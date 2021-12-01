@@ -26,7 +26,7 @@ import (
 // Derived represents a derived table in the query
 type Derived struct {
 	Sel           sqlparser.SelectStatement
-	Inner         Operator
+	Inner         LogicalOperator
 	Alias         string
 	ColumnAliases sqlparser.Columns
 }
@@ -68,6 +68,6 @@ func (d *Derived) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (d *Derived) Compact(*semantics.SemTable) (Operator, error) {
+func (d *Derived) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	return d, nil
 }

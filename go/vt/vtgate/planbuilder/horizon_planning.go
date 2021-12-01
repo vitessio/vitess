@@ -126,7 +126,7 @@ func pushProjections(ctx *planningContext, plan logicalPlan, selectExprs []abstr
 		if err != nil {
 			return err
 		}
-		if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false, false); err != nil {
+		if _, _, err := pushProjection(ctx, aliasExpr, plan, true, false, false); err != nil {
 			return err
 		}
 	}
@@ -159,7 +159,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 }
 
 // pushProjection pushes a projection to the plan.
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner, reuseCol, hasAggregation bool) (offset int, added bool, err error) {
+func pushProjection(ctx *planningContext, expr *sqlparser.AliasedExpr, plan logicalPlan, inner, reuseCol, hasAggregation bool) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *routeGen4:
 		_, isColName := expr.Expr.(*sqlparser.ColName)
@@ -174,7 +174,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			}
 		}
 		if reuseCol {
-			if i := checkIfAlreadyExists(expr, node.Select, semTable); i != -1 {
+			if i := checkIfAlreadyExists(expr, node.Select, ctx.semTable); i != -1 {
 				return i, false, nil
 			}
 		}
@@ -187,7 +187,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		// if we are trying to push a projection that belongs to a DerivedTable
 		// we rewrite that expression, so it matches the column name used inside
 		// that derived table.
-		err = rewriteProjectionOfDerivedTable(expr, semTable)
+		err = rewriteProjectionOfDerivedTable(expr, ctx.semTable)
 		if err != nil {
 			return 0, false, err
 		}
@@ -198,7 +198,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *hashJoin:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.RecursiveDeps(expr.Expr)
+		deps := ctx.semTable.RecursiveDeps(expr.Expr)
 		var column int
 		var appended bool
 		passDownReuseCol := reuseCol
@@ -207,14 +207,14 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		switch {
 		case deps.IsSolvedBy(lhsSolves):
-			offset, added, err := pushProjection(expr, node.Left, semTable, inner, passDownReuseCol, hasAggregation)
+			offset, added, err := pushProjection(ctx, expr, node.Left, inner, passDownReuseCol, hasAggregation)
 			if err != nil {
 				return 0, false, err
 			}
 			column = -(offset + 1)
 			appended = added
 		case deps.IsSolvedBy(rhsSolves):
-			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, hasAggregation)
+			offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, hasAggregation)
 			if err != nil {
 				return 0, false, err
 			}
@@ -243,7 +243,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *joinGen4:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.RecursiveDeps(expr.Expr)
+		deps := ctx.semTable.RecursiveDeps(expr.Expr)
 		var column int
 		var appended bool
 		passDownReuseCol := reuseCol
@@ -252,14 +252,14 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		switch {
 		case deps.IsSolvedBy(lhsSolves):
-			offset, added, err := pushProjection(expr, node.Left, semTable, inner, passDownReuseCol, hasAggregation)
+			offset, added, err := pushProjection(ctx, expr, node.Left, inner, passDownReuseCol, hasAggregation)
 			if err != nil {
 				return 0, false, err
 			}
 			column = -(offset + 1)
 			appended = added
 		case deps.IsSolvedBy(rhsSolves):
-			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, hasAggregation)
+			offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, hasAggregation)
 			if err != nil {
 				return 0, false, err
 			}
@@ -273,7 +273,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 				return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
 			}
 			// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
-			bvName, cols, rewrittenExpr, err := breakExpressionInLHSandRHS(expr.Expr, semTable, lhsSolves)
+			bvName, cols, rewrittenExpr, err := breakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
 			if err != nil {
 				return 0, false, err
 			}
@@ -281,7 +281,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			// It is okay to reuse the columns on the left side since
 			// the final expression which will be selected will be pushed into the right side.
 			for i, col := range cols {
-				colOffset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, node.Left, semTable, inner, true, false)
+				colOffset, _, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: col}, node.Left, inner, true, false)
 				if err != nil {
 					return 0, false, err
 				}
@@ -289,7 +289,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			}
 			// push the rewritten expression on the right side of the tree. Here we should take care whether we want to reuse the expression or not.
 			expr.Expr = rewrittenExpr
-			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, false)
+			offset, added, err := pushProjection(ctx, expr, node.Right, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, false)
 			if err != nil {
 				return 0, false, err
 			}
@@ -309,9 +309,9 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		return len(node.Cols) - 1, true, nil
 	case *pulloutSubquery:
 		// push projection to the outer query
-		return pushProjection(expr, node.underlying, semTable, inner, reuseCol, hasAggregation)
+		return pushProjection(ctx, expr, node.underlying, inner, reuseCol, hasAggregation)
 	case *simpleProjection:
-		offset, _, err := pushProjection(expr, node.input, semTable, inner, true, hasAggregation)
+		offset, _, err := pushProjection(ctx, expr, node.input, inner, true, hasAggregation)
 		if err != nil {
 			return 0, false, err
 		}
@@ -343,15 +343,15 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
 	case *limit:
-		return pushProjection(expr, node.input, semTable, inner, reuseCol, hasAggregation)
+		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
 	case *distinct:
-		return pushProjection(expr, node.input, semTable, inner, reuseCol, hasAggregation)
+		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
 	case *semiJoin:
 		passDownReuseCol := reuseCol
 		if !reuseCol {
 			passDownReuseCol = expr.As.IsEmpty()
 		}
-		offset, added, err := pushProjection(expr, node.lhs, semTable, inner, passDownReuseCol, hasAggregation)
+		offset, added, err := pushProjection(ctx, expr, node.lhs, inner, passDownReuseCol, hasAggregation)
 		if err != nil {
 			return 0, false, err
 		}
@@ -369,7 +369,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		if hasAggregation {
 			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: aggregation on unions")
 		}
-		offset, added, err := pushProjection(expr, node.sources[0], semTable, inner, reuseCol, hasAggregation)
+		offset, added, err := pushProjection(ctx, expr, node.sources[0], inner, reuseCol, hasAggregation)
 		if err != nil {
 			return 0, false, err
 		}
@@ -477,7 +477,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 
 		// push all expression if they are non-aggregating or the plan is not ordered aggregated plan.
 		if !e.Aggr || oa == nil {
-			_, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false, false)
+			_, _, err := pushProjection(ctx, aliasExpr, plan, true, false, false)
 			if err != nil {
 				return nil, err
 			}
@@ -499,7 +499,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 		}
 
 		pushExpr, alias, opcode := hp.createPushExprAndAlias(e, handleDistinct, innerAliased, opcode, oa)
-		offset, _, err := pushProjection(pushExpr, plan, ctx.semTable, true, false, true)
+		offset, _, err := pushProjection(ctx, pushExpr, plan, true, false, true)
 		if err != nil {
 			return nil, err
 		}
@@ -512,7 +512,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	}
 
 	for _, groupExpr := range hp.qp.GroupByExprs {
-		added, err := planGroupByGen4(groupExpr, newPlan, ctx.semTable, false)
+		added, err := planGroupByGen4(ctx, groupExpr, newPlan, false)
 		if err != nil {
 			return nil, err
 		}
@@ -612,7 +612,7 @@ func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, group
 	return false
 }
 
-func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *semantics.SemTable, wsAdded bool) (bool, error) {
+func planGroupByGen4(ctx *planningContext, groupExpr abstract.GroupBy, plan logicalPlan, wsAdded bool) (bool, error) {
 	switch node := plan.(type) {
 	case *routeGen4:
 		sel := node.Select.(*sqlparser.Select)
@@ -625,28 +625,28 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		}
 		return false, nil
 	case *joinGen4, *hashJoin:
-		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
+		_, _, added, err := wrapAndPushExpr(ctx, groupExpr.Inner, groupExpr.WeightStrExpr, node)
 		return added, err
 	case *orderedAggregate:
-		keyCol, wsOffset, colAdded, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node.input, semTable)
+		keyCol, wsOffset, colAdded, err := wrapAndPushExpr(ctx, groupExpr.Inner, groupExpr.WeightStrExpr, node.input)
 		if err != nil {
 			return false, err
 		}
 		if groupExpr.DistinctAggrIndex == 0 {
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: semTable.CollationFor(groupExpr.Inner)})
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: ctx.semTable.CollationFor(groupExpr.Inner)})
 		} else {
 			if wsOffset != -1 {
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
 			}
 		}
-		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable, wsOffset != -1)
+		colAddedRecursively, err := planGroupByGen4(ctx, groupExpr, node.input, wsOffset != -1)
 		if err != nil {
 			return false, err
 		}
 		return colAdded || colAddedRecursively, nil
 	case *pulloutSubquery:
-		return planGroupByGen4(groupExpr, node.underlying, semTable, wsAdded)
+		return planGroupByGen4(ctx, groupExpr, node.underlying, wsAdded)
 	case *semiJoin:
 		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by in a query having a correlated subquery")
 	default:
@@ -680,7 +680,7 @@ func (hp *horizonPlanning) planGroupByUsingOrderBy(ctx *planningContext, plan lo
 func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstract.OrderBy, plan logicalPlan) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
-		newPlan, truncate, err := planOrderByForRoute(orderExprs, plan, ctx.semTable, hp.qp.HasStar)
+		newPlan, truncate, err := planOrderByForRoute(ctx, orderExprs, plan, hp.qp.HasStar)
 		if err != nil {
 			return nil, err
 		}
@@ -760,7 +760,7 @@ func isSpecialOrderBy(o abstract.OrderBy) bool {
 	return isFunction && f.Name.Lowered() == "rand"
 }
 
-func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *routeGen4, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
+func planOrderByForRoute(ctx *planningContext, orderExprs []abstract.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, bool, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
 		err := checkOrderExprCanBePlannedInScatter(plan, order, hasStar)
@@ -771,7 +771,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *routeGen4, semTabl
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset, weightStringOffset, _, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
+		offset, weightStringOffset, _, err := wrapAndPushExpr(ctx, order.Inner.Expr, order.WeightStrExpr, plan)
 		if err != nil {
 			return nil, false, err
 		}
@@ -779,7 +779,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *routeGen4, semTabl
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
-			CollationID:     semTable.CollationFor(order.Inner.Expr),
+			CollationID:     ctx.semTable.CollationFor(order.Inner.Expr),
 		})
 	}
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
@@ -808,8 +808,8 @@ func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order abstract.OrderBy
 
 // wrapAndPushExpr pushes the expression and weighted_string function to the plan using semantics.SemTable
 // It returns (expr offset, weight_string offset, new_column added, error)
-func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (int, int, bool, error) {
-	offset, added, err := pushProjection(&sqlparser.AliasedExpr{Expr: expr}, plan, semTable, true, true, false)
+func wrapAndPushExpr(ctx *planningContext, expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan) (int, int, bool, error) {
+	offset, added, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: expr}, plan, true, true, false)
 	if err != nil {
 		return 0, 0, false, err
 	}
@@ -824,7 +824,7 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 			return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 		}
 	}
-	qt := semTable.TypeFor(expr)
+	qt := ctx.semTable.TypeFor(expr)
 	wsNeeded := true
 	if qt != nil && sqltypes.IsNumber(*qt) {
 		wsNeeded = false
@@ -833,7 +833,7 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	weightStringOffset := -1
 	var wAdded bool
 	if wsNeeded {
-		weightStringOffset, wAdded, err = pushProjection(&sqlparser.AliasedExpr{Expr: weightStringFor(weightStrExpr)}, plan, semTable, true, true, false)
+		weightStringOffset, wAdded, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: weightStringFor(weightStrExpr)}, plan, true, true, false)
 		if err != nil {
 			return 0, 0, false, err
 		}
@@ -968,7 +968,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 		if !useWeightStr {
 			wsExpr = nil
 		}
-		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, wsExpr, plan, ctx.semTable)
+		offset, weightStringOffset, added, err := wrapAndPushExpr(ctx, order.Inner.Expr, wsExpr, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -1079,7 +1079,7 @@ func (hp *horizonPlanning) addDistinct(ctx *planningContext, plan logicalPlan) (
 			ctx.semTable.CopyDependencies(aliasExpr.Expr, inner)
 		}
 		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.semTable.CollationFor(inner)}
-		_, wOffset, added, err := wrapAndPushExpr(aliasExpr.Expr, aliasExpr.Expr, plan, ctx.semTable)
+		_, wOffset, added, err := wrapAndPushExpr(ctx, aliasExpr.Expr, aliasExpr.Expr, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -1178,21 +1178,21 @@ func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) (l
 	if hp.sel.Having == nil {
 		return plan, nil
 	}
-	return pushHaving(hp.sel.Having.Expr, plan, ctx.semTable)
+	return pushHaving(ctx, hp.sel.Having.Expr, plan)
 }
 
-func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func pushHaving(ctx *planningContext, expr sqlparser.Expr, plan logicalPlan) (logicalPlan, error) {
 	switch node := plan.(type) {
 	case *routeGen4:
 		sel := sqlparser.GetFirstSelect(node.Select)
 		sel.AddHaving(expr)
 		return plan, nil
 	case *pulloutSubquery:
-		return pushHaving(expr, node.underlying, semTable)
+		return pushHaving(ctx, expr, node.underlying)
 	case *simpleProjection:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
 	case *orderedAggregate:
-		return newFilter(semTable, plan, expr)
+		return newFilter(ctx, plan, expr)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
 }

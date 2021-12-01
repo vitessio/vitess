@@ -18,8 +18,9 @@ package planbuilder
 
 import (
 	"io"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -37,12 +38,12 @@ func createPhysicalOperator(ctx *planningContext, opTree abstract.LogicalOperato
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
-		//case ctx.vschema.Planner() == Gen4Left2Right:
+		// case ctx.vschema.Planner() == Gen4Left2Right:
 		//	return leftToRightSolve(ctx, op)
 		default:
 			return greedySolve2(ctx, op)
 		}
-	//case *abstract.Join:
+	// case *abstract.Join:
 	//	treeInner, err := optimizeQuery(ctx, op.LHS)
 	//	if err != nil {
 	//		return nil, err
@@ -52,7 +53,7 @@ func createPhysicalOperator(ctx *planningContext, opTree abstract.LogicalOperato
 	//		return nil, err
 	//	}
 	//	return mergeOrJoin(ctx, treeInner, treeOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
-	//case *abstract.Derived:
+	// case *abstract.Derived:
 	//	treeInner, err := optimizeQuery(ctx, op.Inner)
 	//	if err != nil {
 	//		return nil, err
@@ -63,11 +64,11 @@ func createPhysicalOperator(ctx *planningContext, opTree abstract.LogicalOperato
 	//		alias:         op.Alias,
 	//		columnAliases: op.ColumnAliases,
 	//	}, nil
-	//case *abstract.SubQuery:
+	// case *abstract.SubQuery:
 	//	return optimizeSubQuery(ctx, op)
-	//case *abstract.Vindex:
+	// case *abstract.Vindex:
 	//	return createVindexTree(ctx, op)
-	//case *abstract.Concatenate:
+	// case *abstract.Concatenate:
 	//	return optimizeUnion(ctx, op)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
@@ -105,16 +106,16 @@ func seedOperatorList(ctx *planningContext, qg *abstract.QueryGraph) ([]abstract
 		if err != nil {
 			return nil, err
 		}
-		//if qg.NoDeps != nil {
+		// if qg.NoDeps != nil {
 		//	plan.predicates = append(plan.predicates, sqlparser.SplitAndExpression(nil, qg.NoDeps)...)
-		//}
+		// }
 		plans[i] = plan
 	}
 	return plans, nil
 }
 
 func createRouteOperator(ctx *planningContext, table *abstract.QueryTable, solves semantics.TableSet) (*routeOp, error) {
-	//if table.IsInfSchema {
+	// if table.IsInfSchema {
 	//	ks, err := ctx.vschema.AnyKeyspace()
 	//	if err != nil {
 	//		return nil, err
@@ -138,7 +139,7 @@ func createRouteOperator(ctx *planningContext, table *abstract.QueryTable, solve
 	//	}
 	//
 	//	return rp, nil
-	//}
+	// }
 	vschemaTable, _, _, _, _, err := ctx.vschema.FindTableOrVindex(table.Table)
 	if err != nil {
 		return nil, err
@@ -185,7 +186,7 @@ func createRouteOperator(ctx *planningContext, table *abstract.QueryTable, solve
 		vindex, _ := vindexes.NewBinary("binary", nil)
 		plan.selected = &vindexOption{
 			ready:       true,
-			values:      []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}},
+			values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
 			valueExprs:  nil,
 			predicates:  nil,
 			opcode:      engine.SelectEqualUnique,
@@ -198,7 +199,7 @@ func createRouteOperator(ctx *planningContext, table *abstract.QueryTable, solve
 		plan.routeOpCode = engine.SelectScatter
 	}
 	for _, predicate := range table.Predicates {
-		err = plan.updateRoutingLogic(predicate, ctx.semTable)
+		err = plan.updateRoutingLogic(ctx, predicate)
 		if err != nil {
 			return nil, err
 		}
@@ -293,19 +294,21 @@ func getJoinOpFor(ctx *planningContext, cm opCacheMap, lhs, rhs abstract.Physica
 func mergeOrJoinOp(ctx *planningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
 	merger := func(a, b *routeOp) (*routeOp, error) {
-		//if inner {
+		// if inner {
 		return createRouteOperatorForInnerJoin(ctx, a, b, joinPredicates)
-		//}
-		//return createRoutePlanForOuter(ctx, a, b, newTabletSet, joinPredicates), nil
+		// }
+		// return createRoutePlanForOuter(ctx, a, b, newTabletSet, joinPredicates), nil
 	}
 
-	newPlan, _ := tryMergeOp(ctx, lhs, rhs, joinPredicates, merger)
+	newPlan, err := tryMergeOp(ctx, lhs, rhs, joinPredicates, merger)
+	if err != nil {
+		return nil, err
+	}
 	if newPlan != nil {
 		return newPlan, nil
 	}
 
 	var tree abstract.PhysicalOperator = &applyJoin{LHS: lhs.Clone(), RHS: rhs.Clone(), vars: map[string]int{}}
-	var err error
 	for _, predicate := range joinPredicates {
 		tree, err = PushPredicate(ctx, predicate, tree)
 		if err != nil {
@@ -333,17 +336,22 @@ func createRouteOperatorForInnerJoin(ctx *planningContext, aRoute, bRoute *route
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
 		source: &applyJoin{
-			LHS:  aRoute,
-			RHS:  bRoute,
+			LHS:  aRoute.source,
+			RHS:  bRoute.source,
 			vars: map[string]int{},
 		},
 	}
 
 	for _, predicate := range joinPredicates {
-		err := r.PushPredicate(predicate, ctx.semTable)
+		op, err := PushPredicate(ctx, predicate, r)
 		if err != nil {
 			return nil, err
 		}
+		route, ok := op.(*routeOp)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] did not expect type to change when pushing predicates")
+		}
+		r = route
 	}
 
 	if aRoute.selectedVindex() == bRoute.selectedVindex() {
@@ -363,29 +371,29 @@ func makeRouteOp(j abstract.PhysicalOperator) *routeOp {
 
 	return nil
 
-	//x, ok := j.(*derivedTree)
-	//if !ok {
+	// x, ok := j.(*derivedTree)
+	// if !ok {
 	//	return nil
-	//}
-	//dp := x.Clone().(*derivedTree)
+	// }
+	// dp := x.Clone().(*derivedTree)
 	//
-	//inner := makeRouteOp(dp.inner)
-	//if inner == nil {
+	// inner := makeRouteOp(dp.inner)
+	// if inner == nil {
 	//	return nil
-	//}
+	// }
 
-	//dt := &derivedTable{
+	// dt := &derivedTable{
 	//	tables:     inner.tables,
 	//	query:      dp.query,
 	//	predicates: inner.predicates,
 	//	leftJoins:  inner.leftJoins,
 	//	alias:      dp.alias,
-	//}
+	// }
 
-	//inner.tables = parenTables{dt}
-	//inner.predicates = nil
-	//inner.leftJoins = nil
-	//return inner
+	// inner.tables = parenTables{dt}
+	// inner.predicates = nil
+	// inner.leftJoins = nil
+	// return inner
 }
 
 func operatorsToRoutes(a, b abstract.PhysicalOperator) (*routeOp, *routeOp) {
@@ -408,12 +416,12 @@ func tryMergeOp(ctx *planningContext, a, b abstract.PhysicalOperator, joinPredic
 
 	sameKeyspace := aRoute.keyspace == bRoute.keyspace
 
-	//if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
+	// if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
 	//	tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
 	//	if tree != nil || err != nil {
 	//		return tree, err
 	//	}
-	//}
+	// }
 
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
@@ -446,8 +454,11 @@ func tryMergeOp(ctx *planningContext, a, b abstract.PhysicalOperator, joinPredic
 			return nil, nil
 		}
 		r, err := merger(aRoute, bRoute)
+		if err != nil {
+			return nil, err
+		}
 		r.pickBestAvailableVindex()
-		return r, err
+		return r, nil
 	}
 	return nil, nil
 }
@@ -555,13 +566,59 @@ func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 		return nil
 	}
 
-	switch r := op.(type) {
-	case *tableOp:
-		// already visited when entering this method
+	switch op := op.(type) {
+	case *tableOp, *abstract.QueryGraph, *abstract.Vindex:
+		// leaf - no children to visit
 	case *routeOp:
-		err := visitOperators(r.source, f)
+		err := visitOperators(op.source, f)
 		if err != nil {
 			return err
+		}
+	case *applyJoin:
+		err := visitOperators(op.LHS, f)
+		if err != nil {
+			return err
+		}
+		err = visitOperators(op.RHS, f)
+		if err != nil {
+			return err
+		}
+	case *filterOp:
+		err := visitOperators(op.source, f)
+		if err != nil {
+			return err
+		}
+	case *abstract.Concatenate:
+		for _, source := range op.Sources {
+			err := visitOperators(source, f)
+			if err != nil {
+				return err
+			}
+		}
+	case *abstract.Derived:
+		err := visitOperators(op.Inner, f)
+		if err != nil {
+			return err
+		}
+	case *abstract.Join:
+		err := visitOperators(op.LHS, f)
+		if err != nil {
+			return err
+		}
+		err = visitOperators(op.RHS, f)
+		if err != nil {
+			return err
+		}
+	case *abstract.SubQuery:
+		err := visitOperators(op.Outer, f)
+		if err != nil {
+			return err
+		}
+		for _, source := range op.Inner {
+			err := visitOperators(source.Inner, f)
+			if err != nil {
+				return err
+			}
 		}
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown operator type while visiting - %T", op)

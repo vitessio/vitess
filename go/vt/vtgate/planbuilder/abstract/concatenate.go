@@ -54,7 +54,11 @@ func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.Sem
 		if _, isStarExpr := c.SelectStmts[index].SelectExprs[0].(*sqlparser.StarExpr); !isStarExpr {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 		}
-		err := source.PushPredicate(expr, semTable)
+		logical, ok := source.(LogicalOperator)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't use PushPredicate on physical operators")
+		}
+		err := logical.PushPredicate(expr, semTable)
 		if err != nil {
 			return err
 		}
@@ -79,7 +83,7 @@ func (c *Concatenate) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (c *Concatenate) Compact(*semantics.SemTable) (Operator, error) {
+func (c *Concatenate) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	var newSources []Operator
 	var newSels []*sqlparser.Select
 	for i, source := range c.Sources {

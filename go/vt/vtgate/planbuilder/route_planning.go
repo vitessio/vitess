@@ -40,6 +40,22 @@ type planningContext struct {
 	reservedVars *sqlparser.ReservedVars
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
+
+	// here we add all predicates that were created because of a join condition
+	// e.g. [FROM tblA JOIN tblB ON a.colA = b.colB] will be rewritten to [FROM tblB WHERE :a_colA = b.colB],
+	// if we assume that tblB is on the RHS of the join. This last predicate in the WHERE clause is added to the
+	// map below
+	joinPredicates map[sqlparser.Expr]interface{}
+}
+
+func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
+	ctx := &planningContext{
+		reservedVars:   reservedVars,
+		semTable:       semTable,
+		vschema:        vschema,
+		joinPredicates: map[sqlparser.Expr]interface{}{},
+	}
+	return ctx
 }
 
 func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
@@ -554,7 +570,7 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 			continue
 		}
 
-		bvName, cols, predicate, err := breakExpressionInLHSandRHS(expr, ctx.semTable, node.lhs.tableID())
+		bvName, cols, predicate, err := breakExpressionInLHSandRHS(ctx, expr, node.lhs.tableID())
 		if err != nil {
 			return nil, err
 		}
@@ -593,15 +609,15 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 }
 
 func breakExpressionInLHSandRHS(
+	ctx *planningContext,
 	expr sqlparser.Expr,
-	semTable *semantics.SemTable,
 	lhs semantics.TableSet,
 ) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
 	rewrittenExpr = sqlparser.CloneExpr(expr)
 	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			deps := semTable.RecursiveDeps(node)
+			deps := ctx.semTable.RecursiveDeps(node)
 			if deps.NumberOfTables() == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
@@ -614,7 +630,7 @@ func breakExpressionInLHSandRHS(
 				arg := sqlparser.NewArgument(bvName)
 				// we are replacing one of the sides of the comparison with an argument,
 				// but we don't want to lose the type information we have, so we copy it over
-				semTable.CopyExprInfo(node, arg)
+				ctx.semTable.CopyExprInfo(node, arg)
 				cursor.Replace(arg)
 			}
 		}
@@ -623,6 +639,7 @@ func breakExpressionInLHSandRHS(
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	ctx.joinPredicates[rewrittenExpr] = nil
 	return
 }
 

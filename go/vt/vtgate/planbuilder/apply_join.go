@@ -29,6 +29,8 @@ type applyJoin struct {
 	columns []int
 	// arguments that need to be copied from the LHS/RHS
 	vars map[string]int
+
+	predicate sqlparser.Expr
 }
 
 var _ abstract.PhysicalOperator = (*applyJoin)(nil)
