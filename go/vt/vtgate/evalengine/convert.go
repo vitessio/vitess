@@ -135,7 +135,7 @@ func simplifyExpr(e Expr) (Expr, error) {
 
 		switch op := node.Op.(type) {
 		case *LikeOp:
-			if lit2 != nil && lit2.Val.textual() {
+			if lit2 != nil && lit2.Val.textual() && node.TypedCollation.Valid() {
 				coll := collations.Local().LookupByID(node.TypedCollation.Collation)
 				op.Match = coll.Wildcard(lit2.Val.bytes, 0, 0, 0)
 			}

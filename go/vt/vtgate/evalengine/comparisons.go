@@ -385,6 +385,14 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	var foundNull, found bool
 
 	if i.Hashed != nil {
+		if left.typ == querypb.Type_TUPLE {
+			for _, rtuple := range *right.tuple {
+				if _, err := evalTypecheckTuples(left, rtuple); err != nil {
+					return EvalResult{}, err
+				}
+			}
+			panic("should have failed typecheck for tuple")
+		}
 		hash, err := left.nullSafeHashcode()
 		if err != nil {
 			return EvalResult{}, err
@@ -465,6 +473,9 @@ func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 	case sqltypes.IsNumber(left.typ) && right.textual():
 		matched = l.matchWildcard(left.Value().Raw(), right.bytes, right.collation.Collation)
+
+	case left.textual() && sqltypes.IsNumber(right.typ):
+		matched = l.matchWildcard(left.bytes, right.Value().Raw(), left.collation.Collation)
 
 	case left.typ == querypb.Type_TUPLE || right.typ == querypb.Type_TUPLE:
 		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")

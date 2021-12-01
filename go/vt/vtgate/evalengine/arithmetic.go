@@ -699,6 +699,9 @@ func uintMinusIntWithError(v1 uint64, v2u uint64) (EvalResult, error) {
 
 func uintTimesIntWithError(v1 uint64, v2u uint64) (EvalResult, error) {
 	v2 := int64(v2u)
+	if v1 == 0 || v2 == 0 {
+		return newEvalUint64(0), nil
+	}
 	if v2 < 0 || int64(v1) < 0 {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
 	}
@@ -722,6 +725,9 @@ func uintMinusUintWithError(v1, v2 uint64) (EvalResult, error) {
 }
 
 func uintTimesUintWithError(v1, v2 uint64) (EvalResult, error) {
+	if v1 == 0 || v2 == 0 {
+		return newEvalUint64(0), nil
+	}
 	result := v1 * v2
 	if result < v2 || result < v1 {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
