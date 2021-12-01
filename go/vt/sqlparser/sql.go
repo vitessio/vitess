@@ -5084,6 +5084,11 @@ func (st *yySymType) intervalTypeUnion() IntervalTypes {
 	return v
 }
 
+func (st *yySymType) introducerExprCharacterSetUnion() IntroducerCharacterSet {
+	v, _ := st.union.(IntroducerCharacterSet)
+	return v
+}
+
 func (st *yySymType) isExprOperatorUnion() IsExprOperator {
 	v, _ := st.union.(IsExprOperator)
 	return v
@@ -5286,11 +5291,6 @@ func (st *yySymType) tableOptionsUnion() TableOptions {
 
 func (st *yySymType) tableSpecUnion() *TableSpec {
 	v, _ := st.union.(*TableSpec)
-	return v
-}
-
-func (st *yySymType) unaryExprOperatorUnion() UnaryExprOperator {
-	v, _ := st.union.(UnaryExprOperator)
 	return v
 }
 
@@ -7945,7 +7945,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1377
 		{
-			yyLOCAL = &UnaryExpr{Operator: yyDollar[1].unaryExprOperatorUnion(), Expr: NewBitLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].introducerExprCharacterSetUnion(), Expr: NewBitLiteral(yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 201:
@@ -7953,7 +7953,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1381
 		{
-			yyLOCAL = &UnaryExpr{Operator: yyDollar[1].unaryExprOperatorUnion(), Expr: NewHexNumLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].introducerExprCharacterSetUnion(), Expr: NewHexNumLiteral(yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 202:
@@ -7961,7 +7961,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1385
 		{
-			yyLOCAL = &UnaryExpr{Operator: yyDollar[1].unaryExprOperatorUnion(), Expr: NewHexLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].introducerExprCharacterSetUnion(), Expr: NewHexLiteral(yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 203:
@@ -7969,7 +7969,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1389
 		{
-			yyLOCAL = &UnaryExpr{Operator: yyDollar[1].unaryExprOperatorUnion(), Expr: yyDollar[2].colNameUnion()}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].introducerExprCharacterSetUnion(), Expr: yyDollar[2].colNameUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 204:
@@ -7978,12 +7978,12 @@ yydefault:
 //line sql.y:1393
 		{
 			bindVariable(yylex, yyDollar[2].str[1:])
-			yyLOCAL = &UnaryExpr{Operator: yyDollar[1].unaryExprOperatorUnion(), Expr: NewArgument(yyDollar[2].str[1:])}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].introducerExprCharacterSetUnion(), Expr: NewArgument(yyDollar[2].str[1:])}
 		}
 		yyVAL.union = yyLOCAL
 	case 205:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1400
 		{
 			yyLOCAL = Armscii8Op
@@ -7991,7 +7991,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 206:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1404
 		{
 			yyLOCAL = ASCIIOp
@@ -7999,7 +7999,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 207:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1408
 		{
 			yyLOCAL = Big5Op
@@ -8007,7 +8007,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 208:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1412
 		{
 			yyLOCAL = UBinaryOp
@@ -8015,7 +8015,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 209:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1416
 		{
 			yyLOCAL = Cp1250Op
@@ -8023,7 +8023,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 210:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1420
 		{
 			yyLOCAL = Cp1251Op
@@ -8031,7 +8031,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 211:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1424
 		{
 			yyLOCAL = Cp1256Op
@@ -8039,7 +8039,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 212:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1428
 		{
 			yyLOCAL = Cp1257Op
@@ -8047,7 +8047,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 213:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1432
 		{
 			yyLOCAL = Cp850Op
@@ -8055,7 +8055,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 214:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1436
 		{
 			yyLOCAL = Cp852Op
@@ -8063,7 +8063,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 215:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1440
 		{
 			yyLOCAL = Cp866Op
@@ -8071,7 +8071,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 216:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1444
 		{
 			yyLOCAL = Cp932Op
@@ -8079,7 +8079,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 217:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1448
 		{
 			yyLOCAL = Dec8Op
@@ -8087,7 +8087,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 218:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1452
 		{
 			yyLOCAL = EucjpmsOp
@@ -8095,7 +8095,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 219:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1456
 		{
 			yyLOCAL = EuckrOp
@@ -8103,7 +8103,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 220:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1460
 		{
 			yyLOCAL = Gb18030Op
@@ -8111,7 +8111,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 221:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1464
 		{
 			yyLOCAL = Gb2312Op
@@ -8119,7 +8119,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 222:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1468
 		{
 			yyLOCAL = GbkOp
@@ -8127,7 +8127,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 223:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1472
 		{
 			yyLOCAL = Geostd8Op
@@ -8135,7 +8135,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 224:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1476
 		{
 			yyLOCAL = GreekOp
@@ -8143,7 +8143,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 225:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1480
 		{
 			yyLOCAL = HebrewOp
@@ -8151,7 +8151,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 226:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1484
 		{
 			yyLOCAL = Hp8Op
@@ -8159,7 +8159,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 227:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1488
 		{
 			yyLOCAL = Keybcs2Op
@@ -8167,7 +8167,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 228:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1492
 		{
 			yyLOCAL = Koi8rOp
@@ -8175,7 +8175,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 229:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1496
 		{
 			yyLOCAL = Koi8uOp
@@ -8183,7 +8183,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 230:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1500
 		{
 			yyLOCAL = Latin1Op
@@ -8191,7 +8191,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 231:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1504
 		{
 			yyLOCAL = Latin2Op
@@ -8199,7 +8199,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 232:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1508
 		{
 			yyLOCAL = Latin5Op
@@ -8207,7 +8207,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 233:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1512
 		{
 			yyLOCAL = Latin7Op
@@ -8215,7 +8215,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 234:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1516
 		{
 			yyLOCAL = MacceOp
@@ -8223,7 +8223,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 235:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1520
 		{
 			yyLOCAL = MacromanOp
@@ -8231,7 +8231,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 236:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1524
 		{
 			yyLOCAL = SjisOp
@@ -8239,7 +8239,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 237:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1528
 		{
 			yyLOCAL = Swe7Op
@@ -8247,7 +8247,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 238:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1532
 		{
 			yyLOCAL = Tis620Op
@@ -8255,7 +8255,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 239:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1536
 		{
 			yyLOCAL = Ucs2Op
@@ -8263,7 +8263,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 240:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1540
 		{
 			yyLOCAL = UjisOp
@@ -8271,7 +8271,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 241:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1544
 		{
 			yyLOCAL = Utf16Op
@@ -8279,7 +8279,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 242:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1548
 		{
 			yyLOCAL = Utf16leOp
@@ -8287,7 +8287,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 243:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1552
 		{
 			yyLOCAL = Utf32Op
@@ -8295,7 +8295,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 244:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1556
 		{
 			yyLOCAL = Utf8Op
@@ -8303,7 +8303,7 @@ yydefault:
 		yyVAL.union = yyLOCAL
 	case 245:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL UnaryExprOperator
+		var yyLOCAL IntroducerCharacterSet
 //line sql.y:1560
 		{
 			yyLOCAL = Utf8mb4Op
@@ -8346,7 +8346,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1589
 		{
-			yyLOCAL = &UnaryExpr{Operator: yyDollar[1].unaryExprOperatorUnion(), Expr: NewStrLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].introducerExprCharacterSetUnion(), Expr: NewStrLiteral(yyDollar[2].str)}
 		}
 		yyVAL.union = yyLOCAL
 	case 253:

@@ -1144,6 +1144,14 @@ func (op UnaryExprOperator) ToString() string {
 		return BinaryStr
 	case NStringOp:
 		return NStringStr
+	default:
+		return "Unknown UnaryExprOperator"
+	}
+}
+
+// ToString returns the operator as a string
+func (op IntroducerCharacterSet) ToString() string {
+	switch op {
 	case Armscii8Op:
 		return Armscii8Str
 	case ASCIIOp:
@@ -1227,7 +1235,7 @@ func (op UnaryExprOperator) ToString() string {
 	case Utf8mb4Op:
 		return Utf8mb4Str
 	default:
-		return "Unknown UnaryExprOperator"
+		return "Unknown IntroducerCharacterSet"
 	}
 }
 

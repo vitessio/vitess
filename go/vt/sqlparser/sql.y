@@ -158,7 +158,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   explainType 	  ExplainType
   intervalType	  IntervalTypes
   lockType LockType
-  unaryExprOperator UnaryExprOperator
+  introducerExprCharacterSet IntroducerCharacterSet
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
@@ -453,7 +453,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-%type <unaryExprOperator> underscore_charsets
+%type <introducerExprCharacterSet> underscore_charsets
 %start any_command
 
 %%
@@ -1375,24 +1375,24 @@ text_literal
   }
 | underscore_charsets  BIT_LITERAL %prec UNARY
   {
-  	$$ = &UnaryExpr{Operator: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
-  	$$ = &UnaryExpr{Operator: $1, Expr: NewHexNumLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
-   	$$ = &UnaryExpr{Operator: $1, Expr: NewHexLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
   }
 | underscore_charsets column_name %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: $1, Expr: $2}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
     bindVariable(yylex, $2[1:])
-    $$ = &UnaryExpr{Operator: $1, Expr: NewArgument($2[1:])}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
   }
 
 underscore_charsets:
@@ -1587,7 +1587,7 @@ STRING
   }
  | underscore_charsets STRING %prec UNARY
    {
-   	$$ = &UnaryExpr{Operator: $1, Expr: NewStrLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
    }
 
 keys:

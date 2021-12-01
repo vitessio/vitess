@@ -434,7 +434,11 @@ const (
 	BangOp
 	BinaryOp
 	NStringOp
-	Armscii8Op
+)
+
+// Constant for Enum Type - IntroducerCharacterSet
+const (
+	Armscii8Op IntroducerCharacterSet = iota
 	ASCIIOp
 	Big5Op
 	UBinaryOp

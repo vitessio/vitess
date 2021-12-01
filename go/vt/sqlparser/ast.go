@@ -1914,6 +1914,15 @@ type (
 	// UnaryExprOperator is an enum for UnaryExpr.Operator
 	UnaryExprOperator int8
 
+	// IntroducerExpr represents a unary value expression.
+	IntroducerExpr struct {
+		CharacterSet IntroducerCharacterSet
+		Expr         Expr
+	}
+
+	// IntroducerCharacterSet is an enum for IntroducerExpr.CharacterSet
+	IntroducerCharacterSet int8
+
 	// IntervalExpr represents a date-time INTERVAL expression.
 	IntervalExpr struct {
 		Expr Expr
@@ -2056,6 +2065,7 @@ func (*Subquery) iExpr()          {}
 func (ListArg) iExpr()            {}
 func (*BinaryExpr) iExpr()        {}
 func (*UnaryExpr) iExpr()         {}
+func (*IntroducerExpr) iExpr()    {}
 func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}

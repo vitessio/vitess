@@ -497,7 +497,12 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return sqltypes.PlanValue{}, nil
 	case *UnaryExpr:
 		switch node.Operator {
-		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op, NStringOp: // for some charset introducers, we can just ignore them
+		case NStringOp:
+			return NewPlanValue(node.Expr)
+		}
+	case *IntroducerExpr:
+		switch node.CharacterSet {
+		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
 			return NewPlanValue(node.Expr)
 		}
 	}
