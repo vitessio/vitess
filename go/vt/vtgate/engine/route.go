@@ -806,7 +806,11 @@ func (route *Route) description() PrimitiveDescription {
 		other["Vindex"] = route.Vindex.String()
 	}
 	if len(route.Values) > 0 {
-		other["Values"] = route.Values
+		var values []string
+		for _, value := range route.Values {
+			values = append(values, evalengine.FormatExpr(value))
+		}
+		other["Values"] = values
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["

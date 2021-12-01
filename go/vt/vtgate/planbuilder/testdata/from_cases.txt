@@ -1451,7 +1451,7 @@ Gen4 plan same as above
     "Query": "select `user`.col from `user`, user_extra where `user`.id = 5 and `user`.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1575,7 +1575,44 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # sharded join, non-col reference LHS
 "select user.col from user join user_extra on 5 = user.id"
@@ -1617,7 +1654,44 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on 5 = user.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
@@ -1922,7 +1996,7 @@ Gen4 plan same as above
     "Query": "select ref.col from ref, (select aa from `user` where `user`.id = 1) as `user`",
     "Table": "`user`, ref",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -1987,7 +2061,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id, col from user where id = 5) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id, col from `user` where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id, col from `user` where id = 5) as t",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # derived table with join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
@@ -2024,7 +2116,7 @@ Gen4 plan same as above
     "Query": "select t.id from (select id from `user` where id = 5) as t, user_extra where t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2065,7 +2157,7 @@ Gen4 plan same as above
     "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t, user_extra where t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2107,7 +2199,7 @@ Gen4 error: Duplicate column name 'id'
     "Query": "select t.id from user_extra, (select id from `user` where id = 5) as t where t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2180,7 +2272,7 @@ Gen4 error: Duplicate column name 'id'
         "Query": "select t.id from (select id from `user` where id = 5) as t",
         "Table": "`user`",
         "Values": [
-          5
+          "INT64(5)"
         ],
         "Vindex": "user_index"
       },
@@ -2220,7 +2312,25 @@ Gen4 error: Duplicate column name 'id'
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id, col from route1 where id = 5) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
+    "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # derived table missing columns
 "select t.id from (select id from user) as t join user_extra on t.id = user_extra.user_id where t.col = 42"
@@ -2276,7 +2386,7 @@ Gen4 error: symbol t.col not found
     "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2402,7 +2512,7 @@ Gen4 error: symbol id not found
     "Query": "select id from (select id from (select id from `user` where id = 5) as u) as t",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2443,7 +2553,7 @@ Gen4 error: symbol id not found
     "Query": "select u.col, e.col from (select col from `user` where id = 5) as u, (select col from user_extra where user_id = 5) as e",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -3080,42 +3190,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select unsharded_a.col from unsharded_a, unsharded_b where 1 != 1",
-        "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1",
-        "Table": "unsharded_a, unsharded_b"
-      }
-    ]
-  }
-}
+Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
 
 # subquery in ON clause, with join primitives
 "select unsharded.col from unsharded join user on user.col in (select col from user)"
@@ -3174,7 +3249,7 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
 
 # subquery in ON clause, with left join primitives
 # The subquery is not pulled all the way out.
@@ -3234,62 +3309,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Join",
-        "Variant": "LeftJoin",
-        "JoinColumnIndexes": "-1",
-        "Predicate": ":__sq_has_values1 = 1 and `user`.col in ::__sq1",
-        "TableName": "unsharded_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-            "Query": "select unsharded.col from unsharded",
-            "Table": "unsharded"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
-            "Table": "`user`"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
 
 # subquery in ON clause, with join primitives, and join on top
 # The subquery is not pulled all the way out.
@@ -3368,61 +3388,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "1",
-        "TableName": "`user`_unsharded, unsharded_a",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select unsharded.col from unsharded, unsharded_a where 1 != 1",
-            "Query": "select unsharded.col from unsharded, unsharded_a",
-            "Table": "unsharded, unsharded_a"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
 
 # keyspace-qualified queries
 "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2"
@@ -3844,7 +3810,7 @@ Gen4 plan same as above
         "Query": "select user_extra.assembly_id from user_extra where user_extra.user_id = 2",
         "Table": "user_extra",
         "Values": [
-          2
+          "INT64(2)"
         ],
         "Vindex": "user_index"
       },
@@ -4246,7 +4212,7 @@ Gen4 plan same as above
             "Query": "select `user`.id, `user`.col from `user` where `user`.id = 5",
             "Table": "`user`",
             "Values": [
-              5
+              "INT64(5)"
             ],
             "Vindex": "user_index"
           },
@@ -4330,7 +4296,7 @@ Gen4 plan same as above
     "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "name_user_map"
   }
@@ -4353,7 +4319,7 @@ Gen4 plan same as above
     "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "name_user_map"
   }
@@ -4474,73 +4440,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where id in (select id from user_extra) and col = (select user_id from user_extra limit 1)",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutValue",
-    "PulloutVars": [
-      "__sq_has_values2",
-      "__sq2"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Limit",
-        "Count": 1,
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_id from user_extra where 1 != 1",
-            "Query": "select user_id from user_extra limit :__upper_limit",
-            "Table": "user_extra"
-          }
-        ]
-      },
-      {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from user_extra where 1 != 1",
-            "Query": "select id from user_extra",
-            "Table": "user_extra"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectIN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and col = :__sq2",
-            "Table": "`user`",
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
 
 # join on int columns
 "select u.id from user as u join user as uu on u.intcol = uu.intcol"
