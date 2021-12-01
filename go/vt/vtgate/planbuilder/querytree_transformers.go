@@ -24,8 +24,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -430,7 +428,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 	}
 
 	var singleColumn vindexes.SingleColumn
-	var values []sqltypes.PlanValue
+	var values []evalengine.Expr
 	if n.selectedVindex() != nil {
 		singleColumn = n.selected.foundVindex.(vindexes.SingleColumn)
 		values = n.selected.values

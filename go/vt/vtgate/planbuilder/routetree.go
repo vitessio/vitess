@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -80,7 +82,7 @@ type (
 	// vindexOption stores the information needed to know if we have all the information needed to use a vindex
 	vindexOption struct {
 		ready       bool
-		values      []sqltypes.PlanValue
+		values      []evalengine.Expr
 		valueExprs  []sqlparser.Expr
 		predicates  []sqlparser.Expr
 		opcode      engine.RouteOpcode
@@ -325,7 +327,7 @@ func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.Compariso
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex), err
 }
 
 func (rp *routeTree) planSimpleInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
@@ -342,7 +344,7 @@ func (rp *routeTree) planSimpleInOp(ctx *planningContext, node *sqlparser.Compar
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(ctx, node, vdValue, left, *value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, left, value, opcode, justTheVindex), err
 }
 
 func (rp *routeTree) planCompositeInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
@@ -391,7 +393,7 @@ func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlp
 			}
 
 			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
-			newVindex := rp.haveMatchingVindex(ctx, node, rightVals, expr, *newPlanValues, opcode, justTheVindex)
+			newVindex := rp.haveMatchingVindex(ctx, node, rightVals, expr, newPlanValues, opcode, justTheVindex)
 			foundVindex = newVindex || foundVindex
 		}
 	}
@@ -430,7 +432,7 @@ func (rp *routeTree) planLikeOp(ctx *planningContext, node *sqlparser.Comparison
 		return nil
 	}
 
-	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, selectEqual, vdx), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, selectEqual, vdx), err
 }
 
 func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (bool, error) {
@@ -448,15 +450,15 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 		return false, err
 	}
 
-	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex), err
 }
 
-// makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.
+// makePlanValue transforms the given sqlparser.Expr into a evalengine.Expr.
 // If the given sqlparser.Expr is an argument and can be found in the rp.argToReplaceBySelect then the
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
-func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (evalengine.Expr, error) {
 	if ctx.isSubQueryToReplace(n) {
 		return nil, nil
 	}
@@ -474,7 +476,7 @@ func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sql
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, err := makePlanValue(expr)
+		pv, err := evalengine.Convert(expr, &noColumnLookup{semTable: ctx.semTable})
 		if err != nil {
 			return nil, err
 		}
@@ -485,6 +487,22 @@ func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sql
 
 	return nil, nil
 }
+
+type noColumnLookup struct {
+	semTable *semantics.SemTable
+}
+
+// ColumnLookup implements the ConverterLookup interface
+func (lookup *noColumnLookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "implement me!")
+}
+
+// CollationIDLookup implements the ConverterLookup interface
+func (lookup *noColumnLookup) CollationIDLookup(expr sqlparser.Expr) collations.ID {
+	return lookup.semTable.CollationFor(expr)
+}
+
+var _ evalengine.ConverterLookup = (*noColumnLookup)(nil)
 
 func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range rp.vindexPreds {
@@ -502,7 +520,7 @@ func (rp *routeTree) haveMatchingVindex(
 	node sqlparser.Expr,
 	valueExpr sqlparser.Expr,
 	column *sqlparser.ColName,
-	value sqltypes.PlanValue,
+	value evalengine.Expr,
 	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
 	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
 ) bool {
@@ -523,7 +541,7 @@ func (rp *routeTree) haveMatchingVindex(
 			routeOpcode := opcode(v.colVindex)
 			vindex := vfunc(v.colVindex)
 			v.options = append(v.options, &vindexOption{
-				values:      []sqltypes.PlanValue{value},
+				values:      []evalengine.Expr{value},
 				valueExprs:  []sqlparser.Expr{valueExpr},
 				predicates:  []sqlparser.Expr{node},
 				opcode:      routeOpcode,

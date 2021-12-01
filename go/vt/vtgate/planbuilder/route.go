@@ -35,7 +35,7 @@ var _ logicalPlan = (*route)(nil)
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 type route struct {
-	order int
+	gen4Plan
 
 	// Redirect may point to another route if this route
 	// was merged with it. The Resolve function chases
@@ -45,18 +45,6 @@ type route struct {
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
 	Select sqlparser.SelectStatement
-
-	// resultColumns represent the columns returned by this route.
-	resultColumns []*resultColumn
-
-	// weight_string keeps track of the weight_string expressions
-	// that were added additionally for each column. These expressions
-	// are added to be used for collation of text columns.
-	weightStrings map[*resultColumn]int
-
-	// substitutions contain the list of table expressions that
-	// have to be substituted in the route's query.
-	substitutions []*tableSubstitution
 
 	// condition stores the AST condition that will be used
 	// to resolve the ERoute Values field.
@@ -69,40 +57,9 @@ type route struct {
 	tables semantics.TableSet
 }
 
-// Order implements the logicalPlan interface
-func (rb *route) Order() int {
-	return rb.order
-}
-
-// Reorder implements the logicalPlan interface
-func (rb *route) Reorder(order int) {
-	rb.order = order + 1
-}
-
 // Primitive implements the logicalPlan interface
 func (rb *route) Primitive() engine.Primitive {
 	return rb.eroute
-}
-
-// ResultColumns implements the logicalPlan interface
-func (rb *route) ResultColumns() []*resultColumn {
-	return rb.resultColumns
-}
-
-// PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
-// into the select expression list of the route. This function is
-// similar to PushSelect.
-func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
-	// TODO: we should not assume that the query is a SELECT
-	sel := rb.Select.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, expr)
-
-	// We just create a place-holder resultColumn. It won't
-	// match anything.
-	rc := &resultColumn{column: &column{origin: rb}}
-	rb.resultColumns = append(rb.resultColumns, rc)
-
-	return rc
 }
 
 // SetLimit adds a LIMIT clause to the route.
@@ -126,82 +83,6 @@ func (rb *route) WireupGen4(_ *semantics.SemTable) error {
 // ContainsTables implements the logicalPlan interface
 func (rb *route) ContainsTables() semantics.TableSet {
 	return rb.tables
-}
-
-// Wireup implements the logicalPlan interface
-func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
-	// Precaution: update ERoute.Values only if it's not set already.
-	if rb.eroute.Values == nil {
-		// Resolve values stored in the logical plan.
-		switch vals := rb.condition.(type) {
-		case *sqlparser.ComparisonExpr:
-			pv, err := rb.procureValues(plan, jt, vals.Right)
-			if err != nil {
-				return err
-			}
-			rb.eroute.Values = []sqltypes.PlanValue{pv}
-			vals.Right = sqlparser.ListArg(engine.ListVarName)
-		case nil:
-			// no-op.
-		default:
-			pv, err := rb.procureValues(plan, jt, vals)
-			if err != nil {
-				return err
-			}
-			rb.eroute.Values = []sqltypes.PlanValue{pv}
-		}
-	}
-
-	// Fix up the AST.
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *sqlparser.Select:
-			if len(node.SelectExprs) == 0 {
-				node.SelectExprs = []sqlparser.SelectExpr{
-					&sqlparser.AliasedExpr{
-						Expr: sqlparser.NewIntLiteral("1"),
-					},
-				}
-			}
-		case *sqlparser.ComparisonExpr:
-			if node.Operator == sqlparser.EqualOp {
-				if rb.exprIsValue(node.Left) && !rb.exprIsValue(node.Right) {
-					node.Left, node.Right = node.Right, node.Left
-				}
-			}
-		}
-		return true, nil
-	}, rb.Select)
-
-	// Substitute table names
-	for _, sub := range rb.substitutions {
-		*sub.oldExpr = *sub.newExpr
-	}
-
-	// Generate query while simultaneously resolving values.
-	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-		switch node := node.(type) {
-		case *sqlparser.ColName:
-			if !rb.isLocal(node) {
-				joinVar := jt.Procure(plan, node, rb.Order())
-				buf.WriteArg(":", joinVar)
-				return
-			}
-		case sqlparser.TableName:
-			if !sqlparser.SystemSchema(node.Qualifier.String()) {
-				node.Name.Format(buf)
-				return
-			}
-			node.Format(buf)
-			return
-		}
-		node.Format(buf)
-	}
-	buf := sqlparser.NewTrackedBuffer(varFormatter)
-	varFormatter(buf, rb.Select)
-	rb.eroute.Query = buf.ParsedQuery().Query
-	rb.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
-	return nil
 }
 
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
@@ -284,75 +165,6 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 	node := buffer.WriteNode(sel)
 	query := node.ParsedQuery()
 	return query.Query
-}
-
-// SupplyVar implements the logicalPlan interface
-func (rb *route) SupplyVar(int, int, *sqlparser.ColName, string) {
-	// route is an atomic primitive. So, SupplyVar cannot be
-	// called on it.
-	panic("BUG: route is an atomic node.")
-}
-
-// SupplyCol implements the logicalPlan interface
-func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	c := col.Metadata.(*column)
-	for i, rc := range rb.resultColumns {
-		if rc.column == c {
-			return rc, i
-		}
-	}
-
-	// A new result has to be returned.
-	rc = &resultColumn{column: c}
-	rb.resultColumns = append(rb.resultColumns, rc)
-	// TODO: we should not assume that the query is a SELECT query
-	sel := rb.Select.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: col})
-	return rc, len(rb.resultColumns) - 1
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	rc := rb.resultColumns[colNumber]
-	s, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-
-	aliasExpr, ok := s.SelectExprs[colNumber].(*sqlparser.AliasedExpr)
-	if !ok {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
-	}
-	weightStringExpr := &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("weight_string"),
-		Exprs: []sqlparser.SelectExpr{
-			&sqlparser.AliasedExpr{
-				Expr: aliasExpr.Expr,
-			},
-		},
-	}
-	expr := &sqlparser.AliasedExpr{
-		Expr: weightStringExpr,
-	}
-	if alsoAddToGroupBy {
-		sel, isSelect := rb.Select.(*sqlparser.Select)
-		if !isSelect {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot add weight string in %T", rb.Select)
-		}
-		sel.GroupBy = append(sel.GroupBy, weightStringExpr)
-	}
-
-	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
-		return weightcolNumber, nil
-	}
-	// It's ok to pass nil for pb and logicalPlan because PushSelect doesn't use them.
-	// TODO: we are ignoring a potential error here. need to clean this up
-	_, _, weightcolNumber, err = planProjection(nil, rb, expr, nil)
-	if err != nil {
-		return 0, err
-	}
-	rb.weightStrings[rc] = weightcolNumber
-	return weightcolNumber, nil
 }
 
 // Rewrite implements the logicalPlan interface

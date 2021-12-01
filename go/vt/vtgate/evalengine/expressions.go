@@ -154,6 +154,20 @@ func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
 }
 
+// TupleValues allows for retrieval of the value we expose for public consumption
+func (e EvalResult) TupleValues() []sqltypes.Value {
+	if e.tuple == nil {
+		return nil
+	}
+
+	values := *e.tuple
+	result := make([]sqltypes.Value, len(values), 0)
+	for _, val := range values {
+		result = append(result, val.Value())
+	}
+	return result
+}
+
 var collationNull = collations.TypedCollation{
 	Collation:    collations.CollationBinaryID,
 	Coercibility: collations.CoerceIgnorable,
