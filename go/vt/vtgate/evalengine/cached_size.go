@@ -17,7 +17,13 @@ limitations under the License.
 
 package evalengine
 
-import hack "vitess.io/vitess/go/hack"
+import (
+	"math"
+	"reflect"
+	"unsafe"
+
+	hack "vitess.io/vitess/go/hack"
+)
 
 type cachedObject interface {
 	CachedSize(alloc bool) int64
@@ -137,13 +143,26 @@ func (cached *EvalResult) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *InOp) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(8)
+		size += int64(16)
+	}
+	// field Hashed map[uintptr]int
+	if cached.Hashed != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.Hashed)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 144))
+		if len(cached.Hashed) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
+		}
 	}
 	return size
 }

@@ -1281,6 +1281,20 @@ func (cached *IntervalExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Unit)))
 	return size
 }
+func (cached *IntroducerExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
