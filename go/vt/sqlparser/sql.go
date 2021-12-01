@@ -6434,7 +6434,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1400
 		{
-			opt := ColumnType{NotNull: yyDollar[2].boolVal, sawnull: true}
+			opt := ColumnType{NotNull: yyDollar[2].boolVal, Sawnull: true}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
 				yylex.Error(err.Error())
 				return 1

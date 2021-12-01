@@ -1398,7 +1398,7 @@ column_type_options:
   }
 | column_type_options null_or_not_null
   {
-    opt := ColumnType{NotNull: $2, sawnull: true}
+    opt := ColumnType{NotNull: $2, Sawnull: true}
     if err := $1.merge(opt); err != nil {
     	yylex.Error(err.Error())
     	return 1
