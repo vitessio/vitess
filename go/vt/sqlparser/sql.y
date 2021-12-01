@@ -217,7 +217,12 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> '^'
 %right <str> '~' UNARY
 %left <str> COLLATE
-%right <str> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
+%right <str> BINARY UNDERSCORE_ARMSCII8 UNDERSCORE_ASCII UNDERSCORE_BIG5 UNDERSCORE_BINARY UNDERSCORE_CP1250 UNDERSCORE_CP1251
+%right <str> UNDERSCORE_CP1256 UNDERSCORE_CP1257 UNDERSCORE_CP850 UNDERSCORE_CP852 UNDERSCORE_CP866 UNDERSCORE_CP932
+%right <str> UNDERSCORE_DEC8 UNDERSCORE_EUCJPMS UNDERSCORE_EUCKR UNDERSCORE_GB18030 UNDERSCORE_GB2312 UNDERSCORE_GBK UNDERSCORE_GEOSTD8
+%right <str> UNDERSCORE_GREEK UNDERSCORE_HEBREW UNDERSCORE_HP8 UNDERSCORE_KEYBCS2 UNDERSCORE_KOI8R UNDERSCORE_KOI8U UNDERSCORE_LATIN1 UNDERSCORE_LATIN2 UNDERSCORE_LATIN5
+%right <str> UNDERSCORE_LATIN7 UNDERSCORE_MACCE UNDERSCORE_MACROMAN UNDERSCORE_SJIS UNDERSCORE_SWE7 UNDERSCORE_TIS620 UNDERSCORE_UCS2 UNDERSCORE_UJIS UNDERSCORE_UTF16
+%right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4
 %right <str> INTERVAL
 %nonassoc <str> '.'
 
@@ -1391,21 +1396,169 @@ text_literal
   }
 
 underscore_charsets:
- UNDERSCORE_BINARY
+  UNDERSCORE_ARMSCII8
   {
-  	$$ = UBinaryOp
+    $$ = Armscii8Op
   }
-| UNDERSCORE_UTF8
+| UNDERSCORE_ASCII
   {
-  	$$ = Utf8Op
+    $$ = ASCIIOp
   }
-| UNDERSCORE_UTF8MB4
+| UNDERSCORE_BIG5
   {
-  	$$ = Utf8mb4Op
+    $$ = Big5Op
+  }
+| UNDERSCORE_BINARY
+  {
+    $$ = UBinaryOp
+  }
+| UNDERSCORE_CP1250
+  {
+    $$ = Cp1250Op
+  }
+| UNDERSCORE_CP1251
+  {
+    $$ = Cp1251Op
+  }
+| UNDERSCORE_CP1256
+  {
+    $$ = Cp1256Op
+  }
+| UNDERSCORE_CP1257
+  {
+    $$ = Cp1257Op
+  }
+| UNDERSCORE_CP850
+  {
+    $$ = Cp850Op
+  }
+| UNDERSCORE_CP852
+  {
+    $$ = Cp852Op
+  }
+| UNDERSCORE_CP866
+  {
+    $$ = Cp866Op
+  }
+| UNDERSCORE_CP932
+  {
+    $$ = Cp932Op
+  }
+| UNDERSCORE_DEC8
+  {
+    $$ = Dec8Op
+  }
+| UNDERSCORE_EUCJPMS
+  {
+    $$ = EucjpmsOp
+  }
+| UNDERSCORE_EUCKR
+  {
+    $$ = EuckrOp
+  }
+| UNDERSCORE_GB18030
+  {
+    $$ = Gb18030Op
+  }
+| UNDERSCORE_GB2312
+  {
+    $$ = Gb2312Op
+  }
+| UNDERSCORE_GBK
+  {
+    $$ = GbkOp
+  }
+| UNDERSCORE_GEOSTD8
+  {
+    $$ = Geostd8Op
+  }
+| UNDERSCORE_GREEK
+  {
+    $$ = GreekOp
+  }
+| UNDERSCORE_HEBREW
+  {
+    $$ = HebrewOp
+  }
+| UNDERSCORE_HP8
+  {
+    $$ = Hp8Op
+  }
+| UNDERSCORE_KEYBCS2
+  {
+    $$ = Keybcs2Op
+  }
+| UNDERSCORE_KOI8R
+  {
+    $$ = Koi8rOp
+  }
+| UNDERSCORE_KOI8U
+  {
+    $$ = Koi8uOp
   }
 | UNDERSCORE_LATIN1
   {
-  	$$ = Latin1Op
+    $$ = Latin1Op
+  }
+| UNDERSCORE_LATIN2
+  {
+    $$ = Latin2Op
+  }
+| UNDERSCORE_LATIN5
+  {
+    $$ = Latin5Op
+  }
+| UNDERSCORE_LATIN7
+  {
+    $$ = Latin7Op
+  }
+| UNDERSCORE_MACCE
+  {
+    $$ = MacceOp
+  }
+| UNDERSCORE_MACROMAN
+  {
+    $$ = MacromanOp
+  }
+| UNDERSCORE_SJIS
+  {
+    $$ = SjisOp
+  }
+| UNDERSCORE_SWE7
+  {
+    $$ = Swe7Op
+  }
+| UNDERSCORE_TIS620
+  {
+    $$ = Tis620Op
+  }
+| UNDERSCORE_UCS2
+  {
+    $$ = Ucs2Op
+  }
+| UNDERSCORE_UJIS
+  {
+    $$ = UjisOp
+  }
+| UNDERSCORE_UTF16
+  {
+    $$ = Utf16Op
+  }
+| UNDERSCORE_UTF16LE
+  {
+    $$ = Utf16leOp
+  }
+| UNDERSCORE_UTF32
+  {
+    $$ = Utf32Op
+  }
+| UNDERSCORE_UTF8
+  {
+    $$ = Utf8Op
+  }
+| UNDERSCORE_UTF8MB4
+  {
+    $$ = Utf8mb4Op
   }
 
 literal_or_null:
