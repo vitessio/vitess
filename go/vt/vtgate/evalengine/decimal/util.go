@@ -28,8 +28,7 @@ func (z *Big) norm() *Big {
 func (c Context) fix(z *Big) *Big {
 	//mysql
 	if z.isZero() {
-		z.exp = 0
-		z.precision = 1
+		z.setZero(0, 0)
 		return z
 	}
 
