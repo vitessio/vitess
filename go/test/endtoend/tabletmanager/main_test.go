@@ -35,21 +35,22 @@ import (
 )
 
 var (
-	clusterInstance     *cluster.LocalProcessCluster
-	tmClient            *tmc.Client
-	primaryTabletParams mysql.ConnParams
-	replicaTabletParams mysql.ConnParams
-	primaryTablet       cluster.Vttablet
-	replicaTablet       cluster.Vttablet
-	rdonlyTablet        cluster.Vttablet
-	hostname            = "localhost"
-	keyspaceName        = "ks"
-	shardName           = "0"
-	keyspaceShard       = "ks/" + shardName
-	dbName              = "vt_" + keyspaceName
-	username            = "vt_dba"
-	cell                = "zone1"
-	sqlSchema           = `
+	clusterInstance                  *cluster.LocalProcessCluster
+	tmClient                         *tmc.Client
+	primaryTabletParams              mysql.ConnParams
+	replicaTabletParams              mysql.ConnParams
+	primaryTablet                    cluster.Vttablet
+	replicaTablet                    cluster.Vttablet
+	rdonlyTablet                     cluster.Vttablet
+	hostname                         = "localhost"
+	keyspaceName                     = "ks"
+	shardName                        = "0"
+	keyspaceShard                    = "ks/" + shardName
+	dbName                           = "vt_" + keyspaceName
+	username                         = "vt_dba"
+	cell                             = "zone1"
+	tabletHealthcheckRefreshInterval = 5 * time.Second
+	sqlSchema                        = `
 	create table t1(
 		id bigint,
 		value varchar(16),
@@ -99,6 +100,7 @@ func TestMain(m *testing.M) {
 			"-lock_tables_timeout", "5s",
 			"-watch_replication_stream",
 			"-enable_replication_reporter",
+			"-health_check_interval", tabletHealthcheckRefreshInterval.String(),
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
