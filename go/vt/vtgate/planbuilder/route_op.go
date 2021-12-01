@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -72,14 +71,9 @@ func (r *routeOp) Clone() abstract.PhysicalOperator {
 	return &cloneRoute
 }
 
-// PushPredicate implements the Operator interface
-func (r *routeOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	panic("unimplemented")
-}
-
-func (r *routeOp) updateRoutingLogic(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (r *routeOp) updateRoutingLogic(ctx *planningContext, expr sqlparser.Expr) error {
 	if r.canImprove() {
-		newVindexFound, err := r.searchForNewVindexes(semTable, expr)
+		newVindexFound, err := r.searchForNewVindexes(ctx, expr)
 		if err != nil {
 			return err
 		}
@@ -92,11 +86,11 @@ func (r *routeOp) updateRoutingLogic(expr sqlparser.Expr, semTable *semantics.Se
 	return nil
 }
 
-func (r *routeOp) searchForNewVindexes(semTable *semantics.SemTable, predicate sqlparser.Expr) (bool, error) {
+func (r *routeOp) searchForNewVindexes(ctx *planningContext, predicate sqlparser.Expr) (bool, error) {
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.ComparisonExpr:
-		found, exitEarly, err := r.planComparison(semTable, node)
+		found, exitEarly, err := r.planComparison(ctx, node)
 		if err != nil || exitEarly {
 			return false, err
 		}
@@ -105,7 +99,7 @@ func (r *routeOp) searchForNewVindexes(semTable *semantics.SemTable, predicate s
 	return newVindexFound, nil
 }
 
-func (r *routeOp) planComparison(semTable *semantics.SemTable, node *sqlparser.ComparisonExpr) (bool, bool, error) {
+func (r *routeOp) planComparison(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
 	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
@@ -116,16 +110,13 @@ func (r *routeOp) planComparison(semTable *semantics.SemTable, node *sqlparser.C
 
 	switch node.Operator {
 	case sqlparser.EqualOp:
-		found, err := r.planEqualOp(semTable, node)
-		if err != nil {
-			return false, false, err
-		}
+		found := r.planEqualOp(ctx, node)
 		return found, false, nil
 	}
 	return false, false, nil
 }
 
-func (r *routeOp) planEqualOp(semTable *semantics.SemTable, node *sqlparser.ComparisonExpr) (bool, error) {
+func (r *routeOp) planEqualOp(ctx *planningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
 	vdValue := other
@@ -133,16 +124,16 @@ func (r *routeOp) planEqualOp(semTable *semantics.SemTable, node *sqlparser.Comp
 		column, ok = node.Right.(*sqlparser.ColName)
 		if !ok {
 			// either the LHS or RHS have to be a column to be useful for the vindex
-			return false, nil
+			return false
 		}
 		vdValue = node.Left
 	}
-	val, err := r.makePlanValue(semTable, vdValue)
-	if err != nil || val == nil {
-		return false, err
+	val := r.makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return false
 	}
 
-	return r.haveMatchingVindex(semTable, node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
+	return r.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 }
 
 // makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.
@@ -150,10 +141,10 @@ func (r *routeOp) planEqualOp(semTable *semantics.SemTable, node *sqlparser.Comp
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
-func (r *routeOp) makePlanValue(semTable *semantics.SemTable, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	for _, expr := range semTable.GetExprAndEqualities(n) {
+func (r *routeOp) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) evalengine.Expr {
+	for _, expr := range ctx.semTable.GetExprAndEqualities(n) {
 		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
-			extractedSubquery := semTable.FindSubqueryReference(subq)
+			extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
 			if extractedSubquery == nil {
 				continue
 			}
@@ -164,16 +155,13 @@ func (r *routeOp) makePlanValue(semTable *semantics.SemTable, n sqlparser.Expr) 
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, err := makePlanValue(expr)
-		if err != nil {
-			return nil, err
-		}
+		pv, _ := evalengine.Convert(expr, &noColumnLookup{semTable: ctx.semTable})
 		if pv != nil {
-			return pv, nil
+			return pv
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
 func (r *routeOp) hasVindex(column *sqlparser.ColName) bool {
@@ -188,18 +176,18 @@ func (r *routeOp) hasVindex(column *sqlparser.ColName) bool {
 }
 
 func (r *routeOp) haveMatchingVindex(
-	semTable *semantics.SemTable,
+	ctx *planningContext,
 	node sqlparser.Expr,
 	valueExpr sqlparser.Expr,
 	column *sqlparser.ColName,
-	value sqltypes.PlanValue,
+	value evalengine.Expr,
 	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
 	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
 ) bool {
 	newVindexFound := false
 	for _, v := range r.vindexPreds {
 		// check that the
-		if !semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
+		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
 		// Ignore MultiColumn vindexes for finding matching Vindex.
@@ -213,7 +201,7 @@ func (r *routeOp) haveMatchingVindex(
 			routeOpcode := opcode(v.colVindex)
 			vindex := vfunc(v.colVindex)
 			v.options = append(v.options, &vindexOption{
-				values:      []sqltypes.PlanValue{value},
+				values:      []evalengine.Expr{value},
 				valueExprs:  []sqlparser.Expr{valueExpr},
 				predicates:  []sqlparser.Expr{node},
 				opcode:      routeOpcode,

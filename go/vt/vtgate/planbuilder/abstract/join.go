@@ -25,7 +25,7 @@ import (
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  Operator
+	LHS, RHS  LogicalOperator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
 }
@@ -105,7 +105,7 @@ func (j *Join) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (j *Join) Compact(semTable *semantics.SemTable) (Operator, error) {
+func (j *Join) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return j, nil

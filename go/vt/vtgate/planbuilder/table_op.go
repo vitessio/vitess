@@ -26,8 +26,9 @@ import (
 )
 
 type tableOp struct {
-	qtable *abstract.QueryTable
-	vtable *vindexes.Table
+	qtable  *abstract.QueryTable
+	vtable  *vindexes.Table
+	columns []*sqlparser.ColName
 }
 
 var _ abstract.PhysicalOperator = (*tableOp)(nil)

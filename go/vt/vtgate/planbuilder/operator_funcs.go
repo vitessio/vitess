@@ -27,23 +27,38 @@ import (
 func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *routeOp:
-		err := op.updateRoutingLogic(expr, ctx.semTable)
+		err := op.updateRoutingLogic(ctx, expr)
 		if err != nil {
 			return nil, err
 		}
-		return PushPredicate(ctx, expr, op.source)
+		newSrc, err := PushPredicate(ctx, expr, op.source)
+		if err != nil {
+			return nil, err
+		}
+		op.source = newSrc
+		return op, err
 	case *applyJoin:
 		deps := ctx.semTable.RecursiveDeps(expr)
 		switch {
 		case deps.IsSolvedBy(op.LHS.TableID()):
-			return PushPredicate(ctx, expr, op.LHS)
+			newSrc, err := PushPredicate(ctx, expr, op.LHS)
+			if err != nil {
+				return nil, err
+			}
+			op.LHS = newSrc
+			return op, err
 		case deps.IsSolvedBy(op.RHS.TableID()):
-			//if !j.LeftJoin {
-			return PushPredicate(ctx, expr, op.RHS)
-			//}
+			// if !j.LeftJoin {
+			newSrc, err := PushPredicate(ctx, expr, op.RHS)
+			if err != nil {
+				return nil, err
+			}
+			op.RHS = newSrc
+			return op, err
+			// }
 			// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
 			// where tbl is on the rhs of the left outer join
-			//if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
+			// if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
 			//	sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
 			//	sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID()) {
 			//	// When the predicate we are pushing is using information from an outer table, we can
@@ -56,11 +71,11 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 			//	// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
 			//	j.LeftJoin = false
 			//	return j.RHS.PushPredicate(expr, semTable)
-			//}
-			//// TODO - we should do this on the vtgate level once we have a Filter primitive
-			//return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
+			// }
+			// // TODO - we should do this on the vtgate level once we have a Filter primitive
+			// return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
 		case deps.IsSolvedBy(op.TableID()):
-			bvName, cols, predicate, err := breakExpressionInLHSandRHS(expr, ctx.semTable, op.LHS.TableID())
+			bvName, cols, predicate, err := breakExpressionInLHSandRHS(ctx, expr, op.LHS.TableID())
 			if err != nil {
 				return nil, err
 			}
@@ -72,7 +87,13 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 			for i, idx := range idxs {
 				op.vars[bvName[i]] = idx
 			}
-			return PushPredicate(ctx, predicate, op.RHS)
+			newSrc, err := PushPredicate(ctx, predicate, op.RHS)
+			if err != nil {
+				return nil, err
+			}
+			op.RHS = newSrc
+			op.predicate = expr
+			return op, err
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 	case *tableOp:
@@ -130,7 +151,13 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 		}
 		return op, outputColumns, nil
 	case *tableOp:
-		panic("add column list to tableop")
+		before := len(op.columns)
+		op.columns = append(op.columns, columns...)
+		var offsets []int
+		for i := before; i < len(op.columns); i++ {
+			offsets = append(offsets, i)
+		}
+		return op, offsets, nil
 	case *filterOp:
 		return PushOutputColumns(ctx, op.source, columns)
 	default:

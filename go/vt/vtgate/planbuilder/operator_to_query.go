@@ -24,8 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 )
 
-func toSQL(op abstract.PhysicalOperator) sqlparser.SelectStatement {
-	q := &queryBuilder{}
+func toSQL(ctx *planningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
+	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
 	return q.produce()
 }
@@ -37,17 +37,20 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		for _, pred := range op.qtable.Predicates {
 			qb.addPredicate(pred)
 		}
-	// case *join:
-	// 	buildQuery(op.lhs, qb)
-	// 	qbR := &queryBuilder{}
-	// 	buildQuery(op.rhs, qbR)
-	// 	qb.joinWith(qbR, op.condition)
+	case *applyJoin:
+		buildQuery(op.LHS, qb)
+		qbR := &queryBuilder{ctx: qb.ctx}
+		buildQuery(op.RHS, qbR)
+		qb.joinWith(qbR, op.predicate)
+	case *filterOp:
+		buildQuery(op.source, qb)
+		for _, pred := range op.predicates {
+			qb.addPredicate(pred)
+		}
+
 	// case *project:
 	// 	buildQuery(op.src, qb)
 	// 	qb.project(op.projections)
-	// case *filter:
-	// 	buildQuery(op.src, qb)
-	// 	qb.addPredicate(op.predicate)
 	// case *vectorAggr:
 	// 	buildQuery(op.src, qb)
 	// 	qb.vectorGroupBy(op.groupBy, op.aggrF)
@@ -77,6 +80,12 @@ func (qb *queryBuilder) addTable(t string) {
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
+	if _, isJoinCond := qb.ctx.joinPredicates[expr]; isJoinCond {
+		// This is a predicate that was added to the RHS of an applyJoin.
+		// The original predicate will be added, so we don't have to add this here
+		return
+	}
+
 	sel := qb.sel.(*sqlparser.Select)
 	if qb.grouped {
 		if sel.Having == nil {
@@ -197,6 +206,7 @@ func (qb *queryBuilder) convertToDerivedTable() string {
 }
 
 type queryBuilder struct {
+	ctx        *planningContext
 	sel        sqlparser.SelectStatement
 	grouped    bool
 	tableNames []string

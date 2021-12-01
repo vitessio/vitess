@@ -29,24 +29,23 @@ type (
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
 
-		// PushPredicate pushes a predicate to the closest possible operator
-		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
-
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
 		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 
 		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
 		CheckValid() error
-
-		// TODO - Convert to LogicalOperator output
-		Compact(semTable *semantics.SemTable) (Operator, error)
 	}
 
 	LogicalOperator interface {
 		Operator
 		iLogical()
+
+		// PushPredicate pushes a predicate to the closest possible operator
+		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
+
 		// Compact will optimise the operator tree into a smaller but equivalent version
+		Compact(semTable *semantics.SemTable) (LogicalOperator, error)
 	}
 
 	PhysicalOperator interface {
@@ -252,7 +251,7 @@ func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 	}
 }
 
-func createJoin(LHS, RHS Operator) LogicalOperator {
+func createJoin(LHS, RHS LogicalOperator) LogicalOperator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {

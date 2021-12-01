@@ -185,15 +185,6 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
-	ctx := &planningContext{
-		reservedVars: reservedVars,
-		semTable:     semTable,
-		vschema:      vschema,
-	}
-	return ctx
-}
-
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	if limit == nil {
 		return plan, nil

@@ -19,10 +19,9 @@ package planbuilder
 import (
 	"sort"
 	"strings"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-
-	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,7 +34,7 @@ import (
 func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *routeOp:
-		return transformRouteOpPlan(op)
+		return transformRouteOpPlan(ctx, op)
 		// case *joinTree:
 		// 	return transformJoinPlan(ctx, n)
 		// case *derivedTree:
@@ -50,18 +49,22 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 		// 	return transformCorrelatedSubquery(ctx, n)
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", op)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T (transformOpToLogicalPlan)", op)
 }
 
-func transformRouteOpPlan(op *routeOp) (*route, error) {
+func transformRouteOpPlan(ctx *planningContext, op *routeOp) (*routeGen4, error) {
 
 	tableNames := getAllTableNames(op)
 
 	var singleColumn vindexes.SingleColumn
-	var values []sqltypes.PlanValue
+	var value engine.RouteValue
 	if op.selectedVindex() != nil {
-		singleColumn = op.selected.foundVindex.(vindexes.SingleColumn)
-		values = op.selected.values
+		vdx, ok := op.selected.foundVindex.(vindexes.SingleColumn)
+		if !ok || len(op.selected.values) != 1 {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
+		}
+		singleColumn = vdx
+		value = &evalengine.RouteValue{Expr: op.selected.values[0]}
 	}
 
 	var condition sqlparser.Expr
@@ -69,17 +72,17 @@ func transformRouteOpPlan(op *routeOp) (*route, error) {
 		condition = op.selected.valueExprs[0]
 	}
 
-	return &route{
+	return &routeGen4{
 		eroute: &engine.Route{
 			Opcode:              op.routeOpCode,
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            op.keyspace,
 			Vindex:              singleColumn,
-			Values:              values,
+			Value:               value,
 			SysTableTableName:   op.SysTableTableName,
 			SysTableTableSchema: op.SysTableTableSchema,
 		},
-		Select:    toSQL(op.source),
+		Select:    toSQL(ctx, op.source),
 		tables:    op.TableID(),
 		condition: condition,
 	}, nil
