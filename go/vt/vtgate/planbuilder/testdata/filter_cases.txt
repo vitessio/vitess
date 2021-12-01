@@ -812,7 +812,25 @@ Gen4 error: strconv.ParseInt: parsing "18446744073709551615": value out of range
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where name in ::list",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` in ::__vals",
+    "Table": "`user`",
+    "Values": [
+      ":list"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # Multi-table unique vindex constraint
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5"
@@ -1717,7 +1735,48 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "Predicate": "u.id in (user_extra.col, 1)",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(:user_extra_col, INT64(1))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # correlated subquery merge-able into a route of a join tree
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)"
@@ -1765,7 +1824,48 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "Predicate": "u.id in (user_extra.col, 1)",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(:user_extra_col, INT64(1))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # ensure subquery reordering gets us a better plan
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5"
@@ -1807,7 +1907,44 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # nested subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)"
@@ -1855,7 +1992,48 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "Predicate": "u.id in (user_extra.col, 1)",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(:user_extra_col, INT64(1))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # Correlated subquery in where clause
 "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)"
@@ -1874,7 +2052,7 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     "Table": "`user`"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -1897,7 +2075,25 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     "Vindex": "user_index"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id = 5 and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # outer and inner subquery route by same str val
 "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')"
@@ -1920,7 +2116,25 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     "Vindex": "user_index"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
+    "Table": "`user`",
+    "Values": [
+      "VARBINARY(\"aa\")"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # outer and inner subquery route by same val arg
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
@@ -1943,7 +2157,7 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     "Vindex": "user_index"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # unresolved symbol in inner subquery.
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
@@ -1967,7 +2181,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # cross-shard subquery in IN clause.
 # Note the improved Underlying plan as SelectIN.
@@ -2012,7 +2226,46 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (select col from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # cross-shard subquery in NOT IN clause.
 "select id from user where id not in (select col from user)"
@@ -2235,7 +2488,67 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values2",
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id3 from `user` where 1 != 1",
+            "Query": "select id3 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id2 from `user` where 1 != 1",
+            "Query": "select id2 from `user` where :__sq_has_values2 = 1 and id2 in ::__sq2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id1 from `user` where 1 != 1",
+        "Query": "select id1 from `user` where id = :__sq1",
+        "Table": "`user`",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # routing rules subquery merge
 "select col from user where id = (select id from route1 where route1.id = user.id)"
@@ -2627,7 +2940,75 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 411",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(411)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutNotIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+            "Query": "select user_extra.col from user_extra where user_extra.user_id = 42",
+            "Table": "user_extra",
+            "Values": [
+              "INT64(42)"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectIN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where (:__sq_has_values1 = 0 or id not in ::__sq1) and (:__sq_has_values2 = 1 and id in ::__vals)",
+            "Table": "`user`",
+            "Values": [
+              ":__sq2"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # solving LIKE query with a CFC prefix vindex
 "select c2 from cfc_vindex_col where c1 like 'A%'"
@@ -2728,7 +3109,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # in subquery the id will be scoped to local table as there is no qualifier associated with it.
 "select id from user where id in (select col from unsharded where col = id)"
@@ -2772,12 +3153,12 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 error: implement me!
 
 # correlated subquery with different keyspace tables involved
 "select id from user where id in (select col from unsharded where col = user.id)"
 "unsupported: cross-shard correlated subquery"
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # correlated subquery with same keyspace
 "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
@@ -2796,7 +3177,7 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     "Table": "`user`"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # SelectDBA with uncorrelated subqueries
 "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)"
@@ -2834,7 +3215,7 @@ Gen4 plan same as above
     "Table": "ref"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # SelectEqualUnique with uncorrelated subqueries
 "select u1.col from user as u1 where u1.id = 5 and u1.name in (select u2.name from user u2 where u2.id = 5)"
@@ -2857,7 +3238,25 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     "Vindex": "user_index"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where u1.id = 5 and u1.name in (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and u1.`name` in (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # SelectEqualUnique with EXISTS uncorrelated subquery
 "select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)"
@@ -3069,7 +3468,50 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and (:__sq_has_values2 = 1 and id in ::__sq2)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # The outer and second inner are SelectEqualUnique with same Vindex value, the first inner has different Vindex value
 "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -3117,7 +3559,50 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutNotIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and (:__sq_has_values1 = 0 or id not in ::__sq1) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # two correlated subqueries that can be merge in a single route
 "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
@@ -3136,7 +3621,21 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     "Table": "`user`"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+    "Table": "`user`"
+  }
+}
 
 # transitive closures for the win
 "select id from user where user.id = user.col and user.col = 5"
@@ -3384,7 +3883,51 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), 1",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where col2 = 'a'",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC, 1 ASC",
+            "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # should use colb_colc_map as first column of the vindex is present in predicate
 "select * from multicolvin where column_b = 1"
