@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"sync"
 	"sync/atomic"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal/internal/c"
 )
 
 const (
@@ -49,13 +51,10 @@ func storeBigTable(x *[]*big.Int) {
 	bigPow10Tab.Store(x)
 }
 
-var OneInt = big.NewInt(1)
-var TenInt = big.NewInt(10)
-
 // PowOfTenBig reports whether x is a power of 10.
 func PowOfTenBig(x *big.Int) bool {
 	if x.Bit(0) != 0 {
-		return x.Cmp(OneInt) == 0
+		return x.Cmp(c.OneInt) == 0
 	}
 	if x.Sign() == 0 {
 		return true
@@ -63,7 +62,7 @@ func PowOfTenBig(x *big.Int) bool {
 	q := new(big.Int).Set(x)
 	r := new(big.Int)
 	for len := BigLength(x); len > 20; len-- {
-		q.QuoRem(q, TenInt, r)
+		q.QuoRem(q, c.TenInt, r)
 		if r.Sign() != 0 {
 			return false
 		}
@@ -120,7 +119,7 @@ func BigPow10(n uint64) *big.Int {
 		// found so far.
 		partial := tab[tabLen-1]
 		p := new(big.Int).SetUint64(n - (tabLen - 1))
-		return p.Mul(partial, p.Exp(TenInt, p, nil))
+		return p.Mul(partial, p.Exp(c.TenInt, p, nil))
 	}
 	return growBigTen(n)
 }
@@ -150,7 +149,7 @@ func growBigTen(n uint64) *big.Int {
 		newLen = BigPowTabLen
 	}
 	for i := tableLen; i < newLen; i++ {
-		tab = append(tab, new(big.Int).Mul(tab[i-1], TenInt))
+		tab = append(tab, new(big.Int).Mul(tab[i-1], c.TenInt))
 	}
 
 	storeBigTable(&tab)
@@ -184,7 +183,7 @@ func init() {
 	// Can we move this into a var decl without copylock freaking out?
 	storeBigTable(&[]*big.Int{
 		0:  new(big.Int).SetUint64(1),
-		1:  TenInt,
+		1:  c.TenInt,
 		2:  new(big.Int).SetUint64(100),
 		3:  new(big.Int).SetUint64(1000),
 		4:  new(big.Int).SetUint64(10000),

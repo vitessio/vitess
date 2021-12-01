@@ -1,25 +1,46 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package evalengine
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/ericlagergren/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
 )
+
+func newDecimal(val ...string) *decimal.Big {
+	dec := decimal.WithContext(decimalContextSQL)
+	switch len(val) {
+	case 0:
+	case 1:
+		dec.SetString(val[0])
+		if dec.Context.Conditions != 0 {
+			panic(dec.Context.Conditions)
+		}
+	default:
+		panic("newDecimal([val]?)")
+	}
+	return dec
+}
 
 func checkAdd(t *testing.T, left, right, result string) {
 	t.Helper()
-	l := decimal.WithContext(decimalContextSQL)
-	r := decimal.WithContext(decimalContextSQL)
-	o := decimal.WithContext(decimalContextSQL)
-
-	l.SetString(left)
-	r.SetString(right)
+	l, r, o := newDecimal(left), newDecimal(right), newDecimal()
 	o.Add(l, r)
-	if o.Sign() == 0 {
-		o.SetUint64(0)
-	}
-
 	if o.String() != result {
 		t.Errorf("expected %q + %q = %q\nprocessed: %q + %q = %q", left, right, result, l.String(), r.String(), o.String())
 	}
@@ -27,17 +48,8 @@ func checkAdd(t *testing.T, left, right, result string) {
 
 func checkSub(t *testing.T, left, right, result string) {
 	t.Helper()
-	l := decimal.WithContext(decimalContextSQL)
-	r := decimal.WithContext(decimalContextSQL)
-	o := decimal.WithContext(decimalContextSQL)
-
-	l.SetString(left)
-	r.SetString(right)
+	l, r, o := newDecimal(left), newDecimal(right), newDecimal()
 	o.Sub(l, r)
-	if o.Sign() == 0 {
-		o.SetUint64(0)
-	}
-
 	if o.String() != result {
 		t.Errorf("expected %q - %q = %q\nprocessed: %q - %q = %q", left, right, result, l.String(), r.String(), o.String())
 	}
@@ -45,17 +57,8 @@ func checkSub(t *testing.T, left, right, result string) {
 
 func checkMul(t *testing.T, left, right, result string) {
 	t.Helper()
-	l := decimal.WithContext(decimalContextSQL)
-	r := decimal.WithContext(decimalContextSQL)
-	o := decimal.WithContext(decimalContextSQL)
-
-	l.SetString(left)
-	r.SetString(right)
+	l, r, o := newDecimal(left), newDecimal(right), newDecimal()
 	o.Mul(l, r)
-	if o.Sign() == 0 {
-		o.SetUint64(0)
-	}
-
 	if o.String() != result {
 		t.Errorf("expected %q * %q = %q\nprocessed: %q * %q = %q", left, right, result, l.String(), r.String(), o.String())
 	}
@@ -63,36 +66,12 @@ func checkMul(t *testing.T, left, right, result string) {
 
 func checkDiv(t *testing.T, left, right, result string, scaleIncr int) {
 	t.Helper()
-	l := decimal.WithContext(decimalContextSQL)
-	r := decimal.WithContext(decimalContextSQL)
-
-	l.SetString(left)
-	r.SetString(right)
-
-	o := decimal.WithContext(decimalContextSQL)
-	o.Quo(l, r)
-
-	frac1 := myround(l.Scale()) * 9
-	frac2 := myround(r.Scale()) * 9
-
-	scaleIncr -= frac1 - l.Scale() + frac2 - r.Scale()
-	if scaleIncr < 0 {
-		scaleIncr = 0
-	}
-
-	frac0 := myround(frac1 + frac2 + scaleIncr)
-	scale := frac0 * 9
-	if o.Scale() != scale {
-		o.Quantize(scale)
-	}
-	if o.Sign() == 0 {
-		o.SetUint64(0)
-	}
-
-	ostr := fmt.Sprintf("%f", o)
-
-	if ostr != result {
-		t.Errorf("expected %q / %q = %q\nprocessed: %q / %q = %q", left, right, result, l.String(), r.String(), ostr)
+	l := newDecimal(left)
+	r := newDecimal(right)
+	o := newDecimal()
+	o.Div(l, r, scaleIncr)
+	if o.String() != result {
+		t.Errorf("expected %q / %q = %q\nprocessed: %q / %q = %q", left, right, result, l.String(), r.String(), o.String())
 	}
 }
 
@@ -153,4 +132,53 @@ func TestDecimalDiv(t *testing.T) {
 	checkDiv(t, "0.0123456789012345678912345", "9999999999", "0.000000000001234567890246913578148141", 5)
 	checkDiv(t, "10.333000000", "12.34500", "0.837019036046982584042122316", 5)
 	checkDiv(t, "10.000000000060", "2", "5.000000000030000000", 5)
+}
+
+func TestDecimalRoundings(t *testing.T) {
+	defer func() {
+		decimalContextSQL.RoundingMode = roundingModeArithmetic
+	}()
+
+	// (14620 / 9432456) / (24250 / 9432456)
+	found := false
+	a := newEvalInt64(14620)
+	b := newEvalInt64(24250)
+	d := newEvalInt64(9432456)
+
+	for i := 0; i < 7; i++ {
+		var ri = decimal.RoundingMode(i)
+		decimalContextSQL.RoundingMode = ri
+
+		x, _ := decimalDivide(a, d, 4)
+		y, _ := decimalDivide(b, d, 4)
+		z, _ := decimalDivide(x, y, 4)
+
+		aa, _ := newDecimalString("10.333000000")
+		bb, _ := newDecimalString("12.34500")
+		xx, _ := decimalDivide(newEvalDecimal(aa), newEvalDecimal(bb), 5)
+
+		for j := 0; j < 7; j++ {
+			var ok1, ok2 bool
+			var rj = decimal.RoundingMode(j)
+
+			str := string(z.decimal.num.FormatCustom(z.decimal.frac, rj))
+			if str == "0.60288653" {
+				ok1 = true
+			}
+
+			str = string(xx.decimal.num.FormatCustom(xx.decimal.num.Precision(), rj))
+			if str == "0.837019036046982584042122316" {
+				ok2 = true
+			}
+
+			if ok1 && ok2 {
+				t.Logf("i=%s j=%s => %v", ri, rj, ok1 && ok2)
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		t.Fatalf("did not find any valid combinations for arithmetic + format rounding modes")
+	}
 }
