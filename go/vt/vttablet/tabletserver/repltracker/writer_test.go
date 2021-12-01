@@ -105,7 +105,7 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatWriter 
 	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest"), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
-	tw.pool.Open(dbc.DbaWithDB())
+	tw.pool.Open(dbc.AppWithDB())
 
 	return tw
 }
