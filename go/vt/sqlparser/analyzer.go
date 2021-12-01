@@ -502,7 +502,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		}
 	case *IntroducerExpr:
 		switch node.CharacterSet {
-		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
+		case UBinaryStr, Utf8mb4Str, Utf8Str, Latin1Str: // for some charset introducers, we can just ignore them
 			return NewPlanValue(node.Expr)
 		}
 	}
