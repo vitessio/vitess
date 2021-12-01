@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"strconv"
@@ -40,7 +41,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-const maxConcurrency = 6
+var vreplicationCopyPhaseMaxConcurrency = flag.Int("vreplication_copy_phase_max_concurrency", 6, "Maximum number of tables to be copied concurrently in a vreplication workflow's copy phase")
 
 var _ = newParallelVCopier(nil) // TODO(shlomi): delete this; this was added to temporarily satisfy the linter
 var _ = newVCopier(nil)         // TODO(shlomi): delete this; this was added to temporarily satisfy the linter
@@ -136,7 +137,7 @@ func (vc *parallelVcopier) copyNext(ctx context.Context, settings binlogplayer.V
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		lastpk := row[1].ToString()
-		if len(tablesToCopy) < maxConcurrency {
+		if len(tablesToCopy) < *vreplicationCopyPhaseMaxConcurrency {
 			tablesToCopy = append(tablesToCopy, tableName)
 		}
 		copyState[tableName] = nil
@@ -288,7 +289,7 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 	// semaphore implemented by channel with maxConcurrency capacity.
 	// semaphore "down" is done by inserting a value to the channel. Up to maxConcurrency is for free
 	// semaphore "up" is done by extracting a vlue from the channel (guaranteed to succeed if you inserted a value prior)
-	semaphore := make(chan bool, maxConcurrency)
+	semaphore := make(chan bool, *vreplicationCopyPhaseMaxConcurrency)
 
 	err = vc.vr.sourceVStreamer.VStreamRowsParallel(ctx, tables, queries, lastpkpbs, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// this function could be called concurrently by parallel_rowstreamer
