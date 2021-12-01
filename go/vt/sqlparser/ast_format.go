@@ -1196,7 +1196,7 @@ func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s%v", node.CharacterSet.ToString(), node.Expr)
+	buf.astPrintf(node, "%s %v", node.CharacterSet, node.Expr)
 }
 
 // Format formats the node.

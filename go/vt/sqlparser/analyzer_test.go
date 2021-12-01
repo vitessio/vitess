@@ -487,7 +487,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewFloat64(2.1)},
 	}, {
 		in: &IntroducerExpr{
-			CharacterSet: Latin1Op,
+			CharacterSet: Latin1Str,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  "strval",
@@ -505,7 +505,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &IntroducerExpr{
-			CharacterSet: UBinaryOp,
+			CharacterSet: UBinaryStr,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  "strval",
@@ -514,7 +514,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &IntroducerExpr{
-			CharacterSet: Utf8mb4Op,
+			CharacterSet: Utf8mb4Str,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  "strval",
@@ -523,7 +523,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &IntroducerExpr{
-			CharacterSet: Utf8Op,
+			CharacterSet: Utf8Str,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  "strval",

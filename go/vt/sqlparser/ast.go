@@ -1916,12 +1916,9 @@ type (
 
 	// IntroducerExpr represents a unary value expression.
 	IntroducerExpr struct {
-		CharacterSet IntroducerCharacterSet
+		CharacterSet string
 		Expr         Expr
 	}
-
-	// IntroducerCharacterSet is an enum for IntroducerExpr.CharacterSet
-	IntroducerCharacterSet int8
 
 	// IntervalExpr represents a date-time INTERVAL expression.
 	IntervalExpr struct {

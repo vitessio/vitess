@@ -158,7 +158,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   explainType 	  ExplainType
   intervalType	  IntervalTypes
   lockType LockType
-  introducerExprCharacterSet IntroducerCharacterSet
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
@@ -453,7 +452,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-%type <introducerExprCharacterSet> underscore_charsets
+%type <str> underscore_charsets
 %start any_command
 
 %%
@@ -1398,167 +1397,167 @@ text_literal
 underscore_charsets:
   UNDERSCORE_ARMSCII8
   {
-    $$ = Armscii8Op
+    $$ = Armscii8Str
   }
 | UNDERSCORE_ASCII
   {
-    $$ = ASCIIOp
+    $$ = ASCIIStr
   }
 | UNDERSCORE_BIG5
   {
-    $$ = Big5Op
+    $$ = Big5Str
   }
 | UNDERSCORE_BINARY
   {
-    $$ = UBinaryOp
+    $$ = UBinaryStr
   }
 | UNDERSCORE_CP1250
   {
-    $$ = Cp1250Op
+    $$ = Cp1250Str
   }
 | UNDERSCORE_CP1251
   {
-    $$ = Cp1251Op
+    $$ = Cp1251Str
   }
 | UNDERSCORE_CP1256
   {
-    $$ = Cp1256Op
+    $$ = Cp1256Str
   }
 | UNDERSCORE_CP1257
   {
-    $$ = Cp1257Op
+    $$ = Cp1257Str
   }
 | UNDERSCORE_CP850
   {
-    $$ = Cp850Op
+    $$ = Cp850Str
   }
 | UNDERSCORE_CP852
   {
-    $$ = Cp852Op
+    $$ = Cp852Str
   }
 | UNDERSCORE_CP866
   {
-    $$ = Cp866Op
+    $$ = Cp866Str
   }
 | UNDERSCORE_CP932
   {
-    $$ = Cp932Op
+    $$ = Cp932Str
   }
 | UNDERSCORE_DEC8
   {
-    $$ = Dec8Op
+    $$ = Dec8Str
   }
 | UNDERSCORE_EUCJPMS
   {
-    $$ = EucjpmsOp
+    $$ = EucjpmsStr
   }
 | UNDERSCORE_EUCKR
   {
-    $$ = EuckrOp
+    $$ = EuckrStr
   }
 | UNDERSCORE_GB18030
   {
-    $$ = Gb18030Op
+    $$ = Gb18030Str
   }
 | UNDERSCORE_GB2312
   {
-    $$ = Gb2312Op
+    $$ = Gb2312Str
   }
 | UNDERSCORE_GBK
   {
-    $$ = GbkOp
+    $$ = GbkStr
   }
 | UNDERSCORE_GEOSTD8
   {
-    $$ = Geostd8Op
+    $$ = Geostd8Str
   }
 | UNDERSCORE_GREEK
   {
-    $$ = GreekOp
+    $$ = GreekStr
   }
 | UNDERSCORE_HEBREW
   {
-    $$ = HebrewOp
+    $$ = HebrewStr
   }
 | UNDERSCORE_HP8
   {
-    $$ = Hp8Op
+    $$ = Hp8Str
   }
 | UNDERSCORE_KEYBCS2
   {
-    $$ = Keybcs2Op
+    $$ = Keybcs2Str
   }
 | UNDERSCORE_KOI8R
   {
-    $$ = Koi8rOp
+    $$ = Koi8rStr
   }
 | UNDERSCORE_KOI8U
   {
-    $$ = Koi8uOp
+    $$ = Koi8uStr
   }
 | UNDERSCORE_LATIN1
   {
-    $$ = Latin1Op
+    $$ = Latin1Str
   }
 | UNDERSCORE_LATIN2
   {
-    $$ = Latin2Op
+    $$ = Latin2Str
   }
 | UNDERSCORE_LATIN5
   {
-    $$ = Latin5Op
+    $$ = Latin5Str
   }
 | UNDERSCORE_LATIN7
   {
-    $$ = Latin7Op
+    $$ = Latin7Str
   }
 | UNDERSCORE_MACCE
   {
-    $$ = MacceOp
+    $$ = MacceStr
   }
 | UNDERSCORE_MACROMAN
   {
-    $$ = MacromanOp
+    $$ = MacromanStr
   }
 | UNDERSCORE_SJIS
   {
-    $$ = SjisOp
+    $$ = SjisStr
   }
 | UNDERSCORE_SWE7
   {
-    $$ = Swe7Op
+    $$ = Swe7Str
   }
 | UNDERSCORE_TIS620
   {
-    $$ = Tis620Op
+    $$ = Tis620Str
   }
 | UNDERSCORE_UCS2
   {
-    $$ = Ucs2Op
+    $$ = Ucs2Str
   }
 | UNDERSCORE_UJIS
   {
-    $$ = UjisOp
+    $$ = UjisStr
   }
 | UNDERSCORE_UTF16
   {
-    $$ = Utf16Op
+    $$ = Utf16Str
   }
 | UNDERSCORE_UTF16LE
   {
-    $$ = Utf16leOp
+    $$ = Utf16leStr
   }
 | UNDERSCORE_UTF32
   {
-    $$ = Utf32Op
+    $$ = Utf32Str
   }
 | UNDERSCORE_UTF8
   {
-    $$ = Utf8Op
+    $$ = Utf8Str
   }
 | UNDERSCORE_UTF8MB4
   {
-    $$ = Utf8mb4Op
+    $$ = Utf8mb4Str
   }
 
 literal_or_null:
