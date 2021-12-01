@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/vtexplain"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -169,6 +170,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
+	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -954,6 +956,45 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, req.Alias, ids)
+}
+
+// PingTablet is part of the vtadminpb.VTAdminServer interface.
+func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest) (*vtadmin.PingTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.PingTablet")
+	defer span.Finish()
+
+	tablet, err := api.GetTablet(ctx, &vtadminpb.GetTabletRequest{
+		Alias:      req.Alias,
+		ClusterIds: req.ClusterIds,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VSchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.PingTablet(ctx, &vtctldatapb.PingTabletRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error pinging cluster: %w", err)
+	}
+
+	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
 }
 
 // GetTablets is part of the vtadminpb.VTAdminServer interface.

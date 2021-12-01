@@ -3,6 +3,7 @@ import React from 'react'
 interface MenuItemProps {
     className?: String
     intent?: 'danger' | 'warning' | 'success' | 'none'
+    onClick?: () => {}
 }
 
 const MenuItem: React.FC<MenuItemProps> = ({ children, className, intent='none', ...props }) => {
