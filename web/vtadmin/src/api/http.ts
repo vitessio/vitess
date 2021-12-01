@@ -33,7 +33,7 @@ import { TabletDebugVars } from '../util/tabletDebugVars';
 export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
     try {
         const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
-
+        console.log(process.env)
         const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = vtfetchOpts();
 
