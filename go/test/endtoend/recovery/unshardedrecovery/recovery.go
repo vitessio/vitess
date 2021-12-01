@@ -233,12 +233,16 @@ func TestRecoveryImpl(t *testing.T) {
 	//verify that primary has new value
 	qr, err := primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "msgx1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	rowBytes, err := qr.Rows[0][0].ToBytes()
+	assert.NoError(t, err)
+	assert.Equal(t, "msgx1", string(rowBytes))
 
 	//verify that restored replica has old value
 	qr, err = replica2.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "test1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	rowBytes, err = qr.Rows[0][0].ToBytes()
+	assert.NoError(t, err)
+	assert.Equal(t, "test1", string(rowBytes))
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.NoError(t, err)
@@ -262,12 +266,16 @@ func TestRecoveryImpl(t *testing.T) {
 	//verify that primary has new value
 	qr, err = primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "msgx2", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	rowBytes, err = qr.Rows[0][0].ToBytes()
+	assert.NoError(t, err)
+	assert.Equal(t, "msgx2", string(rowBytes))
 
 	//verify that restored replica has old value
 	qr, err = replica3.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "msgx1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	rowBytes, err = qr.Rows[0][0].ToBytes()
+	assert.NoError(t, err)
+	assert.Equal(t, "msgx1", string(rowBytes))
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.TabletTypesToWait = "REPLICA"

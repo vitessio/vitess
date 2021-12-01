@@ -63,7 +63,11 @@ func (vind *Binary) NeedsVCursor() bool {
 func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		out[i] = bytes.Equal(ids[i].ToBytes(), ksids[i])
+		idBytes, err := ids[i].ToBytes()
+		if err != nil {
+			return out, err
+		}
+		out[i] = bytes.Equal(idBytes, ksids[i])
 	}
 	return out, nil
 }
@@ -72,7 +76,11 @@ func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]b
 func (vind *Binary) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		out[i] = key.DestinationKeyspaceID(id.ToBytes())
+		idBytes, err := id.ToBytes()
+		if err != nil {
+			return out, err
+		}
+		out[i] = key.DestinationKeyspaceID(idBytes)
 	}
 	return out, nil
 }

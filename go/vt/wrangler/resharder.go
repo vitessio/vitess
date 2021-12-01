@@ -210,7 +210,11 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
 			}
 			var bls binlogdatapb.BinlogSource
-			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
+			rowBytes, err := row[1].ToBytes()
+			if err != nil {
+				return err
+			}
+			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 				return vterrors.Wrapf(err, "prototext.Unmarshal: %v", row)
 			}
 			isReference, err := rs.blsIsReference(&bls)

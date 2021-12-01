@@ -31,17 +31,21 @@ func Cast(v sqltypes.Value, typ querypb.Type) (sqltypes.Value, error) {
 	if v.Type() == typ || v.IsNull() {
 		return v, nil
 	}
+	vBytes, err := v.ToBytes()
+	if err != nil {
+		return v, err
+	}
 	if sqltypes.IsSigned(typ) && v.IsSigned() {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 	if sqltypes.IsUnsigned(typ) && v.IsUnsigned() {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 	if (sqltypes.IsFloat(typ) || typ == sqltypes.Decimal) && (v.IsIntegral() || v.IsFloat() || v.Type() == sqltypes.Decimal) {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 	if sqltypes.IsQuoted(typ) && (v.IsIntegral() || v.IsFloat() || v.Type() == sqltypes.Decimal || v.IsQuoted()) {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 
 	// Explicitly disallow Expression.
@@ -51,7 +55,7 @@ func Cast(v sqltypes.Value, typ querypb.Type) (sqltypes.Value, error) {
 
 	// If the above fast-paths were not possible,
 	// go through full validation.
-	return sqltypes.NewValue(typ, v.ToBytes())
+	return sqltypes.NewValue(typ, vBytes)
 }
 
 // ToUint64 converts Value to uint64.
@@ -132,7 +136,7 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 	case v.IsFloat():
 		return ToFloat64(v)
 	case v.IsQuoted() || v.Type() == sqltypes.Bit || v.Type() == sqltypes.Decimal:
-		out = v.ToBytes()
+		out, err = v.ToBytes()
 	case v.Type() == sqltypes.Expression:
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be converted to a go type", v)
 	}

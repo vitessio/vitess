@@ -801,7 +801,11 @@ nextrow:
 				continue
 			}
 			journal := &binlogdatapb.Journal{}
-			if err := prototext.Unmarshal(afterValues[i].ToBytes(), journal); err != nil {
+			avBytes, err := afterValues[i].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			if err := prototext.Unmarshal(avBytes, journal); err != nil {
 				return nil, err
 			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -910,7 +914,11 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			if maxBytesPerChar > 1 {
 				maxCharLen := plan.Table.Fields[colNum].ColumnLength / maxBytesPerChar
 				if uint32(value.Len()) > maxCharLen {
-					originalVal := value.ToBytes()
+					ovBytes, err := value.ToBytes()
+					if err != nil {
+						return false, nil, err
+					}
+					originalVal := ovBytes
 
 					// Let's be sure that we're not going to be trimming non-null bytes
 					firstNullBytePos := bytes.IndexByte(originalVal, byte(0))

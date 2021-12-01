@@ -236,7 +236,11 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			}
 
 			var bls binlogdatapb.BinlogSource
-			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
+			rowBytes, err := row[1].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 				return nil, err
 			}
 
