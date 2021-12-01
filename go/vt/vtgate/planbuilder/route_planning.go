@@ -20,7 +20,8 @@ import (
 	"io"
 	"sort"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
@@ -868,7 +869,7 @@ func createRoutePlan(ctx *planningContext, table *abstract.QueryTable, solves se
 		vindex, _ := vindexes.NewBinary("binary", nil)
 		plan.selected = &vindexOption{
 			ready:       true,
-			values:      []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}},
+			values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
 			valueExprs:  nil,
 			predicates:  nil,
 			opcode:      engine.SelectEqualUnique,

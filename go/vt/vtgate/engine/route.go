@@ -76,8 +76,9 @@ type Route struct {
 
 	// Vindex specifies the vindex to be used.
 	Vindex vindexes.SingleColumn
+
 	// Values specifies the vindex values to use for routing.
-	Values []sqltypes.PlanValue
+	Values []evalengine.Expr
 
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
@@ -588,11 +589,14 @@ func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	key, err := route.Values[0].ResolveValue(bindVars)
+	env := &evalengine.ExpressionEnv{
+		BindVars: bindVars,
+	}
+	value, err := route.Values[0].Evaluate(env)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{key})
+	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{value.Value()})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -604,11 +608,14 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 }
 
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	keys, err := route.Values[0].ResolveList(bindVars)
+	env := &evalengine.ExpressionEnv{
+		BindVars: bindVars,
+	}
+	value, err := route.Values[0].Evaluate(env)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
+	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, value.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -616,11 +623,14 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	keys, err := route.Values[0].ResolveList(bindVars)
+	env := &evalengine.ExpressionEnv{
+		BindVars: bindVars,
+	}
+	key, err := route.Values[0].Evaluate(env)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
+	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, key.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
