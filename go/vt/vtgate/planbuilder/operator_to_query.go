@@ -33,7 +33,7 @@ func toSQL(ctx *planningContext, op abstract.PhysicalOperator) sqlparser.SelectS
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *tableOp:
-		qb.addTable(op.qtable.Table.Name.String())
+		qb.addTable(op.qtable.Table.Name.String(), op.qtable.Alias.As.String())
 		for _, pred := range op.qtable.Predicates {
 			qb.addPredicate(pred)
 		}
@@ -67,16 +67,20 @@ func (qb *queryBuilder) produce() sqlparser.SelectStatement {
 	return query
 }
 
-func (qb *queryBuilder) addTable(t string) {
+func (qb *queryBuilder) addTable(tableName, alias string) {
 	if qb.sel == nil {
 		qb.sel = &sqlparser.Select{}
 	}
 	sel := qb.sel.(*sqlparser.Select)
 	sel.From = append(sel.From, &sqlparser.AliasedTableExpr{
-		Expr: sqlparser.TableName{Name: sqlparser.NewTableIdent(t)},
+		Expr:       sqlparser.TableName{Name: sqlparser.NewTableIdent(tableName)},
+		Partitions: nil,
+		As:         sqlparser.NewTableIdent(alias),
+		Hints:      nil,
+		Columns:    nil,
 	})
 	qb.sel = sel
-	qb.tableNames = append(qb.tableNames, t)
+	qb.tableNames = append(qb.tableNames, tableName)
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
