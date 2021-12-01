@@ -114,6 +114,12 @@ func (w *heartbeatWriter) Open() {
 	}
 	log.Info("Hearbeat Writer: opening")
 
+	// We cannot create the database and tables in this Open function
+	// since, this is run when a tablet changes to Primary type. The other replicas
+	// might not have started replication. So if we run the create commands, it will
+	// block this thread, and we could end up in a deadlock.
+	// Instead, we try creating the database and table in each tick which runs in a go routine
+	// keeping us safe from hanging the main thread.
 	w.pool.Open(w.env.Config().DB.AppWithDB())
 	w.enableWrites(true)
 	w.isOpen = true
