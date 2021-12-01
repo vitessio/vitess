@@ -264,9 +264,9 @@ func (ws *wrappedService) VStreamRows(ctx context.Context, target *querypb.Targe
 	})
 }
 
-func (ws *wrappedService) VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (ws *wrappedService) VStreamRowsParallel(ctx context.Context, target *querypb.Target, tables, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "VStreamRowsParallel", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		innerErr := conn.VStreamRowsParallel(ctx, target, queries, lastpks, send)
+		innerErr := conn.VStreamRowsParallel(ctx, target, tables, queries, lastpks, send)
 		return false, innerErr
 	})
 }

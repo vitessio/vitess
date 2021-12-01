@@ -274,10 +274,12 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 
 	var lastpkpbs []*querypb.QueryResult
 	var queries []string
+	var tables []string
 	tcMutex.RLock()
-	for _, tc := range tableCopyInfoMap {
+	for table, tc := range tableCopyInfoMap {
 		queries = append(queries, tc.initialPlan.SendRule.Filter)
 		lastpkpbs = append(lastpkpbs, tc.lastpkpb)
+		tables = append(tables, table)
 	}
 	tcMutex.RUnlock()
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
@@ -288,7 +290,7 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 	// semaphore "up" is done by extracting a vlue from the channel (guaranteed to succeed if you inserted a value prior)
 	semaphore := make(chan bool, maxConcurrency)
 
-	err = vc.vr.sourceVStreamer.VStreamRowsParallel(ctx, queries, lastpkpbs, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = vc.vr.sourceVStreamer.VStreamRowsParallel(ctx, tables, queries, lastpkpbs, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// this function could be called concurrently by parallel_rowstreamer
 		// wait for semaphore (limiting max concurrency) or for cancelled context.
 		select {

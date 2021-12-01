@@ -691,7 +691,7 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 }
 
 // VStreamRowsParallel streams rows of a query from the specified starting point.
-func (conn *gRPCQueryClient) VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (conn *gRPCQueryClient) VStreamRowsParallel(ctx context.Context, target *querypb.Target, tables, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamRowsClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -705,6 +705,7 @@ func (conn *gRPCQueryClient) VStreamRowsParallel(ctx context.Context, target *qu
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 			Queries:           queries,
 			Lastpks:           lastpks,
+			Tables:            tables,
 		}
 		stream, err := conn.c.VStreamRowsParallel(ctx, req)
 		if err != nil {

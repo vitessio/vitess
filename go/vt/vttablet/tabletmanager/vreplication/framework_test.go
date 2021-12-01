@@ -280,6 +280,18 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Targ
 	})
 }
 
+// VStreamRowsParallel directly calls into the pre-initialized engine.
+func (ftc *fakeTabletConn) VStreamRowsParallel(ctx context.Context, target *querypb.Target, tables, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	for i := range tables {
+		send2 := func(rows *binlogdatapb.VStreamRowsResponse) error {
+			rows.TableName = tables[i]
+			return send(rows)
+		}
+		ftc.VStreamRows(ctx, target, queries[i], lastpks[i], send2)
+	}
+	return nil
+}
+
 //--------------------------------------
 // Binlog Client to TabletManager
 

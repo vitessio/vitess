@@ -373,7 +373,7 @@ func (q *query) VStreamRowsParallel(request *binlogdatapb.VStreamRowsParallelReq
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.VStreamRowsParallel(ctx, request.Target, request.Queries, request.Lastpks, stream.Send)
+	err = q.server.VStreamRowsParallel(ctx, request.Target, request.Tables, request.Queries, request.Lastpks, stream.Send)
 	return vterrors.ToGRPC(err)
 }
 

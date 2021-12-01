@@ -1624,6 +1624,15 @@ func (m *VStreamRowsParallelRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.Tables) > 0 {
+		for iNdEx := len(m.Tables) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Tables[iNdEx])
+			copy(dAtA[i:], m.Tables[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Tables[iNdEx])))
+			i--
+			dAtA[i] = 0x32
+		}
+	}
 	if len(m.Lastpks) > 0 {
 		for iNdEx := len(m.Lastpks) - 1; iNdEx >= 0; iNdEx-- {
 			size, err := m.Lastpks[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
@@ -2750,6 +2759,12 @@ func (m *VStreamRowsParallelRequest) SizeVT() (n int) {
 	if len(m.Lastpks) > 0 {
 		for _, e := range m.Lastpks {
 			l = e.SizeVT()
+			n += 1 + l + sov(uint64(l))
+		}
+	}
+	if len(m.Tables) > 0 {
+		for _, s := range m.Tables {
+			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
 	}
@@ -7334,6 +7349,38 @@ func (m *VStreamRowsParallelRequest) UnmarshalVT(dAtA []byte) error {
 			if err := m.Lastpks[len(m.Lastpks)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tables", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Tables = append(m.Tables, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

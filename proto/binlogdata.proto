@@ -434,6 +434,7 @@ message VStreamRowsParallelRequest {
 
   repeated string queries = 4;
   repeated query.QueryResult lastpks = 5;
+  repeated string tables = 6;
 }
 
 // VStreamRowsResponse is the response from VStreamRows

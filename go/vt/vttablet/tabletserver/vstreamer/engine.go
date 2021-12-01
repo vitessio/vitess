@@ -271,7 +271,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 // StreamRowsParallel streams rows.
 // This streams the table data rows (so we can copy the table data snapshot)
-func (vse *Engine) StreamRowsParallel(ctx context.Context, queries []string, lastpks [][]sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (vse *Engine) StreamRowsParallel(ctx context.Context, tables, queries []string, lastpks [][]sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
 	// because this overhead should be incurred only if someone uses this feature.
