@@ -30,8 +30,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/ericlagergren/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
 )
 
 type (
@@ -41,12 +40,12 @@ type (
 		numval    uint64
 		bytes     []byte
 		tuple     *[]EvalResult
-		decimal   *DecimalResult
+		decimal   *decimalResult
 	}
 
-	DecimalResult struct {
-		num   decimal.Big
-		scale int
+	decimalResult struct {
+		num  decimal.Big
+		frac int
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -247,14 +246,6 @@ func NewLiteralFloat(val float64) Expr {
 	return &Literal{Val: newEvalFloat(val)}
 }
 
-var decimalContextSQL = decimal.Context{
-	MaxScale:     30,
-	MinScale:     0,
-	Precision:    65,
-	Traps:        ^(decimal.Inexact | decimal.Rounded | decimal.Subnormal),
-	RoundingMode: 2,
-}
-
 // NewLiteralRealFromBytes returns a float literal expression from a slice of bytes
 func NewLiteralRealFromBytes(val []byte) (Expr, error) {
 	if bytes.IndexByte(val, 'e') >= 0 || bytes.IndexByte(val, 'E') >= 0 {
@@ -264,13 +255,11 @@ func NewLiteralRealFromBytes(val []byte) (Expr, error) {
 		}
 		return &Literal{Val: newEvalFloat(fval)}, nil
 	}
-	dr := newDecimalResult(0)
-	dr.num.SetString(string(val))
-	if dr.num.Context.Conditions != 0 {
-		return nil, dr.num.Context.Conditions
+	dec, err := newDecimalString(string(val))
+	if err != nil {
+		return nil, err
 	}
-	dr.scale = dr.num.Scale()
-	return &Literal{Val: newEvalDecimal(dr)}, nil
+	return &Literal{Val: newEvalDecimal(dec)}, nil
 }
 
 // NewLiteralString returns a literal expression

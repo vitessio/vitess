@@ -3,7 +3,6 @@ package arith
 import (
 	"crypto/rand"
 	"io"
-	"math"
 	"math/big"
 	mrand "math/rand"
 	"testing"
@@ -85,27 +84,6 @@ func TestBigLength(t *testing.T) {
 	n := len(x.String())
 	if l := BigLength(x); l != n {
 		t.Fatalf("exp(10, 1e5): wanted %d, got %d", n, l)
-	}
-
-	if testing.Short() {
-		t.Skip("skipping testing enormous big.Int bit-length in short mode")
-	}
-
-	// Randomly chosen length so its bit-length is a smidge above overflowCutoff
-	// to speed up this looong test.
-	nat := make([]big.Word, 222932222)
-	nat[0] = 0xDEADBEEF
-	for bp := 1; bp < len(nat); bp *= 2 {
-		copy(nat[bp:], nat[:bp])
-	}
-	x.SetBits(nat)
-
-	// Used by math/big.nat to determine the size of the output buffer.
-	n = int(float64(x.BitLen())/math.Log2(10)) + 1
-
-	// We're allowed to be +1 larger, but not smaller.
-	if l := BigLength(x); l-n > 1 {
-		t.Fatalf("really freaking big: wanted %d, got %d", n, l)
 	}
 }
 

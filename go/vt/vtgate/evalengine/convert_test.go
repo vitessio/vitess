@@ -46,10 +46,6 @@ func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
 	return collations.ID(d)
 }
 
-func TestCornerCases(t *testing.T) {
-
-}
-
 func TestConvertSimplification(t *testing.T) {
 	type ast struct {
 		literal, err string
@@ -96,7 +92,7 @@ func TestConvertSimplification(t *testing.T) {
 		{"1 + 0.05", ok("INT64(1) + DECIMAL(0.05)"), ok("DECIMAL(1.05)")},
 		{"1 + 0.05e0", ok("INT64(1) + FLOAT64(0.05)"), ok("FLOAT64(1.05)")},
 		{"1 / 1", ok("INT64(1) / INT64(1)"), ok("DECIMAL(1.0000)")},
-		// {"(14620 / 9432456) / (24250 / 9432456)", ok("(INT64(14620) / INT64(9432456)) / (INT64(24250) / INT64(9432456))"), ok("DECIMAL(0.60288653)")},
+		{"(14620 / 9432456) / (24250 / 9432456)", ok("(INT64(14620) / INT64(9432456)) / (INT64(24250) / INT64(9432456))"), ok("DECIMAL(0.60288653)")},
 	}
 
 	for _, tc := range testCases {

@@ -23,15 +23,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ericlagergren/decimal"
-
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
 )
 
 // evalengine represents a numeric value extracted from
@@ -587,7 +585,7 @@ func divideNumericWithError(v1, v2 EvalResult, precise bool) (EvalResult, error)
 		}
 		return floatDivideAnyWithError(v1f, v2)
 	default:
-		return decimalDivide(v1, v2)
+		return decimalDivide(v1, v2, divPrecisionIncrement)
 	}
 }
 
@@ -747,17 +745,12 @@ func coerceToFloat(v2 EvalResult) (float64, error) {
 	}
 }
 
-func coerceToDecimal(v2 EvalResult) *DecimalResult {
-	var out DecimalResult
-	out.num.Context = decimalContextSQL
-
+func coerceToDecimal(v2 EvalResult) *decimalResult {
 	switch v2.typ {
 	case sqltypes.Int64:
-		out.num.SetMantScale(int64(v2.numval), 0)
-		return &out
+		return newDecimalInt64(int64(v2.numval))
 	case sqltypes.Uint64:
-		out.num.SetUint64(v2.numval)
-		return &out
+		return newDecimalUint64(v2.numval)
 	case sqltypes.Float64:
 		panic("should never coerce FLOAT64 to DECIMAL")
 	case sqltypes.Decimal:
@@ -791,91 +784,93 @@ func floatTimesAny(v1 float64, v2 EvalResult) (EvalResult, error) {
 	return newEvalFloat(v1 * v2f), nil
 }
 
-func maxprecision(left, right *DecimalResult) int {
-	if left.scale > right.scale {
-		return left.scale
-	}
-	return right.scale
+const roundingModeArithmetic = decimal.ToZero
+const roundingModeFormat = decimal.ToNearestEven
+
+var decimalContextSQL = decimal.Context{
+	MaxScale:      30,
+	MinScale:      0,
+	Precision:     65,
+	Traps:         ^(decimal.Inexact | decimal.Rounded | decimal.Subnormal),
+	RoundingMode:  roundingModeArithmetic,
+	OperatingMode: decimal.GDA,
 }
 
-func newDecimalResult(precision int) *DecimalResult {
-	var result DecimalResult
+func newDecimalUint64(x uint64) *decimalResult {
+	var result decimalResult
 	result.num.Context = decimalContextSQL
-	result.scale = precision
+	result.num.SetUint64(x)
 	return &result
 }
 
-func (dr *DecimalResult) clean() {
-	if dr.num.Sign() == 0 {
-		dr.num.SetUint64(0)
+func newDecimalString(x string) (*decimalResult, error) {
+	var result decimalResult
+	result.num.Context = decimalContextSQL
+	result.num.SetString(x)
+	if result.num.Context.Conditions != 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", result.num.Context.Conditions)
 	}
+	result.frac = result.num.Scale()
+	return &result, nil
 }
 
-func (dr *DecimalResult) sscale() int {
-	return dr.num.Scale()
+func newDecimalInt64(x int64) *decimalResult {
+	var result decimalResult
+	result.num.Context = decimalContextSQL
+	result.num.SetMantScale(x, 0)
+	return &result
 }
 
-func decimalPlusAny(v1 *DecimalResult, v2 EvalResult) EvalResult {
+func newDecimalFromOp(left, right *decimalResult, op func(r, x, y *decimal.Big)) *decimalResult {
+	var result decimalResult
+	result.num.Context = decimalContextSQL
+	op(&result.num, &left.num, &right.num)
+	if left.frac > right.frac {
+		result.frac = left.frac
+	} else {
+		result.frac = right.frac
+	}
+	return &result
+}
+
+func decimalPlusAny(v1 *decimalResult, v2 EvalResult) EvalResult {
 	v2d := coerceToDecimal(v2)
-	result := newDecimalResult(maxprecision(v1, v2d))
-	result.num.Add(&v1.num, &v2d.num)
-	result.clean()
+	result := newDecimalFromOp(v1, v2d, func(r, x, y *decimal.Big) { r.Add(x, y) })
 	return newEvalDecimal(result)
 }
 
-func decimalMinusAny(v1 *DecimalResult, v2 EvalResult) EvalResult {
+func decimalMinusAny(v1 *decimalResult, v2 EvalResult) EvalResult {
 	v2d := coerceToDecimal(v2)
-	result := newDecimalResult(maxprecision(v1, v2d))
-	result.num.Sub(&v1.num, &v2d.num)
-	result.clean()
+	result := newDecimalFromOp(v1, v2d, func(r, x, y *decimal.Big) { r.Sub(x, y) })
 	return newEvalDecimal(result)
 }
 
-func anyMinusDecimal(v1 EvalResult, v2 *DecimalResult) EvalResult {
+func anyMinusDecimal(v1 EvalResult, v2 *decimalResult) EvalResult {
 	v1d := coerceToDecimal(v1)
-	result := newDecimalResult(maxprecision(v1d, v2))
-	result.num.Sub(&v1d.num, &v2.num)
-	result.clean()
+	result := newDecimalFromOp(v1d, v2, func(r, x, y *decimal.Big) { r.Sub(x, y) })
 	return newEvalDecimal(result)
 }
 
-func decimalTimesAny(v1 *DecimalResult, v2 EvalResult) EvalResult {
+func decimalTimesAny(v1 *decimalResult, v2 EvalResult) EvalResult {
 	v2d := coerceToDecimal(v2)
-	result := newDecimalResult(maxprecision(v1, v2d))
-	result.num.Mul(&v1.num, &v2d.num)
-	result.clean()
+	result := newDecimalFromOp(v1, v2d, func(r, x, y *decimal.Big) { r.Mul(x, y) })
 	return newEvalDecimal(result)
 }
 
 const divPrecisionIncrement = 4
 
-func myround(digits int) int {
-	return (digits + 8) / 9
-}
-
-func decimalDivide(v1, v2 EvalResult) (EvalResult, error) {
+func decimalDivide(v1, v2 EvalResult, incrPrecision int) (EvalResult, error) {
 	left := coerceToDecimal(v1)
 	right := coerceToDecimal(v2)
-	result := newDecimalResult(left.scale + divPrecisionIncrement)
 
-	result.num.Quo(&left.num, &right.num)
+	var result decimalResult
+	result.num.Context = decimalContextSQL
+	result.frac = left.frac + incrPrecision
+	result.num.Div(&left.num, &right.num, incrPrecision)
 	if result.num.Context.Conditions&(decimal.DivisionByZero|decimal.DivisionUndefined) != 0 {
 		return resultNull, nil
 	}
-
-	fracLeft := myround(left.sscale())
-	fracRight := myround(right.sscale())
-	scaleIncr := divPrecisionIncrement
-	scaleIncr -= fracLeft - left.sscale() + fracRight - right.sscale()
-	if scaleIncr < 0 {
-		scaleIncr = 0
-	}
-	scale := myround(fracLeft+fracRight+scaleIncr) * 9
-	if result.sscale() != scale {
-		result.num.Quantize(scale)
-	}
-	result.clean()
-	return newEvalDecimal(result), nil
+	return newEvalDecimal(&result), nil
 }
 
 func newEvalFloat(f float64) EvalResult {
@@ -902,7 +897,7 @@ func newEvalInt64(i int64) EvalResult {
 	}
 }
 
-func newEvalDecimal(dec *DecimalResult) EvalResult {
+func newEvalDecimal(dec *decimalResult) EvalResult {
 	return EvalResult{
 		typ:       sqltypes.Decimal,
 		decimal:   dec,

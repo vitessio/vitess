@@ -24,12 +24,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/cockroachdb/apd/v2"
-	"github.com/ericlagergren/decimal"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/arith"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1684,67 +1680,4 @@ func TestParseStringToFloat(t *testing.T) {
 			require.EqualValues(t, tc.val, got)
 		})
 	}
-}
-
-func TestRunMysql(t *testing.T) {
-
-}
-
-func TestDecimalPrecision2(t *testing.T) {
-	d := decimal.New(9432456, 0)
-	a := decimal.New(14620, 0)
-	b := decimal.New(24250, 0)
-
-	var x, y decimal.Big
-
-	x.Quo(a, d)
-	t.Logf("x = %s DECIMAL(%d, %d)", x.String(), x.Precision(), x.Scale())
-
-	x.Round(4)
-	t.Logf("x = %s DECIMAL(%d, %d)", x.String(), x.Precision(), x.Scale())
-
-	y.Quo(b, d)
-	y.Round(4)
-}
-
-func TestDecimalPrecision(t *testing.T) {
-	pfunc := func(x *apd.Decimal) uint32 {
-		return uint32(arith.BigLength(&x.Coeff) + int(-x.Exponent))
-	}
-
-	d := apd.New(9432456, 0)
-	a := apd.New(14620, 0)
-	b := apd.New(24250, 0)
-	p := pfunc(a)
-
-	x := new(apd.Decimal)
-	_, _ = new(apd.Context).WithPrecision(9).Quo(x, a, d)
-	t.Logf("%s DECIMAL(%d, %d)", x.String(), p, -x.Exponent)
-
-	y := new(apd.Decimal)
-	_, _ = new(apd.Context).WithPrecision(9).Quo(y, b, d)
-	t.Logf("%s DECIMAL(%d, %d)", y.String(), p, -y.Exponent)
-
-	// p2 := pfunc(x)
-	for p2 := uint32(0); p2 < 32; p2++ {
-		z := new(apd.Decimal)
-		ctx := apd.BaseContext.WithPrecision(uint32(p2))
-		_, _ = ctx.Quo(z, x, y)
-		ctx.Quantize(z, z, -8)
-		t.Logf("%s DECIMAL(%d, %d)", z.String(), p2, -z.Exponent)
-	}
-
-	/*
-		y := decimal.WithContext(decimalContextSQL)
-		y.Quo(c, b)
-		//y.Quantize(4)
-
-		z := decimal.WithContext(decimalContextSQL)
-		z.Quo(y, x)
-		z.Quantize(8)
-
-		t.Logf("%s decimal(%d, %d)", x.String(), x.Precision(), x.Scale())
-		t.Logf("%s decimal(%d, %d)", y.String(), y.Precision(), y.Scale())
-		t.Logf("%s decimal(%d, %d)", z.String(), z.Precision(), z.Scale())
-	*/
 }
