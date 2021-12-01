@@ -158,7 +158,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   explainType 	  ExplainType
   intervalType	  IntervalTypes
   lockType LockType
-  unaryExprOperator UnaryExprOperator
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
@@ -217,7 +216,12 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> '^'
 %right <str> '~' UNARY
 %left <str> COLLATE
-%right <str> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
+%right <str> BINARY UNDERSCORE_ARMSCII8 UNDERSCORE_ASCII UNDERSCORE_BIG5 UNDERSCORE_BINARY UNDERSCORE_CP1250 UNDERSCORE_CP1251
+%right <str> UNDERSCORE_CP1256 UNDERSCORE_CP1257 UNDERSCORE_CP850 UNDERSCORE_CP852 UNDERSCORE_CP866 UNDERSCORE_CP932
+%right <str> UNDERSCORE_DEC8 UNDERSCORE_EUCJPMS UNDERSCORE_EUCKR UNDERSCORE_GB18030 UNDERSCORE_GB2312 UNDERSCORE_GBK UNDERSCORE_GEOSTD8
+%right <str> UNDERSCORE_GREEK UNDERSCORE_HEBREW UNDERSCORE_HP8 UNDERSCORE_KEYBCS2 UNDERSCORE_KOI8R UNDERSCORE_KOI8U UNDERSCORE_LATIN1 UNDERSCORE_LATIN2 UNDERSCORE_LATIN5
+%right <str> UNDERSCORE_LATIN7 UNDERSCORE_MACCE UNDERSCORE_MACROMAN UNDERSCORE_SJIS UNDERSCORE_SWE7 UNDERSCORE_TIS620 UNDERSCORE_UCS2 UNDERSCORE_UJIS UNDERSCORE_UTF16
+%right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4
 %right <str> INTERVAL
 %nonassoc <str> '.'
 
@@ -448,7 +452,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-%type <unaryExprOperator> underscore_charsets
+%type <str> underscore_charsets
 %start any_command
 
 %%
@@ -1370,42 +1374,190 @@ text_literal
   }
 | underscore_charsets  BIT_LITERAL %prec UNARY
   {
-  	$$ = &UnaryExpr{Operator: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
-  	$$ = &UnaryExpr{Operator: $1, Expr: NewHexNumLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
-   	$$ = &UnaryExpr{Operator: $1, Expr: NewHexLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
   }
 | underscore_charsets column_name %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: $1, Expr: $2}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
     bindVariable(yylex, $2[1:])
-    $$ = &UnaryExpr{Operator: $1, Expr: NewArgument($2[1:])}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
   }
 
 underscore_charsets:
- UNDERSCORE_BINARY
+  UNDERSCORE_ARMSCII8
   {
-  	$$ = UBinaryOp
+    $$ = Armscii8Str
   }
-| UNDERSCORE_UTF8
+| UNDERSCORE_ASCII
   {
-  	$$ = Utf8Op
+    $$ = ASCIIStr
   }
-| UNDERSCORE_UTF8MB4
+| UNDERSCORE_BIG5
   {
-  	$$ = Utf8mb4Op
+    $$ = Big5Str
+  }
+| UNDERSCORE_BINARY
+  {
+    $$ = UBinaryStr
+  }
+| UNDERSCORE_CP1250
+  {
+    $$ = Cp1250Str
+  }
+| UNDERSCORE_CP1251
+  {
+    $$ = Cp1251Str
+  }
+| UNDERSCORE_CP1256
+  {
+    $$ = Cp1256Str
+  }
+| UNDERSCORE_CP1257
+  {
+    $$ = Cp1257Str
+  }
+| UNDERSCORE_CP850
+  {
+    $$ = Cp850Str
+  }
+| UNDERSCORE_CP852
+  {
+    $$ = Cp852Str
+  }
+| UNDERSCORE_CP866
+  {
+    $$ = Cp866Str
+  }
+| UNDERSCORE_CP932
+  {
+    $$ = Cp932Str
+  }
+| UNDERSCORE_DEC8
+  {
+    $$ = Dec8Str
+  }
+| UNDERSCORE_EUCJPMS
+  {
+    $$ = EucjpmsStr
+  }
+| UNDERSCORE_EUCKR
+  {
+    $$ = EuckrStr
+  }
+| UNDERSCORE_GB18030
+  {
+    $$ = Gb18030Str
+  }
+| UNDERSCORE_GB2312
+  {
+    $$ = Gb2312Str
+  }
+| UNDERSCORE_GBK
+  {
+    $$ = GbkStr
+  }
+| UNDERSCORE_GEOSTD8
+  {
+    $$ = Geostd8Str
+  }
+| UNDERSCORE_GREEK
+  {
+    $$ = GreekStr
+  }
+| UNDERSCORE_HEBREW
+  {
+    $$ = HebrewStr
+  }
+| UNDERSCORE_HP8
+  {
+    $$ = Hp8Str
+  }
+| UNDERSCORE_KEYBCS2
+  {
+    $$ = Keybcs2Str
+  }
+| UNDERSCORE_KOI8R
+  {
+    $$ = Koi8rStr
+  }
+| UNDERSCORE_KOI8U
+  {
+    $$ = Koi8uStr
   }
 | UNDERSCORE_LATIN1
   {
-  	$$ = Latin1Op
+    $$ = Latin1Str
+  }
+| UNDERSCORE_LATIN2
+  {
+    $$ = Latin2Str
+  }
+| UNDERSCORE_LATIN5
+  {
+    $$ = Latin5Str
+  }
+| UNDERSCORE_LATIN7
+  {
+    $$ = Latin7Str
+  }
+| UNDERSCORE_MACCE
+  {
+    $$ = MacceStr
+  }
+| UNDERSCORE_MACROMAN
+  {
+    $$ = MacromanStr
+  }
+| UNDERSCORE_SJIS
+  {
+    $$ = SjisStr
+  }
+| UNDERSCORE_SWE7
+  {
+    $$ = Swe7Str
+  }
+| UNDERSCORE_TIS620
+  {
+    $$ = Tis620Str
+  }
+| UNDERSCORE_UCS2
+  {
+    $$ = Ucs2Str
+  }
+| UNDERSCORE_UJIS
+  {
+    $$ = UjisStr
+  }
+| UNDERSCORE_UTF16
+  {
+    $$ = Utf16Str
+  }
+| UNDERSCORE_UTF16LE
+  {
+    $$ = Utf16leStr
+  }
+| UNDERSCORE_UTF32
+  {
+    $$ = Utf32Str
+  }
+| UNDERSCORE_UTF8
+  {
+    $$ = Utf8Str
+  }
+| UNDERSCORE_UTF8MB4
+  {
+    $$ = Utf8mb4Str
   }
 
 literal_or_null:
@@ -1434,7 +1586,7 @@ STRING
   }
  | underscore_charsets STRING %prec UNARY
    {
-   	$$ = &UnaryExpr{Operator: $1, Expr: NewStrLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
    }
 
 keys:

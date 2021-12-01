@@ -1582,6 +1582,13 @@ func (node *UnaryExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *IntroducerExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.CharacterSet)
+	buf.WriteByte(' ')
+	buf.printExpr(node, node.Expr, true)
+}
+
+// formatFast formats the node.
 func (node *IntervalExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("interval ")
 	buf.printExpr(node, node.Expr, true)

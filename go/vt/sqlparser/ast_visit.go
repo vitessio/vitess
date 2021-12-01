@@ -160,6 +160,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfInsert(in, f)
 	case *IntervalExpr:
 		return VisitRefOfIntervalExpr(in, f)
+	case *IntroducerExpr:
+		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
 	case IsolationLevel:
@@ -1286,6 +1288,18 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	return nil
 }
 func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfIntroducerExpr(in *IntroducerExpr, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -2646,6 +2660,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *IntervalExpr:
 		return VisitRefOfIntervalExpr(in, f)
+	case *IntroducerExpr:
+		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
 	case ListArg:

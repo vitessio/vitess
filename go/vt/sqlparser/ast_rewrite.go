@@ -160,6 +160,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfInsert(parent, node, replacer)
 	case *IntervalExpr:
 		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntroducerExpr:
+		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
@@ -2436,6 +2438,33 @@ func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExp
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*IntervalExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *IntroducerExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*IntroducerExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -5271,6 +5300,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *IntervalExpr:
 		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
+	case *IntroducerExpr:
+		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case ListArg:
