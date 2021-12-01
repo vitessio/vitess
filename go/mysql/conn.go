@@ -140,6 +140,12 @@ type Conn struct {
 	// avoid maps indexed by ConnectionID for instance.
 	ClientData interface{}
 
+	// If set to true, disables vitess connection handling of client multi
+	// statements. These are currently broken in the presence of statements
+	// and a server could choose to be broken by not attempting to process
+	// them at all rather than process ';'s in statement incorrectly.
+	DisableClientMultiStatements bool
+
 	// Packet encoding variables.
 	bufferedReader *bufio.Reader
 	bufferedWriter *bufio.Writer
@@ -840,7 +846,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		c.recycleReadPacket()
 
 		var queries []string
-		if c.Capabilities&CapabilityClientMultiStatements != 0 {
+		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
 			queries, err = sqlparser.SplitStatementToPieces(query)
 			if err != nil {
 				log.Errorf("Conn %v: Error splitting query: %v", c, err)
@@ -956,7 +962,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		c.recycleReadPacket()
 
 		var queries []string
-		if c.Capabilities&CapabilityClientMultiStatements != 0 {
+		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
 			queries, err = sqlparser.SplitStatementToPieces(query)
 			if err != nil {
 				log.Errorf("Conn %v: Error splitting query: %v", c, err)
