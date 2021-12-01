@@ -19,12 +19,14 @@ package mysql
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -315,7 +317,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status.SourcePort = int(parseInt)
 	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
 	status.ConnectRetry = int(parseInt)
-	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	parseUint, err := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	if err != nil {
+		log.Errorf("Could not compute replica lag from seconds_behind_master value of '%s', this means that replication is unhealthy; setting replica lag to max value to prevent the serving of queries", fields["Seconds_Behind_Master"])
+		parseUint = math.MaxUint32
+	}
 	status.ReplicationLagSeconds = uint(parseUint)
 	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
 	status.SourceServerID = uint(parseUint)
