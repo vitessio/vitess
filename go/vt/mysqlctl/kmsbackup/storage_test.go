@@ -8,22 +8,39 @@ import (
 	"math/rand"
 	"os"
 	"testing"
-	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+
+	"github.com/planetscale/common-libs/files"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestListBackups(t *testing.T) {
+var (
+	awsCredFile    = flag.String("aws-credentials-file", "", "AWS Credentials file")
+	awsCredProfile = flag.String("aws-credentials-profile", "", "Profile for AWS Credentials")
+)
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+func TestFileBackupStorage_ListBackups(t *testing.T) {
 	ctx := context.Background()
-	setTestDefaults(t)
 
 	content := fmt.Sprintf(`%s="1234"`, lastBackupLabel)
 	tmpfile := createTempFile(t, content)
-	defer os.Remove(tmpfile)
+
+	t.Cleanup(func() { os.Remove(tmpfile) })
+
 	os.Setenv(annotationsFilePath, tmpfile)
 
-	fbs := &FilesBackupStorage{}
+	fbs := testFilesBackupStorage(t)
+
 	backups, err := fbs.ListBackups(ctx, "a/b")
 	assert.NoError(t, err)
 	require.Equal(t, 1, len(backups))
@@ -36,14 +53,14 @@ func TestListBackups(t *testing.T) {
 	assert.Equal(t, "/1234/a/b", fbh.rootPath)
 
 	// It should fail if backup params are not set.
-	*backupRegion = ""
+	fbs.region = ""
 	_, err = fbs.ListBackups(ctx, "a/b")
 	assert.Error(t, err)
-	setTestDefaults(t)
 
 	// ListBackups should return empty if the label is not set.
 	tmpfile = createTempFile(t, "")
-	defer os.Remove(tmpfile)
+	t.Cleanup(func() { os.Remove(tmpfile) })
+
 	os.Setenv(annotationsFilePath, tmpfile)
 
 	backups, err = fbs.ListBackups(ctx, "a/b")
@@ -56,16 +73,15 @@ func TestListBackups(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestListBackupsWithExcludedKeyspace(t *testing.T) {
+func TestFilesBackupStorage_ListBackups_withExcludedKeyspace(t *testing.T) {
 	ctx := context.Background()
-	setTestDefaults(t)
 
 	content := fmt.Sprintf("%s=\"1234\"\n%s=\"not-included\"", lastBackupLabel, lastBackupExcludedKeyspacesLabel)
 	tmpfile := createTempFile(t, content)
 	defer os.Remove(tmpfile)
 	os.Setenv(annotationsFilePath, tmpfile)
 
-	fbs := &FilesBackupStorage{}
+	fbs := testFilesBackupStorage(t)
 	backups, err := fbs.ListBackups(ctx, "a/b")
 	assert.NoError(t, err)
 	require.Equal(t, 1, len(backups))
@@ -75,22 +91,20 @@ func TestListBackupsWithExcludedKeyspace(t *testing.T) {
 	require.Equal(t, 0, len(backups))
 }
 
-func TestStartBackup(t *testing.T) {
+func TestFilesBackupStorage_StartBackup(t *testing.T) {
 	ctx := context.Background()
-	setTestDefaults(t)
 
 	backupID := rand.Int63()
 	content := fmt.Sprintf(`%v="%v"`, backupIDLabel, backupID)
 	tmpfile := createTempFile(t, content)
-	defer os.Remove(tmpfile)
-	os.Setenv(annotationsFilePath, tmpfile)
-	t.Logf("backup ID: %v", backupID)
+	t.Cleanup(func() { os.Remove(tmpfile) })
 
-	fbs := &FilesBackupStorage{}
+	os.Setenv(annotationsFilePath, tmpfile)
+
+	fbs := testFilesBackupStorage(t)
 
 	handle, err := fbs.StartBackup(ctx, "a", "b")
 	require.NoError(t, err)
-	defer handle.(*filesBackupHandle).fs.RemoveAll(ctx, fmt.Sprintf("/%v", backupID))
 
 	w, err := handle.AddFile(ctx, "ssfile", 10)
 	require.NoError(t, err)
@@ -116,18 +130,47 @@ func TestStartBackup(t *testing.T) {
 	assert.NoError(t, handle.AbortBackup(ctx))
 }
 
-func TestBackupStorageAPI(t *testing.T) {
+func TestFilesBackupStorage_API(t *testing.T) {
 	ctx := context.Background()
-	fbs := &FilesBackupStorage{}
+	fbs := testFilesBackupStorage(t)
 	assert.NoError(t, fbs.RemoveBackup(ctx, "", ""))
 	assert.NoError(t, fbs.Close())
 }
 
-func setTestDefaults(t *testing.T) {
-	os.Setenv(annotationsFilePath, "")
-	*backupRegion = "us-east-2"
-	*backupBucket = "sougou-bucket"
-	*backupARN = "arn:aws:kms:us-east-2:396684171460:key/d1ade011-ed2a-4960-8d6e-c7a5bdb282f5"
+func testFilesBackupStorage(t *testing.T) *FilesBackupStorage {
+	t.Helper()
+
+	region := "us-east-1"
+	bucket := "planetscale-vitess-private-ci"
+	arn := "not-used"
+
+	testDir := t.TempDir()
+
+	filesCreator := func(region, bucket, arn string) (files.Files, error) {
+		return files.NewLocalFiles(testDir)
+	}
+
+	if *awsCredFile != "" {
+		sess := session.New(&aws.Config{
+			Credentials: credentials.NewSharedCredentials(*awsCredFile, *awsCredProfile),
+			Region:      aws.String(region),
+		})
+
+		filesCreator = func(region, bucket, arn string) (files.Files, error) {
+			return files.NewS3Files(sess, region, bucket, ""), nil
+		}
+	} else {
+		t.Logf("s3 integration is disabled, using local filesystem abstraction")
+	}
+
+	f := &FilesBackupStorage{
+		region:         region,
+		bucket:         bucket,
+		arn:            arn,
+		filesCreatorFn: filesCreator,
+	}
+
+	return f
 }
 
 // createTempFile creates a temp file with the provided contents
@@ -141,10 +184,4 @@ func createTempFile(t *testing.T, content string) string {
 	_, err = tmpfile.Write([]byte(content))
 	require.NoError(t, err)
 	return tmpfile.Name()
-}
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	rand.Seed(time.Now().UnixNano())
-	os.Exit(m.Run())
 }

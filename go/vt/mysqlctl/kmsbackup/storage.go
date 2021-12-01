@@ -13,16 +13,15 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/planetscale/common-libs/files"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"github.com/aws/aws-sdk-go/aws/session"
 )
 
 const (
@@ -44,12 +43,24 @@ func init() {
 
 // FilesBackupStorage satisfies backupstorage.BackupStorage.
 type FilesBackupStorage struct {
+	// region specified the region for the backup
+	region string
+
+	// bucket defines the S3 bucket for backups.
+	bucket string
+
+	// arn represents the ARN for the encrypted S3 bucket.
+	arn string
+
+	// filesCreatorFn creates a files.Files with the given argument. It can be
+	// replaced for testing purposes.
+	filesCreatorFn func(region, bucket, arn string) (files.Files, error)
 }
 
 // ListBackups satisfies backupstorage.BackupStorage.
 // This is a custom implementation that returns at most a single value based on the pod label.
 // It uses the k8s downward api feature to extract the label values.
-func (fbs *FilesBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
+func (f *FilesBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	lastBackupID, err := loadTag(lastBackupLabel)
 	if err != nil {
 		return nil, err
@@ -68,6 +79,7 @@ func (fbs *FilesBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 	if len(parts) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid backup directory: %v", dir)
 	}
+
 	keyspace := parts[0]
 	for _, excludedKeyspace := range strings.Split(excludedKeyspaces, ",") {
 		if keyspace == excludedKeyspace {
@@ -84,66 +96,94 @@ func (fbs *FilesBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 	}
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format(mysqlctl.BackupTimestampFormat), tabletAlias)
 
-	fbh, err := fbs.createHandle(ctx, lastBackupID, dir, name)
+	fbh, err := f.createHandle(ctx, lastBackupID, dir, name)
 	if err != nil {
 		return nil, err
 	}
+
 	return []backupstorage.BackupHandle{fbh}, nil
 }
 
 // StartBackup satisfies backupstorage.BackupStorage.
-func (fbs *FilesBackupStorage) StartBackup(ctx context.Context, dir string, name string) (backupstorage.BackupHandle, error) {
+func (f *FilesBackupStorage) StartBackup(ctx context.Context, dir string, name string) (backupstorage.BackupHandle, error) {
 	backupID, err := loadTag(backupIDLabel)
 	if err != nil {
 		return nil, err
 	}
-	handle, err := fbs.createHandle(ctx, backupID, dir, name)
+
+	handle, err := f.createHandle(ctx, backupID, dir, name)
 	if err != nil {
 		return nil, err
 	}
+
 	if err := handle.createRoot(ctx); err != nil {
 		return nil, err
 	}
+
 	return handle, nil
 }
 
-func (fbs *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, name string) (*filesBackupHandle, error) {
-	if *backupRegion == "" {
-		return nil, errors.New("backup_region is not specified")
-	}
-	if *backupBucket == "" {
-		return nil, errors.New("backup_bucket is not specified")
-	}
-	if *backupARN == "" {
-		return nil, errors.New("backup_arn is not specified")
-	}
+func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, name string) (*filesBackupHandle, error) {
 	if backupID == "" {
 		return nil, errors.New("backup_id is not specified")
 	}
 
-	sess, err := session.NewSession()
-	if err != nil {
-		return nil, vterrors.Wrap(err, "failed to initialize aws session")
+	// flags are parsed later, hence we need to assign them here
+	if *backupRegion != "" {
+		f.region = *backupRegion
+	}
+	if *backupBucket != "" {
+		f.bucket = *backupBucket
+	}
+	if *backupARN != "" {
+		f.arn = *backupARN
 	}
 
-	impl, err := files.NewEncryptedS3Files(sess, *backupRegion, *backupBucket, "", *backupARN)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "could not create encrypted s3 files")
+	if f.region == "" {
+		return nil, errors.New("backup_region is not specified")
 	}
 
+	if f.bucket == "" {
+		return nil, errors.New("backup_bucket is not specified")
+	}
+
+	if f.arn == "" {
+		return nil, errors.New("backup_arn is not specified")
+	}
+
+	var impl files.Files
+	var err error
 	rootPath := path.Join("/", backupID, dir)
+
+	if f.filesCreatorFn == nil {
+		sess, err := session.NewSession()
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to initialize aws session")
+		}
+
+		impl, err = files.NewEncryptedS3Files(sess, f.region, f.bucket, "", f.arn)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "could not create encrypted s3 files")
+		}
+	} else {
+		impl, err = f.filesCreatorFn(f.region, f.bucket, f.arn)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return newFilesBackupHandle(impl, rootPath, dir, name), nil
 }
 
 // RemoveBackup satisfies backupstorage.BackupStorage.
 // This function is a no-op because removal of backups is handled by singularity.
-func (fbs *FilesBackupStorage) RemoveBackup(ctx context.Context, dir string, name string) error {
+func (f *FilesBackupStorage) RemoveBackup(ctx context.Context, dir string, name string) error {
 	return nil
 }
 
 // Close satisfies backupstorage.BackupStorage.
 // This function is a no-op because an aws session does not need to be closed.
-func (fbs *FilesBackupStorage) Close() error {
+func (f *FilesBackupStorage) Close() error {
 	return nil
 }
 
@@ -188,5 +228,6 @@ func loadTags() (map[string]string, error) {
 		}
 		result[key] = value
 	}
+
 	return result, nil
 }

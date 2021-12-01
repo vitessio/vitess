@@ -32,17 +32,17 @@ func newFilesBackupHandle(fs files.Files, rootPath, dir, name string) *filesBack
 }
 
 // Directory satisfiles backupstorage.BackupHandle.
-func (fbh *filesBackupHandle) Directory() string {
-	return fbh.dir
+func (f *filesBackupHandle) Directory() string {
+	return f.dir
 }
 
 // Name satisfiles backupstorage.BackupHandle.
-func (fbh *filesBackupHandle) Name() string {
-	return fbh.name
+func (f *filesBackupHandle) Name() string {
+	return f.name
 }
 
-func (fbh *filesBackupHandle) createRoot(ctx context.Context) error {
-	err := fbh.fs.MkdirAll(ctx, fbh.rootPath)
+func (f *filesBackupHandle) createRoot(ctx context.Context) error {
+	err := f.fs.MkdirAll(ctx, f.rootPath)
 	if err != nil {
 		return err
 	}
@@ -52,34 +52,36 @@ func (fbh *filesBackupHandle) createRoot(ctx context.Context) error {
 	// I tried creating a lock file, but S3 is too permissive.
 	// For now, we'll just trust that the caller will never
 	// attempt two concurrent backups with the same ID.
-	dir, err := fbh.fs.ReadDir(ctx, fbh.rootPath)
+	dir, err := f.fs.ReadDir(ctx, f.rootPath)
 	if err != nil {
 		return err
 	}
+
 	if len(dir) != 0 {
 		return fmt.Errorf("target directory not empty: has %d entries", len(dir))
 	}
+
 	return nil
 }
 
 // AddFile satisfiles backupstorage.BackupHandle.
-func (fbh *filesBackupHandle) AddFile(ctx context.Context, filename string, approxFileSize int64) (io.WriteCloser, error) {
-	filePath := path.Join(fbh.rootPath, filename)
-	return fbh.fs.Create(ctx, filePath, true, files.WithSizeHint(approxFileSize))
+func (f *filesBackupHandle) AddFile(ctx context.Context, filename string, approxFileSize int64) (io.WriteCloser, error) {
+	filePath := path.Join(f.rootPath, filename)
+	return f.fs.Create(ctx, filePath, true, files.WithSizeHint(approxFileSize))
 }
 
 // ReadFile satisfiles backupstorage.BackupHandle.
-func (fbh *filesBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
-	filePath := path.Join(fbh.rootPath, filename)
-	return fbh.fs.Open(ctx, filePath)
+func (f *filesBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
+	filePath := path.Join(f.rootPath, filename)
+	return f.fs.Open(ctx, filePath)
 }
 
 // EndBackup satisfiles backupstorage.BackupHandle. It's a no-op.
-func (fbh *filesBackupHandle) EndBackup(ctx context.Context) error {
+func (f *filesBackupHandle) EndBackup(ctx context.Context) error {
 	return nil
 }
 
 // AbortBackup satisfiles backupstorage.BackupHandle. It's a no-op.
-func (fbh *filesBackupHandle) AbortBackup(ctx context.Context) error {
+func (f *filesBackupHandle) AbortBackup(ctx context.Context) error {
 	return nil
 }
