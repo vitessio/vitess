@@ -815,7 +815,7 @@ func verifyClusterHealth(t *testing.T, cluster *VitessCluster) {
 }
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
-	const MaxWait = 10 * time.Second
+	const MaxWait = 30 * time.Second
 	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
 }
 

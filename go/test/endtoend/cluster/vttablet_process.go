@@ -463,7 +463,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break
 			} else {
-				log.Infof("In WaitForVReplicationToCatchup: %s %+v", query, qr.Rows)
+				log.Infof("In WaitForVReplicationToCatchup::%s: %s %+v", vttablet.Name, query, qr.Rows)
 			}
 			time.Sleep(waitDuration)
 			duration -= waitDuration

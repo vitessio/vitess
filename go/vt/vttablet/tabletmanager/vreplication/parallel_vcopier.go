@@ -208,6 +208,26 @@ func (vc *parallelVcopier) catchup(ctx context.Context, copyState map[string]*sq
 	}
 }
 
+// cloneField creates a copy of a Field object. GRPC optimization code within Vitess overwrites existing Field objects.
+// So we need this function to persist fields across concurrent table copy threads.
+// TODO: check if there is a better way to do this? Right now this function will need to be updated for changes
+// to the Field proto
+func cloneField(field *querypb.Field) *querypb.Field {
+	fld := &querypb.Field{}
+	fld.Name = field.Name
+	fld.Type = field.Type
+	fld.Table = field.Table
+	fld.Charset = field.Charset
+	fld.ColumnType = field.ColumnType
+	fld.ColumnLength = field.ColumnLength
+	fld.Flags = field.Flags
+	fld.Decimals = field.Decimals
+	fld.Database = field.Database
+	fld.OrgTable = field.OrgTable
+	fld.OrgName = field.OrgName
+	return fld
+}
+
 // copyTable performs the synchronized copy of the next set of rows from
 // the current table being copied. Each packet received is transactionally
 // committed with the lastpk. This allows for consistent resumability.
@@ -225,6 +245,8 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 	}
 
 	tableCopyInfoMap := map[string]*tableCopyInfo{}
+	//tcMutex synchronizes access to tableCopyInfoMap which can be accessed concurrently in parallel invocations to VStreamRowsParallel
+	tcMutex := sync.RWMutex{}
 	for _, tableName := range tableNames {
 		tc := &tableCopyInfo{
 			tableName: tableName,
@@ -242,17 +264,22 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 
 		// table name and match name could be different, as is the case in Online DDL,
 		// where match name could be my_table, and table name (on target) could be _b8a52fc2_2739_11ec_a96c_0a43f95f28a3_20211007064220_vrepl
+
+		tcMutex.Lock()
 		tableCopyInfoMap[tc.initialPlan.SendRule.Match] = tc
+		tcMutex.Unlock()
 	}
 	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
 	defer cancel()
 
 	var lastpkpbs []*querypb.QueryResult
 	var queries []string
+	tcMutex.RLock()
 	for _, tc := range tableCopyInfoMap {
 		queries = append(queries, tc.initialPlan.SendRule.Filter)
 		lastpkpbs = append(lastpkpbs, tc.lastpkpb)
 	}
+	tcMutex.RUnlock()
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
@@ -263,7 +290,6 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 
 	err = vc.vr.sourceVStreamer.VStreamRowsParallel(ctx, queries, lastpkpbs, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// this function could be called concurrently by parallel_rowstreamer
-
 		// wait for semaphore (limiting max concurrency) or for cancelled context.
 		select {
 		case semaphore <- true:
@@ -286,7 +312,9 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 				break
 			}
 		}
+		tcMutex.RLock()
 		tc := tableCopyInfoMap[rows.TableName]
+		tcMutex.RUnlock()
 		if tc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
@@ -297,12 +325,17 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tc.initialPlan.SendRule.Match,
 			}
-			fieldEvent.Fields = append(fieldEvent.Fields, rows.Fields...)
+			for _, field := range rows.Fields {
+				fieldEvent.Fields = append(fieldEvent.Fields, cloneField(field))
+			}
 			tc.tablePlan, err = plan.buildExecutionPlan(fieldEvent)
 			if err != nil {
 				return err
 			}
-			tc.pkfields = append(tc.pkfields, rows.Pkfields...)
+
+			for _, field := range rows.Pkfields {
+				tc.pkfields = append(tc.pkfields, cloneField(field))
+			}
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tc.tableName))
 			tc.updateCopyState = buf.ParsedQuery()
@@ -375,6 +408,7 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 	if err != nil {
 		return err
 	}
+	tcMutex.RLock()
 	for _, tc := range tableCopyInfoMap {
 		log.Infof("Copy of %v finished at lastpk: %v", tc.tableName, tc.bv)
 
@@ -384,6 +418,7 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 			return err
 		}
 	}
+	tcMutex.RUnlock()
 	return nil
 }
 
