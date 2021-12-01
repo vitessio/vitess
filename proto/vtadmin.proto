@@ -72,6 +72,8 @@ service VTAdmin {
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
+    // PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+    rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
     // GetTablets returns all tablets across all the specified clusters.
     rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
     // GetVSchema returns a VSchema for the specified keyspace in the specified
@@ -347,6 +349,19 @@ message GetTabletRequest {
     // the caller knows which cluster the tablet may be in, or, to disamiguate if
     // multiple clusters have a tablet with the same hostname.
     repeated string cluster_ids = 2;
+}
+
+message PingTabletRequest {
+    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
+    string alias = 1;
+    // ClusterIDs is an optional parameter to narrow the scope of the search, if
+    // the caller knows which cluster the tablet may be in, or, to disamiguate if
+    // multiple clusters have a tablet with the same hostname.
+    repeated string cluster_ids = 2;
+}
+
+message PingTabletResponse {
+    string status = 1;
 }
 
 message GetTabletsRequest {
