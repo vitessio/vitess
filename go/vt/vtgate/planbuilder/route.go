@@ -37,11 +37,6 @@ var _ logicalPlan = (*route)(nil)
 type route struct {
 	gen4Plan
 
-	// Redirect may point to another route if this route
-	// was merged with it. The Resolve function chases
-	// this pointer till the last un-redirected route.
-	Redirect *route
-
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
 	Select sqlparser.SelectStatement
