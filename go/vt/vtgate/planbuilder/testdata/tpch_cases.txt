@@ -331,7 +331,107 @@ Gen4 error: unsupported: cross-shard correlated subquery
 # TPC-H query 18
 "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) \u003e 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 100,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select l_orderkey from lineitem where 1 != 1 group by l_orderkey",
+            "Query": "select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) \u003e 300",
+            "Table": "lineitem"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-2,-3,-1,-4,-5,1,-6,-7,-8,-9,-10",
+            "JoinVars": {
+              "o_orderkey": 0
+            },
+            "Predicate": "o_orderkey = l_orderkey",
+            "TableName": "orders_customer_lineitem",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "-2,1,2,-3,-4,3,4,-5,-6,-7",
+                "JoinVars": {
+                  "o_custkey": 0
+                },
+                "Predicate": "c_custkey = o_custkey",
+                "TableName": "orders_customer",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "SelectIN",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where 1 != 1",
+                    "OrderBy": "(3|6) DESC, (2|5) ASC",
+                    "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where :__sq_has_values1 = 1 and o_orderkey in ::__vals order by o_totalprice desc, o_orderdate asc",
+                    "Table": "orders",
+                    "Values": [
+                      ":__sq1"
+                    ],
+                    "Vindex": "hash"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "SelectEqualUnique",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select c_name, c_custkey, weight_string(c_name), weight_string(c_custkey) from customer where 1 != 1",
+                    "Query": "select c_name, c_custkey, weight_string(c_name), weight_string(c_custkey) from customer where c_custkey = :o_custkey",
+                    "Table": "customer",
+                    "Values": [
+                      ":o_custkey"
+                    ],
+                    "Vindex": "hash"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectEqualUnique",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(l_quantity) from lineitem where 1 != 1",
+                "Query": "select sum(l_quantity) from lineitem where l_orderkey = :o_orderkey",
+                "Table": "lineitem",
+                "Values": [
+                  ":o_orderkey"
+                ],
+                "Vindex": "lineitem_map"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # TPC-H query 19
 "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity >= 1 and l_quantity <= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity >= 10 and l_quantity <= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity >= 20 and l_quantity <= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )"
@@ -388,7 +488,7 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
 # TPC-H query 20
 "select s_name, s_address from supplier, nation where s_suppkey in ( select ps_suppkey from partsupp where ps_partkey in ( select p_partkey from part where p_name like 'forest%' ) and ps_availqty > ( select 0.5 * sum(l_quantity) from lineitem where l_partkey = ps_partkey and l_suppkey = ps_suppkey and l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year ) ) and s_nationkey = n_nationkey and n_name = 'CANADA' order by s_name"
 "symbol ps_partkey not found in table or subquery"
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 error: unsupported: cross-shard correlated subquery
 
 # TPC-H query 21
 "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate > l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey <> l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey <> l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name limit 100"

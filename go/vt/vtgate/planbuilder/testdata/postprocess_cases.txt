@@ -188,7 +188,46 @@ Gen4 error: implement me!
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user having id in (select col from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # ORDER BY, reference col from local table.
 "select col from user where id = 5 order by aa"
@@ -581,7 +620,7 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
@@ -905,7 +944,7 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # ORDER BY RAND()
 "select col from user order by RAND()"
@@ -1058,7 +1097,7 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # Order by, '*' expression
 "select * from user where id = 5 order by col"
@@ -1222,12 +1261,63 @@ Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,1",
+    "JoinVars": {
+      "u_col": 0
+    },
+    "Predicate": "u.col = e.col",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
+        "Query": "select u.col, u.id from `user` as u where u.col in (select * from `user` where `user`.id = u.id order by col asc)",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+        "Query": "select e.id from user_extra as e where e.col = :u_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Order by, verify outer symtab is searched according to its own context.
 "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)"
 "symbol u.col not found in subquery"
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.id in (select col2 from `user` where `user`.id = u.id order by u.col asc)",
+    "Table": "`user`"
+  }
+}
 
 # Order by, qualified '*' expression, name mismatched.
 "select user.* from user where id = 5 order by e.col"
@@ -1695,7 +1785,7 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 # limit on reference table
 "select col from ref limit 1"

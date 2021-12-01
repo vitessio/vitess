@@ -1694,7 +1694,7 @@ Gen4 error: symbol t.col not found
     "Table": "unsharded"
   }
 }
-Gen4 error: expr cannot be converted, not supported: sqlparser.ListArg
+Gen4 plan same as above
 
 "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
 {
