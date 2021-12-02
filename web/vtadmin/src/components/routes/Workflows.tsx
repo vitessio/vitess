@@ -67,7 +67,7 @@ export const Workflows = () => {
                 <tr key={idx}>
                     <DataCell>
                         <div className="font-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
-                        <div className="font-size-small text-secondary">{row.clusterName}</div>
+                        <div className="text-sm text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>
                         {row.source ? (
@@ -125,9 +125,7 @@ export const Workflows = () => {
 
                     <DataCell>
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
-                        <div className="font-sans font-size-small text-secondary">
-                            {formatRelativeTime(row.timeUpdated)}
-                        </div>
+                        <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.timeUpdated)}</div>
                     </DataCell>
                 </tr>
             );
