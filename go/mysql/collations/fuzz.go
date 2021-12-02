@@ -1,3 +1,6 @@
+//go:build gofuzz
+// +build gofuzz
+
 /*
 Copyright 2021 The Vitess Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,21 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fuzzing
+package collations
 
 import (
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
-
-	"vitess.io/vitess/go/mysql/collations"
 )
 
-func FuzzCollateUnicode(data []byte) int {
-	c := &collations.Collation_unicode_general_ci{}
+var (
+	collations = []string{"utf8mb4_bin", "utf8mb4_0900_ai_ci",
+		"utf8mb4_0900_as_ci", "utf8mb4_0900_as_cs",
+		"utf8mb4_0900_ai_ci", "utf8mb4_0900_as_ci",
+		"utf8mb4_0900_ai_ci", "utf8mb4_0900_ai_ci",
+		"utf8mb4_hu_0900_as_cs", "utf8mb4_ja_0900_as_cs",
+		"utf8mb4_ja_0900_as_cs_ks", "utf8mb4_zh_0900_as_cs",
+		"utf8mb4_zh_0900_as_cs"}
+)
+
+func FuzzCollations(data []byte) int {
+	testinit()
 	f := fuzz.NewConsumer(data)
-	err := f.GenerateStruct(c)
+	collIndex, err := f.GetInt()
 	if err != nil {
 		return 0
 	}
+	collString := collations[collIndex%len(collations)]
+	coll := testcollationMap[collString]
 	left, err := f.GetBytes()
 	if err != nil {
 		return 0
@@ -34,30 +47,6 @@ func FuzzCollateUnicode(data []byte) int {
 	if err != nil {
 		return 0
 	}
-	isPrefix, err := f.GetBool()
-	if err != nil {
-		return 0
-	}
-	_ = c.Collate(left, right, isPrefix)
-	return 1
-}
-
-func FuzzCollateWildcard(data []byte) int {
-	c := &collations.Collation_multibyte{}
-	f := fuzz.NewConsumer(data)
-	err := f.GenerateStruct(c)
-	if err != nil {
-		return 0
-	}
-	pat, err := f.GetBytes()
-	if err != nil {
-		return 0
-	}
-	in, err := f.GetBytes()
-	if err != nil {
-		return 0
-	}
-	wcp := c.Wildcard(pat, 0, 0, 0)
-	wcp.Match(in)
+	_ = coll.Collate(left, right, false)
 	return 1
 }
