@@ -153,11 +153,12 @@ func TestHealthCheck(t *testing.T) {
 	}
 
 	// stop the replica's source mysqld instance to break replication
-	// and test that the tablet becomes unhealthy and non-serving
+	// and test that the replica tablet becomes unhealthy and non-serving after crossing
+	// the tablet's -unhealthy_threshold and the gateway's -discovery_low_replication_lag
 	err = primaryTablet.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
-	time.Sleep(tabletHealthcheckRefreshInterval)
+	time.Sleep(tabletUnhealthyThreshold + tabletHealthcheckRefreshInterval)
 
 	// now the replica's VtTabletStreamHealth should show it as unhealthy
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
@@ -238,8 +239,7 @@ func verifyStreamHealth(t *testing.T, result string, expectHealthy bool) {
 		// replicationLagSeconds varies till 7200 so setting safe limit
 		assert.True(t, replicationLagSeconds < 10000, "replica should not be behind primary")
 	} else {
-		assert.False(t, serving, "Tablet should not be in serving state")
-		assert.False(t, replicationLagSeconds < 10000, "replica should be behind primary")
+		assert.True(t, (!serving || replicationLagSeconds >= uint32(tabletUnhealthyThreshold.Seconds())), "Tablet should not be in serving and healthy state")
 	}
 }
 
