@@ -73,7 +73,7 @@ type tableSubstitution struct {
 	newExpr, oldExpr *sqlparser.AliasedTableExpr
 }
 
-func newRouteLegacy(stmt sqlparser.SelectStatement) (*route, *symtab) {
+func newRoute(stmt sqlparser.SelectStatement) (*route, *symtab) {
 	rb := &route{
 		Select:        stmt,
 		order:         1,
