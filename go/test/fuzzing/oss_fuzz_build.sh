@@ -22,6 +22,10 @@ set -x
 go get github.com/AdaLogics/go-fuzz-headers
 go mod vendor
 
+# Disable logging for mysql conn
+# This affects the mysql fuzzers
+sed -i '/log.Errorf/c\\/\/log.Errorf' $SRC/vitess/go/mysql/conn.go
+
 mv ./go/vt/vttablet/tabletmanager/vreplication/framework_test.go \
    ./go/vt/vttablet/tabletmanager/vreplication/framework_fuzz.go
 
