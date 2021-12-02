@@ -743,7 +743,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 error: implement me!
+Gen4 plan same as above
 
 # Single table equality route with val arg
 "select id from user where name = :a"
@@ -3153,7 +3153,46 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: implement me!
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (select col from unsharded where col = id)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select col from unsharded where 1 != 1",
+        "Query": "select col from unsharded where col = id",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # correlated subquery with different keyspace tables involved
 "select id from user where id in (select col from unsharded where col = user.id)"
@@ -3654,7 +3693,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 error: implement me!
+Gen4 plan same as above
 
 # join with transitive closures
 "select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id"
@@ -3695,7 +3734,21 @@ Gen4 error: implement me!
     ]
   }
 }
-Gen4 error: implement me!
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user`, user_extra where 1 != 1",
+    "Query": "select id from `user`, user_extra where user_extra.col = user_extra.user_id and `user`.id = user_extra.col",
+    "Table": "`user`, user_extra"
+  }
+}
 
 # not supported transitive closures with equality inside of an OR
 "select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)"

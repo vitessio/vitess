@@ -324,6 +324,9 @@ func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.Compariso
 	}
 	val, err := rp.makePlanValue(ctx, vdValue)
 	if err != nil || val == nil {
+		if err == columnNotSupportedErr {
+			return false, nil
+		}
 		return false, err
 	}
 
@@ -334,6 +337,9 @@ func (rp *routeTree) planSimpleInOp(ctx *planningContext, node *sqlparser.Compar
 	vdValue := node.Right
 	value, err := rp.makePlanValue(ctx, vdValue)
 	if err != nil || value == nil {
+		if err == columnNotSupportedErr {
+			return false, nil
+		}
 		return false, err
 	}
 	switch nodeR := vdValue.(type) {
@@ -419,6 +425,9 @@ func (rp *routeTree) planLikeOp(ctx *planningContext, node *sqlparser.Comparison
 	vdValue := node.Right
 	val, err := rp.makePlanValue(ctx, vdValue)
 	if err != nil || val == nil {
+		if err == columnNotSupportedErr {
+			return false, nil
+		}
 		return false, err
 	}
 
@@ -447,6 +456,9 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 	vdValue := &sqlparser.NullVal{}
 	val, err := rp.makePlanValue(ctx, vdValue)
 	if err != nil || val == nil {
+		if err == columnNotSupportedErr {
+			return false, nil
+		}
 		return false, err
 	}
 
@@ -492,9 +504,11 @@ type noColumnLookup struct {
 	semTable *semantics.SemTable
 }
 
+var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
+
 // ColumnLookup implements the ConverterLookup interface
-func (lookup *noColumnLookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "implement me!")
+func (lookup *noColumnLookup) ColumnLookup(*sqlparser.ColName) (int, error) {
+	return 0, columnNotSupportedErr
 }
 
 // CollationIDLookup implements the ConverterLookup interface
