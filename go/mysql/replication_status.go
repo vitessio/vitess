@@ -31,7 +31,7 @@ type ReplicationStatus struct {
 	// However, some MySQL flavors don't expose this information,
 	// in which case RelayLogPosition.IsZero() will be true.
 	// If ReplicationLagUnknown is true then we should not rely on the seconds
-	// behind value and we can instead try to calcuate the lag ourselves when
+	// behind value and we can instead try to calculate the lag ourselves when
 	// appropriate.
 	RelayLogPosition      Position
 	FilePosition          Position
