@@ -430,16 +430,12 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	var singleColumn vindexes.SingleColumn
 	var value engine.RouteValue
 	if n.selectedVindex() != nil {
-		singleColumn = n.selected.foundVindex.(vindexes.SingleColumn)
-		if len(n.selected.values) == 1 {
-			value = &evalengine.RouteValue{Expr: n.selected.values[0]}
-		} else {
-			tuple := evalengine.TupleExpr{}
-			for _, value := range n.selected.values {
-				tuple = append(tuple, value)
-			}
-			value = &evalengine.RouteValue{Expr: tuple}
+		vdx, ok := n.selected.foundVindex.(vindexes.SingleColumn)
+		if !ok || len(n.selected.values) != 1 {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
 		}
+		singleColumn = vdx
+		value = &evalengine.RouteValue{Expr: n.selected.values[0]}
 	}
 
 	var expressions sqlparser.SelectExprs
