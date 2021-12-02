@@ -428,10 +428,18 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	}
 
 	var singleColumn vindexes.SingleColumn
-	var values []evalengine.Expr
+	var value engine.RouteValue
 	if n.selectedVindex() != nil {
 		singleColumn = n.selected.foundVindex.(vindexes.SingleColumn)
-		values = n.selected.values
+		if len(n.selected.values) == 1 {
+			value = &evalengine.RouteValue{Expr: n.selected.values[0]}
+		} else {
+			tuple := evalengine.TupleExpr{}
+			for _, value := range n.selected.values {
+				tuple = append(tuple, value)
+			}
+			value = &evalengine.RouteValue{Expr: tuple}
+		}
 	}
 
 	var expressions sqlparser.SelectExprs
@@ -468,7 +476,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            n.keyspace,
 			Vindex:              singleColumn,
-			Values:              values,
+			Value:               value,
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},

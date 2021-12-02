@@ -77,8 +77,8 @@ type Route struct {
 	// Vindex specifies the vindex to be used.
 	Vindex vindexes.SingleColumn
 
-	// Values specifies the vindex values to use for routing.
-	Values []evalengine.Expr
+	// Value specifies the vindex value to use for routing.
+	Value RouteValue
 
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
@@ -105,6 +105,16 @@ type Route struct {
 
 	// Route does not need transaction handling
 	noTxNeeded
+}
+
+type RouteValue interface {
+	// ResolveValue allows for retrieval of the value we expose for public consumption
+	ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error)
+
+	// ResolveList allows for retrieval of the value we expose for public consumption
+	ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error)
+
+	MarshalJSON() ([]byte, error)
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
@@ -589,14 +599,11 @@ func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-	value, err := route.Values[0].Evaluate(env)
+	value, err := route.Value.ResolveValue(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{value.Value()})
+	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{value})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -608,14 +615,11 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 }
 
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-	value, err := route.Values[0].Evaluate(env)
+	value, err := route.Value.ResolveList(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, value.TupleValues())
+	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -623,14 +627,11 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-	key, err := route.Values[0].Evaluate(env)
+	value, err := route.Value.ResolveList(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, key.TupleValues())
+	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -805,12 +806,8 @@ func (route *Route) description() PrimitiveDescription {
 	if route.Vindex != nil {
 		other["Vindex"] = route.Vindex.String()
 	}
-	if len(route.Values) > 0 {
-		var values []string
-		for _, value := range route.Values {
-			values = append(values, evalengine.FormatExpr(value))
-		}
-		other["Values"] = values
+	if route.Value != nil {
+		other["Values"] = route.Value
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["

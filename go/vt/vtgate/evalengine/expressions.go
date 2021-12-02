@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -56,6 +57,10 @@ type (
 		format(buf *strings.Builder, wrap bool)
 	}
 
+	RouteValue struct {
+		Expr Expr
+	}
+
 	Literal struct {
 		Val EvalResult
 	}
@@ -73,6 +78,34 @@ type (
 		TypedCollation collations.TypedCollation
 	}
 )
+
+// ResolveValue allows for retrieval of the value we expose for public consumption
+func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
+	env := &ExpressionEnv{
+		BindVars: bindVars,
+	}
+	evalResul, err := rv.Expr.Evaluate(env)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	return evalResul.Value(), nil
+}
+
+// ResolveList allows for retrieval of the value we expose for public consumption
+func (rv *RouteValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
+	env := &ExpressionEnv{
+		BindVars: bindVars,
+	}
+	evalResul, err := rv.Expr.Evaluate(env)
+	if err != nil {
+		return nil, err
+	}
+	return evalResul.TupleValues(), nil
+}
+
+func (rv *RouteValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(FormatExpr(rv.Expr))
+}
 
 func (t TupleExpr) Collation() collations.TypedCollation {
 	// a Tuple does not have a collation, but an individual collation for every element of the tuple

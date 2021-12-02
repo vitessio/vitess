@@ -34,9 +34,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(*), col from `user` where 1 != 1",
     "Query": "select count(*), col from `user` where id = 1",
     "Table": "`user`",
-    "Values": [
-      1
-    ],
+    "Values": 1,
     "Vindex": "user_index"
   }
 }
@@ -53,9 +51,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(*), col from `user` where 1 != 1",
     "Query": "select count(*), col from `user` where id = 1",
     "Table": "`user`",
-    "Values": [
-      "INT64(1)"
-    ],
+    "Values": "INT64(1)",
     "Vindex": "user_index"
   }
 }
@@ -830,9 +826,7 @@ Gen4 error: unsupported: '*' expression in cross-shard query
     "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
     "Query": "select id, count(*) as c from `user` group by id having id = 1 and c = 10",
     "Table": "`user`",
-    "Values": [
-      1
-    ],
+    "Values": 1,
     "Vindex": "user_index"
   }
 }
@@ -849,9 +843,7 @@ Gen4 error: unsupported: '*' expression in cross-shard query
     "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
     "Query": "select id, count(*) as c from `user` where id = 1 group by id having c = 10",
     "Table": "`user`",
-    "Values": [
-      "INT64(1)"
-    ],
+    "Values": "INT64(1)",
     "Vindex": "user_index"
   }
 }
@@ -1983,9 +1975,7 @@ Gen4 plan same as above
     "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by a collate utf8_general_ci",
     "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by a collate utf8_general_ci",
     "Table": "`user`",
-    "Values": [
-      5
-    ],
+    "Values": 5,
     "Vindex": "user_index"
   }
 }
@@ -2002,9 +1992,7 @@ Gen4 plan same as above
     "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by a collate utf8_general_ci",
     "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by a collate utf8_general_ci",
     "Table": "`user`",
-    "Values": [
-      "INT64(5)"
-    ],
+    "Values": "INT64(5)",
     "Vindex": "user_index"
   }
 }
@@ -2758,9 +2746,7 @@ Gen4 plan same as above
         "FieldQuery": "select 1 from user_extra where 1 != 1",
         "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
         "Table": "user_extra",
-        "Values": [
-          "INT64(3)"
-        ],
+        "Values": "INT64(3)",
         "Vindex": "user_index"
       }
     ]

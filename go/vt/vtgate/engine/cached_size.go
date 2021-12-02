@@ -666,79 +666,9 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Vindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Values []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(16))
-		for _, elem := range cached.Values {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
-	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
-	}
-	// field SysTableTableSchema []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.SysTableTableSchema)) * int64(16))
-		for _, elem := range cached.SysTableTableSchema {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
-	// field SysTableTableName map[string]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cached.SysTableTableName != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.SysTableTableName)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
-		if len(cached.SysTableTableName) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
-		}
-		for k, v := range cached.SysTableTableName {
-			size += hack.RuntimeAllocSize(int64(len(k)))
-			if cc, ok := v.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
-	return size
-}
-
-//go:nocheckptr
-func (cached *RouteLegacy) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(208)
-	}
-	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
-	size += cached.Keyspace.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
-	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+	// field Value vitess.io/vitess/go/vt/vtgate/engine.RouteValue
+	if cc, ok := cached.Value.(cachedObject); ok {
 		size += cc.CachedSize(true)
-	}
-	// field Query string
-	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field TableName string
-	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
-	// field FieldQuery string
-	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
-	// field Vindex vitess.io/vitess/go/vt/vtgate/vindexes.SingleColumn
-	if cc, ok := cached.Vindex.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Values []vitess.io/vitess/go/sqltypes.PlanValue
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(88))
-		for _, elem := range cached.Values {
-			size += elem.CachedSize(false)
-		}
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{

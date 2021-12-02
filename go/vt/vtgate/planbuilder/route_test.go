@@ -71,8 +71,8 @@ func TestJoinCanMerge(t *testing.T) {
 				rRoute := &route{
 					condition: &sqlparser.ColName{},
 				}
-				lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
-				rRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(right), ks)
+				lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
+				rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
 				assert.Equal(t, val, lRoute.JoinCanMerge(pb, rRoute, nil, nil), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 			})
 		}
@@ -100,9 +100,9 @@ func TestSubqueryCanMerge(t *testing.T) {
 	}
 	rRoute := &route{}
 	for left, vals := range testcases {
-		lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
+		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
-			rRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(right), ks)
+			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
 			assert.Equal(t, val, lRoute.SubqueryCanMerge(pb, rRoute), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}
@@ -125,9 +125,9 @@ func TestUnionCanMerge(t *testing.T) {
 	lRoute := &route{}
 	rRoute := &route{}
 	for left, vals := range testcases {
-		lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
+		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
-			rRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(right), ks)
+			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
 			assert.Equal(t, val, lRoute.unionCanMerge(rRoute, false), fmt.Sprintf("can't create a single route from these two inputs %v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}
