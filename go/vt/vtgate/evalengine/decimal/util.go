@@ -27,7 +27,7 @@ func (z *Big) norm() *Big {
 // fix check for overflow, underflow, and clamping.
 func (c Context) fix(z *Big) *Big {
 	//mysql
-	if z.isZero() {
+	if z.IsFinite() && z.isZero() {
 		z.setZero(0, 0)
 		return z
 	}
