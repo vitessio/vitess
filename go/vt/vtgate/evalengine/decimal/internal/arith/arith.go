@@ -105,18 +105,6 @@ func Set(z *big.Int, z1, z0 uint64) *big.Int {
 // The following is (mostly) copied from math/big/arith.go, licensed under the
 // BSD 3-clause license: https://github.com/golang/go/blob/master/LICENSE
 
-const (
-	_S = _W / 8 // word size in bytes
-
-	_W = bits.UintSize // word size in bits
-	_B = 1 << _W       // digit base
-	_M = _B - 1        // digit mask
-
-	_W2 = _W / 2   // half word size in bits
-	_B2 = 1 << _W2 // half digit base
-	_M2 = _B2 - 1  // half digit mask
-)
-
 func makeWord(z []big.Word, n int) []big.Word {
 	if n <= cap(z) {
 		return z[:n]
