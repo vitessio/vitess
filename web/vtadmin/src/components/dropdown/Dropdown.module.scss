@@ -3,11 +3,11 @@
     @apply ease-out;
     @apply duration-100;
     @apply z-10;
+
     animation-name: entering;
-    animation-fill-mode:forwards;
+    animation-fill-mode: forwards;
     animation-duration: 100ms;
     display: block;
-
 }
 
 .leaving {
@@ -15,21 +15,22 @@
     @apply transition;
     @apply ease-in;
     @apply duration-75;
+
     animation-name: leaving;
-    animation-fill-mode:forwards;
+    animation-fill-mode: forwards;
     animation-duration: 75ms;
     display: none;
 }
 
 @keyframes entering {
     from {
-        transform: scale(.95);
+        transform: scale(0.95);
         opacity: 0;
     }
 
     to {
-       transform: scale(1);
-       opacity: 1;
+        transform: scale(1);
+        opacity: 1;
     }
 }
 
@@ -40,7 +41,7 @@
     }
 
     to {
-        transform: scale(.95);
+        transform: scale(0.95);
         opacity: 0;
     }
 }
