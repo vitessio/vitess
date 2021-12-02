@@ -2001,13 +2001,14 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
+	Null		  BoolVal
 	NotNull       BoolVal
 	Autoincrement BoolVal
 	Default       Expr
 	OnUpdate      Expr
-	Comment       *SQLVal
-	sawnull       bool
-	sawai         bool
+	Comment *SQLVal
+	sawnull bool
+	sawai   bool
 
 	// Numeric field options
 	Length   *SQLVal
@@ -2028,10 +2029,8 @@ type ColumnType struct {
 
 func (ct *ColumnType) merge(other ColumnType) error {
 	if other.sawnull {
-		if ct.sawnull {
-			return errors.New("cannot include NULL / NOT NULL more than once")
-		}
 		ct.sawnull = true
+		ct.Null = other.Null
 		ct.NotNull = other.NotNull
 	}
 
@@ -2063,6 +2062,7 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		}
 		ct.KeyOpt = other.KeyOpt
 	}
+
 
 	if other.Comment != nil {
 		if ct.Comment != nil {

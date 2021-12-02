@@ -376,7 +376,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolVal> null_or_not_null auto_increment local_opt optionally_opt
+%type <boolVal> auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
 %type <strs> enum_values
 %type <columnDefinition> column_definition column_definition_for_create
@@ -1396,9 +1396,18 @@ column_type_options:
   {
     $$ = ColumnType{}
   }
-| column_type_options null_or_not_null
+| column_type_options NULL
   {
-    opt := ColumnType{NotNull: $2, sawnull: true}
+    opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
+    }
+    $$ = $1
+  }
+| column_type_options NOT NULL
+  {
+    opt := ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
     if err := $1.merge(opt); err != nil {
     	yylex.Error(err.Error())
     	return 1
@@ -1784,17 +1793,6 @@ zero_fill_opt:
     $$ = BoolVal(false)
   }
 | ZEROFILL
-  {
-    $$ = BoolVal(true)
-  }
-
-// Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
-null_or_not_null:
-  NULL
-  {
-    $$ = BoolVal(false)
-  }
-| NOT NULL
   {
     $$ = BoolVal(true)
   }
