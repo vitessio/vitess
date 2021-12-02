@@ -433,7 +433,7 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) bo
 	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 }
 
-// makePlanValue transforms the given sqlparser.Expr into a evalengine.Expr.
+// makeEvalEngineExpr transforms the given sqlparser.Expr into a evalengine.Expr.
 // If the given sqlparser.Expr is an argument and can be found in the rp.argToReplaceBySelect then the
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
