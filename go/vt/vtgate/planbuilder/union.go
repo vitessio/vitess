@@ -106,11 +106,11 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reserved
 
 // TODO (systay) we never use this as an actual error. we should rethink the return type
 func unionRouteMerge(left, right logicalPlan, us *sqlparser.Union) error {
-	lroute, ok := left.(*routeLegacy)
+	lroute, ok := left.(*route)
 	if !ok {
 		return errors.New("unsupported: SELECT of UNION is non-trivial")
 	}
-	rroute, ok := right.(*routeLegacy)
+	rroute, ok := right.(*route)
 	if !ok {
 		return errors.New("unsupported: SELECT of UNION is non-trivial")
 	}
@@ -128,7 +128,7 @@ func unionRouteMerge(left, right logicalPlan, us *sqlparser.Union) error {
 func setLock(in logicalPlan, lock sqlparser.Lock) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := in.(type) {
-		case *routeLegacy:
+		case *route:
 			node.Select.SetLock(lock)
 			return false, node, nil
 		case *sqlCalcFoundRows, *vindexFunc:

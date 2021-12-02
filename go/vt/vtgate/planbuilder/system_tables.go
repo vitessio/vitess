@@ -39,7 +39,7 @@ func (f *notImplementedSchemaInfoConverter) CollationIDLookup(sqlparser.Expr) co
 	return 0
 }
 
-func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *routeLegacy, reservedVars *sqlparser.ReservedVars) error {
+func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route, reservedVars *sqlparser.ReservedVars) error {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, reservedVars)
 	if err != nil {
 		return err

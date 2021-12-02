@@ -90,29 +90,27 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 }
 
 func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
-	routePlan, isRoute := plan.(*route)
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
 	var opcode engine.RouteOpcode
 	var sysTableTableName map[string]evalengine.Expr
 	var sysTableTableSchema []evalengine.Expr
-	if isRoute {
+
+	switch routePlan := plan.(type) {
+	case *routeGen4:
 		opcode = routePlan.eroute.Opcode
 		sysTableTableName = routePlan.eroute.SysTableTableName
 		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
-	}
-	if !isRoute {
-		routePlan, isRoute := plan.(*routeLegacy)
-		if !isRoute {
-			return false
-		}
+	case *route:
 		opcode = routePlan.eroute.Opcode
 		sysTableTableName = routePlan.eroute.SysTableTableName
 		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	default:
+		return false
 	}
+
 	return opcode == engine.SelectDBA &&
 		len(sysTableTableName) == 0 &&
 		len(sysTableTableSchema) == 0
-
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
@@ -188,7 +186,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 		return err
 	}
 
-	if rb, ok := pb.plan.(*routeLegacy); ok {
+	if rb, ok := pb.plan.(*route); ok {
 		// TODO(sougou): this can probably be improved.
 		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 		rb.eroute.QueryTimeout = queryTimeout(directives)
@@ -233,13 +231,13 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
-		case *routeLegacy:
+		case *route:
 			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
 			if err != nil {
 				return false, nil, err
 			}
 			return true, node, nil
-		case *route:
+		case *routeGen4:
 			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
 			if err != nil {
 				return false, nil, err
@@ -408,7 +406,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, rese
 		if err != nil {
 			return err
 		}
-		rut, isRoute := origin.(*routeLegacy)
+		rut, isRoute := origin.(*route)
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
 			err := pb.findSysInfoRoutingPredicates(expr, rut, reservedVars)
 			if err != nil {
@@ -497,7 +495,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 				continue
 			}
 			// We'll allow select * for simple routes.
-			rb, ok := pb.plan.(*routeLegacy)
+			rb, ok := pb.plan.(*route)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
@@ -509,7 +507,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		case *sqlparser.Nextval:
-			rb, ok := pb.plan.(*routeLegacy)
+			rb, ok := pb.plan.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
