@@ -398,12 +398,11 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
-	testFile(t, "onecase.txt", testOutputTempDir, vschema)
-	// testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
-	// testFile(t, "migration_cases.txt", testOutputTempDir, vschema)
-	// testFile(t, "flush_cases.txt", testOutputTempDir, vschema)
-	// testFile(t, "show_cases.txt", testOutputTempDir, vschema)
-	// testFile(t, "call_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "migration_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "flush_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "show_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "call_cases.txt", testOutputTempDir, vschema)
 }
 
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {

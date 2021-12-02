@@ -33,11 +33,11 @@ import (
 // This file has functions to analyze the FROM clause.
 
 // processDMLTable analyzes the FROM clause for DMLs and returns a route.
-func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) (*routeLegacy, error) {
+func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) (*route, error) {
 	if err := pb.processTableExprs(tableExprs, reservedVars, where); err != nil {
 		return nil, err
 	}
-	rb, ok := pb.plan.(*routeLegacy)
+	rb, ok := pb.plan.(*route)
 	if !ok {
 		return nil, errors.New("unsupported: multi-shard or vindex write statement")
 	}
@@ -74,7 +74,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		// If it's a route, preserve the parenthesis so things
 		// don't associate differently when more things are pushed
 		// into it. FROM a, (b, c) should not become FROM a, b, c.
-		if rb, ok := pb.plan.(*routeLegacy); ok {
+		if rb, ok := pb.plan.(*route); ok {
 			sel, ok := rb.Select.(*sqlparser.Select)
 			if !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rb.Select))
@@ -118,7 +118,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			return fmt.Errorf("BUG: unexpected SELECT type: %T", stmt)
 		}
 
-		subroute, ok := spb.plan.(*routeLegacy)
+		subroute, ok := spb.plan.(*route)
 		if !ok {
 			var err error
 			pb.plan, pb.st, err = newSimpleProjection(tableExpr.As, spb.plan)
@@ -315,8 +315,8 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		return err
 	}
 
-	lRoute, leftIsRoute := pb.plan.(*routeLegacy)
-	rRoute, rightIsRoute := rpb.plan.(*routeLegacy)
+	lRoute, leftIsRoute := pb.plan.(*route)
+	rRoute, rightIsRoute := rpb.plan.(*route)
 	if !leftIsRoute || !rightIsRoute {
 		return newJoin(pb, rpb, ajoin, reservedVars)
 	}

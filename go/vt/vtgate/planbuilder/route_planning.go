@@ -412,7 +412,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	return false
 }
 
-func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
+func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
 	err := stripDownQuery(sel, rb.Select)
 	if err != nil {
 		return err
@@ -970,7 +970,7 @@ func canMergeOnFilters(ctx *planningContext, a, b *routeTree, joinPredicates []s
 
 type mergeFunc func(a, b *routeTree) (*routeTree, error)
 
-func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
+func canMergeUnionPlans(ctx *planningContext, a, b *routeGen4) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -997,7 +997,7 @@ func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
 	return false
 }
 
-func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
+func canMergeSubqueryPlans(ctx *planningContext, a, b *routeGen4) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -1020,7 +1020,7 @@ func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
 	return false
 }
 
-func canSelectDBAMerge(a, b *route) bool {
+func canSelectDBAMerge(a, b *routeGen4) bool {
 	if a.eroute.Opcode != engine.SelectDBA {
 		return false
 	}

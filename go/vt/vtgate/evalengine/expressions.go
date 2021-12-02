@@ -161,7 +161,7 @@ func (e EvalResult) TupleValues() []sqltypes.Value {
 	}
 
 	values := *e.tuple
-	result := make([]sqltypes.Value, len(values), 0)
+	result := make([]sqltypes.Value, 0, len(values))
 	for _, val := range values {
 		result = append(result, val.Value())
 	}

@@ -37,7 +37,7 @@ type mergeSort struct {
 }
 
 // newMergeSort builds a new mergeSort.
-func newMergeSort(rb *routeLegacy) *mergeSort {
+func newMergeSort(rb *route) *mergeSort {
 	ms := &mergeSort{
 		resultsBuilder: newResultsBuilder(rb, nil),
 	}
@@ -63,7 +63,7 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	// we have to request the corresponding weight_string from mysql
 	// and use that value instead. This is because we cannot mimic
 	// mysql's collation behavior yet.
-	rb := ms.input.(*routeLegacy)
+	rb := ms.input.(*route)
 	for i, orderby := range rb.eroute.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
 		// Add a weight_string column if we know that the column is a textual column or if its type is unknown

@@ -61,14 +61,14 @@ func TestJoinCanMerge(t *testing.T) {
 		for right, val := range vals {
 			name := fmt.Sprintf("%d:%d", left, right)
 			t.Run(name, func(t *testing.T) {
-				lRoute := &routeLegacy{
+				lRoute := &route{
 					// Setting condition will make SelectEqualUnique match itself.
 					condition: &sqlparser.ColName{},
 				}
 				pb := &primitiveBuilder{
 					plan: lRoute,
 				}
-				rRoute := &routeLegacy{
+				rRoute := &route{
 					condition: &sqlparser.ColName{},
 				}
 				lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
@@ -94,11 +94,11 @@ func TestSubqueryCanMerge(t *testing.T) {
 	}
 
 	ks := &vindexes.Keyspace{}
-	lRoute := &routeLegacy{}
+	lRoute := &route{}
 	pb := &primitiveBuilder{
 		plan: lRoute,
 	}
-	rRoute := &routeLegacy{}
+	rRoute := &route{}
 	for left, vals := range testcases {
 		lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
@@ -122,8 +122,8 @@ func TestUnionCanMerge(t *testing.T) {
 		{false, false, false, false, false, false, false, false, false, false},
 	}
 	ks := &vindexes.Keyspace{}
-	lRoute := &routeLegacy{}
-	rRoute := &routeLegacy{}
+	lRoute := &route{}
+	rRoute := &route{}
 	for left, vals := range testcases {
 		lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
