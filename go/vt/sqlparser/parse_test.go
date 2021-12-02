@@ -2418,9 +2418,6 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique null)",
-		err:   "cannot include NULL / NOT NULL more than once at position 123 near 'null'",
-	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
 		err:   "cannot include more than one key option for a column definition at position 130 near 'key'",
 	}, {
@@ -2441,9 +2438,6 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		err:   "syntax error at position 26 near 'default'",
-	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique null)",
-		err:   "cannot include NULL / NOT NULL more than once at position 126 near 'null'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
 		err:   "cannot include more than one key option for a column definition at position 133 near 'key'",
