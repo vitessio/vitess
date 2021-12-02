@@ -63,9 +63,7 @@ type (
 )
 
 var (
-	resultTrue  = EvalResult{typ: sqltypes.Uint64, numval: 1, collation: collationNumeric}
-	resultFalse = EvalResult{typ: sqltypes.Uint64, numval: 0, collation: collationNumeric}
-	resultNull  = EvalResult{typ: sqltypes.Null, collation: collationNull}
+	resultNull = EvalResult{typ: sqltypes.Null, collation: collationNull}
 )
 
 var _ ComparisonOp = (*EqualOp)(nil)
@@ -186,7 +184,7 @@ func evalTypecheckTuples(lVal, rVal EvalResult) (bool, error) {
 	case lVal.typ == querypb.Type_TUPLE:
 		return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
 	case rVal.typ == querypb.Type_TUPLE:
-		return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
+		return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", 1)
 	default:
 		return false, nil
 	}
@@ -295,15 +293,14 @@ func evalCompareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
 	return 0, hasSeenNull, nil
 }
 
-func foldSingleLenTuples(val EvalResult) EvalResult {
-	if val.typ == querypb.Type_TUPLE && len(*val.tuple) == 1 {
-		return (*val.tuple)[0]
-	}
-	return val
-}
+var mysql8 = true
 
-func boolResult(typ querypb.Type, result, negate bool) EvalResult {
-	if result == !negate {
+func evalResultBool(b bool) EvalResult {
+	var typ = sqltypes.Int64
+	if mysql8 {
+		typ = sqltypes.Uint64
+	}
+	if b {
 		return EvalResult{typ: typ, collation: collationNumeric, numval: 1}
 	}
 	return EvalResult{typ: typ, collation: collationNumeric, numval: 0}
@@ -338,10 +335,7 @@ func (e *EqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	if isNull {
 		return resultNull, err
 	}
-	if e.Compare(numeric) {
-		return resultTrue, nil
-	}
-	return resultFalse, nil
+	return evalResultBool(e.Compare(numeric)), nil
 }
 
 // Type implements the ComparisonOp interface
@@ -360,10 +354,7 @@ func (n *NullSafeEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	if cmp == 0 {
-		return resultTrue, nil
-	}
-	return resultFalse, nil
+	return evalResultBool(cmp == 0), nil
 }
 
 // Type implements the ComparisonOp interface
@@ -428,13 +419,21 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 		}
 	}
 
+	boolResult := func(result, negate bool) EvalResult {
+		// results from IN operations are always Int64 in MySQL 5.7 and 8+
+		if result == !negate {
+			return EvalResult{typ: sqltypes.Int64, collation: collationNumeric, numval: 1}
+		}
+		return EvalResult{typ: sqltypes.Int64, collation: collationNumeric, numval: 0}
+	}
+
 	if found {
-		return boolResult(querypb.Type_INT64, found, i.Negate), nil
+		return boolResult(found, i.Negate), nil
 	}
 	if foundNull {
 		return resultNull, nil
 	}
-	return boolResult(querypb.Type_INT64, found, i.Negate), nil
+	return boolResult(found, i.Negate), nil
 }
 
 // Type implements the ComparisonOp interface
@@ -464,6 +463,9 @@ func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	var matched bool
 
 	switch {
+	case left.typ == querypb.Type_TUPLE || right.typ == querypb.Type_TUPLE:
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
+
 	case left.textual() && right.textual():
 		if left.collation.Collation != right.collation.Collation {
 			panic(fmt.Sprintf("LikeOp: did not coerce, left=%d right=%d",
@@ -471,30 +473,20 @@ func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 		}
 		matched = l.matchWildcard(left.bytes, right.bytes, right.collation.Collation)
 
-	case sqltypes.IsNumber(left.typ) && right.textual():
+	case right.textual():
 		matched = l.matchWildcard(left.Value().Raw(), right.bytes, right.collation.Collation)
 
-	case left.textual() && sqltypes.IsNumber(right.typ):
+	case left.textual():
 		matched = l.matchWildcard(left.bytes, right.Value().Raw(), left.collation.Collation)
-
-	case left.typ == querypb.Type_TUPLE || right.typ == querypb.Type_TUPLE:
-		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
 
 	case hasNullEvalResult(left, right):
 		return resultNull, nil
 
 	default:
-		numeric, isNull, err := evalCompare(left, right)
-		if err != nil {
-			return EvalResult{}, err
-		}
-		if isNull {
-			return resultNull, err
-		}
-		matched = numeric == 0
+		matched = l.matchWildcard(left.Value().Raw(), right.Value().Raw(), collations.CollationBinaryID)
 	}
 
-	return boolResult(querypb.Type_UINT64, matched, l.Negate), nil
+	return evalResultBool(matched == !l.Negate), nil
 }
 
 // Type implements the ComparisonOp interface
