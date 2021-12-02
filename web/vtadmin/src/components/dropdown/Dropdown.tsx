@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import style from './Dropdown.module.scss'
 
 interface DropdownProps {
-    button: React.ReactNode
+    button: React.ReactElement
     position?: 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left'
 }
 
@@ -22,7 +22,7 @@ const Dropdown: React.FC<DropdownProps> = ({ children, button, position }) => {
                 {button}
             </div>
 
-            <div 
+            <div
                 className={`${open ? style.entering : style.leaving} z-1 origin-top-right absolute ${positions[position as string] || positions.default} mt-2 w-max rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
                 role="menu"
                 aria-orientation="vertical"
@@ -31,7 +31,7 @@ const Dropdown: React.FC<DropdownProps> = ({ children, button, position }) => {
             >
                 {children}
             </div>
-            </div>
+        </div>
     )
 }
 

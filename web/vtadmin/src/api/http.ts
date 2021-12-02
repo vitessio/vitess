@@ -225,6 +225,19 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
     return pb.Tablet.create(result);
 };
 
+export interface PingTabletParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const pingTablet = async ({ clusterID, alias }: PingTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/ping?cluster=${clusterID}`);
+    const err = pb.PingTabletResponse.verify(result)
+    if (err) throw Error(err);
+
+    return pb.PingTabletResponse.create(result)
+}
+
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;
     data?: TabletDebugVars;

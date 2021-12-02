@@ -88,7 +88,7 @@ export const Tablets = () => {
                         <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
                     <DataCell>
-                        <InfoDropdown />
+                        <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
                         <ChangeDropdown />
                     </DataCell>
                 </tr>
