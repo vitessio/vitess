@@ -9,6 +9,7 @@
   "dependencies": {
     "@bugsnag/js": "^7.10.1",
     "@craco/craco": "^6.4.0",
+    "@headlessui/react": "^1.4.2",
     "@testing-library/user-event": "^12.6.0",
     "@types/classnames": "^2.2.11",
     "@types/jest": "^26.0.19",
