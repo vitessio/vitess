@@ -1351,14 +1351,94 @@
 # Invalid value in IN clause
 "select id from user where id in (18446744073709551616, 1)"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 error: strconv.ParseInt: parsing "18446744073709551616": value out of range
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (18446744073709551616, 1)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id in (18446744073709551616, 1)",
+    "Table": "`user`"
+  }
+}
 
 # Invalid value in IN clause from LHS of join
 "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 error: strconv.ParseInt: parsing "18446744073709551616": value out of range
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1 where u1.id = 18446744073709551616",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # Invalid value in IN clause from RHS of join
 "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 error: strconv.ParseInt: parsing "18446744073709551616": value out of range
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 18446744073709551616",
+        "Table": "`user`"
+      }
+    ]
+  }
+}

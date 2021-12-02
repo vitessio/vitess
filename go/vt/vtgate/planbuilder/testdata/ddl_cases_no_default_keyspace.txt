@@ -365,7 +365,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select * from `user` where id = 0x04"
   }
 }
-Gen4 error: expr cannot be converted, not supported: hexadecimal value: 0x04
+Gen4 plan same as above
 
 # create view with limit works if it can be dropped
 "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5"
