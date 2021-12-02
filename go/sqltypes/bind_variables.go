@@ -108,6 +108,11 @@ func Float64BindVariable(v float64) *querypb.BindVariable {
 	return ValueBindVariable(NewFloat64(v))
 }
 
+func DecimalBindVariable(v DecimalFloat) *querypb.BindVariable {
+	f := strconv.FormatFloat(float64(v), 'f', -1, 64)
+	return ValueBindVariable(NewDecimal(f))
+}
+
 // StringBindVariable converts a string to a bind var.
 func StringBindVariable(v string) *querypb.BindVariable {
 	return ValueBindVariable(NewVarBinary(v))
@@ -122,6 +127,8 @@ func BytesBindVariable(v []byte) *querypb.BindVariable {
 func ValueBindVariable(v Value) *querypb.BindVariable {
 	return &querypb.BindVariable{Type: v.typ, Value: v.val}
 }
+
+type DecimalFloat float64
 
 // BuildBindVariable builds a *querypb.BindVariable from a valid input type.
 func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
@@ -144,6 +151,8 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		return Int64BindVariable(v), nil
 	case uint64:
 		return Uint64BindVariable(v), nil
+	case DecimalFloat:
+		return DecimalBindVariable(v), nil
 	case float64:
 		return Float64BindVariable(v), nil
 	case nil:
