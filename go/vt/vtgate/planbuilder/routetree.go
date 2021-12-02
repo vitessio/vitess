@@ -184,11 +184,7 @@ func (rp *routeTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) 
 // they will improve the routeOpCode
 func (rp *routeTree) addPredicate(ctx *planningContext, predicates ...sqlparser.Expr) error {
 	if rp.canImprove() {
-		newVindexFound, err := rp.searchForNewVindexes(ctx, predicates)
-		if err != nil {
-			return err
-		}
-
+		newVindexFound := rp.searchForNewVindexes(ctx, predicates)
 		// if we didn't open up any new vindex options, no need to enter here
 		if newVindexFound {
 			rp.pickBestAvailableVindex()
@@ -206,7 +202,7 @@ func (rp *routeTree) canImprove() bool {
 	return rp.routeOpCode != engine.SelectNone
 }
 
-func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sqlparser.Expr) (bool, error) {
+func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sqlparser.Expr) bool {
 	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
@@ -222,66 +218,53 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 				Right:    &sqlparser.Subquery{Select: node.Subquery.Select},
 				Operator: originalCmp.Operator,
 			}
-			found, exitEarly, err := rp.planComparison(ctx, cmp)
-			if err != nil || exitEarly {
-				return false, err
+			found, exitEarly := rp.planComparison(ctx, cmp)
+			if exitEarly {
+				return false
 			}
 			newVindexFound = newVindexFound || found
 		case *sqlparser.ComparisonExpr:
-			found, exitEarly, err := rp.planComparison(ctx, node)
-			if err != nil || exitEarly {
-				return false, err
+			found, exitEarly := rp.planComparison(ctx, node)
+			if exitEarly {
+				return false
 			}
 			newVindexFound = newVindexFound || found
 		case *sqlparser.IsExpr:
-			found, err := rp.planIsExpr(ctx, node)
-			if err != nil {
-				return false, err
-			}
+			found := rp.planIsExpr(ctx, node)
 			newVindexFound = newVindexFound || found
 		}
 	}
-	return newVindexFound, nil
+	return newVindexFound
 }
 
-func (rp *routeTree) planComparison(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
+func (rp *routeTree) planComparison(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, bool) {
 	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
 		// so we can safely bail out here
 		rp.routeOpCode = engine.SelectNone
-		return false, true, nil
+		return false, true
 	}
 
 	switch node.Operator {
 	case sqlparser.EqualOp:
-		found, err := rp.planEqualOp(ctx, node)
-		if err != nil {
-			return false, false, err
-		}
-		return found, false, nil
+		return rp.planEqualOp(ctx, node), false
 	case sqlparser.InOp:
 		if rp.isImpossibleIN(node) {
-			return false, true, nil
+			return false, true
 		}
-		found, err := rp.planInOp(ctx, node)
-		if err != nil {
-			return false, false, err
-		}
-		return found, false, nil
+		found := rp.planInOp(ctx, node)
+		return found, false
 	case sqlparser.NotInOp:
 		// NOT IN is always a scatter, except when we can be sure it would return nothing
 		if rp.isImpossibleNotIN(node) {
-			return false, true, nil
+			return false, true
 		}
 	case sqlparser.LikeOp:
-		found, err := rp.planLikeOp(ctx, node)
-		if err != nil {
-			return false, false, err
-		}
-		return found, false, nil
+		found := rp.planLikeOp(ctx, node)
+		return found, false
 	}
-	return false, false, nil
+	return false, false
 }
 
 func (rp *routeTree) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
@@ -310,7 +293,7 @@ func (rp *routeTree) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
 	return false
 }
 
-func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
 	vdValue := other
@@ -318,50 +301,44 @@ func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.Compariso
 		column, ok = node.Right.(*sqlparser.ColName)
 		if !ok {
 			// either the LHS or RHS have to be a column to be useful for the vindex
-			return false, nil
+			return false
 		}
 		vdValue = node.Left
 	}
-	val, err := rp.makePlanValue(ctx, vdValue)
-	if err != nil || val == nil {
-		if err == columnNotSupportedErr {
-			return false, nil
-		}
-		return false, err
+	val := rp.makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return false
 	}
 
-	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 }
 
-func (rp *routeTree) planSimpleInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
+func (rp *routeTree) planSimpleInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left *sqlparser.ColName) bool {
 	vdValue := node.Right
-	value, err := rp.makePlanValue(ctx, vdValue)
-	if err != nil || value == nil {
-		if err == columnNotSupportedErr {
-			return false, nil
-		}
-		return false, err
+	value := rp.makeEvalEngineExpr(ctx, vdValue)
+	if value == nil {
+		return false
 	}
 	switch nodeR := vdValue.(type) {
 	case sqlparser.ValTuple:
 		if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
 			rp.routeOpCode = engine.SelectNone
-			return false, nil
+			return false
 		}
 	}
 	opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
-	return rp.haveMatchingVindex(ctx, node, vdValue, left, value, opcode, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, left, value, opcode, justTheVindex)
 }
 
-func (rp *routeTree) planCompositeInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
+func (rp *routeTree) planCompositeInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) bool {
 	right, rightIsValTuple := node.Right.(sqlparser.ValTuple)
 	if !rightIsValTuple {
-		return false, nil
+		return false
 	}
 	return rp.planCompositeInOpRecursive(ctx, node, left, right, nil)
 }
 
-func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
+func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) bool {
 	foundVindex := false
 	cindex := len(coordinates)
 	coordinates = append(coordinates, 0)
@@ -369,11 +346,8 @@ func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlp
 		coordinates[cindex] = i
 		switch expr := expr.(type) {
 		case sqlparser.ValTuple:
-			ok, err := rp.planCompositeInOpRecursive(ctx, node, expr, right, coordinates)
-			if err != nil {
-				return false, err
-			}
-			return ok || foundVindex, nil
+			ok := rp.planCompositeInOpRecursive(ctx, node, expr, right, coordinates)
+			return ok || foundVindex
 		case *sqlparser.ColName:
 			// check if left col is a vindex
 			if !rp.hasVindex(expr) {
@@ -386,16 +360,16 @@ func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlp
 				case sqlparser.ValTuple:
 					val := tupleAccess(currRight, coordinates)
 					if val == nil {
-						return false, nil
+						return false
 					}
 					rightVals[j] = val
 				default:
-					return false, nil
+					return false
 				}
 			}
-			newPlanValues, err := rp.makePlanValue(ctx, rightVals)
-			if newPlanValues == nil || err != nil {
-				return false, err
+			newPlanValues := rp.makeEvalEngineExpr(ctx, rightVals)
+			if newPlanValues == nil {
+				return false
 			}
 
 			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
@@ -403,32 +377,29 @@ func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlp
 			foundVindex = newVindex || foundVindex
 		}
 	}
-	return foundVindex, nil
+	return foundVindex
 }
 
-func (rp *routeTree) planInOp(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planInOp(ctx *planningContext, node *sqlparser.ComparisonExpr) bool {
 	switch left := node.Left.(type) {
 	case *sqlparser.ColName:
 		return rp.planSimpleInOp(ctx, node, left)
 	case sqlparser.ValTuple:
 		return rp.planCompositeInOp(ctx, node, left)
 	}
-	return false, nil
+	return false
 }
 
-func (rp *routeTree) planLikeOp(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planLikeOp(ctx *planningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
-		return false, nil
+		return false
 	}
 
 	vdValue := node.Right
-	val, err := rp.makePlanValue(ctx, vdValue)
-	if err != nil || val == nil {
-		if err == columnNotSupportedErr {
-			return false, nil
-		}
-		return false, err
+	val := rp.makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return false
 	}
 
 	selectEqual := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectEqual }
@@ -441,28 +412,25 @@ func (rp *routeTree) planLikeOp(ctx *planningContext, node *sqlparser.Comparison
 		return nil
 	}
 
-	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, selectEqual, vdx), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, selectEqual, vdx)
 }
 
-func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (bool, error) {
+func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) bool {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
 	if node.Right != sqlparser.IsNullOp {
-		return false, nil
+		return false
 	}
 	column, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
-		return false, nil
+		return false
 	}
 	vdValue := &sqlparser.NullVal{}
-	val, err := rp.makePlanValue(ctx, vdValue)
-	if err != nil || val == nil {
-		if err == columnNotSupportedErr {
-			return false, nil
-		}
-		return false, err
+	val := rp.makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return false
 	}
 
-	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex), err
+	return rp.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 }
 
 // makePlanValue transforms the given sqlparser.Expr into a evalengine.Expr.
@@ -470,9 +438,9 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
-func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (evalengine.Expr, error) {
+func (rp *routeTree) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) evalengine.Expr {
 	if ctx.isSubQueryToReplace(n) {
-		return nil, nil
+		return nil
 	}
 
 	for _, expr := range ctx.semTable.GetExprAndEqualities(n) {
@@ -488,16 +456,13 @@ func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (eval
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, err := evalengine.Convert(expr, &noColumnLookup{semTable: ctx.semTable})
-		if err != nil {
-			return nil, err
-		}
+		pv, _ := evalengine.Convert(expr, &noColumnLookup{semTable: ctx.semTable})
 		if pv != nil {
-			return pv, nil
+			return pv
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
 type noColumnLookup struct {
