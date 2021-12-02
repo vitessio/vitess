@@ -1,3 +1,4 @@
+//nolint:errcheck
 package decimal
 
 import (
@@ -891,7 +892,7 @@ func (x *Big) Format(s fmt.State, c rune) {
 		f.format(x, sci, byte(c), x.Context.RoundingMode)
 	case 'f', 'F':
 		if !hasPrec {
-			prec = 0
+			f.prec = 0
 		} else {
 			// %f's precision means "number of digits after the radix"
 			if x.exp > 0 {
@@ -921,6 +922,7 @@ func (x *Big) Format(s fmt.State, c rune) {
 		// This is the easiest way of doing it. Note we can't use type Big Big,
 		// even though it's declared inside a function. Go thinks it's recursive.
 		// At least the fields are checked at compile time.
+		//nolint:structcheck
 		type Big struct {
 			Context   Context
 			unscaled  big.Int
@@ -1837,6 +1839,7 @@ func (x *Big) validate() {
 			if caller := runtime.FuncForPC(pc); ok && caller != nil {
 				fmt.Println("called by:", caller.Name())
 			}
+			//nolint:structcheck
 			type Big struct {
 				Context   Context
 				unscaled  big.Int
