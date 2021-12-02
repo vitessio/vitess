@@ -12,7 +12,7 @@ interface InfoDropdownProps {
 const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
     const [isPingOpen, setPingOpen] = useState(false)
     return (
-        <div>
+        <div className="w-min inline-block">
             <Dropdown button={
                 <button
                     type="button"

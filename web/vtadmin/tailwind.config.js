@@ -9,7 +9,10 @@ module.exports = {
                 danger: '#D32F2F',
                 warning: '#FFAB40',
                 success: '#00893E',
-                none: '#17171b'
+                none: '#17171b',
+                'vitess-blue': "#3D5AFE",
+                'vitess-blue-50': "#8187ff",
+                'vitess-blue-200': "#0031ca"
             },
         },
         fontFamily: {
