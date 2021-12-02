@@ -60,6 +60,8 @@ compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzSplitStatementToPieces fu
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzTabletManager_ExecuteFetchAsDba fuzz_tablet_manager_execute_fetch_as_dba
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzUnmarshalJSON fuzz_tabletserver_rules_unmarshal_json
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzLoadTable fuzz_load_table
+compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzCollateUnicode fuzz_collate_unicode
+compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzCollateWildcard fuzz_collate_wildcard
 
 compile_go_fuzzer vitess.io/vitess/go/mysql FuzzWritePacket write_packet_fuzzer
 compile_go_fuzzer vitess.io/vitess/go/mysql FuzzHandleNextCommand handle_next_command_fuzzer
