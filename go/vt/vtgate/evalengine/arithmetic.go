@@ -612,14 +612,20 @@ func makeNumericAndPrioritize(i1, i2 EvalResult) (EvalResult, EvalResult) {
 }
 
 func makeFloat(v EvalResult) EvalResult {
-	if sqltypes.IsIntegral(v.typ) {
-		return EvalResult{numval: math.Float64bits(float64(int64(v.numval))), typ: sqltypes.Float64}
-	}
-	if sqltypes.IsFloat(v.typ) {
+	switch v.typ {
+	case sqltypes.Float64, sqltypes.Float32:
 		return v
+	case sqltypes.Decimal:
+		if f, ok := v.decimal.num.Float64(); ok {
+			return newEvalFloat(f)
+		}
+	case sqltypes.Uint64:
+		return newEvalFloat(float64(v.numval))
+	case sqltypes.Int64:
+		return newEvalFloat(float64(int64(v.numval)))
 	}
-	if fval, err := strconv.ParseFloat(string(v.bytes), 64); err == nil {
-		return newEvalFloat(fval)
+	if v.bytes != nil {
+		return newEvalFloat(parseStringToFloat(string(v.bytes)))
 	}
 	return newEvalFloat(0)
 }
