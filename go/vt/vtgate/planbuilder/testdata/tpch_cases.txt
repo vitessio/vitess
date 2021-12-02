@@ -177,9 +177,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
             "FieldQuery": "select total_revenue from revenue0 where 1 != 1",
             "Query": "select total_revenue from revenue0 where supplier_no = :s_suppkey and total_revenue = :__sq1",
             "Table": "revenue0",
-            "Values": [
-              ":s_suppkey"
-            ],
+            "Values": ":s_suppkey",
             "Vindex": "hash"
           }
         ]
@@ -306,9 +304,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
                         "FieldQuery": "select p_brand, p_type, p_size, weight_string(p_brand), weight_string(p_type), weight_string(p_size) from part where 1 != 1",
                         "Query": "select p_brand, p_type, p_size, weight_string(p_brand), weight_string(p_type), weight_string(p_size) from part where p_brand != 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and p_partkey = :ps_partkey",
                         "Table": "part",
-                        "Values": [
-                          ":ps_partkey"
-                        ],
+                        "Values": ":ps_partkey",
                         "Vindex": "hash"
                       }
                     ]
@@ -388,9 +384,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                     "OrderBy": "(3|6) DESC, (2|5) ASC",
                     "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where :__sq_has_values1 = 1 and o_orderkey in ::__vals order by o_totalprice desc, o_orderdate asc",
                     "Table": "orders",
-                    "Values": [
-                      ":__sq1"
-                    ],
+                    "Values": ":__sq1",
                     "Vindex": "hash"
                   },
                   {
@@ -403,9 +397,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                     "FieldQuery": "select c_name, c_custkey, weight_string(c_name), weight_string(c_custkey) from customer where 1 != 1",
                     "Query": "select c_name, c_custkey, weight_string(c_name), weight_string(c_custkey) from customer where c_custkey = :o_custkey",
                     "Table": "customer",
-                    "Values": [
-                      ":o_custkey"
-                    ],
+                    "Values": ":o_custkey",
                     "Vindex": "hash"
                   }
                 ]
@@ -420,9 +412,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                 "FieldQuery": "select sum(l_quantity) from lineitem where 1 != 1",
                 "Query": "select sum(l_quantity) from lineitem where l_orderkey = :o_orderkey",
                 "Table": "lineitem",
-                "Values": [
-                  ":o_orderkey"
-                ],
+                "Values": ":o_orderkey",
                 "Vindex": "lineitem_map"
               }
             ]

@@ -13,9 +13,7 @@
     "FieldQuery": "select c_discount, c_last, c_credit, w_tax from customer1 as c join warehouse1 as w on c_w_id = w_id where 1 != 1",
     "Query": "select c_discount, c_last, c_credit, w_tax from customer1 as c join warehouse1 as w on c_w_id = w_id where w_id = 1 and c_d_id = 15 and c_id = 10",
     "Table": "customer1, warehouse1",
-    "Values": [
-      1
-    ],
+    "Values": 1,
     "Vindex": "hash"
   }
 }
@@ -32,9 +30,7 @@
     "FieldQuery": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where 1 != 1",
     "Query": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where c_d_id = 15 and c_id = 10 and w_id = 1 and c_w_id = w_id",
     "Table": "customer1, warehouse1",
-    "Values": [
-      "INT64(1)"
-    ],
+    "Values": "INT64(1)",
     "Vindex": "hash"
   }
 }
@@ -54,9 +50,7 @@
     "FieldQuery": "select d_next_o_id, d_tax from district1 where 1 != 1",
     "Query": "select d_next_o_id, d_tax from district1 where d_w_id = 15 and d_id = 95 for update",
     "Table": "district1",
-    "Values": [
-      15
-    ],
+    "Values": 15,
     "Vindex": "hash"
   }
 }
@@ -73,9 +67,7 @@
     "FieldQuery": "select d_next_o_id, d_tax from district1 where 1 != 1",
     "Query": "select d_next_o_id, d_tax from district1 where d_w_id = 15 and d_id = 95 for update",
     "Table": "district1",
-    "Values": [
-      "INT64(15)"
-    ],
+    "Values": "INT64(15)",
     "Vindex": "hash"
   }
 }
@@ -159,9 +151,7 @@ Gen4 plan same as above
     "FieldQuery": "select i_price, i_name, i_data from item1 where 1 != 1",
     "Query": "select i_price, i_name, i_data from item1 where i_id = 9654",
     "Table": "item1",
-    "Values": [
-      9654
-    ],
+    "Values": 9654,
     "Vindex": "hash"
   }
 }
@@ -178,9 +168,7 @@ Gen4 plan same as above
     "FieldQuery": "select i_price, i_name, i_data from item1 where 1 != 1",
     "Query": "select i_price, i_name, i_data from item1 where i_id = 9654",
     "Table": "item1",
-    "Values": [
-      "INT64(9654)"
-    ],
+    "Values": "INT64(9654)",
     "Vindex": "hash"
   }
 }
@@ -200,9 +188,7 @@ Gen4 plan same as above
     "FieldQuery": "select s_quantity, s_data, s_dist_01 as s_dist from stock1 where 1 != 1",
     "Query": "select s_quantity, s_data, s_dist_01 as s_dist from stock1 where s_i_id = 2198 and s_w_id = 89 for update",
     "Table": "stock1",
-    "Values": [
-      89
-    ],
+    "Values": 89,
     "Vindex": "hash"
   }
 }
@@ -219,9 +205,7 @@ Gen4 plan same as above
     "FieldQuery": "select s_quantity, s_data, s_dist_01 as s_dist from stock1 where 1 != 1",
     "Query": "select s_quantity, s_data, s_dist_01 as s_dist from stock1 where s_i_id = 2198 and s_w_id = 89 for update",
     "Table": "stock1",
-    "Values": [
-      "INT64(89)"
-    ],
+    "Values": "INT64(89)",
     "Vindex": "hash"
   }
 }
@@ -309,9 +293,7 @@ Gen4 plan same as above
     "FieldQuery": "select w_street_1, w_street_2, w_city, w_state, w_zip, w_name from warehouse1 where 1 != 1",
     "Query": "select w_street_1, w_street_2, w_city, w_state, w_zip, w_name from warehouse1 where w_id = 998",
     "Table": "warehouse1",
-    "Values": [
-      998
-    ],
+    "Values": 998,
     "Vindex": "hash"
   }
 }
@@ -328,9 +310,7 @@ Gen4 plan same as above
     "FieldQuery": "select w_street_1, w_street_2, w_city, w_state, w_zip, w_name from warehouse1 where 1 != 1",
     "Query": "select w_street_1, w_street_2, w_city, w_state, w_zip, w_name from warehouse1 where w_id = 998",
     "Table": "warehouse1",
-    "Values": [
-      "INT64(998)"
-    ],
+    "Values": "INT64(998)",
     "Vindex": "hash"
   }
 }
@@ -374,9 +354,7 @@ Gen4 plan same as above
     "FieldQuery": "select d_street_1, d_street_2, d_city, d_state, d_zip, d_name from district1 where 1 != 1",
     "Query": "select d_street_1, d_street_2, d_city, d_state, d_zip, d_name from district1 where d_w_id = 896 and d_id = 9",
     "Table": "district1",
-    "Values": [
-      896
-    ],
+    "Values": 896,
     "Vindex": "hash"
   }
 }
@@ -393,9 +371,7 @@ Gen4 plan same as above
     "FieldQuery": "select d_street_1, d_street_2, d_city, d_state, d_zip, d_name from district1 where 1 != 1",
     "Query": "select d_street_1, d_street_2, d_city, d_state, d_zip, d_name from district1 where d_w_id = 896 and d_id = 9",
     "Table": "district1",
-    "Values": [
-      "INT64(896)"
-    ],
+    "Values": "INT64(896)",
     "Vindex": "hash"
   }
 }
@@ -415,9 +391,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(c_id) as namecnt from customer1 where 1 != 1",
     "Query": "select count(c_id) as namecnt from customer1 where c_w_id = 5 and c_d_id = 1 and c_last = 'last'",
     "Table": "customer1",
-    "Values": [
-      5
-    ],
+    "Values": 5,
     "Vindex": "hash"
   }
 }
@@ -434,9 +408,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(c_id) as namecnt from customer1 where 1 != 1",
     "Query": "select count(c_id) as namecnt from customer1 where c_w_id = 5 and c_d_id = 1 and c_last = 'last'",
     "Table": "customer1",
-    "Values": [
-      "INT64(5)"
-    ],
+    "Values": "INT64(5)",
     "Vindex": "hash"
   }
 }
@@ -456,9 +428,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_id from customer1 where 1 != 1",
     "Query": "select c_id from customer1 where c_w_id = 8 and c_d_id = 5 and c_last = 'item_last' order by c_first asc",
     "Table": "customer1",
-    "Values": [
-      8
-    ],
+    "Values": 8,
     "Vindex": "hash"
   }
 }
@@ -475,9 +445,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_id from customer1 where 1 != 1",
     "Query": "select c_id from customer1 where c_w_id = 8 and c_d_id = 5 and c_last = 'item_last' order by c_first asc",
     "Table": "customer1",
-    "Values": [
-      "INT64(8)"
-    ],
+    "Values": "INT64(8)",
     "Vindex": "hash"
   }
 }
@@ -497,9 +465,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since from customer1 where 1 != 1",
     "Query": "select c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since from customer1 where c_w_id = 8965 and c_d_id = 1 and c_id = 9 for update",
     "Table": "customer1",
-    "Values": [
-      8965
-    ],
+    "Values": 8965,
     "Vindex": "hash"
   }
 }
@@ -516,9 +482,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since from customer1 where 1 != 1",
     "Query": "select c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since from customer1 where c_w_id = 8965 and c_d_id = 1 and c_id = 9 for update",
     "Table": "customer1",
-    "Values": [
-      "INT64(8965)"
-    ],
+    "Values": "INT64(8965)",
     "Vindex": "hash"
   }
 }
@@ -538,9 +502,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_data from customer1 where 1 != 1",
     "Query": "select c_data from customer1 where c_w_id = 32 and c_d_id = 68 and c_id = 5",
     "Table": "customer1",
-    "Values": [
-      32
-    ],
+    "Values": 32,
     "Vindex": "hash"
   }
 }
@@ -557,9 +519,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_data from customer1 where 1 != 1",
     "Query": "select c_data from customer1 where c_w_id = 32 and c_d_id = 68 and c_id = 5",
     "Table": "customer1",
-    "Values": [
-      "INT64(32)"
-    ],
+    "Values": "INT64(32)",
     "Vindex": "hash"
   }
 }
@@ -647,9 +607,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(c_id) as namecnt from customer1 where 1 != 1",
     "Query": "select count(c_id) as namecnt from customer1 where c_w_id = 870 and c_d_id = 780 and c_last = 'last'",
     "Table": "customer1",
-    "Values": [
-      870
-    ],
+    "Values": 870,
     "Vindex": "hash"
   }
 }
@@ -666,9 +624,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(c_id) as namecnt from customer1 where 1 != 1",
     "Query": "select count(c_id) as namecnt from customer1 where c_w_id = 870 and c_d_id = 780 and c_last = 'last'",
     "Table": "customer1",
-    "Values": [
-      "INT64(870)"
-    ],
+    "Values": "INT64(870)",
     "Vindex": "hash"
   }
 }
@@ -688,9 +644,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_balance, c_first, c_middle, c_id from customer1 where 1 != 1",
     "Query": "select c_balance, c_first, c_middle, c_id from customer1 where c_w_id = 840 and c_d_id = 1 and c_last = 'test' order by c_first asc",
     "Table": "customer1",
-    "Values": [
-      840
-    ],
+    "Values": 840,
     "Vindex": "hash"
   }
 }
@@ -707,9 +661,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_balance, c_first, c_middle, c_id from customer1 where 1 != 1",
     "Query": "select c_balance, c_first, c_middle, c_id from customer1 where c_w_id = 840 and c_d_id = 1 and c_last = 'test' order by c_first asc",
     "Table": "customer1",
-    "Values": [
-      "INT64(840)"
-    ],
+    "Values": "INT64(840)",
     "Vindex": "hash"
   }
 }
@@ -729,9 +681,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_balance, c_first, c_middle, c_last from customer1 where 1 != 1",
     "Query": "select c_balance, c_first, c_middle, c_last from customer1 where c_w_id = 15 and c_d_id = 5169 and c_id = 1",
     "Table": "customer1",
-    "Values": [
-      15
-    ],
+    "Values": 15,
     "Vindex": "hash"
   }
 }
@@ -748,9 +698,7 @@ Gen4 plan same as above
     "FieldQuery": "select c_balance, c_first, c_middle, c_last from customer1 where 1 != 1",
     "Query": "select c_balance, c_first, c_middle, c_last from customer1 where c_w_id = 15 and c_d_id = 5169 and c_id = 1",
     "Table": "customer1",
-    "Values": [
-      "INT64(15)"
-    ],
+    "Values": "INT64(15)",
     "Vindex": "hash"
   }
 }
@@ -770,9 +718,7 @@ Gen4 plan same as above
     "FieldQuery": "select o_id, o_carrier_id, o_entry_d from orders1 where 1 != 1",
     "Query": "select o_id, o_carrier_id, o_entry_d from orders1 where o_w_id = 9894 and o_d_id = 3 and o_c_id = 159 order by o_id desc",
     "Table": "orders1",
-    "Values": [
-      9894
-    ],
+    "Values": 9894,
     "Vindex": "hash"
   }
 }
@@ -789,9 +735,7 @@ Gen4 plan same as above
     "FieldQuery": "select o_id, o_carrier_id, o_entry_d from orders1 where 1 != 1",
     "Query": "select o_id, o_carrier_id, o_entry_d from orders1 where o_w_id = 9894 and o_d_id = 3 and o_c_id = 159 order by o_id desc",
     "Table": "orders1",
-    "Values": [
-      "INT64(9894)"
-    ],
+    "Values": "INT64(9894)",
     "Vindex": "hash"
   }
 }
@@ -811,9 +755,7 @@ Gen4 plan same as above
     "FieldQuery": "select ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d from order_line1 where 1 != 1",
     "Query": "select ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d from order_line1 where ol_w_id = 92 and ol_d_id = 5 and ol_o_id = 1",
     "Table": "order_line1",
-    "Values": [
-      92
-    ],
+    "Values": 92,
     "Vindex": "hash"
   }
 }
@@ -830,9 +772,7 @@ Gen4 plan same as above
     "FieldQuery": "select ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d from order_line1 where 1 != 1",
     "Query": "select ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d from order_line1 where ol_w_id = 92 and ol_d_id = 5 and ol_o_id = 1",
     "Table": "order_line1",
-    "Values": [
-      "INT64(92)"
-    ],
+    "Values": "INT64(92)",
     "Vindex": "hash"
   }
 }
@@ -852,9 +792,7 @@ Gen4 plan same as above
     "FieldQuery": "select no_o_id from new_orders1 where 1 != 1",
     "Query": "select no_o_id from new_orders1 where no_d_id = 689 and no_w_id = 15 order by no_o_id asc limit 1 for update",
     "Table": "new_orders1",
-    "Values": [
-      15
-    ],
+    "Values": 15,
     "Vindex": "hash"
   }
 }
@@ -871,9 +809,7 @@ Gen4 plan same as above
     "FieldQuery": "select no_o_id from new_orders1 where 1 != 1",
     "Query": "select no_o_id from new_orders1 where no_d_id = 689 and no_w_id = 15 order by no_o_id asc limit 1 for update",
     "Table": "new_orders1",
-    "Values": [
-      "INT64(15)"
-    ],
+    "Values": "INT64(15)",
     "Vindex": "hash"
   }
 }
@@ -917,9 +853,7 @@ Gen4 plan same as above
     "FieldQuery": "select o_c_id from orders1 where 1 != 1",
     "Query": "select o_c_id from orders1 where o_id = 6 and o_d_id = 1983 and o_w_id = 894605",
     "Table": "orders1",
-    "Values": [
-      894605
-    ],
+    "Values": 894605,
     "Vindex": "hash"
   }
 }
@@ -936,9 +870,7 @@ Gen4 plan same as above
     "FieldQuery": "select o_c_id from orders1 where 1 != 1",
     "Query": "select o_c_id from orders1 where o_id = 6 and o_d_id = 1983 and o_w_id = 894605",
     "Table": "orders1",
-    "Values": [
-      "INT64(894605)"
-    ],
+    "Values": "INT64(894605)",
     "Vindex": "hash"
   }
 }
@@ -1006,9 +938,7 @@ Gen4 plan same as above
     "FieldQuery": "select SUM(ol_amount) as sm from order_line1 where 1 != 1",
     "Query": "select SUM(ol_amount) as sm from order_line1 where ol_o_id = 680 and ol_d_id = 201 and ol_w_id = 87",
     "Table": "order_line1",
-    "Values": [
-      87
-    ],
+    "Values": 87,
     "Vindex": "hash"
   }
 }
@@ -1025,9 +955,7 @@ Gen4 plan same as above
     "FieldQuery": "select SUM(ol_amount) as sm from order_line1 where 1 != 1",
     "Query": "select SUM(ol_amount) as sm from order_line1 where ol_o_id = 680 and ol_d_id = 201 and ol_w_id = 87",
     "Table": "order_line1",
-    "Values": [
-      "INT64(87)"
-    ],
+    "Values": "INT64(87)",
     "Vindex": "hash"
   }
 }
@@ -1071,9 +999,7 @@ Gen4 plan same as above
     "FieldQuery": "select d_next_o_id from district1 where 1 != 1",
     "Query": "select d_next_o_id from district1 where d_id = 6 and d_w_id = 21",
     "Table": "district1",
-    "Values": [
-      21
-    ],
+    "Values": 21,
     "Vindex": "hash"
   }
 }
@@ -1090,9 +1016,7 @@ Gen4 plan same as above
     "FieldQuery": "select d_next_o_id from district1 where 1 != 1",
     "Query": "select d_next_o_id from district1 where d_id = 6 and d_w_id = 21",
     "Table": "district1",
-    "Values": [
-      "INT64(21)"
-    ],
+    "Values": "INT64(21)",
     "Vindex": "hash"
   }
 }
@@ -1112,9 +1036,7 @@ Gen4 plan same as above
     "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where 1 != 1",
     "Query": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and s.s_w_id = 12 and s.s_quantity \u003c 10",
     "Table": "stock1, order_line1",
-    "Values": [
-      12
-    ],
+    "Values": 12,
     "Vindex": "hash"
   }
 }
@@ -1131,9 +1053,7 @@ Gen4 plan same as above
     "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where 1 != 1",
     "Query": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity \u003c 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
     "Table": "order_line1, stock1",
-    "Values": [
-      "INT64(12)"
-    ],
+    "Values": "INT64(12)",
     "Vindex": "hash"
   }
 }
@@ -1153,9 +1073,7 @@ Gen4 plan same as above
     "FieldQuery": "select ol_i_id from order_line1 where 1 != 1",
     "Query": "select distinct ol_i_id from order_line1 where ol_w_id = 1 and ol_d_id = 156 and ol_o_id \u003c 500 and ol_o_id \u003e= 56",
     "Table": "order_line1",
-    "Values": [
-      1
-    ],
+    "Values": 1,
     "Vindex": "hash"
   }
 }
@@ -1172,9 +1090,7 @@ Gen4 plan same as above
     "FieldQuery": "select ol_i_id from order_line1 where 1 != 1",
     "Query": "select distinct ol_i_id from order_line1 where ol_w_id = 1 and ol_d_id = 156 and ol_o_id \u003c 500 and ol_o_id \u003e= 56",
     "Table": "order_line1",
-    "Values": [
-      "INT64(1)"
-    ],
+    "Values": "INT64(1)",
     "Vindex": "hash"
   }
 }
@@ -1194,9 +1110,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(*) from stock1 where 1 != 1",
     "Query": "select count(*) from stock1 where s_w_id = 1 and s_i_id = 8 and s_quantity \u003c 1000",
     "Table": "stock1",
-    "Values": [
-      1
-    ],
+    "Values": 1,
     "Vindex": "hash"
   }
 }
@@ -1213,9 +1127,7 @@ Gen4 plan same as above
     "FieldQuery": "select count(*) from stock1 where 1 != 1",
     "Query": "select count(*) from stock1 where s_w_id = 1 and s_i_id = 8 and s_quantity \u003c 1000",
     "Table": "stock1",
-    "Values": [
-      "INT64(1)"
-    ],
+    "Values": "INT64(1)",
     "Vindex": "hash"
   }
 }
@@ -1261,9 +1173,7 @@ Gen4 plan same as above
             "FieldQuery": "select 1 from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where 1 != 1 group by o_c_id, o_d_id, o_w_id) as t where 1 != 1",
             "Query": "select 1 from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id, o_d_id, o_w_id having count(distinct o_id) \u003e 1 limit 1) as t where t.o_w_id = :o_o_w_id and t.o_d_id = :o_o_d_id and t.o_c_id = :o_o_c_id",
             "Table": "orders1",
-            "Values": [
-              1
-            ],
+            "Values": 1,
             "Vindex": "hash"
           }
         ]
@@ -1284,9 +1194,7 @@ Gen4 plan same as above
     "FieldQuery": "select o.o_id, o.o_d_id from orders1 as o, (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where 1 != 1) as t where 1 != 1",
     "Query": "select o.o_id, o.o_d_id from orders1 as o, (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id \u003e 2100 and o_id \u003c 11153) as t where t.o_w_id = o.o_w_id and t.o_d_id = o.o_d_id and t.o_c_id = o.o_c_id limit 1",
     "Table": "orders1",
-    "Values": [
-      "INT64(1)"
-    ],
+    "Values": "INT64(1)",
     "Vindex": "hash"
   }
 }

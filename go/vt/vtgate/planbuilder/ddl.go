@@ -367,8 +367,6 @@ func tryToGetRoutePlan(selectPlan engine.Primitive) (valid bool, keyspaceName st
 	switch plan := selectPlan.(type) {
 	case *engine.Route:
 		return true, plan.Keyspace.Name, plan.Opcode
-	case *engine.RouteLegacy:
-		return true, plan.Keyspace.Name, plan.Opcode
 	case engine.Gen4Comparer:
 		return tryToGetRoutePlan(plan.GetGen4Primitive())
 	default:

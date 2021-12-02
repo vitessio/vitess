@@ -189,7 +189,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRouteLegacy(sel)
-		rb.eroute = engine.NewSimpleRouteLegacy(engine.SelectDBA, ks)
+		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
 		rb.eroute.TableName = sqlparser.String(tableName)
 		pb.plan, pb.st = rb, st
 		// Add the table to symtab
@@ -243,26 +243,26 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		rb.substitutions = []*tableSubstitution{sub}
 	}
 
-	var eroute *engine.RouteLegacy
+	var eroute *engine.Route
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
-		eroute = engine.NewSimpleRouteLegacy(engine.SelectNext, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.SelectNext, vschemaTable.Keyspace)
 	case vschemaTable.Type == vindexes.TypeReference:
-		eroute = engine.NewSimpleRouteLegacy(engine.SelectReference, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.SelectReference, vschemaTable.Keyspace)
 	case !vschemaTable.Keyspace.Sharded:
-		eroute = engine.NewSimpleRouteLegacy(engine.SelectUnsharded, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vschemaTable.Keyspace)
 	case vschemaTable.Pinned == nil:
-		eroute = engine.NewSimpleRouteLegacy(engine.SelectScatter, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.SelectScatter, vschemaTable.Keyspace)
 		eroute.TargetDestination = destTarget
 		eroute.TargetTabletType = destTableType
 	default:
 		// Pinned tables have their keyspace ids already assigned.
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
-		eroute = engine.NewSimpleRouteLegacy(engine.SelectEqualUnique, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.NewBinary("binary", nil)
 		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
-		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
+		eroute.Value = sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}
 	}
 	eroute.TableName = sqlparser.String(vschemaTable.Name)
 	rb.eroute = eroute
