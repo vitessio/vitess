@@ -33,7 +33,7 @@ import { TabletDebugVars } from '../util/tabletDebugVars';
 export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
     try {
         const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
-        console.log(process.env)
+        console.log(process.env);
         const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = vtfetchOpts();
 
@@ -232,11 +232,11 @@ export interface PingTabletParams {
 
 export const pingTablet = async ({ clusterID, alias }: PingTabletParams) => {
     const { result } = await vtfetch(`/api/tablet/${alias}/ping?cluster=${clusterID}`);
-    const err = pb.PingTabletResponse.verify(result)
+    const err = pb.PingTabletResponse.verify(result);
     if (err) throw Error(err);
 
-    return pb.PingTabletResponse.create(result)
-}
+    return pb.PingTabletResponse.create(result);
+};
 
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;

@@ -27,7 +27,6 @@ import {
     fetchTablet,
     FetchTabletParams,
     pingTablet,
-    PingTabletParams,
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
@@ -120,9 +119,12 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
 /**
  * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
  */
-export const usePingTablet = (params: Parameters<typeof pingTablet>[0], options?: UseQueryOptions<pb.PingTabletResponse, Error>) => {
+export const usePingTablet = (
+    params: Parameters<typeof pingTablet>[0],
+    options?: UseQueryOptions<pb.PingTabletResponse, Error>
+) => {
     return useQuery(['ping-tablet', params], () => pingTablet(params), options);
-}
+};
 
 export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
