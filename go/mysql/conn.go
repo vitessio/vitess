@@ -961,23 +961,23 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		query := c.parseComPrepare(data)
 		c.recycleReadPacket()
 
-		var queries []string
-		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
-			queries, err = sqlparser.SplitStatementToPieces(query)
-			if err != nil {
-				log.Errorf("Conn %v: Error splitting query: %v", c, err)
-				if werr := c.writeErrorPacketFromError(err); werr != nil {
-					// If we can't even write the error, we're done.
-					log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-					return werr
-				}
-			}
-		} else {
-			queries = []string{query}
+		// Popoulate PrepareData
+		c.StatementID++
+		prepare := &PrepareData{
+			StatementID: c.StatementID,
+			PrepareStmt: query,
 		}
 
-		if len(queries) != 1 {
-			err := fmt.Errorf("can not prepare multiple statements")
+		var err error
+		var statement sqlparser.Statement
+		var remainder string
+
+		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
+			statement, remainder, err = sqlparser.ParseOneStrictDDL(query)
+		} else {
+			statement, err = sqlparser.ParseStrictDDL(query)
+		}
+		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
 				log.Errorf("Error writing query error to %s: %v", c, werr)
@@ -985,16 +985,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 			return nil
 		}
-
-		// Popoulate PrepareData
-		c.StatementID++
-		prepare := &PrepareData{
-			StatementID: c.StatementID,
-			PrepareStmt: queries[0],
-		}
-
-		statement, err := sqlparser.ParseStrictDDL(query)
-		if err != nil {
+		if remainder != "" {
+			err := fmt.Errorf("can not prepare multiple statements")
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
 				log.Errorf("Error writing query error to %s: %v", c, werr)
@@ -1022,8 +1014,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		c.PrepareData[c.StatementID] = prepare
 
-		fld, err := handler.ComPrepare(c, queries[0])
-
+		fld, err := handler.ComPrepare(c, query)
 		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.

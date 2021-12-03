@@ -195,6 +195,22 @@ func ParseStrictDDL(sql string) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
+func ParseOneStrictDDL(sql string) (Statement, string, error) {
+	tokenizer := NewStringTokenizer(sql)
+	tokenizer.stopAfterFirstStmt = true
+	if yyParsePooled(tokenizer) != 0 {
+		return nil, "", tokenizer.LastError
+	}
+	if tokenizer.ParseTree == nil {
+		return nil, "", ErrEmpty
+	}
+	if tokenizer.Position < len(sql) {
+		return tokenizer.ParseTree, sql[tokenizer.Position:], nil
+	} else {
+		return tokenizer.ParseTree, "", nil
+	}
+}
+
 // ParseTokenizer is a raw interface to parse from the given tokenizer.
 // This does not used pooled parsers, and should not be used in general.
 func ParseTokenizer(tokenizer *Tokenizer) int {
