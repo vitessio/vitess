@@ -199,7 +199,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		return vterrors.Wrap(err, "can't connect to database")
 	}
 	for _, query := range withDDLInitialQueries {
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch); err != nil {
+		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, nil); err != nil {
 			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
 		}
 	}

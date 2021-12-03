@@ -192,7 +192,7 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 		return false, err
 	}
 	defer conn.Recycle()
-	result, err := withDDL.Exec(ctx, "select id from _vt.schema_version limit 1", conn.Exec)
+	result, err := withDDL.Exec(ctx, "select id from _vt.schema_version limit 1", conn.Exec, nil)
 	if err != nil {
 		return false, err
 	}
@@ -258,7 +258,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
-	_, err = withDDL.Exec(ctx, query, conn.Exec)
+	_, err = withDDL.Exec(ctx, query, conn.Exec, nil)
 	if err != nil {
 		return err
 	}

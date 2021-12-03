@@ -359,13 +359,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := withDDL.Exec(vre.ctx, "use _vt", dbClient.ExecuteFetch); err != nil {
+	if _, err := withDDL.Exec(vre.ctx, "use _vt", dbClient.ExecuteFetch, nil); err != nil {
 		return nil, err
 	}
 
 	switch plan.opcode {
 	case insertQuery:
-		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -413,7 +413,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -461,7 +461,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -479,7 +479,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		return qr, nil
 	case selectQuery, reshardingJournalQuery:
 		// select and resharding journal queries are passed through.
-		return withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
+		return withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch, nil)
 	}
 	panic("unreachable")
 }
@@ -638,7 +638,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])
-		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch, nil)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -648,7 +648,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	}
 	for _, ks := range participants {
 		id := je.participants[ks]
-		_, err := withDDL.Exec(vre.ctx, binlogplayer.DeleteVReplication(uint32(id)), dbClient.ExecuteFetch)
+		_, err := withDDL.Exec(vre.ctx, binlogplayer.DeleteVReplication(uint32(id)), dbClient.ExecuteFetch, nil)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
