@@ -3187,6 +3187,22 @@ func TestCreateTable(t *testing.T) {
 			"	time2 timestamp default current_timestamp() on update current_timestamp()\n" +
 			")",
 	}, {
+		// test alternate key syntax
+		input: "create table t (\n" +
+				"	id int,\n" +
+				"	full_name varchar,\n" +
+				"	constraint unique key (full_name),\n" +
+				"	constraint unique index named (full_name),\n" +
+				"	constraint pk primary key (id)\n" +
+				")",
+		output: "create table t (\n" +
+				"	id int,\n" +
+				"	full_name varchar,\n" +
+				"	unique key (full_name),\n" +
+				"	unique index named (full_name),\n" +
+				"	primary key (id)\n" +
+				")",
+	}, {
 		// test current_timestamp with and without ()
 		input: "create table t (\n" +
 			"	time1 timestamp default current_timestamp,\n" +
