@@ -74,7 +74,7 @@ const (
 func getLastLog(dbClient *vdbClient, vreplID uint32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
 	query := fmt.Sprintf("select id, type, state, message from _vt.vreplication_log where vrepl_id = %d order by id desc limit 1", vreplID)
-	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
+	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, nil); err != nil {
 		return 0, "", "", "", err
 	}
 	if len(qr.Rows) != 1 {
@@ -108,7 +108,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message s
 			strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
 	}
-	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
+	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, nil); err != nil {
 		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
 	}
 	return nil
