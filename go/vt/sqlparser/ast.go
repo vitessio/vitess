@@ -86,6 +86,24 @@ func yyParsePooled(yylex yyLexer) int {
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
+	return parseTokenizer(sql, tokenizer)
+}
+
+func ParseOne(sql string) (Statement, string, error) {
+	tokenizer := NewStringTokenizer(sql)
+	tokenizer.stopAfterFirstStmt = true
+	tree, err := parseTokenizer(sql, tokenizer)
+	if err != nil {
+		return nil, "", err
+	}
+	if tokenizer.Position < len(sql) {
+		return tree, sql[tokenizer.Position:], nil
+	} else {
+		return tree, "", nil
+	}
+}
+
+func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
@@ -105,9 +123,7 @@ func Parse(sql string) (Statement, error) {
 	if tokenizer.ParseTree == nil {
 		return nil, ErrEmpty
 	}
-
 	captureSelectExpressions(sql, tokenizer)
-
 	return tokenizer.ParseTree, nil
 }
 
