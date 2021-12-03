@@ -845,28 +845,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		c.recycleReadPacket()
 
-		var queries []string
-		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
-			queries, err = sqlparser.SplitStatementToPieces(query)
-			if err != nil {
-				log.Errorf("Conn %v: Error splitting query: %v", c, err)
-				if werr := c.writeErrorPacketFromError(err); werr != nil {
-					// If we can't even write the error, we're done.
-					log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-					return werr
-				}
-			}
-		} else {
-			queries = []string{query}
+		multiStatements := !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0
+
+		var err error
+
+		for query, err = c.execQuery(query, handler, multiStatements); err == nil && query != ""; {
+			query, err = c.execQuery(query, handler, multiStatements);
 		}
-		for index, sql := range queries {
-			more := false
-			if index != len(queries)-1 {
-				more = true
-			}
-			if err := c.execQuery(sql, handler, more); err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
 
 		timings.Record(queryTimingKey, queryStart)
@@ -888,7 +875,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", table)
-		err = handler.ComQuery(c, sql, func(qr *sqltypes.Result) error {
+		err = handler.ComQuery(c, sql, func(qr *sqltypes.Result, more bool) error {
 			// only send meta data, no rows
 			if len(qr.Fields) == 0 {
 				return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
@@ -1211,12 +1198,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	return nil
 }
 
-func (c *Conn) execQuery(query string, handler Handler, more bool) error {
+func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (string, error) {
 	fieldSent := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
-	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+	resultsCB := func(qr *sqltypes.Result, more bool) error {
 		flag := c.StatusFlags
 		if more {
 			flag |= ServerMoreResultsExists
@@ -1250,7 +1237,16 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 		}
 
 		return c.writeRows(qr)
-	})
+	}
+
+	var err error
+	var remainder string
+
+	if multiStatements {
+		remainder, err = handler.ComMultiQuery(c, query, resultsCB)
+	} else {
+		err = handler.ComQuery(c, query, resultsCB)
+	}
 
 	// If no field was sent, we expect an error.
 	if !fieldSent {
@@ -1261,28 +1257,29 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 		if werr := c.writeErrorPacketFromError(err); werr != nil {
 			// If we can't even write the error, we're done.
 			log.Errorf("Error writing query error to %s: %v", c, werr)
-			return werr
+			return "", werr
 		}
 	} else {
 		if err != nil {
 			// We can't send an error in the middle of a stream.
 			// All we can do is abort the send, which will cause a 2013.
 			log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-			return err
+			return "", err
 		}
 
 		// Send the end packet only sendFinished is false (results were streamed).
 		// In this case the affectedRows and lastInsertID are always 0 since it
 		// was a read operation.
 		if !sendFinished {
+			more := remainder != ""
 			if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Errorf("Error writing result to %s: %v", c, err)
-				return err
+				return "", err
 			}
 		}
 	}
 
-	return nil
+	return remainder, nil
 }
 
 //

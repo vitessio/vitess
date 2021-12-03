@@ -96,7 +96,13 @@ type Handler interface {
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
-	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
+	ComQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) error
+
+	// ComMultiQuery is called when a connection receives a query and the
+	// client supports MULTI_STATEMENT. It should process the first
+	// statement in |query| and return the remainder. It will be called
+	// multiple times until the remainder is |""|.
+	ComMultiQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) (string, error)
 
 	// ComPrepare is called when a connection receives a prepared
 	// statement query.
