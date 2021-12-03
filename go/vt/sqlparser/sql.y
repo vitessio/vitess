@@ -1932,6 +1932,10 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
   }
+| CONSTRAINT UNIQUE index_or_key name_opt
+  {
+    $$ = &IndexInfo{Type: string($2) + " " + string($3), Name: NewColIdent($4), Unique: true}
+  }
 | UNIQUE index_or_key name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Unique: true}
