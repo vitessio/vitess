@@ -960,7 +960,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		var remainder string
 
 		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
-			statement, remainder, err = sqlparser.ParseOneStrictDDL(query)
+			var ri int
+			statement, ri, err = sqlparser.ParseOneStrictDDL(query)
+			if ri < len(query) {
+				remainder = query[ri:]
+			}
 		} else {
 			statement, err = sqlparser.ParseStrictDDL(query)
 		}

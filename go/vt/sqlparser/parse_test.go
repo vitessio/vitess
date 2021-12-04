@@ -2205,9 +2205,13 @@ func TestParseOne(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.input, func(t *testing.T) {
-			stmt, rest, err := ParseOne(c.input)
+			stmt, resti, err := ParseOne(c.input)
 			require.NoError(t, err)
 			require.NotNil(t, stmt)
+			var rest string
+			if resti < len(c.input) {
+				rest = c.input[resti:]
+			}
 			require.Equal(t, c.remainder, rest)
 		})
 	}

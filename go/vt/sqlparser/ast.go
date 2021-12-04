@@ -89,18 +89,17 @@ func Parse(sql string) (Statement, error) {
 	return parseTokenizer(sql, tokenizer)
 }
 
-func ParseOne(sql string) (Statement, string, error) {
+// ParseOne parses the first SQL statement in the given string and returns the
+// index of the start of the next statement in |sql|. If there was only one
+// statement in |sql|, the value of the returned index will be |len(sql)|.
+func ParseOne(sql string) (Statement, int, error) {
 	tokenizer := NewStringTokenizer(sql)
 	tokenizer.stopAfterFirstStmt = true
 	tree, err := parseTokenizer(sql, tokenizer)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, err
 	}
-	if tokenizer.Position < len(sql) {
-		return tree, sql[tokenizer.Position:], nil
-	} else {
-		return tree, "", nil
-	}
+	return tree, tokenizer.Position, nil
 }
 
 func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
@@ -195,20 +194,18 @@ func ParseStrictDDL(sql string) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
-func ParseOneStrictDDL(sql string) (Statement, string, error) {
+// ParseOneStrictDDL is the same as ParseOne but it errors on partially parsed
+// DDL statements.
+func ParseOneStrictDDL(sql string) (Statement, int, error) {
 	tokenizer := NewStringTokenizer(sql)
 	tokenizer.stopAfterFirstStmt = true
 	if yyParsePooled(tokenizer) != 0 {
-		return nil, "", tokenizer.LastError
+		return nil, 0, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {
-		return nil, "", ErrEmpty
+		return nil, 0, ErrEmpty
 	}
-	if tokenizer.Position < len(sql) {
-		return tokenizer.ParseTree, sql[tokenizer.Position:], nil
-	} else {
-		return tokenizer.ParseTree, "", nil
-	}
+	return tokenizer.ParseTree, tokenizer.Position, nil
 }
 
 // ParseTokenizer is a raw interface to parse from the given tokenizer.
