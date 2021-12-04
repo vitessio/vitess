@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"expvar"
 	"fmt"
 	"net/http"
@@ -27,8 +28,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,6 +69,12 @@ func TestOpenAndReload(t *testing.T) {
 			StatusFlags:         0,
 		})
 
+	// advance to one second after the default 1427325875.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"t",
+		"int64"),
+		"1427325876",
+	))
 	firstReadRowsValue := 12
 	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
 	se := newEngine(10, 10*time.Second, 10*time.Second, db)
@@ -80,6 +85,13 @@ func TestOpenAndReload(t *testing.T) {
 	mustMatch(t, want, se.GetSchema())
 	assert.Equal(t, int64(100), se.tableFileSizeGauge.Counts()["msg"])
 	assert.Equal(t, int64(150), se.tableAllocatedSizeGauge.Counts()["msg"])
+
+	// Advance time some more.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"t",
+		"int64"),
+		"1427325877",
+	))
 	assert.EqualValues(t, firstReadRowsValue, se.innoDbReadRowsGauge.Get())
 
 	// Modify test_table_03
@@ -263,6 +275,12 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	mustMatch(t, want, se.GetSchema())
 
 	// Add test_table_04 with a newer timestamp
+	// Advance time some more.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"t",
+		"int64"),
+		"1427325876",
+	))
 	db.ClearQueryPattern()
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
@@ -312,9 +330,16 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		FileSize:      128,
 		AllocatedSize: 256,
 	}
-	assert.Equal(t, want, se.GetSchema())
+
+	mustMatch(t, want, se.GetSchema())
 
 	// swap test_table_03 and test_table_04
+	// Advance time some more.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"t",
+		"int64"),
+		"1427325877",
+	))
 	db.ClearQueryPattern()
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
@@ -384,7 +409,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		FileSize:      100,
 		AllocatedSize: 150,
 	}
-	assert.Equal(t, want, se.GetSchema())
+	mustMatch(t, want, se.GetSchema())
 }
 
 func TestOpenFailedDueToExecErr(t *testing.T) {

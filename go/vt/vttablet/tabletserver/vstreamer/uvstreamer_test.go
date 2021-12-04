@@ -171,6 +171,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	engine.se.Reload(context.Background())
 
 	defer execStatements(t, []string{
 		"drop table t1",

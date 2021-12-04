@@ -181,6 +181,7 @@ func TestSetStatement(t *testing.T) {
 		log.Info("Cannot test SetStatement on this flavor")
 		return
 	}
+	engine.se.Reload(context.Background())
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -326,6 +327,7 @@ func TestMissingTables(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	engine.se.Reload(context.Background())
 	execStatements(t, []string{
 		"create table t1(id11 int, id12 int, primary key(id11))",
 		"create table shortlived(id31 int, id32 int, primary key(id31))",
@@ -630,6 +632,7 @@ func TestFilteredInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	engine.se.Reload(context.Background())
 
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
@@ -811,6 +814,7 @@ func TestStatements(t *testing.T) {
 		in.Flavor = "FilePos"
 		return in
 	})
+
 	defer engine.Close()
 	runCases(t, nil, testcases, "current", nil)
 }
@@ -1025,6 +1029,8 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	engine.watcherOnce.Do(engine.setWatch)
+	engine.se.Reload(context.Background())
 
 	execStatements(t, []string{
 		"create table t1(region int, id int, val varbinary(128), primary key(id))",
@@ -1082,6 +1088,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	engine.watcherOnce.Do(engine.setWatch)
 
 	execStatements(t, []string{
 		"create table t1(region int, id int, val varbinary(128), primary key(id))",
@@ -1138,6 +1145,7 @@ func TestSelectFilter(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	engine.se.Reload(context.Background())
 
 	execStatements(t, []string{
 		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
@@ -1255,7 +1263,7 @@ func TestDDLDropColumn(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
+	env.SchemaEngine.Reload(context.Background())
 	execStatement(t, "create table ddl_test2(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))")
 	defer execStatement(t, "drop table ddl_test2")
 
@@ -1268,6 +1276,7 @@ func TestDDLDropColumn(t *testing.T) {
 		"insert into ddl_test2 values(2, 'bbb')",
 	})
 	engine.se.Reload(context.Background())
+	env.SchemaEngine.Reload(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -2009,6 +2018,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 		default:
 			t.Fatalf("unexpected input: %#v", input)
 		}
+		engine.se.Reload(ctx)
 		expectLog(ctx, t, tcase.input, ch, tcase.output)
 	}
 
@@ -2190,6 +2200,7 @@ func setVSchema(t *testing.T, vschema string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if !updated {
+		log.Infof("vschema did not get updated")
 		t.Error("vschema did not get updated")
 	}
 }

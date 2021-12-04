@@ -166,6 +166,7 @@ func (te *Env) SetVSchema(vs string) error {
 	if err := te.TopoServ.SaveVSchema(ctx, te.KeyspaceName, &kspb); err != nil {
 		return err
 	}
+	te.SchemaEngine.Reload(ctx)
 	return te.TopoServ.RebuildSrvVSchema(ctx, te.Cells)
 }
 
