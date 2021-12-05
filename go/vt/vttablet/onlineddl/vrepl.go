@@ -265,7 +265,7 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 			}
 			if strings.HasPrefix(columnType, "set(") {
 				column.SetTypeIfUnknown(vrepl.SetColumnType)
-				column.EnumValues = schema.ParseEnumValues(columnType)
+				column.EnumValues = schema.ParseSetValues(columnType)
 			}
 			if strings.HasPrefix(columnType, "binary") {
 				column.SetTypeIfUnknown(vrepl.BinaryColumnType)

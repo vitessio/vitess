@@ -54,7 +54,8 @@ var (
 	createTableRegexp     = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
 	revertStatementRegexp = regexp.MustCompile(`(?i)^revert\s+([\S]*)$`)
 
-	enumValuesRegexp = regexp.MustCompile("(?i)^(enum|set)[(](.*)[)]$")
+	enumValuesRegexp = regexp.MustCompile("(?i)^enum[(](.*)[)]$")
+	setValuesRegexp  = regexp.MustCompile("(?i)^set[(](.*)[)]$")
 )
 
 // ReplaceTableNameInCreateTableStatement returns a modified CREATE TABLE statement, such that the table name is replaced with given name.
@@ -109,16 +110,33 @@ func legacyParseRevertUUID(sql string) (uuid string, err error) {
 // ParseEnumValues parses the comma delimited part of an enum column definition
 func ParseEnumValues(enumColumnType string) string {
 	if submatch := enumValuesRegexp.FindStringSubmatch(enumColumnType); len(submatch) > 0 {
-		return submatch[2]
+		return submatch[1]
 	}
 	return enumColumnType
 }
 
-// ParseEnumTokens parses the comma delimited part of an enum column definition and
+// ParseSetValues parses the comma delimited part of a set column definition
+func ParseSetValues(setColumnType string) string {
+	if submatch := setValuesRegexp.FindStringSubmatch(setColumnType); len(submatch) > 0 {
+		return submatch[1]
+	}
+	return setColumnType
+}
+
+// parseEnumOrSetTokens parses the comma delimited part of an enum/set column definition and
 // returns the (unquoted) text values
-func ParseEnumTokens(enumValues string) []string {
-	enumValues = ParseEnumValues(enumValues)
-	tokens := textutil.SplitDelimitedList(enumValues)
+// Expected input: `'x-small','small','medium','large','x-large'`
+// Unexpected input: `enum('x-small','small','medium','large','x-large')`
+func parseEnumOrSetTokens(enumOrSetValues string) (tokens []string) {
+	if submatch := enumValuesRegexp.FindStringSubmatch(enumOrSetValues); len(submatch) > 0 {
+		// input should not contain `enum(...)` column definition, just the comma delimited list
+		return tokens
+	}
+	if submatch := setValuesRegexp.FindStringSubmatch(enumOrSetValues); len(submatch) > 0 {
+		// input should not contain `enum(...)` column definition, just the comma delimited list
+		return tokens
+	}
+	tokens = textutil.SplitDelimitedList(enumOrSetValues)
 	for i := range tokens {
 		if strings.HasPrefix(tokens[i], `'`) && strings.HasSuffix(tokens[i], `'`) {
 			tokens[i] = strings.Trim(tokens[i], `'`)
@@ -127,10 +145,10 @@ func ParseEnumTokens(enumValues string) []string {
 	return tokens
 }
 
-// ParseEnumTokensMap parses the comma delimited part of an enum column definition
+// ParseEnumOrSetTokensMap parses the comma delimited part of an enum column definition
 // and returns a map where ["1"] is the first token, and ["<n>"] is th elast token
-func ParseEnumTokensMap(enumValues string) map[string]string {
-	tokens := ParseEnumTokens(enumValues)
+func ParseEnumOrSetTokensMap(enumOrSetValues string) map[string]string {
+	tokens := parseEnumOrSetTokens(enumOrSetValues)
 	tokensMap := map[string]string{}
 	for i, token := range tokens {
 		tokensMap[strconv.Itoa(i+1)] = token
