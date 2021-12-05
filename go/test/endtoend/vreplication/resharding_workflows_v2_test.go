@@ -246,6 +246,28 @@ func TestBasicV2Workflows(t *testing.T) {
 	log.Flush()
 }
 
+func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
+	done := false
+	ticker := time.NewTicker(10 * time.Millisecond)
+	log.Infof("Waiting for workflow %s to start", ksWorkflow)
+	for {
+		select {
+		case <-ticker.C:
+			if done {
+				return
+			}
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			require.NoError(t, err)
+			if strings.Contains(output, "\"State\": \"Running\"") {
+				done = true
+				log.Infof("Workflow %s has started", ksWorkflow)
+			}
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "workflow %s not yet started", ksWorkflow)
+		}
+	}
+}
+
 /*
 testVSchemaForSequenceAfterMoveTables checks that the related sequence tag is migrated correctly in the vschema
 while moving a table with an auto-increment from sharded to unsharded.
@@ -258,7 +280,9 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	err := tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	time.Sleep(1 * time.Second)
+
+	waitForWorkflowToStart(t, "customer.wf2")
+
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
 		"", workflowActionSwitchTraffic, "", "", "")
 	require.NoError(t, err)
@@ -283,12 +307,14 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "customer", "insert into customer2(name) values('a')")
 	}
 	validateCount(t, vtgateConn, "customer", "customer2", 3+num)
+	want := fmt.Sprintf("[[INT32(%d)]]", 100+num-1)
+	validateQuery(t, vtgateConn, "customer", "select max(cid) from customer2", want)
 
 	// use MoveTables to move customer2 back to product. Note that now the table has an associated sequence
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
-	time.Sleep(1 * time.Second)
+	waitForWorkflowToStart(t, "product.wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
 		"", workflowActionSwitchTraffic, "", "", "")
 	require.NoError(t, err)
@@ -311,6 +337,8 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "product", "insert into customer2(name) values('a')")
 	}
 	validateCount(t, vtgateConn, "product", "customer2", 3+num+num)
+	want = fmt.Sprintf("[[INT32(%d)]]", 100+num+num-1)
+	validateQuery(t, vtgateConn, "product", "select max(cid) from customer2", want)
 }
 
 func testReshardV2Workflow(t *testing.T) {
