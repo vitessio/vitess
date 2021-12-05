@@ -161,6 +161,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfInsert(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntroducerExpr:
+		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
@@ -1044,6 +1046,16 @@ func CloneRefOfInsert(n *Insert) *Insert {
 
 // CloneRefOfIntervalExpr creates a deep clone of the input.
 func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfIntroducerExpr creates a deep clone of the input.
+func CloneRefOfIntroducerExpr(n *IntroducerExpr) *IntroducerExpr {
 	if n == nil {
 		return nil
 	}
@@ -2134,6 +2146,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGroupConcatExpr(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntroducerExpr:
+		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
 	case ListArg:

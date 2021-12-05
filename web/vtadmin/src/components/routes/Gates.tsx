@@ -50,7 +50,7 @@ export const Gates = () => {
             <tr key={idx}>
                 <DataCell className="whitespace-nowrap">
                     <div>{gate.pool}</div>
-                    <div className="font-size-small text-secondary">{gate.cluster}</div>
+                    <div className="text-sm text-secondary">{gate.cluster}</div>
                 </DataCell>
                 <DataCell className="whitespace-nowrap">{gate.hostname}</DataCell>
                 <DataCell className="whitespace-nowrap">{gate.cell}</DataCell>

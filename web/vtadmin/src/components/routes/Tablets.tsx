@@ -53,7 +53,7 @@ export const Tablets = () => {
                     <DataCell>
                         <KeyspaceLink clusterID={t._raw.cluster?.id} name={t.keyspace}>
                             <div>{t.keyspace}</div>
-                            <div className="font-size-small text-secondary">{t.cluster}</div>
+                            <div className="text-sm text-secondary">{t.cluster}</div>
                         </KeyspaceLink>
                     </DataCell>
                     <DataCell>
@@ -65,7 +65,7 @@ export const Tablets = () => {
                         >
                             <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
                             {ksQuery.isSuccess && (
-                                <div className="font-size-small text-secondary whitespace-nowrap">
+                                <div className="text-sm text-secondary whitespace-nowrap">
                                     {!t.isShardServing && 'NOT SERVING'}
                                 </div>
                             )}

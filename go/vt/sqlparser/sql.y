@@ -158,7 +158,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   explainType 	  ExplainType
   intervalType	  IntervalTypes
   lockType LockType
-  unaryExprOperator UnaryExprOperator
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
@@ -173,7 +172,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 %token LEX_ERROR
 %left <str> UNION
-%token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <str> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
@@ -217,7 +216,12 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> '^'
 %right <str> '~' UNARY
 %left <str> COLLATE
-%right <str> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
+%right <str> BINARY UNDERSCORE_ARMSCII8 UNDERSCORE_ASCII UNDERSCORE_BIG5 UNDERSCORE_BINARY UNDERSCORE_CP1250 UNDERSCORE_CP1251
+%right <str> UNDERSCORE_CP1256 UNDERSCORE_CP1257 UNDERSCORE_CP850 UNDERSCORE_CP852 UNDERSCORE_CP866 UNDERSCORE_CP932
+%right <str> UNDERSCORE_DEC8 UNDERSCORE_EUCJPMS UNDERSCORE_EUCKR UNDERSCORE_GB18030 UNDERSCORE_GB2312 UNDERSCORE_GBK UNDERSCORE_GEOSTD8
+%right <str> UNDERSCORE_GREEK UNDERSCORE_HEBREW UNDERSCORE_HP8 UNDERSCORE_KEYBCS2 UNDERSCORE_KOI8R UNDERSCORE_KOI8U UNDERSCORE_LATIN1 UNDERSCORE_LATIN2 UNDERSCORE_LATIN5
+%right <str> UNDERSCORE_LATIN7 UNDERSCORE_MACCE UNDERSCORE_MACROMAN UNDERSCORE_SJIS UNDERSCORE_SWE7 UNDERSCORE_TIS620 UNDERSCORE_UCS2 UNDERSCORE_UJIS UNDERSCORE_UTF16
+%right <str> UNDERSCORE_UTF16LE UNDERSCORE_UTF32 UNDERSCORE_UTF8 UNDERSCORE_UTF8MB4
 %right <str> INTERVAL
 %nonassoc <str> '.'
 
@@ -306,7 +310,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
-%type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
@@ -448,7 +452,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-%type <unaryExprOperator> underscore_charsets
+%type <str> underscore_charsets
 %start any_command
 
 %%
@@ -469,7 +473,6 @@ command:
     $$ = $1
   }
 | stream_statement
-| vstream_statement
 | insert_statement
 | update_statement
 | delete_statement
@@ -723,12 +726,6 @@ stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
-  }
-
-vstream_statement:
-  VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
-  {
-    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.
@@ -1377,42 +1374,190 @@ text_literal
   }
 | underscore_charsets  BIT_LITERAL %prec UNARY
   {
-  	$$ = &UnaryExpr{Operator: $1, Expr: NewBitLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
-  	$$ = &UnaryExpr{Operator: $1, Expr: NewHexNumLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
   }
 | underscore_charsets HEX %prec UNARY
   {
-   	$$ = &UnaryExpr{Operator: $1, Expr: NewHexLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
   }
 | underscore_charsets column_name %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: $1, Expr: $2}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
   }
 | underscore_charsets VALUE_ARG %prec UNARY
   {
     bindVariable(yylex, $2[1:])
-    $$ = &UnaryExpr{Operator: $1, Expr: NewArgument($2[1:])}
+    $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
   }
 
 underscore_charsets:
- UNDERSCORE_BINARY
+  UNDERSCORE_ARMSCII8
   {
-  	$$ = UBinaryOp
+    $$ = Armscii8Str
   }
-| UNDERSCORE_UTF8
+| UNDERSCORE_ASCII
   {
-  	$$ = Utf8Op
+    $$ = ASCIIStr
   }
-| UNDERSCORE_UTF8MB4
+| UNDERSCORE_BIG5
   {
-  	$$ = Utf8mb4Op
+    $$ = Big5Str
+  }
+| UNDERSCORE_BINARY
+  {
+    $$ = UBinaryStr
+  }
+| UNDERSCORE_CP1250
+  {
+    $$ = Cp1250Str
+  }
+| UNDERSCORE_CP1251
+  {
+    $$ = Cp1251Str
+  }
+| UNDERSCORE_CP1256
+  {
+    $$ = Cp1256Str
+  }
+| UNDERSCORE_CP1257
+  {
+    $$ = Cp1257Str
+  }
+| UNDERSCORE_CP850
+  {
+    $$ = Cp850Str
+  }
+| UNDERSCORE_CP852
+  {
+    $$ = Cp852Str
+  }
+| UNDERSCORE_CP866
+  {
+    $$ = Cp866Str
+  }
+| UNDERSCORE_CP932
+  {
+    $$ = Cp932Str
+  }
+| UNDERSCORE_DEC8
+  {
+    $$ = Dec8Str
+  }
+| UNDERSCORE_EUCJPMS
+  {
+    $$ = EucjpmsStr
+  }
+| UNDERSCORE_EUCKR
+  {
+    $$ = EuckrStr
+  }
+| UNDERSCORE_GB18030
+  {
+    $$ = Gb18030Str
+  }
+| UNDERSCORE_GB2312
+  {
+    $$ = Gb2312Str
+  }
+| UNDERSCORE_GBK
+  {
+    $$ = GbkStr
+  }
+| UNDERSCORE_GEOSTD8
+  {
+    $$ = Geostd8Str
+  }
+| UNDERSCORE_GREEK
+  {
+    $$ = GreekStr
+  }
+| UNDERSCORE_HEBREW
+  {
+    $$ = HebrewStr
+  }
+| UNDERSCORE_HP8
+  {
+    $$ = Hp8Str
+  }
+| UNDERSCORE_KEYBCS2
+  {
+    $$ = Keybcs2Str
+  }
+| UNDERSCORE_KOI8R
+  {
+    $$ = Koi8rStr
+  }
+| UNDERSCORE_KOI8U
+  {
+    $$ = Koi8uStr
   }
 | UNDERSCORE_LATIN1
   {
-  	$$ = Latin1Op
+    $$ = Latin1Str
+  }
+| UNDERSCORE_LATIN2
+  {
+    $$ = Latin2Str
+  }
+| UNDERSCORE_LATIN5
+  {
+    $$ = Latin5Str
+  }
+| UNDERSCORE_LATIN7
+  {
+    $$ = Latin7Str
+  }
+| UNDERSCORE_MACCE
+  {
+    $$ = MacceStr
+  }
+| UNDERSCORE_MACROMAN
+  {
+    $$ = MacromanStr
+  }
+| UNDERSCORE_SJIS
+  {
+    $$ = SjisStr
+  }
+| UNDERSCORE_SWE7
+  {
+    $$ = Swe7Str
+  }
+| UNDERSCORE_TIS620
+  {
+    $$ = Tis620Str
+  }
+| UNDERSCORE_UCS2
+  {
+    $$ = Ucs2Str
+  }
+| UNDERSCORE_UJIS
+  {
+    $$ = UjisStr
+  }
+| UNDERSCORE_UTF16
+  {
+    $$ = Utf16Str
+  }
+| UNDERSCORE_UTF16LE
+  {
+    $$ = Utf16leStr
+  }
+| UNDERSCORE_UTF32
+  {
+    $$ = Utf32Str
+  }
+| UNDERSCORE_UTF8
+  {
+    $$ = Utf8Str
+  }
+| UNDERSCORE_UTF8MB4
+  {
+    $$ = Utf8mb4Str
   }
 
 literal_or_null:
@@ -1441,7 +1586,7 @@ STRING
   }
  | underscore_charsets STRING %prec UNARY
    {
-   	$$ = &UnaryExpr{Operator: $1, Expr: NewStrLiteral($2)}
+   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewStrLiteral($2)}
    }
 
 keys:

@@ -129,6 +129,12 @@ var (
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
 	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT null)",
+		output: "create table t2 (\n\tb JSON default null\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
+		output: "create table t2 (\n\tb JSON default null\n)",
+	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
 		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
 	}, {
@@ -2052,8 +2058,6 @@ var (
 	}, {
 		input: "stream * from t",
 	}, {
-		input: "vstream * from t",
-	}, {
 		input: "stream /* comment */ * from t",
 	}, {
 		input: "begin",
@@ -2319,6 +2323,147 @@ func TestInvalid(t *testing.T) {
 		if err != nil && !strings.Contains(err.Error(), tcase.err) {
 			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
 		}
+	}
+}
+
+func TestIntroducers(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select _armscii8 'x'",
+		output: "select _armscii8 'x' from dual",
+	}, {
+		input:  "select _ascii 'x'",
+		output: "select _ascii 'x' from dual",
+	}, {
+		input:  "select _big5 'x'",
+		output: "select _big5 'x' from dual",
+	}, {
+		input:  "select _binary 'x'",
+		output: "select _binary 'x' from dual",
+	}, {
+		input:  "select _cp1250 'x'",
+		output: "select _cp1250 'x' from dual",
+	}, {
+		input:  "select _cp1251 'x'",
+		output: "select _cp1251 'x' from dual",
+	}, {
+		input:  "select _cp1256 'x'",
+		output: "select _cp1256 'x' from dual",
+	}, {
+		input:  "select _cp1257 'x'",
+		output: "select _cp1257 'x' from dual",
+	}, {
+		input:  "select _cp850 'x'",
+		output: "select _cp850 'x' from dual",
+	}, {
+		input:  "select _cp852 'x'",
+		output: "select _cp852 'x' from dual",
+	}, {
+		input:  "select _cp866 'x'",
+		output: "select _cp866 'x' from dual",
+	}, {
+		input:  "select _cp932 'x'",
+		output: "select _cp932 'x' from dual",
+	}, {
+		input:  "select _dec8 'x'",
+		output: "select _dec8 'x' from dual",
+	}, {
+		input:  "select _eucjpms 'x'",
+		output: "select _eucjpms 'x' from dual",
+	}, {
+		input:  "select _euckr 'x'",
+		output: "select _euckr 'x' from dual",
+	}, {
+		input:  "select _gb18030 'x'",
+		output: "select _gb18030 'x' from dual",
+	}, {
+		input:  "select _gb2312 'x'",
+		output: "select _gb2312 'x' from dual",
+	}, {
+		input:  "select _gbk 'x'",
+		output: "select _gbk 'x' from dual",
+	}, {
+		input:  "select _geostd8 'x'",
+		output: "select _geostd8 'x' from dual",
+	}, {
+		input:  "select _greek 'x'",
+		output: "select _greek 'x' from dual",
+	}, {
+		input:  "select _hebrew 'x'",
+		output: "select _hebrew 'x' from dual",
+	}, {
+		input:  "select _hp8 'x'",
+		output: "select _hp8 'x' from dual",
+	}, {
+		input:  "select _keybcs2 'x'",
+		output: "select _keybcs2 'x' from dual",
+	}, {
+		input:  "select _koi8r 'x'",
+		output: "select _koi8r 'x' from dual",
+	}, {
+		input:  "select _koi8u 'x'",
+		output: "select _koi8u 'x' from dual",
+	}, {
+		input:  "select _latin1 'x'",
+		output: "select _latin1 'x' from dual",
+	}, {
+		input:  "select _latin2 'x'",
+		output: "select _latin2 'x' from dual",
+	}, {
+		input:  "select _latin5 'x'",
+		output: "select _latin5 'x' from dual",
+	}, {
+		input:  "select _latin7 'x'",
+		output: "select _latin7 'x' from dual",
+	}, {
+		input:  "select _macce 'x'",
+		output: "select _macce 'x' from dual",
+	}, {
+		input:  "select _macroman 'x'",
+		output: "select _macroman 'x' from dual",
+	}, {
+		input:  "select _sjis 'x'",
+		output: "select _sjis 'x' from dual",
+	}, {
+		input:  "select _swe7 'x'",
+		output: "select _swe7 'x' from dual",
+	}, {
+		input:  "select _tis620 'x'",
+		output: "select _tis620 'x' from dual",
+	}, {
+		input:  "select _ucs2 'x'",
+		output: "select _ucs2 'x' from dual",
+	}, {
+		input:  "select _ujis 'x'",
+		output: "select _ujis 'x' from dual",
+	}, {
+		input:  "select _utf16 'x'",
+		output: "select _utf16 'x' from dual",
+	}, {
+		input:  "select _utf16le 'x'",
+		output: "select _utf16le 'x' from dual",
+	}, {
+		input:  "select _utf32 'x'",
+		output: "select _utf32 'x' from dual",
+	}, {
+		input:  "select _utf8 'x'",
+		output: "select _utf8 'x' from dual",
+	}, {
+		input:  "select _utf8mb4 'x'",
+		output: "select _utf8mb4 'x' from dual",
+	}}
+	for _, tcase := range validSQL {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			assert.NoError(t, err)
+			out := String(tree)
+			assert.Equal(t, tcase.output, out)
+		})
 	}
 }
 

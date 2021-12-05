@@ -18,7 +18,7 @@
     border-radius: 4px;
     color: var(--textColorInverted);
     font-family: var(--fontFamilyPrimary);
-    font-size: var(--fontSizeSmall);
+    font-size: theme('fontSize.sm');
     margin: 8px;
     max-width: 24rem;
     padding: 8px 12px;

@@ -6,7 +6,7 @@
     color: var(--textColorInverted);
     cursor: pointer;
     font-family: var(--fontFamilyPrimary);
-    font-size: var(--fontSizeDefault);
+    font-size: theme('fontSize.base');
     font-weight: 500;
     height: var(--inputHeightMedium);
     line-height: 1;
@@ -69,14 +69,14 @@
 }
 
 .button.sizeLarge {
-    font-size: var(--fontSizeLarge);
+    font-size: theme('fontSize.lg');
     height: var(--inputHeightLarge);
     padding: 0 16px;
 }
 
 .button.sizeSmall {
     border-width: 1px;
-    font-size: var(--fontSizeSmall);
+    font-size: theme('fontSize.lg');
     height: var(--inputHeightSmall);
     padding: 0 6px;
 }
