@@ -488,7 +488,7 @@ func testStreamExecute(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
 	i := 0
-	err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+	err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 		switch i {
 		case 0:
 			if len(qr.Rows) == 0 {
@@ -524,7 +524,7 @@ func testStreamExecuteError(t *testing.T, conn queryservice.QueryService, f *Fak
 	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.ErrorWait:
@@ -553,7 +553,7 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 	f.StreamExecutePanicsEarly = true
 	testPanicHelper(t, f, "StreamExecute.Early", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			return nil
 		})
 	})
@@ -563,7 +563,7 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 	testPanicHelper(t, f, "StreamExecute.Late", func(ctx context.Context) error {
 		f.PanicWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.PanicWait:

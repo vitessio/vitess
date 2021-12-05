@@ -38,7 +38,7 @@ var (
 
 var waitmysql = flag.Bool("waitmysql", false, "")
 
-var defaultenv = collations.Default()
+var defaultenv = collations.Local()
 
 func mysqlconn(t *testing.T) *mysql.Conn {
 	conn, err := mysql.Connect(context.Background(), &connParams)

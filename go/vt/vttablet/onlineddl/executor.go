@@ -324,10 +324,21 @@ func (e *Executor) createGhostPanicFlagFile(uuid string) error {
 	_, err := os.Create(e.ghostPanicFlagFileName(uuid))
 	return err
 }
+
 func (e *Executor) deleteGhostPanicFlagFile(uuid string) error {
 	// We use RemoveAll because if the file does not exist that's fine. Remove will return an error
 	// if file does not exist; RemoveAll does not.
 	return os.RemoveAll(e.ghostPanicFlagFileName(uuid))
+}
+
+func (e *Executor) ghostPostponeFlagFileName(uuid string) string {
+	return path.Join(os.TempDir(), fmt.Sprintf("ghost.%s.postpone.flag", uuid))
+}
+
+func (e *Executor) deleteGhostPostponeFlagFile(uuid string) error {
+	// We use RemoveAll because if the file does not exist that's fine. Remove will return an error
+	// if file does not exist; RemoveAll does not.
+	return os.RemoveAll(e.ghostPostponeFlagFileName(uuid))
 }
 
 func (e *Executor) ptPidFileName(uuid string) string {
@@ -1013,6 +1024,10 @@ exit $exit_code
 		log.Errorf("Error removing gh-ost panic flag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
 		return err
 	}
+	if err := e.deleteGhostPostponeFlagFile(onlineDDL.UUID); err != nil {
+		log.Errorf("Error removing gh-ost postpone flag file %s before migration: %+v", e.ghostPostponeFlagFileName(onlineDDL.UUID), err)
+		return err
+	}
 	// Validate gh-ost binary:
 	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validating gh-ost --version")
 	log.Infof("Will now validate gh-ost binary")
@@ -1078,6 +1093,10 @@ exit $exit_code
 		if onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
 			args = append(args, "--allow-zero-in-date")
 		}
+		if execute && onlineDDL.StrategySetting().IsPostponeCompletion() {
+			args = append(args, "--postpone-cut-over-flag-file", e.ghostPostponeFlagFileName(onlineDDL.UUID))
+		}
+
 		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
@@ -1099,6 +1118,7 @@ exit $exit_code
 
 	go func() error {
 		defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+		defer e.deleteGhostPostponeFlagFile(onlineDDL.UUID) // irrespective whether the file was in fact in use or not
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
@@ -1561,6 +1581,73 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	return err
 }
 
+// reviewQueuedMigrations iterates queued migrations and sees if any information needs to be updated
+func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	// Review REVERT migrations
+	// These migrations are submitted with some details missing. This is because the statement
+	//   REVERT VITESS_MIGRATION '<uuid>'
+	// doesn't have much detail, we need to extract the info from the reverted migration. Missing details:
+	// - What table is affected?
+	// - What ddl action (CREATE, DROP, ALTER) is being reverted, or what is the counter-operation to be executed?
+
+	r, err := e.execQuery(ctx, sqlSelectQueuedRevertMigrations)
+	if err != nil {
+		return err
+	}
+
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		onlineDDL, _, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		reviewEmptyTableRevertMigrations := func() error {
+			if onlineDDL.Table != "" {
+				return nil
+			}
+			// Table name is empty. Let's populate it.
+
+			// Try to update table name and ddl_action
+			// Failure to do so fails the migration
+			revertUUID, err := onlineDDL.GetRevertUUID()
+			if err != nil {
+				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot analyze revert UUID for revert migration %s: %v", onlineDDL.UUID, err))
+			}
+			revertedMigration, row, err := e.readMigration(ctx, revertUUID)
+			if err != nil {
+				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot read migration %s reverted by migration %s: %s", revertUUID, onlineDDL.UUID, err))
+			}
+			revertedActionStr := row["ddl_action"].ToString()
+			mimickedActionStr := ""
+
+			switch revertedActionStr {
+			case sqlparser.CreateStr:
+				mimickedActionStr = sqlparser.DropStr
+			case sqlparser.DropStr:
+				mimickedActionStr = sqlparser.CreateStr
+			case sqlparser.AlterStr:
+				mimickedActionStr = sqlparser.AlterStr
+			default:
+				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertedMigration.UUID, revertedActionStr))
+			}
+			if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
+				return err
+			}
+			if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertedMigration.Table); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := reviewEmptyTableRevertMigrations(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigration *schema.OnlineDDL) (err error) {
 	// Validation: migration to revert exists and is in complete state
 	action, actionStr, err := revertMigration.GetActionStr()
@@ -1628,7 +1715,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 // - what type of migration we're reverting? (CREATE/DROP/ALTER)
 // - revert appropriately to the type of migration
 func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-	revertUUID, _ := onlineDDL.GetRevertUUID()
+	revertUUID, err := onlineDDL.GetRevertUUID()
 	if err != nil {
 		return fmt.Errorf("cannot run a revert migration %v: %+v", onlineDDL.UUID, err)
 	}
@@ -1640,8 +1727,34 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 	if err := e.validateMigrationRevertible(ctx, revertMigration); err != nil {
 		return err
 	}
-	revertActionStr := row["ddl_action"].ToString()
-	switch revertActionStr {
+	revertedActionStr := row["ddl_action"].ToString()
+	if onlineDDL.Table == "" {
+		// table name should be populated by reviewQueuedMigrations
+		// but this was a newly added functionality. To be backwards compatible,
+		// we double check here, and populate table name and ddl_action.
+
+		// TODO: remove in v14
+		mimickedActionStr := ""
+
+		switch revertedActionStr {
+		case sqlparser.CreateStr:
+			mimickedActionStr = sqlparser.DropStr
+		case sqlparser.DropStr:
+			mimickedActionStr = sqlparser.CreateStr
+		case sqlparser.AlterStr:
+			mimickedActionStr = sqlparser.AlterStr
+		default:
+			return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertedActionStr)
+		}
+		if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
+			return err
+		}
+		if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
+			return err
+		}
+	}
+
+	switch revertedActionStr {
 	case sqlparser.CreateStr:
 		{
 			// We are reverting a CREATE migration. The revert is to DROP, only we don't actually
@@ -1651,13 +1764,6 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			// the table.
 			// We can tell the difference by looking at the artifacts. A successful CREATE TABLE, where
 			// a table actually gets created, has a sentry, dummy artifact. A noop has not.
-
-			if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.DropStr); err != nil {
-				return err
-			}
-			if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
-				return err
-			}
 
 			artifacts := row["artifacts"].ToString()
 			artifactTables := textutil.SplitDelimitedList(artifacts)
@@ -1684,12 +1790,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			// We are reverting a DROP migration. But the table wasn't really dropped, because that's not how
 			// we run DROP migrations. It was renamed. So we need to rename it back.
 			// But we impose as if we are now CREATE-ing the table.
-			if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.CreateStr); err != nil {
-				return err
-			}
-			if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
-				return err
-			}
+
 			artifacts := row["artifacts"].ToString()
 			artifactTables := textutil.SplitDelimitedList(artifacts)
 			if len(artifactTables) > 1 {
@@ -1711,15 +1812,12 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 		}
 	case sqlparser.AlterStr:
 		{
-			if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.AlterStr); err != nil {
-				return err
-			}
 			if err := e.ExecuteWithVReplication(ctx, onlineDDL, revertMigration); err != nil {
 				return err
 			}
 		}
 	default:
-		return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertActionStr)
+		return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertedActionStr)
 	}
 
 	return nil
@@ -1869,6 +1967,15 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 	return completedUUID, nil
 }
 
+// failMigration marks a migration as failed
+func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, err error) error {
+	_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+	if err != nil {
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+	}
+	return err
+}
+
 // executeMigration executes a single migration. It analyzes the migration type:
 // - is it declarative?
 // - is it CREATE / DROP / ALTER?
@@ -1878,11 +1985,7 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	defer e.triggerNextCheckInterval()
 	failMigration := func(err error) error {
-		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-		if err != nil {
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
-		}
-		return err
+		return e.failMigration(ctx, onlineDDL, err)
 	}
 
 	ddlAction, err := onlineDDL.GetAction()
@@ -2356,6 +2459,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
 		strategySettings := schema.NewDDLStrategySetting(strategy, row["options"].ToString())
+		postponeCompletion := row.AsBool("postpone_completion", false)
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
 
 		uuidsFoundRunning[uuid] = true
@@ -2394,6 +2498,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						if elapsedSeconds < vreplicationTestSuiteWaitSeconds {
 							isReady = false
 						}
+					}
+					if postponeCompletion {
+						// override. Even if migration is ready, we do not complet it.
+						isReady = false
 					}
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
@@ -2622,6 +2730,9 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
+		log.Error(err)
+	}
+	if err := e.reviewQueuedMigrations(ctx); err != nil {
 		log.Error(err)
 	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
@@ -2943,6 +3054,32 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	return e.execQuery(ctx, query)
 }
 
+// CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
+func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in COMPLETE: %s", uuid)
+	}
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlUpdateCompleteMigration,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer e.triggerNextCheckInterval()
+	if err := e.deleteGhostPostponeFlagFile(uuid); err != nil {
+		// This should work without error even if the migration is not a gh-ost migration, and even
+		// if the file does not exist. An error here indicates a general system error of sorts.
+		return nil, err
+	}
+	return e.execQuery(ctx, query)
+}
+
 // SubmitMigration inserts a new migration request
 func (e *Executor) SubmitMigration(
 	ctx context.Context,
@@ -2961,7 +3098,6 @@ func (e *Executor) SubmitMigration(
 	}
 
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
-
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
@@ -2976,6 +3112,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
+		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
 	)
 	if err != nil {
 		return nil, err

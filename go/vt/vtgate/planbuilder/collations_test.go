@@ -29,7 +29,7 @@ import (
 // collationInTable allows us to set a collation on a column
 type collationInTable struct {
 	ks, table, collationName string
-	offsetInTable            int
+	colName                  string
 }
 
 type collationTestCase struct {
@@ -40,7 +40,7 @@ type collationTestCase struct {
 
 func (tc *collationTestCase) run(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json"),
+		v:             loadSchema(t, "schema_test.json", false),
 		sysVarEnabled: true,
 		version:       Gen4,
 	}
@@ -53,17 +53,23 @@ func (tc *collationTestCase) run(t *testing.T) {
 
 func (tc *collationTestCase) addCollationsToSchema(vschema *vschemaWrapper) {
 	for _, collation := range tc.collations {
-		vschema.v.Keyspaces[collation.ks].Tables[collation.table].Columns[collation.offsetInTable].CollationName = collation.collationName
+		tbl := vschema.v.Keyspaces[collation.ks].Tables[collation.table]
+		for i, c := range tbl.Columns {
+			if c.Name.EqualString(collation.colName) {
+				tbl.Columns[i].CollationName = collation.collationName
+				break
+			}
+		}
 	}
 }
 
 func TestOrderedAggregateCollations(t *testing.T) {
 	collid := func(collname string) collations.ID {
-		return collations.Default().LookupByName(collname).ID()
+		return collations.Local().LookupByName(collname).ID()
 	}
 	testCases := []collationTestCase{
 		{
-			collations: []collationInTable{{ks: "user", table: "user", collationName: "utf8mb4_bin", offsetInTable: 2}},
+			collations: []collationInTable{{ks: "user", table: "user", collationName: "utf8mb4_bin", colName: "textcol1"}},
 			query:      "select textcol1 from user group by textcol1",
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
@@ -72,7 +78,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			},
 		},
 		{
-			collations: []collationInTable{{ks: "user", table: "user", collationName: "utf8mb4_bin", offsetInTable: 2}},
+			collations: []collationInTable{{ks: "user", table: "user", collationName: "utf8mb4_bin", colName: "textcol1"}},
 			query:      "select distinct textcol1 from user",
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
@@ -82,8 +88,8 @@ func TestOrderedAggregateCollations(t *testing.T) {
 		},
 		{
 			collations: []collationInTable{
-				{ks: "user", table: "user", collationName: "utf8mb4_bin", offsetInTable: 2},
-				{ks: "user", table: "user", collationName: "utf8mb4_bin", offsetInTable: 4},
+				{ks: "user", table: "user", collationName: "utf8mb4_bin", colName: "textcol1"},
+				{ks: "user", table: "user", collationName: "utf8mb4_bin", colName: "textcol2"},
 			},
 			query: "select textcol1, textcol2 from user group by textcol1, textcol2",
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
@@ -95,7 +101,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 		},
 		{
 			collations: []collationInTable{
-				{ks: "user", table: "user", collationName: "utf8mb4_bin", offsetInTable: 4},
+				{ks: "user", table: "user", collationName: "utf8mb4_bin", colName: "textcol2"},
 			},
 			query: "select count(*), textcol2 from user group by textcol2",
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
@@ -106,7 +112,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 		},
 		{
 			collations: []collationInTable{
-				{ks: "user", table: "user", collationName: "utf8mb4_bin", offsetInTable: 4},
+				{ks: "user", table: "user", collationName: "utf8mb4_bin", colName: "textcol2"},
 			},
 			query: "select count(*) as c, textcol2 from user group by textcol2 order by c",
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {

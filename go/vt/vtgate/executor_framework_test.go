@@ -19,7 +19,6 @@ package vtgate
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -572,10 +571,47 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	return qr, nil
 }
 
-func testQueries(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
+func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
 	t.Helper()
-	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
-		t.Errorf("%s.Queries:\n%+v, want\n%+v\n", sbcName, sbc.Queries, wantQueries)
+	idx := 0
+	for _, query := range sbc.Queries {
+		if strings.HasPrefix(query.Sql, "savepoint") || strings.HasPrefix(query.Sql, "rollback to") {
+			continue
+		}
+		if len(wantQueries) < idx {
+			t.Errorf("got more queries than expected")
+		}
+		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
+		got := query.Sql
+		expected := wantQueries[idx].Sql
+		idx++
+		assert.Equal(t, expected, got)
+	}
+}
+
+func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
+	t.Helper()
+	require.Equal(t, len(wantQueries), len(sbc.Queries), sbc.Queries)
+	savepointStore := make(map[string]string)
+	for idx, query := range sbc.Queries {
+		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
+		got := query.Sql
+		expected := wantQueries[idx].Sql
+		if strings.HasPrefix(got, "savepoint") {
+			if !strings.HasPrefix(expected, "savepoint") {
+				t.Fatal("savepoint expected")
+			}
+			savepointStore[expected[10:]] = got[10:]
+			continue
+		}
+		if strings.HasPrefix(got, "rollback to") {
+			if !strings.HasPrefix(expected, "rollback to") {
+				t.Fatal("rollback to expected")
+			}
+			assert.Equal(t, savepointStore[expected[12:]], got[12:])
+			continue
+		}
+		assert.Equal(t, expected, got)
 	}
 }
 
@@ -615,8 +651,26 @@ var testPlannedQueries = map[string]bool{}
 func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int) *LogStats {
 	t.Helper()
 
-	logStats := getQueryLog(logChan)
-	require.NotNil(t, logStats)
+	return testQueryLogWithSavepoint(t, logChan, method, stmtType, sql, shardQueries, false /* checkSavepoint */)
+}
+
+func testQueryLogWithSavepoint(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int, checkSavepoint bool) *LogStats {
+	t.Helper()
+
+	var logStats *LogStats
+
+	if checkSavepoint {
+		logStats = getQueryLog(logChan)
+		require.NotNil(t, logStats)
+	} else {
+		for {
+			logStats = getQueryLog(logChan)
+			require.NotNil(t, logStats)
+			if logStats.Method != "MarkSavepoint" {
+				break
+			}
+		}
+	}
 
 	var log bytes.Buffer
 	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
@@ -627,6 +681,15 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 
 	// fields[1] - fields[6] are the caller id, start/end times, etc
 
+	checkEqualQuery := true
+	// The internal savepoints are created with uuids so the value of it not known to assert.
+	// Therefore, the equal query check is ignored.
+	if checkSavepoint {
+		switch stmtType {
+		case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+			checkEqualQuery = false
+		}
+	}
 	// only test the durations if there is no error (fields[16])
 	if fields[16] == "\"\"" {
 		// fields[7] is the total execution time
@@ -643,7 +706,7 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 		// fields[9] is ExecuteTime which is not set for certain statements SET,
 		// BEGIN, COMMIT, ROLLBACK, etc
 		switch stmtType {
-		case "BEGIN", "COMMIT", "ROLLBACK", "SET", "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+		case "BEGIN", "COMMIT", "SET", "ROLLBACK", "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
 		default:
 			testNonZeroDuration(t, "ExecuteTime", fields[9])
 		}
@@ -655,10 +718,11 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	// fields[11] is the statement type
 	assert.Equal(t, stmtType, fields[11], "logstats: stmtType")
 
-	// fields[12] is the original sql
-	wantSQL := fmt.Sprintf("%q", sql)
-	assert.Equal(t, wantSQL, fields[12], "logstats: SQL")
-
+	if checkEqualQuery {
+		// fields[12] is the original sql
+		wantSQL := fmt.Sprintf("%q", sql)
+		assert.Equal(t, wantSQL, fields[12], "logstats: SQL")
+	}
 	// fields[13] contains the formatted bind vars
 
 	// fields[14] is the count of shard queries

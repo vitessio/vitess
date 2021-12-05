@@ -19,6 +19,8 @@ package utils
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -28,6 +30,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	// This imports toposervers to register their implementations of TopoServer.
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	_ "vitess.io/vitess/go/vt/topo/k8stopo"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
@@ -702,5 +710,36 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 			log.Warningf("source port not set correctly yet, will retry")
 		}
 		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// MakeAPICall is used make an API call given the url. It returns the status and the body of the response received
+func MakeAPICall(t *testing.T, url string) (status int, response string) {
+	t.Helper()
+	res, err := http.Get(url)
+	require.NoError(t, err)
+	bodyBytes, err := ioutil.ReadAll(res.Body)
+	require.NoError(t, err)
+	body := string(bodyBytes)
+	return res.StatusCode, body
+}
+
+// MakeAPICallUntilRegistered is used to make an API call and retry if we see a 500 - no successor promoted output. This happens when some other recovery had previously run
+// and the API recovery was unable to be registered due to active timeout period.
+func MakeAPICallUntilRegistered(t *testing.T, url string) (status int, response string) {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timedout waiting for api to register correctly")
+			return
+		default:
+			status, response = MakeAPICall(t, url)
+			if status == 500 && strings.Contains(response, "no successor promoted") {
+				time.Sleep(1 * time.Second)
+				break
+			}
+			return status, response
+		}
 	}
 }

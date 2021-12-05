@@ -122,10 +122,6 @@ const (
 	RegexpStr        = "regexp"
 	NotRegexpStr     = "not regexp"
 
-	// RangeCond.Operator
-	BetweenStr    = "between"
-	NotBetweenStr = "not between"
-
 	// IsExpr.Operator
 	IsNullStr     = "is null"
 	IsNotNullStr  = "is not null"
@@ -150,16 +146,53 @@ const (
 	JSONUnquoteExtractOpStr = "->>"
 
 	// UnaryExpr.Operator
-	UPlusStr   = "+"
-	UMinusStr  = "-"
-	TildaStr   = "~"
-	BangStr    = "!"
-	BinaryStr  = "binary "
-	UBinaryStr = "_binary "
-	Utf8mb4Str = "_utf8mb4 "
-	Utf8Str    = "_utf8 "
-	Latin1Str  = "_latin1 "
-	NStringStr = "N"
+	UPlusStr    = "+"
+	UMinusStr   = "-"
+	TildaStr    = "~"
+	BangStr     = "!"
+	BinaryStr   = "binary "
+	Armscii8Str = "_armscii8"
+	ASCIIStr    = "_ascii"
+	Big5Str     = "_big5"
+	UBinaryStr  = "_binary"
+	Cp1250Str   = "_cp1250"
+	Cp1251Str   = "_cp1251"
+	Cp1256Str   = "_cp1256"
+	Cp1257Str   = "_cp1257"
+	Cp850Str    = "_cp850"
+	Cp852Str    = "_cp852"
+	Cp866Str    = "_cp866"
+	Cp932Str    = "_cp932"
+	Dec8Str     = "_dec8"
+	EucjpmsStr  = "_eucjpms"
+	EuckrStr    = "_euckr"
+	Gb18030Str  = "_gb18030"
+	Gb2312Str   = "_gb2312"
+	GbkStr      = "_gbk"
+	Geostd8Str  = "_geostd8"
+	GreekStr    = "_greek"
+	HebrewStr   = "_hebrew"
+	Hp8Str      = "_hp8"
+	Keybcs2Str  = "_keybcs2"
+	Koi8rStr    = "_koi8r"
+	Koi8uStr    = "_koi8u"
+	Latin1Str   = "_latin1"
+	Latin2Str   = "_latin2"
+	Latin5Str   = "_latin5"
+	Latin7Str   = "_latin7"
+	MacceStr    = "_macce"
+	MacromanStr = "_macroman"
+	SjisStr     = "_sjis"
+	Swe7Str     = "_swe7"
+	Tis620Str   = "_tis620"
+	Ucs2Str     = "_ucs2"
+	UjisStr     = "_ujis"
+	Utf16Str    = "_utf16"
+	Utf16leStr  = "_utf16le"
+	Utf32Str    = "_utf32"
+	Utf8Str     = "_utf8"
+	Utf8mb4Str  = "_utf8mb4"
+	NStringStr  = "N"
 
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
@@ -366,12 +399,6 @@ const (
 	NotRegexpOp
 )
 
-// Constant for Enum Type - RangeCondOperator
-const (
-	BetweenOp RangeCondOperator = iota
-	NotBetweenOp
-)
-
 // Constant for Enum Type - IsExprOperator
 const (
 	IsNullOp IsExprOperator = iota
@@ -406,10 +433,6 @@ const (
 	TildaOp
 	BangOp
 	BinaryOp
-	UBinaryOp
-	Utf8mb4Op
-	Utf8Op
-	Latin1Op
 	NStringOp
 )
 

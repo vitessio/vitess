@@ -23,6 +23,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+type joinColumnInfo struct {
+	offset int
+	typ    semantics.Type
+}
+
 type joinTree struct {
 	// columns needed to feed other plans
 	columns []int
@@ -34,6 +39,12 @@ type joinTree struct {
 	lhs, rhs queryTree
 
 	leftJoin bool
+
+	// predicatesToRemoveFromHashJoin lists all the predicates that needs to be removed
+	// from the right-hand side if we decide to do a hash join.
+	predicatesToRemoveFromHashJoin []sqlparser.Expr
+
+	predicates []sqlparser.Expr
 }
 
 var _ queryTree = (*joinTree)(nil)
@@ -44,10 +55,13 @@ func (jp *joinTree) tableID() semantics.TableSet {
 
 func (jp *joinTree) clone() queryTree {
 	result := &joinTree{
-		lhs:      jp.lhs.clone(),
-		rhs:      jp.rhs.clone(),
-		leftJoin: jp.leftJoin,
-		vars:     jp.vars,
+		columns:                        jp.columns,
+		vars:                           jp.vars,
+		lhs:                            jp.lhs.clone(),
+		rhs:                            jp.rhs.clone(),
+		leftJoin:                       jp.leftJoin,
+		predicatesToRemoveFromHashJoin: jp.predicatesToRemoveFromHashJoin,
+		predicates:                     jp.predicates,
 	}
 	return result
 }
@@ -126,6 +140,13 @@ func (jp *joinTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) e
 			return err
 		}
 		isRemoved = true
+	}
+	for idx, predicate := range jp.predicates {
+		if sqlparser.EqualsExpr(predicate, expr) {
+			jp.predicates = append(jp.predicates[0:idx], jp.predicates[idx+1:]...)
+			isRemoved = true
+			break
+		}
 	}
 	if isRemoved {
 		return nil

@@ -19,7 +19,6 @@ package mysql
 import (
 	"bytes"
 	"crypto/subtle"
-	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"net"
@@ -161,7 +160,7 @@ func (a *AuthServerStatic) HandleUser(user string) bool {
 
 // UserEntryWithPassword implements password lookup based on a plain
 // text password that is negotiated with the client.
-func (a *AuthServerStatic) UserEntryWithPassword(userCerts []*x509.Certificate, user string, password string, remoteAddr net.Addr) (Getter, error) {
+func (a *AuthServerStatic) UserEntryWithPassword(conn *Conn, user string, password string, remoteAddr net.Addr) (Getter, error) {
 	a.mu.Lock()
 	entries, ok := a.entries[user]
 	a.mu.Unlock()
@@ -181,7 +180,7 @@ func (a *AuthServerStatic) UserEntryWithPassword(userCerts []*x509.Certificate, 
 
 // UserEntryWithHash implements password lookup based on a
 // mysql_native_password hash that is negotiated with the client.
-func (a *AuthServerStatic) UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
+func (a *AuthServerStatic) UserEntryWithHash(conn *Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	a.mu.Lock()
 	entries, ok := a.entries[user]
 	a.mu.Unlock()
@@ -214,7 +213,7 @@ func (a *AuthServerStatic) UserEntryWithHash(userCerts []*x509.Certificate, salt
 
 // UserEntryWithCacheHash implements password lookup based on a
 // caching_sha2_password hash that is negotiated with the client.
-func (a *AuthServerStatic) UserEntryWithCacheHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, CacheState, error) {
+func (a *AuthServerStatic) UserEntryWithCacheHash(conn *Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, CacheState, error) {
 	a.mu.Lock()
 	entries, ok := a.entries[user]
 	a.mu.Unlock()

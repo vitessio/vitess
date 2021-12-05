@@ -94,7 +94,7 @@ type (
 
 		Session() SessionActions
 
-		ConnCollation() collations.Collation
+		ConnCollation() collations.ID
 
 		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
 

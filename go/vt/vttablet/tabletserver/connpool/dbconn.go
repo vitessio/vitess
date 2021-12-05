@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -25,8 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -195,7 +194,7 @@ func (dbc *DBConn) FetchNext(ctx context.Context, maxrows int, wantfields bool) 
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
-	trace.AnnotateSQL(span, query)
+	trace.AnnotateSQL(span, sqlparser.Preview(query))
 	defer span.Finish()
 
 	resultSent := false

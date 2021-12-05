@@ -20,11 +20,12 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-
-	"strconv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -53,7 +54,7 @@ type UnsupportedCollationError struct {
 
 // Error function implements the error interface
 func (err UnsupportedCollationError) Error() string {
-	return fmt.Sprintf("comparison using collation %d isn't possible", err.ID)
+	return fmt.Sprintf("cannot compare strings, collation is unknown or unsupported (collation ID: %d)", err.ID)
 }
 
 func dataOutOfRangeError(v1, v2 interface{}, typ, sign string) error {
@@ -215,28 +216,56 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	if v2.IsNull() {
 		return 1, nil
 	}
-	if sqltypes.IsNumber(v1.Type()) || sqltypes.IsNumber(v2.Type()) {
-		lv1, err := newEvalResult(v1)
-		if err != nil {
-			return 0, err
+
+	if isByteComparable(v1.Type()) && isByteComparable(v2.Type()) {
+		v1Bytes, err1 := v1.ToBytes()
+		if err1 != nil {
+			return 0, err1
 		}
-		lv2, err := newEvalResult(v2)
-		if err != nil {
-			return 0, err
+		v2Bytes, err2 := v2.ToBytes()
+		if err2 != nil {
+			return 0, err2
 		}
-		return compareNumeric(lv1, lv2)
+		return bytes.Compare(v1Bytes, v2Bytes), nil
 	}
-	if isByteComparable(v1) && isByteComparable(v2) {
-		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
+
+	typ, err := CoerceTo(v1.Type(), v2.Type()) // TODO systay we should add a method where this decision is done at plantime
+	if err != nil {
+		return 0, err
 	}
-	if v1.IsText() && v2.IsText() && collationID != collations.Unknown {
-		collation := collations.Default().LookupByID(collationID)
+	v1cast, err := castTo(v1, typ)
+	if err != nil {
+		return 0, err
+	}
+	v2cast, err := castTo(v2, typ)
+	if err != nil {
+		return 0, err
+	}
+
+	if sqltypes.IsNumber(typ) {
+		return compareNumeric(v1cast, v2cast)
+	}
+	if sqltypes.IsText(typ) || sqltypes.IsBinary(typ) {
+		if collationID == collations.Unknown {
+			return 0, UnsupportedCollationError{
+				ID: collationID,
+			}
+		}
+		collation := collations.Local().LookupByID(collationID)
 		if collation == nil {
 			return 0, UnsupportedCollationError{
 				ID: collationID,
 			}
 		}
-		switch result := collation.Collate(v1.ToBytes(), v2.ToBytes(), false); {
+		v1Bytes, err1 := v1.ToBytes()
+		if err1 != nil {
+			return 0, err1
+		}
+		v2Bytes, err2 := v2.ToBytes()
+		if err2 != nil {
+			return 0, err2
+		}
+		switch result := collation.Collate(v1Bytes, v2Bytes, false); {
 		case result < 0:
 			return -1, nil
 		case result > 0:
@@ -251,31 +280,164 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	}
 }
 
-// NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
-// for two values that are considered equal by `NullsafeCompare`.
-// TODO: should be extended to support all possible types
-func NullsafeHashcode(v sqltypes.Value) (int64, error) {
-	if v.IsNull() {
-		return math.MaxInt64, nil
-	}
+// HashCode is a type alias to the code easier to read
+type HashCode = uintptr
 
-	if sqltypes.IsNumber(v.Type()) {
-		result, err := newEvalResult(v)
+func (er EvalResult) nullSafeHashcode() (HashCode, error) {
+	switch {
+	case sqltypes.IsNull(er.typ):
+		return HashCode(math.MaxUint64), nil
+	case sqltypes.IsNumber(er.typ):
+		return numericalHashCode(er), nil
+	case sqltypes.IsText(er.typ):
+		coll := collations.Local().LookupByID(er.collation.Collation)
+		if coll == nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
+		}
+		return coll.Hash(er.bytes, 0), nil
+	case sqltypes.IsDate(er.typ):
+		time, err := parseDate(er)
 		if err != nil {
 			return 0, err
 		}
-		return hashCode(result), nil
+		return uintptr(time.UnixNano()), nil
 	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", er.typ)
+}
 
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", v.Type())
+// NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
+// for two values that are considered equal by `NullsafeCompare`.
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType querypb.Type) (HashCode, error) {
+	castValue, err := castTo(v, coerceType)
+	if err != nil {
+		return 0, err
+	}
+	castValue.collation.Collation = collation
+	return castValue.nullSafeHashcode()
+}
+
+func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
+	switch {
+	case typ == sqltypes.Null:
+		return EvalResult{}, nil
+	case sqltypes.IsFloat(typ) || typ == sqltypes.Decimal:
+		switch {
+		case v.IsSigned():
+			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{numval: math.Float64bits(float64(ival)), typ: sqltypes.Float64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{numval: math.Float64bits(float64(uval)), typ: sqltypes.Float64}, nil
+		case v.IsFloat() || v.Type() == sqltypes.Decimal:
+			fval, err := strconv.ParseFloat(v.RawStr(), 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{numval: math.Float64bits(fval), typ: sqltypes.Float64}, nil
+		case v.IsText() || v.IsBinary():
+			fval := parseStringToFloat(v.RawStr())
+			return EvalResult{numval: math.Float64bits(fval), typ: sqltypes.Float64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
+		}
+
+	case sqltypes.IsSigned(typ):
+		switch {
+		case v.IsSigned():
+			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{numval: uint64(ival), typ: sqltypes.Int64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{numval: uval, typ: sqltypes.Int64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
+		}
+
+	case sqltypes.IsUnsigned(typ):
+		switch {
+		case v.IsSigned():
+			uval, err := strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{numval: uint64(uval), typ: sqltypes.Uint64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{numval: uval, typ: sqltypes.Uint64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
+		}
+
+	case sqltypes.IsText(typ) || sqltypes.IsBinary(typ):
+		switch {
+		case v.IsText() || v.IsBinary():
+			return EvalResult{bytes: v.Raw(), typ: v.Type()}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a text: %v", v)
+		}
+	}
+	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
+}
+
+// CoerceTo takes two input types, and decides how they should be coerced before compared
+func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
+	if v1 == v2 {
+		return v1, nil
+	}
+	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
+		return sqltypes.Null, nil
+	}
+	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
+		return sqltypes.VarChar, nil
+	}
+	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
+		switch {
+		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
+			return sqltypes.Float64, nil
+		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
+			return sqltypes.Float64, nil
+		case sqltypes.IsSigned(v1):
+			switch {
+			case sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			case sqltypes.IsSigned(v2):
+				return sqltypes.Int64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		case sqltypes.IsUnsigned(v1):
+			switch {
+			case sqltypes.IsSigned(v2) || sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		}
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
 }
 
 // isByteComparable returns true if the type is binary or date/time.
-func isByteComparable(v sqltypes.Value) bool {
-	if v.IsBinary() {
+func isByteComparable(typ querypb.Type) bool {
+	if sqltypes.IsBinary(typ) {
 		return true
 	}
-	switch v.Type() {
+	switch typ {
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit:
 		return true
 	}
@@ -321,16 +483,16 @@ func addNumeric(v1, v2 EvalResult) EvalResult {
 	v1, v2 = makeNumericAndPrioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
-		return intPlusInt(v1.ival, v2.ival)
+		return intPlusInt(v1.numval, v2.numval)
 	case sqltypes.Uint64:
 		switch v2.typ {
 		case sqltypes.Int64:
-			return uintPlusInt(v1.uval, v2.ival)
+			return uintPlusInt(v1.numval, v2.numval)
 		case sqltypes.Uint64:
-			return uintPlusUint(v1.uval, v2.uval)
+			return uintPlusUint(v1.numval, v2.numval)
 		}
 	case sqltypes.Float64:
-		return floatPlusAny(v1.fval, v2)
+		return floatPlusAny(math.Float64frombits(v1.numval), v2)
 	}
 	panic("unreachable")
 }
@@ -339,16 +501,16 @@ func addNumericWithError(v1, v2 EvalResult) (EvalResult, error) {
 	v1, v2 = makeNumericAndPrioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
-		return intPlusIntWithError(v1.ival, v2.ival)
+		return intPlusIntWithError(v1.numval, v2.numval)
 	case sqltypes.Uint64:
 		switch v2.typ {
 		case sqltypes.Int64:
-			return uintPlusIntWithError(v1.uval, v2.ival)
+			return uintPlusIntWithError(v1.numval, v2.numval)
 		case sqltypes.Uint64:
-			return uintPlusUintWithError(v1.uval, v2.uval)
+			return uintPlusUintWithError(v1.numval, v2.numval)
 		}
 	case sqltypes.Float64, sqltypes.Decimal:
-		return floatPlusAny(v1.fval, v2), nil
+		return floatPlusAny(math.Float64frombits(v1.numval), v2), nil
 	}
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
 
@@ -361,23 +523,23 @@ func subtractNumericWithError(i1, i2 EvalResult) (EvalResult, error) {
 	case sqltypes.Int64:
 		switch v2.typ {
 		case sqltypes.Int64:
-			return intMinusIntWithError(v1.ival, v2.ival)
+			return intMinusIntWithError(v1.numval, v2.numval)
 		case sqltypes.Uint64:
-			return intMinusUintWithError(v1.ival, v2.uval)
+			return intMinusUintWithError(v1.numval, v2.numval)
 		case sqltypes.Float64:
-			return anyMinusFloat(v1, v2.fval), nil
+			return anyMinusFloat(v1, math.Float64frombits(v2.numval)), nil
 		}
 	case sqltypes.Uint64:
 		switch v2.typ {
 		case sqltypes.Int64:
-			return uintMinusIntWithError(v1.uval, v2.ival)
+			return uintMinusIntWithError(v1.numval, v2.numval)
 		case sqltypes.Uint64:
-			return uintMinusUintWithError(v1.uval, v2.uval)
+			return uintMinusUintWithError(v1.numval, v2.numval)
 		case sqltypes.Float64:
-			return anyMinusFloat(v1, v2.fval), nil
+			return anyMinusFloat(v1, math.Float64frombits(v2.numval)), nil
 		}
 	case sqltypes.Float64:
-		return floatMinusAny(v1.fval, v2), nil
+		return floatMinusAny(math.Float64frombits(v1.numval), v2), nil
 	}
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
 }
@@ -386,16 +548,16 @@ func multiplyNumericWithError(v1, v2 EvalResult) (EvalResult, error) {
 	v1, v2 = makeNumericAndPrioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
-		return intTimesIntWithError(v1.ival, v2.ival)
+		return intTimesIntWithError(v1.numval, v2.numval)
 	case sqltypes.Uint64:
 		switch v2.typ {
 		case sqltypes.Int64:
-			return uintTimesIntWithError(v1.uval, v2.ival)
+			return uintTimesIntWithError(v1.numval, v2.numval)
 		case sqltypes.Uint64:
-			return uintTimesUintWithError(v1.uval, v2.uval)
+			return uintTimesUintWithError(v1.numval, v2.numval)
 		}
 	case sqltypes.Float64:
-		return floatTimesAny(v1.fval, v2), nil
+		return floatTimesAny(math.Float64frombits(v1.numval), v2), nil
 	}
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
 
@@ -406,13 +568,13 @@ func divideNumericWithError(i1, i2 EvalResult) (EvalResult, error) {
 	v2 := makeNumeric(i2)
 	switch v1.typ {
 	case sqltypes.Int64:
-		return floatDivideAnyWithError(float64(v1.ival), v2)
+		return floatDivideAnyWithError(float64(int64(v1.numval)), v2)
 
 	case sqltypes.Uint64:
-		return floatDivideAnyWithError(float64(v1.uval), v2)
+		return floatDivideAnyWithError(float64(v1.numval), v2)
 
 	case sqltypes.Float64:
-		return floatDivideAnyWithError(v1.fval, v2)
+		return floatDivideAnyWithError(math.Float64frombits(v1.numval), v2)
 	}
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
 }
@@ -437,15 +599,15 @@ func makeNumericAndPrioritize(i1, i2 EvalResult) (EvalResult, EvalResult) {
 
 func makeFloat(v EvalResult) EvalResult {
 	if sqltypes.IsIntegral(v.typ) {
-		return EvalResult{fval: float64(v.ival), typ: sqltypes.Float64}
+		return EvalResult{numval: math.Float64bits(float64(int64(v.numval))), typ: sqltypes.Float64}
 	}
 	if sqltypes.IsFloat(v.typ) {
 		return v
 	}
 	if fval, err := strconv.ParseFloat(string(v.bytes), 64); err == nil {
-		return EvalResult{fval: fval, typ: sqltypes.Float64}
+		return EvalResult{numval: math.Float64bits(fval), typ: sqltypes.Float64}
 	}
-	return EvalResult{ival: 0, typ: sqltypes.Int64}
+	return EvalResult{numval: 0, typ: sqltypes.Int64}
 }
 
 func makeNumeric(v EvalResult) EvalResult {
@@ -453,15 +615,16 @@ func makeNumeric(v EvalResult) EvalResult {
 		return v
 	}
 	if ival, err := strconv.ParseInt(string(v.bytes), 10, 64); err == nil {
-		return EvalResult{ival: ival, typ: sqltypes.Int64}
+		return EvalResult{numval: uint64(ival), typ: sqltypes.Int64}
 	}
 	if fval, err := strconv.ParseFloat(string(v.bytes), 64); err == nil {
-		return EvalResult{fval: fval, typ: sqltypes.Float64}
+		return EvalResult{numval: math.Float64bits(fval), typ: sqltypes.Float64}
 	}
-	return EvalResult{ival: 0, typ: sqltypes.Int64}
+	return EvalResult{numval: 0, typ: sqltypes.Int64}
 }
 
-func intPlusInt(v1, v2 int64) EvalResult {
+func intPlusInt(v1u, v2u uint64) EvalResult {
+	v1, v2 := int64(v1u), int64(v2u)
 	result := v1 + v2
 	if v1 > 0 && v2 > 0 && result < 0 {
 		goto overflow
@@ -469,71 +632,78 @@ func intPlusInt(v1, v2 int64) EvalResult {
 	if v1 < 0 && v2 < 0 && result > 0 {
 		goto overflow
 	}
-	return EvalResult{typ: sqltypes.Int64, ival: result}
+	return EvalResult{typ: sqltypes.Int64, numval: uint64(result)}
 
 overflow:
-	return EvalResult{typ: sqltypes.Float64, fval: float64(v1) + float64(v2)}
+	return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(float64(v1) + float64(v2))}
 }
 
-func intPlusIntWithError(v1, v2 int64) (EvalResult, error) {
+func intPlusIntWithError(v1u, v2u uint64) (EvalResult, error) {
+	v1, v2 := int64(v1u), int64(v2u)
 	result := v1 + v2
 	if (result > v1) != (v2 > 0) {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT", "+")
 	}
-	return EvalResult{typ: sqltypes.Int64, ival: result}, nil
+	return EvalResult{typ: sqltypes.Int64, numval: uint64(result)}, nil
 }
 
-func intMinusIntWithError(v1, v2 int64) (EvalResult, error) {
+func intMinusIntWithError(v1u, v2u uint64) (EvalResult, error) {
+	v1, v2 := int64(v1u), int64(v2u)
 	result := v1 - v2
 
 	if (result < v1) != (v2 > 0) {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT", "-")
 	}
-	return EvalResult{typ: sqltypes.Int64, ival: result}, nil
+	return EvalResult{typ: sqltypes.Int64, numval: uint64(result)}, nil
 }
 
-func intTimesIntWithError(v1, v2 int64) (EvalResult, error) {
+func intTimesIntWithError(v1u, v2u uint64) (EvalResult, error) {
+	v1, v2 := int64(v1u), int64(v2u)
 	result := v1 * v2
 	if v1 != 0 && result/v1 != v2 {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT", "*")
 	}
-	return EvalResult{typ: sqltypes.Int64, ival: result}, nil
+	return EvalResult{typ: sqltypes.Int64, numval: uint64(result)}, nil
 
 }
 
-func intMinusUintWithError(v1 int64, v2 uint64) (EvalResult, error) {
+func intMinusUintWithError(v1u uint64, v2 uint64) (EvalResult, error) {
+	v1 := int64(v1u)
 	if v1 < 0 || v1 < int64(v2) {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
-	return uintMinusUintWithError(uint64(v1), v2)
+	return uintMinusUintWithError(v1u, v2)
 }
 
-func uintPlusInt(v1 uint64, v2 int64) EvalResult {
-	return uintPlusUint(v1, uint64(v2))
+func uintPlusInt(v1 uint64, v2 uint64) EvalResult {
+	return uintPlusUint(v1, v2)
 }
 
-func uintPlusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
+func uintPlusIntWithError(v1 uint64, v2u uint64) (EvalResult, error) {
+	v2 := int64(v2u)
 	result := v1 + uint64(v2)
 	if v2 < 0 && v1 < uint64(-v2) || v2 > 0 && (result < v1 || result < uint64(v2)) {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "+")
 	}
 	// convert to int -> uint is because for numeric operators (such as + or -)
 	// where one of the operands is an unsigned integer, the result is unsigned by default.
-	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
+	return EvalResult{typ: sqltypes.Uint64, numval: result}, nil
 }
 
-func uintMinusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
+func uintMinusIntWithError(v1 uint64, v2u uint64) (EvalResult, error) {
+	v2 := int64(v2u)
 	if int64(v1) < v2 && v2 > 0 {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
 	// uint - (- int) = uint + int
 	if v2 < 0 {
-		return uintPlusIntWithError(v1, -v2)
+		return uintPlusIntWithError(v1, uint64(-v2))
 	}
 	return uintMinusUintWithError(v1, uint64(v2))
 }
 
-func uintTimesIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
+func uintTimesIntWithError(v1 uint64, v2u uint64) (EvalResult, error) {
+	v2 := int64(v2u)
 	if v2 < 0 || int64(v1) < 0 {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
 	}
@@ -543,9 +713,9 @@ func uintTimesIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
 func uintPlusUint(v1, v2 uint64) EvalResult {
 	result := v1 + v2
 	if result < v2 {
-		return EvalResult{typ: sqltypes.Float64, fval: float64(v1) + float64(v2)}
+		return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(float64(v1) + float64(v2))}
 	}
-	return EvalResult{typ: sqltypes.Uint64, uval: result}
+	return EvalResult{typ: sqltypes.Uint64, numval: result}
 }
 
 func uintPlusUintWithError(v1, v2 uint64) (EvalResult, error) {
@@ -553,7 +723,7 @@ func uintPlusUintWithError(v1, v2 uint64) (EvalResult, error) {
 	if result < v1 || result < v2 {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "+")
 	}
-	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
+	return EvalResult{typ: sqltypes.Uint64, numval: result}, nil
 }
 
 func uintMinusUintWithError(v1, v2 uint64) (EvalResult, error) {
@@ -562,7 +732,7 @@ func uintMinusUintWithError(v1, v2 uint64) (EvalResult, error) {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
 
-	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
+	return EvalResult{typ: sqltypes.Uint64, numval: result}, nil
 }
 
 func uintTimesUintWithError(v1, v2 uint64) (EvalResult, error) {
@@ -570,63 +740,58 @@ func uintTimesUintWithError(v1, v2 uint64) (EvalResult, error) {
 	if result < v2 || result < v1 {
 		return EvalResult{}, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
 	}
-	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
+	return EvalResult{typ: sqltypes.Uint64, numval: result}, nil
+}
+
+func coerceToFloat(v2 EvalResult) float64 {
+	switch v2.typ {
+	case sqltypes.Int64:
+		return float64(int64(v2.numval))
+	case sqltypes.Uint64:
+		return float64(v2.numval)
+	default:
+		return math.Float64frombits(v2.numval)
+	}
 }
 
 func floatPlusAny(v1 float64, v2 EvalResult) EvalResult {
-	switch v2.typ {
-	case sqltypes.Int64:
-		v2.fval = float64(v2.ival)
-	case sqltypes.Uint64:
-		v2.fval = float64(v2.uval)
-	}
-	return EvalResult{typ: sqltypes.Float64, fval: v1 + v2.fval}
+	return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(v1 + coerceToFloat(v2))}
 }
 
 func floatMinusAny(v1 float64, v2 EvalResult) EvalResult {
-	switch v2.typ {
-	case sqltypes.Int64:
-		v2.fval = float64(v2.ival)
-	case sqltypes.Uint64:
-		v2.fval = float64(v2.uval)
-	}
-	return EvalResult{typ: sqltypes.Float64, fval: v1 - v2.fval}
+	return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(v1 - coerceToFloat(v2))}
 }
 
 func floatTimesAny(v1 float64, v2 EvalResult) EvalResult {
-	switch v2.typ {
-	case sqltypes.Int64:
-		v2.fval = float64(v2.ival)
-	case sqltypes.Uint64:
-		v2.fval = float64(v2.uval)
-	}
-	return EvalResult{typ: sqltypes.Float64, fval: v1 * v2.fval}
+	return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(v1 * coerceToFloat(v2))}
 }
 
 func floatDivideAnyWithError(v1 float64, v2 EvalResult) (EvalResult, error) {
-	switch v2.typ {
-	case sqltypes.Int64:
-		v2.fval = float64(v2.ival)
-	case sqltypes.Uint64:
-		v2.fval = float64(v2.uval)
-	}
-	result := v1 / v2.fval
-	divisorLessThanOne := v2.fval < 1
-	resultMismatch := v2.fval*result != v1
+	v2f := coerceToFloat(v2)
+	result := v1 / v2f
+	divisorLessThanOne := v2f < 1
+	resultMismatch := v2f*result != v1
 
 	if divisorLessThanOne && resultMismatch {
-		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v / %v", "BIGINT", v1, v2.fval)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v / %v", "BIGINT", v1, v2f)
 	}
 
-	return EvalResult{typ: sqltypes.Float64, fval: v1 / v2.fval}, nil
+	return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(result)}, nil
 }
 
 func anyMinusFloat(v1 EvalResult, v2 float64) EvalResult {
-	switch v1.typ {
-	case sqltypes.Int64:
-		v1.fval = float64(v1.ival)
-	case sqltypes.Uint64:
-		v1.fval = float64(v1.uval)
+	return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(coerceToFloat(v1) - v2)}
+}
+
+func parseStringToFloat(str string) float64 {
+	str = strings.TrimSpace(str)
+
+	// We only care to parse as many of the initial float characters of the
+	// string as possible. This functionality is implemented in the `strconv` package
+	// of the standard library, but not exposed, so we hook into it.
+	val, _, err := hack.ParseFloatPrefix(str, 64)
+	if err != nil {
+		return 0.0
 	}
-	return EvalResult{typ: sqltypes.Float64, fval: v1.fval - v2}
+	return val
 }

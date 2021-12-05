@@ -150,7 +150,7 @@ func (pv PlanValue) MarshalJSON() ([]byte, error) {
 		return json.Marshal(":" + pv.Key)
 	case !pv.Value.IsNull():
 		if pv.Value.IsIntegral() {
-			return pv.Value.ToBytes(), nil
+			return pv.Value.ToBytes()
 		}
 		return json.Marshal(pv.Value.ToString())
 	case pv.ListKey != "":

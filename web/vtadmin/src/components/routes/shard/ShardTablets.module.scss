@@ -15,7 +15,7 @@
  */
 .placeholder {
     color: var(--textColorSecondary);
-    font-size: var(--fontSizeLarge);
+    font-size: theme('fontSize.lg');
     padding: 10vh 2.4rem;
     text-align: center;
 }
