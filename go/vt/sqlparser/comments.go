@@ -39,6 +39,8 @@ const (
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no-scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
+	// DirectiveAllowHashJoin lets the planner use hash join if possible
+	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 )
 
 func isNonSpace(r rune) bool {
@@ -212,8 +214,7 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 
 	var vals map[string]interface{}
 
-	for _, comment := range comments {
-		commentStr := string(comment)
+	for _, commentStr := range comments {
 		if commentStr[0:5] != commentDirectivePreamble {
 			continue
 		}
@@ -350,6 +351,10 @@ func SkipQueryPlanCacheDirective(stmt Statement) bool {
 // directive is set to true.
 func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
 	switch stmt := stmt.(type) {
+	// For transactional statements, they should always be passed down and
+	// should not come into max payload size requirement.
+	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release:
+		return true
 	case *Select:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)

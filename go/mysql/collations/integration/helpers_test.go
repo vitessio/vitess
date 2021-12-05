@@ -19,10 +19,9 @@ package integration
 import (
 	"bytes"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"io"
-	"os"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -118,8 +117,6 @@ func verifyTranscoding(t *testing.T, local collations.Collation, remote *remote.
 	return transLocal
 }
 
-var flagDumpBadCases = flag.Bool("dump-bad-cases", false, "dump strings that fail a test to a tmpfile")
-
 func verifyWeightString(t *testing.T, local collations.Collation, remote *remote.Collation, text []byte) {
 	localResult := local.WeightString(nil, text, 0)
 	remoteResult := remote.WeightString(nil, text, 0)
@@ -134,19 +131,13 @@ func verifyWeightString(t *testing.T, local collations.Collation, remote *remote
 	}
 
 	if !bytes.Equal(localResult, remoteResult) {
-		var colldumpDebug string
-		if *flagDumpBadCases {
-			bad, err := os.CreateTemp("", "vitess_collation_example")
-			if err != nil {
-				t.Fatal(err)
-			}
-			bad.Write(text)
-			bad.Close()
-
-			colldumpDebug = fmt.Sprintf("manual debugging:\n\tcolldump --test %s < %s\n\n", local.Name(), bad.Name())
-		}
-		t.Fatalf("WEIGHT_STRING mismatch with collation %s (charset %s)\ninput:\n%s\nremote:\n%s\nlocal:\n%s\ngolden:\n%#v\n\n%s",
-			local.Name(), local.Charset().Name(), hex.Dump(text), hex.Dump(remoteResult), hex.Dump(localResult), text, colldumpDebug)
+		printDebugData(t, []string{
+			"strnxfrm",
+			"--collation", local.Name(),
+			"--input", hex.EncodeToString(text),
+		})
+		t.Fatalf("WEIGHT_STRING mismatch with collation %s (charset %s)\ninput:\n%s\nremote:\n%s\nlocal:\n%s\ngolden:\n%#v\n",
+			local.Name(), local.Charset().Name(), hex.Dump(text), hex.Dump(remoteResult), hex.Dump(localResult), text)
 	}
 }
 
@@ -165,4 +156,8 @@ func GoldenWeightString(t *testing.T, conn *mysql.Conn, collation string, input 
 		t.Fatal(coll.LastError())
 	}
 	return weightString
+}
+
+var printDebugData = func(t *testing.T, args []string) {
+	t.Logf("debug: colldump %s", strings.Join(args, " "))
 }

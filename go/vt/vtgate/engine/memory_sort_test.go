@@ -223,7 +223,7 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
 		OrderBy: []OrderByParams{{
 			Col:         0,
@@ -313,7 +313,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	ms := &MemorySort{
 		OrderBy: []OrderByParams{{
 			Col:         0,
@@ -650,7 +650,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	}
 
 	_, err := ms.TryExecute(&noopVCursor{}, nil, false)
-	want := "types are not comparable: VARCHAR vs VARCHAR"
+	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute err: %v, want %v", err, want)
 	}

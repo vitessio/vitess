@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,36 +28,36 @@ import (
 
 func TestEvalResultToBooleanStrict(t *testing.T) {
 	trueValues := []*EvalResult{{
-		typ:  sqltypes.Int64,
-		ival: 1,
+		typ:    sqltypes.Int64,
+		numval: 1,
 	}, {
-		typ:  sqltypes.Uint64,
-		uval: 1,
+		typ:    sqltypes.Uint64,
+		numval: 1,
 	}, {
-		typ:  sqltypes.Int8,
-		ival: 1,
+		typ:    sqltypes.Int8,
+		numval: 1,
 	}}
 
 	falseValues := []*EvalResult{{
-		typ:  sqltypes.Int64,
-		ival: 0,
+		typ:    sqltypes.Int64,
+		numval: 0,
 	}, {
-		typ:  sqltypes.Uint64,
-		uval: 0,
+		typ:    sqltypes.Uint64,
+		numval: 0,
 	}, {
-		typ:  sqltypes.Int8,
-		uval: 0,
+		typ:    sqltypes.Int8,
+		numval: 0,
 	}}
 
 	invalid := []*EvalResult{{
 		typ:   sqltypes.VarChar,
 		bytes: []byte("foobar"),
 	}, {
-		typ:  sqltypes.Float32,
-		fval: 1,
+		typ:    sqltypes.Float32,
+		numval: math.Float64bits(1.0),
 	}, {
-		typ:  sqltypes.Int64,
-		ival: 12,
+		typ:    sqltypes.Int64,
+		numval: 12,
 	}}
 
 	for _, res := range trueValues {

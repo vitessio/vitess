@@ -41,7 +41,7 @@ func (d *derivedTree) tableID() semantics.TableSet {
 }
 
 func (d *derivedTree) cost() int {
-	panic("implement me")
+	return d.inner.cost()
 }
 
 func (d *derivedTree) clone() queryTree {
@@ -79,7 +79,15 @@ func (d *derivedTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) e
 }
 
 func (d *derivedTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "remove '%s' predicate not supported on derived trees", sqlparser.String(expr))
+	tableInfo, err := ctx.semTable.TableInfoForExpr(expr)
+	if err != nil {
+		return err
+	}
+	rewrittenExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
+	if err != nil {
+		return err
+	}
+	return d.inner.removePredicate(ctx, rewrittenExpr)
 }
 
 // findOutputColumn returns the index on which the given name is found in the slice of

@@ -111,7 +111,9 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 			}
 		}
 
-		explainText := ExplainsAsText(explains)
+		explainText, err := ExplainsAsText(explains)
+		require.NoError(t, err, "vtexplain error")
+
 		if diff := cmp.Diff(strings.TrimSpace(string(expected)), strings.TrimSpace(explainText)); diff != "" {
 			// Print the Text that was actually returned and also dump to a
 			// temp file to be able to diff the results.

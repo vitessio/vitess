@@ -63,7 +63,11 @@ const (
 	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRetainArtifacts    = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTablePostponeCompletion = "ALTER TABLE _vt.schema_migrations add column postpone_completion tinyint unsigned NOT NULL DEFAULT 0"
+<<<<<<< HEAD
 	alterSchemaMigrationsTableAllowConcurrent    = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
+=======
+	alterSchemaMigrationsTableContextIndex       = "ALTER TABLE _vt.schema_migrations add KEY migration_context_idx (migration_context(64))"
+>>>>>>> main
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -266,6 +270,17 @@ const (
 			AND mysql_table=%a
 		ORDER BY
 			completed_timestamp DESC
+		LIMIT 1
+	`
+	sqlSelectCompleteMigrationsByContextAndSQL = `SELECT
+			migration_uuid,
+			strategy
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='complete'
+			AND keyspace=%a
+			AND migration_context=%a
+			AND migration_statement=%a
 		LIMIT 1
 	`
 	sqlSelectStaleMigrations = `SELECT
@@ -491,6 +506,7 @@ const (
 	retryMigrationHint     = "retry"
 	cancelMigrationHint    = "cancel"
 	cancelAllMigrationHint = "cancel-all"
+	completeMigrationHint  = "complete"
 )
 
 var (
@@ -530,5 +546,6 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableLogFile,
 	alterSchemaMigrationsTableRetainArtifacts,
 	alterSchemaMigrationsTablePostponeCompletion,
+	alterSchemaMigrationsTableContextIndex,
 	alterSchemaMigrationsTableAllowConcurrent,
 }

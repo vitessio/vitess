@@ -17,7 +17,6 @@ limitations under the License.
 package ldapauthserver
 
 import (
-	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -118,7 +117,7 @@ func (asl *AuthServerLdap) HandleUser(user string) bool {
 
 // UserEntryWithPassword is part of the PlaintextStorage interface
 // and called after the password is sent by the client.
-func (asl *AuthServerLdap) UserEntryWithPassword(userCerts []*x509.Certificate, user string, password string, remoteAddr net.Addr) (mysql.Getter, error) {
+func (asl *AuthServerLdap) UserEntryWithPassword(conn *mysql.Conn, user string, password string, remoteAddr net.Addr) (mysql.Getter, error) {
 	return asl.validate(user, password)
 }
 

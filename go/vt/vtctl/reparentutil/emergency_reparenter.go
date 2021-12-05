@@ -363,7 +363,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForERS(validTablets, tabletPositions)
+	err = sortTabletsForReparent(validTablets, tabletPositions)
 	if err != nil {
 		return nil, nil, err
 	}

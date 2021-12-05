@@ -1,8 +1,12 @@
+## Enhancements
+
+- `vtctl/vtctlclient ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted: `vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce`
+
 ## Major Changes
 
 ### ddl_strategy: -postpone-completion flag
 
-`ddl_strategy` (either `@@ddl_strategy` in VtGate or `-ddl_strategy` in `vtctl ApplySchema`) supports the flag `-postpone-completion`
+`ddl_strategy` (either `@@ddl_strategy` in VtGate or `-ddl_strategy` in `vtctlclient ApplySchema`) supports the flag `-postpone-completion`
 
 This flag indicates that the migration should not auto-complete. This applies for:
 
@@ -41,6 +45,19 @@ This command indicates that a migration executed with `-postpone-completion` is 
 - For running `ALTER`s (`online` and `gh-ost`) which are ready to cut-over: cut-over imminently (though not immediately - cut-over depends on polling interval, replication lag, etc)
 - For running `ALTER`s (`online` and `gh-ost`) which are only partly through the migration: they will cut-over automatically when they complete their work, as if `-postpone-completion` wasn't indicated
 - For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the scheduler's discretion. there is no guarantee that they will be scheduled to run immediately.
+
+### vtctl OnlineDDL ... complete
+
+Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl` or `vtctlclient`:
+
+```shell
+vtctlclient OnlineDDL <keyspace> complete <uuid>
+```
+For example:
+
+```shell
+vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
+```
 
 ## Incompatible Changes
 

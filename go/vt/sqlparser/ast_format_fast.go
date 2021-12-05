@@ -802,11 +802,11 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(ct.Charset)
 	}
-	if ct.Collate != "" {
+	if ct.Options != nil && ct.Options.Collate != "" {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[COLLATE])
 		buf.WriteByte(' ')
-		buf.WriteString(ct.Collate)
+		buf.WriteString(ct.Options.Collate)
 	}
 	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
@@ -1456,14 +1456,20 @@ func (node *ComparisonExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *RangeCond) formatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Left, true)
-	buf.WriteByte(' ')
-	buf.WriteString(node.Operator.ToString())
-	buf.WriteByte(' ')
-	buf.printExpr(node, node.From, true)
-	buf.WriteString(" and ")
-	buf.printExpr(node, node.To, false)
+func (node *BetweenExpr) formatFast(buf *TrackedBuffer) {
+	if node.IsBetween {
+		buf.printExpr(node, node.Left, true)
+		buf.WriteString(" between ")
+		buf.printExpr(node, node.From, true)
+		buf.WriteString(" and ")
+		buf.printExpr(node, node.To, false)
+	} else {
+		buf.printExpr(node, node.Left, true)
+		buf.WriteString(" not between ")
+		buf.printExpr(node, node.From, true)
+		buf.WriteString(" and ")
+		buf.printExpr(node, node.To, false)
+	}
 }
 
 // formatFast formats the node.
@@ -1576,6 +1582,13 @@ func (node *UnaryExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *IntroducerExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.CharacterSet)
+	buf.WriteByte(' ')
+	buf.printExpr(node, node.Expr, true)
+}
+
+// formatFast formats the node.
 func (node *IntervalExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("interval ")
 	buf.printExpr(node, node.Expr, true)
@@ -1606,17 +1619,22 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *CurTimeFuncExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.Name.String())
-	buf.WriteByte('(')
-	buf.printExpr(node, node.Fsp, true)
-	buf.WriteByte(')')
+	if node.Fsp != nil {
+		buf.WriteString(node.Name.String())
+		buf.WriteByte('(')
+		buf.printExpr(node, node.Fsp, true)
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString(node.Name.String())
+		buf.WriteString("()")
+	}
 }
 
 // formatFast formats the node.
 func (node *CollateExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(" collate ")
-	buf.WriteString(node.Charset)
+	buf.WriteString(node.Collation)
 }
 
 // formatFast formats the node.
@@ -1673,22 +1691,15 @@ func (node *ValuesFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
-	var val SQLNode
-	if node.Name != nil {
-		val = node.Name
-	} else {
-		val = node.StrVal
-	}
-
 	if node.To == nil {
 		buf.WriteString("substr(")
-		val.formatFast(buf)
+		buf.printExpr(node, node.Name, true)
 		buf.WriteString(", ")
 		buf.printExpr(node, node.From, true)
 		buf.WriteByte(')')
 	} else {
 		buf.WriteString("substr(")
-		val.formatFast(buf)
+		buf.printExpr(node, node.Name, true)
 		buf.WriteString(", ")
 		buf.printExpr(node, node.From, true)
 		buf.WriteString(", ")

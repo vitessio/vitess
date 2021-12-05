@@ -124,6 +124,9 @@ func TestOptimizeQuery(t *testing.T) {
 		}, {
 			query: "select id from user_extra join unsharded where 4 < user_extra.id and unsharded.col = user_extra.id",
 			result: `Join: {
+	JoinVars: map[user_extra_id:0]
+	Columns: []
+	PredicatesToRemove: unsharded.col = :user_extra_id
 	LHS: 	RouteTree{
 		Opcode: SelectScatter,
 		Tables: user_extra,
@@ -138,8 +141,6 @@ func TestOptimizeQuery(t *testing.T) {
 		ColNames: ,
 		LeftJoins: 
 	}
-	JoinVars: map[user_extra_id:0]
-	Columns: []
 }`,
 		}, {
 			query: "select t.x from (select id from user_extra) t(x) where t.x = 4",
@@ -220,11 +221,44 @@ func TestOptimizeQuery(t *testing.T) {
 	}
 	ExtractedSubQuery::__sq1
 }`,
+		}, {
+			query: "select u1.id from music u1 join music u2 on u2.col = u1.col join music u3 where u3.col = u1.col",
+			result: `Join: {
+	JoinVars: map[u3_col:0]
+	Columns: []
+	PredicatesToRemove: :u3_col = u1.col
+	LHS: 	RouteTree{
+		Opcode: SelectScatter,
+		Tables: music,
+		Predicates: <nil>,
+		ColNames: u3.col,
+		LeftJoins: 
+	}
+	RHS: 	Join: {
+		JoinVars: map[u1_col:0]
+		Columns: []
+		PredicatesToRemove: u2.col = :u1_col
+		LHS: 	RouteTree{
+			Opcode: SelectScatter,
+			Tables: music,
+			Predicates: :u3_col = u1.col,
+			ColNames: u1.col,
+			LeftJoins: 
+		}
+		RHS: 	RouteTree{
+			Opcode: SelectScatter,
+			Tables: music,
+			Predicates: u2.col = :u1_col,
+			ColNames: ,
+			LeftJoins: 
+		}
+	}
+}`,
 		},
 	}
 
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 	}
 
 	for _, testcase := range testcases {
@@ -270,10 +304,18 @@ func getQueryTreeString(tree queryTree) string {
 	case *joinTree:
 		leftStr := indent(getQueryTreeString(tree.lhs))
 		rightStr := indent(getQueryTreeString(tree.rhs))
+		joinType := "Join"
 		if tree.leftJoin {
-			return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tJoinVars: %v\n\tColumns: %v\n}", leftStr, rightStr, tree.vars, tree.columns)
+			joinType = "OuterJoin"
 		}
-		return fmt.Sprintf("Join: {\n\tLHS: %s\n\tRHS: %s\n\tJoinVars: %v\n\tColumns: %v\n}", leftStr, rightStr, tree.vars, tree.columns)
+		expressions := sqlparser.String(sqlparser.AndExpressions(tree.predicatesToRemoveFromHashJoin...))
+		return fmt.Sprintf(`%s: {
+	JoinVars: %v
+	Columns: %v
+	PredicatesToRemove: %v
+	LHS: %s
+	RHS: %s
+}`, joinType, tree.vars, tree.columns, expressions, leftStr, rightStr)
 	case *derivedTree:
 		inner := indent(getQueryTreeString(tree.inner))
 		return fmt.Sprintf("Derived %s: {\n\tInner:%s\n\tColumnAliases:%s\n\tColumns:%s\n}", tree.alias, inner, sqlparser.String(tree.columnAliases), getColmnsString(tree.columns))
