@@ -63,11 +63,8 @@ const (
 	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRetainArtifacts    = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTablePostponeCompletion = "ALTER TABLE _vt.schema_migrations add column postpone_completion tinyint unsigned NOT NULL DEFAULT 0"
-<<<<<<< HEAD
-	alterSchemaMigrationsTableAllowConcurrent    = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
-=======
 	alterSchemaMigrationsTableContextIndex       = "ALTER TABLE _vt.schema_migrations add KEY migration_context_idx (migration_context(64))"
->>>>>>> main
+	alterSchemaMigrationsTableAllowConcurrent    = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
