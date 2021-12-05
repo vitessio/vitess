@@ -196,6 +196,7 @@ e2e_test_cluster: build
 
 .ONESHELL:
 SHELL = /bin/bash
+.SHELLFLAGS = -ec
 
 # Run the following tests after making worker changes.
 worker_test:

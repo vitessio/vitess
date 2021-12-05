@@ -50,7 +50,7 @@
     align-items: center;
     display: flex;
     flex-direction: column;
-    font-size: var(--fontSizeLarge);
+    font-size: theme('fontSize.lg');
     justify-content: center;
     margin: 25vh auto;
     max-width: 720px;
@@ -72,7 +72,7 @@
     color: var(--colorPrimary);
     cursor: default;
     display: inline-block;
-    font-size: var(--fontSizeSmall);
+    font-size: theme('fontSize.sm');
     margin: 0 12px;
     padding: 4px 8px;
     text-transform: uppercase;

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/remote"
 	"vitess.io/vitess/go/sqltypes"
@@ -80,12 +82,14 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local col
 	concat.Write(leftText)
 	concat.Write(rightText)
 
-	if !bytes.Equal(concat.Bytes(), remote.Expr.ToBytes()) {
+	rEBytes, err := remote.Expr.ToBytes()
+	require.NoError(t, err)
+	if !bytes.Equal(concat.Bytes(), rEBytes) {
 		t.Errorf("failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v",
 			tc.left.Text, tc.left.Collation.Name(),
 			tc.right.Text, tc.right.Collation.Name(),
 			leftText, rightText, localCollation.Name(),
-			concat.Bytes(), remote.Expr.ToBytes(),
+			concat.Bytes(), rEBytes,
 		)
 	}
 }
@@ -102,6 +106,7 @@ func (tc *testComparison) Expression() string {
 }
 
 func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion) {
+	localCollation := defaultenv.LookupByID(local.Collation)
 	leftText, err := coerce1(nil, tc.left.Text)
 	if err != nil {
 		t.Errorf("failed to transcode left: %v", err)
@@ -113,9 +118,9 @@ func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local
 		t.Errorf("failed to transcode right: %v", err)
 		return
 	}
-
-	remoteEquals := remote.Expr.ToBytes()[0] == '1'
-	localCollation := defaultenv.LookupByID(local.Collation)
+	rEBytes, err := remote.Expr.ToBytes()
+	require.NoError(t, err)
+	remoteEquals := rEBytes[0] == '1'
 	localEquals := localCollation.Collate(leftText, rightText, false) == 0
 	if remoteEquals != localEquals {
 		t.Errorf("failed to collate %#v = %#v with collation %s (expected %v, got %v)",

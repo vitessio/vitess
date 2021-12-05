@@ -55,6 +55,10 @@ type SandboxConn struct {
 	MustFailStartCommit         int
 	MustFailSetRollback         int
 	MustFailConcludeTransaction int
+	// MustFailExecute is keyed by the statement type and stores the number
+	// of times to fail when it sees that statement type.
+	// Once, exhausted it will start returning non-error response.
+	MustFailExecute map[sqlparser.StatementType]int
 
 	// These Count vars report how often the corresponding
 	// functions were called.
@@ -123,9 +127,10 @@ var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface 
 // NewSandboxConn returns a new SandboxConn targeted to the provided tablet.
 func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	return &SandboxConn{
-		tablet:        t,
-		MustFailCodes: make(map[vtrpcpb.Code]int),
-		txIDToRID:     make(map[int64]int64),
+		tablet:          t,
+		MustFailCodes:   make(map[vtrpcpb.Code]int),
+		MustFailExecute: make(map[sqlparser.StatementType]int),
+		txIDToRID:       make(map[int64]int64),
 	}
 }
 
@@ -175,6 +180,10 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	}
 
 	stmt, _ := sqlparser.Parse(query) // knowingly ignoring the error
+	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
+		sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] = sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] - 1
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed query: %v", query)
+	}
 	return sbc.getNextResult(stmt), nil
 }
 
@@ -604,6 +613,12 @@ func (sbc *SandboxConn) ChangeTabletType(typ topodatapb.TabletType) {
 }
 
 func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result {
+	switch stmt.(type) {
+	case *sqlparser.Savepoint,
+		*sqlparser.SRollback,
+		*sqlparser.Release:
+		return &sqltypes.Result{}
+	}
 	if len(sbc.results) != 0 {
 		r := sbc.results[0]
 		sbc.results = sbc.results[1:]
@@ -625,10 +640,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		*sqlparser.AlterVschema,
 		*sqlparser.Use,
 		*sqlparser.OtherAdmin,
-		*sqlparser.SetTransaction,
-		*sqlparser.Savepoint,
-		*sqlparser.SRollback,
-		*sqlparser.Release:
+		*sqlparser.SetTransaction:
 		return &sqltypes.Result{}
 	}
 

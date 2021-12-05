@@ -290,8 +290,10 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, explicit
 		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
 		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 		return nil
+	case *sqlparser.AlterMigration:
+		exec.executeOnAllTablets(ctx, execResult, sql, true)
+		return nil
 	}
-	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
 	exec.executeOnAllTablets(ctx, execResult, sql, false)
 	return nil
 }
