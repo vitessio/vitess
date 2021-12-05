@@ -126,6 +126,11 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 		// If it's a scatter query, the rows returned will be
 		// more than the upper limit, but enough for the limit
 		node.Select.SetLimit(&sqlparser.Limit{Rowcount: arg})
+	case *routeGen4:
+		// The route pushes the limit regardless of the plan.
+		// If it's a scatter query, the rows returned will be
+		// more than the upper limit, but enough for the limit
+		node.Select.SetLimit(&sqlparser.Limit{Rowcount: arg})
 	case *concatenate:
 		return false, node, nil
 	}

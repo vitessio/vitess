@@ -71,9 +71,7 @@
         "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
         "Query": "select u.id as uid from `user` as u where u.id = :e_id",
         "Table": "`user`",
-        "Values": [
-          ":e_id"
-        ],
+        "Values": ":e_id",
         "Vindex": "user_index"
       }
     ]
@@ -153,9 +151,7 @@
         "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
         "Query": "select u.id as uid from `user` as u where u.id = :e_id",
         "Table": "`user`",
-        "Values": [
-          ":e_id"
-        ],
+        "Values": ":e_id",
         "Vindex": "user_index"
       }
     ]
@@ -582,9 +578,7 @@
             "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
             "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
             "Table": "`user`",
-            "Values": [
-              ":u1_col"
-            ],
+            "Values": ":u1_col",
             "Vindex": "user_index"
           }
         ]
@@ -675,9 +669,7 @@
                 "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
                 "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
                 "Table": "`user`",
-                "Values": [
-                  ":u1_col"
-                ],
+                "Values": ":u1_col",
                 "Vindex": "user_index"
               }
             ]
@@ -728,9 +720,7 @@
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
             "Query": "select 1 from `user` as u2 where u2.id = :u1_col",
             "Table": "`user`",
-            "Values": [
-              ":u1_col"
-            ],
+            "Values": ":u1_col",
             "Vindex": "user_index"
           },
           {
@@ -743,9 +733,7 @@
             "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
             "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
             "Table": "`user`",
-            "Values": [
-              ":u1_col"
-            ],
+            "Values": ":u1_col",
             "Vindex": "user_index"
           }
         ]
@@ -797,9 +785,7 @@
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
             "Query": "select 1 from `user` as u2 where u2.id = :u1_col",
             "Table": "`user`",
-            "Values": [
-              ":u1_col"
-            ],
+            "Values": ":u1_col",
             "Vindex": "user_index"
           }
         ]
@@ -814,9 +800,7 @@
         "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
         "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
         "Table": "`user`",
-        "Values": [
-          ":u1_col"
-        ],
+        "Values": ":u1_col",
         "Vindex": "user_index"
       }
     ]
@@ -896,9 +880,7 @@
         "FieldQuery": "select `weird``name`.a from `weird``name` where 1 != 1",
         "Query": "select `weird``name`.a from `weird``name` where `weird``name`.`a``b*c` = :unsharded_id",
         "Table": "`weird``name`",
-        "Values": [
-          ":unsharded_id"
-        ],
+        "Values": ":unsharded_id",
         "Vindex": "user_index"
       }
     ]
@@ -978,9 +960,7 @@
         "FieldQuery": "select 1 from `weird``name` where 1 != 1",
         "Query": "select 1 from `weird``name` where `weird``name`.`a``b*c` = :unsharded_id",
         "Table": "`weird``name`",
-        "Values": [
-          ":unsharded_id"
-        ],
+        "Values": ":unsharded_id",
         "Vindex": "user_index"
       }
     ]
@@ -1139,9 +1119,7 @@
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
-        "Values": [
-          "::__sq1"
-        ],
+        "Values": "::__sq1",
         "Vindex": "user_index"
       }
     ]
@@ -1208,9 +1186,7 @@
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
-        "Values": [
-          "::__sq1"
-        ],
+        "Values": ":__sq1",
         "Vindex": "user_index"
       }
     ]
@@ -1351,14 +1327,94 @@
 # Invalid value in IN clause
 "select id from user where id in (18446744073709551616, 1)"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (18446744073709551616, 1)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id in (18446744073709551616, 1)",
+    "Table": "`user`"
+  }
+}
 
 # Invalid value in IN clause from LHS of join
 "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1 where u1.id = 18446744073709551616",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # Invalid value in IN clause from RHS of join
 "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 18446744073709551616",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
