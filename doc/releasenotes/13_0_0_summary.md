@@ -1,12 +1,12 @@
 ## Enhancements
 
-- `vtctl ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted: `vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce`
+- `vtctl/vtctlclient ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted: `vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce`
 
 ## Major Changes
 
 ### ddl_strategy: -postpone-completion flag
 
-`ddl_strategy` (either `@@ddl_strategy` in VtGate or `-ddl_strategy` in `vtctl ApplySchema`) supports the flag `-postpone-completion`
+`ddl_strategy` (either `@@ddl_strategy` in VtGate or `-ddl_strategy` in `vtctlclient ApplySchema`) supports the flag `-postpone-completion`
 
 This flag indicates that the migration should not auto-complete. This applies for:
 
@@ -49,10 +49,10 @@ This command indicates that a migration executed with `-postpone-completion` is 
 
 ### vtctl OnlineDDL ... complete
 
-Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl`:
+Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl` or `vtctlclient`:
 
 ```shell
-vtctl OnlineDDL <keyspace> complete <uuid>
+vtctlclient OnlineDDL <keyspace> complete <uuid>
 ```
 For example:
 
