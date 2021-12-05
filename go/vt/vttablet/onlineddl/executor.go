@@ -1946,6 +1946,27 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	return alterClause, nil
 }
 
+// getCompletedMigrationByContextAndSQL chceks if there exists a completed migration with exact same
+// context and SQL as given migration. If so, it returns its UUID.
+func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onlineDDL *schema.OnlineDDL) (completedUUID string, err error) {
+	query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsByContextAndSQL,
+		sqltypes.StringBindVariable(e.keyspace),
+		sqltypes.StringBindVariable(onlineDDL.RequestContext),
+		sqltypes.StringBindVariable(onlineDDL.SQL),
+	)
+	if err != nil {
+		return "", err
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return "", err
+	}
+	for _, row := range r.Named().Rows {
+		completedUUID = row["migration_uuid"].ToString()
+	}
+	return completedUUID, nil
+}
+
 // failMigration marks a migration as failed
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, err error) error {
 	_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -1970,6 +1991,23 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	ddlAction, err := onlineDDL.GetAction()
 	if err != nil {
 		return failMigration(err)
+	}
+
+	// See if this is a duplicate submission. A submission is considered duplicate if it has the exact same
+	// migration context and DDL as a previous one. We are only interested in our scenario in a duplicate
+	// whose predecessor is "complete". If this is the case, then we can mark our own migration as
+	// implicitly "complete", too.
+	if onlineDDL.RequestContext != "" {
+		completedUUID, err := e.getCompletedMigrationByContextAndSQL(ctx, onlineDDL)
+		if err != nil {
+			return err
+		}
+		if completedUUID != "" {
+			// Yep. We mark this migration as implicitly complete, and we're done with it!
+			_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("duplicate DDL as %s for migration context %s", completedUUID, onlineDDL.RequestContext))
+			return nil
+		}
 	}
 
 	if onlineDDL.StrategySetting().IsDeclarative() {
@@ -2194,14 +2232,17 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	named := r.Named()
 	for i, row := range named.Rows {
 		onlineDDL := &schema.OnlineDDL{
-			Keyspace: row["keyspace"].ToString(),
-			Table:    row["mysql_table"].ToString(),
-			Schema:   row["mysql_schema"].ToString(),
-			SQL:      row["migration_statement"].ToString(),
-			UUID:     row["migration_uuid"].ToString(),
-			Strategy: schema.DDLStrategy(row["strategy"].ToString()),
-			Options:  row["options"].ToString(),
-			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
+			Keyspace:       row["keyspace"].ToString(),
+			Table:          row["mysql_table"].ToString(),
+			Schema:         row["mysql_schema"].ToString(),
+			SQL:            row["migration_statement"].ToString(),
+			UUID:           row["migration_uuid"].ToString(),
+			Strategy:       schema.DDLStrategy(row["strategy"].ToString()),
+			Options:        row["options"].ToString(),
+			Status:         schema.OnlineDDLStatus(row["migration_status"].ToString()),
+			Retries:        row.AsInt64("retries", 0),
+			TabletAlias:    row["tablet"].ToString(),
+			RequestContext: row["migration_context"].ToString(),
 		}
 		{
 			// We strip out any VT query comments because our simplified parser doesn't work well with comments
