@@ -106,7 +106,7 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	for _, col := range tbl.Columns {
 		var collation collations.ID
 		if sqltypes.IsText(col.Type) {
-			collation, _ = collations.Default().LookupID(col.CollationName)
+			collation, _ = collations.Local().LookupID(col.CollationName)
 		}
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),

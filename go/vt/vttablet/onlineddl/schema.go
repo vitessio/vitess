@@ -526,6 +526,7 @@ const (
 	retryMigrationHint     = "retry"
 	cancelMigrationHint    = "cancel"
 	cancelAllMigrationHint = "cancel-all"
+	completeMigrationHint  = "complete"
 )
 
 var (

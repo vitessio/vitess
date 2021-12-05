@@ -35,7 +35,11 @@ func unicodeHash(hashFunc func([]byte) []byte, key sqltypes.Value) ([]byte, erro
 	collator := collatorPool.Get().(*pooledCollator)
 	defer collatorPool.Put(collator)
 
-	norm, err := normalize(collator.col, collator.buf, key.ToBytes())
+	keyBytes, err := key.ToBytes()
+	if err != nil {
+		return nil, err
+	}
+	norm, err := normalize(collator.col, collator.buf, keyBytes)
 	if err != nil {
 		return nil, err
 	}

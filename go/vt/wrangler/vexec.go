@@ -414,7 +414,11 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 	if err != nil {
 		return nil, "", err
 	}
-	if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
+	rowBytes, err := row[1].ToBytes()
+	if err != nil {
+		return nil, "", err
+	}
+	if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 		return nil, "", err
 	}
 

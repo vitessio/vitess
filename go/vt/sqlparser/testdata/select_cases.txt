@@ -566,7 +566,7 @@ INPUT
 select strcmp(_koi8r'a', _latin1'A');
 END
 OUTPUT
-select strcmp(_koi8r as a, _latin1 'A') from dual
+select strcmp(_koi8r 'a', _latin1 'A') from dual
 END
 INPUT
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd' COLLATE latin1_general_ci,_latin1'd' COLLATE latin1_bin,2);
@@ -601,8 +601,8 @@ END
 INPUT
 select hex(convert(_ujis 0xA5FE41 using ucs2));
 END
-ERROR
-syntax error at position 34 near '0xA5FE41'
+OUTPUT
+select hex(convert(_ujis 0xA5FE41 using ucs2)) from dual
 END
 INPUT
 select 0x6a8473fc1c64ce4f2684c05a400c5e7ca4a01a like '%emailin%';
@@ -625,8 +625,8 @@ END
 INPUT
 select hex(soundex(_utf32 0x000000BF000000C0));
 END
-ERROR
-syntax error at position 45 near '0x000000BF000000C0'
+OUTPUT
+select hex(soundex(_utf32 0x000000BF000000C0)) from dual
 END
 INPUT
 select from t1 where 'cH' = s1 and s1 <> 'ch';
@@ -643,8 +643,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,3));
 END
-ERROR
-syntax error at position 44 near '0x00e400e5D800DC00'
+OUTPUT
+select hex(substr(_utf16 0x00e400e5D800DC00, 3)) from dual
 END
 INPUT
 select 1+1;
@@ -661,8 +661,8 @@ END
 INPUT
 select hex(substr(_ucs2 0x00e400e50068,2));
 END
-ERROR
-syntax error at position 39 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_ucs2 0x00e400e50068, 2)) from dual
 END
 INPUT
 select insert('txs',null,null,'hi'),insert(null,null,null,null);
@@ -769,8 +769,8 @@ END
 INPUT
 select _latin2'1'=1;
 END
-ERROR
-syntax error at position 19
+OUTPUT
+select _latin2 '1' = 1 from dual
 END
 INPUT
 select from t1 where word= 0xe4 or word=CAST(0xe4 as CHAR);
@@ -1303,8 +1303,8 @@ END
 INPUT
 select hex(_utf32 0x103344);
 END
-ERROR
-syntax error at position 27 near '0x103344'
+OUTPUT
+select hex(_utf32 0x103344) from dual
 END
 INPUT
 select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
@@ -1345,8 +1345,8 @@ END
 INPUT
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin2 0xa3, 2);
 END
-ERROR
-syntax error at position 58 near '0xa3'
+OUTPUT
+select SUBSTRING_INDEX(_latin1 'abcdabcdabcd', _latin2 0xa3, 2) from dual
 END
 INPUT
 select (ST_aswkb(cast(st_union(multipoint( point(8,6), point(1,-17679), point(-9,-9)), linestring(point(91,12), point(-77,49), point(53,-81)))as char(18)))) in ('1','2');
@@ -1460,7 +1460,7 @@ INPUT
 select strcmp(_koi8r'a', _koi8r'A');
 END
 OUTPUT
-select strcmp(_koi8r as a, _koi8r as A) from dual
+select strcmp(_koi8r 'a', _koi8r 'A') from dual
 END
 INPUT
 select t1.* from t1;
@@ -1645,8 +1645,8 @@ END
 INPUT
 select hex(a) from t1 where a = _big5 0xF9DC;
 END
-ERROR
-syntax error at position 45 near '0xF9DC'
+OUTPUT
+select hex(a) from t1 where a = _big5 0xF9DC
 END
 INPUT
 select count(distinct n2), n1 from t1 group by n1;
@@ -2024,7 +2024,7 @@ INPUT
 select collation(lcase(_latin2'a')), coercibility(lcase(_latin2'a'));
 END
 OUTPUT
-select collation(lcase(_latin2 as a)), coercibility(lcase(_latin2 as a)) from dual
+select collation(lcase(_latin2 'a')), coercibility(lcase(_latin2 'a')) from dual
 END
 INPUT
 select date_format('1999-12-31','%x-%v'),date_format('2000-01-01','%x-%v');
@@ -2215,8 +2215,8 @@ END
 INPUT
 select hex(concat(_utf32 0x0410 collate utf32_general_ci, 0x61));
 END
-ERROR
-syntax error at position 32 near '0x0410'
+OUTPUT
+select hex(concat(_utf32 0x0410 collate utf32_general_ci, 0x61)) from dual
 END
 INPUT
 select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 a, t2 b where (a.token = 'a71250b7ed780f6ef3185bfffe027983') and (a.count = b.id) order by a.id;
@@ -2233,8 +2233,8 @@ END
 INPUT
 select strcmp(_koi8r'a' COLLATE koi8r_general_ci, _koi8r'A');
 END
-ERROR
-syntax error at position 32 near 'COLLATE'
+OUTPUT
+select strcmp(_koi8r 'a' collate koi8r_general_ci, _koi8r 'A') from dual
 END
 INPUT
 select from v1 group by id limit 0;
@@ -2372,7 +2372,7 @@ INPUT
 select collation(substring(_latin2'ab',1)), coercibility(substring(_latin2'ab',1));
 END
 OUTPUT
-select collation(substr(_latin2 as ab, 1)), coercibility(substr(_latin2 as ab, 1)) from dual
+select collation(substr(_latin2 'ab', 1)), coercibility(substr(_latin2 'ab', 1)) from dual
 END
 INPUT
 select ST_astext(geom), ST_area(geom),ST_area(ST_buffer(geom,2)) from t1;
@@ -2533,8 +2533,8 @@ END
 INPUT
 select _cp1251'andre%' like convert('andre�%' using cp1251) escape '�';
 END
-ERROR
-syntax error at position 28 near 'like'
+OUTPUT
+select _cp1251 'andre%' like convert('andre�%' using cp1251) escape '�' from dual
 END
 INPUT
 select a from t3 order by a desc limit 300,10;
@@ -2600,7 +2600,7 @@ INPUT
 select collation(lpad(_latin2'a',4,_latin2'b')), coercibility(lpad(_latin2'a',4,_latin2'b'));
 END
 OUTPUT
-select collation(lpad(_latin2 as a, 4, _latin2 as b)), coercibility(lpad(_latin2 as a, 4, _latin2 as b)) from dual
+select collation(lpad(_latin2 'a', 4, _latin2 'b')), coercibility(lpad(_latin2 'a', 4, _latin2 'b')) from dual
 END
 INPUT
 select DAYOFYEAR("1997-03-03"), WEEK("1998-03-03"), QUARTER(980303);
@@ -2678,7 +2678,7 @@ INPUT
 select collation(quote(_latin2'ab')), coercibility(quote(_latin2'ab'));
 END
 OUTPUT
-select collation(quote(_latin2 as ab)), coercibility(quote(_latin2 as ab)) from dual
+select collation(quote(_latin2 'ab')), coercibility(quote(_latin2 'ab')) from dual
 END
 INPUT
 select group_concat(f1) from t1;
@@ -2761,8 +2761,8 @@ END
 INPUT
 select hex(weight_string(_utf16 0xD800DC01 collate utf16_unicode_ci));
 END
-ERROR
-syntax error at position 43 near '0xD800DC01'
+OUTPUT
+select hex(weight_string(_utf16 0xD800DC01 collate utf16_unicode_ci)) from dual
 END
 INPUT
 select from t4 where a+0 > 90;
@@ -2798,7 +2798,7 @@ INPUT
 select collation(trim(BOTH _latin2' ' FROM _latin2'a')), coercibility(trim(BOTH _latin2'a' FROM _latin2'a'));
 END
 ERROR
-syntax error at position 38 near ' '
+syntax error at position 35 near '_latin2'
 END
 INPUT
 select hex(weight_string(ch)) w, name from t1 order by ch;
@@ -2828,7 +2828,7 @@ INPUT
 select collation(substring(_latin2'a',1,1)), coercibility(substring(_latin2'a',1,1));
 END
 OUTPUT
-select collation(substr(_latin2 as a, 1, 1)), coercibility(substr(_latin2 as a, 1, 1)) from dual
+select collation(substr(_latin2 'a', 1, 1)), coercibility(substr(_latin2 'a', 1, 1)) from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaa',4);
@@ -2893,8 +2893,8 @@ END
 INPUT
 select hex(left(_utf16 0xD800DC00D87FDFFF, 1));
 END
-ERROR
-syntax error at position 42 near '0xD800DC00D87FDFFF'
+OUTPUT
+select hex(left(_utf16 0xD800DC00D87FDFFF, 1)) from dual
 END
 INPUT
 select timestampdiff(QUARTER, '2002-05-01', '2001-01-01') as a;
@@ -3289,8 +3289,8 @@ END
 INPUT
 select hex(soundex(_utf32 0x000004100000041100000412));
 END
-ERROR
-syntax error at position 53 near '0x000004100000041100000412'
+OUTPUT
+select hex(soundex(_utf32 0x000004100000041100000412)) from dual
 END
 INPUT
 select from t1 where 'K' > s1 and s1 = 'Y';
@@ -3529,8 +3529,8 @@ END
 INPUT
 select hex(substr(_utf32 0x000000e4000000e500000068,-3));
 END
-ERROR
-syntax error at position 52 near '0x000000e4000000e500000068'
+OUTPUT
+select hex(substr(_utf32 0x000000e4000000e500000068, -3)) from dual
 END
 INPUT
 select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121');
@@ -3602,7 +3602,7 @@ INPUT
 select collation(concat_ws(_latin2'a',_latin2'b')), coercibility(concat_ws(_latin2'a',_latin2'b'));
 END
 OUTPUT
-select collation(concat_ws(_latin2 as a, _latin2 as b)), coercibility(concat_ws(_latin2 as a, _latin2 as b)) from dual
+select collation(concat_ws(_latin2 'a', _latin2 'b')), coercibility(concat_ws(_latin2 'a', _latin2 'b')) from dual
 END
 INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 1)'));
@@ -3619,8 +3619,8 @@ END
 INPUT
 select hex(_utf32 X'103344');
 END
-ERROR
-syntax error at position 28 near '103344'
+OUTPUT
+select hex(_utf32 X'103344') from dual
 END
 INPUT
 select substring('hello', 4294967296, 1);
@@ -3644,7 +3644,7 @@ INPUT
 select FIELD(_latin2'b','A','B');
 END
 OUTPUT
-select FIELD(_latin2 as b, 'A', 'B') from dual
+select FIELD(_latin2 'b', 'A', 'B') from dual
 END
 INPUT
 select from t1 where name='patnom' and author='patauteur' and category=0;
@@ -3793,8 +3793,8 @@ END
 INPUT
 select hex(weight_string(_utf32 0x10001));
 END
-ERROR
-syntax error at position 40 near '0x10001'
+OUTPUT
+select hex(weight_string(_utf32 0x10001)) from dual
 END
 INPUT
 select t2.isbn,city,@bar:=t1.libname,count(distinct t1.libname) as a from t3 left join t1 on t3.libname=t1.libname left join t2 on t3.isbn=t2.isbn group by city having count(distinct t1.libname) > 1;
@@ -3841,8 +3841,8 @@ END
 INPUT
 select hex(substr(_utf32 0x000000e4000000e500000068,3));
 END
-ERROR
-syntax error at position 52 near '0x000000e4000000e500000068'
+OUTPUT
+select hex(substr(_utf32 0x000000e4000000e500000068, 3)) from dual
 END
 INPUT
 select concat('|',c,'|') from t1;
@@ -3961,8 +3961,8 @@ END
 INPUT
 select _latin1'B' in (_latin1'a',_latin2'b');
 END
-ERROR
-syntax error at position 44 near 'b'
+OUTPUT
+select _latin1 'B' in (_latin1 'a', _latin2 'b') from dual
 END
 INPUT
 select right('hello', -4294967297);
@@ -4039,8 +4039,8 @@ END
 INPUT
 select locate(_ujis 0xa2a1,_ujis 0xa1a2a1a3 collate ujis_bin);
 END
-ERROR
-syntax error at position 27 near '0xa2a1'
+OUTPUT
+select locate(_ujis 0xa2a1, _ujis 0xa1a2a1a3 collate ujis_bin) from dual
 END
 INPUT
 select 1 as a union all select 1 union all select 2 union select 1 union all select 2;
@@ -4057,8 +4057,8 @@ END
 INPUT
 select _koi8r'a' = _koi8r'A';
 END
-ERROR
-syntax error at position 19
+OUTPUT
+select _koi8r 'a' = _koi8r 'A' from dual
 END
 INPUT
 select collation(char(130)), coercibility(hex(130));
@@ -4082,7 +4082,7 @@ INPUT
 select collation(make_set(255,_latin2'a',_latin2'b',_latin2'c')), coercibility(make_set(255,_latin2'a',_latin2'b',_latin2'c'));
 END
 OUTPUT
-select collation(make_set(255, _latin2 as a, _latin2 as b, _latin2 as c)), coercibility(make_set(255, _latin2 as a, _latin2 as b, _latin2 as c)) from dual
+select collation(make_set(255, _latin2 'a', _latin2 'b', _latin2 'c')), coercibility(make_set(255, _latin2 'a', _latin2 'b', _latin2 'c')) from dual
 END
 INPUT
 select a$1, $b, c$ from mysqltest.$test1;
@@ -4171,8 +4171,8 @@ END
 INPUT
 select concat(a,if(b<10,_ucs2 0x00C0,_ucs2 0x0062)) from t1;
 END
-ERROR
-syntax error at position 37 near '0x00C0'
+OUTPUT
+select concat(a, if(b < 10, _ucs2 0x00C0, _ucs2 0x0062)) from t1
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaaa',2);
@@ -4351,8 +4351,8 @@ END
 INPUT
 select _koi8r 0xFF regexp _koi8r '[[:upper:]]' COLLATE koi8r_bin;
 END
-ERROR
-syntax error at position 19 near '0xFF'
+OUTPUT
+select _koi8r 0xFF regexp _koi8r '[[:upper:]]' collate koi8r_bin from dual
 END
 INPUT
 select from t1 left join t2 on (t1.i=t2.i) left join t3 on (t2.i=t3.i);
@@ -4411,8 +4411,8 @@ END
 INPUT
 select _koi8r'a' = _koi8r'A' COLLATE koi8r_general_ci;
 END
-ERROR
-syntax error at position 19
+OUTPUT
+select _koi8r 'a' = _koi8r 'A' collate koi8r_general_ci from dual
 END
 INPUT
 select fld3 from t2 where fld3 like "%cultivation";
@@ -4472,7 +4472,7 @@ INPUT
 select collation(group_concat(a,_koi8r'test')) from t1;
 END
 OUTPUT
-select collation(group_concat(a, _koi8r as test)) from t1
+select collation(group_concat(a, _koi8r 'test')) from t1
 END
 INPUT
 select from t1 where match title against ('test' in boolean mode);
@@ -4651,8 +4651,8 @@ END
 INPUT
 select char_length(_utf16 0xD87FDFFF), octet_length(_utf16 0xD87FDFFF);
 END
-ERROR
-syntax error at position 37 near '0xD87FDFFF'
+OUTPUT
+select char_length(_utf16 0xD87FDFFF), octet_length(_utf16 0xD87FDFFF) from dual
 END
 INPUT
 select min(a) from t1i;
@@ -5071,8 +5071,8 @@ END
 INPUT
 select strcmp(_koi8r'a' COLLATE koi8r_general_ci, _koi8r'A' COLLATE koi8r_bin);
 END
-ERROR
-syntax error at position 32 near 'COLLATE'
+OUTPUT
+select strcmp(_koi8r 'a' collate koi8r_general_ci, _koi8r 'A' collate koi8r_bin) from dual
 END
 INPUT
 select from t1 union distinct select from t2;
@@ -5083,8 +5083,8 @@ END
 INPUT
 select hex(soundex(_ucs2 0x00BF00C0));
 END
-ERROR
-syntax error at position 36 near '0x00BF00C0'
+OUTPUT
+select hex(soundex(_ucs2 0x00BF00C0)) from dual
 END
 INPUT
 select insert('hello', -4294967297, 1, 'hi');
@@ -5161,8 +5161,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,-3));
 END
-ERROR
-syntax error at position 40 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_utf16 0x00e400e50068, -3)) from dual
 END
 INPUT
 select collation(conv(130,16,10)), coercibility(conv(130,16,10));
@@ -5269,8 +5269,8 @@ END
 INPUT
 select _cp866'aaaaaaaaa' like _cp866'%aaaa%' collate cp866_bin;
 END
-ERROR
-syntax error at position 30 near 'like'
+OUTPUT
+select _cp866 'aaaaaaaaa' like _cp866 '%aaaa%' collate cp866_bin from dual
 END
 INPUT
 select position("0" in "baaa" in (1)),position("0" in "1" in (1,2,3)),position("sql" in ("mysql"));
@@ -5432,7 +5432,7 @@ INPUT
 select concat(_latin1'a',_latin2'a');
 END
 OUTPUT
-select concat(_latin1 'a', _latin2 as a) from dual
+select concat(_latin1 'a', _latin2 'a') from dual
 END
 INPUT
 select find_in_set("b","a,b,c"),find_in_set("c","a,b,c"),find_in_set("dd","a,bbb,dd"),find_in_set("bbb","a,bbb,dd");
@@ -5467,14 +5467,14 @@ END
 INPUT
 select concat(_latin1'a',_latin2'b',_latin5'c' collate latin5_turkish_ci);
 END
-ERROR
-syntax error at position 55 near 'collate'
+OUTPUT
+select concat(_latin1 'a', _latin2 'b', _latin5 'c' collate latin5_turkish_ci) from dual
 END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,2));
 END
-ERROR
-syntax error at position 44 near '0x00e400e5D800DC00'
+OUTPUT
+select hex(substr(_utf16 0x00e400e5D800DC00, 2)) from dual
 END
 INPUT
 select week("2000-01-01",0) as '2000', week("2001-01-01",0) as '2001', week("2002-01-01",0) as '2002',week("2003-01-01",0) as '2003', week("2004-01-01",0) as '2004', week("2005-01-01",0) as '2005', week("2006-01-01",0) as '2006';
@@ -5527,8 +5527,8 @@ END
 INPUT
 select 5 between 0 and 10 between 0 and 1,(5 between 0 and 10) between 0 and 1;
 END
-ERROR
-syntax error at position 34 near 'between'
+OUTPUT
+select 5 between 0 and (10 between 0 and 1), 5 between 0 and 10 between 0 and 1 from dual
 END
 INPUT
 select from (t1 join t2 on t1.b=t2.b) natural join (t3 natural join t4);
@@ -5618,7 +5618,7 @@ INPUT
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin2'd',2);
 END
 OUTPUT
-select SUBSTRING_INDEX(_latin1 'abcdabcdabcd', _latin2 as d, 2) from dual
+select SUBSTRING_INDEX(_latin1 'abcdabcdabcd', _latin2 'd', 2) from dual
 END
 INPUT
 select from t1 where tt like 'AA%';
@@ -5731,8 +5731,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,-2));
 END
-ERROR
-syntax error at position 40 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_utf16 0x00e400e50068, -2)) from dual
 END
 INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 2)'));
@@ -6067,8 +6067,8 @@ END
 INPUT
 select cast(_koi8r'��' AS nchar) as c1, cast(_koi8r'� ' AS nchar) as c2, cast(_koi8r'���' AS nchar(2)) as c3, cast(_koi8r'� ' AS nchar(2)) as c4, cast(_koi8r'�' AS nchar(2)) as c5;
 END
-ERROR
-syntax error at position 27 near '��'
+OUTPUT
+select convert(_koi8r '��', nchar) as c1, convert(_koi8r '� ', nchar) as c2, convert(_koi8r '���', nchar(2)) as c3, convert(_koi8r '� ', nchar(2)) as c4, convert(_koi8r '�', nchar(2)) as c5 from dual
 END
 INPUT
 select date_add(cast('2004-12-30 12:00:00' as date), interval 0 hour);
@@ -6709,8 +6709,8 @@ END
 INPUT
 select _koi8r 0xFF regexp _koi8r '[[:lower:]]' COLLATE koi8r_bin;
 END
-ERROR
-syntax error at position 19 near '0xFF'
+OUTPUT
+select _koi8r 0xFF regexp _koi8r '[[:lower:]]' collate koi8r_bin from dual
 END
 INPUT
 select aes_decrypt(aes_encrypt("","a"),"a");
@@ -6830,7 +6830,7 @@ INPUT
 select FIELD('b',_latin2'A','B');
 END
 OUTPUT
-select FIELD('b', _latin2 as A, 'B') from dual
+select FIELD('b', _latin2 'A', 'B') from dual
 END
 INPUT
 select compress("");
@@ -6991,8 +6991,8 @@ END
 INPUT
 select _koi8r'a' = _latin1'A';
 END
-ERROR
-syntax error at position 19
+OUTPUT
+select _koi8r 'a' = _latin1 'A' from dual
 END
 INPUT
 select from t1 where not(a != 1);
@@ -7105,8 +7105,8 @@ END
 INPUT
 select _latin1'B' in (_latin2'a',_latin1'b');
 END
-ERROR
-syntax error at position 33 near 'a'
+OUTPUT
+select _latin1 'B' in (_latin2 'a', _latin1 'b') from dual
 END
 INPUT
 select friedrich from (select 1 as otto) as t1;
@@ -7243,8 +7243,8 @@ END
 INPUT
 select collation(group_concat(a,_koi8r 0xC1C2)) from t1;
 END
-ERROR
-syntax error at position 46 near '0xC1C2'
+OUTPUT
+select collation(group_concat(a, _koi8r 0xC1C2)) from t1
 END
 INPUT
 select benchmark(NULL, 1+1);
@@ -7309,8 +7309,8 @@ END
 INPUT
 select CONVERT(_koi8r'����' USING utf8mb4) LIKE CONVERT(_koi8r'����' USING utf8mb4);
 END
-ERROR
-syntax error at position 36 near '����'
+OUTPUT
+select convert(_koi8r '����' using utf8mb4) like convert(_koi8r '����' using utf8mb4) from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 MONTH);
@@ -7610,7 +7610,7 @@ INPUT
 select concat(_latin1'a',_latin2'a',_latin5'a',_latin7'a');
 END
 OUTPUT
-select concat(_latin1 'a', _latin2 as a, _latin5 as a, _latin7 as a) from dual
+select concat(_latin1 'a', _latin2 'a', _latin5 'a', _latin7 'a') from dual
 END
 INPUT
 select a as d from t limit 1;
@@ -7903,8 +7903,8 @@ END
 INPUT
 select _koi8r 0xF7 regexp _koi8r '[[:alpha:]]';
 END
-ERROR
-syntax error at position 19 near '0xF7'
+OUTPUT
+select _koi8r 0xF7 regexp _koi8r '[[:alpha:]]' from dual
 END
 INPUT
 select userid,count(*) from t1 group by userid having (count(*)+1) IN (4,3) order by userid desc;
@@ -7945,8 +7945,8 @@ END
 INPUT
 select concat(a,if(b>10,_ucs2 0x00C0,_ucs2 0x0062)) from t1;
 END
-ERROR
-syntax error at position 37 near '0x00C0'
+OUTPUT
+select concat(a, if(b > 10, _ucs2 0x00C0, _ucs2 0x0062)) from t1
 END
 INPUT
 select 1, max(a) from t1m where 1=99;
@@ -8084,7 +8084,7 @@ INPUT
 select collation(trim(_latin2' a ')), coercibility(trim(_latin2' a '));
 END
 OUTPUT
-select collation(trim(_latin2 as ` a `)), coercibility(trim(_latin2 as ` a `)) from dual
+select collation(trim(_latin2 ' a ')), coercibility(trim(_latin2 ' a ')) from dual
 END
 INPUT
 select count(distinct case when id<=63 then id end) from tb;
@@ -8251,8 +8251,8 @@ END
 INPUT
 select _utf32'a' collate utf32_general_ci = 0xfffd;
 END
-ERROR
-syntax error at position 25 near 'collate'
+OUTPUT
+select _utf32 'a' collate utf32_general_ci = 0xfffd from dual
 END
 INPUT
 select round(1.5, -2147483649), round(1.5, 2147483648);
@@ -8377,8 +8377,8 @@ END
 INPUT
 select hex(convert(_big5 0xC84041 using ucs2));
 END
-ERROR
-syntax error at position 34 near '0xC84041'
+OUTPUT
+select hex(convert(_big5 0xC84041 using ucs2)) from dual
 END
 INPUT
 select quote(concat('abc'', 'cba'));
@@ -8510,7 +8510,7 @@ INPUT
 select collation(ltrim(_latin2' a ')), coercibility(ltrim(_latin2' a '));
 END
 OUTPUT
-select collation(ltrim(_latin2 as ` a `)), coercibility(ltrim(_latin2 as ` a `)) from dual
+select collation(ltrim(_latin2 ' a ')), coercibility(ltrim(_latin2 ' a ')) from dual
 END
 INPUT
 select hex(weight_string('ab' as char(1)));
@@ -9128,7 +9128,7 @@ INPUT
 select collation(left(_latin2'a',1)), coercibility(left(_latin2'a',1));
 END
 OUTPUT
-select collation(left(_latin2 as a, 1)), coercibility(left(_latin2 as a, 1)) from dual
+select collation(left(_latin2 'a', 1)), coercibility(left(_latin2 'a', 1)) from dual
 END
 INPUT
 select @tlwa < @tlwb;
@@ -9409,8 +9409,8 @@ END
 INPUT
 select hex(substr(_ucs2 0x00e400e50068,-1));
 END
-ERROR
-syntax error at position 39 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_ucs2 0x00e400e50068, -1)) from dual
 END
 INPUT
 select convert(_latin1'G�nter Andr�' using utf8) like CONVERT(_latin1'G�NTER%' USING utf8);
@@ -9499,8 +9499,8 @@ END
 INPUT
 select convert(_koi8r'�' using utf8mb4) < convert(_koi8r'�' using utf8mb4);
 END
-ERROR
-syntax error at position 27 near '�'
+OUTPUT
+select convert(_koi8r '�' using utf8mb4) < convert(_koi8r '�' using utf8mb4) from dual
 END
 INPUT
 select from t4;
@@ -9589,8 +9589,8 @@ END
 INPUT
 select hex(substr(_ucs2 0x00e400e50068,3));
 END
-ERROR
-syntax error at position 39 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_ucs2 0x00e400e50068, 3)) from dual
 END
 INPUT
 select char(0xd18f using utf8);
@@ -9625,8 +9625,8 @@ END
 INPUT
 select hex(soundex(_utf16 0x00BF00C0));
 END
-ERROR
-syntax error at position 37 near '0x00BF00C0'
+OUTPUT
+select hex(soundex(_utf16 0x00BF00C0)) from dual
 END
 INPUT
 select timestampdiff(month,'2003-02-28','2004-02-29');
@@ -9745,8 +9745,8 @@ END
 INPUT
 select _koi8r'a' COLLATE koi8r_general_ci LIKE _koi8r'A' COLLATE koi8r_bin;
 END
-ERROR
-syntax error at position 25 near 'COLLATE'
+OUTPUT
+select _koi8r 'a' collate koi8r_general_ci like _koi8r 'A' collate koi8r_bin from dual
 END
 INPUT
 select from renamed_general_log;
@@ -9883,8 +9883,8 @@ END
 INPUT
 select _koi8r'a' COLLATE koi8r_general_ci LIKE _koi8r'A';
 END
-ERROR
-syntax error at position 25 near 'COLLATE'
+OUTPUT
+select _koi8r 'a' collate koi8r_general_ci like _koi8r 'A' from dual
 END
 INPUT
 select hex(l), hex(r) from t1;
@@ -9997,8 +9997,8 @@ END
 INPUT
 select concat(a,if(b<10,_ucs2 0x0061,_ucs2 0x0062)) from t1;
 END
-ERROR
-syntax error at position 37 near '0x0061'
+OUTPUT
+select concat(a, if(b < 10, _ucs2 0x0061, _ucs2 0x0062)) from t1
 END
 INPUT
 select from t1 order by name;
@@ -10087,8 +10087,8 @@ END
 INPUT
 select hex(substr(_ucs2 0x00e400e50068,-2));
 END
-ERROR
-syntax error at position 39 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_ucs2 0x00e400e50068, -2)) from dual
 END
 INPUT
 select count(*) from t1 where v='a ';
@@ -10166,7 +10166,7 @@ INPUT
 select concat_ws(_latin1'a',_latin2'a');
 END
 OUTPUT
-select concat_ws(_latin1 'a', _latin2 as a) from dual
+select concat_ws(_latin1 'a', _latin2 'a') from dual
 END
 INPUT
 select count(*) from t1 where v between 'a' and 'a ' and v between 'a ' and 'b;
@@ -10369,8 +10369,8 @@ END
 INPUT
 select _ujis 0xa1a2a1a3 like concat(_ujis'%',_ujis 0xa2a1, _ujis'%') collate ujis_bin;
 END
-ERROR
-syntax error at position 24 near '0xa1a2a1a3'
+OUTPUT
+select _ujis 0xa1a2a1a3 like concat(_ujis '%', _ujis 0xa2a1, _ujis '%') collate ujis_bin from dual
 END
 INPUT
 select concat(a, if(b>10, 'x' 'x', 'y' 'y')) from t1;
@@ -10598,7 +10598,7 @@ INPUT
 select 1=_latin2'1';
 END
 OUTPUT
-select 1 = _latin2 as `1` from dual
+select 1 = _latin2 '1' from dual
 END
 INPUT
 select from information_schema.collations order by id limit 1;
@@ -10939,8 +10939,8 @@ END
 INPUT
 select _koi8r'a' LIKE _koi8r'A';
 END
-ERROR
-syntax error at position 22 near 'LIKE'
+OUTPUT
+select _koi8r 'a' like _koi8r 'A' from dual
 END
 INPUT
 select from (select from t1 union select from t1) a;
@@ -11065,8 +11065,8 @@ END
 INPUT
 select hex(substr(_utf32 0x000000e4000000e500000068,-1));
 END
-ERROR
-syntax error at position 52 near '0x000000e4000000e500000068'
+OUTPUT
+select hex(substr(_utf32 0x000000e4000000e500000068, -1)) from dual
 END
 INPUT
 select cast(9223372036854775808 as unsigned)+1;
@@ -11612,7 +11612,7 @@ INPUT
 select concat(_latin1'a',_latin2'a',_latin5'a');
 END
 OUTPUT
-select concat(_latin1 'a', _latin2 as a, _latin5 as a) from dual
+select concat(_latin1 'a', _latin2 'a', _latin5 'a') from dual
 END
 INPUT
 select 1.0<=>0.0,0.0<=>NULL,NULL<=>0.0;
@@ -11629,14 +11629,14 @@ END
 INPUT
 select _koi8r'a' COLLATE koi8r_general_ci = _koi8r'A';
 END
-ERROR
-syntax error at position 25 near 'COLLATE'
+OUTPUT
+select _koi8r 'a' collate koi8r_general_ci = _koi8r 'A' from dual
 END
 INPUT
 select _koi8r'a' LIKE _koi8r'A' COLLATE koi8r_bin;
 END
-ERROR
-syntax error at position 22 near 'LIKE'
+OUTPUT
+select _koi8r 'a' like _koi8r 'A' collate koi8r_bin from dual
 END
 INPUT
 select from t1 where str is not null order by id;
@@ -11707,8 +11707,8 @@ END
 INPUT
 select hex(_utf32 0x44);
 END
-ERROR
-syntax error at position 23 near '0x44'
+OUTPUT
+select hex(_utf32 0x44) from dual
 END
 INPUT
 select timestampdiff(SQL_TSI_WEEK, '2001-02-01', '2001-05-01') as a;
@@ -11846,7 +11846,7 @@ INPUT
 select collation(soundex(_latin2'ab')), coercibility(soundex(_latin2'ab'));
 END
 OUTPUT
-select collation(soundex(_latin2 as ab)), coercibility(soundex(_latin2 as ab)) from dual
+select collation(soundex(_latin2 'ab')), coercibility(soundex(_latin2 'ab')) from dual
 END
 INPUT
 select distinct t1.a from t1, t2 where t1.b = t2.b order by 1;
@@ -12019,8 +12019,8 @@ END
 INPUT
 select locate(_ujis 0xa2a1,_ujis 0xa1a2a1a3);
 END
-ERROR
-syntax error at position 27 near '0xa2a1'
+OUTPUT
+select locate(_ujis 0xa2a1, _ujis 0xa1a2a1a3) from dual
 END
 INPUT
 select a1,a2,b, max(c) from t2 where a1 = 'z' or a1 = 'b' or a1 = 'd' group by a1,a2,b;
@@ -12091,14 +12091,14 @@ END
 INPUT
 select hex(soundex(_ucs2 0x041004110412));
 END
-ERROR
-syntax error at position 40 near '0x041004110412'
+OUTPUT
+select hex(soundex(_ucs2 0x041004110412)) from dual
 END
 INPUT
 select concat(a,if(b>10,_ucs2 0x0062,_ucs2 0x00C0)) from t1;
 END
-ERROR
-syntax error at position 37 near '0x0062'
+OUTPUT
+select concat(a, if(b > 10, _ucs2 0x0062, _ucs2 0x00C0)) from t1
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_slovenian_ci;
@@ -12133,8 +12133,8 @@ END
 INPUT
 select hex(_utf16 0x113344);
 END
-ERROR
-syntax error at position 27 near '0x113344'
+OUTPUT
+select hex(_utf16 0x113344) from dual
 END
 INPUT
 select a1,a2,b,min(c),max(c) from t1 where (a1 >= 'c' or a2 < 'b') and (b > 'a') group by a1,a2,b;
@@ -12247,8 +12247,8 @@ END
 INPUT
 select CONVERT(_koi8r'����' USING utf8) LIKE CONVERT(_koi8r'����' USING utf8);
 END
-ERROR
-syntax error at position 36 near '����'
+OUTPUT
+select convert(_koi8r '����' using utf8) like convert(_koi8r '����' using utf8) from dual
 END
 INPUT
 select - a from t1;
@@ -12271,8 +12271,8 @@ END
 INPUT
 select hex(_utf16 0x44);
 END
-ERROR
-syntax error at position 23 near '0x44'
+OUTPUT
+select hex(_utf16 0x44) from dual
 END
 INPUT
 select ROUTINE_NAME from information_schema.routines where routine_schema='test';
@@ -12361,8 +12361,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,1));
 END
-ERROR
-syntax error at position 40 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_utf16 0x00e400e50068, 1)) from dual
 END
 INPUT
 select concat(a, if(b>10, _utf8 0x78, _utf8 0x79)) from t1;
@@ -12487,8 +12487,8 @@ END
 INPUT
 select hex(weight_string(_utf32 0x10000 collate utf32_unicode_ci));
 END
-ERROR
-syntax error at position 40 near '0x10000'
+OUTPUT
+select hex(weight_string(_utf32 0x10000 collate utf32_unicode_ci)) from dual
 END
 INPUT
 select mbrcoveredby(ST_GeomFromText("point(2 4)"), ST_GeomFromText("polygon((2 2, 10 2, 10 10, 2 10, 2 2))"));
@@ -12763,8 +12763,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,3));
 END
-ERROR
-syntax error at position 40 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_utf16 0x00e400e50068, 3)) from dual
 END
 INPUT
 select @@sql_mode into @full_mode;
@@ -12889,8 +12889,8 @@ END
 INPUT
 select _latin2'B' between _latin1'a' and _latin1'b';
 END
-ERROR
-syntax error at position 26 near 'between'
+OUTPUT
+select _latin2 'B' between _latin1 'a' and _latin1 'b' from dual
 END
 INPUT
 select release_lock('bug27638');
@@ -13076,7 +13076,7 @@ INPUT
 select collation(trim(LEADING _latin2' ' FROM _latin2'a')), coercibility(trim(LEADING _latin2'a' FROM _latin2'a'));
 END
 ERROR
-syntax error at position 41 near ' '
+syntax error at position 38 near '_latin2'
 END
 INPUT
 select from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND c2.active = 'Yes' WHERE m.pid=1 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
@@ -13118,7 +13118,7 @@ INPUT
 select HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 | _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 ^ _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 & _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(~ _binary 0x19c9bbcce9e0a88f5212572b0c5b9e6d0), HEX(~ _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2);
 END
 OUTPUT
-select HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 | _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 ^ _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 & _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(~ _binary 0x19c9bbcce9e0a88f5212572b0c5b9e6d0), HEX(~ _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2) from dual
+select HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 | _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 ^ _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(0x19c9bbcce9e0a88f5212572b0c5b9e6d0 & _binary 0x13c19e5cfdf03b19518cbe3d65faf10d2), HEX(~_binary 0x19c9bbcce9e0a88f5212572b0c5b9e6d0), HEX(~_binary 0x13c19e5cfdf03b19518cbe3d65faf10d2) from dual
 END
 INPUT
 select min(a3) from t1 where a2 = 2 and a3 >= 'CHI' and a3 = 'MIN';
@@ -13292,7 +13292,7 @@ INPUT
 select FIELD('1',_latin2'3','2',1);
 END
 OUTPUT
-select FIELD('1', _latin2 as `3`, '2', 1) from dual
+select FIELD('1', _latin2 '3', '2', 1) from dual
 END
 INPUT
 select date_format(d,"%d") from t1 order by 1;
@@ -13333,8 +13333,8 @@ END
 INPUT
 select hex(substr(_ucs2 0x00e400e50068,-3));
 END
-ERROR
-syntax error at position 39 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_ucs2 0x00e400e50068, -3)) from dual
 END
 INPUT
 select -1,-11,-101,-1001,-10001,-100001,-1000001,-10000001,-100000001,-1000000001,-10000000001,-100000000001,-1000000000001,-10000000000001,-100000000000001,-1000000000000001,-10000000000000001,-100000000000000001,-1000000000000000001,-10000000000000000001;
@@ -13682,7 +13682,7 @@ INPUT
 select collation(rpad(_latin2'a',4,_latin2'b')), coercibility(rpad(_latin2'a',4,_latin2'b'));
 END
 OUTPUT
-select collation(rpad(_latin2 as a, 4, _latin2 as b)), coercibility(rpad(_latin2 as a, 4, _latin2 as b)) from dual
+select collation(rpad(_latin2 'a', 4, _latin2 'b')), coercibility(rpad(_latin2 'a', 4, _latin2 'b')) from dual
 END
 INPUT
 select right('hello', 4294967297);
@@ -13939,8 +13939,8 @@ END
 INPUT
 select hex(soundex(_utf16 0x041004110412));
 END
-ERROR
-syntax error at position 41 near '0x041004110412'
+OUTPUT
+select hex(soundex(_utf16 0x041004110412)) from dual
 END
 INPUT
 select hex(s1), hex(convert(s1 using utf8)) from t1 order by binary s1;
@@ -13963,8 +13963,8 @@ END
 INPUT
 select hex(weight_string(_utf16 0xD800DC00 collate utf16_unicode_ci));
 END
-ERROR
-syntax error at position 43 near '0xD800DC00'
+OUTPUT
+select hex(weight_string(_utf16 0xD800DC00 collate utf16_unicode_ci)) from dual
 END
 INPUT
 select from information_schema.tables where table_name = NULL;
@@ -14113,8 +14113,8 @@ END
 INPUT
 select hex(_utf16 0x3344);
 END
-ERROR
-syntax error at position 25 near '0x3344'
+OUTPUT
+select hex(_utf16 0x3344) from dual
 END
 INPUT
 select round(-5000111000111000155,-1);
@@ -14203,8 +14203,8 @@ END
 INPUT
 select _koi8r'a' COLLATE koi8r_bin = _koi8r'A';
 END
-ERROR
-syntax error at position 25 near 'COLLATE'
+OUTPUT
+select _koi8r 'a' collate koi8r_bin = _koi8r 'A' from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_danish_ci;
@@ -14299,8 +14299,8 @@ END
 INPUT
 select _koi8r'a' COLLATE koi8r_bin = _koi8r'A' COLLATE koi8r_general_ci;
 END
-ERROR
-syntax error at position 25 near 'COLLATE'
+OUTPUT
+select _koi8r 'a' collate koi8r_bin = _koi8r 'A' collate koi8r_general_ci from dual
 END
 INPUT
 select from t1 where MATCH(a,b) AGAINST ("indexes" IN NATURAL LANGUAGE MODE);
@@ -14371,8 +14371,8 @@ END
 INPUT
 select strcmp(_koi8r'a', _koi8r'A' COLLATE koi8r_general_ci);
 END
-ERROR
-syntax error at position 43 near 'COLLATE'
+OUTPUT
+select strcmp(_koi8r 'a', _koi8r 'A' collate koi8r_general_ci) from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaa',-3);
@@ -14528,7 +14528,7 @@ INPUT
 select collation(reverse(_latin2'ab')), coercibility(reverse(_latin2'ab'));
 END
 OUTPUT
-select collation(reverse(_latin2 as ab)), coercibility(reverse(_latin2 as ab)) from dual
+select collation(reverse(_latin2 'ab')), coercibility(reverse(_latin2 'ab')) from dual
 END
 INPUT
 select cast(-2 as unsigned), 18446744073709551614, -2;
@@ -14708,7 +14708,7 @@ INPUT
 select _latin1'1'=_latin2'1';
 END
 OUTPUT
-select _latin1 '1' = _latin2 as `1` from dual
+select _latin1 '1' = _latin2 '1' from dual
 END
 INPUT
 select insert('hello', -18446744073709551616, -18446744073709551616, 'hi');
@@ -14738,7 +14738,7 @@ INPUT
 select collation(ucase(_latin2'a')), coercibility(ucase(_latin2'a'));
 END
 OUTPUT
-select collation(ucase(_latin2 as a)), coercibility(ucase(_latin2 as a)) from dual
+select collation(ucase(_latin2 'a')), coercibility(ucase(_latin2 'a')) from dual
 END
 INPUT
 select hex(@utf83:= CONVERT(@ujis3 USING utf8));
@@ -14917,8 +14917,8 @@ END
 INPUT
 select hex(_utf32 X'3344');
 END
-ERROR
-syntax error at position 26 near '3344'
+OUTPUT
+select hex(_utf32 X'3344') from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_polish_ci;
@@ -14948,7 +14948,7 @@ INPUT
 select collation(rtrim(_latin2' a ')), coercibility(rtrim(_latin2' a '));
 END
 OUTPUT
-select collation(rtrim(_latin2 as ` a `)), coercibility(rtrim(_latin2 as ` a `)) from dual
+select collation(rtrim(_latin2 ' a ')), coercibility(rtrim(_latin2 ' a ')) from dual
 END
 INPUT
 select strcmp('s�', '�a'), strcmp('a�', '�x');
@@ -15001,8 +15001,8 @@ END
 INPUT
 select hex(substr(_utf32 0x000000e4000000e500000068,1));
 END
-ERROR
-syntax error at position 52 near '0x000000e4000000e500000068'
+OUTPUT
+select hex(substr(_utf32 0x000000e4000000e500000068, 1)) from dual
 END
 INPUT
 select min(a5), max(a5) from t1;
@@ -15493,8 +15493,8 @@ END
 INPUT
 select hex(_utf32 0x3344);
 END
-ERROR
-syntax error at position 25 near '0x3344'
+OUTPUT
+select hex(_utf32 0x3344) from dual
 END
 INPUT
 select timediff('2008-09-29 20:10:10','2008-09-30 20:10:10')>time('00:00:00');
@@ -15637,8 +15637,8 @@ END
 INPUT
 select char_length(_utf16 0xD800DC00), octet_length(_utf16 0xD800DC00);
 END
-ERROR
-syntax error at position 37 near '0xD800DC00'
+OUTPUT
+select char_length(_utf16 0xD800DC00), octet_length(_utf16 0xD800DC00) from dual
 END
 INPUT
 select cast(10000002383263201056 as unsigned) mod 50 as result;
@@ -15757,8 +15757,8 @@ END
 INPUT
 select convert(_koi8r'�' using utf8) < convert(_koi8r'�' using utf8);
 END
-ERROR
-syntax error at position 27 near '�'
+OUTPUT
+select convert(_koi8r '�' using utf8) < convert(_koi8r '�' using utf8) from dual
 END
 INPUT
 select rpad('hello', -1, '1');
@@ -15871,8 +15871,8 @@ END
 INPUT
 select _koi8r'a' COLLATE koi8r_bin LIKE _koi8r'A';
 END
-ERROR
-syntax error at position 25 near 'COLLATE'
+OUTPUT
+select _koi8r 'a' collate koi8r_bin like _koi8r 'A' from dual
 END
 INPUT
 select '2007-01-01' + interval a day from t1;
@@ -15943,8 +15943,8 @@ END
 INPUT
 select hex(convert(_eucjpms 0x8FABF841 using ucs2));
 END
-ERROR
-syntax error at position 39 near '0x8FABF841'
+OUTPUT
+select hex(convert(_eucjpms 0x8FABF841 using ucs2)) from dual
 END
 INPUT
 select count(distinct a1,a2,b,c) from t1 where (a2 >= 'b') and (b = 'a') and (c = 'i121');
@@ -16171,8 +16171,8 @@ END
 INPUT
 select hex(substr(_utf32 0x000000e4000000e500000068,2));
 END
-ERROR
-syntax error at position 52 near '0x000000e4000000e500000068'
+OUTPUT
+select hex(substr(_utf32 0x000000e4000000e500000068, 2)) from dual
 END
 INPUT
 select /lib64/ user, host, db, command, state, info from information_schema.processlist where (info like "select get_lock%" OR user='event_scheduler') order by info;
@@ -16399,8 +16399,8 @@ END
 INPUT
 select _koi8r'a' LIKE _latin1'A';
 END
-ERROR
-syntax error at position 22 near 'LIKE'
+OUTPUT
+select _koi8r 'a' like _latin1 'A' from dual
 END
 INPUT
 select from information_schema.schemata where schema_name = NULL;
@@ -16663,14 +16663,14 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,1));
 END
-ERROR
-syntax error at position 44 near '0x00e400e5D800DC00'
+OUTPUT
+select hex(substr(_utf16 0x00e400e5D800DC00, 1)) from dual
 END
 INPUT
 select hex(right(_utf16 0xD800DC00D87FDFFF, 1));
 END
-ERROR
-syntax error at position 43 near '0xD800DC00D87FDFFF'
+OUTPUT
+select hex(right(_utf16 0xD800DC00D87FDFFF, 1)) from dual
 END
 INPUT
 select b x, (select group_concat(b) from t2) from t2;
@@ -16711,14 +16711,14 @@ END
 INPUT
 select hex(cast(_ascii 0x7f as char(1) character set latin1));
 END
-ERROR
-syntax error at position 28 near '0x7f'
+OUTPUT
+select hex(convert(_ascii 0x7f, char(1) character set latin1)) from dual
 END
 INPUT
 select hex(weight_string(_utf16 0xD800DC00));
 END
-ERROR
-syntax error at position 43 near '0xD800DC00'
+OUTPUT
+select hex(weight_string(_utf16 0xD800DC00)) from dual
 END
 INPUT
 select week(20001231,2),week(20001231,3);
@@ -16849,8 +16849,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,-3));
 END
-ERROR
-syntax error at position 44 near '0x00e400e5D800DC00'
+OUTPUT
+select hex(substr(_utf16 0x00e400e5D800DC00, -3)) from dual
 END
 INPUT
 select field(c1,'�'),field('�',c1) from t1;
@@ -16891,8 +16891,8 @@ END
 INPUT
 select _koi8r'����' as test;
 END
-ERROR
-syntax error at position 31 near 'as'
+OUTPUT
+select _koi8r '����' as test from dual
 END
 INPUT
 select t1.*, (select a from t2 where d > a) as 'x' from t1;
@@ -16963,8 +16963,8 @@ END
 INPUT
 select strcmp(_koi8r'a', _koi8r'A' COLLATE koi8r_bin);
 END
-ERROR
-syntax error at position 43 near 'COLLATE'
+OUTPUT
+select strcmp(_koi8r 'a', _koi8r 'A' collate koi8r_bin) from dual
 END
 INPUT
 select max(7) from t2i join t1i;
@@ -17005,8 +17005,8 @@ END
 INPUT
 select hex(weight_string(_utf16 0xD800DC01));
 END
-ERROR
-syntax error at position 43 near '0xD800DC01'
+OUTPUT
+select hex(weight_string(_utf16 0xD800DC01)) from dual
 END
 INPUT
 select from (select *,substring(b,1),substring(b,-1),substring(b,-2),substring(b,-3),substring(b,-4),substring(b,-5) from t1) t;
@@ -17059,8 +17059,8 @@ END
 INPUT
 select hex(convert(_ujis 0x8FABF841 using ucs2));
 END
-ERROR
-syntax error at position 36 near '0x8FABF841'
+OUTPUT
+select hex(convert(_ujis 0x8FABF841 using ucs2)) from dual
 END
 INPUT
 select left('hello', 10);
@@ -17473,8 +17473,8 @@ END
 INPUT
 select _latin1'B' between _latin2'a' and _latin1'b';
 END
-ERROR
-syntax error at position 37 near 'a'
+OUTPUT
+select _latin1 'B' between _latin2 'a' and _latin1 'b' from dual
 END
 INPUT
 select distinct a1,a2,b,c from t1 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
@@ -18013,8 +18013,8 @@ END
 INPUT
 select _koi8r'a' = _koi8r'A' COLLATE koi8r_bin;
 END
-ERROR
-syntax error at position 19
+OUTPUT
+select _koi8r 'a' = _koi8r 'A' collate koi8r_bin from dual
 END
 INPUT
 select count(*) into n from t1;
@@ -18140,7 +18140,7 @@ INPUT
 select collation(repeat(_latin2'a',10)), coercibility(repeat(_latin2'a',10));
 END
 OUTPUT
-select collation(repeat(_latin2 as a, 10)), coercibility(repeat(_latin2 as a, 10)) from dual
+select collation(repeat(_latin2 'a', 10)), coercibility(repeat(_latin2 'a', 10)) from dual
 END
 INPUT
 select find_in_set(json_unquote(json_set('{}','$','')),1);
@@ -18211,8 +18211,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,-1));
 END
-ERROR
-syntax error at position 40 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_utf16 0x00e400e50068, -1)) from dual
 END
 INPUT
 select substr('hello',null,2),substr('hello',2,null),substr(null,1,2);
@@ -18565,8 +18565,8 @@ END
 INPUT
 select _koi8r'a' LIKE _koi8r'A' COLLATE koi8r_general_ci;
 END
-ERROR
-syntax error at position 22 near 'LIKE'
+OUTPUT
+select _koi8r 'a' like _koi8r 'A' collate koi8r_general_ci from dual
 END
 INPUT
 select soundex(_utf8mb4 0xE99885E8A788E99A8FE697B6E69BB4E696B0E79A84E696B0E997BB);
@@ -18704,13 +18704,13 @@ INPUT
 select collation(export_set(255,_latin2'y',_latin2'n',_latin2' ')), coercibility(export_set(255,_latin2'y',_latin2'n',_latin2' '));
 END
 OUTPUT
-select collation(export_set(255, _latin2 as y, _latin2 as n, _latin2 as ` `)), coercibility(export_set(255, _latin2 as y, _latin2 as n, _latin2 as ` `)) from dual
+select collation(export_set(255, _latin2 'y', _latin2 'n', _latin2 ' ')), coercibility(export_set(255, _latin2 'y', _latin2 'n', _latin2 ' ')) from dual
 END
 INPUT
 select hex(substr(_utf32 0x000000e4000000e500000068,-2));
 END
-ERROR
-syntax error at position 52 near '0x000000e4000000e500000068'
+OUTPUT
+select hex(substr(_utf32 0x000000e4000000e500000068, -2)) from dual
 END
 INPUT
 select f1,'' from t1 union select f1,'' from t1;
@@ -19069,8 +19069,8 @@ END
 INPUT
 select hex(substr(_ucs2 0x00e400e50068,1));
 END
-ERROR
-syntax error at position 39 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_ucs2 0x00e400e50068, 1)) from dual
 END
 INPUT
 select conv(-29223372036854775809, -10, 16) as conv_signed, conv(-29223372036854775809, 10, 16) as conv_unsigned;
@@ -19262,7 +19262,7 @@ INPUT
 select collation(replace(_latin2'abcd',_latin2'b',_latin2'B')), coercibility(replace(_latin2'abcd',_latin2'b',_latin2'B'));
 END
 OUTPUT
-select collation(replace(_latin2 as abcd, _latin2 as b, _latin2 as B)), coercibility(replace(_latin2 as abcd, _latin2 as b, _latin2 as B)) from dual
+select collation(replace(_latin2 'abcd', _latin2 'b', _latin2 'B')), coercibility(replace(_latin2 'abcd', _latin2 'b', _latin2 'B')) from dual
 END
 INPUT
 select space(-4294967295);
@@ -19333,8 +19333,8 @@ END
 INPUT
 select hex(convert(_gbk 0xA14041 using ucs2));
 END
-ERROR
-syntax error at position 33 near '0xA14041'
+OUTPUT
+select hex(convert(_gbk 0xA14041 using ucs2)) from dual
 END
 INPUT
 select rpad(i, 7, ' ') as t from t1;
@@ -19561,8 +19561,8 @@ END
 INPUT
 select concat(a,if(b<10,_ucs2 0x0062,_ucs2 0x00C0)) from t1;
 END
-ERROR
-syntax error at position 37 near '0x0062'
+OUTPUT
+select concat(a, if(b < 10, _ucs2 0x0062, _ucs2 0x00C0)) from t1
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_german2_ci;
@@ -19646,7 +19646,7 @@ INPUT
 select greatest(1,_utf16'.',_utf8'');
 END
 OUTPUT
-select greatest(1, _utf16 as `.`, _utf8 '') from dual
+select greatest(1, _utf16 '.', _utf8 '') from dual
 END
 INPUT
 select round(1e1,308), truncate(1e1, 308);
@@ -20197,8 +20197,8 @@ END
 INPUT
 select hex(_utf32 X'44');
 END
-ERROR
-syntax error at position 24 near '44'
+OUTPUT
+select hex(_utf32 X'44') from dual
 END
 INPUT
 select a from t1 where a in (1,3);
@@ -20336,7 +20336,7 @@ INPUT
 select collation(concat(_latin2'a',_latin2'b')), coercibility(concat(_latin2'a',_latin2'b'));
 END
 OUTPUT
-select collation(concat(_latin2 as a, _latin2 as b)), coercibility(concat(_latin2 as a, _latin2 as b)) from dual
+select collation(concat(_latin2 'a', _latin2 'b')), coercibility(concat(_latin2 'a', _latin2 'b')) from dual
 END
 INPUT
 select grp,group_concat(a,c) from t1 group by grp;
@@ -20545,8 +20545,8 @@ END
 INPUT
 select _latin2'B' in (_latin1'a',_latin1'b');
 END
-ERROR
-syntax error at position 21 near 'in'
+OUTPUT
+select _latin2 'B' in (_latin1 'a', _latin1 'b') from dual
 END
 INPUT
 select soundex(_utf8 0xD091D092D093);
@@ -20689,8 +20689,8 @@ END
 INPUT
 select hex(weight_string(_utf32 0x10001 collate utf32_unicode_ci));
 END
-ERROR
-syntax error at position 40 near '0x10001'
+OUTPUT
+select hex(weight_string(_utf32 0x10001 collate utf32_unicode_ci)) from dual
 END
 INPUT
 select distinct b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
@@ -20816,7 +20816,7 @@ INPUT
 select collation(right(_latin2'a',1)), coercibility(right(_latin2'a',1));
 END
 OUTPUT
-select collation(right(_latin2 as a, 1)), coercibility(right(_latin2 as a, 1)) from dual
+select collation(right(_latin2 'a', 1)), coercibility(right(_latin2 'a', 1)) from dual
 END
 INPUT
 select ST_GeomFromText('linestring(6 2, 12 1)') into @l;
@@ -20827,8 +20827,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,-2));
 END
-ERROR
-syntax error at position 44 near '0x00e400e5D800DC00'
+OUTPUT
+select hex(substr(_utf16 0x00e400e5D800DC00, -2)) from dual
 END
 INPUT
 select 0xbc24421ce6194ab5c260e80af647ae58fdbfca18a19dc8411424 like '%-106%';
@@ -20935,8 +20935,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,2));
 END
-ERROR
-syntax error at position 40 near '0x00e400e50068'
+OUTPUT
+select hex(substr(_utf16 0x00e400e50068, 2)) from dual
 END
 INPUT
 select 1, min(1) from t1m where 1=99;
@@ -21008,7 +21008,7 @@ INPUT
 select collation(trim(TRAILING _latin2' ' FROM _latin2'a')), coercibility(trim(TRAILING _latin2'a' FROM _latin2'a'));
 END
 ERROR
-syntax error at position 42 near ' '
+syntax error at position 39 near '_latin2'
 END
 INPUT
 select left('hello', -4294967296);
@@ -21127,8 +21127,8 @@ END
 INPUT
 select locate(_ujis 0xa1a3,_ujis 0xa1a2a1a3);
 END
-ERROR
-syntax error at position 27 near '0xa1a3'
+OUTPUT
+select locate(_ujis 0xa1a3, _ujis 0xa1a2a1a3) from dual
 END
 INPUT
 select char(195 using utf8);
@@ -21331,8 +21331,8 @@ END
 INPUT
 select case _latin1'a' when _latin2'b' then 1 when _latin5'c' collate latin5_turkish_ci then 2 else 3 end;
 END
-ERROR
-syntax error at position 39 near 'b'
+OUTPUT
+select case _latin1 'a' when _latin2 'b' then 1 when _latin5 'c' collate latin5_turkish_ci then 2 else 3 end from dual
 END
 INPUT
 select point(b, b) IS NULL, linestring(b) IS NULL, polygon(b) IS NULL, multipoint(b) IS NULL, multilinestring(b) IS NULL, multipolygon(b) IS NULL, geometrycollection(b) IS NULL from t1;
@@ -21469,8 +21469,8 @@ END
 INPUT
 select strcmp(_koi8r'a' COLLATE koi8r_bin, _koi8r'A');
 END
-ERROR
-syntax error at position 32 near 'COLLATE'
+OUTPUT
+select strcmp(_koi8r 'a' collate koi8r_bin, _koi8r 'A') from dual
 END
 INPUT
 select case 1/0 when "a" then "true" else "false" END;
@@ -21691,8 +21691,8 @@ END
 INPUT
 select hex(weight_string(_utf32 0x10000));
 END
-ERROR
-syntax error at position 40 near '0x10000'
+OUTPUT
+select hex(weight_string(_utf32 0x10000)) from dual
 END
 INPUT
 select a from t1 group by b;
@@ -21787,8 +21787,8 @@ END
 INPUT
 select cast(_koi8r'����' as char character set cp1251);
 END
-ERROR
-syntax error at position 33 near '����'
+OUTPUT
+select convert(_koi8r '����', char character set cp1251) from dual
 END
 INPUT
 select timestampdiff(month,'2005-09-11','2003-09-11');
@@ -21872,7 +21872,7 @@ INPUT
 select FIND_IN_SET(_latin1'B',_latin2'a,b,c,d');
 END
 OUTPUT
-select FIND_IN_SET(_latin1 'B', _latin2 as `a,b,c,d`) from dual
+select FIND_IN_SET(_latin1 'B', _latin2 'a,b,c,d') from dual
 END
 INPUT
 select date,format,concat(str_to_date(date, format),'') as con from t1;
@@ -21961,8 +21961,8 @@ END
 INPUT
 select hex(convert(_eucjpms 0xA5FE41 using ucs2));
 END
-ERROR
-syntax error at position 37 near '0xA5FE41'
+OUTPUT
+select hex(convert(_eucjpms 0xA5FE41 using ucs2)) from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_icelandic_ci;
@@ -21973,8 +21973,8 @@ END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,-1));
 END
-ERROR
-syntax error at position 44 near '0x00e400e5D800DC00'
+OUTPUT
+select hex(substr(_utf16 0x00e400e5D800DC00, -1)) from dual
 END
 INPUT
 select hex(quote(concat(char(224),char(227),char(230),char(231),char(232),char(234),char(235))));
@@ -22537,8 +22537,8 @@ END
 INPUT
 select _ujis 0xa1a2a1a3 like concat(_ujis'%',_ujis 0xa2a1, _ujis'%');
 END
-ERROR
-syntax error at position 24 near '0xa1a2a1a3'
+OUTPUT
+select _ujis 0xa1a2a1a3 like concat(_ujis '%', _ujis 0xa2a1, _ujis '%') from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','aa',2);
@@ -22700,7 +22700,7 @@ INPUT
 select _latin1'B' between _latin1'a' and _latin2'b';
 END
 OUTPUT
-select _latin1 'B' between _latin1 'a' and _latin2 as b from dual
+select _latin1 'B' between _latin1 'a' and _latin2 'b' from dual
 END
 INPUT
 select a1,a2,b, max(c) from t2 where (c < 'a0') or (c > 'b1') group by a1,a2,b;
@@ -22927,8 +22927,8 @@ END
 INPUT
 select concat(a,if(b>10,_ucs2 0x0061,_ucs2 0x0062)) from t1;
 END
-ERROR
-syntax error at position 37 near '0x0061'
+OUTPUT
+select concat(a, if(b > 10, _ucs2 0x0061, _ucs2 0x0062)) from t1
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 100000 MONTH);
@@ -22993,8 +22993,8 @@ END
 INPUT
 select least(_latin1'a',_latin2'b',_latin5'c' collate latin5_turkish_ci);
 END
-ERROR
-syntax error at position 54 near 'collate'
+OUTPUT
+select least(_latin1 'a', _latin2 'b', _latin5 'c' collate latin5_turkish_ci) from dual
 END
 INPUT
 select bar from t1 having instr(group_concat(bar), "test") > 0;

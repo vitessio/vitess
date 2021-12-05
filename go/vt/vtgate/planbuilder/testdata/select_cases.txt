@@ -475,10 +475,10 @@ Gen4 plan same as above
 }
 
 # auto-resolve anonymous columns for simple route
-"select col from user join user_extra on user.id = user_extra.user_id"
+"select anon_col from user join user_extra on user.id = user_extra.user_id"
 {
   "QueryType": "SELECT",
-  "Original": "select col from user join user_extra on user.id = user_extra.user_id",
+  "Original": "select anon_col from user join user_extra on user.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -486,14 +486,14 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
-    "Query": "select col from `user` join user_extra on `user`.id = user_extra.user_id",
+    "FieldQuery": "select anon_col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select anon_col from `user` join user_extra on `user`.id = user_extra.user_id",
     "Table": "`user`, user_extra"
   }
 }
 {
   "QueryType": "SELECT",
-  "Original": "select col from user join user_extra on user.id = user_extra.user_id",
+  "Original": "select anon_col from user join user_extra on user.id = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -501,8 +501,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user`, user_extra where 1 != 1",
-    "Query": "select col from `user`, user_extra where `user`.id = user_extra.user_id",
+    "FieldQuery": "select anon_col from `user`, user_extra where 1 != 1",
+    "Query": "select anon_col from `user`, user_extra where `user`.id = user_extra.user_id",
     "Table": "`user`, user_extra"
   }
 }
@@ -1659,7 +1659,7 @@ Gen4 plan same as above
       "42 + 2"
     ],
     "Expressions": [
-      "INT64(42) + INT64(2)"
+      "INT64(44)"
     ],
     "Inputs": [
       {
@@ -2602,9 +2602,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `user`.id, col, weight_string(col) from `user` where 1 != 1",
-        "OrderBy": "(1|2) ASC",
-        "Query": "select `user`.id, col, weight_string(col) from `user` order by col asc",
+        "FieldQuery": "select `user`.id, col from `user` where 1 != 1",
+        "OrderBy": "1 ASC",
+        "Query": "select `user`.id, col from `user` order by col asc",
         "Table": "`user`"
       },
       {

@@ -20,6 +20,10 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -240,9 +244,22 @@ func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logical
 		result = &concatenateGen4{sources: sources}
 	}
 	if n.distinct {
-		return newDistinct(result), nil
+		return newDistinct(result, getCollationsFor(ctx, n)), nil
 	}
 	return result, nil
+}
+
+func getCollationsFor(ctx *planningContext, n *concatenateTree) []collations.ID {
+	var colls []collations.ID
+	for _, expr := range n.selectStmts[0].SelectExprs {
+		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
+		}
+		typ := ctx.semTable.CollationFor(aliasedE.Expr)
+		colls = append(colls, typ)
+	}
+	return colls
 }
 
 func transformAndMergeInOrder(ctx *planningContext, n *concatenateTree) (sources []logicalPlan, err error) {
@@ -464,6 +481,13 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 }
 
 func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
+	// TODO systay we should move the decision of which join to use to the greedy algorithm,
+	// and thus represented as a queryTree
+	canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+
 	lhs, err := transformToLogicalPlan(ctx, n.lhs)
 	if err != nil {
 		return nil, err
@@ -476,13 +500,111 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 	if n.leftJoin {
 		opCode = engine.LeftJoin
 	}
+
+	if canHashJoin {
+		coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
+		if err != nil {
+			return nil, err
+		}
+		return &hashJoin{
+			Left:           lhs,
+			Right:          rhs,
+			Cols:           n.columns,
+			Opcode:         opCode,
+			LHSKey:         lhsInfo.offset,
+			RHSKey:         rhsInfo.offset,
+			Predicate:      sqlparser.AndExpressions(n.predicates...),
+			ComparisonType: coercedType,
+			Collation:      lhsInfo.typ.Collation,
+		}, nil
+	}
 	return &joinGen4{
-		Left:   lhs,
-		Right:  rhs,
-		Cols:   n.columns,
-		Vars:   n.vars,
-		Opcode: opCode,
+		Left:      lhs,
+		Right:     rhs,
+		Cols:      n.columns,
+		Vars:      n.vars,
+		Opcode:    opCode,
+		Predicate: sqlparser.AndExpressions(n.predicates...),
 	}, nil
+}
+
+// canHashJoin decides whether a join tree can be transformed into a hash join or apply join.
+// Since hash join use variables from the left-hand side, we want to remove any
+// join predicate living in the right-hand side.
+// Hash joins are only supporting equality join predicates, which is why the join predicate
+// has to be an EqualOp.
+func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs joinColumnInfo, err error) {
+	if len(n.predicatesToRemoveFromHashJoin) != 1 ||
+		n.leftJoin ||
+		!sqlparser.ExtractCommentDirectives(ctx.semTable.Comments).IsSet(sqlparser.DirectiveAllowHashJoin) {
+		return
+	}
+	cmp, isCmp := n.predicatesToRemoveFromHashJoin[0].(*sqlparser.ComparisonExpr)
+	if !isCmp || cmp.Operator != sqlparser.EqualOp {
+		return
+	}
+	var colOnLeft bool
+	var col *sqlparser.ColName
+	var arg sqlparser.Argument
+	if lCol, isCol := cmp.Left.(*sqlparser.ColName); isCol {
+		col = lCol
+		if rArg, isArg := cmp.Right.(sqlparser.Argument); isArg {
+			arg = rArg
+		}
+		colOnLeft = true
+	} else if rCol, isCol := cmp.Right.(*sqlparser.ColName); isCol {
+		col = rCol
+		if lArg, isArg := cmp.Left.(sqlparser.Argument); isArg {
+			arg = lArg
+		}
+	} else {
+		return
+	}
+
+	lhsKey, found := n.vars[string(arg)]
+	if !found {
+		return
+	}
+	lhs.offset = lhsKey
+
+	colType, found := ctx.semTable.ExprTypes[col]
+	if !found {
+		return
+	}
+	argType, found := ctx.semTable.ExprTypes[arg]
+	if !found {
+		return
+	}
+
+	if colType.Collation != argType.Collation {
+		// joins with different collations are not yet supported
+		canHash = false
+		return
+	}
+
+	if colOnLeft {
+		lhs.typ = colType
+		rhs.typ = argType
+	} else {
+		lhs.typ = argType
+		rhs.typ = colType
+	}
+
+	columns, err := n.rhs.pushOutputColumns([]*sqlparser.ColName{col}, ctx.semTable)
+	if err != nil {
+		return false, lhs, rhs, nil
+	}
+	if len(columns) != 1 {
+		return
+	}
+	rhs.offset = columns[0]
+	canHash = true
+
+	err = n.rhs.removePredicate(ctx, cmp)
+	if err != nil {
+		return
+	}
+	return
 }
 
 func relToTableExpr(t relation) (sqlparser.TableExpr, error) {

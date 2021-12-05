@@ -47,6 +47,7 @@
     "JoinVars": {
       "e_id": 0
     },
+    "Predicate": "u.id = e.id",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -128,6 +129,7 @@
     "JoinVars": {
       "e_id": 0
     },
+    "Predicate": "u.id = e.id",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -245,6 +247,7 @@
         "JoinVars": {
           "u1_col": 0
         },
+        "Predicate": "u3.col = u1.col",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -359,6 +362,7 @@
         "JoinVars": {
           "u2_col": 0
         },
+        "Predicate": "u3.col = u2.col",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -460,6 +464,7 @@
     "JoinVars": {
       "u3_col": 0
     },
+    "Predicate": "u3.col = u1.col",
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -480,6 +485,7 @@
         "JoinVars": {
           "u1_col": 0
         },
+        "Predicate": "u2.col = u1.col and u1.col = :u3_col",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -624,6 +630,7 @@
         "JoinVars": {
           "u4_col": 0
         },
+        "Predicate": "u4.col = u1.col",
         "TableName": "`user`_`user`_`user`",
         "Inputs": [
           {
@@ -644,6 +651,7 @@
             "JoinVars": {
               "u1_col": 0
             },
+            "Predicate": "u3.id = u1.col and u1.col = :u4_col",
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -755,6 +763,7 @@
     "JoinVars": {
       "u1_col": 0
     },
+    "Predicate": "u3.id = u1.col",
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
       {
@@ -764,6 +773,7 @@
         "JoinVars": {
           "u1_col": 0
         },
+        "Predicate": "u2.id = u1.col",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -862,6 +872,7 @@
     "JoinVars": {
       "unsharded_id": 0
     },
+    "Predicate": "`weird``name`.`a``b*c` = unsharded.id",
     "TableName": "unsharded_`weird``name`",
     "Inputs": [
       {
@@ -943,6 +954,7 @@
     "JoinVars": {
       "unsharded_id": 0
     },
+    "Predicate": "`weird``name`.`a``b*c` = unsharded.id",
     "TableName": "unsharded_`weird``name`",
     "Inputs": [
       {
@@ -1034,6 +1046,7 @@
         "JoinVars": {
           "u_col": 0
         },
+        "Predicate": "e.id = u.col",
         "TableName": "`user`_user_extra",
         "Inputs": [
           {
@@ -1156,6 +1169,7 @@
             "JoinVars": {
               "u_col": 0
             },
+            "Predicate": "e.id = u.col",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1301,6 +1315,7 @@
             "JoinVars": {
               "u_col": 0
             },
+            "Predicate": "e.id = u.col",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {

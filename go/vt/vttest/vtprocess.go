@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -233,6 +231,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-enable_query_plan_field_caching=false",
 		"-dbddl_plugin", "vttest",
 		"-foreign_key_mode", args.ForeignKeyMode,
+		"-planner_version", args.PlannerVersion,
 		fmt.Sprintf("-enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("-enable_direct_ddl=%t", args.EnableDirectDDL),
 	}...)
@@ -261,8 +260,8 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
-	if *sqlparser.MySQLServerVersion != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, "-mysql_server_version", *sqlparser.MySQLServerVersion)
+	if *servenv.MySQLServerVersion != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, "-mysql_server_version", *servenv.MySQLServerVersion)
 	}
 
 	if socket != "" {

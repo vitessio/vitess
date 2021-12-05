@@ -119,13 +119,40 @@ type Collation interface {
 	// the hash will interpret the source string as if it were stored in a `CHAR(n)` column. If the value of
 	// numCodepoints is 0, this is equivalent to setting `numCodepoints = RuneCount(src)`.
 	// For collations with NO PAD, the numCodepoint argument is ignored.
-	Hash(src []byte, numCodepoints int) uintptr
+	Hash(src []byte, numCodepoints int) HashCode
+
+	// Wildcard returns a matcher for the given wildcard pattern. The matcher can be used to repeatedly
+	// test different strings to check if they match the pattern. The pattern must be a traditional wildcard
+	// pattern, which may contain the provided special characters for matching one character or several characters.
+	// The provided `escape` character will be used as an escape sequence in front of the other special characters.
+	//
+	// This method is fully collation aware; the matching will be performed according to the underlying collation.
+	// I.e. if this is a case-insensitive collation, matching will be case-insensitive.
+	//
+	// The returned WildcardPattern is always valid, but if the provided special characters do not exist in this
+	// collation's repertoire, the returned pattern will not match any strings. Likewise, if the provided pattern
+	// has invalid syntax, the returned pattern will not match any strings.
+	//
+	// If the provided special characters are 0, the defaults to parse an SQL 'LIKE' statement will be used.
+	// This is, '_' for matching one character, '%' for matching many and '\\' for escape.
+	//
+	// This method can also be used for Shell-like matching with '?', '*' and '\\' as their respective special
+	// characters.
+	Wildcard(pat []byte, matchOne, matchMany, escape rune) WildcardPattern
 
 	// Charset returns the Charset with which this collation is encoded
 	Charset() charset.Charset
 
 	// IsBinary returns whether this collation is a binary collation
 	IsBinary() bool
+}
+
+type HashCode = uintptr
+
+// WildcardPattern is a matcher for a wildcard pattern, constructed from a given collation
+type WildcardPattern interface {
+	// Match returns whether the given string matches this pattern
+	Match(in []byte) bool
 }
 
 const PadToMax = math.MaxInt32
