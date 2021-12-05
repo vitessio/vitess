@@ -585,8 +585,8 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Charset != "" {
 		buf.astPrintf(ct, " %s %s %s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
 	}
-	if ct.Collate != "" {
-		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
+	if ct.Options != nil && ct.Options.Collate != "" {
+		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Options.Collate)
 	}
 	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
@@ -1098,8 +1098,12 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator.ToString(), node.From, node.To)
+func (node *BetweenExpr) Format(buf *TrackedBuffer) {
+	if node.IsBetween {
+		buf.astPrintf(node, "%v between %l and %r", node.Left, node.From, node.To)
+	} else {
+		buf.astPrintf(node, "%v not between %l and %r", node.Left, node.From, node.To)
+	}
 }
 
 // Format formats the node.
@@ -1191,6 +1195,11 @@ func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s %v", node.CharacterSet, node.Expr)
+}
+
+// Format formats the node.
 func (node *IntervalExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "interval %v %s", node.Expr, node.Unit)
 }
@@ -1207,12 +1216,16 @@ func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(%v)", node.Name.String(), node.Fsp)
+	if node.Fsp != nil {
+		buf.astPrintf(node, "%s(%v)", node.Name.String(), node.Fsp)
+	} else {
+		buf.astPrintf(node, "%s()", node.Name.String())
+	}
 }
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v collate %s", node.Expr, node.Charset)
+	buf.astPrintf(node, "%v collate %s", node.Expr, node.Collation)
 }
 
 // Format formats the node.
@@ -1252,17 +1265,10 @@ func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
-	var val SQLNode
-	if node.Name != nil {
-		val = node.Name
-	} else {
-		val = node.StrVal
-	}
-
 	if node.To == nil {
-		buf.astPrintf(node, "substr(%v, %v)", val, node.From)
+		buf.astPrintf(node, "substr(%v, %v)", node.Name, node.From)
 	} else {
-		buf.astPrintf(node, "substr(%v, %v, %v)", val, node.From, node.To)
+		buf.astPrintf(node, "substr(%v, %v, %v)", node.Name, node.From, node.To)
 	}
 }
 

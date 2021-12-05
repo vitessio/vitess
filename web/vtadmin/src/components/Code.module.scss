@@ -31,7 +31,7 @@
     box-sizing: border-box;
     color: var(--textColorSecondary);
     font-family: var(--fontFamilyMonospace);
-    font-size: var(--fontSizeDefault);
+    font-size: theme('fontSize.base');
     line-height: 2.4rem;
     min-width: 5rem;
     padding: 0 1.2rem;
@@ -48,7 +48,7 @@
 
 .code {
     font-family: var(--fontFamilyMonospace);
-    font-size: var(--fontSizeDefault);
+    font-size: theme('fontSize.base');
     line-height: 2.4rem;
     padding: 0 1.2rem;
     tab-size: 8;

@@ -24,8 +24,8 @@ import (
 )
 
 func init() {
-	if unsafe.Sizeof(TypedCollationID{}) != 4 {
-		panic("TypedCollationID should fit in an int32")
+	if unsafe.Sizeof(TypedCollation{}) != 4 {
+		panic("TypedCollation should fit in an int32")
 	}
 }
 
@@ -95,92 +95,72 @@ const (
 	RepertoireUnicode
 )
 
-// Coercion is a function that will transform either the left or right
-// arguments of the function into the same character set. The `dst` argument
+// Coercion is a function that will transform either the given argument
+// arguments of the function into a specific character set. The `dst` argument
 // will be used as the destination of the coerced argument, but it can be nil.
-// The function returns the given left and right arguments: one of the arguments
-// will be the same value that was passed in, while the other will be the
-// same value but transcoded into a different character set, depending on which
-// of the arguments is supposed to be coerced.
-// If the contents of the argument that must be transcoded cannot be mapped
-// to the target charset, an error will be returned.
-type Coercion func(dst, left, right []byte) ([]byte, []byte, error)
+type Coercion func(dst, in []byte) ([]byte, error)
 
 // TypedCollation is the Collation of a SQL expression, including its coercibility
 // and repertoire.
 type TypedCollation struct {
-	Collation    Collation
-	Coercibility Coercibility
-	Repertoire   Repertoire
-}
-
-// TypedCollationID is like TypedCollation but the actual collation is stored with its
-// Collation ID, so the total size of the struct is 4 bytes. This is useful for type
-// processing in the AST.
-type TypedCollationID struct {
 	Collation    ID
 	Coercibility Coercibility
 	Repertoire   Repertoire
 }
 
-func (env *Environment) TypedCollation(tid TypedCollationID) *TypedCollation {
-	return &TypedCollation{
-		Collation:    env.LookupByID(tid.Collation),
-		Coercibility: tid.Coercibility,
-		Repertoire:   tid.Repertoire,
-	}
+func (tc TypedCollation) Valid() bool {
+	return tc.Collation != Unknown
 }
 
-func checkCompatibleCollations(left, right *TypedCollation) bool {
-	leftCS := left.Collation.Charset()
-	rightCS := right.Collation.Charset()
+func checkCompatibleCollations(
+	left Collation, leftCoercibility Coercibility, leftRepertoire Repertoire,
+	right Collation, rightCoercibility Coercibility, rightRepertoire Repertoire,
+) bool {
+	leftCS := left.Charset()
+	rightCS := right.Charset()
 
 	switch leftCS.(type) {
 	case charset.Charset_utf8mb4:
-		if left.Coercibility <= right.Coercibility {
+		if leftCoercibility <= rightCoercibility {
 			return true
 		}
 
 	case charset.Charset_utf32:
 		switch {
-		case left.Coercibility < right.Coercibility:
+		case leftCoercibility < rightCoercibility:
 			return true
-		case left.Coercibility == right.Coercibility:
+		case leftCoercibility == rightCoercibility:
 			if !charset.IsUnicode(rightCS) {
 				return true
 			}
-			if !left.Collation.IsBinary() {
+			if !left.IsBinary() {
 				return true
 			}
 		}
 
 	case charset.Charset_utf8, charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le:
 		switch {
-		case left.Coercibility < right.Coercibility:
+		case leftCoercibility < rightCoercibility:
 			return true
-		case left.Coercibility == right.Coercibility:
+		case leftCoercibility == rightCoercibility:
 			if !charset.IsUnicode(rightCS) {
 				return true
 			}
 		}
 	}
 
-	if right.Repertoire == RepertoireASCII {
+	if rightRepertoire == RepertoireASCII {
 		switch {
-		case left.Coercibility < right.Coercibility:
+		case leftCoercibility < rightCoercibility:
 			return true
-		case left.Coercibility == right.Coercibility:
-			if left.Repertoire == RepertoireUnicode {
+		case leftCoercibility == rightCoercibility:
+			if leftRepertoire == RepertoireUnicode {
 				return true
 			}
 		}
 	}
 
 	return false
-}
-
-func noCoercion(_, left, right []byte) ([]byte, []byte, error) {
-	return left, right, nil
 }
 
 // CoercionOptions is used to configure how aggressive the algorithm can be
@@ -222,71 +202,75 @@ type CoercionOptions struct {
 //
 // If the collations for both sides of the expression are not compatible, an error
 // will be returned and the returned TypedCollation and Coercion will be nil.
-func (env *Environment) MergeCollations(left, right *TypedCollation, opt CoercionOptions) (*TypedCollation, Coercion, error) {
-	leftCS := left.Collation.Charset()
-	rightCS := right.Collation.Charset()
+func (env *Environment) MergeCollations(left, right TypedCollation, opt CoercionOptions) (TypedCollation, Coercion, Coercion, error) {
+	leftColl := env.LookupByID(left.Collation)
+	rightColl := env.LookupByID(right.Collation)
+	if leftColl == nil || rightColl == nil {
+		return TypedCollation{}, nil, nil, fmt.Errorf("unsupported TypeCollationID: %v / %v", left.Collation, right.Collation)
+	}
+	leftCS := leftColl.Charset()
+	rightCS := rightColl.Charset()
 
 	if leftCS.Name() == rightCS.Name() {
 		switch {
 		case left.Coercibility < right.Coercibility:
 			left.Repertoire |= right.Repertoire
-			return left, noCoercion, nil
+			return left, nil, nil, nil
 
 		case left.Coercibility > right.Coercibility:
 			right.Repertoire |= left.Repertoire
-			return right, noCoercion, nil
+			return right, nil, nil, nil
 
-		case left.Collation.ID() == right.Collation.ID():
+		case left.Collation == right.Collation:
 			left.Repertoire |= right.Repertoire
-			return left, noCoercion, nil
+			return left, nil, nil, nil
 		}
 
 		if left.Coercibility == CoerceExplicit {
 			goto cannotCoerce
 		}
 
-		leftCsBin := left.Collation.IsBinary()
-		rightCsBin := right.Collation.IsBinary()
+		leftCsBin := leftColl.IsBinary()
+		rightCsBin := rightColl.IsBinary()
 
 		switch {
 		case leftCsBin && rightCsBin:
 			left.Coercibility = CoerceNone
-			return left, noCoercion, nil
+			return left, nil, nil, nil
 
 		case leftCsBin:
-			return left, noCoercion, nil
+			return left, nil, nil, nil
 
 		case rightCsBin:
-			return right, noCoercion, nil
+			return right, nil, nil, nil
 		}
 
 		defaults := env.byCharset[leftCS.Name()]
-		defaults.Binary.Init()
-		return &TypedCollation{
-			Collation:    defaults.Binary,
+		return TypedCollation{
+			Collation:    defaults.Binary.ID(),
 			Coercibility: CoerceNone,
 			Repertoire:   left.Repertoire | right.Repertoire,
-		}, noCoercion, nil
+		}, nil, nil, nil
 	}
 
-	if _, leftIsBinary := left.Collation.(*Collation_binary); leftIsBinary {
+	if _, leftIsBinary := leftColl.(*Collation_binary); leftIsBinary {
 		if left.Coercibility <= right.Coercibility {
-			return left, noCoercion, nil
+			return left, nil, nil, nil
 		}
-		return right, noCoercion, nil
+		return right, nil, nil, nil
 	}
-	if _, rightIsBinary := right.Collation.(*Collation_binary); rightIsBinary {
+	if _, rightIsBinary := rightColl.(*Collation_binary); rightIsBinary {
 		if left.Coercibility >= right.Coercibility {
-			return right, noCoercion, nil
+			return right, nil, nil, nil
 		}
-		return left, noCoercion, nil
+		return left, nil, nil, nil
 	}
 
 	if opt.ConvertToSuperset {
-		if checkCompatibleCollations(left, right) {
+		if checkCompatibleCollations(leftColl, left.Coercibility, left.Repertoire, rightColl, right.Coercibility, right.Repertoire) {
 			goto coerceToLeft
 		}
-		if checkCompatibleCollations(right, left) {
+		if checkCompatibleCollations(rightColl, right.Coercibility, right.Repertoire, leftColl, left.Coercibility, left.Repertoire) {
 			goto coerceToRight
 		}
 	}
@@ -301,18 +285,28 @@ func (env *Environment) MergeCollations(left, right *TypedCollation, opt Coercio
 	}
 
 cannotCoerce:
-	return nil, nil, fmt.Errorf("Illegal mix of collations (%s,%s) and (%s,%s)",
-		left.Collation.Name(), left.Coercibility, right.Collation.Name(), right.Coercibility)
+	return TypedCollation{}, nil, nil, fmt.Errorf("Illegal mix of collations (%s,%s) and (%s,%s)",
+		leftColl.Name(), left.Coercibility, rightColl.Name(), right.Coercibility)
 
 coerceToLeft:
-	return left, func(dst, left, right []byte) ([]byte, []byte, error) {
-		trans, err := charset.Convert(dst, leftCS, right, rightCS)
-		return left, trans, err
-	}, nil
+	return left, nil,
+		func(dst, in []byte) ([]byte, error) {
+			return charset.Convert(dst, leftCS, in, rightCS)
+		}, nil
 
 coerceToRight:
-	return right, func(dst, left, right []byte) ([]byte, []byte, error) {
-		trans, err := charset.Convert(dst, rightCS, left, leftCS)
-		return trans, right, err
-	}, nil
+	return right,
+		func(dst, in []byte) ([]byte, error) {
+			return charset.Convert(dst, rightCS, in, leftCS)
+		}, nil, nil
+}
+
+func (env *Environment) EnsureCollate(fromID, toID ID) error {
+	// these two lookups should never fail
+	from := env.LookupByID(fromID)
+	to := env.LookupByID(toID)
+	if from.Charset().Name() != to.Charset().Name() {
+		return fmt.Errorf("COLLATION '%s' is not valid for CHARACTER SET '%s'", to.Name(), from.Charset().Name())
+	}
+	return nil
 }

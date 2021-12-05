@@ -159,7 +159,7 @@ func colldump(collation string, input []byte) []byte {
 }
 
 func main() {
-	var defaults = collations.Default()
+	var defaults = collations.Local()
 	var collationsForLanguage = make(map[testutil.Lang][]collations.Collation)
 	var allcollations = defaults.AllCollations()
 	for lang := range testutil.KnownLanguages {

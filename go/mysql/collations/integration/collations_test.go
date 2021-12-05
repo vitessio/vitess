@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode/utf32"
 
 	"vitess.io/vitess/go/mysql"
@@ -113,14 +114,17 @@ func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
 		if row[1].Len() == 0 {
 			continue
 		}
-		utf8Input := parseUtf32cp(row[0].ToBytes())
+		rowBytes, err := row[0].ToBytes()
+		require.NoError(t, err)
+		utf8Input := parseUtf32cp(rowBytes)
 		if utf8Input == nil {
 			t.Errorf("[%s] failed to parse UTF32-encoded codepoint: %s (%s)", u.collation, row[0], row[2].ToString())
 			errors++
 			continue
 		}
-
-		expectedWeightString := parseWeightString(row[1].ToBytes())
+		rowBytes, err = row[1].ToBytes()
+		require.NoError(t, err)
+		expectedWeightString := parseWeightString(rowBytes)
 		if expectedWeightString == nil {
 			t.Errorf("[%s] failed to parse weight string: %s (%s)", u.collation, row[1], row[2].ToString())
 			errors++

@@ -18,7 +18,6 @@ package vault
 
 import (
 	"crypto/subtle"
-	"crypto/x509"
 	"flag"
 	"fmt"
 	"net"
@@ -166,7 +165,7 @@ func (a *AuthServerVault) HandleUser(user string) bool {
 }
 
 // UserEntryWithHash is called when mysql_native_password is used.
-func (a *AuthServerVault) UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (mysql.Getter, error) {
+func (a *AuthServerVault) UserEntryWithHash(conn *mysql.Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (mysql.Getter, error) {
 	a.mu.Lock()
 	userEntries, ok := a.entries[user]
 	a.mu.Unlock()

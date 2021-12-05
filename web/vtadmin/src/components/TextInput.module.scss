@@ -34,7 +34,7 @@ $iconPositionHorizontalLarge: 1.6rem;
     }
 
     &.large {
-        font-size: var(--fontSizeLarge);
+        font-size: theme('fontSize.lg');
         height: var(--inputHeightLarge);
         line-height: var(--inputHeightLarge);
         padding: 0 16px;

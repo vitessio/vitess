@@ -108,7 +108,7 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 			// So, the distinct 'operator' cannot be pushed down into the
 			// route.
 			if rc.column.Origin() == node {
-				return newDistinct(node), nil
+				return newDistinct(node, nil), nil
 			}
 			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: i, WeightStringCol: -1, FromGroupBy: false})
 		}

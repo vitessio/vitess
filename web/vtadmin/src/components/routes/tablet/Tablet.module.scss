@@ -37,7 +37,7 @@
     align-items: center;
     display: flex;
     flex-direction: column;
-    font-size: var(--fontSizeLarge);
+    font-size: theme('fontSize.lg');
     justify-content: center;
     margin: 25vh auto;
     max-width: 720px;

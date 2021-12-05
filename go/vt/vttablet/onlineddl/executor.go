@@ -3298,6 +3298,15 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		switch statusVal {
 		case retryMigrationHint:
 			return response(e.retryMigrationWhere(ctx, sqlparser.String(stmt.Where.Expr)))
+		case completeMigrationHint:
+			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
+			if err != nil {
+				return nil, err
+			}
+			if !schema.IsOnlineDDLUUID(uuid) {
+				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
+			}
+			return response(e.CompleteMigration(ctx, uuid))
 		case cancelMigrationHint:
 			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
 			if err != nil {

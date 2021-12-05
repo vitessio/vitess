@@ -49,6 +49,7 @@ const (
 	WrongNumberOfColumnsInSelect
 	CantDoThisInTransaction
 	RequiresPrimaryKey
+	OperandColumns
 
 	// not found
 	BadDb

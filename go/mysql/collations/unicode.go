@@ -124,7 +124,7 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 	return dst
 }
 
-func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) HashCode {
 	unicaseInfo := c.unicase
 	cs := c.charset
 
@@ -155,6 +155,14 @@ func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) uintp
 
 func (c *Collation_unicode_general_ci) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 2
+}
+
+func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	var sort = c.unicase.unicodeSort
+	var equals = func(a, b rune) bool {
+		return sort(a) == sort(b)
+	}
+	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 type Collation_unicode_bin struct {
@@ -278,7 +286,7 @@ func (c *Collation_unicode_bin) weightStringUnicode(dst, src []byte, numCodepoin
 	return dst
 }
 
-func (c *Collation_unicode_bin) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_unicode_bin) Hash(src []byte, numCodepoints int) HashCode {
 	if c.charset.SupportsSupplementaryChars() {
 		return c.hashUnicode(src, numCodepoints)
 	}
@@ -339,6 +347,13 @@ func (c *Collation_unicode_bin) hashBMP(src []byte, numCodepoints int) uintptr {
 
 func (c *Collation_unicode_bin) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 3
+}
+
+func (c *Collation_unicode_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	equals := func(a, b rune) bool {
+		return a == b
+	}
+	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 func collationBinary(left, right []byte, rightPrefix bool) int {

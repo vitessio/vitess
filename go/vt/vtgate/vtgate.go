@@ -93,7 +93,7 @@ var (
 	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
-	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
+	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 )
 
