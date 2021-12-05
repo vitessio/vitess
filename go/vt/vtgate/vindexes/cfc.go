@@ -207,7 +207,11 @@ func (vind *CFC) computeKsid(v []byte, prefix bool) ([]byte, error) {
 func (vind *CFC) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		v, err := vind.computeKsid(ids[i].ToBytes(), false)
+		idBytes, err := ids[i].ToBytes()
+		if err != nil {
+			return out, err
+		}
+		v, err := vind.computeKsid(idBytes, false)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +224,11 @@ func (vind *CFC) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool
 func (vind *CFC) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		v, err := vind.computeKsid(id.ToBytes(), false)
+		idBytes, err := id.ToBytes()
+		if err != nil {
+			return out, err
+		}
+		v, err := vind.computeKsid(idBytes, false)
 		if err != nil {
 			return nil, err
 		}
@@ -292,7 +300,10 @@ func (vind *prefixCFC) IsUnique() bool {
 func (vind *prefixCFC) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		value := id.ToBytes()
+		value, err := id.ToBytes()
+		if err != nil {
+			return out, err
+		}
 		prefix := findPrefix(value)
 		begin, err := vind.computeKsid(prefix, true)
 		if err != nil {

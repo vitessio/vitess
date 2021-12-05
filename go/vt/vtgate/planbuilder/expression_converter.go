@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -62,7 +63,8 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), 0)
+		// TODO@collations: proper collation for column name
+		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.TypedCollation{})
 	}
 	return nil
 }

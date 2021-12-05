@@ -230,7 +230,7 @@ func TestUnshardedComments(t *testing.T) {
 		Sql:           "update music_user_map set id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assertQueries(t, sbclookup, wantQueries)
 
 	sbclookup.Queries = nil
 	_, err = executorExec(executor, "delete from music_user_map /* trailing */", nil)
@@ -239,7 +239,7 @@ func TestUnshardedComments(t *testing.T) {
 		Sql:           "delete from music_user_map /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assertQueries(t, sbclookup, wantQueries)
 
 	sbclookup.Queries = nil
 	_, err = executorExec(executor, "insert into music_user_map values (1) /* trailing */", nil)
@@ -248,7 +248,7 @@ func TestUnshardedComments(t *testing.T) {
 		Sql:           "insert into music_user_map values (1) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	utils.MustMatch(t, wantQueries, sbclookup.Queries)
+	assertQueries(t, sbclookup, wantQueries)
 }
 
 func TestStreamUnsharded(t *testing.T) {
@@ -589,7 +589,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "types does not support hashcode yet: VARCHAR")
+	assert.Contains(t, err.Error(), "text type with an unknown/unsupported collation cannot be hashed")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {

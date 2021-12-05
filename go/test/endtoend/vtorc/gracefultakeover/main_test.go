@@ -14,21 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package primaryFailure
+package gracefultakeover
 
 import (
 	"fmt"
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
-
-	_ "vitess.io/vitess/go/vt/topo/consultopo"
-	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
-	_ "vitess.io/vitess/go/vt/topo/k8stopo"
-	_ "vitess.io/vitess/go/vt/topo/zk2topo"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 )
 
 var clusterInfo *utils.VtOrcClusterInfo
@@ -38,7 +32,7 @@ func TestMain(m *testing.M) {
 	var cellInfos []*utils.CellInfo
 	cellInfos = append(cellInfos, &utils.CellInfo{
 		CellName:    utils.Cell1,
-		NumReplicas: 12,
+		NumReplicas: 6,
 		NumRdonly:   2,
 		UIDBase:     100,
 	})

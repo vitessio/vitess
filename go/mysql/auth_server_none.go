@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"crypto/x509"
 	"net"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -51,7 +50,7 @@ func (a *AuthServerNone) HandleUser(user string) bool {
 
 // UserEntryWithHash validates the user if it exists and returns the information.
 // Always accepts any user.
-func (a *AuthServerNone) UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
+func (a *AuthServerNone) UserEntryWithHash(conn *Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	return &NoneGetter{}, nil
 }
 

@@ -508,16 +508,30 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 
 		// Gen4 supports more complex queries so we now need to
 		// handle multiple FROM clauses
-		tables := make([]sqlparser.TableIdent, len(selStmt.From))
+		tables := make([]*sqlparser.AliasedTableExpr, len(selStmt.From))
 		for _, from := range selStmt.From {
 			tables = append(tables, getTables(from)...)
 		}
-		colTypeMap := map[string]querypb.Type{}
+
+		tableColumnMap := map[sqlparser.TableIdent]map[string]querypb.Type{}
+
 		for _, table := range tables {
-			tableName := sqlparser.String(table)
+			if table == nil {
+				continue
+			}
+
+			tableName := sqlparser.String(sqlparser.GetTableName(table.Expr))
 			columns, exists := getGlobalTabletEnv().tableColumns[tableName]
 			if !exists && tableName != "" && tableName != "dual" {
 				return fmt.Errorf("unable to resolve table name %s", tableName)
+			}
+
+			colTypeMap := map[string]querypb.Type{}
+
+			if table.As.IsEmpty() {
+				tableColumnMap[sqlparser.GetTableName(table.Expr)] = colTypeMap
+			} else {
+				tableColumnMap[table.As] = colTypeMap
 			}
 
 			for k, v := range columns {
@@ -537,11 +551,23 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		for _, node := range selStmt.SelectExprs {
 			switch node := node.(type) {
 			case *sqlparser.AliasedExpr:
-				colNames, colTypes = inferColTypeFromExpr(node.Expr, colTypeMap, colNames, colTypes)
+				colNames, colTypes = inferColTypeFromExpr(node.Expr, tableColumnMap, colNames, colTypes)
 			case *sqlparser.StarExpr:
-				for col, colType := range colTypeMap {
-					colNames = append(colNames, col)
-					colTypes = append(colTypes, colType)
+				if node.TableName.Name.IsEmpty() {
+					// SELECT *
+					for _, colTypeMap := range tableColumnMap {
+						for col, colType := range colTypeMap {
+							colNames = append(colNames, col)
+							colTypes = append(colTypes, colType)
+						}
+					}
+				} else {
+					// SELECT tableName.*
+					colTypeMap := tableColumnMap[node.TableName.Name]
+					for col, colType := range colTypeMap {
+						colNames = append(colNames, col)
+						colTypes = append(colTypes, colType)
+					}
 				}
 			}
 		}
@@ -611,7 +637,8 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")
 		log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
 
-	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet:
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet,
+		sqlparser.StmtSavepoint, sqlparser.StmtSRollback, sqlparser.StmtRelease:
 		result = &sqltypes.Result{}
 	case sqlparser.StmtShow:
 		result = &sqltypes.Result{Fields: sqltypes.MakeTestFields("", "")}
@@ -626,11 +653,11 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	return callback(result)
 }
 
-func getTables(node sqlparser.SQLNode) []sqlparser.TableIdent {
-	var tables []sqlparser.TableIdent
+func getTables(node sqlparser.SQLNode) []*sqlparser.AliasedTableExpr {
+	var tables []*sqlparser.AliasedTableExpr
 	switch expr := node.(type) {
 	case *sqlparser.AliasedTableExpr:
-		tables = append(tables, sqlparser.GetTableName(expr.Expr))
+		tables = append(tables, expr)
 	case *sqlparser.JoinTableExpr:
 		tables = append(tables, getTables(expr.LeftExpr)...)
 		tables = append(tables, getTables(expr.RightExpr)...)
@@ -638,16 +665,45 @@ func getTables(node sqlparser.SQLNode) []sqlparser.TableIdent {
 	return tables
 }
 
-func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
+func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.TableIdent]map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
 	switch node := node.(type) {
 	case *sqlparser.ColName:
-		col := strings.ToLower(node.Name.String())
-		colType := colTypeMap[col]
-		if colType == querypb.Type_NULL_TYPE {
-			log.Errorf("vtexplain: invalid column %s, typeMap +%v", col, colTypeMap)
+		if node.Qualifier.Name.IsEmpty() {
+			// Unqualified column name, try to search for it across all tables
+			col := strings.ToLower(node.Name.String())
+
+			var colType querypb.Type
+
+			for _, colTypeMap := range tableColumnMap {
+				if colTypeMap[col] != querypb.Type_NULL_TYPE {
+					if colType != querypb.Type_NULL_TYPE {
+						log.Errorf("vtexplain: ambiguous column %s", col)
+						return colNames, colTypes
+					}
+
+					colType = colTypeMap[col]
+				}
+			}
+
+			if colType == querypb.Type_NULL_TYPE {
+				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+			}
+
+			colNames = append(colNames, col)
+			colTypes = append(colTypes, colType)
+		} else {
+			// Qualified column name, try to look it up
+			colTypeMap := tableColumnMap[node.Qualifier.Name]
+			col := strings.ToLower(node.Name.String())
+			colType := colTypeMap[col]
+
+			if colType == querypb.Type_NULL_TYPE {
+				log.Errorf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap)
+			}
+
+			colNames = append(colNames, col)
+			colTypes = append(colTypes, colType)
 		}
-		colNames = append(colNames, col)
-		colTypes = append(colTypes, colType)
 	case *sqlparser.FuncExpr:
 		// As a shortcut, functions are integral types
 		colNames = append(colNames, sqlparser.String(node))
@@ -671,7 +727,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Typ
 			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
 		}
 	case *sqlparser.CaseExpr:
-		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, colTypeMap, colNames, colTypes)
+		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, tableColumnMap, colNames, colTypes)
 	case *sqlparser.NullVal:
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_NULL_TYPE)
