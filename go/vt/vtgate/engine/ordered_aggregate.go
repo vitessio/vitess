@@ -412,7 +412,8 @@ func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value, colls map[int
 		cmp, err := evalengine.NullsafeCompare(row1[key.KeyCol], row2[key.KeyCol], colls[key.KeyCol])
 		if err != nil {
 			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-			if !(isComparisonErr && key.WeightStringCol != -1) {
+			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
+			if !isComparisonErr && !isCollationErr || key.WeightStringCol == -1 {
 				return false, err
 			}
 			key.KeyCol = key.WeightStringCol
@@ -460,7 +461,11 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], row2[aggr.Col], OpcodeType[aggr.Opcode])
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
-			err = proto.Unmarshal(row1[aggr.Col].ToBytes(), vgtid)
+			rowBytes, err := row1[aggr.Col].ToBytes()
+			if err != nil {
+				return nil, nil, err
+			}
+			err = proto.Unmarshal(rowBytes, vgtid)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -543,7 +548,11 @@ func (oa *OrderedAggregate) convertFinal(current []sqltypes.Value) ([]sqltypes.V
 		switch aggr.Opcode {
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
-			err := proto.Unmarshal(current[aggr.Col].ToBytes(), vgtid)
+			currentBytes, err := current[aggr.Col].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			err = proto.Unmarshal(currentBytes, vgtid)
 			if err != nil {
 				return nil, err
 			}

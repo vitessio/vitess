@@ -6851,6 +6851,9 @@ export namespace topodata {
 
         /** Tablet primary_term_start_time */
         primary_term_start_time?: (vttime.ITime|null);
+
+        /** Tablet db_server_version */
+        db_server_version?: (string|null);
     }
 
     /** Represents a Tablet. */
@@ -6897,6 +6900,9 @@ export namespace topodata {
 
         /** Tablet primary_term_start_time. */
         public primary_term_start_time?: (vttime.ITime|null);
+
+        /** Tablet db_server_version. */
+        public db_server_version: string;
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -17993,7 +17999,9 @@ export namespace query {
         TUPLE = 28,
         GEOMETRY = 2077,
         JSON = 2078,
-        EXPRESSION = 31
+        EXPRESSION = 31,
+        HEXNUM = 4128,
+        HEXVAL = 4129
     }
 
     /** Properties of a Value. */
@@ -18316,6 +18324,9 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables */
         has_created_temp_tables?: (boolean|null);
+
+        /** ExecuteOptions collation */
+        collation?: (number|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -18350,6 +18361,9 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables. */
         public has_created_temp_tables: boolean;
+
+        /** ExecuteOptions collation. */
+        public collation: number;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -19683,6 +19697,9 @@ export namespace query {
 
         /** StreamExecuteRequest transaction_id */
         transaction_id?: (number|Long|null);
+
+        /** StreamExecuteRequest reserved_id */
+        reserved_id?: (number|Long|null);
     }
 
     /** Represents a StreamExecuteRequest. */
@@ -19711,6 +19728,9 @@ export namespace query {
 
         /** StreamExecuteRequest transaction_id. */
         public transaction_id: (number|Long);
+
+        /** StreamExecuteRequest reserved_id. */
+        public reserved_id: (number|Long);
 
         /**
          * Creates a new StreamExecuteRequest instance using the specified properties.
@@ -22525,11 +22545,11 @@ export namespace query {
         /** BeginStreamExecuteRequest options */
         options?: (query.IExecuteOptions|null);
 
-        /** BeginStreamExecuteRequest reserved_id */
-        reserved_id?: (number|Long|null);
-
         /** BeginStreamExecuteRequest pre_queries */
         pre_queries?: (string[]|null);
+
+        /** BeginStreamExecuteRequest reserved_id */
+        reserved_id?: (number|Long|null);
     }
 
     /** Represents a BeginStreamExecuteRequest. */
@@ -22556,11 +22576,11 @@ export namespace query {
         /** BeginStreamExecuteRequest options. */
         public options?: (query.IExecuteOptions|null);
 
-        /** BeginStreamExecuteRequest reserved_id. */
-        public reserved_id: (number|Long);
-
         /** BeginStreamExecuteRequest pre_queries. */
         public pre_queries: string[];
+
+        /** BeginStreamExecuteRequest reserved_id. */
+        public reserved_id: (number|Long);
 
         /**
          * Creates a new BeginStreamExecuteRequest instance using the specified properties.
@@ -23377,6 +23397,240 @@ export namespace query {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a ReserveStreamExecuteRequest. */
+    interface IReserveStreamExecuteRequest {
+
+        /** ReserveStreamExecuteRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveStreamExecuteRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveStreamExecuteRequest target */
+        target?: (query.ITarget|null);
+
+        /** ReserveStreamExecuteRequest query */
+        query?: (query.IBoundQuery|null);
+
+        /** ReserveStreamExecuteRequest options */
+        options?: (query.IExecuteOptions|null);
+
+        /** ReserveStreamExecuteRequest transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** ReserveStreamExecuteRequest pre_queries */
+        pre_queries?: (string[]|null);
+    }
+
+    /** Represents a ReserveStreamExecuteRequest. */
+    class ReserveStreamExecuteRequest implements IReserveStreamExecuteRequest {
+
+        /**
+         * Constructs a new ReserveStreamExecuteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveStreamExecuteRequest);
+
+        /** ReserveStreamExecuteRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveStreamExecuteRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveStreamExecuteRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** ReserveStreamExecuteRequest query. */
+        public query?: (query.IBoundQuery|null);
+
+        /** ReserveStreamExecuteRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /** ReserveStreamExecuteRequest transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** ReserveStreamExecuteRequest pre_queries. */
+        public pre_queries: string[];
+
+        /**
+         * Creates a new ReserveStreamExecuteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveStreamExecuteRequest instance
+         */
+        public static create(properties?: query.IReserveStreamExecuteRequest): query.ReserveStreamExecuteRequest;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteRequest message. Does not implicitly {@link query.ReserveStreamExecuteRequest.verify|verify} messages.
+         * @param message ReserveStreamExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveStreamExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteRequest message, length delimited. Does not implicitly {@link query.ReserveStreamExecuteRequest.verify|verify} messages.
+         * @param message ReserveStreamExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveStreamExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveStreamExecuteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveStreamExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveStreamExecuteRequest;
+
+        /**
+         * Decodes a ReserveStreamExecuteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveStreamExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveStreamExecuteRequest;
+
+        /**
+         * Verifies a ReserveStreamExecuteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveStreamExecuteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveStreamExecuteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveStreamExecuteRequest;
+
+        /**
+         * Creates a plain object from a ReserveStreamExecuteRequest message. Also converts values to other types if specified.
+         * @param message ReserveStreamExecuteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveStreamExecuteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveStreamExecuteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReserveStreamExecuteResponse. */
+    interface IReserveStreamExecuteResponse {
+
+        /** ReserveStreamExecuteResponse error */
+        error?: (vtrpc.IRPCError|null);
+
+        /** ReserveStreamExecuteResponse result */
+        result?: (query.IQueryResult|null);
+
+        /** ReserveStreamExecuteResponse reserved_id */
+        reserved_id?: (number|Long|null);
+
+        /** ReserveStreamExecuteResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ReserveStreamExecuteResponse. */
+    class ReserveStreamExecuteResponse implements IReserveStreamExecuteResponse {
+
+        /**
+         * Constructs a new ReserveStreamExecuteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveStreamExecuteResponse);
+
+        /** ReserveStreamExecuteResponse error. */
+        public error?: (vtrpc.IRPCError|null);
+
+        /** ReserveStreamExecuteResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /** ReserveStreamExecuteResponse reserved_id. */
+        public reserved_id: (number|Long);
+
+        /** ReserveStreamExecuteResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ReserveStreamExecuteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveStreamExecuteResponse instance
+         */
+        public static create(properties?: query.IReserveStreamExecuteResponse): query.ReserveStreamExecuteResponse;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteResponse message. Does not implicitly {@link query.ReserveStreamExecuteResponse.verify|verify} messages.
+         * @param message ReserveStreamExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveStreamExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveStreamExecuteResponse message, length delimited. Does not implicitly {@link query.ReserveStreamExecuteResponse.verify|verify} messages.
+         * @param message ReserveStreamExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveStreamExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveStreamExecuteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveStreamExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveStreamExecuteResponse;
+
+        /**
+         * Decodes a ReserveStreamExecuteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveStreamExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveStreamExecuteResponse;
+
+        /**
+         * Verifies a ReserveStreamExecuteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveStreamExecuteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveStreamExecuteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveStreamExecuteResponse;
+
+        /**
+         * Creates a plain object from a ReserveStreamExecuteResponse message. Also converts values to other types if specified.
+         * @param message ReserveStreamExecuteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveStreamExecuteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveStreamExecuteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a ReserveBeginExecuteRequest. */
     interface IReserveBeginExecuteRequest {
 
@@ -23612,6 +23866,246 @@ export namespace query {
 
         /**
          * Converts this ReserveBeginExecuteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReserveBeginStreamExecuteRequest. */
+    interface IReserveBeginStreamExecuteRequest {
+
+        /** ReserveBeginStreamExecuteRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveBeginStreamExecuteRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveBeginStreamExecuteRequest target */
+        target?: (query.ITarget|null);
+
+        /** ReserveBeginStreamExecuteRequest query */
+        query?: (query.IBoundQuery|null);
+
+        /** ReserveBeginStreamExecuteRequest options */
+        options?: (query.IExecuteOptions|null);
+
+        /** ReserveBeginStreamExecuteRequest pre_queries */
+        pre_queries?: (string[]|null);
+
+        /** ReserveBeginStreamExecuteRequest post_begin_queries */
+        post_begin_queries?: (string[]|null);
+    }
+
+    /** Represents a ReserveBeginStreamExecuteRequest. */
+    class ReserveBeginStreamExecuteRequest implements IReserveBeginStreamExecuteRequest {
+
+        /**
+         * Constructs a new ReserveBeginStreamExecuteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveBeginStreamExecuteRequest);
+
+        /** ReserveBeginStreamExecuteRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** ReserveBeginStreamExecuteRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** ReserveBeginStreamExecuteRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** ReserveBeginStreamExecuteRequest query. */
+        public query?: (query.IBoundQuery|null);
+
+        /** ReserveBeginStreamExecuteRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /** ReserveBeginStreamExecuteRequest pre_queries. */
+        public pre_queries: string[];
+
+        /** ReserveBeginStreamExecuteRequest post_begin_queries. */
+        public post_begin_queries: string[];
+
+        /**
+         * Creates a new ReserveBeginStreamExecuteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveBeginStreamExecuteRequest instance
+         */
+        public static create(properties?: query.IReserveBeginStreamExecuteRequest): query.ReserveBeginStreamExecuteRequest;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteRequest message. Does not implicitly {@link query.ReserveBeginStreamExecuteRequest.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveBeginStreamExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteRequest message, length delimited. Does not implicitly {@link query.ReserveBeginStreamExecuteRequest.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveBeginStreamExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveBeginStreamExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveBeginStreamExecuteRequest;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveBeginStreamExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveBeginStreamExecuteRequest;
+
+        /**
+         * Verifies a ReserveBeginStreamExecuteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveBeginStreamExecuteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveBeginStreamExecuteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveBeginStreamExecuteRequest;
+
+        /**
+         * Creates a plain object from a ReserveBeginStreamExecuteRequest message. Also converts values to other types if specified.
+         * @param message ReserveBeginStreamExecuteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveBeginStreamExecuteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveBeginStreamExecuteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReserveBeginStreamExecuteResponse. */
+    interface IReserveBeginStreamExecuteResponse {
+
+        /** ReserveBeginStreamExecuteResponse error */
+        error?: (vtrpc.IRPCError|null);
+
+        /** ReserveBeginStreamExecuteResponse result */
+        result?: (query.IQueryResult|null);
+
+        /** ReserveBeginStreamExecuteResponse transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** ReserveBeginStreamExecuteResponse reserved_id */
+        reserved_id?: (number|Long|null);
+
+        /** ReserveBeginStreamExecuteResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ReserveBeginStreamExecuteResponse. */
+    class ReserveBeginStreamExecuteResponse implements IReserveBeginStreamExecuteResponse {
+
+        /**
+         * Constructs a new ReserveBeginStreamExecuteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IReserveBeginStreamExecuteResponse);
+
+        /** ReserveBeginStreamExecuteResponse error. */
+        public error?: (vtrpc.IRPCError|null);
+
+        /** ReserveBeginStreamExecuteResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /** ReserveBeginStreamExecuteResponse transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** ReserveBeginStreamExecuteResponse reserved_id. */
+        public reserved_id: (number|Long);
+
+        /** ReserveBeginStreamExecuteResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ReserveBeginStreamExecuteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReserveBeginStreamExecuteResponse instance
+         */
+        public static create(properties?: query.IReserveBeginStreamExecuteResponse): query.ReserveBeginStreamExecuteResponse;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteResponse message. Does not implicitly {@link query.ReserveBeginStreamExecuteResponse.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IReserveBeginStreamExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReserveBeginStreamExecuteResponse message, length delimited. Does not implicitly {@link query.ReserveBeginStreamExecuteResponse.verify|verify} messages.
+         * @param message ReserveBeginStreamExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IReserveBeginStreamExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReserveBeginStreamExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.ReserveBeginStreamExecuteResponse;
+
+        /**
+         * Decodes a ReserveBeginStreamExecuteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReserveBeginStreamExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.ReserveBeginStreamExecuteResponse;
+
+        /**
+         * Verifies a ReserveBeginStreamExecuteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReserveBeginStreamExecuteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReserveBeginStreamExecuteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.ReserveBeginStreamExecuteResponse;
+
+        /**
+         * Creates a plain object from a ReserveBeginStreamExecuteResponse message. Also converts values to other types if specified.
+         * @param message ReserveBeginStreamExecuteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.ReserveBeginStreamExecuteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReserveBeginStreamExecuteResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

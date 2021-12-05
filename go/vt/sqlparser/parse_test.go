@@ -41,6 +41,25 @@ var (
 		output     string
 		partialDDL bool
 	}{{
+		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
+		output:     "create table x",
+		partialDDL: true,
+	}, {
+		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
+		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = TRUE",
+		output: "select 1 from t1 where exists (select 1 from dual) = true",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = FALSE",
+		output: "select 1 from t1 where exists (select 1 from dual) = false",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = 1",
+		output: "select 1 from t1 where exists (select 1 from dual) = 1",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
@@ -110,6 +129,12 @@ var (
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
 	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT null)",
+		output: "create table t2 (\n\tb JSON default null\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
+		output: "create table t2 (\n\tb JSON default null\n)",
+	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
 		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
 	}, {
@@ -122,46 +147,22 @@ var (
 		input:  "create table x(location POINT DEFAULT (7.0))",
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
 	}, {
-		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location GEOMETRY DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location LINESTRING DEFAULT POINT(7.0, 3.0))",
 		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
 	}, {
-		input:  "create table x(location POLYGON DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location MULTIPOINT DEFAULT POINT(7.0, 3.0))",
 		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
 	}, {
-		input:  "create table x(location MULTILINESTRING DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
 	}, {
-		input:  "create table x(location MULTIPOLYGON DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
 	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
@@ -2057,8 +2058,6 @@ var (
 	}, {
 		input: "stream * from t",
 	}, {
-		input: "vstream * from t",
-	}, {
 		input: "stream /* comment */ * from t",
 	}, {
 		input: "begin",
@@ -2324,6 +2323,147 @@ func TestInvalid(t *testing.T) {
 		if err != nil && !strings.Contains(err.Error(), tcase.err) {
 			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
 		}
+	}
+}
+
+func TestIntroducers(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select _armscii8 'x'",
+		output: "select _armscii8 'x' from dual",
+	}, {
+		input:  "select _ascii 'x'",
+		output: "select _ascii 'x' from dual",
+	}, {
+		input:  "select _big5 'x'",
+		output: "select _big5 'x' from dual",
+	}, {
+		input:  "select _binary 'x'",
+		output: "select _binary 'x' from dual",
+	}, {
+		input:  "select _cp1250 'x'",
+		output: "select _cp1250 'x' from dual",
+	}, {
+		input:  "select _cp1251 'x'",
+		output: "select _cp1251 'x' from dual",
+	}, {
+		input:  "select _cp1256 'x'",
+		output: "select _cp1256 'x' from dual",
+	}, {
+		input:  "select _cp1257 'x'",
+		output: "select _cp1257 'x' from dual",
+	}, {
+		input:  "select _cp850 'x'",
+		output: "select _cp850 'x' from dual",
+	}, {
+		input:  "select _cp852 'x'",
+		output: "select _cp852 'x' from dual",
+	}, {
+		input:  "select _cp866 'x'",
+		output: "select _cp866 'x' from dual",
+	}, {
+		input:  "select _cp932 'x'",
+		output: "select _cp932 'x' from dual",
+	}, {
+		input:  "select _dec8 'x'",
+		output: "select _dec8 'x' from dual",
+	}, {
+		input:  "select _eucjpms 'x'",
+		output: "select _eucjpms 'x' from dual",
+	}, {
+		input:  "select _euckr 'x'",
+		output: "select _euckr 'x' from dual",
+	}, {
+		input:  "select _gb18030 'x'",
+		output: "select _gb18030 'x' from dual",
+	}, {
+		input:  "select _gb2312 'x'",
+		output: "select _gb2312 'x' from dual",
+	}, {
+		input:  "select _gbk 'x'",
+		output: "select _gbk 'x' from dual",
+	}, {
+		input:  "select _geostd8 'x'",
+		output: "select _geostd8 'x' from dual",
+	}, {
+		input:  "select _greek 'x'",
+		output: "select _greek 'x' from dual",
+	}, {
+		input:  "select _hebrew 'x'",
+		output: "select _hebrew 'x' from dual",
+	}, {
+		input:  "select _hp8 'x'",
+		output: "select _hp8 'x' from dual",
+	}, {
+		input:  "select _keybcs2 'x'",
+		output: "select _keybcs2 'x' from dual",
+	}, {
+		input:  "select _koi8r 'x'",
+		output: "select _koi8r 'x' from dual",
+	}, {
+		input:  "select _koi8u 'x'",
+		output: "select _koi8u 'x' from dual",
+	}, {
+		input:  "select _latin1 'x'",
+		output: "select _latin1 'x' from dual",
+	}, {
+		input:  "select _latin2 'x'",
+		output: "select _latin2 'x' from dual",
+	}, {
+		input:  "select _latin5 'x'",
+		output: "select _latin5 'x' from dual",
+	}, {
+		input:  "select _latin7 'x'",
+		output: "select _latin7 'x' from dual",
+	}, {
+		input:  "select _macce 'x'",
+		output: "select _macce 'x' from dual",
+	}, {
+		input:  "select _macroman 'x'",
+		output: "select _macroman 'x' from dual",
+	}, {
+		input:  "select _sjis 'x'",
+		output: "select _sjis 'x' from dual",
+	}, {
+		input:  "select _swe7 'x'",
+		output: "select _swe7 'x' from dual",
+	}, {
+		input:  "select _tis620 'x'",
+		output: "select _tis620 'x' from dual",
+	}, {
+		input:  "select _ucs2 'x'",
+		output: "select _ucs2 'x' from dual",
+	}, {
+		input:  "select _ujis 'x'",
+		output: "select _ujis 'x' from dual",
+	}, {
+		input:  "select _utf16 'x'",
+		output: "select _utf16 'x' from dual",
+	}, {
+		input:  "select _utf16le 'x'",
+		output: "select _utf16le 'x' from dual",
+	}, {
+		input:  "select _utf32 'x'",
+		output: "select _utf32 'x' from dual",
+	}, {
+		input:  "select _utf8 'x'",
+		output: "select _utf8 'x' from dual",
+	}, {
+		input:  "select _utf8mb4 'x'",
+		output: "select _utf8mb4 'x' from dual",
+	}}
+	for _, tcase := range validSQL {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			assert.NoError(t, err)
+			out := String(tree)
+			assert.Equal(t, tcase.output, out)
+		})
 	}
 }
 
@@ -2810,6 +2950,7 @@ func TestLoadData(t *testing.T) {
 		"load data from s3 file 'x.txt'",
 		"load data infile 'x.txt' into table 'c'",
 		"load data from s3 'x.txt' into table x"}
+
 	for _, tcase := range validSQL {
 		_, err := Parse(tcase)
 		require.NoError(t, err)
@@ -3128,52 +3269,6 @@ func TestCreateTable(t *testing.T) {
 	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)
 )`,
 		}, {
-			// test utc_timestamp with and without ()
-			input: `create table t (
-	time1 timestamp default utc_timestamp,
-	time2 timestamp default utc_timestamp(),
-	time3 timestamp default utc_timestamp on update utc_timestamp,
-	time4 timestamp default utc_timestamp() on update utc_timestamp(),
-	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)
-)`,
-			output: `create table t (
-	time1 timestamp default (utc_timestamp()),
-	time2 timestamp default (utc_timestamp()),
-	time3 timestamp default (utc_timestamp()) on update utc_timestamp(),
-	time4 timestamp default (utc_timestamp()) on update utc_timestamp(),
-	time5 timestamp(4) default (utc_timestamp(4)) on update utc_timestamp(4)
-)`,
-		}, {
-			// test utc_time with and without ()
-			input: `create table t (
-	time1 timestamp default utc_time,
-	time2 timestamp default utc_time(),
-	time3 timestamp default utc_time on update utc_time,
-	time4 timestamp default utc_time() on update utc_time(),
-	time5 timestamp(5) default utc_time(5) on update utc_time(5)
-)`,
-			output: `create table t (
-	time1 timestamp default (utc_time()),
-	time2 timestamp default (utc_time()),
-	time3 timestamp default (utc_time()) on update utc_time(),
-	time4 timestamp default (utc_time()) on update utc_time(),
-	time5 timestamp(5) default (utc_time(5)) on update utc_time(5)
-)`,
-		}, {
-			// test utc_date with and without ()
-			input: `create table t (
-	time1 timestamp default utc_date,
-	time2 timestamp default utc_date(),
-	time3 timestamp default utc_date on update utc_date,
-	time4 timestamp default utc_date() on update utc_date()
-)`,
-			output: `create table t (
-	time1 timestamp default (utc_date()),
-	time2 timestamp default (utc_date()),
-	time3 timestamp default (utc_date()) on update utc_date(),
-	time4 timestamp default (utc_date()) on update utc_date()
-)`,
-		}, {
 			// test localtime with and without ()
 			input: `create table t (
 	time1 timestamp default localtime,
@@ -3204,36 +3299,6 @@ func TestCreateTable(t *testing.T) {
 	time3 timestamp default localtimestamp() on update localtimestamp(),
 	time4 timestamp default localtimestamp() on update localtimestamp(),
 	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)
-)`,
-		}, {
-			// test current_date with and without ()
-			input: `create table t (
-	time1 timestamp default current_date,
-	time2 timestamp default current_date(),
-	time3 timestamp default current_date on update current_date,
-	time4 timestamp default current_date() on update current_date()
-)`,
-			output: `create table t (
-	time1 timestamp default (current_date()),
-	time2 timestamp default (current_date()),
-	time3 timestamp default (current_date()) on update current_date(),
-	time4 timestamp default (current_date()) on update current_date()
-)`,
-		}, {
-			// test current_time with and without ()
-			input: `create table t (
-	time1 timestamp default current_time,
-	time2 timestamp default current_time(),
-	time3 timestamp default current_time on update current_time,
-	time4 timestamp default current_time() on update current_time(),
-	time5 timestamp(2) default current_time(2) on update current_time(2)
-)`,
-			output: `create table t (
-	time1 timestamp default (current_time()),
-	time2 timestamp default (current_time()),
-	time3 timestamp default (current_time()) on update current_time(),
-	time4 timestamp default (current_time()) on update current_time(),
-	time5 timestamp(2) default (current_time(2)) on update current_time(2)
 )`,
 		}, {
 			input: `create table t1 (
@@ -3333,6 +3398,27 @@ func TestCreateTable(t *testing.T) {
 			require.Equal(t, expected, got)
 		})
 	}
+}
+
+func TestOne(t *testing.T) {
+	testOne := struct {
+		input, output string
+	}{
+		input:  "",
+		output: "",
+	}
+	if testOne.input == "" {
+		return
+	}
+	sql := strings.TrimSpace(testOne.input)
+	tree, err := Parse(sql)
+	require.NoError(t, err)
+	got := String(tree)
+	expected := testOne.output
+	if expected == "" {
+		expected = sql
+	}
+	require.Equal(t, expected, got)
 }
 
 func TestCreateTableLike(t *testing.T) {

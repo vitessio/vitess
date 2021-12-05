@@ -52,7 +52,7 @@ type (
 
 	// SetOp is an interface that different type of set operations implements.
 	SetOp interface {
-		Execute(vcursor VCursor, env evalengine.ExpressionEnv) error
+		Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error
 		VariableName() string
 	}
 
@@ -118,7 +118,7 @@ func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 	if len(input.Rows) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
-	env := evalengine.ExpressionEnv{
+	env := &evalengine.ExpressionEnv{
 		BindVars: bindVars,
 		Row:      input.Rows[0],
 	}
@@ -171,7 +171,7 @@ func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "UserDefinedVariable",
 		Name: u.Name,
-		Expr: u.Expr.String(),
+		Expr: evalengine.FormatExpr(u.Expr),
 	})
 
 }
@@ -182,7 +182,7 @@ func (u *UserDefinedVariable) VariableName() string {
 }
 
 // Execute implements the SetOp interface method.
-func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+func (u *UserDefinedVariable) Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error {
 	value, err := u.Expr.Evaluate(env)
 	if err != nil {
 		return err
@@ -210,7 +210,7 @@ func (svi *SysVarIgnore) VariableName() string {
 }
 
 // Execute implements the SetOp interface method.
-func (svi *SysVarIgnore) Execute(VCursor, evalengine.ExpressionEnv) error {
+func (svi *SysVarIgnore) Execute(VCursor, *evalengine.ExpressionEnv) error {
 	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
 	return nil
 }
@@ -235,7 +235,7 @@ func (svci *SysVarCheckAndIgnore) VariableName() string {
 }
 
 // Execute implements the SetOp interface method
-func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error {
 	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
 	if err != nil {
 		return err
@@ -279,7 +279,7 @@ func (svs *SysVarReservedConn) VariableName() string {
 }
 
 // Execute implements the SetOp interface method
-func (svs *SysVarReservedConn) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+func (svs *SysVarReservedConn) Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error {
 	// For those running on advanced vitess settings.
 	if svs.TargetDestination != nil {
 		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
@@ -313,7 +313,7 @@ func (svs *SysVarReservedConn) Execute(vcursor VCursor, env evalengine.Expressio
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarReservedConn) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env evalengine.ExpressionEnv) error {
+func (svs *SysVarReservedConn) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := 0; i < len(rss); i++ {
 		queries[i] = &querypb.BoundQuery{
@@ -325,7 +325,7 @@ func (svs *SysVarReservedConn) execSetStatement(vcursor VCursor, rss []*srvtopo.
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
+func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalengine.ExpressionEnv) (bool, error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	if svs.Name == "sql_mode" {
 		sysVarExprValidationQuery = fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
@@ -412,12 +412,12 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "SysVarAware",
 		Name: svss.Name,
-		Expr: svss.Expr.String(),
+		Expr: evalengine.FormatExpr(svss.Expr),
 	})
 }
 
 // Execute implements the SetOp interface method
-func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+func (svss *SysVarSetAware) Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error {
 	var err error
 	switch svss.Name {
 	case sysvars.Autocommit.Name:
@@ -512,7 +512,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 	return err
 }
 
-func (svss *SysVarSetAware) evalAsInt64(env evalengine.ExpressionEnv) (int64, error) {
+func (svss *SysVarSetAware) evalAsInt64(env *evalengine.ExpressionEnv) (int64, error) {
 	value, err := svss.Expr.Evaluate(env)
 	if err != nil {
 		return 0, err
@@ -529,7 +529,7 @@ func (svss *SysVarSetAware) evalAsInt64(env evalengine.ExpressionEnv) (int64, er
 	return intValue, nil
 }
 
-func (svss *SysVarSetAware) evalAsFloat(env evalengine.ExpressionEnv) (float64, error) {
+func (svss *SysVarSetAware) evalAsFloat(env *evalengine.ExpressionEnv) (float64, error) {
 	value, err := svss.Expr.Evaluate(env)
 	if err != nil {
 		return 0, err
@@ -543,7 +543,7 @@ func (svss *SysVarSetAware) evalAsFloat(env evalengine.ExpressionEnv) (float64, 
 	return floatValue, nil
 }
 
-func (svss *SysVarSetAware) evalAsString(env evalengine.ExpressionEnv) (string, error) {
+func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv) (string, error) {
 	value, err := svss.Expr.Evaluate(env)
 	if err != nil {
 		return "", err
@@ -556,7 +556,7 @@ func (svss *SysVarSetAware) evalAsString(env evalengine.ExpressionEnv) (string, 
 	return v.ToString(), nil
 }
 
-func (svss *SysVarSetAware) setBoolSysVar(env evalengine.ExpressionEnv, setter func(bool) error) error {
+func (svss *SysVarSetAware) setBoolSysVar(env *evalengine.ExpressionEnv, setter func(bool) error) error {
 	value, err := svss.Expr.Evaluate(env)
 	if err != nil {
 		return err

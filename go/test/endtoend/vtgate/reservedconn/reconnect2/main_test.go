@@ -121,6 +121,27 @@ func TestTabletChange(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestTabletChangeStreaming(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "set workload = olap")
+	checkedExec(t, conn, "use @primary")
+	checkedExec(t, conn, "set sql_mode = ''")
+
+	// this will create reserved connection on primary on -80 and 80- shards.
+	checkedExec(t, conn, "select * from test")
+
+	// Change Primary
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
+	require.NoError(t, err)
+
+	// this should pass as there is a new primary tablet and is serving.
+	_, err = exec(t, conn, "select * from test")
+	assert.NoError(t, err)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)

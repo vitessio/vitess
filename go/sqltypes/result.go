@@ -221,9 +221,9 @@ func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, incremen
 	for _, row := range r.Rows {
 		newHash := hashCodeForRow(row)
 		if increment {
-			allRows[newHash] += 1
+			allRows[newHash]++
 		} else {
-			allRows[newHash] -= 1
+			allRows[newHash]--
 		}
 	}
 	if increment {

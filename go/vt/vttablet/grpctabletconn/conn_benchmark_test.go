@@ -73,7 +73,7 @@ func (b *BenchmarkService) Execute(ctx context.Context, target *querypb.Target, 
 	panic("should not be called")
 }
 
-func (b *BenchmarkService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (b *BenchmarkService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	panic("should not be called")
 }
 
@@ -90,7 +90,7 @@ func (b *BenchmarkService) BeginExecuteBatch(ctx context.Context, target *queryp
 }
 
 // BeginStreamExecute combines Begin and StreamExecute.
-func (b *BenchmarkService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+func (b *BenchmarkService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
 	panic("BenchmarkService does not implement BeginStreamExecute")
 }
 
@@ -128,7 +128,15 @@ func (b *BenchmarkService) ReserveBeginExecute(ctx context.Context, target *quer
 	panic("should not be called")
 }
 
+func (b *BenchmarkService) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, int64, *topodatapb.TabletAlias, error) {
+	panic("should not be called")
+}
+
 func (b *BenchmarkService) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("should not be called")
+}
+
+func (b *BenchmarkService) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
 	panic("should not be called")
 }
 

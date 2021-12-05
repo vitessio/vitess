@@ -249,13 +249,9 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 				return err
 			}
 			for _, onlineDDL := range onlineDDLs {
-				if exec.ddlStrategySetting.IsSkipTopo() {
-					exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
-					if len(execResult.SuccessShards) > 0 {
-						exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
-					}
-				} else {
-					exec.executeOnlineDDL(ctx, execResult, onlineDDL)
+				exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+				if len(execResult.SuccessShards) > 0 {
+					exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 				}
 			}
 			return nil
@@ -267,15 +263,13 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 			execResult.ExecutorErr = err.Error()
 			return err
 		}
-		if exec.ddlStrategySetting.IsSkipTopo() {
-			exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
-			exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
-		} else {
-			exec.executeOnlineDDL(ctx, execResult, onlineDDL)
-		}
+		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+		return nil
+	case *sqlparser.AlterMigration:
+		exec.executeOnAllTablets(ctx, execResult, sql, true)
 		return nil
 	}
-	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
 	exec.executeOnAllTablets(ctx, execResult, sql, false)
 	return nil
 }
@@ -416,6 +410,9 @@ func (exec *TabletExecutor) executeOneTablet(
 	if viaQueryService {
 		result, err = exec.wr.TabletManagerClient().ExecuteQuery(ctx, tablet, []byte(sql), 10)
 	} else {
+		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
+			sql = fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''); %s", sql)
+		}
 		result, err = exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
 	}
 	if err != nil {

@@ -338,10 +338,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(0|1) ASC",
-    "Query": "select col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 1,
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select col from `user` order by col asc",
     "Table": "`user`"
   }
 }
@@ -628,10 +627,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
-        "ResultColumns": 1,
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "OrderBy": "0 ASC",
+        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
         "Table": "`user`"
       }
     ]
@@ -696,6 +694,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
+    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -789,6 +788,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
+    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -883,6 +883,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
+    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1036,6 +1037,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
+    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1230,6 +1232,7 @@ Gen4 plan same as above
     "JoinVars": {
       "u_col": 0
     },
+    "Predicate": "u.col = e.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {

@@ -38,7 +38,7 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 		return nil, err
 	}
 
-	env := evalengine.ExpressionEnv{
+	env := &evalengine.ExpressionEnv{
 		BindVars: bindVars,
 	}
 
@@ -71,7 +71,7 @@ func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*quer
 		return err
 	}
 
-	env := evalengine.ExpressionEnv{
+	env := &evalengine.ExpressionEnv{
 		BindVars: bindVars,
 	}
 
@@ -111,7 +111,7 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) error {
-	env := evalengine.ExpressionEnv{BindVars: bindVars}
+	env := &evalengine.ExpressionEnv{BindVars: bindVars}
 	for i, col := range p.Cols {
 		q, err := p.Exprs[i].Type(env)
 		if err != nil {
@@ -134,7 +134,7 @@ func (p *Projection) Inputs() []Primitive {
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
 	for _, e := range p.Exprs {
-		exprs = append(exprs, e.String())
+		exprs = append(exprs, evalengine.FormatExpr(e))
 	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",

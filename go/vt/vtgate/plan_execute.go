@@ -179,6 +179,10 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 	// at the beginning, but never after.
 	safeSession.SetAutocommittable(mustCommit)
 
+	// If we want to instantly commit the query, then there is no need to add savepoints.
+	// Any partial failure of the query will be taken care by rollback.
+	safeSession.SetSavepointState(!mustCommit)
+
 	// Execute!
 	err := execPlan()
 	if err != nil {
@@ -211,12 +215,46 @@ func (e *Executor) executePlan(
 	// 5: Log and add statistics
 	e.setLogStats(logStats, plan, vcursor, execStart, err, qr)
 
-	// Check if there was partial DML execution. If so, rollback the transaction.
-	if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
-		_ = e.txConn.Rollback(ctx, safeSession)
-		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
+	// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
+	if err != nil {
+		return nil, e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 	}
-	return qr, err
+	return qr, nil
+}
+
+// rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
+func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *LogStats, err error) error {
+	if safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
+		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
+		return vterrors.Wrap(err, rErr.Error())
+	}
+	return err
+}
+
+// rollbackPartialExec rollbacks to the savepoint or rollbacks transaction based on the value set on SafeSession.rollbackOnPartialExec.
+// Once, it is used the variable is reset.
+// If it fails to rollback to the previous savepoint then, the transaction is forced to be rolled back.
+func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *LogStats) error {
+	var err error
+
+	// needs to rollback only once.
+	rQuery := safeSession.rollbackOnPartialExec
+	safeSession.rollbackOnPartialExec = ""
+	if rQuery != txRollback {
+		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
+		if err == nil {
+			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
+		}
+		// not able to rollback changes of the failed query, so have to abort the complete transaction.
+	}
+
+	// abort the transaction.
+	_ = e.txConn.Rollback(ctx, safeSession)
+	var errMsg = "transaction rolled back to reverse changes of partial DML execution"
+	if err != nil {
+		return vterrors.Wrap(err, errMsg)
+	}
+	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg)
 }
 
 func (e *Executor) setLogStats(logStats *LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {

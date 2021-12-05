@@ -56,7 +56,7 @@ type noopVCursor struct {
 }
 
 // ConnCollation implements VCursor
-func (t *noopVCursor) ConnCollation() collations.Collation {
+func (t *noopVCursor) ConnCollation() collations.ID {
 	panic("implement me")
 }
 

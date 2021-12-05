@@ -174,7 +174,9 @@ func (v *sorter) Less(i, j int) bool {
 	rightRow := v.rowsColValues[j]
 	for cell, left := range leftRow {
 		right := rightRow[cell]
-		compare := bytes.Compare(left.ToBytes(), right.ToBytes())
+		lBytes, _ := left.ToBytes()
+		rBytes, _ := right.ToBytes()
+		compare := bytes.Compare(lBytes, rBytes)
 		if compare < 0 {
 			return true
 		}
@@ -182,7 +184,9 @@ func (v *sorter) Less(i, j int) bool {
 			return false
 		}
 	}
-	return bytes.Compare(v.toValues[i].ToBytes(), v.toValues[j].ToBytes()) < 0
+	iBytes, _ := v.toValues[i].ToBytes()
+	jBytes, _ := v.toValues[j].ToBytes()
+	return bytes.Compare(iBytes, jBytes) < 0
 }
 
 func (v *sorter) Swap(i, j int) {
