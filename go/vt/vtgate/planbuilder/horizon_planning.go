@@ -38,7 +38,7 @@ type horizonPlanning struct {
 }
 
 func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
-	rb, isRoute := plan.(*route)
+	rb, isRoute := plan.(*routeGen4)
 	if !isRoute && ctx.semTable.ProjectionErr != nil {
 		return nil, ctx.semTable.ProjectionErr
 	}
@@ -138,7 +138,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	}
 
 	switch p := plan.(type) {
-	case *route:
+	case *routeGen4:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *joinGen4, *semiJoin, *hashJoin:
 		// since this is a join, we can safely add extra columns and not need to truncate them
@@ -160,7 +160,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 // pushProjection pushes a projection to the plan.
 func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner, reuseCol, hasAggregation bool) (offset int, added bool, err error) {
 	switch node := plan.(type) {
-	case *route:
+	case *routeGen4:
 		value, err := makePlanValue(expr.Expr)
 		if err != nil {
 			return 0, false, err
@@ -543,7 +543,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	}
 
 	// done with aggregation planning. let's check if we should fail the query
-	if _, planIsRoute := plan.(*route); !planIsRoute {
+	if _, planIsRoute := plan.(*routeGen4); !planIsRoute {
 		// if we had to build up additional operators around the route, we have to fail this query
 		for _, expr := range hp.qp.SelectExprs {
 			colExpr, err := expr.GetExpr()
@@ -611,7 +611,7 @@ func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, group
 
 func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *semantics.SemTable, wsAdded bool) (bool, error) {
 	switch node := plan.(type) {
-	case *route:
+	case *routeGen4:
 		sel := node.Select.(*sqlparser.Select)
 		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
 		// If a weight_string function is added to the select list,
@@ -676,7 +676,7 @@ func (hp *horizonPlanning) planGroupByUsingOrderBy(ctx *planningContext, plan lo
 
 func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstract.OrderBy, plan logicalPlan) (logicalPlan, error) {
 	switch plan := plan.(type) {
-	case *route:
+	case *routeGen4:
 		newPlan, truncate, err := planOrderByForRoute(orderExprs, plan, ctx.semTable, hp.qp.HasStar)
 		if err != nil {
 			return nil, err
@@ -757,7 +757,7 @@ func isSpecialOrderBy(o abstract.OrderBy) bool {
 	return isFunction && f.Name.Lowered() == "rand"
 }
 
-func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
+func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *routeGen4, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
 		err := checkOrderExprCanBePlannedInScatter(plan, order, hasStar)
@@ -784,7 +784,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 
 // checkOrderExprCanBePlannedInScatter verifies that the given order by expression can be planned.
 // It checks if the expression exists in the plan's select list when the query is a scatter.
-func checkOrderExprCanBePlannedInScatter(plan *route, order abstract.OrderBy, hasStar bool) error {
+func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order abstract.OrderBy, hasStar bool) error {
 	if !hasStar {
 		return nil
 	}
@@ -996,7 +996,7 @@ func (hp *horizonPlanning) planDistinct(ctx *planningContext, plan logicalPlan) 
 		return plan, nil
 	}
 	switch p := plan.(type) {
-	case *route:
+	case *routeGen4:
 		// we always make the underlying query distinct,
 		// and then we might also add a distinct operator on top if it is needed
 		p.Select.MakeDistinct()
@@ -1158,7 +1158,7 @@ func (hp *horizonPlanning) needDistinctHandling(ctx *planningContext, funcExpr *
 	if !ok {
 		return false, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(funcExpr))
 	}
-	_, ok = input.(*route)
+	_, ok = input.(*routeGen4)
 	if !ok {
 		// Unreachable
 		return true, innerAliased, nil
@@ -1180,7 +1180,7 @@ func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) (l
 
 func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch node := plan.(type) {
-	case *route:
+	case *routeGen4:
 		sel := sqlparser.GetFirstSelect(node.Select)
 		sel.AddHaving(expr)
 		return plan, nil
