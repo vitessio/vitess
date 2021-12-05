@@ -246,7 +246,10 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitcode)
 	}
+}
 
+func removeBackticks(s string) string {
+	return strings.Replace(s, "`", "", -1)
 }
 
 func TestSchemaChange(t *testing.T) {
@@ -284,9 +287,9 @@ func TestSchemaChange(t *testing.T) {
 					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 					expandedColumnNames := row.AsString("expanded_column_names", "")
 
-					assert.Equal(t, testcase.removedUniqueKeyNames, removedUniqueKeyNames)
-					assert.Equal(t, testcase.droppedNoDefaultColumnNames, droppedNoDefaultColumnNames)
-					assert.Equal(t, testcase.expandedColumnNames, expandedColumnNames)
+					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
+					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
+					assert.Equal(t, testcase.expandedColumnNames, removeBackticks(expandedColumnNames))
 				}
 			})
 		})
