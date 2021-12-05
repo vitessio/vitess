@@ -40,6 +40,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -894,12 +895,13 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	for _, uniqueKey := range v.removedUniqueKeys {
 		removedUniqueKeyNames = append(removedUniqueKeyNames, uniqueKey.Name)
 	}
+
 	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
 		len(v.addedUniqueKeys),
 		len(v.removedUniqueKeys),
-		strings.Join(removedUniqueKeyNames, ","),
-		strings.Join(v.droppedNoDefaultColumnNames, ","),
-		strings.Join(v.expandedColumnNames, ","),
+		strings.Join(sqlescape.EscapeIDs(removedUniqueKeyNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.droppedNoDefaultColumnNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.expandedColumnNames), ","),
 		v.revertibleNotes,
 	); err != nil {
 		return err
