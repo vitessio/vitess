@@ -63,6 +63,7 @@ const (
 	alterSchemaMigrationsTableLogFile                  = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRetainArtifacts          = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTablePostponeCompletion       = "ALTER TABLE _vt.schema_migrations add column postpone_completion tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableContextIndex             = "ALTER TABLE _vt.schema_migrations add KEY migration_context_idx (migration_context(64))"
 	alterSchemaMigrationsTableRemovedUniqueNames       = "ALTER TABLE _vt.schema_migrations add column removed_unique_key_names text NOT NULL"
 	alterSchemaMigrationsTableRemovedNoDefaultColNames = "ALTER TABLE _vt.schema_migrations add column dropped_no_default_column_names text NOT NULL"
 	alterSchemaMigrationsTableExpandedColNames         = "ALTER TABLE _vt.schema_migrations add column expanded_column_names text NOT NULL"
@@ -272,6 +273,17 @@ const (
 			AND mysql_table=%a
 		ORDER BY
 			completed_timestamp DESC
+		LIMIT 1
+	`
+	sqlSelectCompleteMigrationsByContextAndSQL = `SELECT
+			migration_uuid,
+			strategy
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='complete'
+			AND keyspace=%a
+			AND migration_context=%a
+			AND migration_statement=%a
 		LIMIT 1
 	`
 	sqlSelectCountReadyMigrations = `SELECT
@@ -566,6 +578,7 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableLogFile,
 	alterSchemaMigrationsTableRetainArtifacts,
 	alterSchemaMigrationsTablePostponeCompletion,
+	alterSchemaMigrationsTableContextIndex,
 	alterSchemaMigrationsTableRemovedUniqueNames,
 	alterSchemaMigrationsTableRemovedNoDefaultColNames,
 	alterSchemaMigrationsTableExpandedColNames,
