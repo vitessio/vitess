@@ -81,7 +81,7 @@ func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
 	return nil
 }
 
-// SetUUIDs sets an explicit UUID for schema migrations
+// SetUUIDs sets a (possibly empty) list of explicit UUIDs for schema migrations
 func (exec *TabletExecutor) SetUUIDs(commaDelimitedUUIDs string) error {
 	uuids := textutil.SplitDelimitedList(commaDelimitedUUIDs)
 	uuidsMap := map[string]bool{}
