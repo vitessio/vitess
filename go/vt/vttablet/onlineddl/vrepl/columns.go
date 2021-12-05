@@ -155,8 +155,8 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 				return true, "conversion from enum/set to non-enum/set adds potential values"
 			}
 			// target is an enum or a set. See if all values on target exist in source
-			sourceEnumTokensMap := schema.ParseEnumTokensMap(sourceColumn.EnumValues)
-			targetEnumTokensMap := schema.ParseEnumTokensMap(targetColumn.EnumValues)
+			sourceEnumTokensMap := schema.ParseEnumOrSetTokensMap(sourceColumn.EnumValues)
+			targetEnumTokensMap := schema.ParseEnumOrSetTokensMap(targetColumn.EnumValues)
 			for k, v := range targetEnumTokensMap {
 				if sourceEnumTokensMap[k] != v {
 					return true, "target enum/set expands source enum/set"
