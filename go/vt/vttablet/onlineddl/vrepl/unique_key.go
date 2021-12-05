@@ -24,7 +24,7 @@ func UniqueKeyValidForIteration(uniqueKey *UniqueKey) bool {
 	return true // good to go!
 }
 
-// GetSharedUniqueKeys returns the unique keys shared between the two source&target tables
+// GetSharedUniqueKeys returns the unique keys shared between the source & target tables
 func GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *UniqueKey) {
 	type ukPair struct{ source, target *UniqueKey }
 	var sharedUKPairs []*ukPair
