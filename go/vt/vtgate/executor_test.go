@@ -210,7 +210,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 
 	_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
-	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
+	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
 		Sql:           "select :__vtdbname as `database()` from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded/0@primary")},
 	}})

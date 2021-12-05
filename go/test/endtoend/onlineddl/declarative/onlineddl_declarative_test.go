@@ -90,6 +90,7 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`
+	requestContext        = "1111-2222-3333"
 	createStatement1      = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
@@ -146,6 +147,9 @@ var (
 	`
 	alterStatement = `
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default 'this-should-fail'
+	`
+	trivialAlterStatement = `
+		ALTER TABLE stress_test ENGINE=InnoDB
 	`
 	insertRowStatement = `
 		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
@@ -450,6 +454,39 @@ func TestSchemaChange(t *testing.T) {
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
+
+	// ### The following tests are not strictly 'declarative' but are best served under this endtoend test
+
+	// Test duplicate context/SQL
+	t.Run("Trivial statement with request context is successful", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, trivialAlterStatement, "online", "vtctl", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkTable(t, tableName, true)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			require.NotContains(t, message, "duplicate DDL")
+		}
+	})
+	t.Run("Duplicate trivial statement with request context is successful", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, trivialAlterStatement, "online", "vtctl", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkTable(t, tableName, true)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			// Message suggests that the migration was identified as duplicate
+			require.Contains(t, message, "duplicate DDL")
+		}
+	})
 	// Piggyride this test suite, let's also test --allow-zero-in-date for 'direct' strategy
 	t.Run("drop non_online", func(t *testing.T) {
 		_ = testOnlineDDLStatement(t, dropZeroDateStatement, "direct", "vtctl", "", "")
@@ -474,7 +511,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 			uuid = row.AsString("uuid", "")
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, RequestContext: requestContext, SkipPreflight: true})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output

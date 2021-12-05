@@ -160,10 +160,11 @@ func (c *Collation) WeightString(dst, src []byte, numCodepoints int) []byte {
 	c.sql.WriteString(")")
 
 	if result := c.performRemoteQuery(); result != nil {
+		resultBytes, _ := result[0].ToBytes()
 		if dst == nil {
-			dst = result[0].ToBytes()
+			dst = resultBytes
 		} else {
-			dst = append(dst, result[0].ToBytes()...)
+			dst = append(dst, resultBytes...)
 		}
 	}
 	return dst

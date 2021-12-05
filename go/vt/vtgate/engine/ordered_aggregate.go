@@ -461,7 +461,11 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], row2[aggr.Col], OpcodeType[aggr.Opcode])
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
-			err = proto.Unmarshal(row1[aggr.Col].ToBytes(), vgtid)
+			rowBytes, err := row1[aggr.Col].ToBytes()
+			if err != nil {
+				return nil, nil, err
+			}
+			err = proto.Unmarshal(rowBytes, vgtid)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -544,7 +548,11 @@ func (oa *OrderedAggregate) convertFinal(current []sqltypes.Value) ([]sqltypes.V
 		switch aggr.Opcode {
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
-			err := proto.Unmarshal(current[aggr.Col].ToBytes(), vgtid)
+			currentBytes, err := current[aggr.Col].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			err = proto.Unmarshal(currentBytes, vgtid)
 			if err != nil {
 				return nil, err
 			}

@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -73,6 +72,47 @@ func keywordASCIIMatch(input string, expected string) bool {
 // non_reserved_keywords grammar in sql.y -- this will allow the keyword to be used
 // in identifiers. See the docs for each grammar to determine which one to put it into.
 var keywords = []keyword{
+	{"_armscii8", UNDERSCORE_ARMSCII8},
+	{"_ascii", UNDERSCORE_ASCII},
+	{"_big5", UNDERSCORE_BIG5},
+	{"_binary", UNDERSCORE_BINARY},
+	{"_cp1250", UNDERSCORE_CP1250},
+	{"_cp1251", UNDERSCORE_CP1251},
+	{"_cp1256", UNDERSCORE_CP1256},
+	{"_cp1257", UNDERSCORE_CP1257},
+	{"_cp850", UNDERSCORE_CP850},
+	{"_cp852", UNDERSCORE_CP852},
+	{"_cp866", UNDERSCORE_CP866},
+	{"_cp932", UNDERSCORE_CP932},
+	{"_dec8", UNDERSCORE_DEC8},
+	{"_eucjpms", UNDERSCORE_EUCJPMS},
+	{"_euckr", UNDERSCORE_EUCKR},
+	{"_gb18030", UNDERSCORE_GB18030},
+	{"_gb2312", UNDERSCORE_GB2312},
+	{"_gbk", UNDERSCORE_GBK},
+	{"_geostd8", UNDERSCORE_GEOSTD8},
+	{"_greek", UNDERSCORE_GREEK},
+	{"_hebrew", UNDERSCORE_HEBREW},
+	{"_hp8", UNDERSCORE_HP8},
+	{"_keybcs2", UNDERSCORE_KEYBCS2},
+	{"_koi8r", UNDERSCORE_KOI8R},
+	{"_koi8u", UNDERSCORE_KOI8U},
+	{"_latin1", UNDERSCORE_LATIN1},
+	{"_latin2", UNDERSCORE_LATIN2},
+	{"_latin5", UNDERSCORE_LATIN5},
+	{"_latin7", UNDERSCORE_LATIN7},
+	{"_macce", UNDERSCORE_MACCE},
+	{"_macroman", UNDERSCORE_MACROMAN},
+	{"_sjis", UNDERSCORE_SJIS},
+	{"_swe7", UNDERSCORE_SWE7},
+	{"_tis620", UNDERSCORE_TIS620},
+	{"_ucs2", UNDERSCORE_UCS2},
+	{"_ujis", UNDERSCORE_UJIS},
+	{"_utf16", UNDERSCORE_UTF16},
+	{"_utf16le", UNDERSCORE_UTF16LE},
+	{"_utf32", UNDERSCORE_UTF32},
+	{"_utf8", UNDERSCORE_UTF8},
+	{"_utf8mb4", UNDERSCORE_UTF8MB4},
 	{"accessible", UNUSED},
 	{"action", ACTION},
 	{"add", ADD},
@@ -94,10 +134,6 @@ var keywords = []keyword{
 	{"between", BETWEEN},
 	{"bigint", BIGINT},
 	{"binary", BINARY},
-	{"_binary", UNDERSCORE_BINARY},
-	{"_utf8mb4", UNDERSCORE_UTF8MB4},
-	{"_utf8", UNDERSCORE_UTF8},
-	{"_latin1", UNDERSCORE_LATIN1},
 	{"bit", BIT},
 	{"blob", BLOB},
 	{"bool", BOOL},
@@ -463,7 +499,6 @@ var keywords = []keyword{
 	{"straight_join", STRAIGHT_JOIN},
 	{"stream", STREAM},
 	{"system", UNUSED},
-	{"vstream", VSTREAM},
 	{"table", TABLE},
 	{"tables", TABLES},
 	{"tablespace", TABLESPACE},
@@ -546,7 +581,42 @@ var keywords = []keyword{
 var keywordStrings = map[int]string{}
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
-var keywordLookupTable *perfectTable
+var keywordLookupTable *caseInsensitiveTable
+
+type caseInsensitiveTable struct {
+	h map[uint64]keyword
+}
+
+func buildCaseInsensitiveTable(keywords []keyword) *caseInsensitiveTable {
+	table := &caseInsensitiveTable{
+		h: make(map[uint64]keyword, len(keywords)),
+	}
+
+	for _, kw := range keywords {
+		hash := fnv1aIstr(offset64, kw.name)
+		if _, exists := table.h[hash]; exists {
+			panic("collision in caseInsensitiveTable")
+		}
+		table.h[hash] = kw
+	}
+	return table
+}
+
+func (cit *caseInsensitiveTable) LookupString(name string) (int, bool) {
+	hash := fnv1aIstr(offset64, name)
+	if candidate, ok := cit.h[hash]; ok {
+		return candidate.id, candidate.matchStr(name)
+	}
+	return 0, false
+}
+
+func (cit *caseInsensitiveTable) Lookup(name []byte) (int, bool) {
+	hash := fnv1aI(offset64, name)
+	if candidate, ok := cit.h[hash]; ok {
+		return candidate.id, candidate.match(name)
+	}
+	return 0, false
+}
 
 func init() {
 	for _, kw := range keywords {
@@ -559,7 +629,7 @@ func init() {
 		keywordStrings[kw.id] = kw.name
 	}
 
-	keywordLookupTable = buildKeywordTable(keywords)
+	keywordLookupTable = buildCaseInsensitiveTable(keywords)
 }
 
 // KeywordString returns the string corresponding to the given keyword
@@ -569,15 +639,6 @@ func KeywordString(id int) string {
 		return ""
 	}
 	return str
-}
-
-type perfectTable struct {
-	keys       []keyword
-	level0     []uint32 // power of 2 size
-	level0Mask int      // len(Level0) - 1
-	level1     []uint32 // power of 2 size >= len(keys)
-	level1Mask int      // len(Level1) - 1
-	min, max   int
 }
 
 const offset64 = uint64(14695981039346656037)
@@ -602,120 +663,4 @@ func fnv1aIstr(h uint64, s string) uint64 {
 		h = (h ^ uint64(c)) * prime64
 	}
 	return h
-}
-
-// buildKeywordTable generates a perfect hash map for all the keywords using the "Hash, displace, and compress"
-// algorithm described in http://cmph.sourceforge.net/papers/esa09.pdf.
-func buildKeywordTable(keywords []keyword) *perfectTable {
-	type indexBucket struct {
-		n    int
-		vals []int
-	}
-
-	nextPow2 := func(n int) int {
-		for i := 1; ; i *= 2 {
-			if i >= n {
-				return i
-			}
-		}
-	}
-
-	var (
-		level0        = make([]uint32, nextPow2(len(keywords)/4))
-		level0Mask    = len(level0) - 1
-		level1        = make([]uint32, nextPow2(len(keywords)))
-		level1Mask    = len(level1) - 1
-		sparseBuckets = make([][]int, len(level0))
-		zeroSeed      = offset64
-		min, max      = len(keywords[0].name), len(keywords[0].name)
-	)
-	for i, kw := range keywords {
-		kwlen := len(kw.name)
-		if kwlen > max {
-			max = kwlen
-		}
-		if kwlen < min {
-			min = kwlen
-		}
-
-		n := int(fnv1aIstr(zeroSeed, kw.name)) & level0Mask
-		sparseBuckets[n] = append(sparseBuckets[n], i)
-	}
-	var buckets []indexBucket
-	for n, vals := range sparseBuckets {
-		if len(vals) > 0 {
-			buckets = append(buckets, indexBucket{n, vals})
-		}
-	}
-	sort.Slice(buckets, func(i, j int) bool {
-		return len(buckets[i].vals) > len(buckets[j].vals)
-	})
-
-	occ := make([]bool, len(level1))
-	var tmpOcc []int
-	for _, bucket := range buckets {
-		var seed uint64
-	trySeed:
-		tmpOcc = tmpOcc[:0]
-		for _, i := range bucket.vals {
-			n := int(fnv1aIstr(seed, keywords[i].name)) & level1Mask
-			if occ[n] {
-				for _, n := range tmpOcc {
-					occ[n] = false
-				}
-				seed++
-				goto trySeed
-			}
-			occ[n] = true
-			tmpOcc = append(tmpOcc, n)
-			level1[n] = uint32(i)
-		}
-		level0[bucket.n] = uint32(seed)
-	}
-
-	return &perfectTable{
-		keys:       keywords,
-		level0:     level0,
-		level0Mask: level0Mask,
-		level1:     level1,
-		level1Mask: level1Mask,
-		min:        min,
-		max:        max,
-	}
-}
-
-// Lookup looks up the given keyword on the perfect map for keywords.
-// The provided bytes are not modified and are compared **case insensitively**
-func (t *perfectTable) Lookup(keyword []byte) (int, bool) {
-	kwlen := len(keyword)
-	if kwlen > t.max || kwlen < t.min {
-		return 0, false
-	}
-
-	i0 := int(fnv1aI(offset64, keyword)) & t.level0Mask
-	seed := t.level0[i0]
-	i1 := int(fnv1aI(uint64(seed), keyword)) & t.level1Mask
-	cell := &t.keys[int(t.level1[i1])]
-	if cell.match(keyword) {
-		return cell.id, true
-	}
-	return 0, false
-}
-
-// LookupString looks up the given keyword on the perfect map for keywords.
-// The provided string is compared **case insensitively**
-func (t *perfectTable) LookupString(keyword string) (int, bool) {
-	kwlen := len(keyword)
-	if kwlen > t.max || kwlen < t.min {
-		return 0, false
-	}
-
-	i0 := int(fnv1aIstr(offset64, keyword)) & t.level0Mask
-	seed := t.level0[i0]
-	i1 := int(fnv1aIstr(uint64(seed), keyword)) & t.level1Mask
-	cell := &t.keys[int(t.level1[i1])]
-	if cell.matchStr(keyword) {
-		return cell.id, true
-	}
-	return 0, false
 }

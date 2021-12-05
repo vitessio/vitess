@@ -58,7 +58,7 @@ export const Keyspaces = () => {
                 <DataCell>
                     <KeyspaceLink clusterID={row.clusterID} name={row.name}>
                         <div className="font-bold">{row.name}</div>
-                        <div className="font-size-small text-secondary">{row.cluster}</div>
+                        <div className="text-sm text-secondary">{row.cluster}</div>
                     </KeyspaceLink>
                 </DataCell>
                 <DataCell>

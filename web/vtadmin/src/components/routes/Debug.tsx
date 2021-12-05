@@ -47,6 +47,62 @@ export const Debug = () => {
                 </section>
 
                 <section>
+                    <h3 className="mt-12 mb-8">Typography</h3>
+
+                    <div className="my-16">
+                        <p className="text-sm">The quick brown fox ...</p>
+                        <p className="text-base">The quick brown fox ...</p>
+                        <p className="text-lg">The quick brown fox ...</p>
+                        <p className="text-xl">The quick brown fox ...</p>
+                        <p className="text-2xl">The quick brown fox ...</p>
+                        <p className="text-3xl">The quick brown fox ...</p>
+                    </div>
+
+                    <div className="my-16">
+                        <p className="text-sm font-mono">The quick brown fox ...</p>
+                        <p className="text-base font-mono">The quick brown fox ...</p>
+                        <p className="text-lg font-mono">The quick brown fox ...</p>
+                        <p className="text-xl font-mono">The quick brown fox ...</p>
+                        <p className="text-2xl font-mono">The quick brown fox ...</p>
+                        <p className="text-3xl font-mono">The quick brown fox ...</p>
+                    </div>
+
+                    <div className="max-w-prose my-16">
+                        <p>
+                            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi in facilisis libero, eget
+                            congue lorem. Nulla non ligula eget erat aliquam lacinia a eget felis. Nulla turpis sapien,
+                            ultricies sit amet suscipit quis, auctor id risus. Donec pellentesque tellus metus, in
+                            eleifend lacus euismod eget. Vestibulum vehicula ut metus id vestibulum. Nam vulputate
+                            sapien sit amet tempor efficitur. Donec dictum tellus nec leo fringilla, eu tempor neque
+                            posuere. Integer porta, velit quis interdum ultricies, quam enim suscipit eros, quis ornare
+                            metus ante vitae est. Sed quis dignissim justo, at ultrices urna. Suspendisse gravida,
+                            tortor sed semper tristique, erat metus vulputate augue, quis tempor mi nisi vitae magna.
+                            Donec auctor fermentum magna, ut feugiat odio tincidunt sit amet. Donec accumsan lorem mi,
+                            ut placerat ex lacinia vel. Nullam ut magna feugiat, ornare nibh vel, tincidunt nisi. Fusce
+                            tincidunt malesuada posuere.
+                        </p>
+
+                        <p>
+                            Cras elementum lacinia tristique. Vestibulum nec sem sit amet velit lobortis accumsan ut
+                            eget lacus. Nulla eros ipsum, pellentesque sed vehicula id, pulvinar ut dolor. Proin
+                            facilisis ligula vel faucibus iaculis. Donec venenatis massa lorem, sed tempus libero
+                            vulputate nec. Vestibulum semper nibh id tortor dapibus, a pellentesque libero porttitor.
+                            Pellentesque id elit nulla. Duis congue hendrerit rhoncus. Vivamus accumsan tincidunt augue
+                            in sollicitudin. Cras sed augue eget elit semper interdum tristique at ligula. Aliquam vel
+                            pretium sem. Donec egestas nisi blandit congue pretium.
+                        </p>
+
+                        <p>
+                            Duis vulputate blandit ante nec bibendum. Duis ipsum augue, tempus et viverra et, ultricies
+                            ac sapien. Nullam vel laoreet turpis, in convallis eros. Suspendisse sit amet magna turpis.
+                            Curabitur mi risus, facilisis vel fringilla ut, facilisis nec tortor. Mauris rutrum vehicula
+                            justo ac dapibus. Sed aliquam, eros non bibendum sodales, mauris est iaculis dui, ut
+                            tristique nibh sapien ac sapien. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                        </p>
+                    </div>
+                </section>
+
+                <section>
                     <h3 className="mt-12 mb-8">Tabs</h3>
 
                     <TabContainer className={style.tabContainer} size="small">

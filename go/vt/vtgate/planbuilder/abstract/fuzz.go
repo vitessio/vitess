@@ -17,31 +17,11 @@ limitations under the License.
 package abstract
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
 )
-
-var _ semantics.SchemaInformation = (*fakeFuzzSI)(nil)
-
-type fakeFuzzSI struct {
-	tables map[string]*vindexes.Table
-}
-
-// FindTableOrVindex is a helper func
-func (s *fakeFuzzSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	table, found := s.tables[sqlparser.String(tablename)]
-	if !found {
-		return nil, nil, "", 0, nil, fmt.Errorf("fuzzer error - table not found")
-	}
-	return table, nil, "", 0, nil, nil
-}
 
 // FuzzAnalyse implements the fuzzer
 func FuzzAnalyse(data []byte) int {
@@ -56,7 +36,7 @@ func FuzzAnalyse(data []byte) int {
 	}
 	switch stmt := tree.(type) {
 	case *sqlparser.Select:
-		semTable, err := semantics.Analyze(stmt, "", &fakeFuzzSI{})
+		semTable, err := semantics.Analyze(stmt, "", &semantics.FakeSI{})
 		if err != nil {
 			return 0
 		}

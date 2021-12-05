@@ -3297,56 +3297,54 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	var bindErr error
 	switch command {
 	case "show":
-		{
-			condition := ""
-			switch arg {
-			case "", "all":
-				condition = "migration_uuid like '%'"
-			case "recent":
-				condition = "requested_timestamp > now() - interval 1 week"
-			case
-				string(schema.OnlineDDLStatusCancelled),
-				string(schema.OnlineDDLStatusQueued),
-				string(schema.OnlineDDLStatusReady),
-				string(schema.OnlineDDLStatusRunning),
-				string(schema.OnlineDDLStatusComplete),
-				string(schema.OnlineDDLStatusFailed):
-				condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
-			default:
-				if schema.IsOnlineDDLUUID(arg) {
-					uuid = arg
-					condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
-				} else {
-					condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
-				}
+		condition := ""
+		switch arg {
+		case "", "all":
+			condition = "migration_uuid like '%'"
+		case "recent":
+			condition = "requested_timestamp > now() - interval 1 week"
+		case
+			string(schema.OnlineDDLStatusCancelled),
+			string(schema.OnlineDDLStatusQueued),
+			string(schema.OnlineDDLStatusReady),
+			string(schema.OnlineDDLStatusRunning),
+			string(schema.OnlineDDLStatusComplete),
+			string(schema.OnlineDDLStatusFailed):
+			condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
+		default:
+			if schema.IsOnlineDDLUUID(arg) {
+				uuid = arg
+				condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
+			} else {
+				condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 			}
-			query = fmt.Sprintf(`select
+		}
+		query = fmt.Sprintf(`select
 				shard, mysql_schema, mysql_table, ddl_action, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status
 				from _vt.schema_migrations where %s`, condition)
-		}
 	case "retry":
-		{
-			if arg == "" {
-				return fmt.Errorf("UUID required")
-			}
-			uuid = arg
-			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='retry' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
+		if arg == "" {
+			return fmt.Errorf("UUID required")
 		}
+		uuid = arg
+		query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='retry' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
+	case "complete":
+		if arg == "" {
+			return fmt.Errorf("UUID required")
+		}
+		uuid = arg
+		query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='complete' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
 	case "cancel":
-		{
-			if arg == "" {
-				return fmt.Errorf("UUID required")
-			}
-			uuid = arg
-			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
+		if arg == "" {
+			return fmt.Errorf("UUID required")
 		}
+		uuid = arg
+		query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
 	case "cancel-all":
-		{
-			if arg != "" {
-				return fmt.Errorf("UUID not allowed in %s", command)
-			}
-			query = `update _vt.schema_migrations set migration_status='cancel-all'`
+		if arg != "" {
+			return fmt.Errorf("UUID not allowed in %s", command)
 		}
+		query = `update _vt.schema_migrations set migration_status='cancel-all'`
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
