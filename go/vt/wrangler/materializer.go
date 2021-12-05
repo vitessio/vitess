@@ -82,9 +82,6 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 		if err != nil {
 			return err
 		}
-		if srcVSchema == nil {
-			return fmt.Errorf("no vschema found for source keyspace %s", sourceKeyspace)
-		}
 		for _, table := range tables {
 			srcTable, ok := srcVSchema.Tables[table]
 			if ok {
