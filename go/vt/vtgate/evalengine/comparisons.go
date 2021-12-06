@@ -283,11 +283,14 @@ func evalCompareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
 	for idx, lResult := range *lVal.tuple {
 		rResult := (*rVal.tuple)[idx]
 		res, isNull, err := evalCoerceAndCompare(lResult, rResult)
+		if err != nil {
+			return 0, false, err
+		}
 		if isNull {
 			hasSeenNull = true
 		}
-		if res != 0 || err != nil {
-			return res, false, err
+		if res != 0 {
+			return res, hasSeenNull, err
 		}
 	}
 	return 0, hasSeenNull, nil
@@ -465,6 +468,9 @@ func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	case left.typ == querypb.Type_TUPLE || right.typ == querypb.Type_TUPLE:
 		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
 
+	case hasNullEvalResult(left, right):
+		return resultNull, nil
+
 	case left.textual() && right.textual():
 		if left.collation.Collation != right.collation.Collation {
 			panic(fmt.Sprintf("LikeOp: did not coerce, left=%d right=%d",
@@ -477,9 +483,6 @@ func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 	case left.textual():
 		matched = l.matchWildcard(left.bytes, right.Value().Raw(), left.collation.Collation)
-
-	case hasNullEvalResult(left, right):
-		return resultNull, nil
 
 	default:
 		matched = l.matchWildcard(left.Value().Raw(), right.Value().Raw(), collations.CollationBinaryID)
