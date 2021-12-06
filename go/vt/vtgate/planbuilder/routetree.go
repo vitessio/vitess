@@ -81,8 +81,10 @@ type (
 
 	// vindexOption stores the information needed to know if we have all the information needed to use a vindex
 	vindexOption struct {
-		ready       bool
-		values      []evalengine.Expr
+		ready  bool
+		values []evalengine.Expr
+		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
+		colsSeen    map[string]interface{}
 		valueExprs  []sqlparser.Expr
 		predicates  []sqlparser.Expr
 		opcode      engine.RouteOpcode
@@ -509,24 +511,73 @@ func (rp *routeTree) haveMatchingVindex(
 		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
-		// Ignore MultiColumn vindexes for finding matching Vindex.
-		if _, isSingleCol := v.colVindex.Vindex.(vindexes.SingleColumn); !isSingleCol {
-			continue
-		}
+		switch v.colVindex.Vindex.(type) {
+		case vindexes.SingleColumn:
+			col := v.colVindex.Columns[0]
+			if column.Name.Equal(col) {
+				// single column vindex - just add the option
+				routeOpcode := opcode(v.colVindex)
+				vindex := vfunc(v.colVindex)
+				v.options = append(v.options, &vindexOption{
+					values:      []evalengine.Expr{value},
+					valueExprs:  []sqlparser.Expr{valueExpr},
+					predicates:  []sqlparser.Expr{node},
+					opcode:      routeOpcode,
+					foundVindex: vindex,
+					cost:        costFor(vindex, routeOpcode),
+					ready:       true,
+				})
+				newVindexFound = true
+			}
+		case vindexes.MultiColumn:
+			colLoweredName := ""
+			indexOfCol := -1
+			for idx, col := range v.colVindex.Columns {
+				if column.Name.Equal(col) {
+					colLoweredName = column.Name.Lowered()
+					indexOfCol = idx
+					break
+				}
+			}
+			if colLoweredName == "" {
+				break
+			}
 
-		col := v.colVindex.Columns[0]
-		if column.Name.Equal(col) {
-			// single column vindex - just add the option
+			optionPresent := false
+			for _, option := range v.options {
+				if option.ready {
+					continue
+				}
+				_, isPresent := option.colsSeen[colLoweredName]
+				if isPresent {
+					continue
+				}
+				option.colsSeen[colLoweredName] = true
+				option.predicates = append(option.predicates, node)
+				option.valueExprs = append(option.valueExprs, valueExpr)
+				option.values[indexOfCol] = value
+				optionPresent = true
+				option.ready = len(option.colsSeen) == len(v.colVindex.Columns)
+			}
+
+			if optionPresent {
+				break
+			}
+
+			// multi column vindex - just add the option since we do not have one already
 			routeOpcode := opcode(v.colVindex)
 			vindex := vfunc(v.colVindex)
+			values := make([]evalengine.Expr, len(v.colVindex.Columns))
+			values[indexOfCol] = value
 			v.options = append(v.options, &vindexOption{
-				values:      []evalengine.Expr{value},
+				values:      values,
 				valueExprs:  []sqlparser.Expr{valueExpr},
 				predicates:  []sqlparser.Expr{node},
+				colsSeen:    map[string]interface{}{colLoweredName: true},
 				opcode:      routeOpcode,
 				foundVindex: vindex,
 				cost:        costFor(vindex, routeOpcode),
-				ready:       true,
+				ready:       len(v.colVindex.Columns) == 1,
 			})
 			newVindexFound = true
 		}
