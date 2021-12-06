@@ -69,7 +69,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery interface{}, f
 	}
 	execDDL := execQuery
 	if fDDL != nil {
-		execDDL, err = wd.unify(ctx, fQuery)
+		execDDL, err = wd.unify(ctx, fDDL)
 		if err != nil {
 			return nil, err
 		}
