@@ -97,7 +97,11 @@ func ParseOne(sql string) (Statement, int, error) {
 	tokenizer.stopAfterFirstStmt = true
 	tree, err := parseTokenizer(sql, tokenizer)
 	if err != nil {
-		return nil, 0, err
+		if err == ErrEmpty {
+			return nil, tokenizer.Position, err
+		} else {
+			return nil, 0, err
+		}
 	}
 	return tree, tokenizer.Position, nil
 }
@@ -203,7 +207,7 @@ func ParseOneStrictDDL(sql string) (Statement, int, error) {
 		return nil, 0, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {
-		return nil, 0, ErrEmpty
+		return nil, tokenizer.Position, ErrEmpty
 	}
 	return tokenizer.ParseTree, tokenizer.Position, nil
 }
