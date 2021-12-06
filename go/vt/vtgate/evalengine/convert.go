@@ -186,7 +186,7 @@ func simplifyExpr(e Expr) (Expr, error) {
 							break
 						}
 						if collidx, collision := op.Hashed[hash]; collision {
-							cmp, _, err := evalCompare(lit.Val, tuple[collidx].(*Literal).Val)
+							cmp, _, err := evalCompareAll(lit.Val, tuple[collidx].(*Literal).Val)
 							if cmp != 0 || err != nil {
 								op.Hashed = nil
 								break

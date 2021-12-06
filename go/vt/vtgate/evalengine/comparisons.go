@@ -164,7 +164,7 @@ func evalCoerceAndCompare(lVal, rVal EvalResult) (comp int, isNull bool, err err
 			return 0, false, err
 		}
 	}
-	return evalCompare(lVal, rVal)
+	return evalCompareAll(lVal, rVal)
 }
 
 func evalCoerceAndCompareNullSafe(lVal, rVal EvalResult) (comp int, err error) {
@@ -204,10 +204,10 @@ func evalCompareNullSafe(lVal, rVal EvalResult) (cmp int, err error) {
 		}
 		return 1, nil
 	}
-	return evalCompare1(lVal, rVal)
+	return evalCompare(lVal, rVal)
 }
 
-func evalCompare(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
+func evalCompareAll(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
 	tuple, err := evalTypecheckTuples(lVal, rVal)
 	if err != nil {
 		return 0, false, err
@@ -218,13 +218,13 @@ func evalCompare(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
 	if hasNullEvalResult(lVal, rVal) {
 		return 0, true, nil
 	}
-	comp, err = evalCompare1(lVal, rVal)
+	comp, err = evalCompare(lVal, rVal)
 	return comp, false, err
 }
 
 // For more details on comparison expression evaluation and type conversion:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-func evalCompare1(lVal, rVal EvalResult) (comp int, err error) {
+func evalCompare(lVal, rVal EvalResult) (comp int, err error) {
 	switch {
 	case evalResultsAreStrings(lVal, rVal):
 		return compareStrings(lVal, rVal), nil
@@ -247,7 +247,7 @@ func evalCompare1(lVal, rVal EvalResult) (comp int, err error) {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
 
 	case lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE:
-		panic("evalCompare1: tuple comparison should be handled early")
+		panic("evalCompare: tuple comparison should be handled early")
 
 	default:
 		// Quoting MySQL Docs:
@@ -328,7 +328,7 @@ func (c *ComparisonExpr) Type(*ExpressionEnv) (querypb.Type, error) {
 // Evaluate implements the ComparisonOp interface
 func (e *EqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	// No need to coerce here because the caller ComparisonExpr.Evaluate has coerced for us
-	numeric, isNull, err := evalCompare(left, right)
+	numeric, isNull, err := evalCompareAll(left, right)
 	if err != nil {
 		return EvalResult{}, err
 	}
@@ -452,11 +452,10 @@ func (i *InOp) String() string {
 func (l *LikeOp) matchWildcard(left, right []byte, coll collations.ID) bool {
 	if l.Match != nil {
 		return l.Match.Match(left)
-	} else {
-		coll := collations.Local().LookupByID(coll)
-		wc := coll.Wildcard(right, 0, 0, 0)
-		return wc.Match(left)
 	}
+	fullColl := collations.Local().LookupByID(coll)
+	wc := fullColl.Wildcard(right, 0, 0, 0)
+	return wc.Match(left)
 }
 
 func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
