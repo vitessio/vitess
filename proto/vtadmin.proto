@@ -72,8 +72,6 @@ service VTAdmin {
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
-    // PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
-    rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
     // GetTablets returns all tablets across all the specified clusters.
     rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
     // GetVSchema returns a VSchema for the specified keyspace in the specified
@@ -88,6 +86,8 @@ service VTAdmin {
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
     // GetWorkflows returns the Workflows for all specified clusters.
     rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
+    // PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+    rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
     // VTExplain provides information on how Vitess plans to execute a particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
