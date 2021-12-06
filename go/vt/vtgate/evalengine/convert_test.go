@@ -251,7 +251,7 @@ func TestEvaluateTuple(t *testing.T) {
 		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("2"), sqltypes.NewInt64(4)},
 	}, {
 		expression: "(1,'2',4.0)",
-		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("2"), sqltypes.NewFloat64(4.0)},
+		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("2"), sqltypes.NewDecimal("4.0")},
 	}}
 
 	for _, test := range tests {
