@@ -86,6 +86,27 @@ func yyParsePooled(yylex yyLexer) int {
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
+	return parseTokenizer(sql, tokenizer)
+}
+
+// ParseOne parses the first SQL statement in the given string and returns the
+// index of the start of the next statement in |sql|. If there was only one
+// statement in |sql|, the value of the returned index will be |len(sql)|.
+func ParseOne(sql string) (Statement, int, error) {
+	tokenizer := NewStringTokenizer(sql)
+	tokenizer.stopAfterFirstStmt = true
+	tree, err := parseTokenizer(sql, tokenizer)
+	if err != nil {
+		if err == ErrEmpty {
+			return nil, tokenizer.Position, err
+		} else {
+			return nil, 0, err
+		}
+	}
+	return tree, tokenizer.Position, nil
+}
+
+func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
@@ -105,9 +126,7 @@ func Parse(sql string) (Statement, error) {
 	if tokenizer.ParseTree == nil {
 		return nil, ErrEmpty
 	}
-
 	captureSelectExpressions(sql, tokenizer)
-
 	return tokenizer.ParseTree, nil
 }
 
@@ -177,6 +196,20 @@ func ParseStrictDDL(sql string) (Statement, error) {
 		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
+}
+
+// ParseOneStrictDDL is the same as ParseOne but it errors on partially parsed
+// DDL statements.
+func ParseOneStrictDDL(sql string) (Statement, int, error) {
+	tokenizer := NewStringTokenizer(sql)
+	tokenizer.stopAfterFirstStmt = true
+	if yyParsePooled(tokenizer) != 0 {
+		return nil, 0, tokenizer.LastError
+	}
+	if tokenizer.ParseTree == nil {
+		return nil, tokenizer.Position, ErrEmpty
+	}
+	return tokenizer.ParseTree, tokenizer.Position, nil
 }
 
 // ParseTokenizer is a raw interface to parse from the given tokenizer.

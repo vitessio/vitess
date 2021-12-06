@@ -2152,6 +2152,71 @@ func TestValid(t *testing.T) {
 	}
 }
 
+func TestParseOne(t *testing.T) {
+	type tc struct {
+		input     string
+		remainder string
+	}
+	cases := []tc{
+		{
+			"select 1; select 64 * 10;",
+			"select 64 * 10;",
+		},
+		{
+			"select 1",
+			"",
+		},
+		{
+			"select 1 -- trailing comment",
+			"",
+		},
+		{
+			"select 1; -- another trailing comment",
+			"-- another trailing comment",
+		},
+		{
+			"select 1    \t\t\n\r\n\t  \t\n",
+			"",
+		},
+		{
+			`create trigger t1 before delete on foo for each row follows baz
+			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end
+			`,
+			"",
+		},
+		{
+			`create trigger t1 before delete on foo for each row follows baz
+			begin
+				set session foo = old.x;
+				set session bar = new.y;
+				update baz.t set a = @@foo + @@bar where z = old.x;
+			end;
+			select 1 from dual;`,
+			"\t\t\tselect 1 from dual;",
+		},
+		{
+			"\t\t\tselect 1 from dual;",
+			"",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.input, func(t *testing.T) {
+			stmt, resti, err := ParseOne(c.input)
+			require.NoError(t, err)
+			require.NotNil(t, stmt)
+			var rest string
+			if resti < len(c.input) {
+				rest = c.input[resti:]
+			}
+			require.Equal(t, c.remainder, rest)
+		})
+	}
+}
+
 // Skipped tests for queries where the select expression can't accurately be captured because of comments
 func TestBrokenCommentSelection(t *testing.T) {
 	testcases := []parseTest{{
@@ -2601,13 +2666,13 @@ func TestKeywords(t *testing.T) {
 			input:  "insert into t(a, b) values (current_date, current_date())",
 			output: "insert into t(a, b) values (current_date(), current_date())",
 		}, {
-			input: "insert into t(a, b) values ('a', 'b')",
+			input:  "insert into t(a, b) values ('a', 'b')",
 			output: "insert into t(a, b) values ('a', 'b')",
 		}, {
-			input: "insert into t() values ()",
+			input:  "insert into t() values ()",
 			output: "insert into t() values ()",
 		}, {
-			input: "insert into t() values (), (), ()",
+			input:  "insert into t() values (), (), ()",
 			output: "insert into t() values (), (), ()",
 		}, {
 			input: "select * from t where a > utc_timestmp()",

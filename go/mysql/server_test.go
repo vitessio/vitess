@@ -81,9 +81,14 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
 	return nil
 }
 
-func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComMultiQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) (string, error) {
+	err := th.ComQuery(c, query, callback)
+	return "", err
+}
+
+func (th *testHandler) ComQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) error {
 	if th.result != nil {
-		callback(th.result)
+		callback(th.result, false)
 		return nil
 	}
 
@@ -93,15 +98,15 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 	case "panic":
 		panic("test panic attack!")
 	case "select rows":
-		callback(selectRowsResult)
+		callback(selectRowsResult, false)
 	case "error after send":
-		callback(selectRowsResult)
+		callback(selectRowsResult, false)
 		return th.err
 	case "insert":
 		callback(&sqltypes.Result{
 			RowsAffected: 123,
 			InsertID:     123456789,
-		})
+		}, false)
 	case "schema echo":
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
@@ -115,7 +120,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.schemaName)),
 				},
 			},
-		})
+		}, false)
 	case "ssl echo":
 		value := "OFF"
 		if c.Capabilities&CapabilityClientSSL > 0 {
@@ -133,7 +138,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(value)),
 				},
 			},
-		})
+		}, false)
 	case "userData echo":
 		callback(&sqltypes.Result{
 			Fields: []*querypb.Field{
@@ -152,7 +157,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData.Get().Username)),
 				},
 			},
-		})
+		}, false)
 	default:
 		if strings.HasPrefix(query, benchmarkQueryPrefix) {
 			callback(&sqltypes.Result{
@@ -167,10 +172,10 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 						sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(query)),
 					},
 				},
-			})
+			}, false)
 		}
 
-		callback(&sqltypes.Result{})
+		callback(&sqltypes.Result{}, false)
 	}
 	return nil
 }

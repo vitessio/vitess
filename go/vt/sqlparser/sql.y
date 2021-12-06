@@ -43,6 +43,12 @@ func decNesting(yylex interface{}) {
   yylex.(*Tokenizer).nesting--
 }
 
+func statementSeen(yylex interface{}) {
+  if yylex.(*Tokenizer).stopAfterFirstStmt {
+    yylex.(*Tokenizer).stopped = true
+  }
+}
+
 func yyPosition(yylex interface{}) int {
   return yylex.(*Tokenizer).Position
 }
@@ -418,14 +424,15 @@ func skipToEnd(yylex interface{}) {
 %%
 
 any_command:
-  command semicolon_opt
+  command
   {
     setParseTree(yylex, $1)
   }
-
-semicolon_opt:
-/*empty*/ {}
-| ';' {}
+| command ';'
+  {
+    setParseTree(yylex, $1)
+    statementSeen(yylex)
+  }
 
 command:
   select_statement

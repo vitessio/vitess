@@ -51,6 +51,14 @@ type Tokenizer struct {
 	multi               bool
 	specialComment      *Tokenizer
 
+	// If true, the parser should collaborate to set `stopped` on this
+	// tokenizer after a statement is parsed. From that point forward, the
+	// tokenizer will return EOF, instead of new tokens. `ParseOne` uses
+	// this to parse the first delimited statement and then return the
+	// trailer.
+	stopAfterFirstStmt bool
+	stopped            bool
+
 	buf     []byte
 	bufPos  int
 	bufSize int
@@ -546,6 +554,10 @@ func (tkn *Tokenizer) Error(err string) {
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
+	if tkn.stopped {
+		return 0, nil
+	}
+
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
