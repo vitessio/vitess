@@ -15,9 +15,11 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
         const { data: pingResponse, isLoading, isError, error } = usePingTablet({ alias, clusterID });
         const [loading, setLoading] = useState(true);
         useEffect(() => {
-            setTimeout(() => {
+            const timeout = setTimeout(() => {
                 setLoading(isLoading);
             }, 500);
+
+            return () => clearTimeout(timeout)
         });
 
         const SuccessState: React.FC = () => (
