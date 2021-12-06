@@ -14,6 +14,9 @@ module.exports = {
                 'vitess-blue-50': "#8187ff",
                 'vitess-blue-200': "#0031ca"
             },
+            inset: {
+                '-3full': '-300%'
+            }
         },
         fontFamily: {
             mono: ['NotoMono', 'source-code-pro', 'menlo', 'monaco', 'consolas', 'Courier New', 'monospace'],
