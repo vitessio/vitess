@@ -94,9 +94,7 @@ Gen4 plan same as above
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 1",
         "Table": "`user`",
-        "Values": [
-          1
-        ],
+        "Values": 1,
         "Vindex": "user_index"
       },
       {
@@ -109,15 +107,47 @@ Gen4 plan same as above
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 5",
         "Table": "`user`",
-        "Values": [
-          5
-        ],
+        "Values": 5,
         "Vindex": "user_index"
       }
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 1 union all select id from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 1",
+        "Table": "`user`",
+        "Values": "INT64(1)",
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5",
+        "Table": "`user`",
+        "Values": "INT64(5)",
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 #almost dereks query - two queries with order by and limit being scattered to two different sets of tablets
 "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)"
@@ -296,9 +326,7 @@ Gen4 plan same as above
         "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
         "Table": "`user`",
-        "Values": [
-          1
-        ],
+        "Values": 1,
         "Vindex": "user_index"
       },
       {
@@ -315,7 +343,39 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
+        "Table": "`user`",
+        "Values": "INT64(1)",
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
@@ -701,9 +761,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select * from music where 1 != 1",
             "Query": "select * from music where id = 1",
             "Table": "music",
-            "Values": [
-              1
-            ],
+            "Values": 1,
             "Vindex": "music_user_map"
           },
           {
@@ -716,9 +774,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select * from `user` where 1 != 1",
             "Query": "select * from `user` where id = 1",
             "Table": "`user`",
-            "Values": [
-              1
-            ],
+            "Values": 1,
             "Vindex": "user_index"
           }
         ]
@@ -745,9 +801,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select * from music where 1 != 1",
             "Query": "select distinct * from music where id = 1",
             "Table": "music",
-            "Values": [
-              1
-            ],
+            "Values": "INT64(1)",
             "Vindex": "music_user_map"
           },
           {
@@ -760,9 +814,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select * from `user` where 1 != 1",
             "Query": "select distinct * from `user` where id = 1",
             "Table": "`user`",
-            "Values": [
-              1
-            ],
+            "Values": "INT64(1)",
             "Vindex": "user_index"
           }
         ]
@@ -792,9 +844,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select 1 from music where 1 != 1",
             "Query": "select 1 from music where id = 1",
             "Table": "music",
-            "Values": [
-              1
-            ],
+            "Values": 1,
             "Vindex": "music_user_map"
           },
           {
@@ -807,9 +857,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select 1 from music where 1 != 1",
             "Query": "select 1 from music where id = 2",
             "Table": "music",
-            "Values": [
-              2
-            ],
+            "Values": 2,
             "Vindex": "music_user_map"
           }
         ]
@@ -836,9 +884,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select 1 from music where 1 != 1",
             "Query": "select distinct 1 from music where id = 1",
             "Table": "music",
-            "Values": [
-              1
-            ],
+            "Values": "INT64(1)",
             "Vindex": "music_user_map"
           },
           {
@@ -851,9 +897,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "FieldQuery": "select 1 from music where 1 != 1",
             "Query": "select distinct 1 from music where id = 2",
             "Table": "music",
-            "Values": [
-              2
-            ],
+            "Values": "INT64(2)",
             "Vindex": "music_user_map"
           }
         ]

@@ -90,15 +90,27 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 }
 
 func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
-	routePlan, isRoute := plan.(*route)
-	if !isRoute {
+	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
+	var opcode engine.RouteOpcode
+	var sysTableTableName map[string]evalengine.Expr
+	var sysTableTableSchema []evalengine.Expr
+
+	switch routePlan := plan.(type) {
+	case *routeGen4:
+		opcode = routePlan.eroute.Opcode
+		sysTableTableName = routePlan.eroute.SysTableTableName
+		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	case *route:
+		opcode = routePlan.eroute.Opcode
+		sysTableTableName = routePlan.eroute.SysTableTableName
+		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	default:
 		return false
 	}
-	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
-	return routePlan.eroute.Opcode == engine.SelectDBA &&
-		len(routePlan.eroute.SysTableTableName) == 0 &&
-		len(routePlan.eroute.SysTableTableSchema) == 0
 
+	return opcode == engine.SelectDBA &&
+		len(sysTableTableName) == 0 &&
+		len(sysTableTableSchema) == 0
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
@@ -220,14 +232,15 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
 		case *route:
-			query := sqlparser.GetFirstSelect(node.Select)
-			query.Comments = sel.Comments
-			query.Lock = sel.Lock
-			if sel.Into != nil {
-				if node.eroute.Opcode != engine.SelectUnsharded {
-					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
-				}
-				query.Into = sel.Into
+			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
+			if err != nil {
+				return false, nil, err
+			}
+			return true, node, nil
+		case *routeGen4:
+			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
+			if err != nil {
+				return false, nil, err
 			}
 			return true, node, nil
 		}
@@ -236,6 +249,19 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Select, opcode engine.RouteOpcode) error {
+	query := sqlparser.GetFirstSelect(statement)
+	query.Comments = sel.Comments
+	query.Lock = sel.Lock
+	if sel.Into != nil {
+		if opcode != engine.SelectUnsharded {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
+		}
+		query.Into = sel.Into
 	}
 	return nil
 }

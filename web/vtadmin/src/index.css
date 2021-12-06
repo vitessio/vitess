@@ -44,15 +44,9 @@
     --fontFamilyMonospace: theme('fontFamily.mono');
 
     /* Body text */
-    --fontSizeDefault: 1.4rem;
-    --fontSizeLarge: 1.6rem;
-    --fontSizeSmall: 1.2rem;
     --lineHeightBody: 1.36;
 
     /* Headings */
-    --fontSizeHeading1: 3.6rem;
-    --fontSizeHeading2: 2.8rem;
-    --fontSizeHeading3: 2rem;
     --lineHeightHeading: 1.36;
 
     /* Inputs + other form controls */
@@ -129,7 +123,7 @@ html {
 body {
     background: var(--backgroundPrimary);
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeDefault);
+    font-size: theme('fontSize.base');
     line-height: var(--lineHeightBody);
     margin: 0;
     font-family: var(--fontFamilyPrimary);
@@ -140,21 +134,21 @@ body {
 /* Typography */
 h1 {
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeHeading1);
+    font-size: theme('fontSize.3xl');
     font-weight: 700;
     line-height: var(--lineHeightHeading);
 }
 
 h2 {
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeHeading2);
+    font-size: theme('fontSize.2xl');
     font-weight: 700;
     line-height: var(--lineHeightHeading);
 }
 
 h3 {
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeHeading3);
+    font-size: theme('fontSize.xl');
     font-weight: 700;
     line-height: var(--lineHeightHeading);
 }
@@ -189,7 +183,7 @@ table {
 table caption {
     background: var(--backgroundSecondary);
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeDefault);
+    font-size: theme('fontSize.base');
     font-weight: 500;
     padding: 1.2rem var(--tableCellPadding) 0.8rem var(--tableCellPadding);
     text-align: left;
@@ -200,7 +194,7 @@ table th {
     border: solid 1px var(--backgroundSecondary);
     border-bottom-color: var(--tableBorderColor);
     color: var(--textColorSecondary);
-    font-size: var(--fontSizeDefault);
+    font-size: theme('fontSize.base');
     font-weight: 500;
     padding: 8px var(--tableCellPadding);
     text-align: left;
@@ -218,9 +212,4 @@ table tbody td {
 
 table tbody td[rowSpan] {
     border-right: solid 1px var(--tableBorderColor);
-}
-
-/* One-liner utilities */
-.font-size-small {
-    font-size: var(--fontSizeSmall);
 }
