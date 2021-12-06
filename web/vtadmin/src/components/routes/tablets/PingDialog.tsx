@@ -25,8 +25,8 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
                 <span className="flex h-12 w-12 relative items-center justify-center">
                     <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
                 </span>
-                <div className="text-2xl mt-3 font-bold">Success!</div>
-                <div className="text-lg">Successfully reached tablet {alias} via RPC.</div>
+                <div className="text-lg mt-3 font-bold">Success!</div>
+                <div className="text-sm">Successfully reached tablet {alias} via RPC.</div>
             </div>
         );
 
@@ -35,8 +35,8 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
                 <span className="flex h-12 w-12 relative items-center justify-center">
                     <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
                 </span>
-                <div className="text-2xl mt-3 font-bold">Error</div>
-                <div className="text-lg">There was an issue pinging tablet {alias}: {error}</div>
+                <div className="text-lg mt-3 font-bold">Error</div>
+                <div className="text-sm">There was an issue pinging tablet {alias}: {error}</div>
             </div>
         );
 
@@ -57,8 +57,8 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-6 w-6 bg-yellow-500"></span>
                         </span>
-                        <div className="text-2xl mt-3 font-bold">Pinging tablet {alias}</div>
-                        <div className="text-lg">Checking to see if tablet is reachable via RPC...</div>
+                        <div className="text-lg mt-6 font-bold">Pinging tablet {alias}</div>
+                        <div className="text-sm">Checking to see if tablet is reachable via RPC...</div>
                     </div>
                 </Transition>
                 <Transition
