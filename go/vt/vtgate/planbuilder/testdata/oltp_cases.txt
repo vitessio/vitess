@@ -13,7 +13,9 @@
     "FieldQuery": "select c from sbtest34 where 1 != 1",
     "Query": "select c from sbtest34 where id = 15",
     "Table": "sbtest34",
-    "Values": 15,
+    "Values": [
+      15
+    ],
     "Vindex": "hash"
   }
 }
@@ -30,7 +32,9 @@
     "FieldQuery": "select c from sbtest34 where 1 != 1",
     "Query": "select c from sbtest34 where id = 15",
     "Table": "sbtest34",
-    "Values": "INT64(15)",
+    "Values": [
+      "INT64(15)"
+    ],
     "Vindex": "hash"
   }
 }

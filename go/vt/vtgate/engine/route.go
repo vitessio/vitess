@@ -75,10 +75,10 @@ type Route struct {
 	FieldQuery string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.SingleColumn
+	Vindex vindexes.Vindex
 
-	// Value specifies the vindex value to use for routing.
-	Value RouteValue
+	// Values specifies the vindex values to use for routing.
+	Values []RouteValue
 
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
@@ -599,7 +599,7 @@ func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Value.ResolveValue(bindVars)
+	value, err := route.Values[0].ResolveValue(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -615,7 +615,7 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 }
 
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Value.ResolveList(bindVars)
+	value, err := route.Values[0].ResolveList(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -627,7 +627,7 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Value.ResolveList(bindVars)
+	value, err := route.Values[0].ResolveList(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -642,17 +642,25 @@ func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]
 	return rss, multiBindVars, nil
 }
 
-func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShards(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {
 		ids[i] = sqltypes.ValueToProto(vik)
 	}
 
+	var err error
+	var destinations []key.Destination
 	// Map using the Vindex
-	destinations, err := vindex.Map(vcursor, vindexKeys)
+	switch vindex := vindex.(type) {
+	case vindexes.SingleColumn:
+		destinations, err = vindex.Map(vcursor, vindexKeys)
+	case vindexes.MultiColumn:
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi column vindex unsupported")
+	}
 	if err != nil {
 		return nil, nil, err
+
 	}
 
 	// And use the Resolver to map to ResolvedShards.
@@ -806,8 +814,8 @@ func (route *Route) description() PrimitiveDescription {
 	if route.Vindex != nil {
 		other["Vindex"] = route.Vindex.String()
 	}
-	if route.Value != nil {
-		other["Values"] = route.Value
+	if route.Values != nil {
+		other["Values"] = route.Values
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["

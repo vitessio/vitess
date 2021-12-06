@@ -662,13 +662,18 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
-	// field Vindex vitess.io/vitess/go/vt/vtgate/vindexes.SingleColumn
+	// field Vindex vitess.io/vitess/go/vt/vtgate/vindexes.Vindex
 	if cc, ok := cached.Vindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Value vitess.io/vitess/go/vt/vtgate/engine.RouteValue
-	if cc, ok := cached.Value.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field Values []vitess.io/vitess/go/vt/vtgate/engine.RouteValue
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(16))
+		for _, elem := range cached.Values {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
