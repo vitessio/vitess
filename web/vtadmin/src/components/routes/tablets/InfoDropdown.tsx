@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import Dropdown, { DropdownButtonProps } from '../../dropdown/Dropdown';
+import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
-import { Icon, Icons } from '../../Icon';
+import { Icons } from '../../Icon';
 import PingDialog from './PingDialog';
 
 interface InfoDropdownProps {
