@@ -11,16 +11,20 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
     onClose,
 }) => {
     // Mount content as separate component inside Dialog so internal queries are not executed unless dialog is open.
-    const PingContent: React.FC = () => {
-        const { data: pingResponse, isLoading, isError, error } = usePingTablet({ alias, clusterID });
-        const [loading, setLoading] = useState(true);
+    const PingContent: React.FC<{ isOpen: boolean }> = ({ isOpen }) => {
+        const { data: pingResponse, isLoading, isError, error, refetch } = usePingTablet({ alias, clusterID }, { enabled: false });
+        const [loading, setLoading] = useState(true)
         useEffect(() => {
-            const timeout = setTimeout(() => {
-                setLoading(isLoading);
-            }, 500);
-
-            return () => clearTimeout(timeout)
-        });
+            let timeout: NodeJS.Timeout
+            if (isOpen) {
+                setLoading(true)
+                timeout = setTimeout(() => {
+                    refetch();
+                    setLoading(isLoading)
+                }, 300);
+            }
+            return () => timeout && clearTimeout(timeout)
+        }, [isOpen, isLoading, refetch]);
 
         const SuccessState: React.FC = () => (
             <div className="w-full flex flex-col justify-center items-center">
@@ -80,7 +84,7 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
     return (
         <Dialog isOpen={isOpen} onClose={onClose} hideCancel={true} confirmText="Done">
             <div>
-                <PingContent />
+                <PingContent isOpen={isOpen} />
             </div>
         </Dialog>
     );
