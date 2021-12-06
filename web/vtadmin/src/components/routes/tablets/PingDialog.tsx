@@ -10,34 +10,36 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
     isOpen,
     onClose,
 }) => {
-    const SuccessState: React.FC = () => (
-        <div className="w-full flex flex-col justify-center items-center">
-            <span className="flex h-12 w-12 relative items-center justify-center">
-                <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
-            </span>
-            <div className="text-2xl mt-3 font-bold">Success!</div>
-            <div className="text-lg">Successfully reached tablet {alias} via RPC.</div>
-        </div>
-    );
-
-    const FailState: React.FC = () => (
-        <div className="w-full flex flex-col justify-center items-center">
-            <span className="flex h-12 w-12 relative items-center justify-center">
-                <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
-            </span>
-            <div className="text-2xl mt-3 font-bold">Error</div>
-            <div className="text-lg">There was an issue pinging tablet {alias}.</div>
-        </div>
-    );
     // Mount content as separate component inside Dialog so internal queries are not executed unless dialog is open.
     const PingContent: React.FC = () => {
-        const { data: pingResponse, isLoading, isError } = usePingTablet({ alias, clusterID });
+        const { data: pingResponse, isLoading, isError, error } = usePingTablet({ alias, clusterID });
         const [loading, setLoading] = useState(true);
         useEffect(() => {
             setTimeout(() => {
                 setLoading(isLoading);
             }, 500);
         });
+
+        const SuccessState: React.FC = () => (
+            <div className="w-full flex flex-col justify-center items-center">
+                <span className="flex h-12 w-12 relative items-center justify-center">
+                    <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
+                </span>
+                <div className="text-2xl mt-3 font-bold">Success!</div>
+                <div className="text-lg">Successfully reached tablet {alias} via RPC.</div>
+            </div>
+        );
+
+        const FailState: React.FC = () => (
+            <div className="w-full flex flex-col justify-center items-center">
+                <span className="flex h-12 w-12 relative items-center justify-center">
+                    <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
+                </span>
+                <div className="text-2xl mt-3 font-bold">Error</div>
+                <div className="text-lg">There was an issue pinging tablet {alias}: {error}</div>
+            </div>
+        );
+
         return (
             <div className="flex justify-center items-center w-full h-40">
                 <Transition
