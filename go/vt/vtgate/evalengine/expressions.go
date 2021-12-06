@@ -408,6 +408,12 @@ func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
 			fval = 0
 		}
 		return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}, nil
+	case sqltypes.Decimal:
+		dec, err := newDecimalString(string(val.Value))
+		if err != nil {
+			return EvalResult{}, err
+		}
+		return newEvalDecimal(dec), nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
 		return EvalResult{typ: sqltypes.VarBinary, bytes: value}, nil
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
