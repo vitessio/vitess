@@ -351,19 +351,6 @@ message GetTabletRequest {
     repeated string cluster_ids = 2;
 }
 
-message PingTabletRequest {
-    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
-    string alias = 1;
-    // ClusterIDs is an optional parameter to narrow the scope of the search, if
-    // the caller knows which cluster the tablet may be in, or, to disamiguate if
-    // multiple clusters have a tablet with the same hostname.
-    repeated string cluster_ids = 2;
-}
-
-message PingTabletResponse {
-    string status = 1;
-}
-
 message GetTabletsRequest {
     repeated string cluster_ids = 1;
 }
@@ -424,6 +411,19 @@ message GetWorkflowsRequest {
 
 message GetWorkflowsResponse {
     map <string, ClusterWorkflows> workflows_by_cluster = 1;
+}
+
+message PingTabletRequest {
+    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
+    string alias = 1;
+    // ClusterIDs is an optional parameter to narrow the scope of the search, if
+    // the caller knows which cluster the tablet may be in, or, to disamiguate if
+    // multiple clusters have a tablet with the same hostname.
+    repeated string cluster_ids = 2;
+}
+
+message PingTabletResponse {
+    string status = 1;
 }
 
 message VTExplainRequest {
