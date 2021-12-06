@@ -1142,14 +1142,6 @@ func (op UnaryExprOperator) ToString() string {
 		return BangStr
 	case BinaryOp:
 		return BinaryStr
-	case UBinaryOp:
-		return UBinaryStr
-	case Utf8mb4Op:
-		return Utf8mb4Str
-	case Utf8Op:
-		return Utf8Str
-	case Latin1Op:
-		return Latin1Str
 	case NStringOp:
 		return NStringStr
 	default:
