@@ -427,15 +427,13 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 		where = &sqlparser.Where{Expr: predicates, Type: sqlparser.WhereClause}
 	}
 
-	var singleColumn vindexes.SingleColumn
-	var value engine.RouteValue
+	var vindex vindexes.Vindex
+	var values []engine.RouteValue
 	if n.selectedVindex() != nil {
-		vdx, ok := n.selected.foundVindex.(vindexes.SingleColumn)
-		if !ok || len(n.selected.values) != 1 {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
+		vindex = n.selected.foundVindex
+		for _, value := range n.selected.values {
+			values = append(values, &evalengine.RouteValue{Expr: value})
 		}
-		singleColumn = vdx
-		value = &evalengine.RouteValue{Expr: n.selected.values[0]}
 	}
 
 	var expressions sqlparser.SelectExprs
@@ -471,8 +469,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 			Opcode:              n.routeOpCode,
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            n.keyspace,
-			Vindex:              singleColumn,
-			Value:               value,
+			Vindex:              vindex,
+			Values:              values,
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},

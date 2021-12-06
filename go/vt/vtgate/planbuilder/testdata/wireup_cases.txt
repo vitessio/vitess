@@ -71,7 +71,9 @@
         "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
         "Query": "select u.id as uid from `user` as u where u.id = :e_id",
         "Table": "`user`",
-        "Values": ":e_id",
+        "Values": [
+          ":e_id"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -151,7 +153,9 @@
         "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
         "Query": "select u.id as uid from `user` as u where u.id = :e_id",
         "Table": "`user`",
-        "Values": ":e_id",
+        "Values": [
+          ":e_id"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -578,7 +582,9 @@
             "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
             "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
             "Table": "`user`",
-            "Values": ":u1_col",
+            "Values": [
+              ":u1_col"
+            ],
             "Vindex": "user_index"
           }
         ]
@@ -669,7 +675,9 @@
                 "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
                 "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
                 "Table": "`user`",
-                "Values": ":u1_col",
+                "Values": [
+                  ":u1_col"
+                ],
                 "Vindex": "user_index"
               }
             ]
@@ -720,7 +728,9 @@
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
             "Query": "select 1 from `user` as u2 where u2.id = :u1_col",
             "Table": "`user`",
-            "Values": ":u1_col",
+            "Values": [
+              ":u1_col"
+            ],
             "Vindex": "user_index"
           },
           {
@@ -733,7 +743,9 @@
             "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
             "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
             "Table": "`user`",
-            "Values": ":u1_col",
+            "Values": [
+              ":u1_col"
+            ],
             "Vindex": "user_index"
           }
         ]
@@ -785,7 +797,9 @@
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
             "Query": "select 1 from `user` as u2 where u2.id = :u1_col",
             "Table": "`user`",
-            "Values": ":u1_col",
+            "Values": [
+              ":u1_col"
+            ],
             "Vindex": "user_index"
           }
         ]
@@ -800,7 +814,9 @@
         "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
         "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
         "Table": "`user`",
-        "Values": ":u1_col",
+        "Values": [
+          ":u1_col"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -880,7 +896,9 @@
         "FieldQuery": "select `weird``name`.a from `weird``name` where 1 != 1",
         "Query": "select `weird``name`.a from `weird``name` where `weird``name`.`a``b*c` = :unsharded_id",
         "Table": "`weird``name`",
-        "Values": ":unsharded_id",
+        "Values": [
+          ":unsharded_id"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -960,7 +978,9 @@
         "FieldQuery": "select 1 from `weird``name` where 1 != 1",
         "Query": "select 1 from `weird``name` where `weird``name`.`a``b*c` = :unsharded_id",
         "Table": "`weird``name`",
-        "Values": ":unsharded_id",
+        "Values": [
+          ":unsharded_id"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -1119,7 +1139,9 @@
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
-        "Values": "::__sq1",
+        "Values": [
+          "::__sq1"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -1186,7 +1208,9 @@
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
-        "Values": ":__sq1",
+        "Values": [
+          ":__sq1"
+        ],
         "Vindex": "user_index"
       }
     ]

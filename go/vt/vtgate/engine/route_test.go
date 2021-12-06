@@ -235,9 +235,9 @@ func TestSelectEqualUnique(t *testing.T) {
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
 
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.NewLiteralInt(1),
-	}
+	}}
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
@@ -272,7 +272,7 @@ func TestSelectNone(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = nil
+	sel.Values = nil
 
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -307,9 +307,9 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.NewLiteralInt(1),
-	}
+	}}
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"-20", "20-"},
@@ -349,9 +349,9 @@ func TestSelectEqual(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.NewLiteralInt(1),
-	}
+	}}
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
@@ -402,9 +402,9 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.NewLiteralInt(1),
-	}
+	}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
@@ -437,13 +437,13 @@ func TestSelectINUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.TupleExpr{
 			evalengine.NewLiteralInt(1),
 			evalengine.NewLiteralInt(2),
 			evalengine.NewLiteralInt(4),
 		},
-	}
+	}}
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"-20", "-20", "20-"},
@@ -486,13 +486,13 @@ func TestSelectINNonUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.TupleExpr{
 			evalengine.NewLiteralInt(1),
 			evalengine.NewLiteralInt(2),
 			evalengine.NewLiteralInt(4),
 		},
-	}
+	}}
 
 	fields := sqltypes.MakeTestFields(
 		"fromc|toc",
@@ -549,13 +549,13 @@ func TestSelectMultiEqual(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.TupleExpr{
 			evalengine.NewLiteralInt(1),
 			evalengine.NewLiteralInt(2),
 			evalengine.NewLiteralInt(4),
 		},
-	}
+	}}
 
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
@@ -600,9 +600,9 @@ func TestSelectLike(t *testing.T) {
 	)
 
 	sel.Vindex = vindex
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.NewLiteralString([]byte("a%"), collations.TypedCollation{}),
-	}
+	}}
 	// md5("a") = 0cc175b9c0f1b6a831c399e269772661
 	// keyspace id prefix for "a" is 0x0c
 	vc.shardForKsid = []string{"-0c80", "0c80-0d"}
@@ -630,9 +630,9 @@ func TestSelectLike(t *testing.T) {
 
 	vc.Rewind()
 
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.NewLiteralString([]byte("ab%"), collations.TypedCollation{}),
-	}
+	}}
 	// md5("b") = 92eb5ffee6ae2fec3ad71c777531578f
 	// keyspace id prefix for "ab" is 0x0c92
 	// adding one byte to the prefix just hit one shard
@@ -772,9 +772,9 @@ func TestRouteGetFields(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Value = &evalengine.RouteValue{
+	sel.Values = []RouteValue{&evalengine.RouteValue{
 		Expr: evalengine.NewLiteralInt(1),
-	}
+	}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, true)
