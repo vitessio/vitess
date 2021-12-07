@@ -202,3 +202,21 @@ func TestPullFromRdonly(t *testing.T) {
 	err = checkInsertedValues(ctx, t, newPrimary, insertVal)
 	require.NoError(t, err)
 }
+
+// TestTwoReplicaNoReplicationStatus checks that ERS is able to fix
+// two replicas which do not have any replication status
+func TestTwoReplicaNoReplicationStatus(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tab2.Alias, `STOP SLAVE; RESET REPLICA ALL`)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tab3.Alias, `STOP SLAVE; RESET REPLICA ALL`)
+	require.NoError(t, err)
+
+	out, err := ers(tab4, "60s", "30s")
+	require.NoError(t, err, out)
+}
