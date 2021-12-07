@@ -433,7 +433,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
 			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-				log.Warningf("server does not know about super_read_only; maybe MariaDB? Continuing anyway.")
+				log.Warningf("server does not know about super_read_only, continuing anyway...")
 			} else {
 				return nil, err
 			}
