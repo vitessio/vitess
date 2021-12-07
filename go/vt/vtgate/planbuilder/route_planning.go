@@ -45,7 +45,8 @@ type planningContext struct {
 	// e.g. [FROM tblA JOIN tblB ON a.colA = b.colB] will be rewritten to [FROM tblB WHERE :a_colA = b.colB],
 	// if we assume that tblB is on the RHS of the join. This last predicate in the WHERE clause is added to the
 	// map below
-	joinPredicates map[sqlparser.Expr]interface{}
+	joinPredicates map[sqlparser.Expr][]sqlparser.Expr
+	skipPredicates map[sqlparser.Expr]interface{}
 }
 
 func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
@@ -53,7 +54,8 @@ func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantic
 		reservedVars:   reservedVars,
 		semTable:       semTable,
 		vschema:        vschema,
-		joinPredicates: map[sqlparser.Expr]interface{}{},
+		joinPredicates: map[sqlparser.Expr][]sqlparser.Expr{},
+		skipPredicates: map[sqlparser.Expr]interface{}{},
 	}
 	return ctx
 }
@@ -639,7 +641,7 @@ func breakExpressionInLHSandRHS(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ctx.joinPredicates[rewrittenExpr] = nil
+	ctx.joinPredicates[expr] = append(ctx.joinPredicates[expr], rewrittenExpr)
 	return
 }
 

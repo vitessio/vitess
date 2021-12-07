@@ -92,11 +92,13 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 				return nil, err
 			}
 			op.RHS = newSrc
-			op.predicate = expr
+			op.predicate = sqlparser.AndExpressions(op.predicate, expr)
 			return op, err
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 	case *tableOp:
+		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
+		// changed by physical operators.
 		return &filterOp{
 			source:     op,
 			predicates: []sqlparser.Expr{expr},
@@ -112,7 +114,9 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, columns []*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *routeOp:
-		return PushOutputColumns(ctx, op.source, columns)
+		retOp, offsets, err := PushOutputColumns(ctx, op.source, columns)
+		op.source = retOp
+		return op, offsets, err
 	case *applyJoin:
 		var toTheLeft []bool
 		var lhs, rhs []*sqlparser.ColName
