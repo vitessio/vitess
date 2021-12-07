@@ -4,15 +4,11 @@ import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
 import { Icons } from '../../Icon';
 
-interface ChangeDropdownProps { }
+interface ChangeDropdownProps {}
 
 const ChangeDropdown: React.FC<ChangeDropdownProps> = () => {
-
     return (
-        <Dropdown
-            dropdownButton={Icons.wrench}
-            position="bottom-right"
-        >
+        <Dropdown dropdownButton={Icons.wrench} position="bottom-right">
             <MenuItem>Ignore Health Error</MenuItem>
             <MenuItem>Set ReadOnly</MenuItem>
             <MenuItem>Set ReadWrite</MenuItem>

@@ -11,18 +11,21 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
     onClose,
 }) => {
     // Mount content as separate component inside Dialog so internal queries are not executed unless dialog is open.
-    const { data: pingResponse, isLoading, isError, error, refetch } = usePingTablet({ alias, clusterID }, { enabled: false });
-    const [loading, setLoading] = useState(true)
+    const { data: pingResponse, isLoading, isError, error, refetch } = usePingTablet(
+        { alias, clusterID },
+        { enabled: false }
+    );
+    const [loading, setLoading] = useState(true);
     useEffect(() => {
-        let timeout: NodeJS.Timeout
+        let timeout: NodeJS.Timeout;
         if (isOpen) {
-            setLoading(true)
+            setLoading(true);
             timeout = setTimeout(() => {
                 refetch();
-                setLoading(isLoading)
+                setLoading(isLoading);
             }, 300);
         }
-        return () => timeout && clearTimeout(timeout)
+        return () => timeout && clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
@@ -42,7 +45,9 @@ const PingDialog: React.FC<{ alias: string; clusterID?: string; isOpen: boolean;
                 <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
             </span>
             <div className="text-lg mt-3 font-bold">Error</div>
-            <div className="text-sm">There was an issue pinging tablet {alias}: {error}</div>
+            <div className="text-sm">
+                There was an issue pinging tablet {alias}: {error}
+            </div>
         </div>
     );
 

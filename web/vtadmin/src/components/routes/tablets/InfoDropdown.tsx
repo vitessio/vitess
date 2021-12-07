@@ -14,16 +14,13 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
 
     return (
         <div className="w-min inline-block">
-            <Dropdown
-                dropdownButton={Icons.info}
-                position="bottom-right"
-            >
+            <Dropdown dropdownButton={Icons.info} position="bottom-right">
                 <MenuItem onClick={() => setPingOpen(true)}>Ping</MenuItem>
                 <MenuItem>Refresh state</MenuItem>
                 <MenuItem>Run health check</MenuItem>
-            </Dropdown >
+            </Dropdown>
             <PingDialog alias={alias} clusterID={clusterID} isOpen={isPingOpen} onClose={() => setPingOpen(false)} />
-        </div >
+        </div>
     );
 };
 
