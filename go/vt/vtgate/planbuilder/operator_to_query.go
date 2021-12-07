@@ -27,7 +27,7 @@ import (
 func toSQL(ctx *planningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
-	return q.produce()
+	return q.sel
 }
 
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
@@ -37,8 +37,17 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		for _, pred := range op.qtable.Predicates {
 			qb.addPredicate(pred)
 		}
+		for _, name := range op.columns {
+			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
+		}
 	case *applyJoin:
 		buildQuery(op.LHS, qb)
+		// If we are going to add the predicate used in join here
+		// We should not add the predicate's copy of when it was split into
+		// two parts. To avoid this, we use the skipPredicates map.
+		for _, expr := range qb.ctx.joinPredicates[op.predicate] {
+			qb.ctx.skipPredicates[expr] = nil
+		}
 		qbR := &queryBuilder{ctx: qb.ctx}
 		buildQuery(op.RHS, qbR)
 		qb.joinWith(qbR, op.predicate)
@@ -84,7 +93,7 @@ func (qb *queryBuilder) addTable(tableName, alias string) {
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	if _, isJoinCond := qb.ctx.joinPredicates[expr]; isJoinCond {
+	if _, toBeSkipped := qb.ctx.skipPredicates[expr]; toBeSkipped {
 		// This is a predicate that was added to the RHS of an applyJoin.
 		// The original predicate will be added, so we don't have to add this here
 		return
@@ -126,13 +135,9 @@ func (qb *queryBuilder) vectorGroupBy(grouping []*sqlparser.AliasedExpr, aggrFun
 	qb.grouped = true
 }
 
-func (qb *queryBuilder) project(projections []*sqlparser.AliasedExpr) {
+func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
 	sel := qb.sel.(*sqlparser.Select)
-	var exprs []sqlparser.SelectExpr
-	for _, expr := range projections {
-		exprs = append(exprs, expr)
-	}
-	sel.SelectExprs = append(sel.SelectExprs, exprs...)
+	sel.SelectExprs = append(sel.SelectExprs, projection)
 }
 
 func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr) {

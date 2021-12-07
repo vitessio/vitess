@@ -280,6 +280,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules where table name matches, and there's no alias.
 "select * from second_user.user"
@@ -508,6 +509,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # ',' join
 "select music.col from user, music"
@@ -546,6 +548,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ',' join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2"

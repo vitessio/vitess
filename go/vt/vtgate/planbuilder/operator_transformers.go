@@ -35,8 +35,8 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 	switch op := op.(type) {
 	case *routeOp:
 		return transformRouteOpPlan(ctx, op)
-		// case *joinTree:
-		// 	return transformJoinPlan(ctx, n)
+	case *applyJoin:
+		return transformApplyJoinOpPlan(ctx, op)
 		// case *derivedTree:
 		// 	return transformDerivedPlan(ctx, n)
 		// case *subqueryTree:
@@ -49,7 +49,55 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 		// 	return transformCorrelatedSubquery(ctx, n)
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T (transformOpToLogicalPlan)", op)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformOpToLogicalPlan)", op)
+}
+
+func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, error) {
+	// TODO systay we should move the decision of which join to use to the greedy algorithm,
+	// and thus represented as a queryTree
+	//canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	lhs, err := transformOpToLogicalPlan(ctx, n.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformOpToLogicalPlan(ctx, n.RHS)
+	if err != nil {
+		return nil, err
+	}
+	opCode := engine.InnerJoin
+	//if n.leftJoin {
+	//	opCode = engine.LeftJoin
+	//}
+
+	//if canHashJoin {
+	//	coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	return &hashJoin{
+	//		Left:           lhs,
+	//		Right:          rhs,
+	//		Cols:           n.columns,
+	//		Opcode:         opCode,
+	//		LHSKey:         lhsInfo.offset,
+	//		RHSKey:         rhsInfo.offset,
+	//		Predicate:      sqlparser.AndExpressions(n.predicates...),
+	//		ComparisonType: coercedType,
+	//		Collation:      lhsInfo.typ.Collation,
+	//	}, nil
+	//}
+	return &joinGen4{
+		Left:      lhs,
+		Right:     rhs,
+		Cols:      n.columns,
+		Vars:      n.vars,
+		Opcode:    opCode,
+		Predicate: n.predicate,
+	}, nil
 }
 
 func transformRouteOpPlan(ctx *planningContext, op *routeOp) (*routeGen4, error) {

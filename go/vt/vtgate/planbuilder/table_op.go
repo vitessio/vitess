@@ -43,7 +43,15 @@ func (to *tableOp) Cost() int {
 
 // Clone implements the PhysicalOperator interface
 func (to *tableOp) Clone() abstract.PhysicalOperator {
-	return to
+	var columns []*sqlparser.ColName
+	for _, name := range to.columns {
+		columns = append(columns, sqlparser.CloneRefOfColName(name))
+	}
+	return &tableOp{
+		qtable:  to.qtable,
+		vtable:  to.vtable,
+		columns: columns,
+	}
 }
 
 // TableID implements the PhysicalOperator interface

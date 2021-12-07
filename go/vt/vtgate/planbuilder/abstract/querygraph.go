@@ -46,6 +46,7 @@ type (
 	}
 
 	// QueryTable is a single FROM table, including all predicates particular to this table
+	// This is to be used as an immutable data structure which is created in the logical Operator Tree
 	QueryTable struct {
 		ID          semantics.TableSet
 		Alias       *sqlparser.AliasedTableExpr
