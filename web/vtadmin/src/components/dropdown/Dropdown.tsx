@@ -43,7 +43,6 @@ const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position 
         <Menu
             as="div"
             className="relative inline-block text-left"
-        // onBlur={() => setOpen(false)}
         >
             {button}
             <Transition
