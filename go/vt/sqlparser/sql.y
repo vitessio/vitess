@@ -359,7 +359,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
+%type <str> full_opt from_database_opt columns_or_fields
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
@@ -2612,15 +2612,14 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
     $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-| SHOW full_opt tables_or_processlist from_database_opt as_of_opt like_or_where_opt
+| SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
-    // this is ugly, but I couldn't find a better way for now
-    if $3 == "processlist" {
-      $$ = &Show{Type: $3}
-    } else {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$6, AsOf:$5}
-      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
-    }
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt}
+  }
+| SHOW full_opt PROCESSLIST
+  {
+    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{Full: $2}}
   }
 | SHOW full_opt TRIGGERS from_database_opt like_or_where_opt
   {
@@ -2679,16 +2678,6 @@ naked_like:
 LIKE value_expression like_escape_opt
   {
     $$ = &ComparisonExpr{Operator: LikeStr, Right: $2, Escape: $3}
-  }
-
-tables_or_processlist:
-  TABLES
-  {
-    $$ = string($1)
-  }
-| PROCESSLIST
-  {
-    $$ = string($1)
   }
 
 full_opt:

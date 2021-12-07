@@ -2736,6 +2736,14 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.Myprintf("show create trigger %v", node.Table)
 		return
 	}
+	if node.Type == "processlist" {
+		buf.Myprintf("show ")
+		if node.ShowTablesOpt != nil {
+			buf.Myprintf(node.ShowTablesOpt.Full)
+		}
+		buf.Myprintf("processlist")
+		return
+	}
 	if node.Type == "procedure status" {
 		buf.Myprintf("show procedure status")
 		if node.Filter != nil {

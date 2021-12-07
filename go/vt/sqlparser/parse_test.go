@@ -1504,7 +1504,7 @@ var (
 			output: "show processlist",
 		}, {
 			input:  "show full processlist",
-			output: "show processlist",
+			output: "show full processlist",
 		}, {
 			input:  "show profile cpu for query 1",
 			output: "show profile",
