@@ -186,7 +186,7 @@ func TestLag(t *testing.T) {
 		{
 			resp, err := throttleCheck(primaryTablet)
 			assert.NoError(t, err)
-			assert.NotEqual(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
