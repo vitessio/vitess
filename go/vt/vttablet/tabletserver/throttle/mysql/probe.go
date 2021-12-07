@@ -21,6 +21,8 @@ type Probe struct {
 	User            string
 	Password        string
 	MetricQuery     string
+	TabletHost      string
+	TabletPort      int
 	CacheMillis     int
 	QueryInProgress int64
 }
