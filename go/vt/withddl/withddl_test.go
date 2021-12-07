@@ -185,7 +185,7 @@ func TestExec(t *testing.T) {
 				}
 
 				wd := New(test.ddls)
-				qr, err := wd.Exec(ctx, test.query, fun.f, nil)
+				qr, err := wd.Exec(ctx, test.query, fun.f, fun.f)
 				if test.qr != nil {
 					test.qr.StatusFlags = sqltypes.ServerStatusAutocommit
 				}

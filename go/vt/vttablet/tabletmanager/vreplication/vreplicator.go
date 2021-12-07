@@ -321,7 +321,7 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	}
 
 	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
-	qr, err := withDDL.Exec(ctx, query, vr.dbClient.ExecuteFetch, nil)
+	qr, err := withDDL.Exec(ctx, query, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch)
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
