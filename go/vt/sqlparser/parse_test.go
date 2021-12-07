@@ -1504,7 +1504,7 @@ var (
 			output: "show processlist",
 		}, {
 			input:  "show full processlist",
-			output: "show processlist",
+			output: "show full processlist",
 		}, {
 			input:  "show profile cpu for query 1",
 			output: "show profile",
@@ -1613,8 +1613,53 @@ var (
 			input:  "show session variables",
 			output: "show session variables",
 		}, {
+			input:  "show variables like 'max_join_size'",
+			output: "show variables like 'max_join_size'",
+		}, {
+			input:  "show global variables like '%size%'",
+			output: "show global variables like '%size%'",
+		}, {
+			input:  "show session variables like '%size%'",
+			output: "show session variables like '%size%'",
+		}, {
+			input:  "show variables where Variable_name = 'auto_generate_certs'",
+			output: "show variables where Variable_name = 'auto_generate_certs'",
+		}, {
+			input:  "show global variables where `Value` = 'ON'",
+			output: "show global variables where `Value` = 'ON'",
+		}, {
+			input:  "show session variables where Variable_name like '%dir%' and `Value` like '/usr/%'",
+			output: "show session variables where Variable_name like '%dir%' and `Value` like '/usr/%'",
+		}, {
 			input:  "show warnings",
 			output: "show warnings",
+		}, {
+			input:  "show warnings limit 10",
+			output: "show warnings limit 10",
+		}, {
+			input:  "show warnings limit 10, 10",
+			output: "show warnings limit 10, 10",
+		}, {
+			input:  "show count(*) warnings",
+			output: "show count(*) warnings",
+		}, {
+			input:  "show count ( * ) warnings",
+			output: "show count(*) warnings",
+		}, {
+			input:  "show errors",
+			output: "show errors",
+		}, {
+			input:  "show errors limit 10",
+			output: "show errors limit 10",
+		}, {
+			input:  "show errors limit 10, 10",
+			output: "show errors limit 10, 10",
+		}, {
+			input:  "show count(*) errors",
+			output: "show count(*) errors",
+		}, {
+			input:  "show count ( * ) errors",
+			output: "show count(*) errors",
 		}, {
 			input:                "select warnings from t",
 			output:               "select `warnings` from t",
@@ -3254,19 +3299,19 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		// test alternate key syntax
 		input: "create table t (\n" +
-				"	id int,\n" +
-				"	full_name varchar,\n" +
-				"	constraint unique key (full_name),\n" +
-				"	constraint unique index named (full_name),\n" +
-				"	constraint pk primary key (id)\n" +
-				")",
+			"	id int,\n" +
+			"	full_name varchar,\n" +
+			"	constraint unique key (full_name),\n" +
+			"	constraint unique index named (full_name),\n" +
+			"	constraint pk primary key (id)\n" +
+			")",
 		output: "create table t (\n" +
-				"	id int,\n" +
-				"	full_name varchar,\n" +
-				"	unique key (full_name),\n" +
-				"	unique index named (full_name),\n" +
-				"	primary key (id)\n" +
-				")",
+			"	id int,\n" +
+			"	full_name varchar,\n" +
+			"	unique key (full_name),\n" +
+			"	unique index named (full_name),\n" +
+			"	primary key (id)\n" +
+			")",
 	}, {
 		// test current_timestamp with and without ()
 		input: "create table t (\n" +

@@ -2034,14 +2034,14 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	Null		  BoolVal
+	Null          BoolVal
 	NotNull       BoolVal
 	Autoincrement BoolVal
 	Default       Expr
 	OnUpdate      Expr
-	Comment *SQLVal
-	sawnull bool
-	sawai   bool
+	Comment       *SQLVal
+	sawnull       bool
+	sawai         bool
 
 	// Numeric field options
 	Length   *SQLVal
@@ -2095,7 +2095,6 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		}
 		ct.KeyOpt = other.KeyOpt
 	}
-
 
 	if other.Comment != nil {
 		if ct.Comment != nil {
@@ -2702,13 +2701,20 @@ type Show struct {
 	ShowCollationFilterOpt *Expr
 	ShowIndexFilterOpt     Expr
 	Filter                 *ShowFilter
+	Limit                  *Limit
+	CountStar              bool
+	Full                   bool
 }
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields" || node.Type == "triggers") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
-		buf.Myprintf("show %s%s", opt.Full, node.Type)
+		buf.Myprintf("show ")
+		if node.Full {
+			buf.Myprintf("full ")
+		}
+		buf.Myprintf("%s", node.Type)
 		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
 			buf.Myprintf(" from %v", node.OnTable)
 		}
@@ -2733,6 +2739,14 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.Type == CreateTriggerStr {
 		buf.Myprintf("show create trigger %v", node.Table)
+		return
+	}
+	if node.Type == "processlist" {
+		buf.Myprintf("show ")
+		if node.Full {
+			buf.Myprintf("full ")
+		}
+		buf.Myprintf("processlist")
 		return
 	}
 	if node.Type == "procedure status" {
@@ -2767,9 +2781,13 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.Myprintf("show %s %s%s", node.Type, notExistsOpt, node.Database)
 	} else {
 		if node.Scope != "" {
-			buf.Myprintf("show %s %s", node.Scope, node.Type)
+			buf.Myprintf("show %s %s%v", node.Scope, node.Type, node.Filter)
 		} else {
-			buf.Myprintf("show %s", node.Type)
+			buf.Myprintf("show ")
+			if node.CountStar {
+				buf.Myprintf("count(*) ")
+			}
+			buf.Myprintf("%s%v%v", node.Type, node.Filter, node.Limit)
 		}
 	}
 
@@ -2778,12 +2796,6 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
-	}
-	if node.Type == "charset" {
-		if node.Filter != nil {
-			buf.Myprintf("%v", node.Filter)
-		}
-		return
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
@@ -2816,7 +2828,6 @@ func (node *Show) walkSubtree(visit Visit) error {
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
-	Full   string
 	DbName string
 	Filter *ShowFilter
 	AsOf   Expr

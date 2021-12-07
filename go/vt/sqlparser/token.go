@@ -198,6 +198,7 @@ var keywords = map[string]int{
 	"enforced":            ENFORCED,
 	"engines":             ENGINES,
 	"enum":                ENUM,
+	"errors":              ERRORS,
 	"escape":              ESCAPE,
 	"escaped":             ESCAPED,
 	"exists":              EXISTS,

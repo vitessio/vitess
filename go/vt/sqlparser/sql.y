@@ -210,7 +210,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
-%token <bytes> STATUS VARIABLES WARNINGS
+%token <bytes> STATUS VARIABLES WARNINGS ERRORS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
@@ -359,7 +359,8 @@ func skipToEnd(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
+%type <str> from_database_opt columns_or_fields
+%type <boolean> full_opt
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
@@ -2609,26 +2610,25 @@ show_statement:
   }
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Full: $2}
   }
-| SHOW full_opt tables_or_processlist from_database_opt as_of_opt like_or_where_opt
+| SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
-    // this is ugly, but I couldn't find a better way for now
-    if $3 == "processlist" {
-      $$ = &Show{Type: $3}
-    } else {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$6, AsOf:$5}
-      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
-    }
+    showTablesOpt := &ShowTablesOpt{DbName:$4, Filter:$6, AsOf:$5}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, Full: $2}
+  }
+| SHOW full_opt PROCESSLIST
+  {
+    $$ = &Show{Type: string($3), Full: $2}
   }
 | SHOW full_opt TRIGGERS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{DbName: $4, Filter: $5}}
+    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{DbName: $4, Filter: $5}, Full: $2}
   }
-| SHOW show_session_or_global VARIABLES ddl_skip_to_end
+| SHOW show_session_or_global VARIABLES like_or_where_opt
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{Scope: $2, Type: string($3), Filter: $4}
   }
 | SHOW COLLATION
   {
@@ -2648,9 +2648,21 @@ show_statement:
     var ex Expr = cmp
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &ex}
   }
-| SHOW WARNINGS
+| SHOW COUNT openb '*' closeb WARNINGS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($6), CountStar: true}
+  }
+| SHOW COUNT openb '*' closeb ERRORS
+  {
+    $$ = &Show{Type: string($6), CountStar: true}
+  }
+| SHOW WARNINGS limit_opt
+  {
+    $$ = &Show{Type: string($2), Limit: $3}
+  }
+| SHOW ERRORS limit_opt
+  {
+    $$ = &Show{Type: string($2), Limit: $3}
   }
 /*
  * Catch-all for show statements without vitess keywords:
@@ -2669,24 +2681,14 @@ LIKE value_expression like_escape_opt
     $$ = &ComparisonExpr{Operator: LikeStr, Right: $2, Escape: $3}
   }
 
-tables_or_processlist:
-  TABLES
-  {
-    $$ = string($1)
-  }
-| PROCESSLIST
-  {
-    $$ = string($1)
-  }
-
 full_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = false
   }
 | FULL
   {
-    $$ = "full "
+    $$ = true
   }
 
 columns_or_fields:
