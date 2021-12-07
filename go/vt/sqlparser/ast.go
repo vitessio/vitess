@@ -2768,16 +2768,13 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.Myprintf("show %s %s%s", node.Type, notExistsOpt, node.Database)
 	} else {
 		if node.Scope != "" {
-			buf.Myprintf("show %s %s", node.Scope, node.Type)
+			buf.Myprintf("show %s %s%v", node.Scope, node.Type, node.Filter)
 		} else {
 			buf.Myprintf("show ")
 			if node.CountStar {
 				buf.Myprintf("count(*) ")
 			}
-			buf.Myprintf("%s", node.Type)
-			if node.Limit != nil {
-				buf.Myprintf("%v", node.Limit)
-			}
+			buf.Myprintf("%s%v%v", node.Type, node.Filter, node.Limit)
 		}
 	}
 
@@ -2786,12 +2783,6 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
-	}
-	if node.Type == "charset" {
-		if node.Filter != nil {
-			buf.Myprintf("%v", node.Filter)
-		}
-		return
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)

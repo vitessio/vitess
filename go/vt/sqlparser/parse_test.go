@@ -1613,6 +1613,24 @@ var (
 			input:  "show session variables",
 			output: "show session variables",
 		}, {
+			input:  "show variables like 'max_join_size'",
+			output: "show variables like 'max_join_size'",
+		}, {
+			input:  "show global variables like '%size%'",
+			output: "show global variables like '%size%'",
+		}, {
+			input:  "show session variables like '%size%'",
+			output: "show session variables like '%size%'",
+		}, {
+			input:  "show variables where Variable_name = 'auto_generate_certs'",
+			output: "show variables where Variable_name = 'auto_generate_certs'",
+		}, {
+			input:  "show global variables where `Value` = 'ON'",
+			output: "show global variables where `Value` = 'ON'",
+		}, {
+			input:  "show session variables where Variable_name like '%dir%' and `Value` like '/usr/%'",
+			output: "show session variables where Variable_name like '%dir%' and `Value` like '/usr/%'",
+		}, {
 			input:  "show warnings",
 			output: "show warnings",
 		}, {

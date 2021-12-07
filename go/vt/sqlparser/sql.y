@@ -2626,9 +2626,9 @@ show_statement:
   {
     $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{DbName: $4, Filter: $5}}
   }
-| SHOW show_session_or_global VARIABLES ddl_skip_to_end
+| SHOW show_session_or_global VARIABLES like_or_where_opt
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{Scope: $2, Type: string($3), Filter: $4}
   }
 | SHOW COLLATION
   {
