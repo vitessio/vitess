@@ -1,13 +1,12 @@
 import React, { Fragment } from 'react';
 import { Icon, Icons } from '../Icon';
-import { Menu, Transition } from '@headlessui/react'
+import { Menu, Transition } from '@headlessui/react';
 import style from './Dropdown.module.scss';
 interface DropdownProps {
     // Optionally pass in your own button if you don't want it styled like DropdownButton
-    dropdownButton: React.FC | Icons
+    dropdownButton: React.FC | Icons;
     position?: 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
 }
-
 
 const positions: Record<string, string> = {
     'top-left': style.topLeft,
@@ -29,21 +28,19 @@ export const DropdownButton: React.FC<{ icon: Icons }> = ({ icon }) => (
         <div className="transform scale-75">
             <Icon icon={icon} />
         </div>
-    </Menu.Button>)
+    </Menu.Button>
+);
 
 const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position }) => {
     let button;
     if (typeof dropdownButton == 'string') {
-        button = <DropdownButton icon={dropdownButton as Icons} />
+        button = <DropdownButton icon={dropdownButton as Icons} />;
     } else {
-        const ButtonComponent = dropdownButton as React.FC
-        button = <ButtonComponent />
+        const ButtonComponent = dropdownButton as React.FC;
+        button = <ButtonComponent />;
     }
     return (
-        <Menu
-            as="div"
-            className="relative inline-block text-left"
-        >
+        <Menu as="div" className="relative inline-block text-left">
             {button}
             <Transition
                 as={Fragment}
@@ -55,8 +52,9 @@ const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position 
                 leaveTo="transform opacity-0 scale-95"
             >
                 <Menu.Items
-                    className={`py-2 z-10 origin-top-right absolute ${positions[position as string] || positions.default
-                        } md:-left-3full mt-2 w-max rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
+                    className={`py-2 z-10 origin-top-right absolute ${
+                        positions[position as string] || positions.default
+                    } md:-left-3full mt-2 w-max rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
                     role="menu"
                     aria-orientation="vertical"
                     aria-labelledby="menu-button"
