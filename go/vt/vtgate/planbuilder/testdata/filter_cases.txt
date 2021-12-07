@@ -4196,7 +4196,7 @@ Gen4 plan same as above
   }
 }
 
-# multi column vindexes are not allowed to be selected as vindex option. This will be Scatter
+# multi column vindex produces Equal plan in gen4 and Scatter in v3
 "select * from multicol_tbl where cola = 1 and colb = 2"
 {
   "QueryType": "SELECT",
@@ -4229,6 +4229,83 @@ Gen4 plan same as above
     "Values": [
       "INT64(1)",
       "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with different order places the vindex keys in correct order
+"select * from multicol_tbl where colb = 2 and cola = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 2 and cola = 1",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 2 and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+
+# multi column vindex produces IN plan in gen4 and Scatter in v3
+"select * from multicol_tbl where cola in (1,2) and colb in (3,4)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,2) and colb in (3,4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 2) and colb in (3, 4)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,2) and colb in (3,4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in ::__vals and colb in ::__vals",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(2))",
+      "(INT64(3), INT64(4))"
     ],
     "Vindex": "multicolIdx"
   }

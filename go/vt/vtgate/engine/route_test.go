@@ -18,6 +18,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -255,46 +256,6 @@ func TestSelectEqualUnique(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`StreamExecuteMulti dummy_select ks.-20: {} `,
-	})
-	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
-}
-
-func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
-	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
-	sel := NewRoute(
-		SelectEqualUnique,
-		&vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
-		},
-		"dummy_select",
-		"dummy_select_field",
-	)
-	sel.Vindex = vindex
-	sel.Values = []RouteValue{&evalengine.RouteValue{
-		Expr: evalengine.NewLiteralInt(1),
-	}, &evalengine.RouteValue{
-		Expr: evalengine.NewLiteralInt(2),
-	}}
-
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: []*sqltypes.Result{defaultSelectResult},
-	}
-	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
-		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
-	})
-	expectResult(t, "sel.Execute", result, defaultSelectResult)
-
-	vc.Rewind()
-	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
@@ -1406,4 +1367,110 @@ func TestExecFail(t *testing.T) {
 		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
 		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 	})
+}
+
+func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	sel := NewRoute(
+		SelectEqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}, &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(2),
+	}}
+
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectINMultiColumnVindex(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	sel := NewRoute(
+		SelectIN,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []RouteValue{
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
+				func() evalengine.Expr { return evalengine.NewLiteralInt(1) },
+				func() evalengine.Expr { return evalengine.NewLiteralInt(2) },
+			}),
+		},
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
+				func() evalengine.Expr { return evalengine.NewLiteralInt(3) },
+				func() evalengine.Expr { return evalengine.NewLiteralInt(4) },
+			}),
+		},
+	}
+
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "20-", "20-", "-20"},
+		results:      []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestBuildRowColValues(t *testing.T) {
+	out := buildRowColValues([][]sqltypes.Value{
+		{sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
+		{sqltypes.NewInt64(2), sqltypes.NewInt64(20)},
+	}, []sqltypes.Value{
+		sqltypes.NewInt64(3),
+		sqltypes.NewInt64(4),
+	})
+
+	require.Len(t, out, 4)
+	require.EqualValues(t, "[INT64(1) INT64(10) INT64(3)]", fmt.Sprintf("%s", out[0]))
+	require.EqualValues(t, "[INT64(1) INT64(10) INT64(4)]", fmt.Sprintf("%s", out[1]))
+	require.EqualValues(t, "[INT64(2) INT64(20) INT64(3)]", fmt.Sprintf("%s", out[2]))
+	require.EqualValues(t, "[INT64(2) INT64(20) INT64(4)]", fmt.Sprintf("%s", out[3]))
 }
