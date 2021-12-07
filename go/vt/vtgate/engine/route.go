@@ -274,28 +274,7 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	var rss []*srvtopo.ResolvedShard
-	var bvs []map[string]*querypb.BindVariable
-	var err error
-	switch route.Opcode {
-	case SelectDBA:
-		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
-	case SelectUnsharded, SelectNext, SelectReference:
-		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
-	case SelectScatter:
-		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
-	case SelectEqual, SelectEqualUnique:
-		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
-	case SelectIN:
-		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
-	case SelectMultiEqual:
-		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
-	case SelectNone:
-		rss, bvs, err = nil, nil, nil
-	default:
-		// Unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
-	}
+	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +311,33 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	return route.sort(result)
 }
 
+func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	switch route.Opcode {
+	case SelectDBA:
+		return route.paramsSystemQuery(vcursor, bindVars)
+	case SelectUnsharded, SelectNext, SelectReference:
+		return route.paramsAnyShard(vcursor, bindVars)
+	case SelectScatter:
+		return route.paramsAllShards(vcursor, bindVars)
+	case SelectEqual, SelectEqualUnique:
+		switch route.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return route.paramsSelectEqualMultiCol(vcursor, bindVars)
+		default:
+			return route.paramsSelectEqual(vcursor, bindVars)
+		}
+	case SelectIN:
+		return route.paramsSelectIn(vcursor, bindVars)
+	case SelectMultiEqual:
+		return route.paramsSelectMultiEqual(vcursor, bindVars)
+	case SelectNone:
+		return nil, nil, nil
+	default:
+		// Unreachable.
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
+	}
+}
+
 func filterOutNilErrors(errs []error) []error {
 	var errors []error
 	for _, err := range errs {
@@ -344,31 +350,11 @@ func filterOutNilErrors(errs []error) []error {
 
 // TryStreamExecute performs a streaming exec.
 func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var rss []*srvtopo.ResolvedShard
-	var bvs []map[string]*querypb.BindVariable
-	var err error
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
 	}
-	switch route.Opcode {
-	case SelectDBA:
-		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
-	case SelectUnsharded, SelectNext, SelectReference:
-		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
-	case SelectScatter:
-		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
-	case SelectEqual, SelectEqualUnique:
-		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
-	case SelectIN:
-		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
-	case SelectMultiEqual:
-		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
-	case SelectNone:
-		rss, bvs, err = nil, nil, nil
-	default:
-		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
-	}
+	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -612,6 +598,38 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 		multiBindVars[i] = bindVars
 	}
 	return rss, multiBindVars, nil
+}
+
+func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	var rowValue []sqltypes.Value
+	for _, rvalue := range route.Values {
+		v, err := rvalue.ResolveValue(bindVars)
+		if err != nil {
+			return nil, nil, err
+		}
+		rowValue = append(rowValue, v)
+	}
+
+	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, [][]sqltypes.Value{rowValue})
+	if err != nil {
+		return nil, nil, err
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	destinations, err := vindex.Map(vcursor, rowColValues)
+	if err != nil {
+		return nil, nil, err
+
+	}
+
+	// And use the Resolver to map to ResolvedShards.
+	return vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
 }
 
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {

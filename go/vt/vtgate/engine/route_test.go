@@ -285,7 +285,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
@@ -294,7 +294,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
