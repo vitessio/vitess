@@ -550,7 +550,7 @@ func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context,
 		}
 		mySQLThrottleMetric.Value = checkResult.Value
 
-		if checkResult.StatusCode != http.StatusOK {
+		if checkResult.StatusCode == http.StatusInternalServerError {
 			mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", checkResult.StatusCode)
 		}
 		return mySQLThrottleMetric
