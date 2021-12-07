@@ -27,6 +27,7 @@ Gen4 plan same as above
 "select * from user order by id"
 "unsupported: in scatter query: order by must reference a column in the select list: id asc"
 Gen4 error: unsupported: '*' expression in cross-shard query
+Gen4++
 
 # order by rand on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
@@ -82,16 +83,19 @@ Gen4 plan same as above
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
 Gen4 error: cannot use column offsets in group statement when using `*`
+Gen4++
 
 # group by must reference select list
 "select a from user group by b"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # complex group by expression
 "select a from user group by a+1"
 "unsupported: in scatter query: only simple references allowed"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
@@ -102,11 +106,13 @@ Gen4 plan same as above
 "select count(a,b) from user"
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
 Gen4 error: aggregate functions take a single argument 'count(a, b)'
+Gen4++
 
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
@@ -117,6 +123,7 @@ Gen4 plan same as above
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'col + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
@@ -410,6 +417,7 @@ Gen4 plan same as above
 "create view user.view_a as select col from user join user_extra"
 "symbol col not found"
 Gen4 error: Column 'col' in field list is ambiguous
+Gen4++
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"
@@ -486,11 +494,13 @@ Gen4 plan same as above
   }
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # avg function on scatter query
 "select avg(id) from user"
 "unsupported: in scatter query: complex aggregate expression"
 Gen4 error: unsupported: in scatter query: aggregation function 'avg'
+Gen4++
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -529,6 +539,7 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
   }
 }
 Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4++
 
 # aggregation filtering by having on a route with no group by with non-unique vindex filter
 "select 1 from user having count(id) = 10 and name = 'a'"
@@ -552,6 +563,7 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
   }
 }
 Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4++
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
@@ -565,6 +577,7 @@ Gen4 plan same as above
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
 "unsupported: cross-shard correlated subquery"
 Gen4 error: unsupported: unable to split predicates to derived table: uu.user_id = uu.id
+Gen4++
 
 # outer and inner subquery route reference the same "uu.id" name
 # but they refer to different things. The first reference is to the outermost query,
@@ -578,6 +591,7 @@ Gen4 plan same as above
 "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2"
 "can't do ORDER BY on top of UNION"
 Gen4 error: Column 'id' in field list is ambiguous
+Gen4++
 
 # Column aliases in Derived Table
 "select id2 from (select id from user) as x (id2)"
@@ -632,11 +646,13 @@ Gen4 plan same as above
 "select count(*) a from user having a = 0x01"
 "unsupported: filtering on results of aggregates"
 Gen4 error: expr cannot be converted, not supported: hexadecimal value: 0x01
+Gen4++
 
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
 Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
+Gen4++
 
 # aggregation on union
 "select sum(col) from (select col from user union all select col from unsharded) t"
@@ -647,3 +663,4 @@ Gen4 error: unsupported: aggregation on unions
 "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'"
 "unsupported: filtering on results of cross-shard subquery"
 Gen4 error: can't push predicates on concatenate
+Gen4++

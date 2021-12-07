@@ -155,7 +155,7 @@ func (r *routeOp) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) eva
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, _ := evalengine.Convert(expr, &noColumnLookup{semTable: ctx.semTable})
+		pv, _ := evalengine.Convert(expr, ctx.semTable)
 		if pv != nil {
 			return pv
 		}

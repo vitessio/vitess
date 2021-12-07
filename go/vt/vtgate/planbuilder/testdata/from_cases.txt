@@ -16,6 +16,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table unsharded
 "select col from unsharded"
@@ -35,6 +36,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Select from sequence
 "select next 2 values from seq"
@@ -54,6 +56,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # select next from non-sequence table
 "select next value from user"
@@ -78,6 +81,7 @@ Gen4 plan same as above
   }
 }
 Gen4 error: Incorrect usage/placement of 'NEXT'
+Gen4++
 
 # select next in derived table
 "select * from (select next value from seq) t"
@@ -97,6 +101,7 @@ Gen4 error: Incorrect usage/placement of 'NEXT'
   }
 }
 Gen4 error: Incorrect usage/placement of 'NEXT'
+Gen4++
 
 # select next in subquery
 "select 1 from user where id in (select next value from seq)"
@@ -141,6 +146,7 @@ Gen4 error: Incorrect usage/placement of 'NEXT'
   }
 }
 Gen4 error: Incorrect usage/placement of 'NEXT'
+Gen4++
 
 # select next in projection
 "select (select next value from seq) from user"
@@ -181,6 +187,7 @@ Gen4 error: Incorrect usage/placement of 'NEXT'
   }
 }
 Gen4 error: Incorrect usage/placement of 'NEXT'
+Gen4++
 
 # Select from reference
 "select * from ref"
@@ -200,6 +207,7 @@ Gen4 error: Incorrect usage/placement of 'NEXT'
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Multi-table unsharded
 "select m1.col from unsharded as m1 join unsharded as m2"
@@ -233,6 +241,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4++
 
 # Multi-table, multi-chunk
 "select music.col from user join music"
@@ -290,6 +299,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
@@ -309,6 +319,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules where table name does not match, and there's no alias.
 "select * from route1"
@@ -328,6 +339,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules where table name does not match, and there's an alias.
 "select * from route1 as a"
@@ -347,6 +359,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules with primary targeting
 "select * from primary_redirect"
@@ -366,6 +379,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules bad table
 "select * from bad_table"
@@ -408,6 +422,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4++
 
 "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42"
 {
@@ -550,6 +565,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ',' 3-way join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3"
@@ -995,6 +1011,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4++
 
 # Three-way join
 "select user.col from user join unsharded as m1 join unsharded as m2"
@@ -1316,6 +1333,7 @@ Gen4 plan same as above
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # mergeable sharded join on unique vindex (parenthesized ON clause)
 "select user.col from user join user_extra on (user.id = user_extra.user_id)"
@@ -1349,6 +1367,7 @@ Gen4 plan same as above
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # mergeable sharded join on unique vindex, with a stray condition
 "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id"
@@ -1382,6 +1401,7 @@ Gen4 plan same as above
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # mergeable sharded join on unique vindex, swapped operands
 "select user.col from user join user_extra on user_extra.user_id = user.id"
@@ -1415,6 +1435,7 @@ Gen4 plan same as above
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # mergeable sharded join on unique vindex, and condition
 "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id"
@@ -1456,6 +1477,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # sharded join on unique vindex, inequality
 "select user.col from user join user_extra on user.id < user_extra.user_id"
@@ -2075,6 +2097,7 @@ Gen4 plan same as above
 "select t.id from (select user.id, id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
 "duplicate column aliases: id"
 Gen4 error: Duplicate column name 'id'
+Gen4++
 
 # derived table in RHS of join
 "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id"
@@ -2240,6 +2263,7 @@ Gen4 plan same as above
   }
 }
 Gen4 error: symbol t.col not found
+Gen4++
 
 # routing rules for derived table where the constraint is in the outer query
 "select id from (select id, col from route1) as t where id = 5"
@@ -2300,6 +2324,7 @@ Gen4 error: symbol t.col not found
   }
 }
 Gen4 error: symbol id not found
+Gen4++
 
 # push predicate on joined derived tables
 "select t.id from (select id, textcol1 as baz from route1) as t join (select id, textcol1+textcol1 as baz from user) as s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'"
@@ -3520,6 +3545,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # col refs should be case-insensitive
 "select user.col from user join user_extra on user.ID = user_extra.User_Id"
@@ -3553,6 +3579,7 @@ Gen4 plan same as above
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # derived table with join primitive (FROM)
 "select id, t.id from (select user.id from user join user_extra) as t"
@@ -3656,6 +3683,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"
@@ -3675,6 +3703,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # last_insert_id for unsharded route
 "select last_insert_id() from main.unsharded"
@@ -3694,6 +3723,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # join with USING construct
 "select user.id from user join user_extra using(id)"
@@ -3944,6 +3974,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4++
 
 # gen4 - optimise plan by merging user_extra and music first, and then querying for user info
 "select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id"

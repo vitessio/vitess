@@ -9,6 +9,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # use db tablet
 "use ks@replica"
@@ -21,6 +22,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # use db target with :
 "use `ks:-80@replica`"
@@ -33,6 +35,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # use db target with /
 "use `ks/80-@replica`"
@@ -45,6 +48,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # reset db
 "use"
@@ -56,3 +60,4 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++

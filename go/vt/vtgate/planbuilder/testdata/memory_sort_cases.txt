@@ -36,6 +36,7 @@
   }
 }
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate order by references aggregate expression
 "select a, b, count(*) k from user group by a order by k"
@@ -72,6 +73,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   }
 }
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate order by references multiple non-group-by expressions
 "select a, b, count(*) k from user group by a order by b, a, k"
@@ -110,6 +112,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   }
 }
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate with memory sort and limit
 "select a, b, count(*) k from user group by a order by k desc limit 10"
@@ -152,6 +155,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   }
 }
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate with memory sort and order by number
 "select a, b, count(*) k from user group by a order by 1,3"
@@ -190,6 +194,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   }
 }
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate with memory sort and order by number, reuse weight_string
 # we have to use a meaningless construct to test this. TODO: improve to do ordering once for textcol1

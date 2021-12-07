@@ -653,6 +653,10 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
 			})
 
+			if !tcase.check2ndPlanner {
+				continue
+			}
+
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
 			if err != nil && tcase.output2ndPlanner == "" && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
@@ -685,6 +689,10 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 					} else {
 						expected.WriteString(fmt.Sprintf("%s\n", out))
 					}
+				}
+
+				if out == tcase.output2ndPlanner {
+					expected.WriteString("Gen4++\n")
 				}
 			})
 			expected.WriteString("\n")
@@ -723,6 +731,7 @@ type testCase struct {
 	input            string
 	output           string
 	output2ndPlanner string
+	check2ndPlanner  bool
 	comments         string
 }
 
@@ -810,12 +819,25 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			case strings.HasPrefix(nextLine, gen4ErrorPrefix):
 				output2Planner = []byte(nextLine[len(gen4ErrorPrefix) : len(nextLine)-1])
 			}
+
+			var check2ndPlanner bool
+			if len(output2Planner) != 0 {
+				binput, err = r.ReadBytes('\n')
+				if err != nil && err != io.EOF {
+					panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
+				}
+				lineno++
+				nextLine = string(binput)
+				check2ndPlanner = nextLine == "Gen4++\n"
+			}
+
 			testCaseIterator <- testCase{
 				file:             name,
 				lineno:           lineno,
 				input:            input,
 				output:           string(output),
 				output2ndPlanner: string(output2Planner),
+				check2ndPlanner:  check2ndPlanner,
 				comments:         comments,
 			}
 			comments = ""

@@ -16,6 +16,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Query that always return empty
 "select id from user where someColumn = null"
@@ -35,6 +36,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table unique vindex route
 "select id from user where user.id = 5"
@@ -58,6 +60,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table unique vindex route, but complex expr
 "select id from user where user.id = 5+5"
@@ -95,6 +98,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
@@ -118,6 +122,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table multiple non-unique vindex match
 "select id from user where costly = 'aa' and name = 'bb'"
@@ -141,6 +146,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table multiple non-unique vindex match for IN clause
 "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')"
@@ -302,6 +308,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN: multiple vindex matches
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -390,6 +397,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN: RHS not tuple
 "select id from user where (col1, name) in (select * from music where music.user_id=user.id)"
@@ -484,6 +492,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table equality route with val arg
 "select id from user where name = :a"
@@ -507,6 +516,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table equality route with unsigned value
 "select id from user where name = 18446744073709551615"
@@ -530,6 +540,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table in clause list arg
 "select id from user where name in ::list"
@@ -594,6 +605,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # Multi-table unique vindex constraint on right table
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
@@ -635,6 +647,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # Multi-table unique vindex constraint on left table of left join
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5"
@@ -852,6 +865,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # Multi-route with cross-route constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col"
@@ -1085,6 +1099,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
@@ -1108,6 +1123,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
@@ -1131,6 +1147,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
@@ -1154,6 +1171,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Route with OR and AND clause, must parenthesize correctly.
 "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)"
@@ -1173,6 +1191,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Unsharded route
 "select unsharded.id from user join unsharded where unsharded.id = user.id"
@@ -1278,6 +1297,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
@@ -2159,6 +2179,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # database() call in where clause.
 "select id from user where database()"
@@ -2197,6 +2218,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SELECT with IS NULL
 "select id from music where id is null"
@@ -2239,6 +2261,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table with unique vindex match and null match
 "select id from music where user_id = 4 and id = null"
@@ -2300,6 +2323,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table with unique vindex match and NOT IN (null, 1, 2)
 "select id from music where user_id = 4 and id NOT IN (null, 1, 2)"
@@ -2524,6 +2548,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # non unique predicate on vindex
 "select id from user where user.id > 5"
@@ -2543,6 +2568,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # select from unsharded keyspace with uncorrelated subquery which should be merged to a single route
 "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)"
@@ -3071,6 +3097,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # join with transitive closures
 "select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id"
@@ -3126,6 +3153,7 @@ Gen4 plan same as above
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # not supported transitive closures with equality inside of an OR
 "select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)"
@@ -3386,6 +3414,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # should only use first column of the vindex colb_colc_map
 "select * from multicolvin where column_b = 1 and column_c = 2"
@@ -3409,6 +3438,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # uses vindex colb_colc_map
 "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3"
@@ -3432,6 +3462,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # v3 takes cola_map, gen4 takes colb_colc_map, may be based on map key ordering
 "select * from multicolvin where column_a = 3 and column_b = 1"
@@ -3473,6 +3504,7 @@ Gen4 plan same as above
     "Vindex": "colb_colc_map"
   }
 }
+Gen4++
 
 # multi column vindex produces Equal plan in gen4 and Scatter in v3
 "select * from multicol_tbl where cola = 1 and colb = 2"
