@@ -34,29 +34,29 @@ var (
 	groupOnlineSize = stats.NewGaugesWithMultiLabels("MysqlGroupOnlineSize", "Online MySQL server in the group", []string{"Keyspace", "Shard"})
 	isLostQuorum    = stats.NewGaugesWithMultiLabels("MysqlGroupLostQuorum", "If MySQL group lost quorum", []string{"Keyspace", "Shard"})
 
-	heartbeatThreshold = flag.Int("group_heartbeat_threshold", 0, "Group heartbeat staleness threshold. Need to set together with -enable_heartbeat_check")
+	heartbeatThreshold = flag.Int("group_heartbeat_threshold_sec", 0, "VTGR will trigger backoff on inconsistent state and the group heartbeat staleness exceeds the threshold here. Need to set together with -enable_heartbeat_check")
 )
 
 // SQLGroup contains views from all the nodes within the shard
 type SQLGroup struct {
-	views                       []*db.GroupView
-	resolvedView                *ResolvedView
-	logger                      *log.Logger
-	size                        int
-	singlePrimary               bool
-	heartbeatStalenessThreshold int
-	statsTags                   []string
+	views              []*db.GroupView
+	resolvedView       *ResolvedView
+	logger             *log.Logger
+	size               int
+	singlePrimary      bool
+	heartbeatThreshold int
+	statsTags          []string
 	sync.Mutex
 }
 
 // NewSQLGroup creates a new SQLGroup
 func NewSQLGroup(size int, singlePrimary bool, keyspace, shard string) *SQLGroup {
 	return &SQLGroup{
-		size:                        size,
-		singlePrimary:               singlePrimary,
-		statsTags:                   []string{keyspace, shard},
-		logger:                      log.NewVTGRLogger(keyspace, shard),
-		heartbeatStalenessThreshold: *heartbeatThreshold,
+		size:               size,
+		singlePrimary:      singlePrimary,
+		statsTags:          []string{keyspace, shard},
+		logger:             log.NewVTGRLogger(keyspace, shard),
+		heartbeatThreshold: *heartbeatThreshold,
 	}
 }
 
@@ -254,19 +254,19 @@ func (group *SQLGroup) resolveLocked() error {
 			}
 			// Members in a group should eventually converge on a state
 			// if there is a partition, then a node should be removed from
-			// a group. If we a node is reported as ONLINE together with
-			// some other staet, we back off if we see a node with diverged state
+			// a group. If a node is reported as ONLINE together with
+			// some other state, we back off if we see a node with diverged state
 			if memberState != db.UNKNOWNSTATE &&
 				st.State != db.UNKNOWNSTATE &&
 				st.State != memberState &&
 				(st.State == db.ONLINE || memberState == db.ONLINE) {
 				group.logger.Warningf("found inconsistent member state for %v: %v vs %v", instance.Hostname, st.State, memberState)
-				if group.heartbeatStalenessThreshold != 0 &&
+				if group.heartbeatThreshold != 0 &&
 					// Check minStalenessResult among the group is not math.MaxInt32
 					// which means at least one node returns the lag from _vt.heartbeat table
 					// otherwise we don't trigger backoff on inconsistent state
 					minStalenessResult != math.MaxInt32 &&
-					minStalenessResult >= group.heartbeatStalenessThreshold {
+					minStalenessResult >= group.heartbeatThreshold {
 					group.logger.Warningf("ErrGroupBackoffError by staled heartbeat check %v", minStalenessResult)
 					var sb strings.Builder
 					for _, view := range group.views {

@@ -235,7 +235,7 @@ func TestInconsistentState(t *testing.T) {
 	group.recordView(v1)
 	group.recordView(v2)
 	group.recordView(v3)
-	group.heartbeatStalenessThreshold = 10
+	group.heartbeatThreshold = 10
 	err := group.Resolve()
 	assert.EqualErrorf(t, err, "group backoff error", err.Error())
 	rv := group.resolvedView
@@ -268,7 +268,7 @@ func TestInconsistentStateWithInvalidStaleResult(t *testing.T) {
 	group.recordView(v1)
 	group.recordView(v2)
 	group.recordView(v3)
-	group.heartbeatStalenessThreshold = 10
+	group.heartbeatThreshold = 10
 	err := group.Resolve()
 	// Same setup as TestInconsistentState but because HeartbeatStaleness are all MaxInt32
 	// the backoff is not triggered

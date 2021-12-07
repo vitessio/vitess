@@ -44,10 +44,10 @@ var (
 // grInstance represents an instance that's running MySQL GR
 // it wraps a InstanceKey plus some tablet related information
 type grInstance struct {
-	instanceKey     *inst.InstanceKey
-	tablet          *topodatapb.Tablet
-	masterTimeStamp time.Time
-	alias           string
+	instanceKey      *inst.InstanceKey
+	tablet           *topodatapb.Tablet
+	primaryTimeStamp time.Time
+	alias            string
 }
 
 // GRTopo is VTGR wrapper for topo server
@@ -215,14 +215,14 @@ func (shard *GRShard) refreshPrimaryShard(ctx context.Context) (string, error) {
 // findPrimaryFromLocalCell iterates through the replicas stored in grShard and returns
 // the one that's marked as primary
 func (shard *GRShard) findPrimaryFromLocalCell() string {
-	var latestMasterTimestamp time.Time
+	var latestPrimaryTimestamp time.Time
 	var primaryInstance *grInstance
 	for _, instance := range shard.instances {
-		if instance.tablet.Type == topodatapb.TabletType_MASTER {
+		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
 			// It is possible that there are more than one master in topo server
 			// we should compare timestamp to pick the latest one
-			if latestMasterTimestamp.Before(instance.masterTimeStamp) {
-				latestMasterTimestamp = instance.masterTimeStamp
+			if latestPrimaryTimestamp.Before(instance.primaryTimeStamp) {
+				latestPrimaryTimestamp = instance.primaryTimeStamp
 				primaryInstance = instance
 			}
 		}
@@ -240,7 +240,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 	var newReplicas []*grInstance
 	for alias, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		// Only monitor master, replica and ronly tablet types
+		// Only monitor primary, replica and ronly tablet types
 		switch tablet.Type {
 		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			// mysql hostname and port might be empty here if tablet is not running
@@ -250,10 +250,10 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 				Port:     int(tablet.MysqlPort),
 			}
 			grInstance := grInstance{
-				instanceKey:     &instanceKey,
-				tablet:          tablet,
-				masterTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
-				alias:           alias,
+				instanceKey:      &instanceKey,
+				tablet:           tablet,
+				primaryTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
+				alias:            alias,
 			}
 			newReplicas = append(newReplicas, &grInstance)
 		}
