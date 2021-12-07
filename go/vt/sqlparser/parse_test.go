@@ -1616,6 +1616,33 @@ var (
 			input:  "show warnings",
 			output: "show warnings",
 		}, {
+			input:  "show warnings limit 10",
+			output: "show warnings limit 10",
+		}, {
+			input:  "show warnings limit 10, 10",
+			output: "show warnings limit 10, 10",
+		}, {
+			input:  "show count(*) warnings",
+			output: "show count(*) warnings",
+		}, {
+			input:  "show count ( * ) warnings",
+			output: "show count(*) warnings",
+		}, {
+			input:  "show errors",
+			output: "show errors",
+		}, {
+			input:  "show errors limit 10",
+			output: "show errors limit 10",
+		}, {
+			input:  "show errors limit 10, 10",
+			output: "show errors limit 10, 10",
+		}, {
+			input:  "show count(*) errors",
+			output: "show count(*) errors",
+		}, {
+			input:  "show count ( * ) errors",
+			output: "show count(*) errors",
+		}, {
 			input:                "select warnings from t",
 			output:               "select `warnings` from t",
 			serializeSelectExprs: true,
@@ -3254,19 +3281,19 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		// test alternate key syntax
 		input: "create table t (\n" +
-				"	id int,\n" +
-				"	full_name varchar,\n" +
-				"	constraint unique key (full_name),\n" +
-				"	constraint unique index named (full_name),\n" +
-				"	constraint pk primary key (id)\n" +
-				")",
+			"	id int,\n" +
+			"	full_name varchar,\n" +
+			"	constraint unique key (full_name),\n" +
+			"	constraint unique index named (full_name),\n" +
+			"	constraint pk primary key (id)\n" +
+			")",
 		output: "create table t (\n" +
-				"	id int,\n" +
-				"	full_name varchar,\n" +
-				"	unique key (full_name),\n" +
-				"	unique index named (full_name),\n" +
-				"	primary key (id)\n" +
-				")",
+			"	id int,\n" +
+			"	full_name varchar,\n" +
+			"	unique key (full_name),\n" +
+			"	unique index named (full_name),\n" +
+			"	primary key (id)\n" +
+			")",
 	}, {
 		// test current_timestamp with and without ()
 		input: "create table t (\n" +

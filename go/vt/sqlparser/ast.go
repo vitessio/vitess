@@ -2034,14 +2034,14 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	Null		  BoolVal
+	Null          BoolVal
 	NotNull       BoolVal
 	Autoincrement BoolVal
 	Default       Expr
 	OnUpdate      Expr
-	Comment *SQLVal
-	sawnull bool
-	sawai   bool
+	Comment       *SQLVal
+	sawnull       bool
+	sawai         bool
 
 	// Numeric field options
 	Length   *SQLVal
@@ -2095,7 +2095,6 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		}
 		ct.KeyOpt = other.KeyOpt
 	}
-
 
 	if other.Comment != nil {
 		if ct.Comment != nil {
@@ -2702,6 +2701,8 @@ type Show struct {
 	ShowCollationFilterOpt *Expr
 	ShowIndexFilterOpt     Expr
 	Filter                 *ShowFilter
+	Limit                  *Limit
+	CountStar              bool
 }
 
 // Format formats the node.
@@ -2769,7 +2770,14 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		if node.Scope != "" {
 			buf.Myprintf("show %s %s", node.Scope, node.Type)
 		} else {
-			buf.Myprintf("show %s", node.Type)
+			buf.Myprintf("show ")
+			if node.CountStar {
+				buf.Myprintf("count(*) ")
+			}
+			buf.Myprintf("%s", node.Type)
+			if node.Limit != nil {
+				buf.Myprintf("%v", node.Limit)
+			}
 		}
 	}
 

@@ -210,7 +210,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
-%token <bytes> STATUS VARIABLES WARNINGS
+%token <bytes> STATUS VARIABLES WARNINGS ERRORS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
@@ -2648,9 +2648,21 @@ show_statement:
     var ex Expr = cmp
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &ex}
   }
-| SHOW WARNINGS
+| SHOW COUNT openb '*' closeb WARNINGS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($6), CountStar: true}
+  }
+| SHOW COUNT openb '*' closeb ERRORS
+  {
+    $$ = &Show{Type: string($6), CountStar: true}
+  }
+| SHOW WARNINGS limit_opt
+  {
+    $$ = &Show{Type: string($2), Limit: $3}
+  }
+| SHOW ERRORS limit_opt
+  {
+    $$ = &Show{Type: string($2), Limit: $3}
   }
 /*
  * Catch-all for show statements without vitess keywords:
