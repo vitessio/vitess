@@ -2703,13 +2703,18 @@ type Show struct {
 	Filter                 *ShowFilter
 	Limit                  *Limit
 	CountStar              bool
+	Full                   bool
 }
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields" || node.Type == "triggers") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
-		buf.Myprintf("show %s%s", opt.Full, node.Type)
+		buf.Myprintf("show ")
+		if node.Full {
+			buf.Myprintf("full ")
+		}
+		buf.Myprintf("%s", node.Type)
 		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
 			buf.Myprintf(" from %v", node.OnTable)
 		}
@@ -2738,8 +2743,8 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.Type == "processlist" {
 		buf.Myprintf("show ")
-		if node.ShowTablesOpt != nil {
-			buf.Myprintf(node.ShowTablesOpt.Full)
+		if node.Full {
+			buf.Myprintf("full ")
 		}
 		buf.Myprintf("processlist")
 		return
@@ -2823,7 +2828,6 @@ func (node *Show) walkSubtree(visit Visit) error {
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
-	Full   string
 	DbName string
 	Filter *ShowFilter
 	AsOf   Expr

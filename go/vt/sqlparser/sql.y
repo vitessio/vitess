@@ -359,7 +359,8 @@ func skipToEnd(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> full_opt from_database_opt columns_or_fields
+%type <str> from_database_opt columns_or_fields
+%type <boolean> full_opt
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
@@ -2609,21 +2610,21 @@ show_statement:
   }
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Full: $2}
   }
 | SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$6, AsOf:$5}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt}
+    showTablesOpt := &ShowTablesOpt{DbName:$4, Filter:$6, AsOf:$5}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, Full: $2}
   }
 | SHOW full_opt PROCESSLIST
   {
-    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{Full: $2}}
+    $$ = &Show{Type: string($3), Full: $2}
   }
 | SHOW full_opt TRIGGERS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{DbName: $4, Filter: $5}}
+    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{DbName: $4, Filter: $5}, Full: $2}
   }
 | SHOW show_session_or_global VARIABLES like_or_where_opt
   {
@@ -2683,11 +2684,11 @@ LIKE value_expression like_escape_opt
 full_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = false
   }
 | FULL
   {
-    $$ = "full "
+    $$ = true
   }
 
 columns_or_fields:
