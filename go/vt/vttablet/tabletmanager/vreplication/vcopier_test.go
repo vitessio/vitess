@@ -447,7 +447,7 @@ func TestPlayerCopyTables(t *testing.T) {
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
 		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), primary key(id))", vrepldb),
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table no(id int, val varbinary(128), primary key(id))",
@@ -464,7 +464,7 @@ func TestPlayerCopyTables(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "dst1",
-			Filter: "select * from src1",
+			Filter: "select id, val, val as val2 from src1",
 		}, {
 			Match: "/yes",
 		}},
@@ -500,7 +500,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		"insert into dst1(id,val,val2) values (1,'aaa','aaa'), (2,'bbb','bbb')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -515,8 +515,8 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{
-		{"1", "aaa"},
-		{"2", "bbb"},
+		{"1", "aaa", "aaa"},
+		{"2", "bbb", "bbb"},
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 2)

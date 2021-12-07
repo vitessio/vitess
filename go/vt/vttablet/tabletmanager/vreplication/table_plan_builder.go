@@ -47,7 +47,6 @@ type tablePlanBuilder struct {
 	// selColumns keeps track of the columns we want to pull from source.
 	// If Lastpk is set, we compare this list against the table's pk and
 	// add missing references.
-	selColumns        map[string]bool
 	colExprs          []*colExpr
 	onInsert          insertType
 	pkCols            []*colExpr
@@ -246,10 +245,9 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 			From:  sel.From,
 			Where: sel.Where,
 		},
-		selColumns: make(map[string]bool),
-		lastpk:     lastpk,
-		colInfos:   colInfos,
-		stats:      stats,
+		lastpk:   lastpk,
+		colInfos: colInfos,
+		stats:    stats,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -493,10 +491,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 // addCol adds the specified column to the send query
 // if it's not already present.
 func (tpb *tablePlanBuilder) addCol(ident sqlparser.ColIdent) {
-	if tpb.selColumns[ident.Lowered()] {
-		return
-	}
-	tpb.selColumns[ident.Lowered()] = true
 	tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{
 		Expr: &sqlparser.ColName{Name: ident},
 	})
