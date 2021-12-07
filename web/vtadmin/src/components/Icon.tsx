@@ -82,6 +82,7 @@ export enum Icons {
     keyV = 'keyV',
     keyboard = 'keyboard',
     link = 'link',
+    menu = 'menu',
     pageFirst = 'pageFirst',
     pageLast = 'pageLast',
     pause = 'pause',

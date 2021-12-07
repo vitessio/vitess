@@ -247,6 +247,20 @@ export namespace vtadmin {
         public getTablet(request: vtadmin.IGetTabletRequest): Promise<vtadmin.Tablet>;
 
         /**
+         * Calls PingTablet.
+         * @param request PingTabletRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and PingTabletResponse
+         */
+        public pingTablet(request: vtadmin.IPingTabletRequest, callback: vtadmin.VTAdmin.PingTabletCallback): void;
+
+        /**
+         * Calls PingTablet.
+         * @param request PingTabletRequest message or plain object
+         * @returns Promise
+         */
+        public pingTablet(request: vtadmin.IPingTabletRequest): Promise<vtadmin.PingTabletResponse>;
+
+        /**
          * Calls GetTablets.
          * @param request GetTabletsRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetTabletsResponse
@@ -458,6 +472,13 @@ export namespace vtadmin {
          * @param [response] Tablet
          */
         type GetTabletCallback = (error: (Error|null), response?: vtadmin.Tablet) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#pingTablet}.
+         * @param error Error, if any
+         * @param [response] PingTabletResponse
+         */
+        type PingTabletCallback = (error: (Error|null), response?: vtadmin.PingTabletResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablets}.
@@ -4326,6 +4347,192 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a PingTabletRequest. */
+    interface IPingTabletRequest {
+
+        /** PingTabletRequest alias */
+        alias?: (string|null);
+
+        /** PingTabletRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a PingTabletRequest. */
+    class PingTabletRequest implements IPingTabletRequest {
+
+        /**
+         * Constructs a new PingTabletRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IPingTabletRequest);
+
+        /** PingTabletRequest alias. */
+        public alias: string;
+
+        /** PingTabletRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new PingTabletRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PingTabletRequest instance
+         */
+        public static create(properties?: vtadmin.IPingTabletRequest): vtadmin.PingTabletRequest;
+
+        /**
+         * Encodes the specified PingTabletRequest message. Does not implicitly {@link vtadmin.PingTabletRequest.verify|verify} messages.
+         * @param message PingTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IPingTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PingTabletRequest message, length delimited. Does not implicitly {@link vtadmin.PingTabletRequest.verify|verify} messages.
+         * @param message PingTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IPingTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PingTabletRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PingTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.PingTabletRequest;
+
+        /**
+         * Decodes a PingTabletRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PingTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.PingTabletRequest;
+
+        /**
+         * Verifies a PingTabletRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PingTabletRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PingTabletRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.PingTabletRequest;
+
+        /**
+         * Creates a plain object from a PingTabletRequest message. Also converts values to other types if specified.
+         * @param message PingTabletRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.PingTabletRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PingTabletRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a PingTabletResponse. */
+    interface IPingTabletResponse {
+
+        /** PingTabletResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a PingTabletResponse. */
+    class PingTabletResponse implements IPingTabletResponse {
+
+        /**
+         * Constructs a new PingTabletResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IPingTabletResponse);
+
+        /** PingTabletResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new PingTabletResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PingTabletResponse instance
+         */
+        public static create(properties?: vtadmin.IPingTabletResponse): vtadmin.PingTabletResponse;
+
+        /**
+         * Encodes the specified PingTabletResponse message. Does not implicitly {@link vtadmin.PingTabletResponse.verify|verify} messages.
+         * @param message PingTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IPingTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PingTabletResponse message, length delimited. Does not implicitly {@link vtadmin.PingTabletResponse.verify|verify} messages.
+         * @param message PingTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IPingTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PingTabletResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PingTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.PingTabletResponse;
+
+        /**
+         * Decodes a PingTabletResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PingTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.PingTabletResponse;
+
+        /**
+         * Verifies a PingTabletResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PingTabletResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PingTabletResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.PingTabletResponse;
+
+        /**
+         * Creates a plain object from a PingTabletResponse message. Also converts values to other types if specified.
+         * @param message PingTabletResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.PingTabletResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PingTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a GetTabletsRequest. */
     interface IGetTabletsRequest {
 
@@ -6854,6 +7061,9 @@ export namespace topodata {
 
         /** Tablet db_server_version */
         db_server_version?: (string|null);
+
+        /** Tablet default_conn_collation */
+        default_conn_collation?: (number|null);
     }
 
     /** Represents a Tablet. */
@@ -6903,6 +7113,9 @@ export namespace topodata {
 
         /** Tablet db_server_version. */
         public db_server_version: string;
+
+        /** Tablet default_conn_collation. */
+        public default_conn_collation: number;
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -18324,9 +18537,6 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables */
         has_created_temp_tables?: (boolean|null);
-
-        /** ExecuteOptions collation */
-        collation?: (number|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -18361,9 +18571,6 @@ export namespace query {
 
         /** ExecuteOptions has_created_temp_tables. */
         public has_created_temp_tables: boolean;
-
-        /** ExecuteOptions collation. */
-        public collation: number;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
