@@ -18,6 +18,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Aggregate on unique sharded
 "select count(*), col from user where id = 1"
@@ -41,6 +42,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Aggregate detection (non-aggregate function)
 "select fun(1), col from user"
@@ -60,6 +62,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # select distinct with unique vindex for scatter route.
 "select distinct col1, id from user"
@@ -79,6 +82,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # distinct and group by together for single route - group by is redundant
 "select distinct col1, id from user group by col1"
@@ -98,6 +102,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # scatter group by a text column
 "select count(*), a, textcol1, b from user group by a, textcol1, b"
@@ -511,6 +516,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # aggregate on RHS subquery (tests symbol table merge)
 "select user.a, t.b from user join (select count(*) b from unsharded) as t"
@@ -796,6 +802,7 @@ Gen4 plan same as above
   }
 }
 Gen4 error: unsupported: '*' expression in cross-shard query
+Gen4++
 
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having id=1 and c=10"
@@ -837,6 +844,7 @@ Gen4 error: unsupported: '*' expression in cross-shard query
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having max(col) > 10"
@@ -945,6 +953,7 @@ Gen4 plan same as above
   }
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate using distinct
 "select distinct col from user"
@@ -972,6 +981,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # scatter aggregate group by select col
 "select col from user group by col"
@@ -1404,6 +1414,7 @@ Gen4 plan same as above
 "select count(*) b from user group by b"
 "Can't group on 'b'"
 Gen4 error: Can't group on 'count(*)'
+Gen4++
 
 # scatter aggregate multiple group by (columns)
 "select a, b, count(*) from user group by b, a"
@@ -1693,6 +1704,7 @@ Gen4 plan same as above
   }
 }
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate with named order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c"
@@ -1722,6 +1734,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   }
 }
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # scatter aggregate with jumbled order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c"
@@ -1972,6 +1985,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules for aggregates
 "select id, count(*) from route2 group by id"
@@ -1991,6 +2005,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # order by on a reference table
 "select col from ref order by col"
@@ -2010,6 +2025,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # distinct and aggregate functions missing group by
 "select distinct a, count(*) from user"
@@ -2044,6 +2060,7 @@ Gen4 plan same as above
   }
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'a'; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # distinct and aggregate functions
 "select distinct a, count(*) from user group by a"
@@ -2114,6 +2131,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 "select id from user group by 1.1"
 "column number is not an int"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4++
 
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
@@ -2203,6 +2221,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # do not use distinct when using only aggregates and no group by
 "select distinct count(*) from user"

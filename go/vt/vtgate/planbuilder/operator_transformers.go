@@ -57,14 +57,14 @@ func transformRouteOpPlan(ctx *planningContext, op *routeOp) (*routeGen4, error)
 	tableNames := getAllTableNames(op)
 
 	var singleColumn vindexes.SingleColumn
-	var value engine.RouteValue
+	var value evalengine.Expr
 	if op.selectedVindex() != nil {
 		vdx, ok := op.selected.foundVindex.(vindexes.SingleColumn)
 		if !ok || len(op.selected.values) != 1 {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
 		}
 		singleColumn = vdx
-		value = &evalengine.RouteValue{Expr: op.selected.values[0]}
+		value = op.selected.values[0]
 	}
 
 	var condition sqlparser.Expr
@@ -72,13 +72,17 @@ func transformRouteOpPlan(ctx *planningContext, op *routeOp) (*routeGen4, error)
 		condition = op.selected.valueExprs[0]
 	}
 
+	var values []evalengine.Expr
+	if value != nil {
+		values = []evalengine.Expr{value}
+	}
 	return &routeGen4{
 		eroute: &engine.Route{
 			Opcode:              op.routeOpCode,
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            op.keyspace,
 			Vindex:              singleColumn,
-			Value:               value,
+			Values:              values,
 			SysTableTableName:   op.SysTableTableName,
 			SysTableTableSchema: op.SysTableTableSchema,
 		},

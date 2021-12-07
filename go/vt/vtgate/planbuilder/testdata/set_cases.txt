@@ -20,6 +20,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set multi user defined variable
 "set @foo = 42, @bar = @foo"
@@ -48,6 +49,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set multi user defined variable with complex expression
 "set @foo = 42, @bar = @foo + 1"
@@ -76,6 +78,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set UDV to expression that can't be evaluated at vtgate
 "set @foo = CONCAT('Any','Expression','Is','Valid')"
@@ -106,6 +109,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # single sysvar cases
 "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
@@ -133,6 +137,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # multiple sysvar cases
 "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0"
@@ -169,6 +174,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # autocommit case
 "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`"
@@ -217,6 +223,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set ignore plan
 "set @@default_storage_engine = 'DONOTCHANGEME'"
@@ -240,6 +247,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set check and ignore plan
 "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
@@ -267,6 +275,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set system settings
 "set @@sql_safe_updates = 1"
@@ -294,6 +303,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set plan building with ON/OFF enum
 "set @@innodb_strict_mode = OFF"
@@ -317,6 +327,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set plan building with string literal
 "set @@innodb_strict_mode = 'OFF'"
@@ -340,6 +351,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set plan building with string literal
 "set @@innodb_tmpdir = 'OFF'"
@@ -363,6 +375,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set system settings
 "set @@ndbinfo_max_bytes = 192"
@@ -391,6 +404,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set autocommit false
 "set autocommit = 0"
@@ -414,6 +428,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set autocommit with backticks
 "set @@session.`autocommit` = 0"
@@ -437,6 +452,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # more vitess aware settings
 "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20"
@@ -470,6 +486,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set autocommit to default
 "set @@autocommit = default"
@@ -493,6 +510,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # set global autocommit to default
 "set global autocommit = off"
@@ -521,6 +539,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # change read only variable
 "set socket = ''"

@@ -15,6 +15,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show columns from routed table
 "show full fields from `route1`"
@@ -33,6 +34,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show variables
 "show variables"
@@ -56,6 +58,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show full columns from system schema
 "show full columns from sys.sys_config"
@@ -74,6 +77,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show full columns from system schema replacing qualifier
 "show full columns from x.sys_config from sys"
@@ -92,6 +96,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show global status
 "show global status"
@@ -110,3 +115,4 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++

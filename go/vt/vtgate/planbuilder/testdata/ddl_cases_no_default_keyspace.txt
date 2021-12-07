@@ -13,6 +13,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with qualifier in select as well
 "create view user.a as select* from user.user"
@@ -29,6 +30,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with No column referenced
 "create view user.view_a as select 1 from user"
@@ -45,6 +47,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with '*' expression for simple route
 "create view user.view_a as select user.* from user"
@@ -61,6 +64,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with unqualified '*' expression for simple route
 "create view user.view_a as select * from user"
@@ -77,6 +81,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with fully qualified '*' expression for simple route
 "create view user.view_a as select user.user.* from user.user"
@@ -93,6 +98,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with select * from authoritative table
 "create view user.view_a as select * from authoritative"
@@ -120,6 +126,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select user_id, col1, col2 from authoritative"
   }
 }
+Gen4++
 
 # create view with select * from join of authoritative tables
 "create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id"
@@ -147,6 +154,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id"
   }
 }
+Gen4++
 
 # create view with select * from qualified authoritative table
 "create view user.view_a as select a.* from authoritative a"
@@ -174,6 +182,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select a.user_id, a.col1, a.col2 from authoritative as a"
   }
 }
+Gen4++
 
 # create view with select * from intermixing of authoritative table with non-authoritative results in no expansion
 "create view user.view_a as select * from authoritative join user on authoritative.user_id=user.id"
@@ -190,6 +199,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with select authoritative.* with intermixing still expands
 "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id"
@@ -217,6 +227,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
   }
 }
+Gen4++
 
 # create view with auto-resolve anonymous columns for simple route
 "create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id"
@@ -233,6 +244,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with join that can be solved in each shard separately
 "create view user.view_a as select user.id from user join user_extra on user.id = user_extra.user_id"
@@ -249,6 +261,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with last_insert_id for unsharded route
 "create view main.view_a as select last_insert_id() as x from main.unsharded"
@@ -265,6 +278,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with select from pinned table
 "create view user.view_a as select * from pin_test"
@@ -281,6 +295,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Expression with single-route reference
 "create view user.view_a as select user.col, user_extra.id + user_extra.col from user join user_extra on user.id = user_extra.user_id"
@@ -297,6 +312,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Comments
 "create view user.view_a as select /* comment */ user.col from user join user_extra on user.id = user_extra.user_id"
@@ -313,6 +329,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with for update
 "create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id for update"
@@ -329,6 +346,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Case preservation
 "create view user.view_a as select user.Col, user_extra.Id from user join user_extra on user.id = user_extra.user_id"
@@ -345,6 +363,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with syntax error
 "create view user.view_a as the quick brown fox"
@@ -366,6 +385,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with limit works if it can be dropped
 "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5"
@@ -382,6 +402,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Multiple parenthesized expressions
 "create view user.view_a as select * from user where (id = 4) AND (name ='abc') limit 5"
@@ -398,6 +419,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Multiple parenthesized expressions
 "create view user.view_a as select * from user where (id = 4 and name ='abc') limit 5"
@@ -414,6 +436,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Column Aliasing with Table.Column
 "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col"
@@ -430,6 +453,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Column Aliasing with Column
 "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc"
@@ -446,6 +470,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with Booleans and parenthesis
 "create view user.view_a as select * from user where (id = 1) AND name = true"
@@ -462,6 +487,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with union with the same target shard
 "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1"
@@ -494,6 +520,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with sql_calc_found_rows without limit
 "create view user.view_a as select sql_calc_found_rows * from music where user_id = 1"
@@ -510,6 +537,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # DDL
 "create index a on user(id)"
@@ -526,6 +554,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 #Alter table with qualifier
 "alter table user ADD id int"
@@ -542,6 +571,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Alter View
 "alter view user_extra as select* from user"
@@ -558,6 +588,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Alter View with unknown view
 "alter view unknown as select* from user"
@@ -579,6 +610,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # drop table with incompatible tables
 "drop table user, unsharded_a"
@@ -605,6 +637,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # drop view with incompatible views
 "drop view user, unsharded_a"
@@ -631,6 +664,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Rename table
 "rename table user_extra to b"
@@ -647,6 +681,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Rename table with different keyspace tables
 "rename table user_extra to b, main.a to b"

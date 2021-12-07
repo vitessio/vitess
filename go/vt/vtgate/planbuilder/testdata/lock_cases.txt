@@ -15,6 +15,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # is_free_lock from dual
 "select is_free_lock('xyz') from dual"
@@ -33,6 +34,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # get_lock from dual prepare query
 "select get_lock(?, ?)"
@@ -51,6 +53,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # lock tables read
 "lock tables t as x read local"
@@ -62,6 +65,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # lock tables write
 "lock tables t low_priority write"
@@ -73,6 +77,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # unlock tables
 "unlock tables"
@@ -84,3 +89,4 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
