@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -730,11 +729,13 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return nil, err
 	}
 	for _, field := range fields {
-		typ := strings.ToLower(field.Type.String())
-		if typ == "enum" || typ == "set" {
-			if extColInfo, ok := extColInfos[field.Name]; ok {
-				field.ColumnType = extColInfo.columnType
-			}
+		// we want the MySQL column type info so that we can properly handle
+		// ambiguous binlog events and other cases where the internal types
+		// don't match the MySQL column type. One example being that in binlog
+		// events CHAR columns with a binary collation are indistinguishable
+		// from BINARY columns.
+		if extColInfo, ok := extColInfos[field.Name]; ok {
+			field.ColumnType = extColInfo.columnType
 		}
 	}
 	return fields, nil
@@ -891,46 +892,13 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			valueIndex++
 			continue
 		}
-		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
+		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum])
 		if err != nil {
 			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 				err, plan.Table.Name, colNum, plan.Table.Fields, values)
 			return false, nil, err
 		}
 		pos += l
-
-		// If this is a binary type in the binlog event but actually a CHAR column *with a
-		// binary collation*, then we need to factor in the max bytes per character of 3 for
-		// utf8[mb3] and 4 for utf8mb4 and trim the added null-byte padding as needed to accomodate
-		// for that
-		if value.IsBinary() && sqltypes.IsBinary(plan.Table.Fields[colNum].Type) {
-			maxBytesPerChar := uint32(1)
-			if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetMap["utf8"]) {
-				maxBytesPerChar = 3
-			} else if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetMap["utf8mb4"]) {
-				maxBytesPerChar = 4
-			}
-
-			if maxBytesPerChar > 1 {
-				maxCharLen := plan.Table.Fields[colNum].ColumnLength / maxBytesPerChar
-				if uint32(value.Len()) > maxCharLen {
-					ovBytes, err := value.ToBytes()
-					if err != nil {
-						return false, nil, err
-					}
-					originalVal := ovBytes
-
-					// Let's be sure that we're not going to be trimming non-null bytes
-					firstNullBytePos := bytes.IndexByte(originalVal, byte(0))
-					if uint32(firstNullBytePos) <= maxCharLen {
-						rightSizedVal := make([]byte, maxCharLen)
-						copy(rightSizedVal, originalVal)
-						value = sqltypes.MakeTrusted(querypb.Type_BINARY, rightSizedVal)
-					}
-				}
-			}
-		}
-
 		values[colNum] = value
 		valueIndex++
 	}
