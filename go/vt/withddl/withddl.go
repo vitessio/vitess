@@ -55,8 +55,6 @@ func (wd *WithDDL) DDLs() []string {
 // It takes 2 functions, one to run the query and the other to run the
 // DDL commands. This is generally needed so that different users can be used
 // to run the commands. i.e. AllPrivs user for DDLs and App user for query commands.
-// If only 1 function is provided, then that is the function used to run
-// both the type of queries.
 // Funcs can be any of these types:
 // func(query string) (*sqltypes.Result, error)
 // func(query string, maxrows int) (*sqltypes.Result, error)
@@ -67,12 +65,9 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery interface{}, f
 	if err != nil {
 		return nil, err
 	}
-	execDDL := execQuery
-	if fDDL != nil {
-		execDDL, err = wd.unify(ctx, fDDL)
-		if err != nil {
-			return nil, err
-		}
+	execDDL, err := wd.unify(ctx, fDDL)
+	if err != nil {
+		return nil, err
 	}
 	qr, err := execQuery(query)
 	if err == nil {
