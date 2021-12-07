@@ -327,7 +327,12 @@ func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.Bind
 			return route.paramsSelectEqual(vcursor, bindVars)
 		}
 	case SelectIN:
-		return route.paramsSelectIn(vcursor, bindVars)
+		switch route.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return route.paramsSelectInMultiCol(vcursor, bindVars)
+		default:
+			return route.paramsSelectIn(vcursor, bindVars)
+		}
 	case SelectMultiEqual:
 		return route.paramsSelectMultiEqual(vcursor, bindVars)
 	case SelectNone:
@@ -625,7 +630,6 @@ func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspac
 	destinations, err := vindex.Map(vcursor, rowColValues)
 	if err != nil {
 		return nil, nil, err
-
 	}
 
 	// And use the Resolver to map to ResolvedShards.
@@ -642,6 +646,58 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 		return nil, nil, err
 	}
 	return rss, shardVars(bindVars, values), nil
+}
+
+func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	// gather values from all the column in the vindex
+	var multiColValues [][]sqltypes.Value
+	for _, rvalue := range route.Values {
+		lv, err := rvalue.ResolveList(bindVars)
+		if err != nil {
+			return nil, nil, err
+		}
+		multiColValues = append(multiColValues, lv)
+	}
+
+	/*
+		need to convert them into vindex keys
+		from: cola (1,2) colb (3,4,5)
+		to: keys (1,3) (1,4) (1,5) (2,3) (2,4) (2,5)
+
+		so that the vindex can map them into correct destination.
+	*/
+
+	// TODO: assuming there are atleast 2 columns in multi column vindex. (this assumption may change)
+	var rowColValues [][]sqltypes.Value
+	for _, firstCol := range multiColValues[0] {
+		rowColValues = append(rowColValues, []sqltypes.Value{firstCol})
+	}
+	for idx := 1; idx < len(multiColValues); idx++ {
+		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
+	}
+
+	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues)
+	if err != nil {
+		return nil, nil, err
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+// buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input
+// convert it into [1,2,4][1,2,5][1,3,4][1,3,5]
+// all combination of left and right side.
+func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqltypes.Value {
+	var allCombinations [][]sqltypes.Value
+	for _, firstPart := range left {
+		for _, secondPart := range right {
+			allCombinations = append(allCombinations, append(firstPart, secondPart))
+		}
+	}
+	return allCombinations
 }
 
 func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
