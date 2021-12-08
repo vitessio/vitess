@@ -2698,3 +2698,101 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	utils.MustMatch(t, wantWarnings, session.Warnings)
 }
+
+func TestGen4MultiColumnVindexEqual(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where cola = 1 and colb = 2"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColumnVindex",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola = :vtg1 and colb = :vtg2",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(1),
+				"vtg2": sqltypes.Int64BindVariable(2),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+
+	sbc1.Queries = nil
+
+	query = "select * from user_region where cola = 17984 and colb = 1"
+	_, err = executor.Execute(context.Background(),
+		"TestGen4MultiColumnVindex",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola = :vtg1 and colb = :vtg2",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(17984),
+				"vtg2": sqltypes.Int64BindVariable(1),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+	require.Nil(t, sbc1.Queries)
+}
+
+func TestGen4MultiColumnVindexIn(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where cola IN (1,17984) and colb IN (2,3,4)"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColumnVindex",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 1, 1})
+	bv2, _ := sqltypes.BuildBindVariable([]int64{17984, 17984, 17984})
+	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
+	bvtg2, _ := sqltypes.BuildBindVariable([]int64{2, 3, 4})
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola in ::__vals0 and colb in ::__vals1",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": bv1,
+				"__vals1": bvtg2,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola in ::__vals0 and colb in ::__vals1",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": bv2,
+				"__vals1": bvtg2,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}
