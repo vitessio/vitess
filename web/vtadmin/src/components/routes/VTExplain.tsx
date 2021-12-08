@@ -99,7 +99,9 @@ export const VTExplain = () => {
                             </Label>
                         </div>
                         <div className={style.buttons}>
-                            <Button type="submit">Run VTExplain</Button>
+                            <button className="btn" type="submit">
+                                Run VTExplain
+                            </button>
                         </div>
                     </form>
                 </section>

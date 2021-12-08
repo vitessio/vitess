@@ -1,7 +1,6 @@
 import { Fragment, useRef } from 'react';
 import { Dialog as HUDialog, Transition } from '@headlessui/react';
 import { Icon, Icons } from '../Icon';
-import { Button } from '../Button';
 
 interface DialogProps {
     icon?: Icons;
@@ -106,32 +105,31 @@ const Dialog: React.FC<DialogProps> = ({
                                 </div>
                             </div>
                             {!footer && !hideFooter && (
-                                <div className="px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <div className="px-4 py-3 flex gap-2 sm:px-6 sm:flex-row-reverse">
                                     {!hideConfirm && (
-                                        <Button
+                                        <button
                                             type="button"
-                                            className="px-4 py-2 text-base font-medium ml-2"
+                                            className="btn"
                                             onClick={() => {
                                                 onConfirm && onConfirm();
                                                 onClose && onClose();
                                             }}
                                         >
                                             {confirmText || 'Confirm'}
-                                        </Button>
+                                        </button>
                                     )}
                                     {!hideCancel && (
-                                        <Button
+                                        <button
                                             type="button"
-                                            className="px-4 py-2 text-base font-medium"
+                                            className="btn btn-secondary"
                                             onClick={() => {
                                                 onCancel && onCancel();
                                                 onClose && onClose();
                                             }}
-                                            secondary={true}
                                             ref={cancelButtonRef}
                                         >
                                             {cancelText || 'Cancel'}
-                                        </Button>
+                                        </button>
                                     )}
                                 </div>
                             )}

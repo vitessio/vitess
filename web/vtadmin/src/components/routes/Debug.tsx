@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Theme, useTheme } from '../../hooks/useTheme';
-import { Button } from '../Button';
 import { Icon, Icons } from '../Icon';
 import { Select } from '../inputs/Select';
 import { ContentContainer } from '../layout/ContentContainer';
@@ -260,15 +259,21 @@ export const Debug = () => {
                                 size="large"
                                 placeholder="Button-adjacent"
                             />
-                            <Button size="large">Primary</Button>
-                            <Button secondary size="large">
+                            <button className="btn btn-lg" type="button">
+                                Primary
+                            </button>
+                            <button className="btn btn-lg btn-secondary" type="button">
                                 Secondary
-                            </Button>
+                            </button>
                         </div>
                         <div className={style.inputRow}>
                             <TextInput iconLeft={Icons.search} iconRight={Icons.delete} placeholder="Button-adjacent" />
-                            <Button>Primary</Button>
-                            <Button secondary>Secondary</Button>
+                            <button className="btn" type="button">
+                                Primary
+                            </button>
+                            <button className="btn btn-secondary" type="button">
+                                Secondary
+                            </button>
                         </div>
                     </div>
                 </section>
