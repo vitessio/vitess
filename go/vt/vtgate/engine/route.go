@@ -662,14 +662,18 @@ func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*quer
 	return shardsIds
 }
 
-func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value) []map[string]*querypb.BindVariable {
+func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value, isSingleVal map[int]interface{}) []map[string]*querypb.BindVariable {
 	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
 	for i, shardVals := range mapVals {
-		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals))
+		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals)-len(isSingleVal))
 		for k, v := range bv {
 			newbv[k] = v
 		}
 		for j, vals := range shardVals {
+			if _, found := isSingleVal[j]; found {
+				// this vindex column is non-tuple column hence listVal bind variable is not required to be set.
+				continue
+			}
 			newbv[ListVarName+strconv.Itoa(j)] = &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,
 				Values: vals,
@@ -697,7 +701,8 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 	var multiColValues [][]sqltypes.Value
 	var err error
 	var lv []sqltypes.Value
-	for _, rvalue := range route.Values {
+	isSingleVal := map[int]interface{}{}
+	for colIdx, rvalue := range route.Values {
 		lv, err = rvalue.ResolveList(bindVars)
 		if err != nil {
 			return nil, nil, err
@@ -707,6 +712,7 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 			if err != nil {
 				return nil, nil, err
 			}
+			isSingleVal[colIdx] = nil
 			lv = []sqltypes.Value{v}
 		}
 		multiColValues = append(multiColValues, lv)
@@ -733,7 +739,7 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 	if err != nil {
 		return nil, nil, err
 	}
-	return rss, shardVarsMultiCol(bindVars, mapVals), nil
+	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
 }
 
 // buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input
