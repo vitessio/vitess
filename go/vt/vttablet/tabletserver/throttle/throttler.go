@@ -384,7 +384,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					atomic.StoreInt64(&throttler.isLeader, shouldBeLeader)
 
 					if shouldCreateThrottlerUser {
-						throttler.initConfig()
+						// throttler.initConfig()
 						shouldCreateThrottlerUser = false
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 						go mysqlRefreshTicker.TickNow()
