@@ -15,6 +15,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Show Table status with a keyspace name
 "SHOW table StatUs from main"
@@ -33,6 +34,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Show Table status with a keyspace name using IN
 "SHOW table StatUs In main"
@@ -51,6 +53,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Show Table status with a keyspace name with a condition
 "SHOW table StatUs In user WHERE Rows > 70"
@@ -69,6 +72,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Show Table status with a Like condition
 "SHOW table StatUs LIKe '%a'"
@@ -87,6 +91,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show columns from user keyspace
 "show full columns from user.user_extra"
@@ -105,6 +110,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show columns from main keyspace
 "show full columns from unsharded"
@@ -123,6 +129,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show columns pass as dbname in from clause supersedes the qualifier
 "show full columns from user.unsharded from main"
@@ -141,16 +148,19 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show columns fails as table does not exists in user keyspace
 "show full columns from unsharded from user"
 "table unsharded not found"
 Gen4 plan same as above
+Gen4++
 
 # show columns fails as table does not exists in user keyspace
 "show full columns from user.unsharded"
 "table unsharded not found"
 Gen4 plan same as above
+Gen4++
 
 # show charset
 "show charset"
@@ -162,6 +172,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show function
 "show function status"
@@ -180,6 +191,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show privileges
 "show privileges"
@@ -198,6 +210,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show procedure status
 "show procedure status"
@@ -216,6 +229,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show variables
 "show variables"
@@ -239,6 +253,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show global variables
 "show global variables"
@@ -262,6 +277,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show databases
 "show databases"
@@ -273,6 +289,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create database
 "show create database user"
@@ -291,6 +308,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create database system_schema
 "show create database mysql"
@@ -309,6 +327,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create procedure
 "show create procedure proc"
@@ -327,6 +346,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create procedure from system_schema
 "show create procedure information_schema.proc"
@@ -345,6 +365,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create table on table present in sharded but as unsharded is selected it goes to unsharded keyspace
 "show create table user_extra"
@@ -363,6 +384,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create table with qualifier
 "show create table user.user_extra"
@@ -381,6 +403,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create table with unsharded as default keyspace
 "show create table unknown"
@@ -399,11 +422,13 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show create table with table not present with qualifier
 "show create table user.unknown"
 "table unknown not found"
 Gen4 plan same as above
+Gen4++
 
 # show create table from system_schema
 "show create table information_schema.tables"
@@ -422,6 +447,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show tables
 "show tables"
@@ -451,6 +477,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show tables from db
 "show tables from user"
@@ -480,6 +507,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show tables from system schema
 "show tables from performance_schema"
@@ -509,6 +537,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show migrations with db and like
 "show vitess_migrations from user like '%format'"
@@ -526,6 +555,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show migrations with db and where
 "show vitess_migrations from user where id = 5"
@@ -543,6 +573,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show vgtid
 "show global vgtid_executed"
@@ -569,6 +600,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show gtid
 "show global gtid_executed from user"
@@ -587,6 +619,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show warnings
 "show warnings"
@@ -598,6 +631,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # show global status
 "show global status"
@@ -616,3 +650,4 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++

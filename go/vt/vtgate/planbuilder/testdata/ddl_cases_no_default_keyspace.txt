@@ -369,6 +369,7 @@ Gen4++
 "create view user.view_a as the quick brown fox"
 "syntax error at position 31 near 'the'"
 Gen4 plan same as above
+Gen4++
 
 # create view with Hex number is not treated as a simple value
 "create view user.view_a as select * from user where id = 0x04"
@@ -594,6 +595,7 @@ Gen4++
 "alter view unknown as select* from user"
 "keyspace not specified"
 Gen4 plan same as above
+Gen4++
 
 # drop table with qualifier in one
 "drop table user.user, user_extra"
@@ -616,11 +618,13 @@ Gen4++
 "drop table user, unsharded_a"
 "Tables or Views specified in the query do not belong to the same destination"
 Gen4 plan same as above
+Gen4++
 
 # drop table with unknown table
 "drop table unknown"
 "keyspace not specified"
 Gen4 plan same as above
+Gen4++
 
 # drop view with 1 view without qualifier
 "drop view user.user, user_extra"
@@ -643,11 +647,13 @@ Gen4++
 "drop view user, unsharded_a"
 "Tables or Views specified in the query do not belong to the same destination"
 Gen4 plan same as above
+Gen4++
 
 # drop view with unknown view
 "drop view unknown"
 "keyspace not specified"
 Gen4 plan same as above
+Gen4++
 
 # Truncate table without qualifier
 "truncate user_extra"
@@ -687,8 +693,10 @@ Gen4++
 "rename table user_extra to b, main.a to b"
 "Tables or Views specified in the query do not belong to the same destination"
 Gen4 plan same as above
+Gen4++
 
 # Rename table with change in keyspace name
 "rename table user_extra to main.b"
 "Changing schema from 'user' to 'main' is not allowed"
 Gen4 plan same as above
+Gen4++

@@ -15,6 +15,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Explain Vitess statement
 "explain format=vitess select * from user"
@@ -26,6 +27,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Analyze statement
 "analyze table t1"
@@ -44,6 +46,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Describe statement
 "describe select * from t"
@@ -62,6 +65,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Desc statement
 "desc select * from t"
@@ -80,3 +84,4 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
