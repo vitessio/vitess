@@ -28,7 +28,9 @@
         @apply rounded-lg;
         @apply text-center;
         @apply text-white;
+        @apply select-none;
         @apply whitespace-nowrap;
+        @apply w-min;
 
         height: fit-content;
         -webkit-appearance: button;
