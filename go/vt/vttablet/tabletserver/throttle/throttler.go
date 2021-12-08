@@ -229,15 +229,11 @@ func (throttler *Throttler) initConfig() {
 	throttler.metricsQueryType = mysql.GetMetricsQueryType(throttler.metricsQuery)
 
 	config.Instance.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
-		User:              "", // running on local tablet server, will use vttablet DBA user
-		Password:          "", // running on local tablet server, will use vttablet DBA user
 		MetricQuery:       throttler.metricsQuery,
 		ThrottleThreshold: throttler.MetricsThreshold.Get(),
 		IgnoreHostsCount:  0,
 	}
 	config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
-		User:              "", // running on local tablet server, will use vttablet DBA user
-		Password:          "", // running on local tablet server, will use vttablet DBA user
 		MetricQuery:       throttler.metricsQuery,
 		ThrottleThreshold: throttler.MetricsThreshold.Get(),
 		IgnoreHostsCount:  0,
