@@ -552,12 +552,8 @@ func (rp *routeTree) haveMatchingVindex(
 				if isPresent {
 					continue
 				}
-				option.colsSeen[colLoweredName] = true
-				option.valueExprs = append(option.valueExprs, valueExpr)
-				option.values[indexOfCol] = value
-				option.predicates[indexOfCol] = node
 				optionPresent = true
-				option.ready = len(option.colsSeen) == len(v.colVindex.Columns)
+				option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
 			}
 
 			if optionPresent {
@@ -565,26 +561,50 @@ func (rp *routeTree) haveMatchingVindex(
 			}
 
 			// multi column vindex - just add the option since we do not have one already
-			routeOpcode := opcode(v.colVindex)
-			vindex := vfunc(v.colVindex)
-			values := make([]evalengine.Expr, len(v.colVindex.Columns))
-			values[indexOfCol] = value
-			predicates := make([]sqlparser.Expr, len(v.colVindex.Columns))
-			predicates[indexOfCol] = node
-			v.options = append(v.options, &vindexOption{
-				values:      values,
-				valueExprs:  []sqlparser.Expr{valueExpr},
-				predicates:  predicates,
-				colsSeen:    map[string]interface{}{colLoweredName: true},
-				opcode:      routeOpcode,
-				foundVindex: vindex,
-				cost:        costFor(vindex, routeOpcode),
-				ready:       len(v.colVindex.Columns) == 1,
-			})
+			option := createOption(v.colVindex, vfunc)
+			option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
 			newVindexFound = true
+			v.options = append(v.options, option)
 		}
 	}
 	return newVindexFound
+}
+
+func createOption(
+	colVindex *vindexes.ColumnVindex,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+) *vindexOption {
+	values := make([]evalengine.Expr, len(colVindex.Columns))
+	predicates := make([]sqlparser.Expr, len(colVindex.Columns))
+	vindex := vfunc(colVindex)
+
+	return &vindexOption{
+		values:      values,
+		predicates:  predicates,
+		colsSeen:    map[string]interface{}{},
+		foundVindex: vindex,
+	}
+}
+
+func (option *vindexOption) updateWithNewColumn(
+	colLoweredName string,
+	valueExpr sqlparser.Expr,
+	indexOfCol int,
+	value evalengine.Expr,
+	node sqlparser.Expr,
+	colVindex *vindexes.ColumnVindex,
+	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
+) {
+	option.colsSeen[colLoweredName] = true
+	option.valueExprs = append(option.valueExprs, valueExpr)
+	option.values[indexOfCol] = value
+	option.predicates[indexOfCol] = node
+	option.ready = len(option.colsSeen) == len(colVindex.Columns)
+	routeOpcode := opcode(colVindex)
+	if option.opcode < routeOpcode {
+		option.opcode = routeOpcode
+		option.cost = costFor(option.foundVindex, routeOpcode)
+	}
 }
 
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
