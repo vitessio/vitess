@@ -2101,6 +2101,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 					evs[i].RowEvent.Keyspace = ""
 					evs[i].RowEvent.Shard = ""
 				}
+				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
