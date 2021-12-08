@@ -56,8 +56,6 @@ const (
 	defaultThrottleTTLMinutes = 60
 	defaultThrottleRatio      = 1.0
 
-	maxPasswordLength = 32
-
 	shardStoreName = "shard"
 	selfStoreName  = "self"
 )
@@ -314,18 +312,6 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		return password, fmt.Errorf("createThrottlerUser(): server is read_only")
 	}
 
-	password = textutil.RandomHash()[0:maxPasswordLength]
-	{
-		// There seems to be a bug where CREATE USER hangs. If CREATE USER is preceded by
-		// any query that writes to the binary log, CREATE USER does not hang.
-		// The simplest such query is FLUSH STATUS. Other options are FLUSH PRIVILEGES or similar.
-		// The bug was found in MySQL 8.0.21, and not found in 5.7.30
-		// - shlomi
-		simpleBinlogQuery := `FLUSH STATUS`
-		if _, err := conn.ExecuteFetch(simpleBinlogQuery, 0, false); err != nil {
-			return password, err
-		}
-	}
 	log.Infof("Throttler: user created/updated")
 	return password, nil
 }
@@ -432,15 +418,10 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					atomic.StoreInt64(&throttler.isLeader, shouldBeLeader)
 
 					if shouldCreateThrottlerUser {
-						_, err := throttler.createThrottlerUser(ctx)
-						if err == nil {
-							throttler.initConfig()
-							shouldCreateThrottlerUser = false
-							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
-							go mysqlRefreshTicker.TickNow()
-						} else {
-							log.Errorf("Error creating throttler account: %+v", err)
-						}
+						throttler.initConfig()
+						shouldCreateThrottlerUser = false
+						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
+						go mysqlRefreshTicker.TickNow()
 					}
 				}()
 			}
