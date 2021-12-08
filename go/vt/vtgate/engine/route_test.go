@@ -19,6 +19,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1394,7 +1395,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
 		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
@@ -1403,7 +1404,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
 		`StreamExecuteMulti dummy_select ks.-20: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
@@ -1438,14 +1439,14 @@ func TestSelectINMultiColumnVindex(t *testing.T) {
 
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"-20", "20-", "20-", "-20"},
+		shardForKsid: []string{"-20", "20-", "20-", "20-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
-		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard ks.-20: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"} values:{type:INT64 value:"4"}} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
@@ -1453,8 +1454,8 @@ func TestSelectINMultiColumnVindex(t *testing.T) {
 	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
-		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		`StreamExecuteMulti dummy_select ks.-20: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"} values:{type:INT64 value:"4"}} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
@@ -1473,4 +1474,51 @@ func TestBuildRowColValues(t *testing.T) {
 	require.EqualValues(t, "[INT64(1) INT64(10) INT64(4)]", fmt.Sprintf("%s", out[1]))
 	require.EqualValues(t, "[INT64(2) INT64(20) INT64(3)]", fmt.Sprintf("%s", out[2]))
 	require.EqualValues(t, "[INT64(2) INT64(20) INT64(4)]", fmt.Sprintf("%s", out[3]))
+}
+
+func TestBuildMultiColumnVindexValues(t *testing.T) {
+	testcases := []struct {
+		input  [][][]sqltypes.Value
+		output [][][]*querypb.Value
+	}{
+		{
+			input: [][][]sqltypes.Value{
+				{
+					{sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
+					{sqltypes.NewInt64(2), sqltypes.NewInt64(20)},
+				}, {
+					{sqltypes.NewInt64(10), sqltypes.NewInt64(10)},
+					{sqltypes.NewInt64(20), sqltypes.NewInt64(20)},
+				},
+			},
+			output: [][][]*querypb.Value{
+				{
+					{sqltypes.ValueToProto(sqltypes.NewInt64(1)), sqltypes.ValueToProto(sqltypes.NewInt64(2))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				}, {
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				},
+			},
+		}, {
+			input: [][][]sqltypes.Value{{
+				{sqltypes.NewInt64(10), sqltypes.NewInt64(10), sqltypes.NewInt64(1)},
+				{sqltypes.NewInt64(20), sqltypes.NewInt64(20), sqltypes.NewInt64(1)},
+			},
+			},
+			output: [][][]*querypb.Value{{
+				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				{sqltypes.ValueToProto(sqltypes.NewInt64(1)), sqltypes.ValueToProto(sqltypes.NewInt64(1))},
+			},
+			},
+		},
+	}
+
+	for idx, testcase := range testcases {
+		t.Run(strconv.Itoa(idx), func(t *testing.T) {
+			out := buildMultiColumnVindexValues(testcase.input)
+			require.EqualValues(t, testcase.output, out)
+		})
+	}
 }

@@ -626,14 +626,58 @@ func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[stri
 	return rss, multiBindVars, nil
 }
 
-func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value) ([]*srvtopo.ResolvedShard, [][][]*querypb.Value, error) {
 	destinations, err := vindex.Map(vcursor, rowColValues)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// And use the Resolver to map to ResolvedShards.
-	return vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
+	rss, shardsValues, err := vcursor.ResolveDestinationsMultiCol(keyspace.Name, rowColValues, destinations)
+
+	shardsIds := buildMultiColumnVindexValues(shardsValues)
+
+	return rss, shardsIds, err
+}
+
+// buildMultiColumnVindexValues takes in the values resolved for each shard and transposes them
+// and eliminates duplicates, returning the values to be used for each column for a multi column
+// vindex in each shard.
+func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*querypb.Value {
+	var shardsIds [][][]*querypb.Value
+	for _, shardValues := range shardsValues {
+		// shardValues -> [[0,1], [0,2], [0,3]]
+		// shardIds -> [[0,0,0], [1,2,3]]
+		// cols = 2
+		cols := len(shardValues[0])
+		shardIds := make([][]*querypb.Value, cols)
+		for _, values := range shardValues {
+			for colIdx, value := range values {
+				shardIds[colIdx] = append(shardIds[colIdx], sqltypes.ValueToProto(value))
+			}
+		}
+		// TODO - Eliminate the duplicates in the shard values
+		shardsIds = append(shardsIds, shardIds)
+	}
+	return shardsIds
+}
+
+func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value) []map[string]*querypb.BindVariable {
+	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
+	for i, shardVals := range mapVals {
+		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals))
+		for k, v := range bv {
+			newbv[k] = v
+		}
+		for j, vals := range shardVals {
+			newbv[ListVarName+strconv.Itoa(j)] = &querypb.BindVariable{
+				Type:   querypb.Type_TUPLE,
+				Values: vals,
+			}
+		}
+		shardVars[i] = newbv
+	}
+	return shardVars
 }
 
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -676,15 +720,11 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
 	}
 
-	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues)
+	rss, mapVals, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues)
 	if err != nil {
 		return nil, nil, err
 	}
-	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
-	}
-	return rss, multiBindVars, nil
+	return rss, shardVarsMultiCol(bindVars, mapVals), nil
 }
 
 // buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input

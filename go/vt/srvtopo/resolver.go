@@ -19,6 +19,8 @@ package srvtopo
 import (
 	"sort"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"context"
 
 	"google.golang.org/protobuf/proto"
@@ -165,6 +167,64 @@ func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 	// But the tests depend on this behavior now.
 	sort.Strings(keyspaces)
 	return keyspaces, nil
+}
+
+// ResolveDestinationsMultiCol resolves values and their destinations into their
+// respective shards for multi col vindex.
+//
+// If ids is nil, the returned [][][]sqltypes.Value is also nil.
+// Otherwise, len(ids) has to match len(destinations), and then the returned
+// [][][]sqltypes.Value is populated with all the values that go in each shard,
+// and len([]*ResolvedShard) matches len([][][]sqltypes.Value).
+//
+// Sample input / output:
+// - destinations: dst1, 			dst2, 		dst3
+// - ids:          [id1a,id1b],  [id2a,id2b],  [id3a,id3b]
+// If dst1 is in shard1, and dst2 and dst3 are in shard2, the output will be:
+// - []*ResolvedShard:   shard1, 			shard2
+// - [][][]sqltypes.Value: [[id1a,id1b]],  [[id2a,id2b], [id3a,id3b]]
+func (r *Resolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids [][]sqltypes.Value, destinations []key.Destination) ([]*ResolvedShard, [][][]sqltypes.Value, error) {
+	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var result []*ResolvedShard
+	var values [][][]sqltypes.Value
+	resolved := make(map[string]int)
+	for i, destination := range destinations {
+		if err := destination.Resolve(allShards, func(shard string) error {
+			s, ok := resolved[shard]
+			if !ok {
+				target := &querypb.Target{
+					Keyspace:   keyspace,
+					Shard:      shard,
+					TabletType: tabletType,
+					Cell:       r.localCell,
+				}
+				// Right now we always set the Cell to ""
+				// Later we can fallback to another cell if needed.
+				// We would then need to read the SrvKeyspace there too.
+				target.Cell = ""
+				s = len(result)
+				result = append(result, &ResolvedShard{
+					Target:  target,
+					Gateway: r.gateway,
+				})
+				if ids != nil {
+					values = append(values, nil)
+				}
+				resolved[shard] = s
+			}
+			if ids != nil {
+				values[s] = append(values[s], ids[i])
+			}
+			return nil
+		}); err != nil {
+			return nil, nil, err
+		}
+	}
+	return result, values, nil
 }
 
 // ResolveDestinations resolves values and their destinations into their
