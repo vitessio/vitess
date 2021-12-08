@@ -45,6 +45,14 @@ mv ./go/vt/vtgate/planbuilder/plan_test.go \
 mv ./go/vt/vttablet/tabletserver/testutils_test.go \
    ./go/vt/vttablet/tabletserver/testutils_fuzz.go
 
+# autogenerate and build api_marshal_fuzzer:
+cd $SRC/vitess/go/vt
+grep -r ') Unmarshal' .>>/tmp/marshal_targets.txt
+cd $SRC/vitess/go/test/fuzzing/autogenerate
+go run convert_grep_to_fuzzer.go
+mv api_marshal_fuzzer.go $SRC/vitess/go/test/fuzzing/
+compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzAPIMarshal api_marshal_fuzzer
+
 # collation fuzzer
 mv ./go/mysql/collations/uca_test.go \
    ./go/mysql/collations/uca_test_fuzz.go
