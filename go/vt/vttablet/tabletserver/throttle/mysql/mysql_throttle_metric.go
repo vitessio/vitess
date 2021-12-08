@@ -73,7 +73,7 @@ func GetMetricsQueryType(query string) MetricsQueryType {
 }
 
 // MySQLThrottleMetric has the probed metric for a mysql instance
-type MySQLThrottleMetric struct {
+type MySQLThrottleMetric struct { // nolint:revive
 	ClusterName string
 	Key         InstanceKey
 	Value       float64
