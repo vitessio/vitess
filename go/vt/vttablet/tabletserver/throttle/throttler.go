@@ -521,11 +521,6 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 }
 
 func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
-	if probe.TabletHost == "" {
-		// nil function means no override; throttler will use default probe behavior, which is to open a direct
-		// connection to mysql and run a query
-		return nil
-	}
 	return func() *mysql.MySQLThrottleMetric {
 		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
 		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
@@ -575,13 +570,13 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					}
 					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
-					// Apply an override to metrics read, if this is the special "self" cluster
-					// (where we incidentally know there's a single probe)
-					overrideGetMySQLThrottleMetricFunc := throttler.readSelfMySQLThrottleMetric
-					if clusterName != selfStoreName {
-						overrideGetMySQLThrottleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
+					var throttleMetricFunc func() *mysql.MySQLThrottleMetric
+					if clusterName == selfStoreName {
+						throttleMetricFunc = throttler.readSelfMySQLThrottleMetric
+					} else {
+						throttleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
 					}
-					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, overrideGetMySQLThrottleMetricFunc)
+					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, throttleMetricFunc)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
 				}()
 			}
@@ -607,8 +602,6 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 		probe := &mysql.Probe{
 			Key:         *key,
-			User:        clusterSettings.User,
-			Password:    clusterSettings.Password,
 			TabletHost:  tabletHost,
 			TabletPort:  tabletPort,
 			MetricQuery: clusterSettings.MetricQuery,
