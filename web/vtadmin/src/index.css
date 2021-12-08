@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 @import './style/fonts.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@import './style/components.css';
 
 :root {
     /* Greyscale */

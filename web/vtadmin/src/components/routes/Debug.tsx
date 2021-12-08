@@ -11,6 +11,7 @@ import { TextInput } from '../TextInput';
 import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
 
+/* eslint-disable jsx-a11y/anchor-is-valid */
 export const Debug = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
@@ -274,6 +275,30 @@ export const Debug = () => {
 
                 <section>
                     <h3 className="mt-12 mb-8">Buttons</h3>
+
+                    {['btn-lg', '', 'btn-sm'].map((s, idx) => (
+                        <div className="flex gap-4 my-6" key={idx}>
+                            <button className={`btn ${s}`}>Button</button>
+                            <a className={`btn ${s}`} href="#">
+                                Link
+                            </a>
+
+                            <button className={`btn ${s} btn-secondary`}>Button</button>
+                            <a className={`btn ${s} btn-secondary`} href="#">
+                                Link
+                            </a>
+
+                            <button className={`btn ${s} btn-secondary`}>
+                                <Icon icon={Icons.circleAdd} />
+                                Button
+                            </button>
+                            <a className={`btn ${s} btn-secondary`} href="#">
+                                <Icon icon={Icons.circleAdd} />
+                                Link
+                            </a>
+                        </div>
+                    ))}
+
                     <div className={style.buttonContainer}>
                         {/* Large */}
                         <Button size="large">Button</Button>
