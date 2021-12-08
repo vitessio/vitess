@@ -44,7 +44,7 @@ type DML struct {
 
 	// Values specifies the vindex values to use for routing.
 	// For now, only one value is specified.
-	Values []sqltypes.PlanValue
+	Values []RouteValue
 
 	// Keyspace Id Vindex
 	KsidVindex vindexes.SingleColumn
@@ -100,8 +100,15 @@ func (op DMLOpcode) String() string {
 	return opcodeName[op]
 }
 
-func resolveMultiValueShards(vcursor VCursor, keyspace *vindexes.Keyspace, query string, bindVars map[string]*querypb.BindVariable, pv sqltypes.PlanValue, vindex vindexes.SingleColumn) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-	keys, err := pv.ResolveList(bindVars)
+func resolveMultiValueShards(
+	vcursor VCursor,
+	keyspace *vindexes.Keyspace,
+	query string,
+	bindVars map[string]*querypb.BindVariable,
+	val RouteValue,
+	vindex vindexes.SingleColumn,
+) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
+	keys, err := val.ResolveList(bindVars)
 	if err != nil {
 		return nil, nil, err
 	}

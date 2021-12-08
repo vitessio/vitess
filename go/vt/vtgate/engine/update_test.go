@@ -72,7 +72,7 @@ func TestUpdateEqual(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
@@ -85,7 +85,7 @@ func TestUpdateEqual(t *testing.T) {
 	})
 
 	// Failure case
-	upd.Values = []sqltypes.PlanValue{{Key: "aa"}}
+	upd.Values = []RouteValue{sqltypes.PlanValue{Key: "aa"}}
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `missing bind var aa`)
 }
@@ -101,7 +101,7 @@ func TestUpdateScatter(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
@@ -124,7 +124,7 @@ func TestUpdateScatter(t *testing.T) {
 			},
 			Query:                "dummy_update",
 			Vindex:               vindex.(vindexes.SingleColumn),
-			Values:               []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values:               []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 			MultiShardAutocommit: true,
 		},
 	}
@@ -154,7 +154,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
@@ -183,7 +183,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
@@ -200,7 +200,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 			Keyspace:         ks.Keyspace,
 			Query:            "dummy_update",
 			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values:           []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
@@ -449,7 +449,7 @@ func TestUpdateIn(t *testing.T) {
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
 		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{
+		Values: []RouteValue{sqltypes.PlanValue{
 			Values: []sqltypes.PlanValue{
 				{Value: sqltypes.NewInt64(1)},
 				{Value: sqltypes.NewInt64(2)},
@@ -474,7 +474,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
 		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{
+		Values: []RouteValue{sqltypes.PlanValue{
 			Values: []sqltypes.PlanValue{
 				{Value: sqltypes.NewInt64(1)},
 				{Value: sqltypes.NewInt64(2)},
@@ -502,7 +502,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 			Keyspace: ks.Keyspace,
 			Query:    "dummy_update",
 			Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{
+			Values: []RouteValue{sqltypes.PlanValue{
 				Values: []sqltypes.PlanValue{
 					{Value: sqltypes.NewInt64(1)},
 					{Value: sqltypes.NewInt64(2)},

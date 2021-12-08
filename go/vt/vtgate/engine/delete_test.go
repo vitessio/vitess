@@ -69,7 +69,7 @@ func TestDeleteEqual(t *testing.T) {
 			},
 			Query:  "dummy_delete",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
@@ -82,7 +82,7 @@ func TestDeleteEqual(t *testing.T) {
 	})
 
 	// Failure case
-	del.Values = []sqltypes.PlanValue{{Key: "aa"}}
+	del.Values = []RouteValue{sqltypes.PlanValue{Key: "aa"}}
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "missing bind var aa")
 }
@@ -102,7 +102,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 			},
 			Query:  "dummy_delete",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
@@ -131,7 +131,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 			},
 			Query:  "dummy_delete",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
@@ -148,7 +148,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 			Keyspace:         ks.Keyspace,
 			Query:            "dummy_delete",
 			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values:           []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
