@@ -219,7 +219,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
-%token <bytes> STATUS VARIABLES WARNINGS ERRORS
+%token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
@@ -296,7 +296,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
-%type <statement> lock_statement unlock_statement
+%type <statement> lock_statement unlock_statement kill_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -491,6 +491,7 @@ command:
 | release_savepoint_statement
 | lock_statement
 | unlock_statement
+| kill_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -5123,6 +5124,20 @@ unlock_statement:
     $$ = &UnlockTables{}
   }
 
+kill_statement:
+  KILL INTEGRAL
+  {
+    $$ = &Kill{Connection: true, ConnID: NewIntVal($2)}
+  }
+|  KILL QUERY INTEGRAL
+  {
+    $$ = &Kill{ConnID: NewIntVal($3)}
+  }
+| KILL CONNECTION INTEGRAL
+  {
+    $$ = &Kill{Connection: true, ConnID: NewIntVal($3)}
+  }
+
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -5151,6 +5166,7 @@ reserved_keyword:
 | CASE
 | COLLATE
 | CONVERT
+| CONNECTION
 | COUNT
 | CREATE
 | CROSS
@@ -5199,6 +5215,7 @@ reserved_keyword:
 | JSON_OBJECTAGG
 | JSON_TABLE
 | KEY
+| KILL
 | LATERAL
 | LEFT
 | LIKE

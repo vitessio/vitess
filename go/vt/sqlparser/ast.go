@@ -5542,6 +5542,30 @@ func (node *UnlockTables) walkSubtree(visit Visit) error {
 	return nil
 }
 
+type Kill struct {
+	Connection bool
+	ConnID     Expr
+}
+
+func (k *Kill) Format(buf *TrackedBuffer) {
+	buf.WriteString("kill ")
+	if k.Connection {
+		buf.WriteString("connection ")
+	} else {
+		buf.WriteString("query ")
+	}
+	buf.Myprintf("%v", k.ConnID)
+}
+
+func (*Kill) iStatement() {}
+
+func (k *Kill) walkSubtree(visit Visit) error {
+	if k == nil {
+		return nil
+	}
+	return Walk(visit, k.ConnID)
+}
+
 func compliantName(in string) string {
 	var buf strings.Builder
 	for i, c := range in {

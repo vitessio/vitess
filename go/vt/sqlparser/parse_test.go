@@ -2227,8 +2227,13 @@ var (
 		}, {
 			input:  "SHOW GRANTS FOR UserName USING role1, role2",
 			output: "show grants for `UserName`@`%` using `role1`@`%`, `role2`@`%`",
+		}, {
+			input:  "kill query 123",
+			output: "kill query 123",
+		}, {
+			input:  "kill connection 423",
+			output: "kill connection 423",
 		},
-
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
 	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.
