@@ -16,7 +16,8 @@
 
 /* See https://tailwindcss.com/docs/extracting-components */
 @layer components {
-    .btn {
+    .btn,
+    .btn:visited {
         @apply bg-vtblue;
         @apply border-2 border-vtblue;
         @apply cursor-pointer;
@@ -62,36 +63,43 @@
     }
 
     /* Visual priority variants */
-    .btn-secondary {
+    .btn-secondary,
+    .btn-secondary:visited {
         @apply bg-transparent !important;
         @apply text-vtblue;
     }
 
     /* Intents (colours) */
-    .btn-danger {
+    .btn-danger,
+    .btn-danger:visited {
         @apply bg-danger;
         @apply border-danger;
     }
 
-    .btn-danger.btn-secondary {
+    .btn-danger.btn-secondary,
+    .btn-danger.btn-secondary:visited {
         @apply text-danger;
     }
 
-    .btn-success {
+    .btn-success,
+    .btn-success:visited {
         @apply bg-success;
         @apply border-success;
     }
 
-    .btn-success.btn-secondary {
+    .btn-success.btn-secondary,
+    .btn-success.btn-secondary:visited {
         @apply text-success;
     }
 
-    .btn-warning {
+    .btn-warning,
+    .btn-warning:visited {
         @apply bg-warning;
         @apply border-warning;
     }
 
-    .btn-warning.btn-secondary {
+    .btn-warning.btn-secondary,
+    .btn-warning.btn-secondary:visited {
         @apply text-warning;
     }
 }
