@@ -23,22 +23,26 @@
         @apply cursor-pointer;
         @apply font-sans font-semibold;
         @apply inline-block;
+        @apply leading-relaxed;
         @apply px-6 py-2;
         @apply rounded-lg;
         @apply text-center;
         @apply text-white;
 
+        height: fit-content;
         -webkit-appearance: button;
     }
 
     /* Size variants */
     .btn-lg {
-        @apply px-8 py-4;
+        @apply px-8;
+        @apply leading-loose;
         @apply text-lg;
     }
 
     .btn-sm {
         @apply border;
+        @apply leading-snug;
         @apply px-4 py-1;
         @apply text-sm;
     }
