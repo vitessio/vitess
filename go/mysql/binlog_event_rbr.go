@@ -903,10 +903,10 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 			//      (where the value is the result of a mysql query) is different from the one during replication
 			//      (where the value is the one from the binlogs)
 			//    * mysql where clause comparisons do not do the right thing without padding
-			// So for fixed length binary() columns we right-pad it with nulls if necessary to match what MySQL returns.
-			// Because CHAR columns with a binary collation have the same metadata as a BINARY column in binlog events, we
-			// also need to check for this case based on the underlying column type when available.
-			if l < max && strings.HasPrefix(field.ColumnType, "binary") {
+			// So for fixed length BINARY columns we right-pad it with nulls if necessary to match what MySQL returns.
+			// Because CHAR columns with a binary collation (e.g. utf8mb4_bin) have the same metadata as a BINARY column
+			// in binlog events, we also need to check for this case based on the underlying column type.
+			if l < max && strings.HasPrefix(strings.ToLower(field.ColumnType), "binary") {
 				paddedData := make([]byte, max)
 				copy(paddedData[:l], mdata)
 				mdata = paddedData
