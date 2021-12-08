@@ -28,7 +28,7 @@ import (
 
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpcode, vindexes.SingleColumn, string, vindexes.SingleColumn, []sqltypes.PlanValue, error) {
+func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpcode, vindexes.SingleColumn, string, vindexes.SingleColumn, []engine.RouteValue, error) {
 	var ksidVindex vindexes.SingleColumn
 	var ksidCol string
 	for _, index := range table.Ordered {
@@ -56,7 +56,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 				// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
 				continue
 			}
-			return opcode, ksidVindex, ksidCol, single, []sqltypes.PlanValue{pv}, nil
+			return opcode, ksidVindex, ksidCol, single, []engine.RouteValue{pv}, nil
 		}
 	}
 	if ksidVindex == nil {
@@ -100,8 +100,8 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValu
 }
 
 func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
-	colname, ok := node.(*sqlparser.ColName)
-	return ok && colname.Name.Equal(col)
+	colName, ok := node.(*sqlparser.ColName)
+	return ok && colName.Name.Equal(col)
 }
 
 func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, vindexes.SingleColumn, string, error) {
