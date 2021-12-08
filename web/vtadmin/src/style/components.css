@@ -34,6 +34,13 @@
         -webkit-appearance: button;
     }
 
+    .btn:disabled {
+        @apply cursor-not-allowed;
+
+        background: var(--colorDisabled);
+        border-color: var(--colorDisabled);
+    }
+
     /* Size variants */
     .btn-lg {
         @apply px-8;
@@ -74,6 +81,12 @@
         @apply text-vtblue;
     }
 
+    .btn-secondary:disabled {
+        @apply text-vtblue;
+
+        color: var(--colorDisabled);
+    }
+
     /* Intents (colours) */
     .btn-danger,
     .btn-danger:visited {
@@ -81,7 +94,7 @@
         @apply border-danger;
     }
 
-    .btn-danger.btn-secondary,
+    .btn-danger.btn-secondary:enabled,
     .btn-danger.btn-secondary:visited {
         @apply text-danger;
     }
@@ -92,7 +105,7 @@
         @apply border-success;
     }
 
-    .btn-success.btn-secondary,
+    .btn-success.btn-secondary:enabled,
     .btn-success.btn-secondary:visited {
         @apply text-success;
     }
@@ -103,7 +116,7 @@
         @apply border-warning;
     }
 
-    .btn-warning.btn-secondary,
+    .btn-warning.btn-secondary:enabled,
     .btn-warning.btn-secondary:visited {
         @apply text-warning;
     }

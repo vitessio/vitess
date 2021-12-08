@@ -305,6 +305,14 @@ export const Debug = () => {
                                                 <Icon icon={Icons.circleAdd} />
                                                 Link
                                             </a>
+
+                                            <button className={`btn ${s} ${v}`} disabled>
+                                                Button
+                                            </button>
+                                            <button className={`btn ${s} ${v} btn-secondary`} disabled>
+                                                <Icon icon={Icons.circleAdd} />
+                                                Button
+                                            </button>
                                         </div>
                                     );
                                 })}
