@@ -339,10 +339,18 @@ func (se *Engine) reload(ctx context.Context) error {
 		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
 		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
 
-		// TODO(sougou); find a better way detect changed tables. This method
-		// seems unreliable. The endtoend test flags all tables as changed.
+		// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
+		// We also record the last time the schema was loaded (`se.lastChange`). Both are in seconds. We reload a table only when:
+		//   1. A table's underlying mysql metadata has changed: `se.lastChange >= createTime`. This can happen if a table was directly altered.
+		//      Note that we also reload if `se.lastChange == createTime` since it is possible, especially in unit tests,
+		//      that a table might be changed multiple times within the same second.
+		//
+		//   2. A table was swapped in by Online DDL: `createTime != tbl.CreateTime`. When an Online DDL migration is completed the temporary table is
+		//      renamed to the table being altered. `se.lastChange` is updated every time the schema is reloaded (default: 30m).
+		//      Online DDL can take hours. So it is possible that the `create_time` of the temporary table is before se.lastChange. Hence,
+		//      #1 will not identify the renamed table as a changed one.
 		tbl, isInTablesMap := se.tables[tableName]
-		if isInTablesMap && createTime == tbl.CreateTime && !(createTime >= se.lastChange) {
+		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
 			tbl.FileSize = fileSize
 			tbl.AllocatedSize = allocatedSize
 			continue
