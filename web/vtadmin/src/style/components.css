@@ -24,6 +24,7 @@
         @apply font-sans font-semibold;
         @apply inline-block;
         @apply leading-relaxed;
+        @apply outline-none;
         @apply px-6 py-2;
         @apply rounded-lg;
         @apply text-center;
@@ -31,6 +32,10 @@
         @apply select-none;
         @apply whitespace-nowrap;
         @apply w-min;
+
+        @apply focus:ring-vtblue-50;
+        @apply focus:ring-offset-1;
+        @apply focus:ring-2;
 
         height: fit-content;
         -webkit-appearance: button;
@@ -92,6 +97,7 @@
     /* Intents (colours) */
     .btn-danger,
     .btn-danger:visited {
+        @apply focus:ring-danger-50;
         @apply bg-danger;
         @apply border-danger;
     }
@@ -103,6 +109,7 @@
 
     .btn-success,
     .btn-success:visited {
+        @apply focus:ring-success-50;
         @apply bg-success;
         @apply border-success;
     }
@@ -114,6 +121,7 @@
 
     .btn-warning,
     .btn-warning:visited {
+        @apply focus:ring-warning-50;
         @apply bg-warning;
         @apply border-warning;
     }
