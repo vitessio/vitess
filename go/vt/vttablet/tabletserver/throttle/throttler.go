@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -71,16 +70,6 @@ var (
 	throttlerCheckAsCheckSelf = flag.Bool("throttle_check_as_check_self", false, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
 )
 var (
-	throttlerUser  = "vt_tablet_throttler"
-	throttlerGrant = fmt.Sprintf("'%s'@'%s'", throttlerUser, "%")
-
-	sqlCreateThrottlerUser = []string{
-		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
-		`ALTER USER %s IDENTIFIED BY '%s'`,
-	}
-	sqlGrantThrottlerUser = []string{
-		`GRANT SELECT ON _vt.heartbeat TO %s`,
-	}
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 )
 
@@ -251,7 +240,6 @@ func (throttler *Throttler) initConfig(password string) {
 	}
 	if password != "" {
 		config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
-			User:              throttlerUser,
 			Password:          password,
 			MetricQuery:       throttler.metricsQuery,
 			ThrottleThreshold: throttler.MetricsThreshold.Get(),
@@ -336,18 +324,6 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		// - shlomi
 		simpleBinlogQuery := `FLUSH STATUS`
 		if _, err := conn.ExecuteFetch(simpleBinlogQuery, 0, false); err != nil {
-			return password, err
-		}
-	}
-	for _, query := range sqlCreateThrottlerUser {
-		parsed := sqlparser.BuildParsedQuery(query, throttlerGrant, password)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
-			return password, err
-		}
-	}
-	for _, query := range sqlGrantThrottlerUser {
-		parsed := sqlparser.BuildParsedQuery(query, throttlerGrant)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 			return password, err
 		}
 	}
