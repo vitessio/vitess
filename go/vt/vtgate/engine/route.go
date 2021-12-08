@@ -695,10 +695,19 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	// gather values from all the column in the vindex
 	var multiColValues [][]sqltypes.Value
+	var err error
+	var lv []sqltypes.Value
 	for _, rvalue := range route.Values {
-		lv, err := rvalue.ResolveList(bindVars)
+		lv, err = rvalue.ResolveList(bindVars)
 		if err != nil {
 			return nil, nil, err
+		}
+		if lv == nil {
+			v, err := rvalue.ResolveValue(bindVars)
+			if err != nil {
+				return nil, nil, err
+			}
+			lv = []sqltypes.Value{v}
 		}
 		multiColValues = append(multiColValues, lv)
 	}

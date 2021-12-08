@@ -1460,6 +1460,53 @@ func TestSelectINMultiColumnVindex(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
+func TestSelectINMixedMultiColumnComparision(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	sel := NewRoute(
+		SelectIN,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []RouteValue{
+		&evalengine.RouteValue{
+			Expr: evalengine.NewLiteralInt(1),
+		},
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
+				func() evalengine.Expr { return evalengine.NewLiteralInt(3) },
+				func() evalengine.Expr { return evalengine.NewLiteralInt(4) },
+			}),
+		},
+	}
+
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "20-"},
+		results:      []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard ks.-20: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"4"}} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
+		`StreamExecuteMulti dummy_select ks.-20: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"4"}} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
 func TestBuildRowColValues(t *testing.T) {
 	out := buildRowColValues([][]sqltypes.Value{
 		{sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
