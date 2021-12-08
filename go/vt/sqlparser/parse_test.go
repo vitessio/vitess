@@ -1440,9 +1440,6 @@ var (
 		}, {
 			input: "show function status like 'hi'",
 		}, {
-			input:  "show grants for 'root'@'localhost'",
-			output: "show grants",
-		}, {
 			input: "show index from tbl",
 		}, {
 			input:  "show indexes from tbl",
@@ -2105,6 +2102,24 @@ var (
 			input:  "SELECT FORMAT(45124,2,'de_DE') FROM test",
 			output: "select FORMAT(45124,2,'de_DE') from test",
 		}, {
+			input:  "CREATE USER UserName@localhost",
+			output: "create user `UserName`@`localhost`",
+		}, {
+			input:  "CREATE USER UserName@localhost IDENTIFIED BY 'some_auth'",
+			output: "create user `UserName`@`localhost` identified by 'some_auth'",
+		}, {
+			input:  "CREATE USER UserName@localhost IDENTIFIED BY RANDOM PASSWORD AND IDENTIFIED WITH some_plugin",
+			output: "create user `UserName`@`localhost` identified by random password and identified with some_plugin",
+		}, {
+			input:  "CREATE USER UserName@localhost IDENTIFIED WITH some_plugin INITIAL AUTHENTICATION IDENTIFIED BY RANDOM PASSWORD",
+			output: "create user `UserName`@`localhost` identified with some_plugin initial authentication identified by random password",
+		}, {
+			input:  "CREATE USER UserName1@localhost IDENTIFIED BY 'some_auth1', UserName2@localhost IDENTIFIED BY 'some_auth2' DEFAULT ROLE role1, role2@localhost",
+			output: "create user `UserName1`@`localhost` identified by 'some_auth1', `UserName2`@`localhost` identified by 'some_auth2' default role `role1`@`%`, `role2`@`localhost`",
+		}, {
+			input:  "RENAME USER UserName1@localhost TO UserName2@localhost, UserName3 TO UserName4",
+			output: "rename user `UserName1`@`localhost` to `UserName2`@`localhost`, `UserName3`@`%` to `UserName4`@`%`",
+		}, {
 			input:  "DROP USER UserName",
 			output: "drop user `UserName`@`%`",
 		}, {
@@ -2173,6 +2188,45 @@ var (
 		}, {
 			input:  `DROP USER IF EXISTS UserName1@localhost, 'UserName2'@"localhost"`,
 			output: "drop user if exists `UserName1`@`localhost`, `UserName2`@`localhost`",
+		}, {
+			input:  "CREATE ROLE role1",
+			output: "create role `role1`@`%`",
+		}, {
+			input:  "CREATE ROLE role1, role2@localhost",
+			output: "create role `role1`@`%`, `role2`@`localhost`",
+		}, {
+			input:  "CREATE ROLE IF NOT EXISTS role1",
+			output: "create role if not exists `role1`@`%`",
+		}, {
+			input:  "CREATE ROLE IF NOT EXISTS role1, role2@localhost",
+			output: "create role if not exists `role1`@`%`, `role2`@`localhost`",
+		}, {
+			input:  "DROP ROLE role1",
+			output: "drop role `role1`@`%`",
+		}, {
+			input:  "DROP ROLE role1, role2@localhost",
+			output: "drop role `role1`@`%`, `role2`@`localhost`",
+		}, {
+			input:  "DROP ROLE IF EXISTS role1",
+			output: "drop role if exists `role1`@`%`",
+		}, {
+			input:  "DROP ROLE IF EXISTS role1, role2@localhost",
+			output: "drop role if exists `role1`@`%`, `role2`@`localhost`",
+		}, {
+			input:  "SHOW GRANTS",
+			output: "show grants",
+		}, {
+			input:  "SHOW GRANTS FOR UserName",
+			output: "show grants for `UserName`@`%`",
+		}, {
+			input:  "SHOW GRANTS FOR Current_User",
+			output: "show grants for Current_User()",
+		}, {
+			input:  "SHOW GRANTS FOR Current_User()",
+			output: "show grants for Current_User()",
+		}, {
+			input:  "SHOW GRANTS FOR UserName USING role1, role2",
+			output: "show grants for `UserName`@`%` using `role1`@`%`, `role2`@`%`",
 		},
 
 	}
@@ -2634,6 +2688,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "alter table t add (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		err:   "syntax error at position 29 near 'default'",
+	}, {
+		input: "create role ''@localhost",
+		err:   "the anonymous user is not a valid role name",
 	}}
 	for _, tcase := range invalidDDL {
 		_, err := ParseStrictDDL(tcase.input)

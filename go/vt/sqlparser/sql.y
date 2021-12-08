@@ -161,6 +161,13 @@ func skipToEnd(yylex interface{}) {
   lockType LockType
   accountName AccountName
   accountNames []AccountName
+  accountRenames []AccountRename
+  authentication *Authentication
+  accountWithAuth AccountWithAuth
+  accountsWithAuth []AccountWithAuth
+  tlsOptions TLSOptions
+  accountLimits AccountLimits
+  passwordOptions PasswordOptions
 }
 
 %token LEX_ERROR
@@ -225,7 +232,10 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION
 
 // Permissions Tokens
-%token <bytes> USER
+%token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
+%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTIONAL
+%token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS
+%token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
@@ -275,9 +285,9 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> UNUSED ARRAY DESCRIPTION EMPTY EXCEPT JSON_TABLE LATERAL MEMBER RECURSIVE
 %token <bytes> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
-%token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE SYSTEM INFILE
+%token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
+%token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE SYSTEM INFILE
 
 %type <statement> command
 %type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
@@ -424,9 +434,13 @@ func skipToEnd(yylex interface{}) {
 %type <tableAndLockTypes> lock_table_list
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
-%type <accountName> account_name
-%type <accountNames> account_name_list
+%type <accountName> account_name role_name
+%type <accountNames> account_name_list role_name_list default_role_opt
+%type <accountRenames> rename_user_list
 %type <str> account_name_str
+%type <accountWithAuth> account_with_auth
+%type <accountsWithAuth> account_with_auth_list
+%type <authentication> authentication authentication_initial
 
 %start any_command
 
@@ -816,6 +830,31 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
   }
+| CREATE USER not_exists_opt account_with_auth_list default_role_opt
+  {
+    var notExists bool
+    if $3 != 0 {
+      notExists = true
+    }
+    $$ = &CreateUser{IfNotExists: notExists, Users: $4, DefaultRoles: $5}
+  }
+| CREATE ROLE not_exists_opt role_name_list
+  {
+    var notExists bool
+    if $3 != 0 {
+      notExists = true
+    }
+    $$ = &CreateRole{IfNotExists: notExists, Roles: $4}
+  }
+
+default_role_opt:
+  {
+    $$ = nil
+  }
+| DEFAULT ROLE role_name_list
+  {
+    $$ = $3
+  }
 
 // TODO: Implement IGNORE, REPLACE, VALUES, and TABLE
 create_query_expression:
@@ -961,15 +1000,19 @@ account_name_str:
 account_name:
   account_name_str '@' account_name_str
   {
-    $$ = AccountName{Name: $1, Host: $3}
+    anyHost := false
+    if $3 == "%" {
+      anyHost = true
+    }
+    $$ = AccountName{Name: $1, Host: $3, AnyHost: anyHost}
   }
 | account_name_str '@'
   {
-    $$ = AccountName{Name: $1, Host: ""}
+    $$ = AccountName{Name: $1, Host: "", AnyHost: false}
   }
 | account_name_str
   {
-    $$ = AccountName{Name: $1, Host: "%"}
+    $$ = AccountName{Name: $1, Host: "", AnyHost: true}
   }
 
 account_name_list:
@@ -980,6 +1023,114 @@ account_name_list:
 | account_name_list ',' account_name
   {
     $$ = append($$, $3)
+  }
+
+role_name:
+  account_name_str '@' account_name_str
+  {
+    if len($1) == 0 {
+      yylex.Error("the anonymous user is not a valid role name")
+      return 1
+    }
+    $$ = AccountName{Name: $1, Host: $3, AnyHost: false}
+  }
+| account_name_str '@'
+  {
+    if len($1) == 0 {
+      yylex.Error("the anonymous user is not a valid role name")
+      return 1
+    }
+    $$ = AccountName{Name: $1, Host: "", AnyHost: false}
+  }
+| account_name_str
+  {
+    if len($1) == 0 {
+      yylex.Error("the anonymous user is not a valid role name")
+      return 1
+    }
+    $$ = AccountName{Name: $1, Host: "", AnyHost: true}
+  }
+
+role_name_list:
+  role_name
+  {
+    $$ = []AccountName{$1}
+  }
+| role_name_list ',' role_name
+  {
+    $$ = append($$, $3)
+  }
+
+account_with_auth:
+  account_name
+  {
+    $$ = AccountWithAuth{AccountName: $1}
+  }
+| account_name authentication
+  {
+    $$ = AccountWithAuth{AccountName: $1, Auth1: $2}
+  }
+| account_name authentication INITIAL AUTHENTICATION authentication_initial
+  {
+    $$ = AccountWithAuth{AccountName: $1, Auth1: $2, AuthInitial: $5}
+  }
+| account_name authentication AND authentication
+  {
+    $$ = AccountWithAuth{AccountName: $1, Auth1: $2, Auth2: $4}
+  }
+| account_name authentication AND authentication AND authentication
+  {
+    $$ = AccountWithAuth{AccountName: $1, Auth1: $2, Auth2: $4, Auth3: $6}
+  }
+
+authentication:
+  IDENTIFIED BY RANDOM PASSWORD
+  {
+    $$ = &Authentication{RandomPassword: true}
+  }
+| IDENTIFIED BY STRING
+  {
+    $$ = &Authentication{Password: string($3)}
+  }
+| IDENTIFIED WITH ID
+  {
+    $$ = &Authentication{Plugin: string($3)}
+  }
+| IDENTIFIED WITH ID BY RANDOM PASSWORD
+  {
+    $$ = &Authentication{Plugin: string($3), RandomPassword: true}
+  }
+| IDENTIFIED WITH ID BY STRING
+  {
+    $$ = &Authentication{Plugin: string($3), Password: string($5)}
+  }
+| IDENTIFIED WITH ID AS STRING
+  {
+    $$ = &Authentication{Plugin: string($3), Identity: string($5)}
+  }
+
+authentication_initial:
+  IDENTIFIED BY RANDOM PASSWORD
+  {
+    $$ = &Authentication{RandomPassword: true}
+  }
+| IDENTIFIED BY STRING
+  {
+    $$ = &Authentication{Password: string($3)}
+  }
+| IDENTIFIED WITH ID AS STRING
+  {
+    $$ = &Authentication{Plugin: string($3), Identity: string($5)}
+  }
+
+account_with_auth_list:
+  account_with_auth
+  {
+    $$ = []AccountWithAuth{$1}
+  }
+| account_with_auth_list ',' account_with_auth
+  {
+    $$ = append($1, $3)
   }
 
 trigger_time:
@@ -2480,6 +2631,10 @@ rename_statement:
   {
     $$ = $3
   }
+| RENAME USER rename_user_list
+  {
+    $$ = &RenameUser{Accounts: $3}
+  }
 
 rename_list:
   table_name TO table_name
@@ -2491,6 +2646,16 @@ rename_list:
     $$ = $1
     $$.FromTables = append($$.FromTables, $3)
     $$.ToTables = append($$.ToTables, $5)
+  }
+
+rename_user_list:
+  account_name TO account_name
+  {
+    $$ = []AccountRename{{From: $1, To: $3}}
+  }
+| rename_user_list ',' account_name TO account_name
+  {
+    $$ = append($1, AccountRename{From: $3, To: $5})
   }
 
 drop_statement:
@@ -2553,6 +2718,14 @@ drop_statement:
       exists = true
     }
     $$ = &DropUser{IfExists: exists, AccountNames: $4}
+  }
+| DROP ROLE exists_opt role_name_list
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DropRole{IfExists: exists, Roles: $4}
   }
 
 drop_statement_action:
@@ -2705,6 +2878,24 @@ show_statement:
     cmp.Left = &ColName{Name: NewColIdent("collation")}
     var ex Expr = cmp
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &ex}
+  }
+| SHOW GRANTS
+  {
+    $$ = &ShowGrants{}
+  }
+| SHOW GRANTS FOR account_name
+  {
+    an := $4
+    $$ = &ShowGrants{For: &an}
+  }
+| SHOW GRANTS FOR CURRENT_USER func_parens_opt
+  {
+    $$ = &ShowGrants{CurrentUser: true}
+  }
+| SHOW GRANTS FOR account_name USING role_name_list
+  {
+    an := $4
+    $$ = &ShowGrants{For: &an, Using: $6}
   }
 | SHOW COUNT openb '*' closeb WARNINGS
   {
@@ -4987,10 +5178,12 @@ reserved_keyword:
 | FOR
 | FORCE
 | FROM
+| GRANT
 | GROUP
 | GROUPING
 | GROUPS
 | HAVING
+| IDENTIFIED
 | IF
 | IGNORE
 | IN
@@ -5038,6 +5231,7 @@ reserved_keyword:
 | RENAME
 | REPLACE
 | RIGHT
+| REVOKE
 | SCHEMA
 | SELECT
 | SEPARATOR
@@ -5088,10 +5282,13 @@ reserved_keyword:
 */
 non_reserved_keyword:
   AGAINST
+| ACCOUNT
 | ACTION
 | ACTIVE
 | ADMIN
 | ALTER
+| ATTRIBUTE
+| AUTHENTICATION
 | BEFORE
 | BEGIN
 | BIGINT
@@ -5107,6 +5304,7 @@ non_reserved_keyword:
 | CHARACTER
 | CHARSET
 | CHECK
+| CIPHER
 | CLASS_ORIGIN
 | CLONE
 | COLLATION
@@ -5125,6 +5323,7 @@ non_reserved_keyword:
 | DATA
 | DATE
 | DATETIME
+| DAY
 | DECIMAL
 | DECLARE
 | DEFINER
@@ -5138,6 +5337,8 @@ non_reserved_keyword:
 | ENUM
 | EXCLUDE
 | EXPANSION
+| EXPIRE
+| FAILED_LOGIN_ATTEMPTS
 | FIELDS
 | FIXED
 | FLOAT_TYPE
@@ -5151,15 +5352,18 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| GRANTS
 | HISTOGRAM
 | HISTORY
 | INACTIVE
 | INDEXES
+| INITIAL
 | INT
 | INTEGER
 | INVISIBLE
 | INVOKER
 | ISOLATION
+| ISSUER
 | JSON
 | KEYS
 | KEY_BLOCK_SIZE
@@ -5179,6 +5383,10 @@ non_reserved_keyword:
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
 | MASTER_ZSTD_COMPRESSION_LEVEL
+| MAX_CONNECTIONS_PER_HOUR
+| MAX_QUERIES_PER_HOUR
+| MAX_UPDATES_PER_HOUR
+| MAX_USER_CONNECTIONS
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
@@ -5194,7 +5402,9 @@ non_reserved_keyword:
 | NCHAR
 | NESTED
 | NETWORK_NAMESPACE
+| NEVER
 | NO
+| NONE
 | NOWAIT
 | NULLS
 | NUMERIC
@@ -5209,6 +5419,8 @@ non_reserved_keyword:
 | ORGANIZATION
 | OTHERS
 | PARTITION
+| PASSWORD
+| PASSWORD_LOCK_TIME
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -5261,10 +5473,12 @@ non_reserved_keyword:
 | SPATIAL
 | SQLSTATE
 | SRID
+| SSL
 | START
 | STARTING
 | STREAM
 | SUBCLASS_ORIGIN
+| SUBJECT
 | TABLES
 | TABLE_NAME
 | TEMPORARY
@@ -5296,6 +5510,7 @@ non_reserved_keyword:
 | WARNINGS
 | WORK
 | WRITE
+| X509
 | YEAR
 | ZEROFILL
 
