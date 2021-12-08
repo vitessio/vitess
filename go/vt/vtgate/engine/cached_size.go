@@ -132,7 +132,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Vindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Values []vitess.io/vitess/go/vt/vtgate/engine.RouteValue
+	// field Values []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(16))
 		for _, elem := range cached.Values {

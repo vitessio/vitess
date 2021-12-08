@@ -17,18 +17,26 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpcode, vindexes.SingleColumn, string, vindexes.SingleColumn, []engine.RouteValue, error) {
+func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
+	engine.DMLOpcode,
+	vindexes.SingleColumn,
+	string,
+	vindexes.SingleColumn,
+	[]evalengine.Expr,
+	error,
+) {
 	var ksidVindex vindexes.SingleColumn
 	var ksidCol string
 	for _, index := range table.Ordered {
@@ -47,16 +55,20 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 			return engine.Scatter, ksidVindex, ksidCol, nil, nil, nil
 		}
 
-		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
+		if expr := getMatch(where.Expr, index.Columns[0]); expr != nil {
+			q, err := expr.Type(nil)
+			if err != nil {
+				return 0, nil, "", nil, nil, err
+			}
 			opcode := engine.Equal
-			if pv.IsList() {
+			if q == querypb.Type_TUPLE {
 				opcode = engine.In
 			} else if lu, isLu := single.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
 				// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
 				// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
 				continue
 			}
-			return opcode, ksidVindex, ksidCol, single, []engine.RouteValue{pv}, nil
+			return opcode, ksidVindex, ksidCol, single, []evalengine.Expr{expr}, nil
 		}
 	}
 	if ksidVindex == nil {
@@ -68,7 +80,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 // getMatch returns the matched value if there is an equality
 // constraint on the specified column that can be used to
 // decide on a route.
-func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, ok bool) {
+func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) evalengine.Expr {
 	filters := sqlparser.SplitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
@@ -90,13 +102,13 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValu
 		default:
 			continue
 		}
-		pv, err := sqlparser.NewPlanValue(comparison.Right)
+		expr, err := evalengine.Convert(comparison.Right, &noColumnLookup{})
 		if err != nil {
 			continue
 		}
-		return pv, true
+		return expr
 	}
-	return sqltypes.PlanValue{}, false
+	return nil
 }
 
 func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
