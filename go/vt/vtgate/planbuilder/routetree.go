@@ -553,9 +553,9 @@ func (rp *routeTree) haveMatchingVindex(
 					continue
 				}
 				option.colsSeen[colLoweredName] = true
-				option.predicates = append(option.predicates, node)
 				option.valueExprs = append(option.valueExprs, valueExpr)
 				option.values[indexOfCol] = value
+				option.predicates[indexOfCol] = node
 				optionPresent = true
 				option.ready = len(option.colsSeen) == len(v.colVindex.Columns)
 			}
@@ -569,10 +569,12 @@ func (rp *routeTree) haveMatchingVindex(
 			vindex := vfunc(v.colVindex)
 			values := make([]evalengine.Expr, len(v.colVindex.Columns))
 			values[indexOfCol] = value
+			predicates := make([]sqlparser.Expr, len(v.colVindex.Columns))
+			predicates[indexOfCol] = node
 			v.options = append(v.options, &vindexOption{
 				values:      values,
 				valueExprs:  []sqlparser.Expr{valueExpr},
-				predicates:  []sqlparser.Expr{node},
+				predicates:  predicates,
 				colsSeen:    map[string]interface{}{colLoweredName: true},
 				opcode:      routeOpcode,
 				foundVindex: vindex,

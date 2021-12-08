@@ -4301,7 +4301,45 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where cola in ::__vals and colb in ::__vals",
+    "Query": "select * from multicol_tbl where cola in ::__vals0 and colb in ::__vals1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(2))",
+      "(INT64(3), INT64(4))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with different order places the vindex keys in correct order in IN plan in gen4
+"select * from multicol_tbl where colb in (3,4) and cola in (1,2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (3,4) and cola in (1,2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in (3, 4) and cola in (1, 2)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (3,4) and cola in (1,2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in ::__vals1 and cola in ::__vals0",
     "Table": "multicol_tbl",
     "Values": [
       "(INT64(1), INT64(2))",
