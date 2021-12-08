@@ -40,10 +40,10 @@ import (
 
 const (
 	leaderCheckInterval         = 5 * time.Second
-	mysqlCollectInterval        = 100 * time.Millisecond
+	mysqlCollectInterval        = 250 * time.Millisecond
 	mysqlDormantCollectInterval = 5 * time.Second
 	mysqlRefreshInterval        = 10 * time.Second
-	mysqlAggregateInterval      = 100 * time.Millisecond
+	mysqlAggregateInterval      = 125 * time.Millisecond
 
 	aggregatedMetricsExpiration   = 5 * time.Second
 	aggregatedMetricsCleanup      = 10 * time.Second
