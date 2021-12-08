@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -376,7 +377,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	}
 
 	if n.selected != nil {
-		for _, predicate := range n.selected.predicates {
+		_, isMultiColumn := n.selected.foundVindex.(vindexes.MultiColumn)
+		for idx, predicate := range n.selected.predicates {
 			switch predicate := predicate.(type) {
 			case *sqlparser.ComparisonExpr:
 				if predicate.Operator == sqlparser.InOp {
@@ -387,6 +389,10 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 							if extractedSubquery != nil {
 								extractedSubquery.SetArgName(engine.ListVarName)
 							}
+						}
+						if isMultiColumn {
+							predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
+							continue
 						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
 					}

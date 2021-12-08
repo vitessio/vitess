@@ -666,7 +666,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			t.Run(testName, func(t *testing.T) {
 				if out != tcase.output2ndPlanner {
-					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output2ndPlanner, out)
 				}
 				if err != nil {
 					out = `"` + out + `"`
