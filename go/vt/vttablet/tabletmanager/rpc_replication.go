@@ -250,7 +250,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 	defer tm.unlock()
 
 	// Initializing as primary implies undoing any previous "do not replicate".
-	tm.replManager.setReplicationStopped(false)
+	tm.replManager.reset()
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
