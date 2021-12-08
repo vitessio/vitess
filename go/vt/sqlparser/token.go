@@ -34,22 +34,23 @@ const (
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream            io.Reader
-	AllowComments       bool
-	SkipSpecialComments bool
-	SkipToEnd           bool
-	lastChar            uint16
-	Position            int
-	OldPosition         int
-	lastToken           []byte
-	lastNonNilToken     []byte
-	LastError           error
-	posVarIndex         int
-	ParseTree           Statement
-	partialDDL          *DDL
-	nesting             int
-	multi               bool
-	specialComment      *Tokenizer
+	InStream             io.Reader
+	AllowComments        bool
+	SkipSpecialComments  bool
+	SkipToEnd            bool
+	lastChar             uint16
+	Position             int
+	OldPosition          int
+	lastToken            []byte
+	lastNonNilToken      []byte
+	LastError            error
+	posVarIndex          int
+	ParseTree            Statement
+	partialDDL           *DDL
+	nesting              int
+	multi                bool
+	specialComment       *Tokenizer
+	potentialAccountName bool
 
 	// If true, the parser should collaborate to set `stopped` on this
 	// tokenizer after a statement is parsed. From that point forward, the
@@ -459,6 +460,7 @@ var keywords = map[string]int{
 	"update":              UPDATE,
 	"usage":               UNUSED,
 	"use":                 USE,
+	"user":                USER,
 	"using":               USING,
 	"utc_date":            UTC_DATE,
 	"utc_time":            UTC_TIME,
@@ -571,6 +573,11 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
 	}
+	if tkn.potentialAccountName {
+		defer func() {
+			tkn.potentialAccountName = false
+		}()
+	}
 
 	tkn.OldPosition = tkn.Position
 	if tkn.lastChar == 0 {
@@ -592,6 +599,12 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				tkn.next()
 				return tkn.scanBitLiteral()
 			}
+		}
+		return tkn.scanIdentifier(byte(ch), false)
+	case ch == '@':
+		tkn.next()
+		if tkn.potentialAccountName {
+			return int('@'), nil
 		}
 		isDbSystemVariable := false
 		if ch == '@' && tkn.lastChar == '@' {
@@ -739,9 +752,16 @@ func (tkn *Tokenizer) skipBlank() {
 func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(firstByte)
+	if isDbSystemVariable {
+		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.next()
+	}
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || (isDbSystemVariable && isCarat(tkn.lastChar)) {
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
+	}
+	if tkn.lastChar == '@' {
+		tkn.potentialAccountName = true
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
 	loweredStr := string(lowered)
@@ -803,8 +823,8 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 		}
 		tkn.next()
 	}
-	if buffer.Len() == 0 {
-		return LEX_ERROR, buffer.Bytes()
+	if tkn.lastChar == '@' {
+		tkn.potentialAccountName = true
 	}
 	return ID, buffer.Bytes()
 }
@@ -939,6 +959,9 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 		tkn.next()
 	}
 
+	if tkn.lastChar == '@' {
+		tkn.potentialAccountName = true
+	}
 	return typ, buffer.Bytes()
 }
 
@@ -1052,7 +1075,7 @@ func (tkn *Tokenizer) reset() {
 }
 
 func isLetter(ch uint16) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '@'
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
 }
 
 func isCarat(ch uint16) bool {

@@ -1410,9 +1410,6 @@ var (
 			input:  "show create trigger t",
 			output: "show create trigger t",
 		}, {
-			input:  "show create user u",
-			output: "show create user",
-		}, {
 			input:  "show create view v",
 			output: "show create view v",
 		}, {
@@ -1443,7 +1440,7 @@ var (
 		}, {
 			input: "show function status like 'hi'",
 		}, {
-			input:  "show grants for 'root@localhost'",
+			input:  "show grants for 'root'@'localhost'",
 			output: "show grants",
 		}, {
 			input: "show index from tbl",
@@ -2101,15 +2098,83 @@ var (
 		}, {
 			input:  "create definer = me procedure p1(v1 int) comment 'some_comment' not deterministic select now()",
 			output: "create definer = me procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
-		},
-		{
+		}, {
 			input:  "SELECT FORMAT(45124,2) FROM test",
 			output: "select FORMAT(45124,2) from test",
-		},
-		{
+		}, {
 			input:  "SELECT FORMAT(45124,2,'de_DE') FROM test",
 			output: "select FORMAT(45124,2,'de_DE') from test",
+		}, {
+			input:  "DROP USER UserName",
+			output: "drop user `UserName`@`%`",
+		}, {
+			input:  "DROP USER 'UserName'",
+			output: "drop user `UserName`@`%`",
+		}, {
+			input:  `DROP USER "UserName"`,
+			output: "drop user `UserName`@`%`",
+		}, {
+			input:  `DROP USER "User@Name"`,
+			output: "drop user `User@Name`@`%`",
+		}, {
+			input:  "DROP USER UserName@localhost",
+			output: "drop user `UserName`@`localhost`",
+		}, {
+			input:  "DROP USER UserName@`localhost`",
+			output: "drop user `UserName`@`localhost`",
+		}, {
+			input:  `DROP USER "UserName"@localhost`,
+			output: "drop user `UserName`@`localhost`",
+		}, {
+			input:  "DROP USER 'UserName'@'localhost'",
+			output: "drop user `UserName`@`localhost`",
+		}, {
+			input:  "DROP USER 'User@Name'@`local@host`",
+			output: "drop user `User@Name`@`local@host`",
+		}, {
+			input:  "DROP USER `User``Name`",
+			output: "drop user `User``Name`@`%`",
+		}, {
+			input:  "DROP USER user@rank",
+			output: "drop user `user`@`rank`",
+		}, {
+			input:  "DROP USER ''",
+			output: "drop user ``@`%`",
+		}, {
+			input:  `DROP USER ""`,
+			output: "drop user ``@`%`",
+		}, {
+			input:  "DROP USER ``",
+			output: "drop user ``@`%`",
+		}, {
+			input:  "DROP USER ''@localhost",
+			output: "drop user ``@`localhost`",
+		}, {
+			input:  "DROP USER ''@",
+			output: "drop user ``@``",
+		}, {
+			input:  "DROP USER UserName1, UserName2",
+			output: "drop user `UserName1`@`%`, `UserName2`@`%`",
+		}, {
+			input:  "DROP USER IF EXISTS UserName",
+			output: "drop user if exists `UserName`@`%`",
+		}, {
+			input:  "DROP USER IF EXISTS 'UserName'@'localhost'",
+			output: "drop user if exists `UserName`@`localhost`",
+		}, {
+			input:  "DROP USER IF EXISTS UserName1, UserName2",
+			output: "drop user if exists `UserName1`@`%`, `UserName2`@`%`",
+		}, {
+			input:  "DROP USER IF EXISTS UserName1, `UserName2`@'localhost'",
+			output: "drop user if exists `UserName1`@`%`, `UserName2`@`localhost`",
+		}, {
+			input:  `DROP USER IF EXISTS "UserName1", "UserName2"@'localhost'`,
+			output: "drop user if exists `UserName1`@`%`, `UserName2`@`localhost`",
+		}, {
+			input:  `DROP USER IF EXISTS UserName1@localhost, 'UserName2'@"localhost"`,
+			output: "drop user if exists `UserName1`@`localhost`, `UserName2`@`localhost`",
 		},
+
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
 	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.
@@ -3997,13 +4062,13 @@ var (
 		output: "invalid system variable declaration `autocommit` at position 32 near 'true'",
 	}, {
 		input:  "set @@session.@@autocommit = true",
-		output: "invalid system variable declaration `@@autocommit` at position 34 near 'true'",
+		output: "syntax error at position 16 near '@@session.'",
 	}, {
 		input:  "set xyz.@@autocommit = true",
 		output: "invalid system variable declaration `@@autocommit` at position 28 near 'true'",
 	}, {
 		input:  "set @@session.@autocommit = true",
-		output: "invalid user variable declaration `@autocommit` at position 33 near 'true'",
+		output: "syntax error at position 16 near '@@session.'",
 	}, {
 		input:  "set xyz.@autocommit = true",
 		output: "invalid user variable declaration `@autocommit` at position 27 near 'true'",
@@ -4061,6 +4126,15 @@ var (
 	}, {
 		input:  "drop table x CASAS",
 		output: "syntax error at position 19 near 'CASAS'",
+	}, {
+		input:  "drop user UserName1 UserName2",
+		output: "syntax error at position 30 near 'UserName2'",
+	}, {
+		input:  "drop user `UserName1@`localhost",
+		output: "syntax error at position 32 near 'localhost'",
+	}, {
+		input:  "drop user insert@table",
+		output: "syntax error at position 17 near 'insert'",
 	},
 	}
 )

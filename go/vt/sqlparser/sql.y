@@ -159,6 +159,8 @@ func skipToEnd(yylex interface{}) {
   tableAndLockType *TableAndLockType
   tableAndLockTypes TableAndLockTypes
   lockType LockType
+  accountName AccountName
+  accountNames []AccountName
 }
 
 %token LEX_ERROR
@@ -173,7 +175,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
-%token <empty> '(' ',' ')'
+%token <empty> '(' ',' ')' '@'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 
@@ -221,6 +223,9 @@ func skipToEnd(yylex interface{}) {
 
 // DECLARE Tokens
 %token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION
+
+// Permissions Tokens
+%token <bytes> USER
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
@@ -419,6 +424,9 @@ func skipToEnd(yylex interface{}) {
 %type <tableAndLockTypes> lock_table_list
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
+%type <accountName> account_name
+%type <accountNames> account_name_list
+%type <str> account_name_str
 
 %start any_command
 
@@ -930,6 +938,48 @@ definer_opt:
 | DEFINER '=' ID
   {
     $$ = string($3)
+  }
+
+account_name_str:
+  STRING
+  {
+    $$ = string($1)
+  }
+| ID
+  {
+    $$ = string($1)
+  }
+| non_reserved_keyword
+  {
+    $$ = string($1)
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = string($1)
+  }
+
+account_name:
+  account_name_str '@' account_name_str
+  {
+    $$ = AccountName{Name: $1, Host: $3}
+  }
+| account_name_str '@'
+  {
+    $$ = AccountName{Name: $1, Host: ""}
+  }
+| account_name_str
+  {
+    $$ = AccountName{Name: $1, Host: "%"}
+  }
+
+account_name_list:
+  account_name
+  {
+    $$ = []AccountName{$1}
+  }
+| account_name_list ',' account_name
+  {
+    $$ = append($$, $3)
   }
 
 trigger_time:
@@ -2495,6 +2545,14 @@ drop_statement:
       exists = true
     }
     $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{Name: string($4)}, IfExists: exists}
+  }
+| DROP USER exists_opt account_name_list
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DropUser{IfExists: exists, AccountNames: $4}
   }
 
 drop_statement_action:
@@ -5227,6 +5285,7 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
+| USER
 | VARBINARY
 | VARCHAR
 | VARIABLES

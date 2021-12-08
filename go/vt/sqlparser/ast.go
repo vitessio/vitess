@@ -5439,7 +5439,7 @@ func formatID(buf *TrackedBuffer, original, lowered string) {
 	}
 
 	for i, c := range original {
-		if !isLetter(uint16(c)) && (!isDbSystemVariable || !isCarat(uint16(c))) {
+		if !(isLetter(uint16(c)) || c == '@') && (!isDbSystemVariable || !isCarat(uint16(c))) {
 			if i == 0 || !isDigit(uint16(c)) {
 				goto mustEscape
 			}

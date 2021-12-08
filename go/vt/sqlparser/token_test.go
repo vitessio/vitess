@@ -43,6 +43,10 @@ func TestLiteralID(t *testing.T) {
 		id:  ID,
 		out: "a`b",
 	}, {
+		in:  "``",
+		id:  ID,
+		out: "",
+	}, {
 		in:  "`a``b",
 		id:  LEX_ERROR,
 		out: "a`b",
@@ -50,10 +54,6 @@ func TestLiteralID(t *testing.T) {
 		in:  "`a``b``",
 		id:  LEX_ERROR,
 		out: "a`b`",
-	}, {
-		in:  "``",
-		id:  LEX_ERROR,
-		out: "",
 	}}
 
 	for _, tcase := range testcases {
