@@ -47,6 +47,29 @@ export const Debug = () => {
                 </section>
 
                 <section>
+                    <h3 className="mt-12 mb-8">Colours</h3>
+                    {[
+                        ['danger', 'danger-50', 'danger-200'],
+                        ['success', 'success-50', 'success-200'],
+                        ['warning', 'warning-50', 'warning-200'],
+                        ['vtblue', 'vtblue-50', 'vtblue-200'],
+                        ['vtblue-dark', 'vtblue-dark-50', 'vtblue-dark-200'],
+                        ['gray-75', 'gray-100', 'gray-200', 'gray-400', 'gray-600', 'gray-800', 'gray-900'],
+                    ].map((colors, idx) => {
+                        return (
+                            <div className="flex my-8" key={idx}>
+                                {colors.map((c) => (
+                                    <div className="mr-4" key={c}>
+                                        <div className={`w-40 h-16 rounded bg-${c}`} />
+                                        <div className={`text-sm font-semibold text-${c}`}>{c}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
+                </section>
+
+                <section>
                     <h3 className="mt-12 mb-8">Typography</h3>
 
                     <div className="my-16">
