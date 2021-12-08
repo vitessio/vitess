@@ -356,7 +356,6 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 
-	shouldCreateThrottlerUser := false
 	for {
 		select {
 		case <-leaderCheckTicker.C:
@@ -373,9 +372,10 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 						}
 					}
 
+					transitionedIntoLeader := false
 					if shouldBeLeader > throttler.isLeader {
 						log.Infof("Throttler: transition into leadership")
-						shouldCreateThrottlerUser = true
+						transitionedIntoLeader = true
 					}
 					if shouldBeLeader < throttler.isLeader {
 						log.Infof("Throttler: transition out of leadership")
@@ -383,9 +383,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 					atomic.StoreInt64(&throttler.isLeader, shouldBeLeader)
 
-					if shouldCreateThrottlerUser {
-						// throttler.initConfig()
-						shouldCreateThrottlerUser = false
+					if transitionedIntoLeader {
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 						go mysqlRefreshTicker.TickNow()
 					}
