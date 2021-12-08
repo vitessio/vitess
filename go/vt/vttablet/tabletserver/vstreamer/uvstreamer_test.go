@@ -302,7 +302,7 @@ func validateReceivedEvents(t *testing.T) {
 			ev.RowEvent.Shard = ""
 		}
 		got := ev.String()
-		want := expectedEvents[i]
+		want := env.RemoveAnyDeprecatedDisplayWidths(expectedEvents[i])
 		if !strings.HasPrefix(got, want) {
 			printAllEvents("Events not received in the right order")
 			t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)

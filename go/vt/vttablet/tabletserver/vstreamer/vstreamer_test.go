@@ -101,8 +101,8 @@ func TestSetAndEnum(t *testing.T) {
 		cols: []*TestColumn{
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, charset: 63},
 			{name: "val", dataType: "BINARY", colType: "binary(4)", len: 4, charset: 63},
-			{name: "color", dataType: "SET", colType: "set('red','green','blue')", len: 56, charset: 45},
-			{name: "size", dataType: "ENUM", colType: "enum('S','M','L')", len: 4, charset: 45},
+			{name: "color", dataType: "SET", colType: "set('red','green','blue')", len: 42, charset: 33},
+			{name: "size", dataType: "ENUM", colType: "enum('S','M','L')", len: 3, charset: 33},
 		},
 	}
 
@@ -156,11 +156,11 @@ func TestCellValuePadding(t *testing.T) {
 			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"1aaa\x00"}}}`,
 			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:4 values:"2bbb\x00"}}}`,
 			`type:ROW row_event:{table_name:"t1" row_changes:{before:{lengths:1 lengths:4 values:"1aaa\x00"} after:{lengths:2 lengths:4 values:"11aaa\x00"}}}`,
-			`type:FIELD field_event:{table_name:"t2" fields:{name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:CHAR table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:16 charset:45 column_type:"char(4)"}}`,
+			`type:FIELD field_event:{table_name:"t2" fields:{name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:CHAR table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:12 charset:33 column_type:"char(4)"}}`,
 			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
 			`type:ROW row_event:{table_name:"t2" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
 			`type:ROW row_event:{table_name:"t2" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
-			`type:FIELD field_event:{table_name:"t3" fields:{name:"id" type:INT32 table:"t3" org_table:"t3" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:BINARY table:"t3" org_table:"t3" database:"vttest" org_name:"val" column_length:16 charset:45 column_type:"char(4)"}}`,
+			`type:FIELD field_event:{table_name:"t3" fields:{name:"id" type:INT32 table:"t3" org_table:"t3" database:"vttest" org_name:"id" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"val" type:BINARY table:"t3" org_table:"t3" database:"vttest" org_name:"val" column_length:12 charset:33 column_type:"char(4)"}}`,
 			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
 			`type:ROW row_event:{table_name:"t3" row_changes:{after:{lengths:1 lengths:2 values:"2bb"}}}`,
 			`type:ROW row_event:{table_name:"t3" row_changes:{before:{lengths:1 lengths:3 values:"1aaa"} after:{lengths:2 lengths:3 values:"11aaa"}}}`,
@@ -1590,7 +1590,7 @@ func TestTypes(t *testing.T) {
 		},
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:64 charset:45 column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:64 charset:45 column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:1020 charset:45 column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:262140 charset:45 column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:4 charset:45 column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:12 charset:45 column_type:"set('a','b')"}}`,
+			`type:FIELD field_event:{table_name:"vitess_strings" fields:{name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:48 charset:33 column_type:"char(16)"} fields:{name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:48 charset:33 column_type:"varchar(16)"} fields:{name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 column_type:"binary(4)"} fields:{name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 column_type:"tinyblob"} fields:{name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 column_type:"blob"} fields:{name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:765 charset:33 column_type:"tinytext"} fields:{name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:196605 charset:33 column_type:"text"} fields:{name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:3 charset:33 column_type:"enum('a','b')"} fields:{name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:9 charset:33 column_type:"set('a','b')"}}`,
 			`type:ROW row_event:{table_name:"vitess_strings" row_changes:{after:{lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
 				`values:"abcd\x00\x00\x00efgh13"}}}`,
 			`gtid`,
@@ -2101,6 +2101,7 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 					evs[i].RowEvent.Keyspace = ""
 					evs[i].RowEvent.Shard = ""
 				}
+				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
