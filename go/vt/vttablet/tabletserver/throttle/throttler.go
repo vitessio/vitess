@@ -181,7 +181,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		throttler.initThrottleTabletTypes()
 		throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 		throttler.check = NewThrottlerCheck(throttler)
-		throttler.initConfig("")
+		throttler.initConfig()
 		throttler.check.SelfChecks(context.Background())
 	}
 	return throttler
@@ -213,7 +213,7 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 }
 
 // initThrottler initializes config
-func (throttler *Throttler) initConfig(password string) {
+func (throttler *Throttler) initConfig() {
 	log.Infof("Throttler: initializing config")
 	config.Instance = &config.ConfigurationSettings{
 		Stores: config.StoresSettings{
@@ -238,13 +238,12 @@ func (throttler *Throttler) initConfig(password string) {
 		ThrottleThreshold: throttler.MetricsThreshold.Get(),
 		IgnoreHostsCount:  0,
 	}
-	if password != "" {
-		config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
-			Password:          password,
-			MetricQuery:       throttler.metricsQuery,
-			ThrottleThreshold: throttler.MetricsThreshold.Get(),
-			IgnoreHostsCount:  0,
-		}
+	config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
+		User:              "", // running on local tablet server, will use vttablet DBA user
+		Password:          "", // running on local tablet server, will use vttablet DBA user
+		MetricQuery:       throttler.metricsQuery,
+		ThrottleThreshold: throttler.MetricsThreshold.Get(),
+		IgnoreHostsCount:  0,
 	}
 }
 
@@ -433,9 +432,9 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					atomic.StoreInt64(&throttler.isLeader, shouldBeLeader)
 
 					if shouldCreateThrottlerUser {
-						password, err := throttler.createThrottlerUser(ctx)
+						_, err := throttler.createThrottlerUser(ctx)
 						if err == nil {
-							throttler.initConfig(password)
+							throttler.initConfig()
 							shouldCreateThrottlerUser = false
 							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 							go mysqlRefreshTicker.TickNow()
