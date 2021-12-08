@@ -13,6 +13,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # simple create table with keyspace
 "create table user.t1(id bigint, primary key(id))"
@@ -29,6 +30,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # DDL
 "create table a(id int)"
@@ -45,11 +47,13 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # simple create table with table qualifier that does not exists
 "create table a.b(id int)"
 "Unknown database 'a' in vschema"
 Gen4 plan same as above
+Gen4++
 
 #Alter table
 "alter table a ADD id int"
@@ -66,6 +70,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 #Alter table with qualifier
 "alter table user.user ADD id int"
@@ -82,6 +87,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 #Alter table with qualifier and table not in vschema
 "alter table user.a ADD id int"
@@ -98,11 +104,13 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 #Alter table with unknown qualifier
 "alter table a.b ADD id int"
 "Unknown database 'a' in vschema"
 Gen4 plan same as above
+Gen4++
 
 # create db foo
 "create database foo"
@@ -118,11 +126,13 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create db main
 "create database main"
 "Can't create database 'main'; database exists"
 Gen4 plan same as above
+Gen4++
 
 # create db if not exists main
 "create database if not exists main"
@@ -134,21 +144,25 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # alter db foo
 "alter database foo collate utf8"
 "Can't alter database 'foo'; unknown database"
 Gen4 plan same as above
+Gen4++
 
 # alter db main
 "alter database main collate utf8"
 "alter database is not supported"
 Gen4 plan same as above
+Gen4++
 
 # drop db foo
 "drop database foo"
 "Can't drop database 'foo'; database doesn't exists"
 Gen4 plan same as above
+Gen4++
 
 # drop db main
 "drop database main"
@@ -164,6 +178,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # drop db if exists main
 "drop database if exists main"
@@ -179,6 +194,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # drop db if exists foo
 "drop schema if exists foo"
@@ -190,6 +206,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # DDL with qualifier
 "create index a on user.user(id)"
@@ -206,6 +223,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # DDL with qualifier for a table not in vschema of an unsharded keyspace
 "create index a on main.unknown(id)"
@@ -222,6 +240,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with subquery in unsharded keyspace
 "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
@@ -313,6 +332,7 @@ Gen4 plan same as above
   }
 }
 Gen4 error: nesting of unions at the right-hand side is not yet supported
+Gen4++
 
 # Alter View
 "alter view user.user_extra as select* from user.user"
@@ -329,6 +349,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # drop table without qualifier
 "drop table unsharded_a"
@@ -345,6 +366,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Drop view
 "drop view main.a"
@@ -361,6 +383,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Truncate table with qualifier
 "truncate user.user_extra"
@@ -377,6 +400,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Rename table
 "rename table a to main.b"
@@ -393,6 +417,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # CREATE temp TABLE
 "create temporary table a(id int)"
@@ -410,6 +435,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # DROP temp TABLE
 "drop temporary table a"
@@ -427,6 +453,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create table with function as a default value
 "create table function_default (x varchar(25) DEFAULT (TRIM(' check ')))"
@@ -443,3 +470,4 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++

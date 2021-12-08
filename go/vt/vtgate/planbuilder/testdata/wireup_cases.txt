@@ -1076,6 +1076,7 @@
     ]
   }
 }
+Gen4++
 
 # Wire-up in subquery
 "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)"
@@ -1366,6 +1367,7 @@
     "Table": "`user`"
   }
 }
+Gen4++
 
 # Invalid value in IN clause from LHS of join
 "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
@@ -1404,6 +1406,7 @@
     ]
   }
 }
+Gen4++
 
 # Invalid value in IN clause from RHS of join
 "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
@@ -1442,3 +1445,4 @@
     ]
   }
 }
+Gen4++

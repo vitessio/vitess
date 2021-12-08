@@ -157,6 +157,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter group by a integer column. Do not add weight strings for this.
 "select count(*), intcol from user group by intcol"
@@ -208,6 +209,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter group by a text column, reuse existing weight_string
 "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
@@ -277,6 +279,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # count aggregate
 "select count(*) from user"
@@ -324,6 +327,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # sum aggregate
 "select sum(col) from user"
@@ -371,6 +375,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # min aggregate
 "select min(col) from user"
@@ -418,6 +423,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # max aggregate
 "select max(col) from user"
@@ -465,6 +471,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # distinct and group by together for scatter route
 "select distinct col1, col2 from user group by col1"
@@ -574,6 +581,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # group by a unique vindex and other column should use a simple route
 "select id, col, count(*) from user group by id, col"
@@ -593,6 +601,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # group by a non-vindex column should use an OrderdAggregate primitive
 "select col, count(*) from user group by col"
@@ -644,6 +653,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # group by must only reference expressions in the select list
 "select col, count(*) from user group by col, baz"
@@ -673,6 +683,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # group by a non-unique vindex column should use an OrderedAggregate primitive
 "select name, count(*) from user group by name"
@@ -726,6 +737,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # group by a unique vindex should use a simple route, even if aggr is complex
 "select id, 1+count(*) from user group by id"
@@ -745,6 +757,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # group by a unique vindex where alias from select list is used
 "select id as val, 1+count(*) from user group by val"
@@ -764,6 +777,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # group by a unique vindex where expression is qualified (alias should be ignored)
 "select val as id, 1+count(*) from user group by user.id"
@@ -783,6 +797,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"
@@ -864,6 +879,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # scatter aggregate in a subquery
 "select a from (select count(*) as a from user) t"
@@ -1009,6 +1025,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # count with distinct group by unique vindex
 "select id, count(distinct col) from user group by id"
@@ -1028,6 +1045,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # count with distinct unique vindex
 "select col, count(distinct id) from user group by col"
@@ -1079,6 +1097,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # count with distinct no unique vindex
 "select col1, count(distinct col2) from user group by col1"
@@ -1132,6 +1151,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # count with distinct no unique vindex and no group by
 "select count(distinct col2) from user"
@@ -1183,6 +1203,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # count with distinct no unique vindex, count expression aliased
 "select col1, count(distinct col2) c2 from user group by col1"
@@ -1236,6 +1257,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # sum with distinct no unique vindex
 "select col1, sum(distinct col2) from user group by col1"
@@ -1289,6 +1311,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # min with distinct no unique vindex. distinct is ignored.
 "select col1, min(distinct col2) from user group by col1"
@@ -1342,6 +1365,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # order by count distinct
 "select col1, count(distinct col2) k from user group by col1 order by k"
@@ -1409,6 +1433,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # scatter aggregate group by aggregate function
 "select count(*) b from user group by b"
@@ -1468,6 +1493,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter aggregate multiple group by (numbers)
 "select a, b, count(*) from user group by 2, 1"
@@ -1521,6 +1547,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter aggregate multiple group by columns inverse order
 "select a, b, count(*) from user group by b, a"
@@ -1574,6 +1601,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter aggregate group by column number
 "select col from user group by 1"
@@ -1623,11 +1651,13 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter aggregate group by invalid column number
 "select col from user group by 2"
 "Unknown column '2' in 'group statement'"
 Gen4 plan same as above
+Gen4++
 
 # scatter aggregate order by null
 "select count(*) from user order by null"
@@ -1675,6 +1705,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
@@ -1788,6 +1819,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter aggregate with jumbled group by and order by columns
 "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d, b, a, c"
@@ -1841,6 +1873,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter aggregate with some descending order by cols
 "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b"
@@ -1894,11 +1927,13 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # invalid order by column numner for scatter
 "select col, count(*) from user group by col order by 5 limit 10"
 "Unknown column '5' in 'order clause'"
 Gen4 plan same as above
+Gen4++
 
 # aggregate with limit
 "select col, count(*) from user group by col limit 10"
@@ -1962,6 +1997,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Group by with collate operator
 "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
@@ -2126,6 +2162,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
@@ -2137,11 +2174,13 @@ Gen4++
 "select id from user group by 2"
 "Unknown column '2' in 'group statement'"
 Gen4 plan same as above
+Gen4++
 
 # syntax error detected by planbuilder
 "select count(distinct *) from user"
 "syntax error: count(distinct *)"
 Gen4 plan same as above
+Gen4++
 
 # if derived table scatter and ordering, then V3 doesn't allow outer constructs to be pushed down.
 "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
@@ -2274,6 +2313,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Grouping on join
 "select user.a from user join user_extra group by user.a"
@@ -2321,6 +2361,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Cannot have more than one aggr(distinct...
 "select count(distinct a), count(distinct b) from user"
@@ -2349,6 +2390,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # multiple distinct functions with grouping.
 "select col1, count(distinct col2), sum(distinct col2) from user group by col1"
@@ -2378,6 +2420,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # aggregate query with order by aggregate column along with NULL
 "select col, count(*) k from user group by col order by null, k"
@@ -2413,6 +2456,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # aggregate query with order by NULL
 "select col, count(*) k from user group by col order by null"
@@ -2464,6 +2508,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # join query on sharding key with group by a unique vindex with having clause.
 "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) > 10"
@@ -2549,6 +2594,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # weight_string addition to group by
 "select lower(textcol1) as v, count(*) from user group by v"
@@ -2602,6 +2648,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # weight_string addition to group by when also there in order by
 "select char_length(texcol1) as a, count(*) from user group by a order by a"
@@ -2655,6 +2702,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # order by inside and outside parenthesis select
 "(select id from user order by 1 desc) order by 1 asc limit 2"
@@ -2704,6 +2752,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # correlated subquery in exists clause with an ordering
 "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id"
@@ -2781,6 +2830,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Equality filtering with column and string literal on scatter aggregates
 "select count(*) a from user having a = '1'"
@@ -2813,6 +2863,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Column and Literal not equal filter on scatter aggregates
 "select count(*) a from user having a != 10"
@@ -2845,6 +2896,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Not equal filter with column and string literal on scatter aggregates
 "select count(*) a from user having a != '1'"
@@ -2877,6 +2929,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Greater than filter on scatter aggregates
 "select count(*) a from user having a > 10"
@@ -2909,6 +2962,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Greater Equal filter on scatter aggregates
 "select count(*) a from user having a >= 10"
@@ -2941,6 +2995,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Less than filter on scatter aggregates
 "select count(*) a from user having a < 10"
@@ -2973,6 +3028,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Less Equal filter on scatter aggregates
 "select count(*) a from user having a <= 10"
@@ -3005,3 +3061,4 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++

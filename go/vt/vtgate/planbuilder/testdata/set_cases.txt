@@ -381,6 +381,7 @@ Gen4++
 "set @@ndbinfo_max_bytes = 192"
 "ndbinfo_max_bytes: system setting is not supported"
 Gen4 plan same as above
+Gen4++
 
 # set autocommit
 "set autocommit = 1"
@@ -545,3 +546,4 @@ Gen4++
 "set socket = ''"
 "variable 'socket' is a read only variable"
 Gen4 plan same as above
+Gen4++

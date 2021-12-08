@@ -16,6 +16,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # unqualified table name
 "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'user' and c.table_schema = 'user' order by t.table_schema,t.table_name,c.column_name"

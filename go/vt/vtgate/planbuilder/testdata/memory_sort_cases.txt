@@ -265,6 +265,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # order by on a cross-shard derived table
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
@@ -479,6 +480,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Order by for join, with mixed cross-shard ordering
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
@@ -589,6 +591,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Order by for join, on text column in LHS.
 "select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2"
@@ -676,6 +679,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Order by for join, on text column in RHS.
 "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2"
@@ -763,6 +767,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # order by for vindex func
 "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start"
@@ -833,6 +838,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4++
 
 # unary expression in join query
 "select u.a from user u join music m on u.a = m.a order by binary a desc"
@@ -914,6 +920,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # intcol order by
 "select id, intcol from user order by intcol"
@@ -934,6 +941,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # scatter order by with order by column not present
 "select col from user order by id"
@@ -955,3 +963,4 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4++

@@ -15,6 +15,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Optimize statement
 "optimize table t1"
@@ -33,6 +34,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # DO statement
 "DO 1"
@@ -51,3 +53,4 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++

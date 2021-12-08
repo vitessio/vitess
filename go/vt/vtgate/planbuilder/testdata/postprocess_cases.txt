@@ -109,6 +109,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # HAVING multi-route
 "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1"
@@ -349,6 +350,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ORDER BY on select t.*
 "select t.*, t.col from user t order by t.col"
@@ -394,6 +396,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by col1"
@@ -431,6 +434,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
+Gen4++
 
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"
@@ -468,6 +472,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4++
 
 # ORDER BY on scatter with text column, qualified name TODO: can plan better
 "select a, user.textcol1, b from user order by a, textcol1, b"
@@ -505,6 +510,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4++
 
 # ORDER BY on scatter with multiple text columns
 "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2"
@@ -542,11 +548,13 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4++
 
 # ORDER BY invalid col number on scatter
 "select col from user order by 2"
 "Unknown column '2' in 'order clause'"
 Gen4 plan same as above
+Gen4++
 
 # ORDER BY column offset
 "select id as foo from music order by 1"
@@ -584,6 +592,7 @@ Gen4 plan same as above
     "Table": "music"
   }
 }
+Gen4++
 
 # ORDER BY NULL
 "select col from user order by null"
@@ -603,6 +612,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ORDER BY after pull-out subquery
 "select col from user where col in (select col2 from user) order by col"
@@ -738,6 +748,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # ORDER BY non-key column for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a"
@@ -833,6 +844,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # ORDER BY non-key column for implicit join
 "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a"
@@ -928,6 +940,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # ORDER BY NULL after pull-out subquery
 "select col from user where col in (select col2 from user) order by null"
@@ -987,6 +1000,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
@@ -1081,6 +1095,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # ORDER BY RAND() after pull-out subquery
 "select col from user where col in (select col2 from user) order by rand()"
@@ -1295,16 +1310,19 @@ Gen4++
 "select user.* from user where id = 5 order by e.col"
 "symbol e.col not found"
 Gen4 plan same as above
+Gen4++
 
 # Order by, invalid column number
 "select col from user order by 18446744073709551616"
 "error parsing column number: 18446744073709551616"
 Gen4 plan same as above
+Gen4++
 
 # Order by, out of range column number
 "select col from user order by 2"
 "Unknown column '2' in 'order clause'"
 Gen4 plan same as above
+Gen4++
 
 # Order by, '*' expression with qualified reference and using collate
 "select * from user where id = 5 order by user.col collate utf8_general_ci"
@@ -1535,6 +1553,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # limit for scatter
 "select col from user limit 1"
@@ -1704,6 +1723,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # order by column alias
 "select id as foo from music order by foo"
@@ -1725,6 +1745,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # column alias for a table column in order by
 "select id as foo, id2 as id from music order by id"
@@ -1746,6 +1767,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ordering on the left side of the join
 "select name from user, music order by name"
@@ -1820,6 +1842,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # aggregation and non-aggregations column without group by
 "select count(id), num from user"
@@ -1936,6 +1959,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # aggregation and non-aggregations column with group by and order by
 "select count(id), num from user group by 2 order by 1"
@@ -2003,6 +2027,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # join order by with ambiguous column reference ; valid in MySQL
 "select name, name from user, music order by name"
@@ -2042,6 +2067,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # order by with ambiguous column reference ; valid in MySQL
 "select id, id from user order by id"
@@ -2063,6 +2089,7 @@ Gen4++
     "Table": "`user`"
   }
 }
+Gen4++
 
 # Scatter order by and aggregation: order by column must reference column from select list
 "select col, count(*) from user group by col order by c1"
@@ -2154,6 +2181,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Distinct with column alias
 "select distinct a as c, a from user"

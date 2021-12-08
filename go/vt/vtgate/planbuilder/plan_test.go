@@ -653,10 +653,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
 			})
 
-			if !tcase.check2ndPlanner {
-				continue
-			}
-
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
 			if err != nil && tcase.output2ndPlanner == "" && strings.HasPrefix(err.Error(), "gen4 does not yet support") {
@@ -673,8 +669,29 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			//       produces the same plan as the V3 planner does
 			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			t.Run(testName, func(t *testing.T) {
-				if out != tcase.output2ndPlanner {
-					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output2ndPlanner, out)
+
+				correctOutput := out == tcase.output2ndPlanner
+
+				switch {
+				case !correctOutput && tcase.check2ndPlanner:
+					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+				case correctOutput && !tcase.check2ndPlanner:
+					t.Errorf("Gen4 - %s:%d\nGen4++ handles it", filename, tcase.lineno)
+				}
+				if !tcase.check2ndPlanner {
+					out := tcase.output2ndPlanner
+					switch {
+					case outFirstPlanner == out || outFirstPlanner == `"`+out+`"`:
+						expected.WriteString(samePlanMarker)
+					case strings.HasPrefix(out, "{"):
+						expected.WriteString(fmt.Sprintf("%s\n", out))
+					default:
+						expected.WriteString(fmt.Sprintf("Gen4 error: %s\n", out))
+					}
+					if correctOutput {
+						expected.WriteString("Gen4++\n")
+					}
+					return
 				}
 				if err != nil {
 					out = `"` + out + `"`

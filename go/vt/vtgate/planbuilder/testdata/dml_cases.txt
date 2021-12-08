@@ -2,11 +2,13 @@
 "update nouser set val = 1"
 "table nouser not found"
 Gen4 plan same as above
+Gen4++
 
 # delete table not found
 "delete from nouser"
 "table nouser not found"
 Gen4 plan same as above
+Gen4++
 
 # explicit keyspace reference
 "update main.m1 set val = 1"
@@ -327,6 +329,7 @@ Gen4++
 "update user_metadata set email = 'a', email = 'b' where user_id = 1"
 "column has duplicate set values: 'email'"
 Gen4 plan same as above
+Gen4++
 
 # update by primary keyspace id, changing multiple vindex columns
 "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1"
@@ -862,6 +865,7 @@ Gen4++
 "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 Gen4 plan same as above
+Gen4++
 
 # insert unsharded, column present
 "insert into unsharded_auto(id, val) values(1, 'aa')"
@@ -1014,6 +1018,7 @@ Gen4++
 "insert into user(id) values (1, 2)"
 "column list doesn't match values"
 Gen4 plan same as above
+Gen4++
 
 # insert no column list for sharded authoritative table
 "insert into authoritative values(1, 2, 3)"
@@ -1292,21 +1297,25 @@ Gen4++
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 Gen4 plan same as above
+Gen4++
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 Gen4 plan same as above
+Gen4++
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
 "could not compute value for vindex or auto-inc column: column access not supported here"
 Gen4 plan same as above
+Gen4++
 
 # insert invalid table
 "insert into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
 Gen4 plan same as above
+Gen4++
 
 # insert with multiple rows
 "insert into user(id) values (1), (2)"
@@ -1376,6 +1385,7 @@ Gen4++
 "insert into user_index(id) values(1)"
 "unsupported: multi-shard or vindex write statement"
 Gen4 plan same as above
+Gen4++
 
 # simple replace unsharded
 "replace into unsharded values(1, 2)"
@@ -1423,6 +1433,7 @@ Gen4++
 "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 Gen4 plan same as above
+Gen4++
 
 # replace unsharded, column present
 "replace into unsharded_auto(id, val) values(1, 'aa')"
@@ -1491,6 +1502,7 @@ Gen4++
 "replace into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
 Gen4 plan same as above
+Gen4++
 
 # insert a row in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)"
@@ -2486,16 +2498,19 @@ Gen4++
 "delete music from user where id = 1"
 "Unknown table 'music' in MULTI DELETE"
 Gen4 plan same as above
+Gen4++
 
 # delete with derived tables
 "delete music from (select * from user) music where id = 1"
 "The target table music of the DELETE is not updatable"
 Gen4 plan same as above
+Gen4++
 
 # delete with derived tables with unknown table
 "delete user from (select * from user) music where id = 1"
 "Unknown table 'user' in MULTI DELETE"
 Gen4 plan same as above
+Gen4++
 
 "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)"
 {
