@@ -84,7 +84,13 @@ jobs:
 
 
     # Asserting previous operations
-    - name: Assert
+    - name: Use other version VTGate
       run: |
+        echo $PWD
         ls -lR /tmp/vitess-build-current/
         ls -lR /tmp/vitess-build-other/
+        ls -lR $PWD/bin
+        source build.env
+        cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
+        vtgate --version
+        vttablet --version
