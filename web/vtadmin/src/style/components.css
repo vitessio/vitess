@@ -61,7 +61,7 @@
         @apply fill-current;
         @apply h-8;
         @apply inline-block;
-        @apply -ml-1 mr-1;
+        @apply -ml-2 mr-1;
     }
 
     .btn-lg svg {
@@ -71,7 +71,7 @@
 
     .btn-sm svg {
         @apply h-6;
-        @apply -ml-1 mr-0.5;
+        @apply -ml-3 mr-0;
     }
 
     /* Visual priority variants */
