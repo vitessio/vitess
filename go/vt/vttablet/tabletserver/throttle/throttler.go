@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -281,39 +280,6 @@ func (throttler *Throttler) Close() {
 
 	throttler.pool.Close()
 	atomic.StoreInt64(&throttler.isOpen, 0)
-}
-
-// createThrottlerUser creates or updates the throttler account and assigns it a random password
-func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password string, err error) {
-	if atomic.LoadInt64(&throttler.isOpen) == 0 {
-		return "", fmt.Errorf("createThrottlerUser: not open")
-	}
-
-	conn, err := dbconnpool.NewDBConnection(ctx, throttler.env.Config().DB.DbaWithDB())
-	if err != nil {
-		return password, err
-	}
-	defer conn.Close()
-
-	// Double check this server is writable
-	tm, err := conn.ExecuteFetch("select @@global.read_only as read_only from dual", 1, true)
-	if err != nil {
-		return password, err
-	}
-	row := tm.Named().Row()
-	if row == nil {
-		return password, fmt.Errorf("unexpected result for MySQL variables: %+v", tm.Rows)
-	}
-	readOnly, err := row.ToBool("read_only")
-	if err != nil {
-		return password, err
-	}
-	if readOnly {
-		return password, fmt.Errorf("createThrottlerUser(): server is read_only")
-	}
-
-	log.Infof("Throttler: user created/updated")
-	return password, nil
 }
 
 // readSelfMySQLThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
