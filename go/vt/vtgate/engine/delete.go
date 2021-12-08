@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -122,11 +124,15 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 }
 
 func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	key, err := del.Values[0].ResolveValue(bindVars)
+	env := &evalengine.ExpressionEnv{
+		BindVars: bindVars,
+	}
+
+	key, err := del.Values[0].Evaluate(env)
 	if err != nil {
 		return nil, err
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key.Value())
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +267,10 @@ func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
 		other["KsidVindex"] = dml.KsidVindex.String()
 	}
 	if len(dml.Values) > 0 {
-		other["Values"] = dml.Values
+		s := []string{}
+		for _, value := range dml.Values {
+			s = append(s, evalengine.FormatExpr(value))
+		}
+		other["Values"] = s
 	}
 }

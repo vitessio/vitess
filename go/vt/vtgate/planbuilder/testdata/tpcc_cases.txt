@@ -89,7 +89,7 @@
     "Query": "update district1 set d_next_o_id = 56 where d_id = 9842 and d_w_id = 8546",
     "Table": "district1",
     "Values": [
-      8546
+      "INT64(8546)"
     ],
     "Vindex": "hash"
   }
@@ -227,7 +227,7 @@ Gen4 plan same as above
     "Query": "update stock1 set s_quantity = 894 where s_i_id = 156 and s_w_id = 6",
     "Table": "stock1",
     "Values": [
-      6
+      "INT64(6)"
     ],
     "Vindex": "hash"
   }
@@ -271,7 +271,7 @@ Gen4 plan same as above
     "Query": "update warehouse1 set w_ytd = w_ytd + 946879 where w_id = 3",
     "Table": "warehouse1",
     "Values": [
-      3
+      "INT64(3)"
     ],
     "Vindex": "hash"
   }
@@ -332,7 +332,7 @@ Gen4 plan same as above
     "Query": "update district1 set d_ytd = d_ytd + 2 where d_w_id = 89 and d_id = 9",
     "Table": "district1",
     "Values": [
-      89
+      "INT64(89)"
     ],
     "Vindex": "hash"
   }
@@ -541,7 +541,7 @@ Gen4 plan same as above
     "Query": "update customer1 set c_balance = 508.98, c_ytd_payment = 48941.980301, c_data = 'i am data' where c_w_id = 20 and c_d_id = 387 and c_id = 98",
     "Table": "customer1",
     "Values": [
-      20
+      "INT64(20)"
     ],
     "Vindex": "hash"
   }
@@ -565,7 +565,7 @@ Gen4 plan same as above
     "Query": "update customer1 set c_balance = 508.98, c_ytd_payment = 48941.980301 where c_w_id = 20 and c_d_id = 387 and c_id = 98",
     "Table": "customer1",
     "Values": [
-      20
+      "INT64(20)"
     ],
     "Vindex": "hash"
   }
@@ -831,7 +831,7 @@ Gen4 plan same as above
     "Query": "delete from new_orders1 where no_o_id = 2218 and no_d_id = 358 and no_w_id = 98465",
     "Table": "new_orders1",
     "Values": [
-      98465
+      "INT64(98465)"
     ],
     "Vindex": "hash"
   }
@@ -892,7 +892,7 @@ Gen4 plan same as above
     "Query": "update orders1 set o_carrier_id = 9 where o_id = 56 and o_d_id = 98 and o_w_id = 897",
     "Table": "orders1",
     "Values": [
-      897
+      "INT64(897)"
     ],
     "Vindex": "hash"
   }
@@ -916,7 +916,7 @@ Gen4 plan same as above
     "Query": "update order_line1 set ol_delivery_d = NOW() where ol_o_id = 235 and ol_d_id = 315 and ol_w_id = 8",
     "Table": "order_line1",
     "Values": [
-      8
+      "INT64(8)"
     ],
     "Vindex": "hash"
   }
@@ -977,7 +977,7 @@ Gen4 plan same as above
     "Query": "update customer1 set c_balance = c_balance + 988.01, c_delivery_cnt = c_delivery_cnt + 1 where c_id = 6 and c_d_id = 5 and c_w_id = 160",
     "Table": "customer1",
     "Values": [
-      160
+      "INT64(160)"
     ],
     "Vindex": "hash"
   }
@@ -1216,7 +1216,7 @@ Gen4 plan same as above
     "Query": "delete from order_line1 where ol_w_id = 178 and ol_d_id = 1 and ol_o_id = 84",
     "Table": "order_line1",
     "Values": [
-      178
+      "INT64(178)"
     ],
     "Vindex": "hash"
   }
@@ -1240,7 +1240,7 @@ Gen4 plan same as above
     "Query": "delete from orders1 where o_w_id = 1 and o_d_id = 3 and o_id = 384",
     "Table": "orders1",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "hash"
   }
@@ -1264,7 +1264,7 @@ Gen4 plan same as above
     "Query": "delete from history1 where h_w_id = 75 and h_d_id = 102 limit 10",
     "Table": "history1",
     "Values": [
-      75
+      "INT64(75)"
     ],
     "Vindex": "hash"
   }

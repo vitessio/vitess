@@ -20,6 +20,9 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -69,7 +72,7 @@ func TestDeleteEqual(t *testing.T) {
 			},
 			Query:  "dummy_delete",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
 
@@ -82,9 +85,10 @@ func TestDeleteEqual(t *testing.T) {
 	})
 
 	// Failure case
-	del.Values = []RouteValue{sqltypes.PlanValue{Key: "aa"}}
+	expr := evalengine.NewBindVar("aa", collations.TypedCollation{})
+	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, "missing bind var aa")
+	require.EqualError(t, err, "Bind variable not found")
 }
 
 func TestDeleteEqualNoRoute(t *testing.T) {
@@ -102,7 +106,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 			},
 			Query:  "dummy_delete",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
 
@@ -131,7 +135,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 			},
 			Query:  "dummy_delete",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
 
@@ -148,7 +152,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 			Keyspace:         ks.Keyspace,
 			Query:            "dummy_delete",
 			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values:           []RouteValue{sqltypes.PlanValue{Value: sqltypes.NewInt64(1)}},
+			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
