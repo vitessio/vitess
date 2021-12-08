@@ -8,8 +8,10 @@ package throttle
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -38,10 +40,10 @@ import (
 
 const (
 	leaderCheckInterval         = 5 * time.Second
-	mysqlCollectInterval        = 100 * time.Millisecond
+	mysqlCollectInterval        = 250 * time.Millisecond
 	mysqlDormantCollectInterval = 5 * time.Second
 	mysqlRefreshInterval        = 10 * time.Second
-	mysqlAggregateInterval      = 100 * time.Millisecond
+	mysqlAggregateInterval      = 125 * time.Millisecond
 
 	aggregatedMetricsExpiration   = 5 * time.Second
 	aggregatedMetricsCleanup      = 10 * time.Second
@@ -83,7 +85,7 @@ var (
 )
 
 // ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
-type ThrottleCheckType int
+type ThrottleCheckType int // nolint:revive
 
 const (
 	// ThrottleCheckPrimaryWrite indicates a check before making a write on a primary server
@@ -186,7 +188,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		throttler.tickers = [](*timer.SuspendableTicker){}
 		throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval)
 
-		throttler.httpClient = base.SetupHTTPClient(0)
+		throttler.httpClient = base.SetupHTTPClient(2 * mysqlCollectInterval)
 		throttler.initThrottleTabletTypes()
 		throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 		throttler.check = NewThrottlerCheck(throttler)
@@ -518,6 +520,43 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	}
 }
 
+func (throttler *Throttler) generateTabletHTTPProbeFunction(ctx context.Context, clusterName string, probe *mysql.Probe) (probeFunc func() *mysql.MySQLThrottleMetric) {
+	if probe.TabletHost == "" {
+		// nil function means no override; throttler will use default probe behavior, which is to open a direct
+		// connection to mysql and run a query
+		return nil
+	}
+	return func() *mysql.MySQLThrottleMetric {
+		// Hit a tablet's `check-self` via HTTP, and convert its CheckResult JSON output into a MySQLThrottleMetric
+		mySQLThrottleMetric := mysql.NewMySQLThrottleMetric()
+		mySQLThrottleMetric.ClusterName = clusterName
+		mySQLThrottleMetric.Key = probe.Key
+
+		tabletCheckSelfURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=vitess", probe.TabletHost, probe.TabletPort)
+		resp, err := throttler.httpClient.Get(tabletCheckSelfURL)
+		if err != nil {
+			mySQLThrottleMetric.Err = err
+			return mySQLThrottleMetric
+		}
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			mySQLThrottleMetric.Err = err
+			return mySQLThrottleMetric
+		}
+		checkResult := &CheckResult{}
+		if err := json.Unmarshal(b, checkResult); err != nil {
+			mySQLThrottleMetric.Err = err
+			return mySQLThrottleMetric
+		}
+		mySQLThrottleMetric.Value = checkResult.Value
+
+		if checkResult.StatusCode == http.StatusInternalServerError {
+			mySQLThrottleMetric.Err = fmt.Errorf("Status code: %d", checkResult.StatusCode)
+		}
+		return mySQLThrottleMetric
+	}
+}
+
 func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 	// synchronously, get lists of probes
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
@@ -540,7 +579,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					// (where we incidentally know there's a single probe)
 					overrideGetMySQLThrottleMetricFunc := throttler.readSelfMySQLThrottleMetric
 					if clusterName != selfStoreName {
-						overrideGetMySQLThrottleMetricFunc = nil
+						overrideGetMySQLThrottleMetricFunc = throttler.generateTabletHTTPProbeFunction(ctx, clusterName, probe)
 					}
 					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, overrideGetMySQLThrottleMetricFunc)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
@@ -554,7 +593,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 // refreshMySQLInventory will re-structure the inventory based on reading config settings
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
-	addInstanceKey := func(key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+	addInstanceKey := func(tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
 			if strings.Contains(key.StringCode(), ignore) {
 				log.Infof("Throttler: instance key ignored: %+v", key)
@@ -570,6 +609,8 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			Key:         *key,
 			User:        clusterSettings.User,
 			Password:    clusterSettings.Password,
+			TabletHost:  tabletHost,
+			TabletPort:  tabletPort,
 			MetricQuery: clusterSettings.MetricQuery,
 			CacheMillis: clusterSettings.CacheMillis,
 		}
@@ -592,7 +633,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			if clusterName == selfStoreName {
 				// special case: just looking at this tablet's MySQL server
 				// We will probe this "cluster" (of one server) is a special way.
-				addInstanceKey(mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+				addInstanceKey("", 0, mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return
 			}
@@ -613,7 +654,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 					}
 					if throttler.throttleTabletTypesMap[tablet.Type] {
 						key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
-						addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+						addInstanceKey(tablet.Hostname, int(tablet.PortMap["vt"]), &key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 					}
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
