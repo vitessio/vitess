@@ -24,7 +24,10 @@
         @apply inline-block;
         @apply px-6 py-2;
         @apply rounded-lg;
+        @apply text-center;
         @apply text-white;
+
+        -webkit-appearance: button;
     }
 
     /* Size variants */
@@ -34,6 +37,7 @@
     }
 
     .btn-sm {
+        @apply border;
         @apply px-4 py-1;
         @apply text-sm;
     }
@@ -54,12 +58,40 @@
 
     .btn-sm svg {
         @apply h-6;
-        @apply -ml-1;
+        @apply -ml-1 mr-0.5;
     }
 
     /* Visual priority variants */
     .btn-secondary {
-        @apply bg-transparent;
+        @apply bg-transparent !important;
         @apply text-vtblue;
+    }
+
+    /* Intents (colours) */
+    .btn-danger {
+        @apply bg-danger;
+        @apply border-danger;
+    }
+
+    .btn-danger.btn-secondary {
+        @apply text-danger;
+    }
+
+    .btn-success {
+        @apply bg-success;
+        @apply border-success;
+    }
+
+    .btn-success.btn-secondary {
+        @apply text-success;
+    }
+
+    .btn-warning {
+        @apply bg-warning;
+        @apply border-warning;
+    }
+
+    .btn-warning.btn-secondary {
+        @apply text-warning;
     }
 }

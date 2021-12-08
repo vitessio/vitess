@@ -276,28 +276,36 @@ export const Debug = () => {
                 <section>
                     <h3 className="mt-12 mb-8">Buttons</h3>
 
-                    {['btn-lg', '', 'btn-sm'].map((s, idx) => (
-                        <div className="flex gap-4 my-6" key={idx}>
-                            <button className={`btn ${s}`}>Button</button>
-                            <a className={`btn ${s}`} href="#">
-                                Link
-                            </a>
+                    {['btn-lg', '', 'btn-sm'].map((s, idx) => {
+                        return (
+                            <div className="my-16">
+                                {['', 'btn-danger', 'btn-warning', 'btn-success'].map((v) => {
+                                    return (
+                                        <div className="flex gap-4 my-6" key={`${idx}-${v}`}>
+                                            <button className={`btn ${s} ${v}`}>Button</button>
+                                            <a className={`btn ${s} ${v}`} href="#">
+                                                Link
+                                            </a>
 
-                            <button className={`btn ${s} btn-secondary`}>Button</button>
-                            <a className={`btn ${s} btn-secondary`} href="#">
-                                Link
-                            </a>
+                                            <button className={`btn ${s} ${v} btn-secondary`}>Button</button>
+                                            <a className={`btn ${s} ${v} btn-secondary`} href="#">
+                                                Link
+                                            </a>
 
-                            <button className={`btn ${s} btn-secondary`}>
-                                <Icon icon={Icons.circleAdd} />
-                                Button
-                            </button>
-                            <a className={`btn ${s} btn-secondary`} href="#">
-                                <Icon icon={Icons.circleAdd} />
-                                Link
-                            </a>
-                        </div>
-                    ))}
+                                            <button className={`btn ${s} ${v} btn-secondary`}>
+                                                <Icon icon={Icons.circleAdd} />
+                                                Button
+                                            </button>
+                                            <a className={`btn ${s} ${v} btn-secondary`} href="#">
+                                                <Icon icon={Icons.circleAdd} />
+                                                Link
+                                            </a>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
 
                     <div className={style.buttonContainer}>
                         {/* Large */}
