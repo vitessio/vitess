@@ -1,7 +1,7 @@
 name: Upgrade Downgrade Testing
 on: [push, pull_request]
 concurrency:
-  group: "Upgrade Downgrade Testing"
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing')
   cancel-in-progress: true
 
 # This test ensures that our end-to-end tests work using Vitess components
@@ -82,8 +82,6 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
-
-    # Asserting previous operations
     - name: Use other version VTGate
       run: |
         echo $PWD
@@ -94,3 +92,21 @@ jobs:
         cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
         vtgate --version
         vttablet --version
+
+    - name: E2E test
+      run: |
+        source build.env
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 17
+
+    - name: Use current version VTGate, and other version VTTablet
+      run: |
+        source build.env
+        cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
+        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        vtgate --version
+        vttablet --version
+
+    - name: E2E test
+      run: |
+        source build.env
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 17
