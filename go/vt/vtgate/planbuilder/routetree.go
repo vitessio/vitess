@@ -543,25 +543,24 @@ func (rp *routeTree) haveMatchingVindex(
 				break
 			}
 
-			optionPresent := false
-			for _, option := range v.options {
-				if option.ready {
+			var option *vindexOption
+			for _, op := range v.options {
+				if op.ready {
 					continue
 				}
-				_, isPresent := option.colsSeen[colLoweredName]
+				_, isPresent := op.colsSeen[colLoweredName]
 				if isPresent {
 					continue
 				}
-				optionPresent = true
-				option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
+				option = op
 			}
 
-			if optionPresent {
-				break
+			if option == nil {
+				// multi column vindex - just add the option since we do not have one already
+				option = createOption(v.colVindex, vfunc)
+			} else {
+				option = copyOption(option)
 			}
-
-			// multi column vindex - just add the option since we do not have one already
-			option := createOption(v.colVindex, vfunc)
 			option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
 			newVindexFound = true
 			v.options = append(v.options, option)
@@ -584,6 +583,30 @@ func createOption(
 		colsSeen:    map[string]interface{}{},
 		foundVindex: vindex,
 	}
+}
+
+func copyOption(orig *vindexOption) *vindexOption {
+	colsSeen := make(map[string]interface{}, len(orig.colsSeen))
+	valueExprs := make([]sqlparser.Expr, len(orig.valueExprs))
+	values := make([]evalengine.Expr, len(orig.values))
+	predicates := make([]sqlparser.Expr, len(orig.predicates))
+
+	copy(values, orig.values)
+	copy(valueExprs, orig.valueExprs)
+	copy(predicates, orig.predicates)
+	for k, v := range orig.colsSeen {
+		colsSeen[k] = v
+	}
+	vo := &vindexOption{
+		values:      values,
+		colsSeen:    colsSeen,
+		valueExprs:  valueExprs,
+		predicates:  predicates,
+		opcode:      orig.opcode,
+		foundVindex: orig.foundVindex,
+		cost:        orig.cost,
+	}
+	return vo
 }
 
 func (option *vindexOption) updateWithNewColumn(
