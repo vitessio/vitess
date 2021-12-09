@@ -25,7 +25,7 @@ port=$[15000 + $uid]
 grpc_port=$[16000 + $uid]
 printf -v alias '%s-%010d' $cell $uid
 printf -v tablet_dir 'vt_%010d' $uid
-tablet_hostname=''
+tablet_hostname='localhost'
 printf -v tablet_logfile 'vttablet_%010d_querylog.txt' $uid
 
 tablet_type=replica
@@ -54,16 +54,16 @@ vttablet \
  -grpc_port $grpc_port \
  -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
- -vtctld_addr http://$hostname:$vtctld_web_port/ \
+ -vtctld_addr http://localhost:$vtctld_web_port/ \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening
 # Not the same as healthy
 
 for i in $(seq 0 300); do
- curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
+ curl -I "http://localhost:$port/debug/status" >/dev/null 2>&1 && break
  sleep 0.1
 done
 
 # check one last time
-curl -I "http://$hostname:$port/debug/status" || fail "tablet could not be started!"
+curl -I "http://localhost:$port/debug/status" || fail "tablet could not be started!"

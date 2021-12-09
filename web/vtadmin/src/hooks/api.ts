@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult } from 'react-query';
+import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult, QueryObserverBaseResult,  } from 'react-query';
 import {
     fetchBackups,
     fetchClusters,
@@ -35,6 +35,7 @@ import {
     fetchWorkflow,
     fetchWorkflows,
     TabletDebugVarsResponse,
+    refreshState,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -125,6 +126,16 @@ export const usePingTablet = (
 ) => {
     return useQuery(['ping-tablet', params], () => pingTablet(params), options);
 };
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useRefreshState = (
+    params: Parameters<typeof refreshState>[0],
+    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
+) => {
+    return useQuery(['refresh-state', params], () => refreshState(params), options)
+}
 
 export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
@@ -254,3 +265,7 @@ export const useWorkflow = (
         ...options,
     });
 };
+
+export type Refetch = QueryObserverBaseResult['refetch']
+export type QueryHook = (params: any, options?:any) => UseQueryResult<any, Error>
+export type Options = UseQueryOptions<ResponseType, Error> | undefined

@@ -19,6 +19,8 @@ interface DialogProps {
     children?: React.ReactElement;
     hideConfirm?: boolean;
     hideCancel?: boolean;
+    // Optionally delay opening of dialog in cases of conditional rendering
+    delay?: number
 }
 
 /**
@@ -40,6 +42,7 @@ const Dialog: React.FC<DialogProps> = ({
     onCancel,
     onConfirm,
     onClose,
+    delay
 }) => {
     const cancelButtonRef = useRef(null);
 

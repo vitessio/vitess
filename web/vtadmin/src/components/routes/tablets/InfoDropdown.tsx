@@ -1,25 +1,57 @@
 import React, { useState } from 'react';
+import { usePingTablet, useRefreshState } from '../../../hooks/api';
 import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
 import { Icons } from '../../Icon';
-import PingDialog from './PingDialog';
-
+import InfoDialog, { BaseInfoDialogProps } from './InfoDialog';
 interface InfoDropdownProps {
     alias: string;
     clusterID?: string;
 }
 
 const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
-    const [isPingOpen, setPingOpen] = useState(false);
+    const [currentDialog, setCurrentDialog] = useState('');
+    const [isOpen, setIsOpen] = useState(false)
+    const closeDialog = () => setIsOpen(false)
+
+    const openDialog = (key: string) => { setCurrentDialog(key); setIsOpen(true) }
+
+    const dialogConfigs: Record<string, BaseInfoDialogProps> = {
+        'ping': {
+            useHook: usePingTablet,
+            params: { alias, clusterID },
+            options: { enabled: false },
+            successDescription: `Successfully reached tablet ${alias} via RPC.`,
+            errorDescription: `There was an issue pinging tablet ${alias}`,
+            loadingTitle: `Pinging tablet ${alias}`,
+            loadingDescription: "Checking to see if tablet is reachable via RPC..."
+        },
+        'refresh': {
+            useHook: useRefreshState,
+            params: { alias, clusterID },
+            options: { enabled: false },
+            successDescription: `Successfully refreshed tablet ${alias}.`,
+            errorDescription: `There was an issue refreshing tablet`,
+            loadingTitle: `Refreshing tablet ${alias}`,
+            loadingDescription: "Refreshing tablet record on tablet..."
+        }
+    }
+
+    const defaultConfig = dialogConfigs['ping']
 
     return (
         <div className="w-min inline-block">
             <Dropdown dropdownButton={Icons.info} position="bottom-right">
-                <MenuItem onClick={() => setPingOpen(true)}>Ping</MenuItem>
-                <MenuItem>Refresh state</MenuItem>
+                <MenuItem onClick={() => openDialog('ping')}>Ping</MenuItem>
+                <MenuItem onClick={() => openDialog('refresh')}>Refresh state</MenuItem>
                 <MenuItem>Run health check</MenuItem>
             </Dropdown>
-            <PingDialog alias={alias} clusterID={clusterID} isOpen={isPingOpen} onClose={() => setPingOpen(false)} />
+            {/* <PingDialog alias={alias} clusterID={clusterID} isOpen={openDialog === 'ping'} onClose={closeDialog} /> */}
+            <InfoDialog
+                isOpen={isOpen}
+                onClose={closeDialog}
+                {...dialogConfigs[currentDialog] || defaultConfig}
+            />
         </div>
     );
 };

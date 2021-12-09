@@ -52,9 +52,8 @@ const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position 
                 leaveTo="transform opacity-0 scale-95"
             >
                 <Menu.Items
-                    className={`py-2 z-10 origin-top-right absolute ${
-                        positions[position as string] || positions.default
-                    } md:-left-3full mt-2 w-max rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
+                    className={`py-2 z-10 origin-top-right absolute ${positions[position as string] || positions.default
+                        } md:-left-3full mt-2 w-max rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
                     role="menu"
                     aria-orientation="vertical"
                     aria-labelledby="menu-button"
