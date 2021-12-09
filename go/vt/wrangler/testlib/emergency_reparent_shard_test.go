@@ -18,6 +18,7 @@ package testlib
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -204,17 +205,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.Replicating = true
-	// this server has executed upto 455, which is the highest among replicas
-	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
-				Domain:   2,
-				Server:   123,
-				Sequence: 455,
-			},
-		},
-	}
-	// It has more transactions in its relay log, but not as many as
+	// It has transactions in its relay log, but not as many as
 	// moreAdvancedReplica
 	newPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
@@ -244,22 +235,12 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	defer newPrimary.StopActionLoop(t)
 
 	// old primary, will be scrapped
-	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
+	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = fmt.Errorf("old primary stopped working")
 	oldPrimary.StartActionLoop(t, wr)
 	defer oldPrimary.StopActionLoop(t)
 
 	// more advanced replica
 	moreAdvancedReplica.FakeMysqlDaemon.Replicating = true
-	// position up to which this replica has executed is behind desired new primary
-	moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
-		GTIDSet: mysql.MariadbGTIDSet{
-			2: mysql.MariadbGTID{
-				Domain:   2,
-				Server:   123,
-				Sequence: 454,
-			},
-		},
-	}
 	// relay log position is more advanced than desired new primary
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
