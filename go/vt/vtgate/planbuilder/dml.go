@@ -17,13 +17,13 @@ limitations under the License.
 package planbuilder
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -55,13 +55,9 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
 			return engine.Scatter, ksidVindex, ksidCol, nil, nil, nil
 		}
 
-		if expr := getMatch(where.Expr, index.Columns[0]); expr != nil {
-			q, err := expr.Type(nil)
-			if err != nil {
-				return 0, nil, "", nil, nil, err
-			}
+		if expr, op := getMatch(where.Expr, index.Columns[0]); expr != nil {
 			opcode := engine.Equal
-			if q == querypb.Type_TUPLE {
+			if op == sqlparser.InOp {
 				opcode = engine.In
 			} else if lu, isLu := single.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
 				// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
@@ -80,7 +76,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
 // getMatch returns the matched value if there is an equality
 // constraint on the specified column that can be used to
 // decide on a route.
-func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) evalengine.Expr {
+func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (evalengine.Expr, sqlparser.ComparisonExprOperator) {
 	filters := sqlparser.SplitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
@@ -102,13 +98,13 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) evalengine.Expr {
 		default:
 			continue
 		}
-		expr, err := evalengine.Convert(comparison.Right, &noColumnLookup{})
+		expr, err := evalengine.Convert(comparison.Right, &noColumnLookup{semTable: semantics.EmptySemTable()})
 		if err != nil {
 			continue
 		}
-		return expr
+		return expr, comparison.Operator
 	}
-	return nil
+	return nil, 0
 }
 
 func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
