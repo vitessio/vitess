@@ -209,7 +209,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 
 	if len(opts.HTTPOpts.CORSOrigins) > 0 {
 		serv.Router().Use(handlers.CORS(
-			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})))
+			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
 	}
 
 	if !opts.HTTPOpts.DisableCompression {
