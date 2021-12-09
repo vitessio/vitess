@@ -1,0 +1,60 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+.card {
+    @apply border border-vtblue;
+    @apply cursor-pointer;
+    @apply flex;
+    @apply h-full;
+    @apply gap-4;
+    @apply outline-none;
+    @apply p-6;
+    @apply rounded-md;
+}
+
+.checked {
+    @apply bg-vtblue-50 bg-opacity-10;
+}
+
+.card:focus,
+.card:hover,
+.card.active {
+    @apply ring-2;
+}
+
+.circle {
+    @apply border border-gray-400;
+    @apply flex-none;
+    @apply mt-1;
+    @apply rounded-full;
+
+    height: 16px;
+    width: 16px;
+}
+
+.checked .circle {
+    @apply border-gray-600;
+}
+
+.checked .circle::before {
+    @apply bg-vtblue;
+    @apply block;
+    @apply rounded-full;
+
+    content: '';
+    height: 8px;
+    margin: 3px;
+    width: 8px;
+}
