@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/log"
@@ -246,24 +248,43 @@ func TestBasicV2Workflows(t *testing.T) {
 	log.Flush()
 }
 
+const workflowStartTimeout = 5 * time.Second
+
 func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
 	done := false
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	timer := time.NewTimer(workflowStartTimeout)
 	log.Infof("Waiting for workflow %s to start", ksWorkflow)
 	for {
 		select {
 		case <-ticker.C:
 			if done {
+				log.Infof("Workflow %s has started", ksWorkflow)
 				return
 			}
 			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
 			require.NoError(t, err)
-			if strings.Contains(output, "\"State\": \"Running\"") {
-				done = true
-				log.Infof("Workflow %s has started", ksWorkflow)
-			}
-		case <-time.After(5 * time.Second):
-			require.FailNow(t, "workflow %s not yet started", ksWorkflow)
+			done = true
+			state := ""
+			result := gjson.Get(output, "ShardStatuses")
+			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each participating tablet
+				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+					if streamId.String() == "PrimaryReplicationStatuses" {
+						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+							state = attributeValue.Get("State").String()
+							if state != "Running" {
+								done = false // we need to wait for all streams to start
+							}
+							return true
+						})
+					}
+					return true
+				})
+				return true
+			})
+
+		case <-timer.C:
+			require.FailNowf(t, "workflow %s not yet started", ksWorkflow)
 		}
 	}
 }
