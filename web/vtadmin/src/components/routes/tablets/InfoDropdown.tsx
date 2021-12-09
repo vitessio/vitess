@@ -37,6 +37,9 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
         }
     }
 
+    // Default config is needed to avoid "hook order" inconsistency
+    // Queries are not executed until dialog is open; no unneccessary queries are executed as a result.
+
     const defaultConfig = dialogConfigs['ping']
 
     return (
