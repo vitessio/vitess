@@ -46,7 +46,7 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
             errorDescription: `There was an issue running a health check on the tablet`,
             loadingTitle: `Running health check`,
             loadingDescription: `Running health check on tablet ${alias}`,
-        }
+        },
     };
 
     // Default config is needed to avoid "hook order" inconsistency
