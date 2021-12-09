@@ -543,7 +543,7 @@ func (rp *routeTree) haveMatchingVindex(
 				break
 			}
 
-			var option *vindexOption
+			var newOption []*vindexOption
 			for _, op := range v.options {
 				if op.ready {
 					continue
@@ -552,17 +552,21 @@ func (rp *routeTree) haveMatchingVindex(
 				if isPresent {
 					continue
 				}
-				option = op
+				option := copyOption(op)
+				optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
+				if optionReady {
+					newVindexFound = true
+				}
+				newOption = append(newOption, option)
 			}
+			v.options = append(v.options, newOption...)
 
-			if option == nil {
-				// multi column vindex - just add the option since we do not have one already
-				option = createOption(v.colVindex, vfunc)
-			} else {
-				option = copyOption(option)
+			// multi column vindex - just always add as new option for furince we do not have one already
+			option := createOption(v.colVindex, vfunc)
+			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
+			if optionReady {
+				newVindexFound = true
 			}
-			option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
-			newVindexFound = true
 			v.options = append(v.options, option)
 		}
 	}
@@ -617,7 +621,7 @@ func (option *vindexOption) updateWithNewColumn(
 	node sqlparser.Expr,
 	colVindex *vindexes.ColumnVindex,
 	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
-) {
+) bool {
 	option.colsSeen[colLoweredName] = true
 	option.valueExprs = append(option.valueExprs, valueExpr)
 	option.values[indexOfCol] = value
@@ -628,6 +632,7 @@ func (option *vindexOption) updateWithNewColumn(
 		option.opcode = routeOpcode
 		option.cost = costFor(option.foundVindex, routeOpcode)
 	}
+	return option.ready
 }
 
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
