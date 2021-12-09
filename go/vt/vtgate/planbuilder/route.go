@@ -145,7 +145,7 @@ func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
 	return nil
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (rb *route) ContainsTables() semantics.TableSet {
 	return rb.tables
 }
@@ -153,7 +153,7 @@ func (rb *route) ContainsTables() semantics.TableSet {
 // Wireup implements the logicalPlan interface
 func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	// Precaution: update ERoute.Values only if it's not set already.
-	if rb.eroute.Values == nil {
+	if rb.eroute.Value == nil {
 		// Resolve values stored in the logical plan.
 		switch vals := rb.condition.(type) {
 		case *sqlparser.ComparisonExpr:
@@ -161,7 +161,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []sqltypes.PlanValue{pv}
+			rb.eroute.Value = pv
 			vals.Right = sqlparser.ListArg(engine.ListVarName)
 		case nil:
 			// no-op.
@@ -170,7 +170,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []sqltypes.PlanValue{pv}
+			rb.eroute.Value = pv
 		}
 	}
 
@@ -179,11 +179,11 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.Select:
 			if len(node.SelectExprs) == 0 {
-				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+				node.SelectExprs = []sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
 						Expr: sqlparser.NewIntLiteral("1"),
 					},
-				})
+				}
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.EqualOp {

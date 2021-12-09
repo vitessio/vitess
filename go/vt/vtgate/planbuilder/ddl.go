@@ -207,14 +207,14 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVa
 	if err != nil {
 		return nil, nil, err
 	}
-	routePlan := tryToGetRoutePlan(selectPlan)
-	if routePlan == nil {
+	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan)
+	if !isRoutePlan {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
-	if keyspace.Name != routePlan.GetKeyspaceName() {
+	if keyspace.Name != keyspaceName {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
-	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
+	if opCode != engine.SelectUnsharded && opCode != engine.SelectEqualUnique && opCode != engine.SelectScatter {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
@@ -243,14 +243,14 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reserved
 	if err != nil {
 		return nil, nil, err
 	}
-	routePlan := tryToGetRoutePlan(selectPlan)
-	if routePlan == nil {
+	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan)
+	if !isRoutePlan {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
-	if keyspace.Name != routePlan.GetKeyspaceName() {
+	if keyspace.Name != keyspaceName {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
-	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
+	if opCode != engine.SelectUnsharded && opCode != engine.SelectEqualUnique && opCode != engine.SelectScatter {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
@@ -363,13 +363,13 @@ func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable
 	return destination, keyspace, nil
 }
 
-func tryToGetRoutePlan(selectPlan engine.Primitive) *engine.Route {
-	routePlan, isRoute := selectPlan.(*engine.Route)
-	if !isRoute {
-		comparer, isComparer := selectPlan.(engine.Gen4Comparer)
-		if isComparer {
-			return tryToGetRoutePlan(comparer.GetGen4Primitive())
-		}
+func tryToGetRoutePlan(selectPlan engine.Primitive) (valid bool, keyspaceName string, opCode engine.RouteOpcode) {
+	switch plan := selectPlan.(type) {
+	case *engine.Route:
+		return true, plan.Keyspace.Name, plan.Opcode
+	case engine.Gen4Comparer:
+		return tryToGetRoutePlan(plan.GetGen4Primitive())
+	default:
+		return false, "", engine.RouteOpcode(0)
 	}
-	return routePlan
 }

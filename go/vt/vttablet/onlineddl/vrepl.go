@@ -70,10 +70,13 @@ type VRepl struct {
 	alterOptions string
 	tableRows    int64
 
-	sourceSharedColumns *vrepl.ColumnList
-	targetSharedColumns *vrepl.ColumnList
-	sharedColumnsMap    map[string]string
-	sourceAutoIncrement uint64
+	sourceSharedColumns              *vrepl.ColumnList
+	targetSharedColumns              *vrepl.ColumnList
+	droppedSourceNonGeneratedColumns *vrepl.ColumnList
+	droppedNoDefaultColumnNames      []string
+	expandedColumnNames              []string
+	sharedColumnsMap                 map[string]string
+	sourceAutoIncrement              uint64
 
 	chosenSourceUniqueKey *vrepl.UniqueKey
 	chosenTargetUniqueKey *vrepl.UniqueKey
@@ -81,9 +84,10 @@ type VRepl struct {
 	addedUniqueKeys   []*vrepl.UniqueKey
 	removedUniqueKeys []*vrepl.UniqueKey
 
-	filterQuery   string
-	enumToTextMap map[string]string
-	bls           *binlogdatapb.BinlogSource
+	revertibleNotes string
+	filterQuery     string
+	enumToTextMap   map[string]string
+	bls             *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
 
@@ -104,132 +108,6 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		enumToTextMap:  map[string]string{},
 		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
 	}
-}
-
-// getSharedUniqueKeys returns the unique keys shared between the two source&target tables
-func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *vrepl.UniqueKey) {
-	type ukPair struct{ source, target *vrepl.UniqueKey }
-	var sharedUKPairs []*ukPair
-	for _, sourceUniqueKey := range sourceUniqueKeys {
-		for _, targetUniqueKey := range targetUniqueKeys {
-			uniqueKeyMatches := func() bool {
-				// Compare two unique keys
-				if sourceUniqueKey.Columns.Len() != targetUniqueKey.Columns.Len() {
-					return false
-				}
-				// Expect same columns, same order, potentially column name mapping
-				sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
-				targetUniqueKeyNames := targetUniqueKey.Columns.Names()
-				for i := range sourceUniqueKeyNames {
-					sourceColumnName := sourceUniqueKeyNames[i]
-					targetColumnName := targetUniqueKeyNames[i]
-					mappedSourceColumnName := sourceColumnName
-					if mapped, ok := columnRenameMap[sourceColumnName]; ok {
-						mappedSourceColumnName = mapped
-					}
-					if !strings.EqualFold(mappedSourceColumnName, targetColumnName) {
-						return false
-					}
-				}
-				return true
-			}
-			if uniqueKeyMatches() {
-				sharedUKPairs = append(sharedUKPairs, &ukPair{source: sourceUniqueKey, target: targetUniqueKey})
-			}
-		}
-	}
-	// Now that we know what the shared unique keys are, let's find the "best" shared one.
-	// Source and target unique keys can have different name, even though they cover the exact same
-	// columns and in same order.
-	for _, pair := range sharedUKPairs {
-		if pair.source.HasNullable {
-			continue
-		}
-		if pair.target.HasNullable {
-			continue
-		}
-		return pair.source, pair.target
-	}
-	return nil, nil
-}
-
-// sourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
-// "More constrained" means the uniqueness constraint is "stronger". Thus, if sourceUniqueKey is as-or-more constrained than targetUniqueKey, then
-// rows valid under sourceUniqueKey must also be valid in targetUniqueKey. The opposite is not necessarily so: rows that are valid in targetUniqueKey
-// may cause a unique key violation under sourceUniqueKey
-func sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey *vrepl.UniqueKey, columnRenameMap map[string]string) bool {
-	// Compare two unique keys
-	if sourceUniqueKey.Columns.Len() > targetUniqueKey.Columns.Len() {
-		// source can't be more constrained if it covers *more* columns
-		return false
-	}
-	// we know that len(sourceUniqueKeyNames) <= len(targetUniqueKeyNames)
-	sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
-	targetUniqueKeyNames := targetUniqueKey.Columns.Names()
-	// source is more constrained than target if every column in source is also in target, order is immaterial
-	for i := range sourceUniqueKeyNames {
-		sourceColumnName := sourceUniqueKeyNames[i]
-		mappedSourceColumnName := sourceColumnName
-		if mapped, ok := columnRenameMap[sourceColumnName]; ok {
-			mappedSourceColumnName = mapped
-		}
-		columnFoundInTarget := func() bool {
-			for _, targetColumnName := range targetUniqueKeyNames {
-				if strings.EqualFold(mappedSourceColumnName, targetColumnName) {
-					return true
-				}
-			}
-			return false
-		}
-		if !columnFoundInTarget() {
-			return false
-		}
-	}
-	return true
-}
-
-// addedUniqueKeys returns the unique key constraints added in target. This does not necessarily mean that the unique key itself is new,
-// rather that there's a new, stricter constraint on a set of columns, that didn't exist before. Example:
-//   before: unique key `my_key`(c1, c2, c3); after: unique key `my_key`(c1, c2)
-//   The constraint on (c1, c2) is new; and `my_key` in target table ("after") is considered a new key
-// Order of columns is immaterial to uniqueness of column combination.
-func addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (addedUKs [](*vrepl.UniqueKey)) {
-	addedUKs = [](*vrepl.UniqueKey){}
-	for _, targetUniqueKey := range targetUniqueKeys {
-		foundAsOrMoreConstrainingSourceKey := func() bool {
-			for _, sourceUniqueKey := range sourceUniqueKeys {
-				if sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey, columnRenameMap) {
-					// target key does not add a new constraint
-					return true
-				}
-			}
-			return false
-		}
-		if !foundAsOrMoreConstrainingSourceKey() {
-			addedUKs = append(addedUKs, targetUniqueKey)
-		}
-	}
-	return addedUKs
-}
-
-// removedUniqueKeys returns the list of unique key constraints _removed_ going from source to target.
-func removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (removedUKs [](*vrepl.UniqueKey)) {
-	reverseColumnRenameMap := map[string]string{}
-	for k, v := range columnRenameMap {
-		reverseColumnRenameMap[v] = k
-	}
-	return addedUniqueKeys(targetUniqueKeys, sourceUniqueKeys, reverseColumnRenameMap)
-}
-
-// getUniqueKeyCoveredByColumns returns the first unique key from given list, whose columns all appear
-// in given column list.
-func getUniqueKeyCoveredByColumns(uniqueKeys [](*vrepl.UniqueKey), columns *vrepl.ColumnList) (chosenUniqueKey *vrepl.UniqueKey) {
-	for _, uniqueKey := range uniqueKeys {
-		if uniqueKey.Columns.IsSubsetOf(columns) {
-			return uniqueKey
-		}
-	}
-	return nil
 }
 
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
@@ -299,20 +177,11 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 		return nil, err
 	}
 	for _, row := range rs.Named().Rows {
-		if row.AsBool("is_float", false) {
-			// float & double data types are imprecise and we cannot use them while iterating unique keys
-			continue
-		}
-		if row.AsBool("has_nullable", false) {
-			// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
-			// Thus, we cannot use this unique key for iteration.
-			continue
-		}
-
 		uniqueKey := &vrepl.UniqueKey{
 			Name:            row.AsString("index_name", ""),
 			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
 			HasNullable:     row.AsBool("has_nullable", false),
+			HasFloat:        row.AsBool("is_float", false),
 			IsAutoIncrement: row.AsBool("is_auto_increment", false),
 		}
 		uniqueKeys = append(uniqueKeys, uniqueKey)
@@ -359,6 +228,15 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				continue
 			}
 
+			column.DataType = row.AsString("DATA_TYPE", "") // a more canonical form of column_type
+			column.IsNullable = (row.AsString("IS_NULLABLE", "") == "YES")
+			column.IsDefaultNull = row.AsBool("is_default_null", false)
+
+			column.CharacterMaximumLength = row.AsInt64("CHARACTER_MAXIMUM_LENGTH", 0)
+			column.NumericPrecision = row.AsInt64("NUMERIC_PRECISION", 0)
+			column.NumericScale = row.AsInt64("NUMERIC_SCALE", 0)
+			column.DateTimePrecision = row.AsInt64("DATETIME_PRECISION", -1)
+
 			column.Type = vrepl.UnknownColumnType
 			if strings.Contains(columnType, "unsigned") {
 				column.IsUnsigned = true
@@ -378,9 +256,16 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 			if strings.Contains(columnType, "float") {
 				column.SetTypeIfUnknown(vrepl.FloatColumnType)
 			}
+			if strings.Contains(columnType, "double") {
+				column.SetTypeIfUnknown(vrepl.DoubleColumnType)
+			}
 			if strings.HasPrefix(columnType, "enum") {
 				column.SetTypeIfUnknown(vrepl.EnumColumnType)
 				column.EnumValues = schema.ParseEnumValues(columnType)
+			}
+			if strings.HasPrefix(columnType, "set(") {
+				column.SetTypeIfUnknown(vrepl.SetColumnType)
+				column.EnumValues = schema.ParseSetValues(columnType)
 			}
 			if strings.HasPrefix(columnType, "binary") {
 				column.SetTypeIfUnknown(vrepl.BinaryColumnType)
@@ -396,62 +281,6 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 		}
 	}
 	return nil
-}
-
-// getSharedColumns returns the intersection of two lists of columns in same order as the first list
-func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList, sourceVirtualColumns, targetVirtualColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
-	sourceSharedColumns *vrepl.ColumnList, targetSharedColumns *vrepl.ColumnList, sharedColumnsMap map[string]string,
-) {
-	sharedColumnNames := []string{}
-	for _, sourceColumn := range sourceColumns.Names() {
-		isSharedColumn := false
-		for _, targetColumn := range targetColumns.Names() {
-			if strings.EqualFold(sourceColumn, targetColumn) {
-				// both tables have this column. Good start.
-				isSharedColumn = true
-				break
-			}
-			if strings.EqualFold(columnRenameMap[sourceColumn], targetColumn) {
-				// column in source is renamed in target
-				isSharedColumn = true
-				break
-			}
-		}
-		for droppedColumn := range v.parser.DroppedColumnsMap() {
-			if strings.EqualFold(sourceColumn, droppedColumn) {
-				isSharedColumn = false
-				break
-			}
-		}
-		for _, virtualColumn := range sourceVirtualColumns.Names() {
-			// virtual/generated columns on source are silently skipped
-			if strings.EqualFold(sourceColumn, virtualColumn) {
-				isSharedColumn = false
-			}
-		}
-		for _, virtualColumn := range targetVirtualColumns.Names() {
-			// virtual/generated columns on target are silently skipped
-			if strings.EqualFold(sourceColumn, virtualColumn) {
-				isSharedColumn = false
-			}
-		}
-		if isSharedColumn {
-			sharedColumnNames = append(sharedColumnNames, sourceColumn)
-		}
-	}
-	sharedColumnsMap = map[string]string{}
-	for _, columnName := range sharedColumnNames {
-		if mapped, ok := columnRenameMap[columnName]; ok {
-			sharedColumnsMap[columnName] = mapped
-		} else {
-			sharedColumnsMap[columnName] = columnName
-		}
-	}
-	mappedSharedColumnNames := []string{}
-	for _, columnName := range sharedColumnNames {
-		mappedSharedColumnNames = append(mappedSharedColumnNames, sharedColumnsMap[columnName])
-	}
-	return vrepl.NewColumnList(sharedColumnNames), vrepl.NewColumnList(mappedSharedColumnNames), sharedColumnsMap
 }
 
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
@@ -478,7 +307,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if err != nil {
 		return err
 	}
-	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
+	v.sourceSharedColumns, v.targetSharedColumns, v.droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
 
 	// unique keys
 	sourceUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.sourceTable)
@@ -495,12 +324,12 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if len(targetUniqueKeys) == 0 {
 		return fmt.Errorf("Found no possible unique key on `%s`", v.targetTable)
 	}
-	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = vrepl.GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil {
 		// VReplication supports completely different unique keys on source and target, covering
 		// some/completely different columns. The condition is that the key on source
 		// must use columns which all exist on target table.
-		v.chosenSourceUniqueKey = getUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
+		v.chosenSourceUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
 		if v.chosenSourceUniqueKey == nil {
 			// Still no luck.
 			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTable, v.targetTable)
@@ -510,7 +339,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		// VReplication supports completely different unique keys on source and target, covering
 		// some/completely different columns. The condition is that the key on target
 		// must use columns which all exist on source table.
-		v.chosenTargetUniqueKey = getUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
+		v.chosenTargetUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
 		if v.chosenTargetUniqueKey == nil {
 			// Still no luck.
 			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTable, v.sourceTable)
@@ -519,13 +348,13 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
-	v.addedUniqueKeys = addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedUniqueKeys = removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
-	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns); err != nil {
+	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
 		return err
 	}
 	if err := v.applyColumnTypes(ctx, conn, v.targetTable, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
@@ -554,7 +383,23 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		}
 	}
 
+	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
+	var expandedDescriptions map[string]string
+	v.expandedColumnNames, expandedDescriptions = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
+
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
+
+	notes := []string{}
+	for _, uk := range v.removedUniqueKeys {
+		notes = append(notes, fmt.Sprintf("unique constraint removed: %s", uk.Name))
+	}
+	for _, name := range v.droppedNoDefaultColumnNames {
+		notes = append(notes, fmt.Sprintf("column %s dropped, and had no default value", name))
+	}
+	for _, name := range v.expandedColumnNames {
+		notes = append(notes, fmt.Sprintf("column %s: %s", name, expandedDescriptions[name]))
+	}
+	v.revertibleNotes = strings.Join(notes, "\n")
 	if err != nil {
 		return err
 	}
