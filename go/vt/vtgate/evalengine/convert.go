@@ -113,13 +113,6 @@ func simplifyExpr(e Expr) (Expr, error) {
 		}
 		lit1, _ := node.Left.(*Literal)
 		lit2, _ := node.Right.(*Literal)
-		if lit1 != nil && lit2 != nil {
-			res, err := node.Evaluate(nil)
-			if err != nil {
-				return nil, err
-			}
-			return &Literal{Val: res}, nil
-		}
 
 		if lit1 != nil && node.CoerceLeft != nil {
 			lit1.Val.bytes, _ = node.CoerceLeft(nil, lit1.Val.bytes)
@@ -132,9 +125,17 @@ func simplifyExpr(e Expr) (Expr, error) {
 			node.CoerceRight = nil
 		}
 
+		if lit1 != nil && lit2 != nil {
+			res, err := node.Evaluate(nil)
+			if err != nil {
+				return nil, err
+			}
+			return &Literal{Val: res}, nil
+		}
+
 		switch op := node.Op.(type) {
 		case *LikeOp:
-			if lit2 != nil {
+			if lit2 != nil && lit2.Val.textual() && node.TypedCollation.Valid() {
 				coll := collations.Local().LookupByID(node.TypedCollation.Collation)
 				op.Match = coll.Wildcard(lit2.Val.bytes, 0, 0, 0)
 			}
@@ -185,7 +186,7 @@ func simplifyExpr(e Expr) (Expr, error) {
 							break
 						}
 						if collidx, collision := op.Hashed[hash]; collision {
-							cmp, _, err := nullSafeCompare(lit.Val, tuple[collidx].(*Literal).Val)
+							cmp, _, err := evalCompareAll(lit.Val, tuple[collidx].(*Literal).Val)
 							if cmp != 0 || err != nil {
 								op.Hashed = nil
 								break
@@ -266,21 +267,9 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			Left:  left,
 			Right: right,
 		}
-
-		leftColl := left.Collation()
-		rightColl := right.Collation()
-		if leftColl.Valid() && rightColl.Valid() {
-			env := collations.Local()
-			comp.TypedCollation, comp.CoerceLeft, comp.CoerceRight, err =
-				env.MergeCollations(leftColl, rightColl, collations.CoercionOptions{
-					ConvertToSuperset:   true,
-					ConvertWithCoercion: true,
-				})
-			if err != nil {
-				return nil, err
-			}
+		if err := comp.mergeCollations(); err != nil {
+			return nil, err
 		}
-
 		return comp, nil
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
@@ -293,7 +282,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.IntVal:
 			return NewLiteralIntFromBytes(node.Bytes())
 		case sqlparser.FloatVal:
-			return NewLiteralFloatFromBytes(node.Bytes())
+			return NewLiteralRealFromBytes(node.Bytes())
 		case sqlparser.StrVal:
 			collation := getCollation(e, lookup)
 			return NewLiteralString(node.Bytes(), collation), nil

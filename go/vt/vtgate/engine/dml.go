@@ -22,6 +22,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -44,7 +45,7 @@ type DML struct {
 
 	// Values specifies the vindex values to use for routing.
 	// For now, only one value is specified.
-	Values []sqltypes.PlanValue
+	Values []evalengine.Expr
 
 	// Keyspace Id Vindex
 	KsidVindex vindexes.SingleColumn
@@ -100,12 +101,23 @@ func (op DMLOpcode) String() string {
 	return opcodeName[op]
 }
 
-func resolveMultiValueShards(vcursor VCursor, keyspace *vindexes.Keyspace, query string, bindVars map[string]*querypb.BindVariable, pv sqltypes.PlanValue, vindex vindexes.SingleColumn) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-	keys, err := pv.ResolveList(bindVars)
+func resolveMultiValueShards(
+	vcursor VCursor,
+	keyspace *vindexes.Keyspace,
+	query string,
+	bindVars map[string]*querypb.BindVariable,
+	val evalengine.Expr,
+	vindex vindexes.SingleColumn,
+) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
+	env := &evalengine.ExpressionEnv{
+		BindVars: bindVars,
+	}
+
+	keys, err := val.Evaluate(env)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, err := resolveMultiShard(vcursor, vindex, keyspace, keys)
+	rss, err := resolveMultiShard(vcursor, vindex, keyspace, keys.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}

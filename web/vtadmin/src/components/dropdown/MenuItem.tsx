@@ -11,7 +11,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ children, className, intent = 'none
         <button
             onMouseDown={(e) => e.preventDefault()}
             className={`transition-colors font-sans border-none text-left block px-6 py-4 hover:bg-gray-100 text-${intent} hover:text-${
-                intent === 'none' ? 'vitess-blue' : intent
+                intent === 'none' ? 'vtblue' : intent
             } w-full ${className || ''}`}
             role="menuitem"
             tabIndex={-1}

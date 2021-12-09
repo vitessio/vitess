@@ -234,6 +234,7 @@ func TestStreamRowsKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	engine.se.Reload(context.Background())
 
 	if err := env.SetVSchema(shardedVSchema); err != nil {
 		t.Fatal(err)

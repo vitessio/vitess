@@ -13,8 +13,6 @@ package config
 // MySQLClusterConfigurationSettings has the settings for a specific MySQL cluster. It derives its information
 // from MySQLConfigurationSettings
 type MySQLClusterConfigurationSettings struct {
-	User                 string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	Password             string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	MetricQuery          string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	CacheMillis          int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	ThrottleThreshold    float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
@@ -33,8 +31,6 @@ func (settings *MySQLClusterConfigurationSettings) postReadAdjustments() error {
 
 // MySQLConfigurationSettings has the general configuration for all MySQL clusters
 type MySQLConfigurationSettings struct {
-	User                 string
-	Password             string
 	MetricQuery          string
 	CacheMillis          int // optional, if defined then probe result will be cached, and future probes may use cached value
 	ThrottleThreshold    float64
@@ -58,12 +54,6 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	for _, clusterSettings := range settings.Clusters {
 		if err := clusterSettings.postReadAdjustments(); err != nil {
 			return err
-		}
-		if clusterSettings.User == "" {
-			clusterSettings.User = settings.User
-		}
-		if clusterSettings.Password == "" {
-			clusterSettings.Password = settings.Password
 		}
 		if clusterSettings.MetricQuery == "" {
 			clusterSettings.MetricQuery = settings.MetricQuery

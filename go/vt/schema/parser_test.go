@@ -127,6 +127,7 @@ func TestParseEnumValues(t *testing.T) {
 			``,
 			`abc`,
 			`func('x-small','small','medium','large','x-large')`,
+			`set('x-small','small','medium','large','x-large')`,
 		}
 		for _, input := range inputs {
 			enumValues := ParseEnumValues(input)
@@ -135,25 +136,57 @@ func TestParseEnumValues(t *testing.T) {
 	}
 }
 
-func TestParseEnumTokens(t *testing.T) {
-	inputs := []string{
-		`enum('x-small','small','medium','large','x-large')`,
-		`'x-small','small','medium','large','x-large'`,
+func TestParseSetValues(t *testing.T) {
+	{
+		inputs := []string{
+			`set('x-small','small','medium','large','x-large')`,
+			`SET('x-small','small','medium','large','x-large')`,
+			`'x-small','small','medium','large','x-large'`,
+		}
+		for _, input := range inputs {
+			setValues := ParseSetValues(input)
+			assert.Equal(t, `'x-small','small','medium','large','x-large'`, setValues)
+		}
 	}
-	for _, input := range inputs {
-		enumTokens := ParseEnumTokens(input)
+	{
+		inputs := []string{
+			``,
+			`abc`,
+			`func('x-small','small','medium','large','x-large')`,
+			`enum('x-small','small','medium','large','x-large')`,
+			`ENUM('x-small','small','medium','large','x-large')`,
+		}
+		for _, input := range inputs {
+			setValues := ParseSetValues(input)
+			assert.Equal(t, input, setValues)
+		}
+	}
+}
+
+func TestParseEnumTokens(t *testing.T) {
+	{
+		input := `'x-small','small','medium','large','x-large'`
+		enumTokens := parseEnumOrSetTokens(input)
 		expect := []string{"x-small", "small", "medium", "large", "x-large"}
 		assert.Equal(t, expect, enumTokens)
+	}
+	{
+		input := `enum('x-small','small','medium','large','x-large')`
+		enumTokens := parseEnumOrSetTokens(input)
+		assert.Nil(t, enumTokens)
+	}
+	{
+		input := `set('x-small','small','medium','large','x-large')`
+		enumTokens := parseEnumOrSetTokens(input)
+		assert.Nil(t, enumTokens)
 	}
 }
 
 func TestParseEnumTokensMap(t *testing.T) {
-	inputs := []string{
-		`enum('x-small','small','medium','large','x-large')`,
-		`'x-small','small','medium','large','x-large'`,
-	}
-	for _, input := range inputs {
-		enumTokensMap := ParseEnumTokensMap(input)
+	{
+		input := `'x-small','small','medium','large','x-large'`
+
+		enumTokensMap := ParseEnumOrSetTokensMap(input)
 		expect := map[string]string{
 			"1": "x-small",
 			"2": "small",
@@ -162,5 +195,16 @@ func TestParseEnumTokensMap(t *testing.T) {
 			"5": "x-large",
 		}
 		assert.Equal(t, expect, enumTokensMap)
+	}
+	{
+		inputs := []string{
+			`enum('x-small','small','medium','large','x-large')`,
+			`set('x-small','small','medium','large','x-large')`,
+		}
+		for _, input := range inputs {
+			enumTokensMap := ParseEnumOrSetTokensMap(input)
+			expect := map[string]string{}
+			assert.Equal(t, expect, enumTokensMap)
+		}
 	}
 }
