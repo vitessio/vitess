@@ -42,3 +42,14 @@ func GetTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(tablet, err)
 }
+
+// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+func PingTablet(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	ping, err := api.server.PingTablet(ctx, &vtadminpb.PingTabletRequest{
+		Alias:      vars["tablet"],
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+
+	return NewJSONResponse(ping, err)
+}

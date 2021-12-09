@@ -214,7 +214,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 
 	enumValuesMap := map[string](map[string]string){}
 	for k, v := range rule.ConvertEnumToText {
-		tokensMap := schema.ParseEnumTokensMap(v)
+		tokensMap := schema.ParseEnumOrSetTokensMap(v)
 		enumValuesMap[k] = tokensMap
 	}
 

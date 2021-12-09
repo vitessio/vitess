@@ -70,6 +70,7 @@ func TestCorrelatedExistsSubquery(t *testing.T) {
 
 	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`, `[[INT64(100)]]`)
 	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`, `[[INT64(1)] [INT64(4)] [INT64(100)]]`)
+	utils.AssertMatches(t, conn, `select id from t1 where id in (select id from t2) order by id`, `[[INT64(1)] [INT64(100)]]`)
 }
 
 func TestGroupBy(t *testing.T) {

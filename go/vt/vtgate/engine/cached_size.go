@@ -666,12 +666,9 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Vindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Values []vitess.io/vitess/go/sqltypes.PlanValue
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(88))
-		for _, elem := range cached.Values {
-			size += elem.CachedSize(false)
-		}
+	// field Value vitess.io/vitess/go/vt/vtgate/engine.RouteValue
+	if cc, ok := cached.Value.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{

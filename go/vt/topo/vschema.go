@@ -48,7 +48,7 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 	if err != nil {
 		log.Errorf("failed to update vschema for keyspace %s: %v", keyspace, err)
 	} else {
-		log.Infof("successfully updated vschema for keyspace %s: %v", keyspace, data)
+		log.Infof("successfully updated vschema for keyspace %s: %+v", keyspace, vschema)
 	}
 	return err
 }

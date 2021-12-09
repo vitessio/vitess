@@ -52,17 +52,24 @@ func (wd *WithDDL) DDLs() []string {
 
 // Exec executes the query using the supplied function.
 // If there are any schema errors, it applies the DDLs and retries.
+// It takes 2 functions, one to run the query and the other to run the
+// DDL commands. This is generally needed so that different users can be used
+// to run the commands. i.e. AllPrivs user for DDLs and App user for query commands.
 // Funcs can be any of these types:
 // func(query string) (*sqltypes.Result, error)
 // func(query string, maxrows int) (*sqltypes.Result, error)
 // func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 // func(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
-func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqltypes.Result, error) {
-	exec, err := wd.unify(ctx, f)
+func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery interface{}, fDDL interface{}) (*sqltypes.Result, error) {
+	execQuery, err := wd.unify(ctx, fQuery)
 	if err != nil {
 		return nil, err
 	}
-	qr, err := exec(query)
+	execDDL, err := wd.unify(ctx, fDDL)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execQuery(query)
 	if err == nil {
 		return qr, nil
 	}
@@ -72,7 +79,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 
 	log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
 	for _, applyQuery := range wd.ddls {
-		_, merr := exec(applyQuery)
+		_, merr := execDDL(applyQuery)
 		if merr == nil {
 			continue
 		}
@@ -83,7 +90,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 		// Return the original error.
 		return nil, err
 	}
-	return exec(query)
+	return execQuery(query)
 }
 
 // ExecIgnore executes the query using the supplied function.
