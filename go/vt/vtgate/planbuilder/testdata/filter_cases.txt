@@ -4538,6 +4538,44 @@ Gen4 plan same as above
   }
 }
 
+# multi column vindex as tuple
+"select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where (cola, colb) in ((1, 2), (3, 4))",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where (cola, colb) in ((1, 2), (3, 4))",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(3))",
+      "(INT64(2), INT64(4))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
 # Multi-route unique vindex constraint (with hash join)
 "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
 {
