@@ -46,7 +46,6 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
                 <MenuItem onClick={() => openDialog('refresh')}>Refresh state</MenuItem>
                 <MenuItem>Run health check</MenuItem>
             </Dropdown>
-            {/* <PingDialog alias={alias} clusterID={clusterID} isOpen={openDialog === 'ping'} onClose={closeDialog} /> */}
             <InfoDialog
                 isOpen={isOpen}
                 onClose={closeDialog}
