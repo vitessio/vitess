@@ -364,6 +364,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"onlineddl_revertible": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revertible"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_revertible",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"onlineddl_declarative": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
