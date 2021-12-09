@@ -198,7 +198,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	if limit == nil {
 		return plan, nil
 	}
-	rb, ok := plan.(*route)
+	rb, ok := plan.(*routeGen4)
 	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return plan, nil
@@ -236,7 +236,7 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 		}
 	case *sqlparser.Union:
 		var err error
-		rb, isRoute := plan.(*route)
+		rb, isRoute := plan.(*routeGen4)
 		if !isRoute && ctx.semTable.ProjectionErr != nil {
 			return nil, ctx.semTable.ProjectionErr
 		}
@@ -285,7 +285,7 @@ func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatemen
 	if scatterAsWarns || queryTimeout > 0 {
 		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 			switch plan := logicalPlan.(type) {
-			case *route:
+			case *routeGen4:
 				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
 				plan.eroute.QueryTimeout = queryTimeout
 			}

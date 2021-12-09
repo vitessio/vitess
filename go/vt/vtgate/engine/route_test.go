@@ -234,8 +234,10 @@ func TestSelectEqualUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
@@ -270,7 +272,7 @@ func TestSelectNone(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = nil
+	sel.Value = nil
 
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -305,8 +307,9 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
-
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"-20", "20-"},
@@ -346,8 +349,9 @@ func TestSelectEqual(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
-
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
@@ -398,7 +402,9 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
@@ -431,16 +437,13 @@ func TestSelectINUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{
-		Values: []sqltypes.PlanValue{{
-			Value: sqltypes.NewInt64(1),
-		}, {
-			Value: sqltypes.NewInt64(2),
-		}, {
-			Value: sqltypes.NewInt64(4),
-		}},
-	}}
-
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+			evalengine.NewLiteralInt(4),
+		},
+	}
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"-20", "-20", "20-"},
@@ -483,15 +486,13 @@ func TestSelectINNonUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{
-		Values: []sqltypes.PlanValue{{
-			Value: sqltypes.NewInt64(1),
-		}, {
-			Value: sqltypes.NewInt64(2),
-		}, {
-			Value: sqltypes.NewInt64(4),
-		}},
-	}}
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+			evalengine.NewLiteralInt(4),
+		},
+	}
 
 	fields := sqltypes.MakeTestFields(
 		"fromc|toc",
@@ -548,15 +549,13 @@ func TestSelectMultiEqual(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{
-		Values: []sqltypes.PlanValue{{
-			Value: sqltypes.NewInt64(1),
-		}, {
-			Value: sqltypes.NewInt64(2),
-		}, {
-			Value: sqltypes.NewInt64(4),
-		}},
-	}}
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+			evalengine.NewLiteralInt(4),
+		},
+	}
 
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
@@ -601,8 +600,8 @@ func TestSelectLike(t *testing.T) {
 	)
 
 	sel.Vindex = vindex
-	sel.Values = []sqltypes.PlanValue{
-		{Value: sqltypes.NewVarBinary("a%")},
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralString([]byte("a%"), collations.TypedCollation{}),
 	}
 	// md5("a") = 0cc175b9c0f1b6a831c399e269772661
 	// keyspace id prefix for "a" is 0x0c
@@ -631,8 +630,8 @@ func TestSelectLike(t *testing.T) {
 
 	vc.Rewind()
 
-	sel.Values = []sqltypes.PlanValue{
-		{Value: sqltypes.NewVarBinary("ab%")},
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralString([]byte("ab%"), collations.TypedCollation{}),
 	}
 	// md5("b") = 92eb5ffee6ae2fec3ad71c777531578f
 	// keyspace id prefix for "ab" is 0x0c92
@@ -773,7 +772,9 @@ func TestRouteGetFields(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
+	sel.Value = &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, true)
@@ -1204,7 +1205,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 	expectResult(t, "sel.Execute", result, wantResult)
 }
 
-func XTestRouteStreamSortTruncate(t *testing.T) {
+func TestRouteStreamSortTruncate(t *testing.T) {
 	sel := NewRoute(
 		SelectUnsharded,
 		&vindexes.Keyspace{

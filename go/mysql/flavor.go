@@ -315,8 +315,15 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status.SourcePort = int(parseInt)
 	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
 	status.ConnectRetry = int(parseInt)
-	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	status.ReplicationLagSeconds = uint(parseUint)
+	parseUint, err := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	if err != nil {
+		// we could not parse the value into a valid uint -- most commonly because the value is NULL from the
+		// database -- so let's reflect that the underlying value was unknown on our last check
+		status.ReplicationLagUnknown = true
+	} else {
+		status.ReplicationLagUnknown = false
+		status.ReplicationLagSeconds = uint(parseUint)
+	}
 	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
 	status.SourceServerID = uint(parseUint)
 

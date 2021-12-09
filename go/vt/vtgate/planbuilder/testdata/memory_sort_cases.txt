@@ -395,9 +395,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select `user`.col1 as a, `user`.col2 as b, `user`.id from `user` where 1 != 1",
             "Query": "select `user`.col1 as a, `user`.col2 as b, `user`.id from `user` where `user`.id = 1",
             "Table": "`user`",
-            "Values": [
-              1
-            ],
+            "Values": 1,
             "Vindex": "user_index"
           },
           {
@@ -410,9 +408,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select music.col3 as c, weight_string(music.col3) from music where 1 != 1",
             "Query": "select music.col3 as c, weight_string(music.col3) from music where music.id = :user_id",
             "Table": "music",
-            "Values": [
-              ":user_id"
-            ],
+            "Values": ":user_id",
             "Vindex": "music_user_map"
           }
         ]
@@ -449,9 +445,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where 1 != 1",
             "Query": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where `user`.id = 1",
             "Table": "`user`",
-            "Values": [
-              1
-            ],
+            "Values": "INT64(1)",
             "Vindex": "user_index"
           },
           {
@@ -464,9 +458,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select music.col3 as c, weight_string(music.col3) from music where 1 != 1",
             "Query": "select music.col3 as c, weight_string(music.col3) from music where music.id = :user_id",
             "Table": "music",
-            "Values": [
-              ":user_id"
-            ],
+            "Values": ":user_id",
             "Vindex": "music_user_map"
           }
         ]
@@ -505,9 +497,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where 1 != 1",
             "Query": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where `user`.id = 1",
             "Table": "`user`",
-            "Values": [
-              1
-            ],
+            "Values": 1,
             "Vindex": "user_index"
           },
           {
@@ -520,9 +510,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select music.col3, weight_string(music.col3) from music where 1 != 1",
             "Query": "select music.col3, weight_string(music.col3) from music where music.id = :user_id",
             "Table": "music",
-            "Values": [
-              ":user_id"
-            ],
+            "Values": ":user_id",
             "Vindex": "music_user_map"
           }
         ]
@@ -559,9 +547,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where 1 != 1",
             "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where `user`.id = 1",
             "Table": "`user`",
-            "Values": [
-              1
-            ],
+            "Values": "INT64(1)",
             "Vindex": "user_index"
           },
           {
@@ -574,9 +560,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "FieldQuery": "select music.col3, weight_string(music.col3) from music where 1 != 1",
             "Query": "select music.col3, weight_string(music.col3) from music where music.id = :user_id",
             "Table": "music",
-            "Values": [
-              ":user_id"
-            ],
+            "Values": ":user_id",
             "Vindex": "music_user_map"
           }
         ]

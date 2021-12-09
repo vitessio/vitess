@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -56,6 +57,10 @@ type (
 		format(buf *strings.Builder, wrap bool)
 	}
 
+	RouteValue struct {
+		Expr Expr
+	}
+
 	Literal struct {
 		Val EvalResult
 	}
@@ -73,6 +78,34 @@ type (
 		TypedCollation collations.TypedCollation
 	}
 )
+
+// ResolveValue allows for retrieval of the value we expose for public consumption
+func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
+	env := &ExpressionEnv{
+		BindVars: bindVars,
+	}
+	evalResul, err := rv.Expr.Evaluate(env)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	return evalResul.Value(), nil
+}
+
+// ResolveList allows for retrieval of the value we expose for public consumption
+func (rv *RouteValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
+	env := &ExpressionEnv{
+		BindVars: bindVars,
+	}
+	evalResul, err := rv.Expr.Evaluate(env)
+	if err != nil {
+		return nil, err
+	}
+	return evalResul.TupleValues(), nil
+}
+
+func (rv *RouteValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(FormatExpr(rv.Expr))
+}
 
 func (t TupleExpr) Collation() collations.TypedCollation {
 	// a Tuple does not have a collation, but an individual collation for every element of the tuple
@@ -152,6 +185,20 @@ var _ Expr = (*CollateExpr)(nil)
 // Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
+}
+
+// TupleValues allows for retrieval of the value we expose for public consumption
+func (e EvalResult) TupleValues() []sqltypes.Value {
+	if e.tuple == nil {
+		return nil
+	}
+
+	values := *e.tuple
+	result := make([]sqltypes.Value, 0, len(values))
+	for _, val := range values {
+		result = append(result, val.Value())
+	}
+	return result
 }
 
 var collationNull = collations.TypedCollation{
@@ -318,40 +365,62 @@ func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
 	return ltype
 }
 
-func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
-	switch val.Type {
+func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
+	switch typ {
 	case sqltypes.Int64:
-		ival, err := strconv.ParseInt(string(val.Value), 10, 64)
+		ival, err := strconv.ParseInt(string(value), 10, 64)
 		if err != nil {
 			ival = 0
 		}
 		return EvalResult{typ: sqltypes.Int64, numval: uint64(ival)}, nil
 	case sqltypes.Int32:
-		ival, err := strconv.ParseInt(string(val.Value), 10, 32)
+		ival, err := strconv.ParseInt(string(value), 10, 32)
 		if err != nil {
 			ival = 0
 		}
 		return EvalResult{typ: sqltypes.Int32, numval: uint64(ival)}, nil
 	case sqltypes.Uint64:
-		uval, err := strconv.ParseUint(string(val.Value), 10, 64)
+		uval, err := strconv.ParseUint(string(value), 10, 64)
 		if err != nil {
 			uval = 0
 		}
 		return EvalResult{typ: sqltypes.Uint64, numval: uval}, nil
 	case sqltypes.Float64:
-		fval, err := strconv.ParseFloat(string(val.Value), 64)
+		fval, err := strconv.ParseFloat(string(value), 64)
 		if err != nil {
 			fval = 0
 		}
 		return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}, nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
-		return EvalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
+		return EvalResult{typ: sqltypes.VarBinary, bytes: value}, nil
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
-		return EvalResult{typ: val.Type, bytes: val.Value}, nil
+		return EvalResult{typ: typ, bytes: value}, nil
 	case sqltypes.Null:
 		return EvalResult{typ: sqltypes.Null}, nil
+	default:
+		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", typ.String())
 	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
+
+}
+func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
+	switch val.Type {
+	case querypb.Type_TUPLE:
+		tuple := make([]EvalResult, 0, len(val.Values))
+		for _, value := range val.Values {
+			single, err := evaluateByTypeSingle(value.Type, value.Value)
+			if err != nil {
+				return EvalResult{}, err
+			}
+			tuple = append(tuple, single)
+		}
+		return EvalResult{
+			typ:   querypb.Type_TUPLE,
+			tuple: &tuple,
+		}, nil
+
+	default:
+		return evaluateByTypeSingle(val.Type, val.Value)
+	}
 }
 
 // debugString prints the entire EvalResult in a debug format
