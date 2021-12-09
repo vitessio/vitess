@@ -130,4 +130,22 @@
     .btn-warning.btn-secondary:visited {
         @apply text-warning;
     }
+
+    .hotkey {
+        @apply border border-gray-300;
+        @apply flex-none;
+        @apply font-mono;
+        @apply inline-block;
+        @apply px-3 py-1;
+        @apply rounded;
+        @apply text-secondary;
+        @apply text-sm;
+        @apply uppercase;
+        @apply w-max;
+    }
+
+    .hotkey-lg {
+        @apply px-4 py-2;
+        @apply text-base;
+    }
 }
