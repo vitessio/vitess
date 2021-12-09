@@ -52,6 +52,13 @@ create table t3(
 	tcol2 varchar(50),
 	primary key(id)
 ) Engine=InnoDB;
+
+create table user_region(
+	id bigint,
+	cola bigint,
+	colb bigint,
+	primary key(id)
+) Engine=InnoDB;
 `
 	unshardedSchemaSQL = `create table u_a(
 	id bigint,
@@ -72,6 +79,12 @@ create table u_b(
   "vindexes": {
     "xxhash": {
       "type": "xxhash"
+    },
+    "regional_vdx": {
+	  "type": "region_experimental",
+	  "params": {
+		"region_bytes": "1"
+	  }
     }
   },
   "tables": {
@@ -110,7 +123,15 @@ create table u_b(
           "type": "VARCHAR"
         }
       ]
-    }
+    },
+    "user_region": {
+	  "column_vindexes": [
+	    {
+          "columns": ["cola","colb"],
+		  "name": "regional_vdx"
+		}
+      ]
+	}
   }
 }`
 
