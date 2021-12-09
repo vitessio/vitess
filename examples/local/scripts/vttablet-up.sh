@@ -25,7 +25,7 @@ port=$[15000 + $uid]
 grpc_port=$[16000 + $uid]
 printf -v alias '%s-%010d' $cell $uid
 printf -v tablet_dir 'vt_%010d' $uid
-tablet_hostname='localhost'
+tablet_hostname=''
 printf -v tablet_logfile 'vttablet_%010d_querylog.txt' $uid
 
 tablet_type=replica
