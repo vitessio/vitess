@@ -285,6 +285,9 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
 		return NewBindVar(string(node), collation), nil
+	case sqlparser.ListArg:
+		collation := getCollation(e, lookup)
+		return NewBindVar(string(node), collation), nil
 	case *sqlparser.Literal:
 		switch node.Type {
 		case sqlparser.IntVal:

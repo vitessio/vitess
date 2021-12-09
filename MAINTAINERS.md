@@ -13,10 +13,10 @@ The following is the full list, alphabetically ordered.
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) frouioui@planetscale.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
+* Mali Akmanalp ([makmanalp](https://github.com/makmanalp) makmanalp@hubspot.com
 * Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
-* Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@figma.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Sara Bee ([doeg](https://github.com/doeg)) sarab@slack-corp.com
@@ -48,7 +48,7 @@ vmg
 deepthi, rafael, enisoc, shlomi-noach, ajm188, GuptaManan100
 
 ### Java
-mpawliszyn, pH14, harshit-gangal
+mpawliszyn, makmanalp, harshit-gangal
 
 ### Kubernetes
 derekperkins, dkhenry, enisoc

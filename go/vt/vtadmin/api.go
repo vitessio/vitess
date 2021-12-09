@@ -169,6 +169,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
+	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -891,69 +892,39 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	span, ctx := trace.NewSpan(ctx, "API.GetTablet")
 	defer span.Finish()
 
-	span.Annotate("tablet_alias", req.Alias)
+	return api.getTabletForAction(ctx, span, rbac.GetAction, req.Alias, req.ClusterIds)
+}
 
-	alias, err := topoproto.ParseTabletAlias(req.Alias)
+// PingTablet is part of the vtadminpb.VTAdminServer interface.
+func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest) (*vtadminpb.PingTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.PingTablet")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PingAction, req.Alias, req.ClusterIds)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", req.Alias, err)
+		return nil, err
 	}
 
-	span.Annotate("tablet_cell", alias.Cell)
-	span.Annotate("tablet_uid", alias.Uid)
-
-	clusters, ids := api.getClustersForRequest(req.ClusterIds)
-
-	var (
-		tablets []*vtadminpb.Tablet
-		wg      sync.WaitGroup
-		er      concurrency.AllErrorRecorder
-		m       sync.Mutex
-	)
-
-	for _, c := range clusters {
-		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
-			continue
-		}
-
-		wg.Add(1)
-
-		go func(c *cluster.Cluster) {
-			defer wg.Done()
-
-			ts, err := c.GetTablets(ctx)
-			if err != nil {
-				er.RecordError(fmt.Errorf("GetTablets(cluster = %s): %w", c.ID, err))
-				return
-			}
-
-			var found []*vtadminpb.Tablet
-
-			for _, t := range ts {
-				if t.Tablet.Alias.Cell == alias.Cell && t.Tablet.Alias.Uid == alias.Uid {
-					found = append(found, t)
-				}
-			}
-
-			m.Lock()
-			tablets = append(tablets, found...)
-			m.Unlock()
-		}(c)
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
 	}
 
-	wg.Wait()
+	cluster.AnnotateSpan(c, span)
 
-	if er.HasErrors() {
-		return nil, er.Error()
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
 	}
 
-	switch len(tablets) {
-	case 0:
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, req.Alias, ids)
-	case 1:
-		return tablets[0], nil
+	_, err = c.Vtctld.PingTablet(ctx, &vtctldatapb.PingTabletRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error pinging cluster: %w", err)
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, req.Alias, ids)
+	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
 }
 
 // GetTablets is part of the vtadminpb.VTAdminServer interface.
@@ -1454,4 +1425,70 @@ func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []strin
 	}
 
 	return clusters, ids
+}
+
+func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action rbac.Action, alias string, clusterIds []string) (*vtadminpb.Tablet, error) {
+	span.Annotate("tablet_alias", alias)
+
+	tabletAlias, err := topoproto.ParseTabletAlias(alias)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", alias, err)
+	}
+
+	span.Annotate("tablet_cell", tabletAlias.Cell)
+	span.Annotate("tablet_uid", tabletAlias.Uid)
+
+	clusters, ids := api.getClustersForRequest(clusterIds)
+
+	var (
+		tablets []*vtadminpb.Tablet
+		wg      sync.WaitGroup
+		er      concurrency.AllErrorRecorder
+		m       sync.Mutex
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, action) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			ts, err := c.GetTablets(ctx)
+			if err != nil {
+				er.RecordError(fmt.Errorf("GetTablets(cluster = %s): %w", c.ID, err))
+				return
+			}
+
+			var found []*vtadminpb.Tablet
+
+			for _, t := range ts {
+				if t.Tablet.Alias.Cell == tabletAlias.Cell && t.Tablet.Alias.Uid == tabletAlias.Uid {
+					found = append(found, t)
+				}
+			}
+
+			m.Lock()
+			tablets = append(tablets, found...)
+			m.Unlock()
+		}(c)
+	}
+
+	wg.Wait()
+
+	if er.HasErrors() {
+		return nil, er.Error()
+	}
+
+	switch len(tablets) {
+	case 0:
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, alias, ids)
+	case 1:
+		return tablets[0], nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, alias, ids)
 }

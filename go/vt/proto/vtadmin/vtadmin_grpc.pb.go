@@ -59,6 +59,8 @@ type VTAdminClient interface {
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
+	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
@@ -229,6 +231,15 @@ func (c *vTAdminClient) GetTablet(ctx context.Context, in *GetTabletRequest, opt
 	return out, nil
 }
 
+func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error) {
+	out := new(PingTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PingTablet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error) {
 	out := new(GetTabletsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTablets", in, out, opts...)
@@ -336,6 +347,8 @@ type VTAdminServer interface {
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
+	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
@@ -406,6 +419,9 @@ func (UnimplementedVTAdminServer) GetSrvVSchemas(context.Context, *GetSrvVSchema
 }
 func (UnimplementedVTAdminServer) GetTablet(context.Context, *GetTabletRequest) (*Tablet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablet not implemented")
+}
+func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
 }
 func (UnimplementedVTAdminServer) GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
@@ -729,6 +745,24 @@ func _VTAdmin_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).PingTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/PingTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).PingTablet(ctx, req.(*PingTabletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetTabletsRequest)
 	if err := dec(in); err != nil {
@@ -925,6 +959,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablet",
 			Handler:    _VTAdmin_GetTablet_Handler,
+		},
+		{
+			MethodName: "PingTablet",
+			Handler:    _VTAdmin_PingTablet_Handler,
 		},
 		{
 			MethodName: "GetTablets",

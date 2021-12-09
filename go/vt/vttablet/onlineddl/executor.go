@@ -40,6 +40,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -963,7 +964,19 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	if err := e.updateMigrationTableRows(ctx, onlineDDL.UUID, v.tableRows); err != nil {
 		return err
 	}
-	if err := e.updateMigrationAddedRemovedUniqueKeys(ctx, onlineDDL.UUID, len(v.addedUniqueKeys), len(v.removedUniqueKeys)); err != nil {
+	removedUniqueKeyNames := []string{}
+	for _, uniqueKey := range v.removedUniqueKeys {
+		removedUniqueKeyNames = append(removedUniqueKeyNames, uniqueKey.Name)
+	}
+
+	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
+		len(v.addedUniqueKeys),
+		len(v.removedUniqueKeys),
+		strings.Join(sqlescape.EscapeIDs(removedUniqueKeyNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.droppedNoDefaultColumnNames), ","),
+		strings.Join(sqlescape.EscapeIDs(v.expandedColumnNames), ","),
+		v.revertibleNotes,
+	); err != nil {
 		return err
 	}
 	if revertMigration == nil {
@@ -2966,10 +2979,17 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 	return err
 }
 
-func (e *Executor) updateMigrationAddedRemovedUniqueKeys(ctx context.Context, uuid string, addedUniqueKeys, removedUnqiueKeys int) error {
-	query, err := sqlparser.ParseAndBind(sqlUpdateAddedRemovedUniqueKeys,
+func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
+	addedUniqueKeys, removedUnqiueKeys int, removedUniqueKeyNames string,
+	droppedNoDefaultColumnNames string, expandedColumnNames string,
+	revertibleNotes string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
+		sqltypes.StringBindVariable(removedUniqueKeyNames),
+		sqltypes.StringBindVariable(droppedNoDefaultColumnNames),
+		sqltypes.StringBindVariable(expandedColumnNames),
+		sqltypes.StringBindVariable(revertibleNotes),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

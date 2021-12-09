@@ -134,11 +134,14 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 }
 
 // CheckCancelAllMigrations cancels all pending migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
 func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	cancelQuery := "alter vitess_migration cancel all"
 	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
 
-	assert.Equal(t, expectCount, int(r.RowsAffected))
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
 }
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status

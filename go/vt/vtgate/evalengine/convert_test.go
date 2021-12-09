@@ -233,3 +233,42 @@ func TestEvaluate(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluateTuple(t *testing.T) {
+	type testCase struct {
+		expression string
+		expected   []sqltypes.Value
+	}
+
+	tests := []testCase{{
+		expression: "(1,2,4)",
+		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(4)},
+	}, {
+		expression: "(1,'2',4)",
+		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("2"), sqltypes.NewInt64(4)},
+	}, {
+		expression: "(1,'2',4.0)",
+		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("2"), sqltypes.NewFloat64(4.0)},
+	}}
+
+	for _, test := range tests {
+		t.Run(test.expression, func(t *testing.T) {
+			// Given
+			stmt, err := sqlparser.Parse("select " + test.expression)
+			require.NoError(t, err)
+			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+			sqltypesExpr, err := Convert(astExpr, dummyCollation(45))
+			require.Nil(t, err)
+			require.NotNil(t, sqltypesExpr)
+
+			// When
+			r, err := sqltypesExpr.Evaluate(nil)
+
+			// Then
+			require.NoError(t, err)
+			require.NotNil(t, r)
+			gotValues := r.TupleValues()
+			assert.Equal(t, test.expected, gotValues, "expected: %s, got: %s", test.expected, gotValues)
+		})
+	}
+}

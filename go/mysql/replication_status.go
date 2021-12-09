@@ -30,6 +30,9 @@ type ReplicationStatus struct {
 	// were to finish executing everything that's currently in its relay log.
 	// However, some MySQL flavors don't expose this information,
 	// in which case RelayLogPosition.IsZero() will be true.
+	// If ReplicationLagUnknown is true then we should not rely on the seconds
+	// behind value and we can instead try to calculate the lag ourselves when
+	// appropriate.
 	RelayLogPosition      Position
 	FilePosition          Position
 	FileRelayLogPosition  Position
@@ -37,6 +40,7 @@ type ReplicationStatus struct {
 	IOThreadRunning       bool
 	SQLThreadRunning      bool
 	ReplicationLagSeconds uint
+	ReplicationLagUnknown bool
 	SourceHost            string
 	SourcePort            int
 	ConnectRetry          int

@@ -545,9 +545,7 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
     "FieldQuery": "select 1 from `user` where 1 != 1",
     "Query": "select 1 from `user` having count(id) = 10 and `name` = 'a'",
     "Table": "`user`",
-    "Values": [
-      "a"
-    ],
+    "Values": "a",
     "Vindex": "name_user_map"
   }
 }

@@ -21,8 +21,6 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -59,8 +57,6 @@ func createRoute() *Route {
 		TableName:         "tableName",
 		FieldQuery:        "more query",
 		Vindex:            hash.(*vindexes.Hash),
-		Values:            []sqltypes.PlanValue{},
-		OrderBy:           []OrderByParams{},
 	}
 }
 

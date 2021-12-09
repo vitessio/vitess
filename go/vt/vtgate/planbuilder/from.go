@@ -262,7 +262,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.NewBinary("binary", nil)
 		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
-		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
+		eroute.Value = sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}
 	}
 	eroute.TableName = sqlparser.String(vschemaTable.Name)
 	rb.eroute = eroute

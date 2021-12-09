@@ -169,12 +169,12 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 // extractOnlineDDL extracts the gh-ost binary from this executable. gh-ost is appended
 // to vttablet executable by `make build` and via ricebox
 func extractOnlineDDL() error {
-	riceBox, err := rice.FindBox("../../../resources/bin")
-	if err != nil {
-		return err
-	}
-
 	if binaryFileName, isOverride := onlineddl.GhostBinaryFileName(); !isOverride {
+		riceBox, err := rice.FindBox("../../../resources/bin")
+		if err != nil {
+			return err
+		}
+
 		// there is no path override for gh-ost. We're expected to auto-extract gh-ost.
 		ghostBinary, err := riceBox.Bytes("gh-ost")
 		if err != nil {
