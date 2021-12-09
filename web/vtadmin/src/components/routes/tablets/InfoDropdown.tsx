@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { usePingTablet, useRefreshState } from '../../../hooks/api';
+import { useHealthCheck, usePingTablet, useRefreshState } from '../../../hooks/api';
 import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
 import { Icons } from '../../Icon';
@@ -38,6 +38,15 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
             loadingTitle: `Refreshing tablet ${alias}`,
             loadingDescription: 'Refreshing tablet record on tablet...',
         },
+        healthcheck: {
+            useHook: useHealthCheck,
+            params: { alias, clusterID },
+            options: { enabled: false },
+            successDescription: `Tablet ${alias} looks healthy.`,
+            errorDescription: `There was an issue running a health check on the tablet`,
+            loadingTitle: `Running health check`,
+            loadingDescription: `Running health check on tablet ${alias}`,
+        }
     };
 
     // Default config is needed to avoid "hook order" inconsistency
@@ -50,7 +59,7 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
             <Dropdown dropdownButton={Icons.info} position="bottom-right">
                 <MenuItem onClick={() => openDialog('ping')}>Ping</MenuItem>
                 <MenuItem onClick={() => openDialog('refresh')}>Refresh state</MenuItem>
-                <MenuItem>Run health check</MenuItem>
+                <MenuItem onClick={() => openDialog('healthcheck')}>Run health check</MenuItem>
             </Dropdown>
             <InfoDialog isOpen={isOpen} onClose={closeDialog} {...(dialogConfigs[currentDialog] || defaultConfig)} />
         </div>
