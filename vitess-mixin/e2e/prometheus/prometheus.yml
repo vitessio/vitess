@@ -31,7 +31,7 @@ scrape_configs:
     static_configs:
       - targets:
           - 'vtwork:8080'
-  # Mock mysql exporter for vttablet 
+  # Mock mysql exporter for vttablet
   - job_name: mysql
     metrics_path: /metrics
     static_configs:
@@ -42,7 +42,7 @@ scrape_configs:
        target_label: instance
        action: replace
        replacement: vttablet101:8080
-  # Mock node exporter for vtgate 
+  # Mock node exporter for vtgate
   - job_name: node-exporter-vitess-vtgate
     metrics_path: /metrics
     static_configs:
@@ -53,7 +53,7 @@ scrape_configs:
         target_label: instance
         action: replace
         replacement: vtgate:8080
-  # Mock node exporter for vttablet 
+  # Mock node exporter for vttablet
   - job_name: node-exporter-vitess-vttablet
     metrics_path: /metrics
     static_configs:
