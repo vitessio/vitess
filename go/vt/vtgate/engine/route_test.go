@@ -1446,7 +1446,7 @@ func TestSelectINMultiColumnVindex(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
-		`ExecuteMultiShard ks.-20: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"} values:{type:INT64 value:"4"}} false false`,
+		`ExecuteMultiShard ks.-20: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
@@ -1455,7 +1455,7 @@ func TestSelectINMultiColumnVindex(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
-		`StreamExecuteMulti dummy_select ks.-20: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"} values:{type:INT64 value:"4"}} `,
+		`StreamExecuteMulti dummy_select ks.-20: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
@@ -1556,7 +1556,7 @@ func TestBuildMultiColumnVindexValues(t *testing.T) {
 			output: [][][]*querypb.Value{{
 				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
 				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
-				{sqltypes.ValueToProto(sqltypes.NewInt64(1)), sqltypes.ValueToProto(sqltypes.NewInt64(1))},
+				{sqltypes.ValueToProto(sqltypes.NewInt64(1))},
 			},
 			},
 		},

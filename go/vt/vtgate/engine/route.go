@@ -651,12 +651,19 @@ func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*quer
 		// cols = 2
 		cols := len(shardValues[0])
 		shardIds := make([][]*querypb.Value, cols)
+		colValSeen := make([]map[string]interface{}, cols)
 		for _, values := range shardValues {
 			for colIdx, value := range values {
+				if colValSeen[colIdx] == nil {
+					colValSeen[colIdx] = map[string]interface{}{}
+				}
+				if _, found := colValSeen[colIdx][value.String()]; found {
+					continue
+				}
 				shardIds[colIdx] = append(shardIds[colIdx], sqltypes.ValueToProto(value))
+				colValSeen[colIdx][value.String()] = nil
 			}
 		}
-		// TODO - Eliminate the duplicates in the shard values
 		shardsIds = append(shardsIds, shardIds)
 	}
 	return shardsIds

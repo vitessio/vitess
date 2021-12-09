@@ -2767,8 +2767,8 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 1, 1})
-	bv2, _ := sqltypes.BuildBindVariable([]int64{17984, 17984, 17984})
+	bv1, _ := sqltypes.BuildBindVariable([]int64{1})
+	bv2, _ := sqltypes.BuildBindVariable([]int64{17984})
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
 	bvtg2, _ := sqltypes.BuildBindVariable([]int64{2, 3, 4})
 	wantQueries := []*querypb.BoundQuery{
