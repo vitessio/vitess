@@ -1,7 +1,9 @@
+import { RadioGroup } from '@headlessui/react';
 import * as React from 'react';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Theme, useTheme } from '../../hooks/useTheme';
 import { Icon, Icons } from '../Icon';
+import { RadioCard } from '../inputs/RadioCard';
 import { Select } from '../inputs/Select';
 import { ContentContainer } from '../layout/ContentContainer';
 import { Tab } from '../tabs/Tab';
@@ -320,6 +322,46 @@ export const Debug = () => {
                         );
                     })}
                 </section>
+
+                <section>
+                    <h3 className="mt-12 mb-8">Radio Groups</h3>
+                    <RadioGroup
+                        value={formData.radioGroupValue}
+                        onChange={(radioGroupValue) => {
+                            setFormData({ ...formData, radioGroupValue });
+                        }}
+                    >
+                        <RadioGroup.Label className="block font-semibold my-6">Types of Cats</RadioGroup.Label>
+                        <div className="grid gap-4 max-w-7xl md:grid-flow-col md:auto-cols-fr">
+                            {CATS.map(({ breed, description }) => (
+                                <RadioCard label={breed} description={description} value={breed} />
+                            ))}
+                        </div>
+
+                        <div className="mt-6 text-secondary">
+                            <span className="hidden md:inline-block">
+                                <div className="hotkey">←</div> <div className="hotkey">→</div>
+                            </span>
+                            <span className="md:hidden">
+                                <div className="hotkey">↑</div> <div className="hotkey">↓</div>
+                            </span>{' '}
+                            to change selection.
+                        </div>
+                    </RadioGroup>
+                </section>
+
+                <section>
+                    <h3 className="mt-12 mb-8">Keyboard shortcuts</h3>
+                    {['hotkey-lg', ''].map((size) => (
+                        <div className="flex gap-2 mb-6" key={size}>
+                            {['A', 'B', 'C', '/', '←', '↑', '→', '↓', '⌘', 'ctrl', 'cmd', 'shift'].map((k) => (
+                                <div className={`hotkey ${size}`} key={k}>
+                                    {k}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </section>
             </div>
         </ContentContainer>
     );
@@ -344,3 +386,19 @@ const FRUITS: { emoji: string; name: string; id: string }[] = [
 ];
 
 const FRUIT_NAMES = FRUITS.map((f) => f.name).slice(0, 5);
+
+const CATS: { breed: string; description: string }[] = [
+    {
+        breed: 'Maine Coon',
+        description:
+            'Known for its large stature and thick fur coat, the Maine coon is a cat that is difficult to ignore.',
+    },
+    {
+        breed: 'Ragdoll',
+        description: 'Ragdoll cats get their name from their docile temperament.',
+    },
+    {
+        breed: 'Bengal',
+        description: 'Bengals have a wild appearance; their golden shimmer comes from their leopard cat ancestry.',
+    },
+];
