@@ -11,36 +11,39 @@ interface InfoDropdownProps {
 
 const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
     const [currentDialog, setCurrentDialog] = useState('');
-    const [isOpen, setIsOpen] = useState(false)
-    const closeDialog = () => setIsOpen(false)
+    const [isOpen, setIsOpen] = useState(false);
+    const closeDialog = () => setIsOpen(false);
 
-    const openDialog = (key: string) => { setCurrentDialog(key); setIsOpen(true) }
+    const openDialog = (key: string) => {
+        setCurrentDialog(key);
+        setIsOpen(true);
+    };
 
     const dialogConfigs: Record<string, BaseInfoDialogProps> = {
-        'ping': {
+        ping: {
             useHook: usePingTablet,
             params: { alias, clusterID },
             options: { enabled: false },
             successDescription: `Successfully reached tablet ${alias} via RPC.`,
             errorDescription: `There was an issue pinging tablet ${alias}`,
             loadingTitle: `Pinging tablet ${alias}`,
-            loadingDescription: "Checking to see if tablet is reachable via RPC..."
+            loadingDescription: 'Checking to see if tablet is reachable via RPC...',
         },
-        'refresh': {
+        refresh: {
             useHook: useRefreshState,
             params: { alias, clusterID },
             options: { enabled: false },
             successDescription: `Successfully refreshed tablet ${alias}.`,
             errorDescription: `There was an issue refreshing tablet`,
             loadingTitle: `Refreshing tablet ${alias}`,
-            loadingDescription: "Refreshing tablet record on tablet..."
-        }
-    }
+            loadingDescription: 'Refreshing tablet record on tablet...',
+        },
+    };
 
     // Default config is needed to avoid "hook order" inconsistency
     // Queries are not executed until dialog is open; no unneccessary queries are executed as a result.
 
-    const defaultConfig = dialogConfigs['ping']
+    const defaultConfig = dialogConfigs['ping'];
 
     return (
         <div className="w-min inline-block">
@@ -49,11 +52,7 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
                 <MenuItem onClick={() => openDialog('refresh')}>Refresh state</MenuItem>
                 <MenuItem>Run health check</MenuItem>
             </Dropdown>
-            <InfoDialog
-                isOpen={isOpen}
-                onClose={closeDialog}
-                {...dialogConfigs[currentDialog] || defaultConfig}
-            />
+            <InfoDialog isOpen={isOpen} onClose={closeDialog} {...(dialogConfigs[currentDialog] || defaultConfig)} />
         </div>
     );
 };
