@@ -251,6 +251,18 @@ export const refreshState = async ({ clusterID, alias }: RefreshStateParams) => 
     return pb.RefreshStateResponse.create(result);
 };
 
+export interface RunHealthCheckParams {
+    clusterID?:string;
+    alias: string;
+}
+
+export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/healthcheck?cluster=${clusterID}`);
+    const err = pb.RunHealthCheckResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RunHealthCheckResponse.create(result);
+};
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;
     data?: TabletDebugVars;
