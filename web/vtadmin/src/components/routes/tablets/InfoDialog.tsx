@@ -18,7 +18,7 @@ export interface BaseInfoDialogProps {
 
 interface InfoDialogProps extends BaseInfoDialogProps {
     isOpen: boolean;
-    onClose: () => void
+    onClose: () => void;
 }
 
 const InfoDialog: React.FC<InfoDialogProps> = ({
@@ -34,10 +34,7 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
     isOpen,
     onClose,
 }) => {
-    const { data, error, isLoading, refetch } = useHook(
-        params,
-        options || {},
-    );
+    const { data, error, isLoading, refetch } = useHook(params, options || {});
 
     // Animate loading briefly in case useHook is very fast
     // to give UX sense of work being done
@@ -54,7 +51,7 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
-    const loading = !animationDone || isLoading
+    const loading = !animationDone || isLoading;
 
     const SuccessState: React.FC = () => (
         <div className="w-full flex flex-col justify-center items-center">
@@ -82,43 +79,47 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
         <Dialog
             isOpen={isOpen}
             onClose={() => {
-                setAnimationDone(false)
-                onClose()
+                setAnimationDone(false);
+                onClose();
             }}
             hideCancel={true}
             confirmText="Done"
         >
             <div>
                 <div className="flex justify-center items-center w-full h-40">
-                    {loading && (<Transition
-                        className="absolute"
-                        show={loading && isOpen}
-                        leave="transition-opacity duration-100"
-                        enter="transition-opacity duration-75"
-                        enterFrom="opacity-0"
-                        enterTo="opacity-100"
-                        leaveFrom="opacity-100"
-                        leaveTo="opacity-0"
-                    >
-                        <div className="w-full flex flex-col justify-center items-center">
-                            <span className="flex h-6 w-6 relative items-center justify-center">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-6 w-6 bg-yellow-500"></span>
-                            </span>
-                            <div className="text-lg mt-6 font-bold">{loadingTitle || 'Loading...'}</div>
-                            <div className="text-sm">{loadingDescription}</div>
-                        </div>
-                    </Transition>)}
-                    {!loading && (<Transition
-                        className="absolute"
-                        show={!loading && isOpen}
-                        enter="delay-100 transition-opacity duration-75"
-                        enterFrom="opacity-0"
-                        enterTo="opacity-100"
-                    >
-                        {data && <SuccessState />}
-                        {error && <FailState />}
-                    </Transition>)}
+                    {loading && (
+                        <Transition
+                            className="absolute"
+                            show={loading && isOpen}
+                            leave="transition-opacity duration-100"
+                            enter="transition-opacity duration-75"
+                            enterFrom="opacity-0"
+                            enterTo="opacity-100"
+                            leaveFrom="opacity-100"
+                            leaveTo="opacity-0"
+                        >
+                            <div className="w-full flex flex-col justify-center items-center">
+                                <span className="flex h-6 w-6 relative items-center justify-center">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-6 w-6 bg-yellow-500"></span>
+                                </span>
+                                <div className="text-lg mt-6 font-bold">{loadingTitle || 'Loading...'}</div>
+                                <div className="text-sm">{loadingDescription}</div>
+                            </div>
+                        </Transition>
+                    )}
+                    {!loading && (
+                        <Transition
+                            className="absolute"
+                            show={!loading && isOpen}
+                            enter="delay-100 transition-opacity duration-75"
+                            enterFrom="opacity-0"
+                            enterTo="opacity-100"
+                        >
+                            {data && <SuccessState />}
+                            {error && <FailState />}
+                        </Transition>
+                    )}
                 </div>
             </div>
         </Dialog>

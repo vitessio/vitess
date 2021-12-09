@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult  } from 'react-query';
+import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult } from 'react-query';
 import {
     fetchBackups,
     fetchClusters,
@@ -134,8 +134,8 @@ export const useRefreshState = (
     params: Parameters<typeof refreshState>[0],
     options?: UseQueryOptions<pb.RefreshStateResponse, Error>
 ) => {
-    return useQuery(['refresh-state', params], () => refreshState(params), options)
-}
+    return useQuery(['refresh-state', params], () => refreshState(params), options);
+};
 
 export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
@@ -266,5 +266,5 @@ export const useWorkflow = (
     });
 };
 
-export type QueryHook = (params: any, options?:any) => UseQueryResult<any, Error>
-export type Options = UseQueryOptions<ResponseType, Error> | undefined
+export type QueryHook = (params: any, options?: any) => UseQueryResult<any, Error>;
+export type Options = UseQueryOptions<ResponseType, Error> | undefined;

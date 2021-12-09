@@ -34,7 +34,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
     try {
         const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
         const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
-        const opts = {...vtfetchOpts(), ...options};
+        const opts = { ...vtfetchOpts(), ...options };
 
         let response = null;
         try {
@@ -240,16 +240,16 @@ export const pingTablet = async ({ clusterID, alias }: PingTabletParams) => {
 
 export interface RefreshStateParams {
     clusterID?: string;
-    alias: string
+    alias: string;
 }
 
 export const refreshState = async ({ clusterID, alias }: RefreshStateParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/refresh?cluster=${clusterID}`, { method: "put" });
+    const { result } = await vtfetch(`/api/tablet/${alias}/refresh?cluster=${clusterID}`, { method: 'put' });
     const err = pb.RefreshStateResponse.verify(result);
     if (err) throw Error(err);
 
     return pb.RefreshStateResponse.create(result);
-}
+};
 
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;
