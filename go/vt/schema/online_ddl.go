@@ -181,14 +181,17 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 }
 
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
-func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (onlineDDLs [](*OnlineDDL), err error) {
+func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string, providedUUID string) (onlineDDLs [](*OnlineDDL), err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
 		if err := onlineDDLStatementSanity(sql, ddlStmt); err != nil {
 			return err
 		}
-		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, requestContext)
+		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, requestContext, providedUUID)
 		if err != nil {
 			return err
+		}
+		if len(onlineDDLs) > 0 && providedUUID != "" {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "UUID %s provided but multiple DDLs generated", providedUUID)
 		}
 		onlineDDLs = append(onlineDDLs, onlineDDL)
 		return nil
@@ -214,13 +217,22 @@ func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, 
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
+func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string, providedUUID string) (onlineDDL *OnlineDDL, err error) {
 	if ddlStrategySetting == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "NewOnlineDDL: found nil DDLStrategySetting")
 	}
-	u, err := CreateOnlineDDLUUID()
-	if err != nil {
-		return nil, err
+	var onlineDDLUUID string
+	if providedUUID != "" {
+		if !IsOnlineDDLUUID(providedUUID) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "NewOnlineDDL: not a valid UUID: %s", providedUUID)
+		}
+		onlineDDLUUID = providedUUID
+	} else {
+		// No explicit UUID provided. We generate our own
+		onlineDDLUUID, err = CreateOnlineDDLUUID()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	{
@@ -231,7 +243,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		if ddlStrategySetting.IsSkipTopo() {
 			comments = sqlparser.Comments{
 				fmt.Sprintf(`/*vt+ uuid=%s context=%s table=%s strategy=%s options=%s */`,
-					encodeDirective(u),
+					encodeDirective(onlineDDLUUID),
 					encodeDirective(requestContext),
 					encodeDirective(table),
 					encodeDirective(string(ddlStrategySetting.Strategy)),
@@ -273,7 +285,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		Keyspace:       keyspace,
 		Table:          table,
 		SQL:            sql,
-		UUID:           u,
+		UUID:           onlineDDLUUID,
 		Strategy:       ddlStrategySetting.Strategy,
 		Options:        ddlStrategySetting.Options,
 		RequestTime:    time.Now().UnixNano(),
