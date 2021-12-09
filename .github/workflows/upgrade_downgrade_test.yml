@@ -82,31 +82,38 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
-    - name: Create Vitess cluster with current version and insert data
+    - name: Run simple test with current versions for both binaries
       run: |
-        cd examples/local
-        chmod +x ./*.sh ./scripts/*.sh
-        ./all.sh
-        cat ../common/insert_commerce_data.sql | mysql
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
 
-#    - name: Use other version VTGate
-#      run: |
-#        echo $PWD
-#        ls -lR /tmp/vitess-build-current/
-#        ls -lR /tmp/vitess-build-other/
-#        ls -lR $PWD/bin
-#        source build.env
-#        cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
-#        vtgate --version
-#        vttablet --version
-#
-#
-#
-#    - name: Use current version VTGate, and other version VTTablet
-#      run: |
-#        source build.env
-#        cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
-#        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
-#        vtgate --version
-#        vttablet --version
+        source build.env
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 30
 
+    - name: Use other version VTGate
+      run: |
+        cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
+        vtgate --version
+
+    - name: Run simple test old version vtgate and current version vttablet
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+
+        source build.env
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 30
+
+    - name: Use current version VTGate, and other version VTTablet
+      run: |
+        cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
+        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        vtgate --version
+        vttablet --version
+
+    - name: Run simple test current version vtgate and old version vttablet
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+
+        source build.env
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 30
