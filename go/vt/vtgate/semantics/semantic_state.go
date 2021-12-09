@@ -318,3 +318,11 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 		st.ExprTypes[dest] = srcType
 	}
 }
+
+// EmptySemTable creates a new empty SemTable
+func EmptySemTable() *SemTable {
+	return &SemTable{
+		ExprTypes: make(map[sqlparser.Expr]Type),
+		Recursive: make(map[sqlparser.Expr]TableSet),
+	}
+}
