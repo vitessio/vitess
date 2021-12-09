@@ -79,6 +79,13 @@ type (
 	}
 )
 
+// EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
+func EmptyExpressionEnv() *ExpressionEnv {
+	return &ExpressionEnv{
+		BindVars: make(map[string]*querypb.BindVariable),
+	}
+}
+
 // ResolveValue allows for retrieval of the value we expose for public consumption
 func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
 	env := &ExpressionEnv{
