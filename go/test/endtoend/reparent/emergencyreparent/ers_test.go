@@ -203,9 +203,9 @@ func TestPullFromRdonly(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestTwoReplicaNoReplicationStatus checks that ERS is able to fix
+// TestTwoReplicasNoReplicationStatus checks that ERS is able to fix
 // two replicas which do not have any replication status
-func TestTwoReplicaNoReplicationStatus(t *testing.T) {
+func TestTwoReplicasNoReplicationStatus(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
