@@ -18,6 +18,7 @@ package integration
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -101,9 +102,13 @@ func TestTypes(t *testing.T) {
 	}
 }
 
+var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
+var fuzzSeed = flag.Int64("fuzz-seed", 1234, "RNG seed when generating fuzz expressions")
+
 func TestGenerateFuzzCases(t *testing.T) {
-	const Total = 100
-	const Seed = 1234
+	if *fuzzMaxFailures <= 0 {
+		t.Skipf("skipping fuzz test generation")
+	}
 
 	type evaltest struct {
 		Query string
@@ -113,7 +118,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 
 	var golden []evaltest
 	var gen = gencase{
-		rand:         rand.New(rand.NewSource(Seed)),
+		rand:         rand.New(rand.NewSource(*fuzzSeed)),
 		ratioTuple:   8,
 		ratioSubexpr: 8,
 		tupleLen:     4,
@@ -128,7 +133,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
-	for len(golden) < Total {
+	for len(golden) < *fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 
 		stmt, err := sqlparser.Parse(query)
