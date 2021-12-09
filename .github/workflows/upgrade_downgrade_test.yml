@@ -1,5 +1,8 @@
 name: Upgrade Downgrade Testing
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing')
   cancel-in-progress: true
@@ -13,6 +16,15 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
+    - uses: Dreamcodeio/pr-has-label-action@master
+      id: checkLabel
+      with:
+        label: Upgrade Downgrade
+
+    - name: Cancel ${{ steps.checkLabel.outputs.checkedLabel }} workflow if the Upgrade Downgrade testing label is not set on a Pull Request
+      if: ${{ steps.checkLabel.outputs.hasLabel == false }}
+      uses: andymckay/cancel-action@0.2
+
     - name: Check latest versions
       run: echo ${{ needs.get_latest_versions.outputs.matrix }}
 
@@ -92,6 +104,8 @@ jobs:
 
     - name: Use other version VTGate
       run: |
+        source build.env
+
         cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
         vtgate --version
 
@@ -105,6 +119,8 @@ jobs:
 
     - name: Use current version VTGate, and other version VTTablet
       run: |
+        source build.env
+
         cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         vtgate --version
