@@ -81,8 +81,8 @@ func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
 	return nil
 }
 
-// SetUUIDs sets a (possibly empty) list of explicit UUIDs for schema migrations
-func (exec *TabletExecutor) SetUUIDs(commaDelimitedUUIDs string) error {
+// SetUUIDList sets a (possibly empty) list of provided UUIDs for schema migrations
+func (exec *TabletExecutor) SetUUIDList(commaDelimitedUUIDs string) error {
 	uuids := textutil.SplitDelimitedList(commaDelimitedUUIDs)
 	uuidsMap := map[string]bool{}
 	for _, uuid := range uuids {
@@ -98,8 +98,8 @@ func (exec *TabletExecutor) SetUUIDs(commaDelimitedUUIDs string) error {
 	return nil
 }
 
-// hasExplicitUUIDs returns true when explicit UUIDs were provided
-func (exec *TabletExecutor) hasExplicitUUIDs() bool {
+// hasProvidedUUIDs returns true when UUIDs were provided
+func (exec *TabletExecutor) hasProvidedUUIDs() bool {
 	return len(exec.uuids) != 0
 }
 
@@ -259,7 +259,7 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
-func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, explicitUUID string, execResult *ExecuteResult) error {
+func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) error {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return err
@@ -267,7 +267,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, explicit
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		if exec.isOnlineSchemaDDL(stmt) {
-			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext, explicitUUID)
+			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext, providedUUID)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
 				return err
@@ -282,7 +282,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, explicit
 		}
 	case *sqlparser.RevertMigration:
 		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext, explicitUUID)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext, providedUUID)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return err
@@ -332,18 +332,18 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		return &execResult
 	}
 
-	if exec.hasExplicitUUIDs() && len(exec.uuids) != len(sqls) {
-		execResult.ExecutorErr = fmt.Sprintf("explicitly given %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls))
+	if exec.hasProvidedUUIDs() && len(exec.uuids) != len(sqls) {
+		execResult.ExecutorErr = fmt.Sprintf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls))
 		return &execResult
 	}
-	explicitUUID := ""
+	providedUUID := ""
 
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
-		if exec.hasExplicitUUIDs() {
-			explicitUUID = exec.uuids[index]
+		if exec.hasProvidedUUIDs() {
+			providedUUID = exec.uuids[index]
 		}
-		if err := exec.executeSQL(ctx, sql, explicitUUID, &execResult); err != nil {
+		if err := exec.executeSQL(ctx, sql, providedUUID, &execResult); err != nil {
 			execResult.ExecutorErr = err.Error()
 			return &execResult
 		}

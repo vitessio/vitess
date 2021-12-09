@@ -41,7 +41,7 @@ type VtctlClientParams struct {
 	DDLStrategy    string
 	RequestContext string
 	SkipPreflight  bool
-	UUID           string
+	UUIDList       string
 }
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
@@ -69,8 +69,8 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 	if params.DDLStrategy != "" {
 		args = append(args, "-ddl_strategy", params.DDLStrategy)
 	}
-	if params.UUID != "" {
-		args = append(args, "-uuid", params.UUID)
+	if params.UUIDList != "" {
+		args = append(args, "-uuid_list", params.UUIDList)
 	}
 	if params.SkipPreflight {
 		args = append(args, "-skip_preflight")

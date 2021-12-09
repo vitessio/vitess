@@ -60,12 +60,12 @@ For example:
 vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 ```
 
-### vtctl/vtctlclient ApplySchema -uuid
+### vtctl/vtctlclient ApplySchema -uuid_list
 
-`vtctlient ApplySchema` now support a new optional `-uuid` flag. It is possible for the user to explicitly specify the UUIDs for given migration(s). UUIDs must be in a specific format. If given, number of UUIDs must match the number of DDL statements. Example:
+`vtctlient ApplySchema` now support a new optional `-uuid_list` flag. It is possible for the user to explicitly specify the UUIDs for given migration(s). UUIDs must be in a specific format. If given, number of UUIDs must match the number of DDL statements. Example:
 
 ```shell
-vtctlclient OnlineDDL ApplySchema -sql "drop table t1, drop table t2" -uuid "d08f0000_51c9_11ec_9cf2_0a43f95f28a3,d08f0001_51c9_11ec_9cf2_0a43f95f28a3" commerce
+vtctlclient OnlineDDL ApplySchema -sql "drop table t1, drop table t2" -uuid_list "d08f0000_51c9_11ec_9cf2_0a43f95f28a3,d08f0001_51c9_11ec_9cf2_0a43f95f28a3" commerce
 ```
 
 Vitess will assign each migration with given UUID in order of appearance.
