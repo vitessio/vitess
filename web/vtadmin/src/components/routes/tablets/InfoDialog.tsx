@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { QueryHook, Options } from '../../../hooks/api';
 import { Transition } from '@headlessui/react';
 import Dialog from '../../dialog/Dialog';
 import { Icon, Icons } from '../../Icon';
+import { UseQueryResult } from 'react-query';
 
 export interface BaseInfoDialogProps {
     loadingTitle?: string;
@@ -11,9 +11,7 @@ export interface BaseInfoDialogProps {
     successDescription: string;
     errorTitle?: string;
     errorDescription: string;
-    useHook: QueryHook;
-    params: Record<string, any>;
-    options: Options;
+    useHook: () => UseQueryResult<any, Error>;
 }
 
 interface InfoDialogProps extends BaseInfoDialogProps {
@@ -29,12 +27,10 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
     errorTitle,
     errorDescription,
     useHook,
-    params,
-    options,
     isOpen,
     onClose,
 }) => {
-    const { data, error, isLoading, refetch } = useHook(params, options || {});
+    const { data, error, isLoading, refetch } = useHook();
 
     // Animate loading briefly in case useHook is very fast
     // to give UX sense of work being done

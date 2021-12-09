@@ -21,27 +21,21 @@ const InfoDropdown: React.FC<InfoDropdownProps> = ({ alias, clusterID }) => {
 
     const dialogConfigs: Record<string, BaseInfoDialogProps> = {
         ping: {
-            useHook: usePingTablet,
-            params: { alias, clusterID },
-            options: { enabled: false },
+            useHook: () => usePingTablet({ alias, clusterID }, { enabled: false }),
             successDescription: `Successfully reached tablet ${alias} via RPC.`,
             errorDescription: `There was an issue pinging tablet ${alias}`,
             loadingTitle: `Pinging tablet ${alias}`,
             loadingDescription: 'Checking to see if tablet is reachable via RPC...',
         },
         refresh: {
-            useHook: useRefreshState,
-            params: { alias, clusterID },
-            options: { enabled: false },
+            useHook: () => useRefreshState({ alias, clusterID }, { enabled: false }),
             successDescription: `Successfully refreshed tablet ${alias}.`,
             errorDescription: `There was an issue refreshing tablet`,
             loadingTitle: `Refreshing tablet ${alias}`,
             loadingDescription: 'Refreshing tablet record on tablet...',
         },
         healthcheck: {
-            useHook: useHealthCheck,
-            params: { alias, clusterID },
-            options: { enabled: false },
+            useHook: () => useHealthCheck({ alias, clusterID }, { enabled: false }),
             successDescription: `Tablet ${alias} looks healthy.`,
             errorDescription: `There was an issue running a health check on the tablet`,
             loadingTitle: `Running health check`,

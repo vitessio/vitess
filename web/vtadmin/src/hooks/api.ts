@@ -276,6 +276,3 @@ export const useWorkflow = (
         ...options,
     });
 };
-
-export type QueryHook = (params: any, options?: any) => UseQueryResult<any, Error>;
-export type Options = UseQueryOptions<ResponseType, Error> | undefined;
