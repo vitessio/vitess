@@ -34,7 +34,7 @@ var (
 	groupOnlineSize = stats.NewGaugesWithMultiLabels("MysqlGroupOnlineSize", "Online MySQL server in the group", []string{"Keyspace", "Shard"})
 	isLostQuorum    = stats.NewGaugesWithMultiLabels("MysqlGroupLostQuorum", "If MySQL group lost quorum", []string{"Keyspace", "Shard"})
 
-	heartbeatThreshold = flag.Int("group_heartbeat_threshold_sec", 0, "VTGR will trigger backoff on inconsistent state and the group heartbeat staleness exceeds the threshold here. Need to set together with -enable_heartbeat_check")
+	heartbeatThreshold = flag.Int("group_heartbeat_threshold", 0, "VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with -enable_heartbeat_check")
 )
 
 // SQLGroup contains views from all the nodes within the shard
