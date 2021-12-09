@@ -31,6 +31,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+var defaultenv = collations.Local()
+
 type testweight struct {
 	collation string
 	input     []byte

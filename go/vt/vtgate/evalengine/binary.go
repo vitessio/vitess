@@ -20,6 +20,8 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -61,6 +63,12 @@ func (b *BinaryExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
+	if lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE {
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
+	}
+	if hasNullEvalResult(lVal, rVal) {
+		return resultNull, nil
+	}
 	return b.Op.Evaluate(lVal, rVal)
 }
 
@@ -95,7 +103,7 @@ func (m *Multiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // Evaluate implements the BinaryOp interface
 func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return divideNumericWithError(left, right)
+	return divideNumericWithError(left, right, true)
 }
 
 // Type implements the BinaryOp interface
