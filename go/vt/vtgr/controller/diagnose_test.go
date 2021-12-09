@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -51,10 +53,11 @@ var (
 )
 
 type testGroupInput struct {
-	groupName  string
-	readOnly   bool
-	groupState []db.TestGroupState
-	gtid       mysql.GTIDSet
+	groupName   string
+	readOnly    bool
+	checkResult int
+	groupState  []db.TestGroupState
+	gtid        mysql.GTIDSet
 }
 
 func TestShardIsHealthy(t *testing.T) {
@@ -81,7 +84,7 @@ func TestShardIsHealthy(t *testing.T) {
 		EXPECT().
 		FetchGroupView(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(alias string, target *inst.InstanceKey) (*db.GroupView, error) {
-			return db.BuildGroupView(alias, "group", testHost, testPort0, false, []db.TestGroupState{
+			return db.BuildGroupView(alias, "group", testHost, testPort0, false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -189,7 +192,7 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 						if target.Hostname == "" || target.Port == 0 {
 							return nil, errors.New("invalid mysql instance key")
 						}
-						return db.BuildGroupView(alias, "group", testHost, testPort0, false, []db.TestGroupState{
+						return db.BuildGroupView(alias, "group", testHost, testPort0, false, 0, []db.TestGroupState{
 							{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 							{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 							{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -241,12 +244,17 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 func TestMysqlIssueDiagnoses(t *testing.T) {
 	cfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 	disableProtectionCfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, DisableReadOnlyProtection: true, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	*heartbeatThreshold = 10
+	defer func() {
+		*heartbeatThreshold = math.MaxInt64
+	}()
 	type data struct {
-		alias      string
-		groupName  string
-		readOnly   bool
-		groupInput []db.TestGroupState
-		ttype      topodatapb.TabletType
+		alias       string
+		groupName   string
+		readOnly    bool
+		checkResult int
+		groupInput  []db.TestGroupState
+		ttype       topodatapb.TabletType
 	}
 	var sqltests = []struct {
 		name          string
@@ -257,287 +265,312 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 		removeTablets []string // to simulate missing tablet in topology
 	}{
 		{name: "healthy shard", expected: DiagnoseTypeHealthy, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "recovering primary shard", expected: DiagnoseTypeBackoffError, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "RECOVERING", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "RECOVERING", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "RECOVERING", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "no group in shard", expected: DiagnoseTypeShardHasNoGroup, errMessage: "", inputs: []data{
-			{alias0, "", true, []db.TestGroupState{
+			{alias0, "", true, 0, []db.TestGroupState{
 				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, "", true, []db.TestGroupState{
+			{alias1, "", true, 0, []db.TestGroupState{
 				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "", true, []db.TestGroupState{
+			{alias2, "", true, 0, []db.TestGroupState{
 				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "unreachable node", expected: DiagnoseTypeBackoffError, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "mysql and tablet has different primary", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", inputs: []data{ // vtgr should failover vttablet
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "mysql primary out of topology", expected: DiagnoseTypeUnreachablePrimary, errMessage: "", inputs: []data{ // vtgr should failover mysql
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}, removeTablets: []string{alias0}},
 		{name: "one error node", expected: DiagnoseTypeUnconnectedReplica, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ERROR", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ERROR", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
+		{name: "inactive group with divergent state", expected: DiagnoseTypeShardHasInactiveGroup, errMessage: "", inputs: []data{
+			{alias0, "group", true, 11, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "OFFLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ERROR", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_PRIMARY},
+			{alias1, "group", true, 11, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+			{alias2, "group", true, 11, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+		}},
 		{name: "two error node", expected: DiagnoseTypeInsufficientGroupSize, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ERROR", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "insufficient group member", expected: DiagnoseTypeInsufficientGroupSize, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{}, topodatapb.TabletType_REPLICA},
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "unconnected node", expected: DiagnoseTypeBackoffError, errMessage: "", inputs: []data{
-			{alias0, "group", true, []db.TestGroupState{
+			{alias0, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "unreachable primary", expected: DiagnoseTypeBackoffError, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "UNREACHABLE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "UNREACHABLE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "UNREACHABLE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "more than one group name", expected: DiagnoseTypeError, errMessage: "fail to refreshSQLGroup: group has split brain", inputs: []data{ // vtgr should raise error
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group_xxx", false, []db.TestGroupState{
+			{alias1, "group_xxx", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "different primary", expected: DiagnoseTypeError, errMessage: "fail to refreshSQLGroup: group has split brain", inputs: []data{ // vtgr should raise error
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", false, []db.TestGroupState{
+			{alias1, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "insufficient members in group", expected: DiagnoseTypeInsufficientGroupSize, errMessage: "", inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		// the shard has insufficient member, but the primary is already read_only
 		// we should try to connect the replica node
 		{name: "insufficient members in read only shard", expected: DiagnoseTypeUnconnectedReplica, errMessage: "", inputs: []data{
-			{alias0, "group", true, []db.TestGroupState{
+			{alias0, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "insufficient members in group with disable read only protection", expected: DiagnoseTypeUnconnectedReplica, errMessage: "", config: disableProtectionCfg, inputs: []data{
-			{alias0, "group", false, []db.TestGroupState{
+			{alias0, "group", false, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "read only with disable read only protection", expected: DiagnoseTypeReadOnlyShard, errMessage: "", config: disableProtectionCfg, inputs: []data{
-			{alias0, "group", true, []db.TestGroupState{
+			{alias0, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ERROR", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "read only healthy shard", expected: DiagnoseTypeReadOnlyShard, errMessage: "", inputs: []data{
-			{alias0, "group", true, []db.TestGroupState{
+			{alias0, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
+		{name: "inconsistent member state", expected: DiagnoseTypeBackoffError, errMessage: "", inputs: []data{
+			{alias0, "group", true, 11, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+			{alias1, "group", true, 12, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_PRIMARY},
+			{alias2, "group", true, math.MaxInt64, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+		}},
 		{name: "network partition", expected: DiagnoseTypeBackoffError, errMessage: "", inputs: []data{
-			{alias0, "group", true, []db.TestGroupState{
+			{alias0, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "UNREACHABLE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_PRIMARY},
-			{alias1, "group", true, []db.TestGroupState{
+			{alias1, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "OFFLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias2, "group", true, []db.TestGroupState{
+			{alias2, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "OFFLINE", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
 		}},
 		{name: "start bootstrap in progress", expected: DiagnoseTypeBootstrapBackoff, errMessage: "", inputs: []data{
-			{alias0, "group", true, []db.TestGroupState{
+			{alias0, "group", true, 0, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
 			}, topodatapb.TabletType_REPLICA},
-			{alias1, "", true, []db.TestGroupState{}, topodatapb.TabletType_REPLICA},
-			{alias2, "", true, []db.TestGroupState{
+			{alias1, "", true, 0, []db.TestGroupState{}, topodatapb.TabletType_REPLICA},
+			{alias2, "", true, 0, []db.TestGroupState{
 				{MemberHost: "", MemberPort: "", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
 		}},
@@ -565,6 +598,7 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 				inputMap[input.alias] = testGroupInput{
 					input.groupName,
 					input.readOnly,
+					input.checkResult,
 					input.groupInput,
 					nil,
 				}
@@ -588,7 +622,7 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[alias]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
@@ -749,6 +783,7 @@ func TestDiagnoseWithInactive(t *testing.T) {
 				inputMap[input.alias] = testGroupInput{
 					input.groupName,
 					input.readOnly,
+					0,
 					input.groupInput,
 					nil,
 				}
@@ -767,7 +802,7 @@ func TestDiagnoseWithInactive(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[alias]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
