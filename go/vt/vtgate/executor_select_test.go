@@ -2899,3 +2899,34 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	require.Nil(t, sbc2.Queries)
 }
+
+func TestGen4MultiColMultiEqual(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where (cola,colb) in ((17984,2),(17984,3))"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColMultiEqual",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where (cola, colb) in ((:vtg1, :vtg2), (:vtg1, :vtg3))",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(17984),
+				"vtg2": sqltypes.Int64BindVariable(2),
+				"vtg3": sqltypes.Int64BindVariable(3),
+			},
+		},
+	}
+	require.Nil(t, sbc1.Queries)
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}

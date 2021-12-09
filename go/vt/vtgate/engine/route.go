@@ -334,7 +334,12 @@ func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.Bind
 			return route.paramsSelectIn(vcursor, bindVars)
 		}
 	case SelectMultiEqual:
-		return route.paramsSelectMultiEqual(vcursor, bindVars)
+		switch route.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return route.paramsSelectMultiEqualMultiCol(vcursor, bindVars)
+		default:
+			return route.paramsSelectMultiEqual(vcursor, bindVars)
+		}
 	case SelectNone:
 		return nil, nil, nil
 	default:
@@ -594,7 +599,7 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{value})
+	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, []sqltypes.Value{value})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -615,7 +620,7 @@ func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[stri
 		rowValue = append(rowValue, v)
 	}
 
-	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, [][]sqltypes.Value{rowValue})
+	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -626,7 +631,7 @@ func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[stri
 	return rss, multiBindVars, nil
 }
 
-func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value) ([]*srvtopo.ResolvedShard, [][][]*querypb.Value, error) {
+func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value, shardIdsNeeded bool) ([]*srvtopo.ResolvedShard, [][][]*querypb.Value, error) {
 	destinations, err := vindex.Map(vcursor, rowColValues)
 	if err != nil {
 		return nil, nil, err
@@ -634,10 +639,14 @@ func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspac
 
 	// And use the Resolver to map to ResolvedShards.
 	rss, shardsValues, err := vcursor.ResolveDestinationsMultiCol(keyspace.Name, rowColValues, destinations)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	shardsIds := buildMultiColumnVindexValues(shardsValues)
-
-	return rss, shardsIds, err
+	if shardIdsNeeded {
+		return rss, buildMultiColumnVindexValues(shardsValues), nil
+	}
+	return rss, nil, nil
 }
 
 // buildMultiColumnVindexValues takes in the values resolved for each shard and transposes them
@@ -696,7 +705,7 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, value)
+	rss, values, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -733,7 +742,6 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 		so that the vindex can map them into correct destination.
 	*/
 
-	// TODO: assuming there are atleast 2 columns in multi column vindex. (this assumption may change)
 	var rowColValues [][]sqltypes.Value
 	for _, firstCol := range multiColValues[0] {
 		rowColValues = append(rowColValues, []sqltypes.Value{firstCol})
@@ -742,7 +750,7 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
 	}
 
-	rss, mapVals, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues)
+	rss, mapVals, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, true /* shardIdsNeeded */)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -767,7 +775,7 @@ func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, value)
+	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -778,22 +786,51 @@ func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]
 	return rss, multiBindVars, nil
 }
 
-func resolveShards(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func (route *Route) paramsSelectMultiEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	var multiColValues [][]sqltypes.Value
+	for _, rvalue := range route.Values {
+		v, err := rvalue.ResolveList(bindVars)
+		if err != nil {
+			return nil, nil, err
+		}
+		multiColValues = append(multiColValues, v)
+	}
+
+	// transpose from multi col value to vindex keys with one value from each multi column values.
+	// [1,3]
+	// [2,4]
+	// [5,6]
+	// change
+	// [1,2,5]
+	// [3,4,6]
+
+	rowColValues := make([][]sqltypes.Value, len(multiColValues[0]))
+	for _, colValues := range multiColValues {
+		for row, colVal := range colValues {
+			rowColValues[row] = append(rowColValues[row], colVal)
+		}
+	}
+
+	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, false /* shardIdsNotNeeded */)
+	if err != nil {
+		return nil, nil, err
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {
 		ids[i] = sqltypes.ValueToProto(vik)
 	}
 
-	var err error
-	var destinations []key.Destination
 	// Map using the Vindex
-	switch vindex := vindex.(type) {
-	case vindexes.SingleColumn:
-		destinations, err = vindex.Map(vcursor, vindexKeys)
-	case vindexes.MultiColumn:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi column vindex unsupported")
-	}
+	destinations, err := vindex.Map(vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
 
