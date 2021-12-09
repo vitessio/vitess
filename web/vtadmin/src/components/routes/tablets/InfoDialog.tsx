@@ -80,7 +80,15 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
     );
 
     return (
-        <Dialog isOpen={isOpen} onClose={onClose} hideCancel={true} confirmText="Done">
+        <Dialog
+            isOpen={isOpen}
+            onClose={() => {
+                setAnimationDone(false)
+                onClose()
+            }}
+            hideCancel={true}
+            confirmText="Done"
+        >
             <div>
                 <div className="flex justify-center items-center w-full h-40">
                     {loading && (<Transition
