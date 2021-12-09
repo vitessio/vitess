@@ -82,31 +82,31 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
-    - name: Use other version VTGate
+    - name: Create Vitess cluster with current version and insert data
       run: |
-        echo $PWD
-        ls -lR /tmp/vitess-build-current/
-        ls -lR /tmp/vitess-build-other/
-        ls -lR $PWD/bin
-        source build.env
-        cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
-        vtgate --version
-        vttablet --version
+        cd examples/local
+        chmod +x ./*.sh ./scripts/*.sh
+        ./all.sh
+        cat ../common/insert_commerce_data.sql | mysql
 
-    - name: E2E test
-      run: |
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 17
+#    - name: Use other version VTGate
+#      run: |
+#        echo $PWD
+#        ls -lR /tmp/vitess-build-current/
+#        ls -lR /tmp/vitess-build-other/
+#        ls -lR $PWD/bin
+#        source build.env
+#        cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
+#        vtgate --version
+#        vttablet --version
+#
+#
+#
+#    - name: Use current version VTGate, and other version VTTablet
+#      run: |
+#        source build.env
+#        cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
+#        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+#        vtgate --version
+#        vttablet --version
 
-    - name: Use current version VTGate, and other version VTTablet
-      run: |
-        source build.env
-        cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
-        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
-        vtgate --version
-        vttablet --version
-
-    - name: E2E test
-      run: |
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 17
