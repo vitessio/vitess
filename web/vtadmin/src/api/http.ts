@@ -252,7 +252,7 @@ export const refreshState = async ({ clusterID, alias }: RefreshStateParams) => 
 };
 
 export interface RunHealthCheckParams {
-    clusterID?:string;
+    clusterID?: string;
     alias: string;
 }
 

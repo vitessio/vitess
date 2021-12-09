@@ -141,7 +141,7 @@ export const useRefreshState = (
 /**
  * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
  */
- export const useHealthCheck = (
+export const useHealthCheck = (
     params: Parameters<typeof runHealthCheck>[0],
     options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
 ) => {
