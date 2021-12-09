@@ -591,6 +591,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Left join, single chunk
 "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b"

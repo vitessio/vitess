@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"io"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -217,18 +218,22 @@ func mergeRouteOps(ctx *planningContext, qg *abstract.QueryGraph, physicalOps []
 		if err != nil {
 			return nil, err
 		}
-		// if we found a best plan, we'll replace the two plans that were joined with the join plan created
+		// if we found a plan, we'll replace the two plans that were joined with the join plan created
 		if bestTree != nil {
-			// we need to remove the larger of the two plans first
+			replace := 0
+			// we remove one plan, and replace the other
 			if rIdx > lIdx {
 				physicalOps = removeOpAt(physicalOps, rIdx)
-				physicalOps = removeOpAt(physicalOps, lIdx)
+				replace = lIdx
 			} else {
 				physicalOps = removeOpAt(physicalOps, lIdx)
-				physicalOps = removeOpAt(physicalOps, rIdx)
+				replace = rIdx
 			}
-			physicalOps = append(physicalOps, bestTree)
+			physicalOps[replace] = bestTree
 		} else {
+			if crossJoinsOK {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not happen")
+			}
 			// we will only fail to find a join plan when there are only cross joins left
 			// when that happens, we switch over to allow cross joins as well.
 			// this way we prioritize joining physicalOps with predicates first

@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"sort"
 	"strings"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
