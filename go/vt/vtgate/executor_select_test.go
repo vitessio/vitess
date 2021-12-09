@@ -2796,3 +2796,106 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 	}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 }
+
+func TestGen4MultiColMixedColComparision(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where colb = 2 and cola IN (1,17984)"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColMixedColComparision",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	bvtg1 := sqltypes.Int64BindVariable(2)
+	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
+	vals0sbc1, _ := sqltypes.BuildBindVariable([]int64{1})
+	vals0sbc2, _ := sqltypes.BuildBindVariable([]int64{17984})
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb = :vtg1 and cola in ::__vals0",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": vals0sbc1,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb = :vtg1 and cola in ::__vals0",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": vals0sbc2,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}
+
+func TestGen4MultiColBestVindexSel(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where colb = 2 and cola IN (1,17984) and cola = 1"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColBestVindexSel",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb = :vtg1 and cola in ::vtg2 and cola = :vtg3",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(2),
+				"vtg2": bvtg2,
+				"vtg3": sqltypes.Int64BindVariable(1),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+
+	// reset
+	sbc1.Queries = nil
+
+	query = "select * from user_region where colb in (10,20) and cola IN (1,17984) and cola = 1 and colb = 2"
+	_, err = executor.Execute(context.Background(),
+		"TestGen4MultiColBestVindexSel",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+
+	bvtg1, _ := sqltypes.BuildBindVariable([]int64{10, 20})
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb in ::vtg1 and cola in ::vtg2 and cola = :vtg3 and colb = :vtg4",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": bvtg1,
+				"vtg2": bvtg2,
+				"vtg3": sqltypes.Int64BindVariable(1),
+				"vtg4": sqltypes.Int64BindVariable(2),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+}
