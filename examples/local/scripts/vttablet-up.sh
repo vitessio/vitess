@@ -54,16 +54,16 @@ vttablet \
  -grpc_port $grpc_port \
  -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
- -vtctld_addr http://localhost:$vtctld_web_port/ \
+ -vtctld_addr http://$hostname:$vtctld_web_port/ \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening
 # Not the same as healthy
 
 for i in $(seq 0 300); do
- curl -I "http://localhost:$port/debug/status" >/dev/null 2>&1 && break
+ curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
  sleep 0.1
 done
 
 # check one last time
-curl -I "http://localhost:$port/debug/status" || fail "tablet could not be started!"
+curl -I "http://$hostname:$port/debug/status" || fail "tablet could not be started!"

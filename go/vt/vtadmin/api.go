@@ -1481,8 +1481,7 @@ func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action 
 	)
 
 	for _, c := range clusters {
-		authorized := !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, action)
-		if authorized {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, action) {
 			continue
 		}
 
