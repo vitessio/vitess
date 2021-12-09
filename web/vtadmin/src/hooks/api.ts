@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult, QueryObserverBaseResult,  } from 'react-query';
+import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult  } from 'react-query';
 import {
     fetchBackups,
     fetchClusters,
@@ -266,6 +266,5 @@ export const useWorkflow = (
     });
 };
 
-export type Refetch = QueryObserverBaseResult['refetch']
 export type QueryHook = (params: any, options?:any) => UseQueryResult<any, Error>
 export type Options = UseQueryOptions<ResponseType, Error> | undefined

@@ -34,7 +34,6 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
     isOpen,
     onClose,
 }) => {
-    // Mount content as separate component inside Dialog so internal queries are not executed unless dialog is open.
     const { data, error, isLoading, refetch } = useHook(
         params,
         options || {},
@@ -74,7 +73,7 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
             </span>
             <div className="text-lg mt-3 font-bold">{errorTitle || 'Error'}</div>
             <div className="text-sm">
-                {errorDescription}: {error?.name}
+                {errorDescription}: {error?.message}
             </div>
         </div>
     );
