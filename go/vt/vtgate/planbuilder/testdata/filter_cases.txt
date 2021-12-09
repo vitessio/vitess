@@ -4272,7 +4272,6 @@ Gen4 plan same as above
   }
 }
 
-
 # multi column vindex produces IN plan in gen4 and Scatter in v3
 "select * from multicol_tbl where cola in (1,2) and colb in (3,4)"
 {
@@ -4382,6 +4381,120 @@ Gen4 plan same as above
     "Values": [
       "INT64(1)",
       "(INT64(3), INT64(4))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with both IN predicate and equality predicate
+"select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6) and colb = 7",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6) and colb = 7",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(4)",
+      "INT64(7)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with one column with equal followed by IN predicate, ordering matters for now
+"select * from multicol_tbl where cola = 4 and cola in (1,10) and colb in (5,6)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 4 and cola in (1,10) and colb in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 4 and cola in (1, 10) and colb in (5, 6)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 4 and cola in (1,10) and colb in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 4 and cola in ::__vals0 and colb in ::__vals1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(10))",
+      "(INT64(5), INT64(6))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with one column with IN followed by equal predicate, ordering matters for now
+"select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in ::__vals1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(4)",
+      "(INT64(5), INT64(6))"
     ],
     "Vindex": "multicolIdx"
   }
