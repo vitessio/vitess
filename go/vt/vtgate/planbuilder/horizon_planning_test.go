@@ -71,7 +71,7 @@ func TestCheckIfAlreadyExists(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		semTable := semantics.NewSemTable()
+		semTable := semantics.EmptySemTable()
 		t.Run(tt.name, func(t *testing.T) {
 			got := checkIfAlreadyExists(tt.expr, tt.sel, semTable)
 			assert.Equal(t, tt.want, got)
