@@ -1,0 +1,36 @@
+# This is a workflow that periodically pulls upstream to keep our fork up to date.
+name: Pull Upstream
+
+on:
+  # Enable manually trigger button in UI
+  workflow_dispatch:
+
+  schedule:
+    # Pull every hour at minute 50.
+    # That way, build jobs that run at minute 0 will see the latest commits.
+    - cron: "50 * * * *"
+
+jobs:
+  rebase-upstream-master:
+    name: rebase upstream to latest
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout planetscale/vitess-private
+        uses: actions/checkout@v2
+        with:
+          repository: planetscale/vitess-private
+          fetch-depth: 0
+          token: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config --global user.email "engineering+pull-upstream-workflow@planetscale.com"
+          git config --global user.name "Pull Upstream Workflow"
+
+          git remote add upstream https://github.com/vitessio/vitess
+          git remote set-url upstream --push disabled
+
+      - name: Rebase upstream master
+        run: _planetscale/tools/rebase-upstream-latest.sh
