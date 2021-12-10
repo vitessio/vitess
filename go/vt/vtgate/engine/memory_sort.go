@@ -161,7 +161,7 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 	if ms.UpperLimit == nil {
 		return math.MaxInt64, nil
 	}
-	env := &evalengine.ExpressionEnv{BindVars: bindVars}
+	env := evalengine.EnvWithBindVars(bindVars)
 	resolved, err := ms.UpperLimit.Evaluate(env)
 	if err != nil {
 		return 0, err
