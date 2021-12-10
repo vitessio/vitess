@@ -1424,16 +1424,16 @@ func TestSelectINMultiColumnVindex(t *testing.T) {
 	sel.Vindex = vindex
 	sel.Values = []RouteValue{
 		&evalengine.RouteValue{
-			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
-				func() evalengine.Expr { return evalengine.NewLiteralInt(1) },
-				func() evalengine.Expr { return evalengine.NewLiteralInt(2) },
-			}),
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+			),
 		},
 		&evalengine.RouteValue{
-			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
-				func() evalengine.Expr { return evalengine.NewLiteralInt(3) },
-				func() evalengine.Expr { return evalengine.NewLiteralInt(4) },
-			}),
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(3),
+				evalengine.NewLiteralInt(4),
+			),
 		},
 	}
 
@@ -1477,10 +1477,10 @@ func TestSelectINMixedMultiColumnComparision(t *testing.T) {
 			Expr: evalengine.NewLiteralInt(1),
 		},
 		&evalengine.RouteValue{
-			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
-				func() evalengine.Expr { return evalengine.NewLiteralInt(3) },
-				func() evalengine.Expr { return evalengine.NewLiteralInt(4) },
-			}),
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(3),
+				evalengine.NewLiteralInt(4),
+			),
 		},
 	}
 
@@ -1518,16 +1518,15 @@ func TestSelectMultiEqualMultiCol(t *testing.T) {
 	sel.Vindex = vindex
 	sel.Values = []RouteValue{
 		&evalengine.RouteValue{
-			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
-				func() evalengine.Expr { return evalengine.NewLiteralInt(1) },
-				func() evalengine.Expr { return evalengine.NewLiteralInt(3) },
-			}),
-		},
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(3),
+			)},
 		&evalengine.RouteValue{
-			Expr: evalengine.NewTupleExpr([]func() evalengine.Expr{
-				func() evalengine.Expr { return evalengine.NewLiteralInt(2) },
-				func() evalengine.Expr { return evalengine.NewLiteralInt(4) },
-			}),
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(4),
+			),
 		},
 	}
 
