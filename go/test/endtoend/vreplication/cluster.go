@@ -340,11 +340,6 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				}
 			}
 			for ind, tablet := range tablets {
-				log.Infof("Creating vt_keyspace database for tablet %s", tablets[ind].Name)
-				if _, err := tablet.Vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name),
-					keyspace.Name, false); err != nil {
-					t.Fatalf("Unable to start create database vt_%s for tablet %v", keyspace.Name, tablet.Vttablet)
-				}
 				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())
