@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -79,15 +81,13 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 			Sharded: false,
 		},
 		Query: "dummy_generate",
-		Values: sqltypes.PlanValue{
-			Values: []sqltypes.PlanValue{
-				{Value: sqltypes.NewInt64(1)},
-				{Value: sqltypes.NULL},
-				{Value: sqltypes.NewInt64(2)},
-				{Value: sqltypes.NULL},
-				{Value: sqltypes.NewInt64(3)},
-			},
-		},
+		Values: evalengine.NewTupleExpr(
+			evalengine.NewLiteralInt(1),
+			evalengine.NullExpr,
+			evalengine.NewLiteralInt(2),
+			evalengine.NullExpr,
+			evalengine.NewLiteralInt(3),
+		),
 	}
 
 	vc := newDMLTestVCursor("0")
@@ -134,15 +134,13 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 			Sharded: false,
 		},
 		Query: "dummy_generate",
-		Values: sqltypes.PlanValue{
-			Values: []sqltypes.PlanValue{
-				{Value: sqltypes.NewInt64(1)},
-				{Value: sqltypes.NewInt64(0)},
-				{Value: sqltypes.NewInt64(2)},
-				{Value: sqltypes.NewInt64(0)},
-				{Value: sqltypes.NewInt64(3)},
-			},
-		},
+		Values: evalengine.NewTupleExpr(
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(0),
+			evalengine.NewLiteralInt(2),
+			evalengine.NewLiteralInt(0),
+			evalengine.NewLiteralInt(3),
+		),
 	}
 
 	vc := newDMLTestVCursor("0")
@@ -419,13 +417,11 @@ func TestInsertShardedGenerate(t *testing.T) {
 			Sharded: false,
 		},
 		Query: "dummy_generate",
-		Values: sqltypes.PlanValue{
-			Values: []sqltypes.PlanValue{
-				{Value: sqltypes.NewInt64(1)},
-				{Value: sqltypes.NULL},
-				{Value: sqltypes.NewInt64(2)},
-			},
-		},
+		Values: evalengine.NewTupleExpr(
+			evalengine.NewLiteralInt(1),
+			evalengine.NullExpr,
+			evalengine.NewLiteralInt(2),
+		),
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")

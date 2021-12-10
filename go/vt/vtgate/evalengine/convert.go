@@ -332,7 +332,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		}
 		return exprs, nil
 	case *sqlparser.NullVal:
-		return NewLiteralNull(), nil
+		return NullExpr, nil
 	case *sqlparser.CollateExpr:
 		expr, err := convertExpr(node.Expr, lookup)
 		if err != nil {

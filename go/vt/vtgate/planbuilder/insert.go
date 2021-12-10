@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -225,24 +228,27 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 // is set. Bind variable names are generated using baseName.
 func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
-	autoIncValues := sqltypes.PlanValue{}
-	for rowNum, row := range ins.Rows.(sqlparser.Values) {
+	rows := ins.Rows.(sqlparser.Values)
+	autoIncValues := make([]evalengine.Expr, len(rows))
+	lookup := &noColumnLookup{semTable: semantics.EmptySemTable()}
+	for rowNum, row := range rows {
 		// Support the DEFAULT keyword by treating it as null
 		if _, ok := row[colNum].(*sqlparser.Default); ok {
 			row[colNum] = &sqlparser.NullVal{}
 		}
-		pv, err := sqlparser.NewPlanValue(row[colNum])
+
+		pv, err := evalengine.Convert(row[colNum], lookup)
 		if err != nil {
 			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}
-		autoIncValues.Values = append(autoIncValues.Values, pv)
+		autoIncValues = append(autoIncValues, pv)
 		row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 	}
 
 	eins.Generate = &engine.Generate{
 		Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
 		Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eins.Table.AutoIncrement.Sequence.Name)),
-		Values:   autoIncValues,
+		Values:   evalengine.NewTupleExpr(autoIncValues...),
 	}
 	return nil
 }
