@@ -118,7 +118,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Original": "select a, b, count(*) k from user group by a order by k desc limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Sort",

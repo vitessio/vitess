@@ -248,6 +248,11 @@ func NewLiteralInt(i int64) Expr {
 	return &Literal{Val: newEvalInt64(i)}
 }
 
+// NewLiteralUint returns a literal expression
+func NewLiteralUint(i uint64) Expr {
+	return &Literal{Val: newEvalUint64(i)}
+}
+
 // NewLiteralFloat returns a literal expression
 func NewLiteralFloat(val float64) Expr {
 	return &Literal{Val: newEvalFloat(val)}

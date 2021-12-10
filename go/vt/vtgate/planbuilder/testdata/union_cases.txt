@@ -167,7 +167,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 1,
+        "Count": "INT64(1)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -186,7 +186,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Limit",
-        "Count": 1,
+        "Count": "INT64(1)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -275,7 +275,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 5,
+        "Count": "INT64(5)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -294,7 +294,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Limit",
-        "Count": 5,
+        "Count": "INT64(5)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1546,7 +1546,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select id from user union select 3 limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Distinct",
@@ -1588,7 +1588,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select id from user union select 3 limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Distinct",

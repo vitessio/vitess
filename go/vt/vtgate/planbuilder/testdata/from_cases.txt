@@ -4549,7 +4549,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": 1,
+            "Count": "INT64(1)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4597,7 +4597,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 1,
+        "Count": "INT64(1)",
         "Inputs": [
           {
             "OperatorType": "Route",

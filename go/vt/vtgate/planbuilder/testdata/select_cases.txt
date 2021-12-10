@@ -131,7 +131,7 @@ Gen4 plan same as above
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -275,7 +275,7 @@ Gen4 plan same as above
   "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1008,8 +1008,8 @@ Gen4 plan same as above
   "Original": "select user_id from music order by user_id limit 10, 20",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 20,
-    "Offset": 10,
+    "Count": "INT64(20)",
+    "Offset": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1919,7 +1919,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 100,
+        "Count": "INT64(100)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1963,7 +1963,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 100,
+        "Count": "INT64(100)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2091,7 +2091,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 2,
+        "Count": "INT64(2)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2137,7 +2137,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 2,
+        "Count": "INT64(2)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2494,7 +2494,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 1,
+        "Count": "INT64(1)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2556,7 +2556,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 1,
+        "Count": "INT64(1)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2626,7 +2626,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": 1,
+            "Count": "INT64(1)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2694,7 +2694,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Limit",
-            "Count": 1,
+            "Count": "INT64(1)",
             "Inputs": [
               {
                 "OperatorType": "Route",

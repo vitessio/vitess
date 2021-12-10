@@ -994,7 +994,7 @@
   "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -1037,7 +1037,7 @@
   "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -1092,7 +1092,7 @@
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 10,
+        "Count": "INT64(10)",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -1160,7 +1160,7 @@
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 10,
+        "Count": "INT64(10)",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -1224,7 +1224,7 @@
   "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -1288,7 +1288,7 @@
   "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Subquery",

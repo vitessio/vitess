@@ -1662,7 +1662,7 @@ Gen4 plan same as above
   "Original": "select user.col from user join user_extra limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -1706,7 +1706,7 @@ Gen4 plan same as above
   "Original": "select col from user limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1731,7 +1731,7 @@ Gen4 plan same as above
   "Original": "select col from user limit :a",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": null,
+    "Count": ":a",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1756,7 +1756,7 @@ Gen4 plan same as above
   "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 5,
+    "Count": "INT64(5)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1781,7 +1781,7 @@ Gen4 plan same as above
   "Original": "select col from user where col in (select col1 from user) limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -1839,9 +1839,29 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# invalid limit expression
+# arithmetic limit
 "select id from user limit 1+1"
-"unexpected expression in LIMIT: expression is too complex '1 + 1'"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user limit 1+1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": "INT64(2)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` limit :__upper_limit",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 Gen4 plan same as above
 
 # order by column alias
