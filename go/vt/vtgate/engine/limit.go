@@ -160,7 +160,7 @@ func (l *Limit) NeedsTransaction() bool {
 }
 
 func (l *Limit) getCountAndOffset(bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
-	env := &evalengine.ExpressionEnv{BindVars: bindVars}
+	env := evalengine.EnvWithBindVars(bindVars)
 	count, err = getIntFrom(env, l.Count)
 	if err != nil {
 		return

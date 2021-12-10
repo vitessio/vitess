@@ -135,10 +135,7 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 }
 
 func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars)
 	key, err := upd.Values[0].Evaluate(env)
 	if err != nil {
 		return nil, err
@@ -232,7 +229,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	for colNum, field := range subQueryResult.Fields {
 		fieldColNumMap[field.Name] = colNum
 	}
-	env := &evalengine.ExpressionEnv{BindVars: bindVars}
+	env := evalengine.EnvWithBindVars(bindVars)
 
 	for _, row := range subQueryResult.Rows {
 		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])

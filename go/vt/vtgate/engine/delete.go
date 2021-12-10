@@ -124,11 +124,7 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 }
 
 func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-
-	key, err := del.Values[0].Evaluate(env)
+	key, err := del.Values[0].Evaluate(evalengine.EnvWithBindVars(bindVars))
 	if err != nil {
 		return nil, err
 	}

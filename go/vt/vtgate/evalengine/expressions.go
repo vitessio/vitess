@@ -87,16 +87,17 @@ type (
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return &ExpressionEnv{
-		BindVars: make(map[string]*querypb.BindVariable),
-	}
+	return EnvWithBindVars(map[string]*querypb.BindVariable{})
+}
+
+// EnvWithBindVars returns an expression environment with no current row, but with bindvars
+func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
+	return &ExpressionEnv{BindVars: bindVars}
 }
 
 // ResolveValue allows for retrieval of the value we expose for public consumption
 func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
-	env := &ExpressionEnv{
-		BindVars: bindVars,
-	}
+	env := EnvWithBindVars(bindVars)
 	evalResul, err := rv.Expr.Evaluate(env)
 	if err != nil {
 		return sqltypes.Value{}, err
@@ -106,10 +107,7 @@ func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (s
 
 // ResolveList allows for retrieval of the value we expose for public consumption
 func (rv *RouteValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
-	env := &ExpressionEnv{
-		BindVars: bindVars,
-	}
-	evalResul, err := rv.Expr.Evaluate(env)
+	evalResul, err := rv.Expr.Evaluate(EnvWithBindVars(bindVars))
 	if err != nil {
 		return nil, err
 	}

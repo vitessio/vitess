@@ -470,11 +470,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return defaultRoute()
 	}
 
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-		Row:      []sqltypes.Value{},
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars)
 	var specifiedKS string
 	for _, tableSchema := range route.SysTableTableSchema {
 		result, err := tableSchema.Evaluate(env)
