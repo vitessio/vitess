@@ -280,7 +280,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	case *sqlparser.Literal:
 		switch node.Type {
 		case sqlparser.IntVal:
-			return NewLiteralIntFromBytes(node.Bytes())
+			return NewLiteralIntegralFromBytes(node.Bytes())
 		case sqlparser.FloatVal:
 			return NewLiteralRealFromBytes(node.Bytes())
 		case sqlparser.StrVal:

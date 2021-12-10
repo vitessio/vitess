@@ -794,14 +794,18 @@ Gen4 plan same as above
   "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select id from `user` where 1 != 1",
     "Query": "select id from `user` where `name` = 18446744073709551615",
-    "Table": "`user`"
+    "Table": "`user`",
+    "Values": [
+      "UINT64(18446744073709551615)"
+    ],
+    "Vindex": "name_user_map"
   }
 }
 

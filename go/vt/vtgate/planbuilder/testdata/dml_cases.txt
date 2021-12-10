@@ -823,7 +823,7 @@ Gen4 plan same as above
 
 # insert unsharded, invalid value for auto-inc
 "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
-"could not compute value for vindex or auto-inc column: strconv.ParseInt: parsing "18446744073709551616": value out of range"
+"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 Gen4 plan same as above
 
 # insert unsharded, column present
@@ -1233,7 +1233,7 @@ Gen4 plan same as above
 
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
-"could not compute value for vindex or auto-inc column: strconv.ParseInt: parsing "18446744073709551616": value out of range"
+"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 Gen4 plan same as above
 
 # insert invalid index value
@@ -1359,7 +1359,7 @@ Gen4 plan same as above
 
 # replace unsharded, invalid value for auto-inc
 "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
-"could not compute value for vindex or auto-inc column: strconv.ParseInt: parsing "18446744073709551616": value out of range"
+"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 Gen4 plan same as above
 
 # replace unsharded, column present
