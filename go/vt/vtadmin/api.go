@@ -169,7 +169,9 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
+	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
+	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -208,7 +210,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 
 	if len(opts.HTTPOpts.CORSOrigins) > 0 {
 		serv.Router().Use(handlers.CORS(
-			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins)))
+			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
 	}
 
 	if !opts.HTTPOpts.DisableCompression {
@@ -896,6 +898,38 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 }
 
 // PingTablet is part of the vtadminpb.VTAdminServer interface.
+func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthCheckRequest) (*vtadminpb.RunHealthCheckResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RunHealthCheck")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.GetAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error running health check on tablet: %w", err)
+	}
+
+	return &vtadminpb.RunHealthCheckResponse{Status: "ok"}, nil
+}
+
+// PingTablet is part of the vtadminpb.VTAdminServer interface.
 func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest) (*vtadminpb.PingTabletResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.PingTablet")
 	defer span.Finish()
@@ -1218,6 +1252,38 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	return &vtadminpb.GetWorkflowsResponse{
 		WorkflowsByCluster: results,
 	}, nil
+}
+
+// RefreshState reloads the tablet record on the specified tablet.
+func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateRequest) (*vtadminpb.RefreshStateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RefreshState")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error pinging cluster: %w", err)
+	}
+
+	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil
 }
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.

@@ -345,6 +345,34 @@ export namespace vtadmin {
         public pingTablet(request: vtadmin.IPingTabletRequest): Promise<vtadmin.PingTabletResponse>;
 
         /**
+         * Calls RefreshState.
+         * @param request RefreshStateRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RefreshStateResponse
+         */
+        public refreshState(request: vtadmin.IRefreshStateRequest, callback: vtadmin.VTAdmin.RefreshStateCallback): void;
+
+        /**
+         * Calls RefreshState.
+         * @param request RefreshStateRequest message or plain object
+         * @returns Promise
+         */
+        public refreshState(request: vtadmin.IRefreshStateRequest): Promise<vtadmin.RefreshStateResponse>;
+
+        /**
+         * Calls RunHealthCheck.
+         * @param request RunHealthCheckRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RunHealthCheckResponse
+         */
+        public runHealthCheck(request: vtadmin.IRunHealthCheckRequest, callback: vtadmin.VTAdmin.RunHealthCheckCallback): void;
+
+        /**
+         * Calls RunHealthCheck.
+         * @param request RunHealthCheckRequest message or plain object
+         * @returns Promise
+         */
+        public runHealthCheck(request: vtadmin.IRunHealthCheckRequest): Promise<vtadmin.RunHealthCheckResponse>;
+
+        /**
          * Calls VTExplain.
          * @param request VTExplainRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VTExplainResponse
@@ -521,6 +549,20 @@ export namespace vtadmin {
          * @param [response] PingTabletResponse
          */
         type PingTabletCallback = (error: (Error|null), response?: vtadmin.PingTabletResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#refreshState}.
+         * @param error Error, if any
+         * @param [response] RefreshStateResponse
+         */
+        type RefreshStateCallback = (error: (Error|null), response?: vtadmin.RefreshStateResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#runHealthCheck}.
+         * @param error Error, if any
+         * @param [response] RunHealthCheckResponse
+         */
+        type RunHealthCheckCallback = (error: (Error|null), response?: vtadmin.RunHealthCheckResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
@@ -5470,6 +5512,378 @@ export namespace vtadmin {
 
         /**
          * Converts this PingTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RefreshStateRequest. */
+    interface IRefreshStateRequest {
+
+        /** RefreshStateRequest alias */
+        alias?: (string|null);
+
+        /** RefreshStateRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a RefreshStateRequest. */
+    class RefreshStateRequest implements IRefreshStateRequest {
+
+        /**
+         * Constructs a new RefreshStateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRefreshStateRequest);
+
+        /** RefreshStateRequest alias. */
+        public alias: string;
+
+        /** RefreshStateRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new RefreshStateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RefreshStateRequest instance
+         */
+        public static create(properties?: vtadmin.IRefreshStateRequest): vtadmin.RefreshStateRequest;
+
+        /**
+         * Encodes the specified RefreshStateRequest message. Does not implicitly {@link vtadmin.RefreshStateRequest.verify|verify} messages.
+         * @param message RefreshStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRefreshStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RefreshStateRequest message, length delimited. Does not implicitly {@link vtadmin.RefreshStateRequest.verify|verify} messages.
+         * @param message RefreshStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRefreshStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RefreshStateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RefreshStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RefreshStateRequest;
+
+        /**
+         * Decodes a RefreshStateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RefreshStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RefreshStateRequest;
+
+        /**
+         * Verifies a RefreshStateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RefreshStateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RefreshStateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RefreshStateRequest;
+
+        /**
+         * Creates a plain object from a RefreshStateRequest message. Also converts values to other types if specified.
+         * @param message RefreshStateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RefreshStateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RefreshStateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RefreshStateResponse. */
+    interface IRefreshStateResponse {
+
+        /** RefreshStateResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a RefreshStateResponse. */
+    class RefreshStateResponse implements IRefreshStateResponse {
+
+        /**
+         * Constructs a new RefreshStateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRefreshStateResponse);
+
+        /** RefreshStateResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new RefreshStateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RefreshStateResponse instance
+         */
+        public static create(properties?: vtadmin.IRefreshStateResponse): vtadmin.RefreshStateResponse;
+
+        /**
+         * Encodes the specified RefreshStateResponse message. Does not implicitly {@link vtadmin.RefreshStateResponse.verify|verify} messages.
+         * @param message RefreshStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRefreshStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RefreshStateResponse message, length delimited. Does not implicitly {@link vtadmin.RefreshStateResponse.verify|verify} messages.
+         * @param message RefreshStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRefreshStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RefreshStateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RefreshStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RefreshStateResponse;
+
+        /**
+         * Decodes a RefreshStateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RefreshStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RefreshStateResponse;
+
+        /**
+         * Verifies a RefreshStateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RefreshStateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RefreshStateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RefreshStateResponse;
+
+        /**
+         * Creates a plain object from a RefreshStateResponse message. Also converts values to other types if specified.
+         * @param message RefreshStateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RefreshStateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RefreshStateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RunHealthCheckRequest. */
+    interface IRunHealthCheckRequest {
+
+        /** RunHealthCheckRequest alias */
+        alias?: (string|null);
+
+        /** RunHealthCheckRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a RunHealthCheckRequest. */
+    class RunHealthCheckRequest implements IRunHealthCheckRequest {
+
+        /**
+         * Constructs a new RunHealthCheckRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRunHealthCheckRequest);
+
+        /** RunHealthCheckRequest alias. */
+        public alias: string;
+
+        /** RunHealthCheckRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new RunHealthCheckRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RunHealthCheckRequest instance
+         */
+        public static create(properties?: vtadmin.IRunHealthCheckRequest): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Encodes the specified RunHealthCheckRequest message. Does not implicitly {@link vtadmin.RunHealthCheckRequest.verify|verify} messages.
+         * @param message RunHealthCheckRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRunHealthCheckRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RunHealthCheckRequest message, length delimited. Does not implicitly {@link vtadmin.RunHealthCheckRequest.verify|verify} messages.
+         * @param message RunHealthCheckRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRunHealthCheckRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RunHealthCheckRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RunHealthCheckRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Decodes a RunHealthCheckRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RunHealthCheckRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Verifies a RunHealthCheckRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RunHealthCheckRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RunHealthCheckRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Creates a plain object from a RunHealthCheckRequest message. Also converts values to other types if specified.
+         * @param message RunHealthCheckRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RunHealthCheckRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RunHealthCheckRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RunHealthCheckResponse. */
+    interface IRunHealthCheckResponse {
+
+        /** RunHealthCheckResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a RunHealthCheckResponse. */
+    class RunHealthCheckResponse implements IRunHealthCheckResponse {
+
+        /**
+         * Constructs a new RunHealthCheckResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRunHealthCheckResponse);
+
+        /** RunHealthCheckResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new RunHealthCheckResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RunHealthCheckResponse instance
+         */
+        public static create(properties?: vtadmin.IRunHealthCheckResponse): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Encodes the specified RunHealthCheckResponse message. Does not implicitly {@link vtadmin.RunHealthCheckResponse.verify|verify} messages.
+         * @param message RunHealthCheckResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRunHealthCheckResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RunHealthCheckResponse message, length delimited. Does not implicitly {@link vtadmin.RunHealthCheckResponse.verify|verify} messages.
+         * @param message RunHealthCheckResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRunHealthCheckResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RunHealthCheckResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RunHealthCheckResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Decodes a RunHealthCheckResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RunHealthCheckResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Verifies a RunHealthCheckResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RunHealthCheckResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RunHealthCheckResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Creates a plain object from a RunHealthCheckResponse message. Also converts values to other types if specified.
+         * @param message RunHealthCheckResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RunHealthCheckResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RunHealthCheckResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
