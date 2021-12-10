@@ -54,12 +54,12 @@ func (b *BinaryExpr) Collation() collations.TypedCollation {
 }
 
 // Evaluate implements the Expr interface
-func (b *BinaryExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
-	lVal, err := b.Left.Evaluate(env)
+func (b *BinaryExpr) eval(env *ExpressionEnv) (EvalResult, error) {
+	lVal, err := b.Left.eval(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
-	rVal, err := b.Right.Evaluate(env)
+	rVal, err := b.Right.eval(env)
 	if err != nil {
 		return EvalResult{}, err
 	}

@@ -226,7 +226,7 @@ func TestEvaluate(t *testing.T) {
 				})
 
 			// When
-			r, err := sqltypesExpr.Evaluate(env)
+			r, err := env.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
@@ -263,7 +263,7 @@ func TestEvaluateTuple(t *testing.T) {
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := sqltypesExpr.Evaluate(nil)
+			r, err := noenv.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)

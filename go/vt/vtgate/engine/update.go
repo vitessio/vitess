@@ -136,7 +136,7 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 
 func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	env := evalengine.EnvWithBindVars(bindVars)
-	key, err := upd.Values[0].Evaluate(env)
+	key, err := env.Evaluate(upd.Values[0])
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 					origColValue := row[fieldColNumMap[vCol.String()]]
 					fromIds = append(fromIds, origColValue)
 					if colValue, exists := updColValues.PvMap[vCol.String()]; exists {
-						resolvedVal, err := colValue.Evaluate(env)
+						resolvedVal, err := env.Evaluate(colValue)
 						if err != nil {
 							return err
 						}

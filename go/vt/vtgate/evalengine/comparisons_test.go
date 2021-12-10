@@ -69,7 +69,7 @@ func (tc testCase) run(t *testing.T) {
 		t.Fatalf("error while merging collations: %v", err)
 	}
 
-	got, err := cmp.Evaluate(env)
+	got, err := cmp.eval(env)
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
@@ -1040,21 +1040,6 @@ func TestNullComparisons(t *testing.T) {
 			v1:   NewLiteralInt(0), v2: NullExpr,
 			out: &F,
 			op:  &NullSafeEqualOp{},
-		},
-		{
-			name: "tuples different sizes",
-			v1:   TupleExpr{NewLiteralString([]byte("foo"), defaultCollation), NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1)},
-			v2: TupleExpr{
-				TupleExpr{
-					TupleExpr{NewLiteralString([]byte("foo"), defaultCollation), NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1)},
-					NewLiteralString([]byte("foo"), defaultCollation),
-					TupleExpr{NewLiteralString([]byte("foo"), defaultCollation), NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1)},
-					NewLiteralInt(1),
-				},
-				NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1),
-			},
-			err: "Operand should contain 1 column(s)",
-			op:  &InOp{Negate: true},
 		},
 	}
 
