@@ -188,43 +188,62 @@ func (r *Resolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace str
 	if err != nil {
 		return nil, nil, err
 	}
+	accumulator := &resultAcc{
+		resolved:   make(map[string]int),
+		resolver:   r,
+		ids:        ids,
+		keyspace:   keyspace,
+		tabletType: tabletType,
+	}
 
-	var result []*ResolvedShard
-	var values [][][]sqltypes.Value
-	resolved := make(map[string]int)
 	for i, destination := range destinations {
-		if err := destination.Resolve(allShards, func(shard string) error {
-			s, ok := resolved[shard]
-			if !ok {
-				target := &querypb.Target{
-					Keyspace:   keyspace,
-					Shard:      shard,
-					TabletType: tabletType,
-					Cell:       r.localCell,
-				}
-				// Right now we always set the Cell to ""
-				// Later we can fallback to another cell if needed.
-				// We would then need to read the SrvKeyspace there too.
-				target.Cell = ""
-				s = len(result)
-				result = append(result, &ResolvedShard{
-					Target:  target,
-					Gateway: r.gateway,
-				})
-				if ids != nil {
-					values = append(values, nil)
-				}
-				resolved[shard] = s
-			}
-			if ids != nil {
-				values[s] = append(values[s], ids[i])
-			}
-			return nil
-		}); err != nil {
+		if err := destination.Resolve(allShards, accumulator.resolveShard(i)); err != nil {
 			return nil, nil, err
 		}
 	}
-	return result, values, nil
+	return accumulator.shards, accumulator.values, nil
+}
+
+type resultAcc struct {
+	shards     []*ResolvedShard
+	values     [][][]sqltypes.Value
+	resolved   map[string]int
+	resolver   *Resolver
+	ids        [][]sqltypes.Value
+	keyspace   string
+	tabletType topodatapb.TabletType
+}
+
+// resolveShard is called once per shard that is resolved. It will keep track of which shards that are
+// the destinations resolved, and the values that are bound to each shard
+func (acc *resultAcc) resolveShard(idx int) func(shard string) error {
+	return func(shard string) error {
+		offsetInValues, ok := acc.resolved[shard]
+		if !ok {
+			target := &querypb.Target{
+				Keyspace:   acc.keyspace,
+				Shard:      shard,
+				TabletType: acc.tabletType,
+			}
+			// Right now we always set the Cell to ""
+			// Later we can fallback to another cell if needed.
+			// We would then need to read the SrvKeyspace there too.
+			target.Cell = ""
+			offsetInValues = len(acc.shards)
+			acc.shards = append(acc.shards, &ResolvedShard{
+				Target:  target,
+				Gateway: acc.resolver.gateway,
+			})
+			if acc.ids != nil {
+				acc.values = append(acc.values, nil)
+			}
+			acc.resolved[shard] = offsetInValues
+		}
+		if acc.ids != nil {
+			acc.values[offsetInValues] = append(acc.values[offsetInValues], acc.ids[idx])
+		}
+		return nil
+	}
 }
 
 // ResolveDestinations resolves values and their destinations into their
