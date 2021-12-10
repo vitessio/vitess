@@ -233,6 +233,13 @@ func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
 	if err == nil {
 		return NewLiteralInt(ival), nil
 	}
+
+	// let's try with uint if we overflowed
+	numError, ok := err.(*strconv.NumError)
+	if !ok || numError.Err != strconv.ErrRange {
+		return nil, err
+	}
+
 	uval, err := strconv.ParseUint(str, 0, 64)
 	if err != nil {
 		return nil, err
