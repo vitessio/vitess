@@ -625,7 +625,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from pin_test where 1 != 1",
     "Query": "select * from pin_test",
     "Table": "pin_test",
-    "Values": "\ufffd",
+    "Values": [
+      "\ufffd"
+    ],
     "Vindex": "binary"
   }
 }
@@ -642,7 +644,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from pin_test where 1 != 1",
     "Query": "select * from pin_test",
     "Table": "pin_test",
-    "Values": "VARBINARY(\"\\x80\")",
+    "Values": [
+      "VARBINARY(\"\\x80\")"
+    ],
     "Vindex": "binary"
   }
 }
@@ -1040,7 +1044,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where `name` = 'abc' and id = 4 limit 5",
     "Table": "`user`",
-    "Values": 4,
+    "Values": [
+      4
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1057,7 +1063,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where `name` = 'abc' and id = 4 limit 5",
     "Table": "`user`",
-    "Values": "INT64(4)",
+    "Values": [
+      "INT64(4)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1077,7 +1085,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
     "Table": "`user`",
-    "Values": 4,
+    "Values": [
+      4
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1094,7 +1104,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
     "Table": "`user`",
-    "Values": "INT64(4)",
+    "Values": [
+      "INT64(4)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1114,7 +1126,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
     "Table": "`user`",
-    "Values": 4,
+    "Values": [
+      4
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1131,7 +1145,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
     "Table": "`user`",
-    "Values": "INT64(4)",
+    "Values": [
+      "INT64(4)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1151,7 +1167,9 @@ Gen4 plan same as above
     "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
     "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 2",
     "Table": "`user`",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1168,7 +1186,9 @@ Gen4 plan same as above
     "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
     "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 2",
     "Table": "`user`",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1188,7 +1208,9 @@ Gen4 plan same as above
     "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
     "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc limit 3",
     "Table": "`user`",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1205,7 +1227,9 @@ Gen4 plan same as above
     "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
     "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc limit 3",
     "Table": "`user`",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1225,7 +1249,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 1 and `name` = true limit 5",
     "Table": "`user`",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1242,7 +1268,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 1 and `name` = true limit 5",
     "Table": "`user`",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1262,7 +1290,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 1 and `name` limit 5",
     "Table": "`user`",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1279,7 +1309,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 1 and `name` limit 5",
     "Table": "`user`",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1299,7 +1331,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 5 and `name` = true limit 5",
     "Table": "`user`",
-    "Values": 5,
+    "Values": [
+      5
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1316,7 +1350,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select * from `user` where id = 5 and `name` = true limit 5",
     "Table": "`user`",
-    "Values": "INT64(5)",
+    "Values": [
+      "INT64(5)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1541,7 +1577,9 @@ Gen4 error: symbol t.col not found
     "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
     "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1558,7 +1596,9 @@ Gen4 error: symbol t.col not found
     "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
     "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1578,7 +1618,9 @@ Gen4 error: symbol t.col not found
     "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
     "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1595,7 +1637,9 @@ Gen4 error: symbol t.col not found
     "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
     "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1839,7 +1883,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from music where 1 != 1",
     "Query": "select * from music where user_id = 1",
     "Table": "music",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1856,7 +1902,9 @@ Gen4 plan same as above
     "FieldQuery": "select * from music where 1 != 1",
     "Query": "select * from music where user_id = 1",
     "Table": "music",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1970,7 +2018,9 @@ Gen4 plan same as above
         "FieldQuery": "select * from music where 1 != 1",
         "Query": "select * from music where user_id = 1 limit 2",
         "Table": "music",
-        "Values": 1,
+        "Values": [
+          1
+        ],
         "Vindex": "user_index"
       },
       {
@@ -1983,7 +2033,9 @@ Gen4 plan same as above
         "FieldQuery": "select count(*) from music where 1 != 1",
         "Query": "select count(*) from music where user_id = 1",
         "Table": "music",
-        "Values": 1,
+        "Values": [
+          1
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -2005,7 +2057,9 @@ Gen4 plan same as above
         "FieldQuery": "select * from music where 1 != 1",
         "Query": "select * from music where user_id = 1 limit 2",
         "Table": "music",
-        "Values": "INT64(1)",
+        "Values": [
+          "INT64(1)"
+        ],
         "Vindex": "user_index"
       },
       {
@@ -2018,7 +2072,9 @@ Gen4 plan same as above
         "FieldQuery": "select count(*) from music where 1 != 1",
         "Query": "select count(*) from music where user_id = 1",
         "Table": "music",
-        "Values": "INT64(1)",
+        "Values": [
+          "INT64(1)"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -2216,7 +2272,9 @@ Gen4 plan same as above
     "FieldQuery": "select (select u.id from `user` as u where 1 != 1), a.id from `user` as a where 1 != 1",
     "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
     "Table": "`user`",
-    "Values": 1,
+    "Values": [
+      1
+    ],
     "Vindex": "user_index"
   }
 }
@@ -2233,7 +2291,9 @@ Gen4 plan same as above
     "FieldQuery": "select (select u.id from `user` as u where 1 != 1), a.id from `user` as a where 1 != 1",
     "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
     "Table": "`user`",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -2784,7 +2844,9 @@ Gen4 plan same as above
         "FieldQuery": "select 1 from user_extra where 1 != 1",
         "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
         "Table": "user_extra",
-        "Values": "INT64(3)",
+        "Values": [
+          "INT64(3)"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -2827,7 +2889,9 @@ Gen4 plan same as above
         "FieldQuery": "select 1 from user_extra where 1 != 1",
         "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
         "Table": "user_extra",
-        "Values": "INT64(3)",
+        "Values": [
+          "INT64(3)"
+        ],
         "Vindex": "user_index"
       }
     ]
