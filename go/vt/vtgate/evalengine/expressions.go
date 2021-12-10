@@ -289,12 +289,21 @@ func NewBindVar(key string, collation collations.TypedCollation) Expr {
 	}
 }
 
-// NewColumn returns a bind variable
+// NewColumn returns a column expression
 func NewColumn(offset int, collation collations.TypedCollation) Expr {
 	return &Column{
 		Offset:    offset,
 		collation: collation,
 	}
+}
+
+// NewTupleExpr returns a tuple expression
+func NewTupleExpr(exprs ...Expr) Expr {
+	tupleExpr := make(TupleExpr, 0, len(exprs))
+	for _, f := range exprs {
+		tupleExpr = append(tupleExpr, f)
+	}
+	return tupleExpr
 }
 
 // Evaluate implements the Expr interface
