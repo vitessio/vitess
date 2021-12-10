@@ -421,10 +421,12 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(64)
 	}
-	// field UpperLimit vitess.io/vitess/go/sqltypes.PlanValue
-	size += cached.UpperLimit.CachedSize(false)
+	// field UpperLimit vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.UpperLimit.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
