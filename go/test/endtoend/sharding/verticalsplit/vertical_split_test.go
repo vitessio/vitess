@@ -134,9 +134,9 @@ func TestVerticalSplit(t *testing.T) {
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, ksServedFrom, *clusterInstance)
 
 	// reparent to make the tablets work (we use health check, fix their types)
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(sourceKeyspace, shardName, cellj, sourcePrimaryTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(sourceKeyspace, shardName, cellj, sourcePrimaryTablet.TabletUID)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(destinationKeyspace, shardName, cellj, destinationPrimaryTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(destinationKeyspace, shardName, cellj, destinationPrimaryTablet.TabletUID)
 	require.NoError(t, err)
 
 	sourcePrimaryTablet.Type = "primary"
