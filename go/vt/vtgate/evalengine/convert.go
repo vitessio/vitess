@@ -363,9 +363,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		if coll == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown character set")
 		}
-		lit.Val.collation = collations.TypedCollation{
-			Collation: coll.ID(),
-		}
+		lit.Val.collation.Collation = coll.ID()
 		return lit, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
