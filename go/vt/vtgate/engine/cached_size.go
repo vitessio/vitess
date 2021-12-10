@@ -1024,7 +1024,7 @@ func (cached *VindexFunc) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(96)
 	}
 	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
 	{
@@ -1041,8 +1041,10 @@ func (cached *VindexFunc) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Vindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Value vitess.io/vitess/go/sqltypes.PlanValue
-	size += cached.Value.CachedSize(false)
+	// field Value vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Value.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 

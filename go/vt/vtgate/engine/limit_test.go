@@ -544,7 +544,3 @@ func TestLimitInvalidCount(t *testing.T) {
 	err = l.TryStreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil })
 	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
 }
-
-func int64PlanValue(v int64) sqltypes.PlanValue {
-	return sqltypes.PlanValue{Value: sqltypes.NewInt64(v)}
-}

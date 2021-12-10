@@ -46,7 +46,7 @@ func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, 
 	case *concatenateTree:
 		return transformConcatenatePlan(ctx, n)
 	case *vindexTree:
-		return transformVindexTree(n)
+		return transformVindexTree(ctx, n)
 	case *correlatedSubqueryTree:
 		return transformCorrelatedSubquery(ctx, n)
 	}
@@ -77,10 +77,16 @@ func pushDistinct(plan logicalPlan) {
 	}
 }
 
-func transformVindexTree(n *vindexTree) (logicalPlan, error) {
+func transformVindexTree(ctx *planningContext, n *vindexTree) (logicalPlan, error) {
 	single, ok := n.vindex.(vindexes.SingleColumn)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
+	}
+
+	lookup := &noColumnLookup{semTable: ctx.semTable}
+	expr, err := evalengine.Convert(n.value, lookup)
+	if err != nil {
+		return nil, err
 	}
 	plan := &vindexFunc{
 		order:         1,
@@ -89,7 +95,7 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 		eVindexFunc: &engine.VindexFunc{
 			Opcode: n.opCode,
 			Vindex: single,
-			Value:  n.value,
+			Value:  expr,
 		},
 	}
 
