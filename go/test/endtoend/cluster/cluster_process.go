@@ -331,7 +331,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 
 		// Make first tablet as primary
 		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
-			log.Errorf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
+			log.Errorf("error running PRS on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
 		keyspace.Shards = append(keyspace.Shards, *shard)
