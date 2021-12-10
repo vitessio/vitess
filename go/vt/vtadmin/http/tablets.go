@@ -53,3 +53,25 @@ func PingTablet(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(ping, err)
 }
+
+// RefreshState reloads the tablet record on the specified tablet.
+func RefreshState(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	result, err := api.server.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
+		Alias:      vars["tablet"],
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+
+	return NewJSONResponse(result, err)
+}
+
+// RunHealthCheck runs a healthcheck on the tablet and returns the result.
+func RunHealthCheck(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	result, err := api.server.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
+		Alias:      vars["tablet"],
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+
+	return NewJSONResponse(result, err)
+}
