@@ -103,13 +103,13 @@ func TestTypes(t *testing.T) {
 	}
 }
 
-var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
+var fuzzMaxFailures = flag.Int("fuzz-total", 100, "maximum number of failures to fuzz for")
 var fuzzSeed = flag.Int64("fuzz-seed", 1234, "RNG seed when generating fuzz expressions")
 var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\d+)\) during query: (.*?)`)
 
 var knownErrors = []*regexp.Regexp{
 	regexp.MustCompile(`value is out of range in '(.*?)'`),
-	regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
+	// regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
 }
 
 func errorsMatch(remote, local error) bool {
@@ -190,7 +190,7 @@ nextCase:
 						err = fmt.Errorf("PANIC: %v", r)
 					}
 				}()
-				eval, err = local.Evaluate(nil)
+				eval, err = (*evalengine.ExpressionEnv)(nil).Evaluate(local)
 				return
 			}()
 		}
@@ -210,12 +210,12 @@ nextCase:
 		}
 
 		if remoteErr != nil {
-			t.Errorf("remote query %q failed: %v, local=%s", query, remoteErr.Error(), eval.Value().String())
 			for _, ke := range knownErrors {
 				if ke.MatchString(remoteErr.Error()) {
 					continue nextCase
 				}
 			}
+			t.Errorf("remote query %q failed: %v, local=%s", query, remoteErr.Error(), eval.Value().String())
 			goto failed
 		}
 

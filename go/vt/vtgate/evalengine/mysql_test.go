@@ -34,9 +34,10 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := ConvertEx(astExpr, dummyCollation(45), true)
+	converted, err := ConvertEx(astExpr, dummyCollation(45), false)
 	if err == nil {
-		return converted.Evaluate(nil)
+		// t.Logf("%s", PrettyPrint(converted))
+		return noenv.Evaluate(converted)
 	}
 	return EvalResult{}, err
 }
@@ -92,7 +93,6 @@ func TestMySQLGolden(t *testing.T) {
 }
 
 func TestDebug1(t *testing.T) {
-	// Debug
-	eval, err := testSingle(t, `SELECT NULL <=> (0 <=> NULL)`)
-	t.Logf("eval=%s err=%s", eval.Value(), err)
+	eval, err := testSingle(t, `SELECT "fOo" NOT IN (((0, "foo", NULL, (("FOO", -1, -1, 0) IN (1, NULL, ("fOo", ((("fOo" <= 1), "FOO", "fOo", 0) / -1), 0, "foo"), 0))), 0, "foo", -1), 1, "FOO", "fOo")`)
+	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }

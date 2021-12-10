@@ -463,7 +463,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	env := evalengine.EnvWithBindVars(bindVars)
 	var specifiedKS string
 	for _, tableSchema := range route.SysTableTableSchema {
-		result, err := tableSchema.Evaluate(env)
+		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +481,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 
 	tableNames := map[string]string{}
 	for tblBvName, sysTableName := range route.SysTableTableName {
-		val, err := sysTableName.Evaluate(env)
+		val, err := env.Evaluate(sysTableName)
 		if err != nil {
 			return nil, err
 		}

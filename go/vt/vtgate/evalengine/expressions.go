@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -56,10 +55,13 @@ type (
 
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
-		Evaluate(env *ExpressionEnv) (EvalResult, error)
+		eval(env *ExpressionEnv) (EvalResult, error)
 		Type(env *ExpressionEnv) (querypb.Type, error)
 		Collation() collations.TypedCollation
-		format(buf *strings.Builder, wrap bool)
+		cardinality(env *ExpressionEnv) (int, error)
+		format(buf *formatter, depth int)
+		constant() bool
+		simplify() error
 	}
 
 	Literal struct {
@@ -80,6 +82,16 @@ type (
 	}
 )
 
+var noenv *ExpressionEnv = nil
+
+func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
+	_, err := expr.cardinality(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	return expr.eval(env)
+}
+
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
 	return EnvWithBindVars(map[string]*querypb.BindVariable{})
@@ -93,68 +105,6 @@ func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
 func (t TupleExpr) Collation() collations.TypedCollation {
 	// a Tuple does not have a collation, but an individual collation for every element of the tuple
 	return collations.TypedCollation{}
-}
-
-func FormatExpr(expr Expr) string {
-	var bld strings.Builder
-	expr.format(&bld, false)
-	return bld.String()
-}
-
-func (l *Literal) format(w *strings.Builder, _ bool) {
-	w.WriteString(l.Val.Value().String())
-}
-func (bv *BindVariable) format(w *strings.Builder, _ bool) {
-	w.WriteByte(':')
-	w.WriteString(bv.Key)
-}
-func (c *Column) format(w *strings.Builder, _ bool) {
-	fmt.Fprintf(w, "[COLUMN %d]", c.Offset)
-}
-func (b *BinaryExpr) format(w *strings.Builder, wrap bool) {
-	if wrap {
-		w.WriteByte('(')
-	}
-
-	b.Left.format(w, true)
-	w.WriteString(" ")
-	w.WriteString(b.Op.String())
-	w.WriteString(" ")
-	b.Right.format(w, true)
-
-	if wrap {
-		w.WriteByte(')')
-	}
-}
-func (c *ComparisonExpr) format(w *strings.Builder, wrap bool) {
-	if wrap {
-		w.WriteByte('(')
-	}
-
-	c.Left.format(w, true)
-	w.WriteString(" ")
-	w.WriteString(c.Op.String())
-	w.WriteString(" ")
-	c.Right.format(w, true)
-
-	if wrap {
-		w.WriteByte(')')
-	}
-}
-func (t TupleExpr) format(w *strings.Builder, wrap bool) {
-	w.WriteByte('(')
-	for i, expr := range t {
-		if i > 0 {
-			w.WriteString(", ")
-		}
-		expr.format(w, wrap)
-	}
-	w.WriteByte(')')
-}
-func (c *CollateExpr) format(w *strings.Builder, wrap bool) {
-	c.Expr.format(w, wrap)
-	coll := collations.Local().LookupByID(c.TypedCollation.Collation)
-	fmt.Fprintf(w, " COLLATE %s", coll.Name())
 }
 
 var _ Expr = (*Literal)(nil)
@@ -294,7 +244,7 @@ func NewTupleExpr(exprs ...Expr) TupleExpr {
 }
 
 // Evaluate implements the Expr interface
-func (l *Literal) Evaluate(*ExpressionEnv) (EvalResult, error) {
+func (l *Literal) eval(*ExpressionEnv) (EvalResult, error) {
 	return l.Val, nil
 }
 
@@ -302,10 +252,10 @@ func (l *Literal) Collation() collations.TypedCollation {
 	return l.Val.collation
 }
 
-func (t TupleExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
+func (t TupleExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	var tup []EvalResult
 	for _, expr := range t {
-		evalRes, err := expr.Evaluate(env)
+		evalRes, err := expr.eval(env)
 		if err != nil {
 			return EvalResult{}, err
 		}
@@ -318,7 +268,7 @@ func (t TupleExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 }
 
 // Evaluate implements the Expr interface
-func (bv *BindVariable) Evaluate(env *ExpressionEnv) (EvalResult, error) {
+func (bv *BindVariable) eval(env *ExpressionEnv) (EvalResult, error) {
 	val, ok := env.BindVars[bv.Key]
 	if !ok {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
@@ -336,7 +286,7 @@ func (bv *BindVariable) Collation() collations.TypedCollation {
 }
 
 // Evaluate implements the Expr interface
-func (c *Column) Evaluate(env *ExpressionEnv) (EvalResult, error) {
+func (c *Column) eval(env *ExpressionEnv) (EvalResult, error) {
 	value := env.Row[c.Offset]
 	numeric, err := newEvalResult(value)
 	numeric.collation = c.collation
@@ -454,8 +404,8 @@ func (e *EvalResult) debugString() string {
 	return fmt.Sprintf("(%s) 0x%08x %s", querypb.Type_name[int32(e.typ)], e.numval, e.bytes)
 }
 
-func (c *CollateExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
-	res, err := c.Expr.Evaluate(env)
+func (c *CollateExpr) eval(env *ExpressionEnv) (EvalResult, error) {
+	res, err := c.Expr.eval(env)
 	if err != nil {
 		return EvalResult{}, err
 	}

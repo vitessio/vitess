@@ -49,7 +49,7 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 	for _, row := range result.Rows {
 		env.Row = row
 		for _, exp := range p.Exprs {
-			result, err := exp.Evaluate(env)
+			result, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
@@ -79,7 +79,7 @@ func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*quer
 	for _, row := range result.Rows {
 		env.Row = row
 		for _, exp := range p.Exprs {
-			result, err := exp.Evaluate(env)
+			result, err := env.Evaluate(exp)
 			if err != nil {
 				return err
 			}

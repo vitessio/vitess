@@ -95,10 +95,10 @@ func (c *ComparisonExpr) mergeCollations() error {
 func (c *ComparisonExpr) evaluateComparisonExprs(env *ExpressionEnv) (EvalResult, EvalResult, error) {
 	var lVal, rVal EvalResult
 	var err error
-	if lVal, err = c.Left.Evaluate(env); err != nil {
+	if lVal, err = c.Left.eval(env); err != nil {
 		return EvalResult{}, EvalResult{}, err
 	}
-	if rVal, err = c.Right.Evaluate(env); err != nil {
+	if rVal, err = c.Right.eval(env); err != nil {
 		return EvalResult{}, EvalResult{}, err
 	}
 
@@ -177,21 +177,8 @@ func evalCoerceAndCompareNullSafe(lVal, rVal EvalResult) (comp int, err error) {
 	return evalCompareNullSafe(lVal, rVal)
 }
 
-func evalTypecheckTuples(lVal, rVal EvalResult) (bool, error) {
-	switch {
-	case lVal.typ == querypb.Type_TUPLE && rVal.typ == querypb.Type_TUPLE:
-		return true, nil
-	case lVal.typ == querypb.Type_TUPLE:
-		return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
-	case rVal.typ == querypb.Type_TUPLE:
-		return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", 1)
-	default:
-		return false, nil
-	}
-}
-
 func evalCompareNullSafe(lVal, rVal EvalResult) (cmp int, err error) {
-	tuple, err := evalTypecheckTuples(lVal, rVal)
+	tuple, err := checkTupleCardinality(lVal, rVal)
 	if err != nil {
 		return 0, err
 	}
@@ -208,7 +195,7 @@ func evalCompareNullSafe(lVal, rVal EvalResult) (cmp int, err error) {
 }
 
 func evalCompareAll(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
-	tuple, err := evalTypecheckTuples(lVal, rVal)
+	tuple, err := checkTupleCardinality(lVal, rVal)
 	if err != nil {
 		return 0, false, err
 	}
@@ -263,7 +250,7 @@ func evalCompare(lVal, rVal EvalResult) (comp int, err error) {
 
 func evalCompareTuplesNullSafe(lVal EvalResult, rVal EvalResult) (int, error) {
 	if len(*lVal.tuple) != len(*rVal.tuple) {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
+		panic("did not typecheck cardinality")
 	}
 	for idx, lResult := range *lVal.tuple {
 		rResult := (*rVal.tuple)[idx]
@@ -277,7 +264,7 @@ func evalCompareTuplesNullSafe(lVal EvalResult, rVal EvalResult) (int, error) {
 
 func evalCompareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
 	if len(*lVal.tuple) != len(*rVal.tuple) {
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
+		panic("did not typecheck cardinality")
 	}
 	hasSeenNull := false
 	for idx, lResult := range *lVal.tuple {
@@ -310,7 +297,7 @@ func evalResultBool(b bool) EvalResult {
 }
 
 // Evaluate implements the Expr interface
-func (c *ComparisonExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
+func (c *ComparisonExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	if c.Op == nil {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a comparison expression needs a comparison operator")
 	}
@@ -330,7 +317,7 @@ func (c *ComparisonExpr) Type(*ExpressionEnv) (querypb.Type, error) {
 
 // Evaluate implements the ComparisonOp interface
 func (e *EqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	// No need to coerce here because the caller ComparisonExpr.Evaluate has coerced for us
+	// No need to coerce here because the caller ComparisonExpr.eval has coerced for us
 	numeric, isNull, err := evalCompareAll(left, right)
 	if err != nil {
 		return EvalResult{}, err
@@ -379,14 +366,6 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	var foundNull, found bool
 
 	if i.Hashed != nil {
-		if left.typ == querypb.Type_TUPLE {
-			for _, rtuple := range *right.tuple {
-				if _, err := evalTypecheckTuples(left, rtuple); err != nil {
-					return EvalResult{}, err
-				}
-			}
-			panic("should have failed typecheck for tuple")
-		}
 		hash, err := left.nullSafeHashcode()
 		if err != nil {
 			return EvalResult{}, err
@@ -401,13 +380,6 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 		}
 	} else {
 		for _, rtuple := range *right.tuple {
-			if found {
-				if _, err := evalTypecheckTuples(left, rtuple); err != nil {
-					return EvalResult{}, err
-				}
-				continue
-			}
-
 			numeric, isNull, err := evalCoerceAndCompare(left, rtuple)
 			if err != nil {
 				return EvalResult{}, err
@@ -418,6 +390,7 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 			}
 			if numeric == 0 {
 				found = true
+				break
 			}
 		}
 	}
