@@ -185,7 +185,7 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
-		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
 			return 1, err
 		}
 
@@ -203,7 +203,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
 			return 1, err
 		}
 

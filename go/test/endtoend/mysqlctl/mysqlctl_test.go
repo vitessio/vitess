@@ -25,8 +25,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -131,13 +129,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			}
 		}
 
-		for _, tablet := range shard.Vttablets {
-			if _, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
-				log.Error(err.Error())
-				return
-			}
-		}
-
 		keyspace.Shards = append(keyspace.Shards, *shard)
 	}
 	clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
@@ -165,7 +156,7 @@ func TestAutoDetect(t *testing.T) {
 	require.Nil(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err, "error should be nil")
 
 	//Reset flavor
