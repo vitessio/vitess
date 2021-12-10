@@ -128,10 +128,10 @@ type Generate struct {
 	Keyspace *vindexes.Keyspace
 	Query    string
 	// Values are the supplied values for the column, which
-	// will be stored as a list within the PlanValue. New
+	// will be stored as a list within the expression. New
 	// values will be generated based on how many were not
 	// supplied (NULL).
-	Values sqltypes.PlanValue
+	Values evalengine.Expr
 }
 
 // InsertOpcode is a number representing the opcode
@@ -303,12 +303,13 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// Scan input values to compute the number of values to generate, and
 	// keep track of where they should be filled.
-	resolved, err := ins.Generate.Values.ResolveList(bindVars)
+	resolved, err := ins.Generate.Values.Evaluate(evalengine.EnvWithBindVars(bindVars))
 	if err != nil {
 		return 0, err
 	}
 	count := int64(0)
-	for _, val := range resolved {
+	values := resolved.TupleValues()
+	for _, val := range values {
 		if shouldGenerate(val) {
 			count++
 		}
@@ -338,7 +339,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// Fill the holes where no value was supplied.
 	cur := insertID
-	for i, v := range resolved {
+	for i, v := range values {
 		if shouldGenerate(v) {
 			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.Int64BindVariable(cur)
 			cur++
@@ -613,8 +614,8 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 	return nil
 }
 
-//InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
-//to make sure they both produce the same names
+// InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
+// to make sure they both produce the same names
 func InsertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
 }

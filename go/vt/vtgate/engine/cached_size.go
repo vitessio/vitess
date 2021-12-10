@@ -233,8 +233,6 @@ func (cached *Generate) CachedSize(alloc bool) int64 {
 	size += cached.Keyspace.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field Values vitess.io/vitess/go/sqltypes.PlanValue
-	size += cached.Values.CachedSize(false)
 	return size
 }
 func (cached *GroupByParams) CachedSize(alloc bool) int64 {

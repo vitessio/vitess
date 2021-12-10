@@ -222,9 +222,8 @@ var collationNull = collations.TypedCollation{
 	Repertoire:   collations.RepertoireASCII,
 }
 
-func NewLiteralNull() Expr {
-	return &Literal{Val: resultNull}
-}
+// NullExpr is just what you are lead to believe
+var NullExpr = &Literal{Val: resultNull}
 
 // NewLiteralIntFromBytes returns a literal expression
 func NewLiteralIntFromBytes(val []byte) (Expr, error) {
@@ -438,7 +437,7 @@ func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
 		return EvalResult{typ: typ, bytes: value}, nil
 	case sqltypes.Null:
-		return EvalResult{typ: sqltypes.Null}, nil
+		return resultNull, nil
 	default:
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", typ.String())
 	}
