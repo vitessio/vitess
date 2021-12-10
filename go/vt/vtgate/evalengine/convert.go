@@ -350,6 +350,23 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 				Repertoire:   collations.RepertoireUnicode,
 			},
 		}, nil
+	case *sqlparser.IntroducerExpr:
+		expr, err := convertExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+		lit, ok := expr.(*Literal)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set introducers are only supported for literals")
+		}
+		coll := collations.Local().DefaultCollationForCharset(node.CharacterSet[1:])
+		if coll == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown character set")
+		}
+		lit.Val.collation = collations.TypedCollation{
+			Collation: coll.ID(),
+		}
+		return lit, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }

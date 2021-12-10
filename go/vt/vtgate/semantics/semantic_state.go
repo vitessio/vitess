@@ -122,8 +122,8 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
-// NewSemTable creates a new empty SemTable
-func NewSemTable() *SemTable {
+// EmptySemTable creates a new empty SemTable
+func EmptySemTable() *SemTable {
 	return &SemTable{
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},

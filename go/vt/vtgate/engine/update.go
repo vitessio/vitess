@@ -39,7 +39,7 @@ var _ Primitive = (*Update)(nil)
 
 // VindexValues contains changed values for a vindex.
 type VindexValues struct {
-	PvMap  map[string]sqltypes.PlanValue
+	PvMap  map[string]evalengine.Expr
 	Offset int // Offset from ownedVindexQuery to provide input decision for vindex update.
 }
 
@@ -232,6 +232,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	for colNum, field := range subQueryResult.Fields {
 		fieldColNumMap[field.Name] = colNum
 	}
+	env := &evalengine.ExpressionEnv{BindVars: bindVars}
 
 	for _, row := range subQueryResult.Rows {
 		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
@@ -258,11 +259,11 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 					origColValue := row[fieldColNumMap[vCol.String()]]
 					fromIds = append(fromIds, origColValue)
 					if colValue, exists := updColValues.PvMap[vCol.String()]; exists {
-						resolvedVal, err := colValue.ResolveValue(bindVars)
+						resolvedVal, err := colValue.Evaluate(env)
 						if err != nil {
 							return err
 						}
-						vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
+						vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value())
 					} else {
 						// Set the column value to original as this column in vindex is not updated.
 						vindexColumnKeys = append(vindexColumnKeys, origColValue)
