@@ -165,9 +165,17 @@ func skipToEnd(yylex interface{}) {
   authentication *Authentication
   accountWithAuth AccountWithAuth
   accountsWithAuth []AccountWithAuth
-  tlsOptions TLSOptions
-  accountLimits AccountLimits
-  passwordOptions PasswordOptions
+  tlsOptionItem TLSOptionItem
+  tlsOptionItems []TLSOptionItem
+  accountLimitItem AccountLimitItem
+  accountLimitItems []AccountLimitItem
+  passLockItem PassLockItem
+  passLockItems []PassLockItem
+  grantPrivilege Privilege
+  grantPrivileges []Privilege
+  grantObjectType GrantObjectType
+  privilegeLevel PrivilegeLevel
+  grantAssumption *GrantUserAssumption
 }
 
 %token LEX_ERROR
@@ -233,9 +241,9 @@ func skipToEnd(yylex interface{}) {
 
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
-%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTIONAL
+%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS
-%token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED
+%token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE CURRENT PROXY
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
@@ -282,8 +290,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED ARRAY DESCRIPTION EMPTY EXCEPT JSON_TABLE LATERAL MEMBER RECURSIVE
-%token <bytes> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <bytes> UNUSED ARRAY DESCRIPTION EMPTY JSON_TABLE LATERAL MEMBER RECURSIVE
+%token <bytes> ACTIVE BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
@@ -296,7 +304,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
-%type <statement> lock_statement unlock_statement kill_statement
+%type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -437,10 +445,23 @@ func skipToEnd(yylex interface{}) {
 %type <accountName> account_name role_name
 %type <accountNames> account_name_list role_name_list default_role_opt
 %type <accountRenames> rename_user_list
-%type <str> account_name_str
+%type <str> account_name_str user_comment_attribute
 %type <accountWithAuth> account_with_auth
 %type <accountsWithAuth> account_with_auth_list
 %type <authentication> authentication authentication_initial
+%type <tlsOptionItem> tls_option_item
+%type <tlsOptionItems> tls_options tls_option_item_list
+%type <accountLimitItem> account_limit_item
+%type <accountLimitItems> account_limits account_limit_item_list
+%type <passLockItem> pass_lock_item
+%type <passLockItems> pass_lock_options pass_lock_item_list
+%type <grantPrivilege> grant_privilege
+%type <grantPrivileges> grant_privilege_list
+%type <strs> grant_privilege_columns_opt grant_privilege_column_list
+%type <grantObjectType> grant_object_type
+%type <privilegeLevel> grant_privilege_level
+%type <grantAssumption> grant_assumption
+%type <boolean> with_grant_opt with_admin_opt
 
 %start any_command
 
@@ -492,6 +513,8 @@ command:
 | lock_statement
 | unlock_statement
 | kill_statement
+| grant_statement
+| revoke_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -831,13 +854,24 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
   }
-| CREATE USER not_exists_opt account_with_auth_list default_role_opt
+| CREATE USER not_exists_opt account_with_auth_list default_role_opt tls_options account_limits pass_lock_options user_comment_attribute
   {
     var notExists bool
     if $3 != 0 {
       notExists = true
     }
-    $$ = &CreateUser{IfNotExists: notExists, Users: $4, DefaultRoles: $5}
+    tlsOptions, err := NewTLSOptions($6)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    accountLimits, err := NewAccountLimits($7)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    passwordOptions, locked := NewPasswordOptionsWithLock($8)
+    $$ = &CreateUser{IfNotExists: notExists, Users: $4, DefaultRoles: $5, TLSOptions: tlsOptions, AccountLimits: accountLimits, PasswordOptions: passwordOptions, Locked: locked, Attribute: $9}
   }
 | CREATE ROLE not_exists_opt role_name_list
   {
@@ -855,6 +889,358 @@ default_role_opt:
 | DEFAULT ROLE role_name_list
   {
     $$ = $3
+  }
+
+tls_options:
+  {
+    $$ = nil
+  }
+| REQUIRE NONE
+  {
+    $$ = nil
+  }
+| REQUIRE tls_option_item_list
+  {
+    $$ = $2
+  }
+
+tls_option_item_list:
+  tls_option_item
+  {
+    $$ = []TLSOptionItem{$1}
+  }
+| tls_option_item_list AND tls_option_item
+  {
+    $$ = append($1, $3)
+  }
+
+tls_option_item:
+  SSL
+  {
+    $$ = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_SSL, ItemData: ""}
+  }
+| X509
+  {
+    $$ = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_X509, ItemData: ""}
+  }
+| CIPHER STRING
+  {
+    $$ = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_Cipher, ItemData: string($2)}
+  }
+| ISSUER STRING
+  {
+    $$ = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_Issuer, ItemData: string($2)}
+  }
+| SUBJECT STRING
+  {
+    $$ = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_Subject, ItemData: string($2)}
+  }
+
+account_limits:
+  {
+    $$ = nil
+  }
+| WITH account_limit_item_list
+  {
+    $$ = $2
+  }
+
+account_limit_item_list:
+  account_limit_item
+  {
+    $$ = []AccountLimitItem{$1}
+  }
+| account_limit_item_list account_limit_item
+  {
+    $$ = append($1, $2)
+  }
+
+account_limit_item:
+  MAX_QUERIES_PER_HOUR INTEGRAL
+  {
+    $$ = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Queries_PH, Count: NewIntVal($2)}
+  }
+| MAX_UPDATES_PER_HOUR INTEGRAL
+  {
+    $$ = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Updates_PH, Count: NewIntVal($2)}
+  }
+| MAX_CONNECTIONS_PER_HOUR INTEGRAL
+  {
+    $$ = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Connections_PH, Count: NewIntVal($2)}
+  }
+| MAX_USER_CONNECTIONS INTEGRAL
+  {
+    $$ = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Connections, Count: NewIntVal($2)}
+  }
+
+pass_lock_options:
+  {
+    $$ = nil
+  }
+| pass_lock_item_list
+  {
+    $$ = $1
+  }
+
+pass_lock_item_list:
+  pass_lock_item
+  {
+    $$ = []PassLockItem{$1}
+  }
+| pass_lock_item_list pass_lock_item
+  {
+    $$ = append($1, $2)
+  }
+
+pass_lock_item:
+  PASSWORD EXPIRE DEFAULT
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassExpireDefault, Value: nil}
+  }
+| PASSWORD EXPIRE NEVER
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassExpireNever, Value: nil}
+  }
+| PASSWORD EXPIRE INTERVAL INTEGRAL DAY
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassExpireInterval, Value: NewIntVal($4)}
+  }
+| PASSWORD HISTORY DEFAULT
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassHistory, Value: nil}
+  }
+| PASSWORD HISTORY INTEGRAL
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassHistory, Value: NewIntVal($3)}
+  }
+| PASSWORD REUSE INTERVAL DEFAULT
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassReuseInterval, Value: nil}
+  }
+| PASSWORD REUSE INTERVAL INTEGRAL DAY
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassReuseInterval, Value: NewIntVal($4)}
+  }
+| PASSWORD REQUIRE CURRENT DEFAULT
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassReqCurrentDefault, Value: nil}
+  }
+| PASSWORD REQUIRE CURRENT OPTIONAL
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassReqCurrentOptional, Value: nil}
+  }
+| FAILED_LOGIN_ATTEMPTS INTEGRAL
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassFailedLogins, Value: NewIntVal($2)}
+  }
+| PASSWORD_LOCK_TIME INTEGRAL
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassLockTime, Value: NewIntVal($2)}
+  }
+| PASSWORD_LOCK_TIME UNBOUNDED
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_PassLockTime, Value: nil}
+  }
+| ACCOUNT LOCK
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_AccountLock, Value: nil}
+  }
+| ACCOUNT UNLOCK
+  {
+    $$ = PassLockItem{PassLockItemType: PassLockItemType_AccountUnlock, Value: nil}
+  }
+
+user_comment_attribute:
+  {
+    $$ = ""
+  }
+| COMMENT_KEYWORD STRING
+  {
+    comment := string($2)
+    $$ = `{"comment": "`+escapeDoubleQuotes(comment)+`"}`
+  }
+| ATTRIBUTE STRING
+  {
+    $$ = string($2)
+  }
+
+grant_statement:
+  GRANT ALL ON grant_object_type grant_privilege_level TO account_name_list with_grant_opt grant_assumption
+  {
+    allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
+    $$ = &GrantPrivilege{Privileges: allPriv, ObjectType: $4, PrivilegeLevel: $5, To: $7, WithGrantOption: $8, As: $9}
+  }
+| GRANT grant_privilege_list ON grant_object_type grant_privilege_level TO account_name_list with_grant_opt grant_assumption
+  {
+    $$ = &GrantPrivilege{Privileges: $2, ObjectType: $4, PrivilegeLevel: $5, To: $7, WithGrantOption: $8, As: $9}
+  }
+| GRANT role_name_list TO account_name_list with_admin_opt
+  {
+    $$ = &GrantRole{Roles: $2, To: $4, WithAdminOption: $5}
+  }
+| GRANT PROXY ON account_name TO account_name_list with_grant_opt
+  {
+    $$ = &GrantProxy{On: $4, To: $6, WithGrantOption: $7}
+  }
+
+revoke_statement:
+  REVOKE ALL ON grant_object_type grant_privilege_level FROM account_name_list
+  {
+    allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
+    $$ = &RevokePrivilege{Privileges: allPriv, ObjectType: $4, PrivilegeLevel: $5, From: $7}
+  }
+| REVOKE grant_privilege_list ON grant_object_type grant_privilege_level FROM account_name_list
+  {
+    $$ = &RevokePrivilege{Privileges: $2, ObjectType: $4, PrivilegeLevel: $5, From: $7}
+  }
+| REVOKE ALL ',' GRANT OPTION FROM account_name_list
+  {
+    $$ = &RevokeAllPrivileges{From: $7}
+  }
+| REVOKE ALL PRIVILEGES ',' GRANT OPTION FROM account_name_list
+  {
+    $$ = &RevokeAllPrivileges{From: $8}
+  }
+| REVOKE role_name_list FROM account_name_list
+  {
+    $$ = &RevokeRole{Roles: $2, From: $4}
+  }
+| REVOKE PROXY ON account_name FROM account_name_list
+  {
+    $$ = &RevokeProxy{On: $4, From: $6}
+  }
+
+grant_privilege:
+  INSERT grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Insert, Columns: $2}
+  }
+| REFERENCES grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_References, Columns: $2}
+  }
+| SELECT grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Select, Columns: $2}
+  }
+| UPDATE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Update, Columns: $2}
+  }
+
+grant_privilege_list:
+  grant_privilege
+  {
+    $$ = []Privilege{$1}
+  }
+| grant_privilege_list ',' grant_privilege
+  {
+    $$ = append($1, $3)
+  }
+
+grant_privilege_columns_opt:
+  {
+    $$ = nil
+  }
+| '(' grant_privilege_column_list ')'
+  {
+    $$ = $2
+  }
+
+grant_privilege_column_list:
+  sql_id
+  {
+    $$ = []string{$1.String()}
+  }
+| grant_privilege_column_list ',' sql_id
+  {
+    $$ = append($1, $3.String())
+  }
+
+grant_object_type:
+  {
+    $$ = GrantObjectType_Any
+  }
+| TABLE
+  {
+    $$ = GrantObjectType_Table
+  }
+| FUNCTION
+  {
+    $$ = GrantObjectType_Function
+  }
+| PROCEDURE
+  {
+    $$ = GrantObjectType_Procedure
+  }
+
+grant_privilege_level:
+  '*'
+  {
+    $$ = PrivilegeLevel{Database: "", TableRoutine: "*"}
+  }
+| '*' '.' '*'
+  {
+    $$ = PrivilegeLevel{Database: "*", TableRoutine: "*"}
+  }
+| sql_id
+  {
+    $$ = PrivilegeLevel{Database: "", TableRoutine: $1.String()}
+  }
+| sql_id '.' '*'
+  {
+    $$ = PrivilegeLevel{Database: $1.String(), TableRoutine: "*"}
+  }
+| sql_id '.' sql_id
+  {
+    $$ = PrivilegeLevel{Database: $1.String(), TableRoutine: $3.String()}
+  }
+
+grant_assumption:
+  {
+    $$ = nil
+  }
+| AS account_name
+  {
+    $$ = &GrantUserAssumption{Type: GrantUserAssumptionType_Default, User: $2, Roles: nil}
+  }
+| AS account_name WITH ROLE DEFAULT
+  {
+    $$ = &GrantUserAssumption{Type: GrantUserAssumptionType_Default, User: $2, Roles: nil}
+  }
+| AS account_name WITH ROLE NONE
+  {
+    $$ = &GrantUserAssumption{Type: GrantUserAssumptionType_None, User: $2, Roles: nil}
+  }
+| AS account_name WITH ROLE ALL
+  {
+    $$ = &GrantUserAssumption{Type: GrantUserAssumptionType_All, User: $2, Roles: nil}
+  }
+| AS account_name WITH ROLE ALL EXCEPT role_name_list
+  {
+    $$ = &GrantUserAssumption{Type: GrantUserAssumptionType_AllExcept, User: $2, Roles: $7}
+  }
+| AS account_name WITH ROLE role_name_list
+  {
+    $$ = &GrantUserAssumption{Type: GrantUserAssumptionType_Roles, User: $2, Roles: $5}
+  }
+
+with_grant_opt:
+  {
+    $$ = false
+  }
+| WITH GRANT OPTION
+  {
+    $$ = true
+  }
+
+with_admin_opt:
+  {
+    $$ = false
+  }
+| WITH ADMIN OPTION
+  {
+    $$ = true
   }
 
 // TODO: Implement IGNORE, REPLACE, VALUES, and TABLE
@@ -1023,7 +1409,7 @@ account_name_list:
   }
 | account_name_list ',' account_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 role_name:
@@ -1059,7 +1445,7 @@ role_name_list:
   }
 | role_name_list ',' role_name
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 account_with_auth:
@@ -1509,6 +1895,8 @@ statement_list_statement:
 | savepoint_statement
 | rollback_savepoint_statement
 | release_savepoint_statement
+| grant_statement
+| revoke_statement
 | begin_end_block
 
 create_table_prefix:
@@ -2897,6 +3285,10 @@ show_statement:
   {
     an := $4
     $$ = &ShowGrants{For: &an, Using: $6}
+  }
+| SHOW PRIVILEGES
+  {
+    $$ = &ShowPrivileges{}
   }
 | SHOW COUNT openb '*' closeb WARNINGS
   {
@@ -5148,12 +5540,14 @@ kill_statement:
   Sorted alphabetically
 */
 reserved_keyword:
-  ADD
+  ACCOUNT
+| ADD
 | AFTER
 | AND
 | ARRAY
 | AS
 | ASC
+| ATTRIBUTE
 | AUTO_INCREMENT
 | AVG
 | BETWEEN
@@ -5165,6 +5559,7 @@ reserved_keyword:
 | CALL
 | CASE
 | COLLATE
+| COMMENT_KEYWORD
 | CONVERT
 | CONNECTION
 | COUNT
@@ -5189,11 +5584,13 @@ reserved_keyword:
 | ESCAPE
 | EXISTS
 | EXPLAIN
+| FAILED_LOGIN_ATTEMPTS
 | FALSE
 | FIRST
 | FOR
 | FORCE
 | FROM
+| FUNCTION
 | GRANT
 | GROUP
 | GROUPING
@@ -5232,6 +5629,7 @@ reserved_keyword:
 | MODIFIES
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
+| NONE
 | NOT
 | NULL
 | OF
@@ -5242,13 +5640,18 @@ reserved_keyword:
 | OUT
 | OUTER
 | OVER
+| PASSWORD
+| PASSWORD_LOCK_TIME
+| PROCEDURE
 | READS
 | RECURSIVE
+| REFERENCES
 | REGEXP
 | RENAME
 | REPLACE
-| RIGHT
+| REQUIRE
 | REVOKE
+| RIGHT
 | SCHEMA
 | SELECT
 | SEPARATOR
@@ -5298,13 +5701,11 @@ reserved_keyword:
   Sorted alphabetically
 */
 non_reserved_keyword:
-  AGAINST
-| ACCOUNT
-| ACTION
+  ACTION
 | ACTIVE
 | ADMIN
+| AGAINST
 | ALTER
-| ATTRIBUTE
 | AUTHENTICATION
 | BEFORE
 | BEGIN
@@ -5327,7 +5728,6 @@ non_reserved_keyword:
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
-| COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
 | COMPONENT
@@ -5336,6 +5736,7 @@ non_reserved_keyword:
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
 | CONTAINS
+| CURRENT
 | CURSOR_NAME
 | DATA
 | DATE
@@ -5352,10 +5753,10 @@ non_reserved_keyword:
 | ENFORCED
 | ENGINES
 | ENUM
+| EXCEPT
 | EXCLUDE
 | EXPANSION
 | EXPIRE
-| FAILED_LOGIN_ATTEMPTS
 | FIELDS
 | FIXED
 | FLOAT_TYPE
@@ -5363,7 +5764,6 @@ non_reserved_keyword:
 | FOLLOWING
 | FOREIGN
 | FULLTEXT
-| FUNCTION
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
@@ -5421,7 +5821,6 @@ non_reserved_keyword:
 | NETWORK_NAMESPACE
 | NEVER
 | NO
-| NONE
 | NOWAIT
 | NULLS
 | NUMERIC
@@ -5430,14 +5829,13 @@ non_reserved_keyword:
 | OLD
 | ONLY
 | OPTIMIZE
+| OPTION
 | OPTIONAL
 | OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | OTHERS
 | PARTITION
-| PASSWORD
-| PASSWORD_LOCK_TIME
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -5449,14 +5847,14 @@ non_reserved_keyword:
 | PRECISION
 | PRIMARY
 | PRIVILEGE_CHECKS_USER
-| PROCEDURE
+| PRIVILEGES
 | PROCESS
+| PROXY
 | QUERY
 | RANDOM
 | READ
 | REAL
 | REFERENCE
-| REFERENCES
 | RELEASE
 | REORGANIZE
 | REPAIR
