@@ -274,10 +274,10 @@ func NewColumn(offset int, collation collations.TypedCollation) Expr {
 }
 
 // NewTupleExpr returns a tuple expression
-func NewTupleExpr(funcs []func() Expr) Expr {
-	var tupleExpr TupleExpr
-	for _, f := range funcs {
-		tupleExpr = append(tupleExpr, f())
+func NewTupleExpr(exprs ...Expr) Expr {
+	tupleExpr := make(TupleExpr, 0, len(exprs))
+	for _, f := range exprs {
+		tupleExpr = append(tupleExpr, f)
 	}
 	return tupleExpr
 }
