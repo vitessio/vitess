@@ -1142,3 +1142,8 @@ func buildLdPaths() ([]string, error) {
 
 	return ldPaths, nil
 }
+
+// GetVersionString is part of the MysqlDeamon interface.
+func (mysqld *Mysqld) GetVersionString() string {
+	return fmt.Sprintf("%d.%d.%d", mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor, mysqld.capabilities.version.Patch)
+}
