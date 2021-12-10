@@ -4,6 +4,11 @@
 
 ## Major Changes
 
+### vttablet -use_super_read_only flag now defaults to true
+The default value used to be false. What this means is that during a failover, we will set `super_read_only` on database flavors that support them (MySQL 5.7+ and Percona 5.7+).
+In addition, all Vitess-managed databases will be started with `super-read-only` in the cnf file.
+It is expected that this change is safe and backwards-compatible. Anyone who is relying on the current behavior should pass -use_super_read_only=false on the vttablet command line, and make sure they are using a custom my.cnf instead of the one provided as the default by Vitess.
+
 ### ddl_strategy: -postpone-completion flag
 
 `ddl_strategy` (either `@@ddl_strategy` in VtGate or `-ddl_strategy` in `vtctl ApplySchema`) supports the flag `-postpone-completion`
