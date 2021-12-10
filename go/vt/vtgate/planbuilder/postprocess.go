@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // This file has functions to analyze postprocessing
@@ -139,14 +141,15 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 
 func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
 	plan := newLimit(input)
-	pv, err := sqlparser.NewPlanValue(limit.Rowcount)
+	lookup := &noColumnLookup{semTable: semantics.EmptySemTable()}
+	pv, err := evalengine.Convert(limit.Rowcount, lookup)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
 	plan.elimit.Count = pv
 
 	if limit.Offset != nil {
-		pv, err = sqlparser.NewPlanValue(limit.Offset)
+		pv, err = evalengine.Convert(limit.Offset, lookup)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}

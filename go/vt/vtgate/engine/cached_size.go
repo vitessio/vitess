@@ -361,12 +361,16 @@ func (cached *Limit) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(48)
 	}
-	// field Count vitess.io/vitess/go/sqltypes.PlanValue
-	size += cached.Count.CachedSize(false)
-	// field Offset vitess.io/vitess/go/sqltypes.PlanValue
-	size += cached.Offset.CachedSize(false)
+	// field Count vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Count.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Offset vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Offset.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
