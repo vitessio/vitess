@@ -41,6 +41,27 @@ var (
 		output     string
 		partialDDL bool
 	}{{
+		input:  "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt",
+		output: "select * from json_table('[ {\\\"c1\\\": null} ]', '$[*]' columns(\n\tc1 INT path '$.c1' error on error \n\t)\n) as jt",
+	}, {
+		input:  "SELECT * FROM JSON_TABLE('[{\"a\":\"3\"},{\"a\":2},{\"b\":1},{\"a\":0},{\"a\":[1,2]}]', \"$[*]\" COLUMNS(rowid FOR ORDINALITY, ac VARCHAR(100) PATH \"$.a\" DEFAULT '111' ON EMPTY DEFAULT '999' ON ERROR,  aj JSON PATH \"$.a\" DEFAULT '{\"x\": 333}' ON EMPTY, bx INT EXISTS PATH \"$.b\" ) ) AS tt",
+		output: "select * from json_table('[{\\\"a\\\":\\\"3\\\"},{\\\"a\\\":2},{\\\"b\\\":1},{\\\"a\\\":0},{\\\"a\\\":[1,2]}]', '$[*]' columns(\n        \trowid as ordinality,\n        \tac VARCHAR(100) path '$.a' default '111' on empty default '999' on error ,\n        \taj JSON path '$.a' default '{\\\"x\\\": 333}' on empty ,\n        \tbx INT exists path '$.b' \n        \t)\n        ) as tt",
+	}, {
+		input:  "SELECT * FROM  JSON_TABLE(    '[{\"a\": \"a_val\",\"b\": [{\"c\": \"c_val\", \"l\": [1,2]}]},{\"a\": \"a_val\", \"b\": [{\"c\": \"c_val\",\"l\": [11]}, {\"c\": \"c_val\", \"l\": [22]}]}]',    '$[*]' COLUMNS(      top_ord FOR ORDINALITY,      apath VARCHAR(10) PATH '$.a',      NESTED PATH '$.b[*]' COLUMNS (        bpath VARCHAR(10) PATH '$.c',        ord FOR ORDINALITY,        NESTED PATH '$.l[*]' COLUMNS (lpath varchar(10) PATH '$')        )    )) as jt",
+		output: "",
+	}, {
+		input:  "SELECT * FROM  JSON_TABLE(    '[{\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}]',    '$[*]' COLUMNS(        a INT PATH '$.a',        NESTED PATH '$.b[*]' COLUMNS (b1 INT PATH '$'),        NESTED PATH '$.b[*]' COLUMNS (b2 INT PATH '$')    )) AS jt",
+		output: "",
+	}, {
+		input:  "SELECT * F ROM  JSON_TABLE(    '[ {\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}, {\"a\":3}]',    '$[*]' COLUMNS(            a INT PATH '$.a',            NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$')           )   ) AS jtWHERE b IS NOT NULL",
+		output: "",
+	}, {
+		input:  "SELECT * FROM  JSON_TABLE(    '[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]',    \"$[1]\" COLUMNS(      xval VARCHAR(100) PATH \"$.x\",      yval VARCHAR(100) PATH \"$.y\"    )  ) AS  jt1",
+		output: "",
+	}, {
+		input:  "SELECT * FROM   JSON_TABLE(     '[{\"x\":2,\"y\":\"8\"},{\"x\":\"3\",\"y\":\"7\"},{\"x\":\"4\",\"y\":6}]',     \"$[*]\" COLUMNS(       xval VARCHAR(100) PATH \"$.x\",       yval VARCHAR(100) PATH \"$.y\"     )   ) AS  jt1;",
+		output: "",
+	}, {
 		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
 		output:     "create table x",
 		partialDDL: true,

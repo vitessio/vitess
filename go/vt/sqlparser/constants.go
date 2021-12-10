@@ -603,3 +603,9 @@ const (
 	IntervalMinuteMicrosecond
 	IntervalSecondMicrosecond
 )
+
+const (
+	ErrorJSONType JtOnResponseType = iota
+	NullJSONType
+	DefaultJSONType
+)

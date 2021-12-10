@@ -1521,6 +1521,46 @@ type TableSpec struct {
 	PartitionOption *PartitionOption
 }
 
+type JSONTableExpr struct {
+	Expr    Expr
+	Filter  Expr
+	Columns []*JtColumnDefinition
+	Alias   TableIdent
+}
+
+type JtOnResponseType int
+
+type JtColumnDefinition struct {
+	JtOrdinal    *JtOrdinalColDef
+	JtPath       *JtPathColDef
+	JtNestedPath *JtNestedPathColDef
+}
+
+type JtOrdinalColDef struct {
+	Name ColIdent
+}
+
+type JtPathColDef struct {
+	Name            ColIdent
+	Type            ColumnType
+	Collate         string
+	JtColExists     bool
+	Path            Expr
+	EmptyOnResponse *JtOnResponse
+	ErrorOnResponse *JtOnResponse
+}
+
+type JtNestedPathColDef struct {
+	Path    Expr
+	Columns []*JtColumnDefinition
+}
+type JtOnResponse struct {
+	ResponseType JtOnResponseType
+	Expr         Expr
+}
+
+func (*JSONTableExpr) iTableExpr() {}
+
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
 	Name ColIdent

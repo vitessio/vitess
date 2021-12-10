@@ -168,6 +168,10 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionOption *PartitionOption
   exprOrColumns *ExprOrColumns
   subPartition  *SubPartition
+  JSONTableExpr	*JSONTableExpr
+  jtColumnDefinition *JtColumnDefinition
+  jtColumnList	[]*JtColumnDefinition
+  jtOnResponse	*JtOnResponse
 }
 
 %token LEX_ERROR
@@ -341,7 +345,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt union_op replace_opt local_opt
+%type <boolean> distinct_opt union_op replace_opt local_opt jt_column_type
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
 %type <strs> select_options flush_option_list
@@ -349,7 +353,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> definer_opt user generated_always_opt
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
-%type <tableExpr> table_reference table_factor join_table
+%type <tableExpr> table_reference table_factor join_table table_function
+%type <jtColumnDefinition> jt_column
+%type <jtColumnList> columns_clause columns_list
+%type <jtOnResponse> on_error on_empty json_on_response
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
@@ -822,6 +829,95 @@ table_name_list:
 | table_name_list ',' table_name
   {
     $$ = append($$, $3)
+  }
+
+table_function:
+  JSON_TABLE '(' expression ',' text_literal columns_clause ')' as_opt_id
+  {
+	$$ = &JSONTableExpr{Expr: $3, Filter: $5, Columns: $6, Alias: $8}
+  }
+
+columns_clause:
+  COLUMNS '(' columns_list ')'
+  {
+	$$= $3
+  }
+
+columns_list:
+  jt_column
+  {
+	$$= []*JtColumnDefinition{$1}
+  }
+| columns_list ',' jt_column
+  {
+	$$ = append($1, $3)
+  }
+
+jt_column:
+ sql_id FOR ORDINALITY
+  {
+	$$ = &JtColumnDefinition{JtOrdinal: &JtOrdinalColDef{Name: $1}}
+  }
+| sql_id column_type collate_opt jt_column_type PATH text_literal
+  {
+ 	jtPath := &JtPathColDef{Name: $1, Type: $2, Collate: $3, JtColExists: $4, Path: $6}
+ 	$$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_column_type PATH text_literal on_empty
+  {
+ 	jtPath := &JtPathColDef{Name: $1, Type: $2, Collate: $3, JtColExists: $4, Path: $6, EmptyOnResponse: $7}
+ 	$$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_column_type PATH text_literal on_error
+  {
+ 	jtPath := &JtPathColDef{Name: $1, Type: $2, Collate: $3, JtColExists: $4, Path: $6, ErrorOnResponse: $7}
+ 	$$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| sql_id column_type collate_opt jt_column_type PATH text_literal on_empty on_error
+  {
+ 	jtPath := &JtPathColDef{Name: $1, Type: $2, Collate: $3, JtColExists: $4, Path: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
+ 	$$ = &JtColumnDefinition{JtPath: jtPath}
+  }
+| NESTED PATH text_literal columns_clause
+  {
+	jtNestedPath := &JtNestedPathColDef{Path: $3, Columns: $4}
+	$$ = &JtColumnDefinition{JtNestedPath: jtNestedPath}
+  }
+
+jt_column_type:
+  /* empty */
+  {
+	$$=false
+  }
+| EXISTS
+  {
+	$$=true
+  }
+
+on_empty:
+  json_on_response ON EMPTY
+  {
+  	$$= $1
+  }
+
+on_error:
+  json_on_response ON ERROR
+  {
+  	$$= $1
+  }
+
+json_on_response:
+  ERROR
+  {
+    $$ = &JtOnResponse{ResponseType: ErrorJSONType}
+  }
+| NULL
+  {
+    $$ = &JtOnResponse{ResponseType: NullJSONType}
+  }
+| DEFAULT signed_literal
+  {
+    $$ = &JtOnResponse{ResponseType: DefaultJSONType, Expr: $2}
   }
 
 delete_table_list:
@@ -3858,6 +3954,10 @@ table_factor:
 | openb table_references closeb
   {
     $$ = &ParenTableExpr{Exprs: $2}
+  }
+| table_function
+  {
+    $$ = $1
   }
 
 derived_table:
