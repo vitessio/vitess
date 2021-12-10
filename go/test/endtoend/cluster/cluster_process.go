@@ -321,13 +321,6 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 		for _, tablet := range shard.Vttablets {
-			if !cluster.ReusingVTDATAROOT {
-				if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
-					log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
-					return
-				}
-			}
-
 			log.Infof("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort)
 
 			if err = tablet.VttabletProcess.Setup(); err != nil {
@@ -337,7 +330,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		}
 
 		// Make first tablet as primary
-		if err = cluster.VtctlclientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
