@@ -56,6 +56,19 @@ func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard s
 	return err
 }
 
+// InitializeShard executes vtctlclient command to make specified tablet the primary for the shard.
+func (vtctlclient *VtctlClientProcess) InitializeShard(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
+	output, err := vtctlclient.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		"-keyspace_shard", fmt.Sprintf("%s/%s", Keyspace, Shard),
+		"-wait_replicas_timeout", "31s",
+		"-new_primary", fmt.Sprintf("%s-%d", Cell, TabletUID))
+	if err != nil {
+		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
 // ApplySchemaWithOutput applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, params VtctlClientParams) (result string, err error) {
 	args := []string{
