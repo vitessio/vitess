@@ -1870,15 +1870,15 @@ func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
 
 func (node *JtColumnDefinition) Format(buf *TrackedBuffer) {
 	if node.JtOrdinal != nil {
-		buf.astPrintf(node, "%v as ordinality", node.JtOrdinal.Name)
+		buf.astPrintf(node, "%v for ordinality", node.JtOrdinal.Name)
 	} else if node.JtNestedPath != nil {
 		buf.astPrintf(node, "nested path %v columns(\n", node.JtNestedPath.Path)
 		sz := len(node.JtNestedPath.Columns)
 
 		for i := 0; i < sz-1; i++ {
-			buf.astPrintf(node, "\t%v,\n)", node.JtNestedPath.Columns[i])
+			buf.astPrintf(node, "\t%v,\n", node.JtNestedPath.Columns[i])
 		}
-		buf.astPrintf(node, "\t%v\n", node.JtNestedPath.Columns[sz-1])
+		buf.astPrintf(node, "\t%v\n)", node.JtNestedPath.Columns[sz-1])
 	} else if node.JtPath != nil {
 		buf.astPrintf(node, "%v %v ", node.JtPath.Name, node.JtPath.Type)
 		if node.JtPath.Collate != "" {

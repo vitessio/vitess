@@ -2446,7 +2446,7 @@ func (node *JSONTableExpr) formatFast(buf *TrackedBuffer) {
 func (node *JtColumnDefinition) formatFast(buf *TrackedBuffer) {
 	if node.JtOrdinal != nil {
 		node.JtOrdinal.Name.formatFast(buf)
-		buf.WriteString(" as ordinality")
+		buf.WriteString(" for ordinality")
 	} else if node.JtNestedPath != nil {
 		buf.WriteString("nested path ")
 		node.JtNestedPath.Path.formatFast(buf)
@@ -2456,11 +2456,11 @@ func (node *JtColumnDefinition) formatFast(buf *TrackedBuffer) {
 		for i := 0; i < sz-1; i++ {
 			buf.WriteByte('\t')
 			node.JtNestedPath.Columns[i].formatFast(buf)
-			buf.WriteString(",\n)")
+			buf.WriteString(",\n")
 		}
 		buf.WriteByte('\t')
 		node.JtNestedPath.Columns[sz-1].formatFast(buf)
-		buf.WriteByte('\n')
+		buf.WriteString("\n)")
 	} else if node.JtPath != nil {
 		node.JtPath.Name.formatFast(buf)
 		buf.WriteByte(' ')
