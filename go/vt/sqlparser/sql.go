@@ -4934,6 +4934,11 @@ type yySymType struct {
 	yys               int
 }
 
+func (st *yySymType) JSONTableExprUnion() *JSONTableExpr {
+	v, _ := st.union.(*JSONTableExpr)
+	return v
+}
+
 func (st *yySymType) ReferenceActionUnion() ReferenceAction {
 	v, _ := st.union.(ReferenceAction)
 	return v
@@ -5166,11 +5171,6 @@ func (st *yySymType) isolationLevelUnion() IsolationLevel {
 
 func (st *yySymType) joinTypeUnion() JoinType {
 	v, _ := st.union.(JoinType)
-	return v
-}
-
-func (st *yySymType) JSONTableExprUnion() *JSONTableExpr {
-	v, _ := st.union.(*JSONTableExpr)
 	return v
 }
 
