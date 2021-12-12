@@ -72,6 +72,7 @@ var (
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
+		"onlineddl_scheduler",
 		"onlineddl_revertible",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
