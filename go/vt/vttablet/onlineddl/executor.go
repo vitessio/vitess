@@ -375,9 +375,8 @@ func (e *Executor) isAnyMigrationRunningOnTable(tableName string) bool {
 	return sameTableMigrationFound
 }
 
-// isAnyNonConcurrentMigrationRunning sees if there's any migration running right now
-// that does not have -allow-concurrent.
-// such a running migration will for example prevent a new non-concurrent migration from running.
+// isAnyConflictingMigrationRunning checks if there's any running migration that conflicts with the
+// given migration, such that they can't both run concurrently.
 func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) bool {
 
 	if e.isAnyNonConcurrentMigrationRunning() && !e.allowConcurrentMigration(onlineDDL) {
@@ -1634,14 +1633,14 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 }
 
 // scheduleNextMigration attemps to schedule a single migration to run next.
-// possibly there's no migrations to run.
+// possibly there are migrations to run.
 // The effect of this function is to move a migration from 'queued' state to 'ready' state, is all.
-// Notice that the query sqlScheduleSingleMigration embeds some logic inside. We may choose
-// to refactor the logic into the app
 func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	// The query sqlScheduleSingleMigration has some business logic; in the future, we can
+	// consider moving the logic outside the query and into this function's code.
 	_, err := e.execQuery(ctx, sqlScheduleSingleMigration)
 	return err
 }
@@ -2286,12 +2285,13 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	return nil
 }
 
-// runNextMigration picks one 'ready' migration that is able to run, and executes it.
+// runNextMigration picks up to one 'ready' migration that is able to run, and executes it.
 // Possible scenarios:
 // - no migration is in 'ready' state -- nothing to be done
 // - a migration is 'ready', but conflicts with other running migrations -- try another 'ready' migration
-// It is therefore possible that there is a 'ready' migration, and still this function only handles one.
 // - multiple migrations are 'ready' -- we just handle one here
+// Note that per the above breakdown, and due to potential conflicts, it is possible to have one or
+// more 'ready' migration, and still none is executed.
 func (e *Executor) runNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -2302,13 +2302,13 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		// a vreplication migration from a pre-PRS/ERS that we still need to learn about?
 		// We're going to be careful here, and avoid running new migrations until we have
 		// a better picture. It will likely take a couple seconds till next iteration.
-		// execution. This delay ony takes place shortly after Open().
+		// This delay only takes place shortly after Open().
 		return nil
 	}
 
 	// getNonConflictingMigration finds a single 'ready' migration which does not conflict with running migrations.
 	// Conflicts are:
-	// - a migration is 'ready' but is not set to run _concurrnetly_, and there's a running migration that is also non-concurrent
+	// - a migration is 'ready' but is not set to run _concurrently_, and there's a running migration that is also non-concurrent
 	// - a migration is 'ready' but there's another migration 'running' on the exact same table
 	getNonConflictingMigration := func() (*schema.OnlineDDL, error) {
 		r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
@@ -2327,7 +2327,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			}
 		}
 		// no non-conflicting migration found...
-		// Either all ready migrations are conflicting, or there's no ready migrations...
+		// Either all ready migrations are conflicting, or there are no ready migrations...
 		return nil, nil
 	}
 	onlineDDL, err := getNonConflictingMigration()
