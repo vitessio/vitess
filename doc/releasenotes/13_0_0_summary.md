@@ -47,17 +47,12 @@ This command indicates that a migration executed with `-postpone-completion` is 
 - For running `ALTER`s (`online` and `gh-ost`) which are only partly through the migration: they will cut-over automatically when they complete their work, as if `-postpone-completion` wasn't indicated
 - For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the scheduler's discretion. there is no guarantee that they will be scheduled to run immediately.
 
-### vtctl/vtctlclient OnlineDDL ... complete
+### vtctl/vtctlclient ApplySchema: ALTER VITESS_MIGRATION
 
-Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl` or `vtctlclient`:
-
-```shell
-vtctlclient OnlineDDL <keyspace> complete <uuid>
-```
-For example:
+`vtctl ApplySchema` now supports `ALTER VITESS_MIGRATION ...` statements. Example:
 
 ```shell
-vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
+$ vtctl ApplySchema -skip_preflight -sql "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete" commerce
 ```
 
 ### vtctl/vtctlclient ApplySchema -uuid_list
@@ -70,6 +65,20 @@ vtctlclient OnlineDDL ApplySchema -sql "drop table t1, drop table t2" -uuid_list
 
 Vitess will assign each migration with given UUID in order of appearance.
 It is the user's responsibility to ensure given UUIDs are globally unique. If the user submits a migration with an already existing UUID, that migration never gets scheduled nor executed.
+
+### vtctl/vtctlclient OnlineDDL ... complete
+
+Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl` or `vtctlclient`:
+
+```shell
+vtctlclient OnlineDDL <keyspace> complete <uuid>
+```
+
+For example:
+
+```shell
+vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
+```
 
 ## Incompatible Changes
 
