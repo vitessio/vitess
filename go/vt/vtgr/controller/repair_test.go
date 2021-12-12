@@ -176,6 +176,7 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				inputMap[input.mysqlport] = testGroupInput{
 					input.groupName,
 					input.readOnly,
+					0,
 					input.groupInput,
 					nil,
 				}
@@ -187,7 +188,7 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[target.Port]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
@@ -403,6 +404,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				inputMap[input.mysqlport] = testGroupInput{
 					input.groupName,
 					false,
+					0,
 					input.groupInput,
 					input.gtid,
 				}
@@ -415,7 +417,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[target.Port]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
@@ -617,6 +619,7 @@ func TestRepairWrongPrimaryTablet(t *testing.T) {
 				inputMap[tablet.AliasString()] = testGroupInput{
 					input.groupName,
 					false,
+					0,
 					input.groupInput,
 					nil,
 				}
@@ -631,7 +634,7 @@ func TestRepairWrongPrimaryTablet(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[alias]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
@@ -767,6 +770,7 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 				inputMap[input.alias] = testGroupInput{
 					input.groupName,
 					input.readOnly,
+					0,
 					input.groupInput,
 					nil,
 				}
@@ -778,7 +782,7 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[alias]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
@@ -846,7 +850,7 @@ func TestRepairUnreachablePrimary(t *testing.T) {
 				EXPECT().
 				FetchGroupView(gomock.Any(), gomock.Any()).
 				DoAndReturn(func(alias string, target *inst.InstanceKey) (*db.GroupView, error) {
-					return db.BuildGroupView(alias, "group", target.Hostname, target.Port, false, []db.TestGroupState{
+					return db.BuildGroupView(alias, "group", target.Hostname, target.Port, false, 0, []db.TestGroupState{
 						{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 						{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
 						{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
@@ -990,6 +994,7 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 				inputMap[input.alias] = testGroupInput{
 					"group",
 					input.readOnly,
+					0,
 					input.groupInput,
 					nil,
 				}
@@ -1001,7 +1006,7 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[alias]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
@@ -1106,6 +1111,7 @@ func TestRepairReadOnlyShard(t *testing.T) {
 				inputMap[input.alias] = testGroupInput{
 					"group",
 					input.readOnly,
+					0,
 					input.groupInput,
 					nil,
 				}
@@ -1117,7 +1123,7 @@ func TestRepairReadOnlyShard(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[alias]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()
@@ -1240,6 +1246,7 @@ func TestRepairBackoffError(t *testing.T) {
 				inputMap[input.mysqlport] = testGroupInput{
 					input.groupName,
 					false,
+					0,
 					input.groupInput,
 					input.gtid,
 				}
@@ -1252,7 +1259,7 @@ func TestRepairBackoffError(t *testing.T) {
 							return nil, errors.New("invalid mysql instance key")
 						}
 						s := inputMap[target.Port]
-						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.checkResult, s.groupState)
 						return view, nil
 					}).
 					AnyTimes()

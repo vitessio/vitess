@@ -60,11 +60,15 @@ func (tc testCase) run(t *testing.T) {
 		BindVars: tc.bv,
 		Row:      tc.row,
 	}
-	cmp := ComparisonExpr{
+	cmp := &ComparisonExpr{
 		Op:    tc.op,
 		Left:  tc.v1,
 		Right: tc.v2,
 	}
+	if err := cmp.mergeCollations(); err != nil {
+		t.Fatalf("error while merging collations: %v", err)
+	}
+
 	got, err := cmp.Evaluate(env)
 	if tc.err == "" {
 		require.NoError(t, err)
@@ -999,6 +1003,57 @@ func TestNotInOp(t *testing.T) {
 			name: "Null In tuple",
 			v1:   NewLiteralNull(), v2: TupleExpr{NewLiteralNull(), NewLiteralInt(52), NewLiteralInt(54)},
 			out: nil,
+			op:  &InOp{Negate: true},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// TestNotInOp tests the NotIn operator comparisons
+func TestNullComparisons(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "null not like string",
+			v1:   NewLiteralNull(), v2: NewLiteralString([]byte("foo"), defaultCollation),
+			op: &LikeOp{Negate: true},
+		},
+		{
+			name: "null equal integer",
+			v1:   NewLiteralNull(), v2: NewLiteralInt(10),
+			op: &EqualOp{"=", func(cmp int) bool {
+				return cmp == 0
+			}},
+		},
+		{
+			name: "null null-safe-equal null",
+			v1:   NewLiteralNull(), v2: NewLiteralNull(),
+			out: &T,
+			op:  &NullSafeEqualOp{},
+		},
+		{
+			name: "0 null-safe-equal null",
+			v1:   NewLiteralInt(0), v2: NewLiteralNull(),
+			out: &F,
+			op:  &NullSafeEqualOp{},
+		},
+		{
+			name: "tuples different sizes",
+			v1:   TupleExpr{NewLiteralString([]byte("foo"), defaultCollation), NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1)},
+			v2: TupleExpr{
+				TupleExpr{
+					TupleExpr{NewLiteralString([]byte("foo"), defaultCollation), NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1)},
+					NewLiteralString([]byte("foo"), defaultCollation),
+					TupleExpr{NewLiteralString([]byte("foo"), defaultCollation), NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1)},
+					NewLiteralInt(1),
+				},
+				NewLiteralInt(1), NewLiteralInt(1), NewLiteralInt(1),
+			},
+			err: "Operand should contain 1 column(s)",
 			op:  &InOp{Negate: true},
 		},
 	}

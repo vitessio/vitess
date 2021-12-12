@@ -658,7 +658,7 @@ func TestMerge(t *testing.T) {
 
 	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], nil, nil)
 	assert.NoError(err)
-	want := sqltypes.MakeTestResult(fields, "1|5|6|2|bc").Rows[0]
+	want := sqltypes.MakeTestResult(fields, "1|5|6.0|2|bc").Rows[0]
 	assert.Equal(want, merged)
 
 	// swap and retry

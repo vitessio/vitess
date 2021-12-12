@@ -114,7 +114,7 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 		return math.Float64frombits(num.numval), nil
 	}
 
-	if sqltypes.IsText(num.typ) || sqltypes.IsBinary(num.typ) {
+	if num.textual() {
 		fval, err := strconv.ParseFloat(string(v.Raw()), 64)
 		if err != nil {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
@@ -149,34 +149,37 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 
 // newEvalResult parses a value and produces an EvalResult containing the value
 func newEvalResult(v sqltypes.Value) (EvalResult, error) {
-	raw := v.Raw()
 	switch {
 	case v.IsBinary() || v.IsText():
-		return EvalResult{bytes: raw, typ: sqltypes.VarBinary}, nil
+		// TODO: collation
+		return EvalResult{bytes: v.Raw(), typ: sqltypes.VarBinary}, nil
 	case v.IsSigned():
-		ival, err := strconv.ParseInt(string(raw), 10, 64)
+		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return EvalResult{numval: uint64(ival), typ: sqltypes.Int64}, nil
+		return newEvalInt64(ival), nil
 	case v.IsUnsigned():
-		uval, err := strconv.ParseUint(string(raw), 10, 64)
+		uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return EvalResult{numval: uval, typ: sqltypes.Uint64}, nil
-	case v.IsFloat() || v.Type() == sqltypes.Decimal:
-		fval, err := strconv.ParseFloat(string(raw), 64)
+		return newEvalUint64(uval), nil
+	case v.IsFloat():
+		fval, err := strconv.ParseFloat(v.RawStr(), 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		typ := sqltypes.Float64
-		if v.Type() == sqltypes.Decimal {
-			typ = sqltypes.Decimal
+		return newEvalFloat(fval), nil
+	case v.Type() == sqltypes.Decimal:
+		dec, err := newDecimalString(v.RawStr())
+		if err != nil {
+			return EvalResult{}, err
 		}
-		return EvalResult{numval: math.Float64bits(fval), typ: typ}, nil
+		return newEvalDecimal(dec), nil
+
 	default:
-		return EvalResult{typ: v.Type(), bytes: raw}, nil
+		return EvalResult{typ: v.Type(), bytes: v.Raw()}, nil
 	}
 }
 
@@ -238,6 +241,8 @@ func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 				format = 'f'
 			}
 			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, math.Float64frombits(v.numval), format, -1, 64))
+		case sqltypes.Decimal:
+			return sqltypes.MakeTrusted(resultType, v.decimal.num.FormatCustom(v.decimal.frac, roundingModeFormat))
 		}
 	default:
 		return sqltypes.MakeTrusted(resultType, v.bytes)
@@ -260,8 +265,10 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return -1, nil
 			}
 			v1 = EvalResult{typ: sqltypes.Uint64, numval: uint64(v1.numval)}
-		case sqltypes.Float64, sqltypes.Decimal:
+		case sqltypes.Float64:
 			v1 = EvalResult{typ: v2.typ, numval: math.Float64bits(float64(int64(v1.numval)))}
+		case sqltypes.Decimal:
+			v1 = newEvalDecimal(newDecimalInt64(int64(v1.numval)))
 		}
 	case sqltypes.Uint64:
 		switch v2.typ {
@@ -270,8 +277,10 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return 1, nil
 			}
 			v2 = EvalResult{typ: sqltypes.Uint64, numval: uint64(v2.numval)}
-		case sqltypes.Float64, sqltypes.Decimal:
+		case sqltypes.Float64:
 			v1 = EvalResult{typ: v2.typ, numval: math.Float64bits(float64(v1.numval))}
+		case sqltypes.Decimal:
+			v1 = newEvalDecimal(newDecimalUint64(v1.numval))
 		}
 	case sqltypes.Float64:
 		switch v2.typ {
@@ -283,19 +292,24 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 			}
 			v2 = EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(float64(v2.numval))}
 		case sqltypes.Decimal:
-			v2.typ = sqltypes.Float64
+			f, ok := v2.decimal.num.Float64()
+			if !ok {
+				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
+			}
+			v2 = newEvalFloat(f)
 		}
 	case sqltypes.Decimal:
 		switch v2.typ {
 		case sqltypes.Int64:
-			v2 = EvalResult{typ: sqltypes.Decimal, numval: math.Float64bits(float64(int64(v2.numval)))}
+			v2 = newEvalDecimal(newDecimalInt64(int64(v2.numval)))
 		case sqltypes.Uint64:
-			if math.Float64frombits(v1.numval) < 0 {
-				return -1, nil
-			}
-			v2 = EvalResult{typ: sqltypes.Decimal, numval: math.Float64bits(float64(v2.numval))}
+			v2 = newEvalDecimal(newDecimalUint64(v2.numval))
 		case sqltypes.Float64:
-			v1.typ = sqltypes.Float64
+			f, ok := v1.decimal.num.Float64()
+			if !ok {
+				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
+			}
+			v1 = newEvalFloat(f)
 		}
 	}
 
@@ -316,7 +330,7 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 		case v1.numval < v2.numval:
 			return -1, nil
 		}
-	case sqltypes.Float64, sqltypes.Decimal:
+	case sqltypes.Float64:
 		v1v, v2v := math.Float64frombits(v1.numval), math.Float64frombits(v2.numval)
 		switch {
 		case v1v == v2v:
@@ -324,6 +338,8 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 		case v1v < v2v:
 			return -1, nil
 		}
+	case sqltypes.Decimal:
+		return v1.decimal.num.Cmp(&v2.decimal.num), nil
 	}
 
 	// v1>v2
@@ -398,7 +414,7 @@ func compareDateAndString(l, r EvalResult) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-	case sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ):
+	case l.textual():
 		rTime, err = parseDate(r)
 		if err != nil {
 			return 0, err
@@ -412,7 +428,7 @@ func compareDateAndString(l, r EvalResult) (int, error) {
 }
 
 func mergeCollations(left, right EvalResult) (EvalResult, EvalResult, error) {
-	if !sqltypes.IsText(left.typ) || !sqltypes.IsText(right.typ) {
+	if !left.textual() || !right.textual() {
 		return left, right, nil
 	}
 	env := collations.Local()
@@ -434,24 +450,6 @@ func mergeCollations(left, right EvalResult) (EvalResult, EvalResult, error) {
 	return left, right, nil
 }
 
-func compareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
-	if len(*lVal.tuple) != len(*rVal.tuple) {
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
-	}
-	hasSeenNull := false
-	for idx, lResult := range *lVal.tuple {
-		rResult := (*rVal.tuple)[idx]
-		res, isNull, err := nullSafeCoerceAndCompare(lResult, rResult)
-		if isNull {
-			hasSeenNull = true
-		}
-		if res != 0 || err != nil {
-			return res, false, err
-		}
-	}
-	return 0, hasSeenNull, nil
-}
-
 func compareGoTimes(lTime, rTime time.Time) (int, error) {
 	if lTime.Before(rTime) {
 		return -1, nil
@@ -469,5 +467,8 @@ func compareStrings(l, r EvalResult) int {
 		panic("compareStrings: did not coerce")
 	}
 	collation := collations.Local().LookupByID(l.collation.Collation)
+	if collation == nil {
+		panic("unknown collation after coercion")
+	}
 	return collation.Collate(l.bytes, r.bytes, false)
 }

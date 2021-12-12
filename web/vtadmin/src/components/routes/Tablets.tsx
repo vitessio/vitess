@@ -34,6 +34,8 @@ import { KeyspaceLink } from '../links/KeyspaceLink';
 import { TabletLink } from '../links/TabletLink';
 import { ExternalTabletLink } from '../links/ExternalTabletLink';
 import { ShardLink } from '../links/ShardLink';
+import InfoDropdown from './tablets/InfoDropdown';
+import ChangeDropdown from './tablets/ChangeDropdown';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -85,6 +87,10 @@ export const Tablets = () => {
                     <DataCell>
                         <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
+                    <DataCell>
+                        <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
+                        <ChangeDropdown />
+                    </DataCell>
                 </tr>
             ));
         },
@@ -105,7 +111,7 @@ export const Tablets = () => {
                     value={filter || ''}
                 />
                 <DataTable
-                    columns={['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname']}
+                    columns={['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname', 'Actions']}
                     data={filteredData}
                     renderRows={renderRows}
                 />

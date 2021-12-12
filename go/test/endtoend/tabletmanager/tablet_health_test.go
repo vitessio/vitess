@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -134,7 +135,7 @@ func TestHealthCheck(t *testing.T) {
 	// make sure the health stream is updated
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
 	require.NoError(t, err)
-	verifyStreamHealth(t, result)
+	verifyStreamHealth(t, result, true)
 
 	// then restart replication, make sure we stay healthy
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", rTablet.Alias)
@@ -148,7 +149,48 @@ func TestHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 	scanner := bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {
-		verifyStreamHealth(t, scanner.Text())
+		verifyStreamHealth(t, scanner.Text(), true)
+	}
+
+	// stop the replica's source mysqld instance to break replication
+	// and test that the replica tablet becomes unhealthy and non-serving after crossing
+	// the tablet's -unhealthy_threshold and the gateway's -discovery_low_replication_lag
+	err = primaryTablet.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+
+	time.Sleep(tabletUnhealthyThreshold + tabletHealthcheckRefreshInterval)
+
+	// now the replica's VtTabletStreamHealth should show it as unhealthy
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	require.NoError(t, err)
+	scanner = bufio.NewScanner(strings.NewReader(result))
+	for scanner.Scan() {
+		verifyStreamHealth(t, scanner.Text(), false)
+	}
+
+	// start the primary tablet's mysqld back up
+	primaryTablet.MysqlctlProcess.InitMysql = false
+	err = primaryTablet.MysqlctlProcess.Start()
+	primaryTablet.MysqlctlProcess.InitMysql = true
+	require.NoError(t, err)
+
+	// explicitly start replication on all of the replicas to avoid any test flakiness as they were all
+	// replicating from the primary instance
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", rTablet.Alias)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", rdonlyTablet.Alias)
+	require.NoError(t, err)
+
+	time.Sleep(tabletHealthcheckRefreshInterval)
+
+	// now the replica's VtTabletStreamHealth should show it as healthy again
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	require.NoError(t, err)
+	scanner = bufio.NewScanner(strings.NewReader(result))
+	for scanner.Scan() {
+		verifyStreamHealth(t, scanner.Text(), true)
 	}
 
 	// Manual cleanup of processes
@@ -183,7 +225,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	assert.Equal(t, want, got)
 }
 
-func verifyStreamHealth(t *testing.T, result string) {
+func verifyStreamHealth(t *testing.T, result string, expectHealthy bool) {
 	var streamHealthResponse querypb.StreamHealthResponse
 	err := json2.Unmarshal([]byte(result), &streamHealthResponse)
 	require.NoError(t, err)
@@ -191,10 +233,14 @@ func verifyStreamHealth(t *testing.T, result string) {
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
 	replicationLagSeconds := realTimeStats.GetReplicationLagSeconds()
-	assert.True(t, serving, "Tablet should be in serving state")
 	assert.True(t, UID > 0, "Tablet should contain uid")
-	// replicationLagSeconds varies till 7200 so setting safe limit
-	assert.True(t, replicationLagSeconds < 10000, "replica should not be behind primary")
+	if expectHealthy {
+		assert.True(t, serving, "Tablet should be in serving state")
+		// replicationLagSeconds varies till 7200 so setting safe limit
+		assert.True(t, replicationLagSeconds < 10000, "replica should not be behind primary")
+	} else {
+		assert.True(t, (!serving || replicationLagSeconds >= uint32(tabletUnhealthyThreshold.Seconds())), "Tablet should not be in serving and healthy state")
+	}
 }
 
 func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {

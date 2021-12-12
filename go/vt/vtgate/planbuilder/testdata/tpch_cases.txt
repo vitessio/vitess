@@ -389,7 +389,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                     "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where :__sq_has_values1 = 1 and o_orderkey in ::__vals order by o_totalprice desc, o_orderdate asc",
                     "Table": "orders",
                     "Values": [
-                      "::__sq1"
+                      ":__sq1"
                     ],
                     "Vindex": "hash"
                   },

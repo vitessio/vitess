@@ -64,8 +64,8 @@ func TestConvertSimplification(t *testing.T) {
 	}{
 		{"42", ok("INT64(42)"), ok("INT64(42)")},
 		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
-		{"1.0 + (1 + 1) * 8.0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
-		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") like VARBINARY(\"poke%\")"), ok("INT32(1)")},
+		{"1.0e0 + (1 + 1) * 8.0e0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
+		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") like VARBINARY(\"poke%\")"), ok("UINT64(1)")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
 			ok(`VARBINARY("foo") COLLATE utf8mb4_general_ci in (VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz"))`),
@@ -73,20 +73,26 @@ func TestConvertSimplification(t *testing.T) {
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
 			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("charizard"))`),
-			ok("INT32(0)"),
+			ok("INT64(0)"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
 			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"))`),
-			ok("INT32(1)"),
+			ok("INT64(1)"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
 			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), NULL)`),
-			ok(`INT32(1)`),
+			ok(`INT64(1)`),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
 			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL)`),
 			ok(`NULL`),
 		},
+		{"0 + NULL", ok("INT64(0) + NULL"), ok("NULL")},
+		{"1.00000 + 2.000", ok("DECIMAL(1.00000) + DECIMAL(2.000)"), ok("DECIMAL(3.00000)")},
+		{"1 + 0.05", ok("INT64(1) + DECIMAL(0.05)"), ok("DECIMAL(1.05)")},
+		{"1 + 0.05e0", ok("INT64(1) + FLOAT64(0.05)"), ok("FLOAT64(1.05)")},
+		{"1 / 1", ok("INT64(1) / INT64(1)"), ok("DECIMAL(1.0000)")},
+		{"(14620 / 9432456) / (24250 / 9432456)", ok("(INT64(14620) / INT64(9432456)) / (INT64(24250) / INT64(9432456))"), ok("DECIMAL(0.60288653)")},
 	}
 
 	for _, tc := range testCases {
@@ -138,7 +144,7 @@ func TestEvaluate(t *testing.T) {
 		expression: "42",
 		expected:   sqltypes.NewInt64(42),
 	}, {
-		expression: "42.42",
+		expression: "42.42e0",
 		expected:   sqltypes.NewFloat64(42.42),
 	}, {
 		expression: "40+2",
@@ -151,7 +157,7 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewInt64(80),
 	}, {
 		expression: "40/2",
-		expected:   sqltypes.NewFloat64(20),
+		expected:   sqltypes.NewDecimal("20.0000"),
 	}, {
 		expression: ":exp",
 		expected:   sqltypes.NewInt64(66),
@@ -166,40 +172,37 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewFloat64(2.2),
 	}, {
 		expression: "42 in (41, 42)",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewInt64(1),
 	}, {
 		expression: "42 in (41, 43)",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewInt64(0),
 	}, {
 		expression: "42 in (null, 41, 43)",
 		expected:   NULL,
 	}, {
 		expression: "(1,2) in ((1,2), (2,3))",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewInt64(1),
 	}, {
 		expression: "(1,2) = (1,2)",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewUint64(1),
 	}, {
 		expression: "1 = 'sad'",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewUint64(0),
 	}, {
 		expression: "(1,2) = (1,3)",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewUint64(0),
 	}, {
 		expression: "(1,2) = (1,null)",
 		expected:   NULL,
 	}, {
 		expression: "(1,2) in ((4,2), (2,3))",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewInt64(0),
 	}, {
 		expression: "(1,2) in ((1,null), (2,3))",
 		expected:   NULL,
 	}, {
-		expression: "(1,2) in ((3,2), (2,3), null)",
-		expected:   NULL,
-	}, {
 		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewUint64(1),
 	}, {
 		expression: "(1,(1,2,3),(1,(1,NULL),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
 		expected:   NULL,
@@ -230,6 +233,45 @@ func TestEvaluate(t *testing.T) {
 			// Then
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, r.Value(), "expected %s", test.expected.String())
+		})
+	}
+}
+
+func TestEvaluateTuple(t *testing.T) {
+	type testCase struct {
+		expression string
+		expected   []sqltypes.Value
+	}
+
+	tests := []testCase{{
+		expression: "(1,2,4)",
+		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(4)},
+	}, {
+		expression: "(1,'2',4)",
+		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("2"), sqltypes.NewInt64(4)},
+	}, {
+		expression: "(1,'2',4.0)",
+		expected:   []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("2"), sqltypes.NewDecimal("4.0")},
+	}}
+
+	for _, test := range tests {
+		t.Run(test.expression, func(t *testing.T) {
+			// Given
+			stmt, err := sqlparser.Parse("select " + test.expression)
+			require.NoError(t, err)
+			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+			sqltypesExpr, err := Convert(astExpr, dummyCollation(45))
+			require.Nil(t, err)
+			require.NotNil(t, sqltypesExpr)
+
+			// When
+			r, err := sqltypesExpr.Evaluate(nil)
+
+			// Then
+			require.NoError(t, err)
+			require.NotNil(t, r)
+			gotValues := r.TupleValues()
+			assert.Equal(t, test.expected, gotValues, "expected: %s, got: %s", test.expected, gotValues)
 		})
 	}
 }

@@ -30,12 +30,11 @@ import { TabletDebugVars } from '../util/tabletDebugVars';
  * Note that this only validates the HttpResponse envelope; it does not
  * do any type checking or validation on the result.
  */
-export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
+export const vtfetch = async (endpoint: string, options: RequestInit = {}): Promise<HttpOkResponse> => {
     try {
         const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
-
         const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
-        const opts = vtfetchOpts();
+        const opts = { ...vtfetchOpts(), ...options };
 
         let response = null;
         try {
@@ -85,6 +84,7 @@ export const vtfetchOpts = (): RequestInit => {
             `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
         );
     }
+
     return { credentials };
 };
 
@@ -225,6 +225,44 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
     return pb.Tablet.create(result);
 };
 
+export interface PingTabletParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const pingTablet = async ({ clusterID, alias }: PingTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/ping?cluster=${clusterID}`);
+    const err = pb.PingTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.PingTabletResponse.create(result);
+};
+
+export interface RefreshStateParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const refreshState = async ({ clusterID, alias }: RefreshStateParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/refresh?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.RefreshStateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RefreshStateResponse.create(result);
+};
+
+export interface RunHealthCheckParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/healthcheck?cluster=${clusterID}`);
+    const err = pb.RunHealthCheckResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RunHealthCheckResponse.create(result);
+};
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;
     data?: TabletDebugVars;

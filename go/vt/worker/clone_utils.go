@@ -55,9 +55,5 @@ func makeValueString(fields []*querypb.Field, rows [][]sqltypes.Value) string {
 
 // escapeAll runs sqlescape.EscapeID() for all entries in the slice.
 func escapeAll(identifiers []string) []string {
-	result := make([]string, len(identifiers))
-	for i := range identifiers {
-		result[i] = sqlescape.EscapeID(identifiers[i])
-	}
-	return result
+	return sqlescape.EscapeIDs(identifiers)
 }

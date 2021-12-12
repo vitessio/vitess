@@ -130,7 +130,13 @@ var executorVSchema = `
         		"to": "keyspace_id"
       		},
       		"owner": "t2_wo_lookup"
-    	}
+    	},
+		"regional_vdx": {
+			"type": "region_experimental",
+			"params": {
+				"region_bytes": "1"
+			}
+        }
 	},
 	"tables": {
 		"user": {
@@ -302,7 +308,15 @@ var executorVSchema = `
 				  	"name": "t2_lu_vdx"
 				}
             ]
-    	}
+    	},
+		"user_region": {
+			"column_vindexes": [
+				{
+					"columns": ["cola","colb"],
+					"name": "regional_vdx"
+				}
+			]
+		}
 	}
 }
 `

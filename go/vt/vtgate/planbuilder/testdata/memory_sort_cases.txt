@@ -450,7 +450,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Query": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "user_index"
           },
@@ -560,7 +560,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "user_index"
           },

@@ -18,6 +18,8 @@ package engine
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -234,8 +236,10 @@ func TestSelectEqualUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}}
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
@@ -305,8 +309,9 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
-
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}}
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"-20", "20-"},
@@ -346,8 +351,9 @@ func TestSelectEqual(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
-
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}}
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
@@ -398,7 +404,9 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
@@ -431,16 +439,13 @@ func TestSelectINUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{
-		Values: []sqltypes.PlanValue{{
-			Value: sqltypes.NewInt64(1),
-		}, {
-			Value: sqltypes.NewInt64(2),
-		}, {
-			Value: sqltypes.NewInt64(4),
-		}},
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+			evalengine.NewLiteralInt(4),
+		},
 	}}
-
 	vc := &loggingVCursor{
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"-20", "-20", "20-"},
@@ -483,14 +488,12 @@ func TestSelectINNonUnique(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{
-		Values: []sqltypes.PlanValue{{
-			Value: sqltypes.NewInt64(1),
-		}, {
-			Value: sqltypes.NewInt64(2),
-		}, {
-			Value: sqltypes.NewInt64(4),
-		}},
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+			evalengine.NewLiteralInt(4),
+		},
 	}}
 
 	fields := sqltypes.MakeTestFields(
@@ -548,14 +551,12 @@ func TestSelectMultiEqual(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{
-		Values: []sqltypes.PlanValue{{
-			Value: sqltypes.NewInt64(1),
-		}, {
-			Value: sqltypes.NewInt64(2),
-		}, {
-			Value: sqltypes.NewInt64(4),
-		}},
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+			evalengine.NewLiteralInt(4),
+		},
 	}}
 
 	vc := &loggingVCursor{
@@ -601,9 +602,9 @@ func TestSelectLike(t *testing.T) {
 	)
 
 	sel.Vindex = vindex
-	sel.Values = []sqltypes.PlanValue{
-		{Value: sqltypes.NewVarBinary("a%")},
-	}
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralString([]byte("a%"), collations.TypedCollation{}),
+	}}
 	// md5("a") = 0cc175b9c0f1b6a831c399e269772661
 	// keyspace id prefix for "a" is 0x0c
 	vc.shardForKsid = []string{"-0c80", "0c80-0d"}
@@ -631,9 +632,9 @@ func TestSelectLike(t *testing.T) {
 
 	vc.Rewind()
 
-	sel.Values = []sqltypes.PlanValue{
-		{Value: sqltypes.NewVarBinary("ab%")},
-	}
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralString([]byte("ab%"), collations.TypedCollation{}),
+	}}
 	// md5("b") = 92eb5ffee6ae2fec3ad71c777531578f
 	// keyspace id prefix for "ab" is 0x0c92
 	// adding one byte to the prefix just hit one shard
@@ -773,7 +774,9 @@ func TestRouteGetFields(t *testing.T) {
 		"dummy_select_field",
 	)
 	sel.Vindex = vindex.(vindexes.SingleColumn)
-	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, true)
@@ -1204,7 +1207,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 	expectResult(t, "sel.Execute", result, wantResult)
 }
 
-func XTestRouteStreamSortTruncate(t *testing.T) {
+func TestRouteStreamSortTruncate(t *testing.T) {
 	sel := NewRoute(
 		SelectUnsharded,
 		&vindexes.Keyspace{
@@ -1365,4 +1368,250 @@ func TestExecFail(t *testing.T) {
 		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
 		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 	})
+}
+
+func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	sel := NewRoute(
+		SelectEqualUnique,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []RouteValue{&evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(1),
+	}, &evalengine.RouteValue{
+		Expr: evalengine.NewLiteralInt(2),
+	}}
+
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectINMultiColumnVindex(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	sel := NewRoute(
+		SelectIN,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []RouteValue{
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+			),
+		},
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(3),
+				evalengine.NewLiteralInt(4),
+			),
+		},
+	}
+
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "20-", "20-", "20-"},
+		results:      []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard ks.-20: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		`StreamExecuteMulti dummy_select ks.-20: {__vals0: type:TUPLE values:{type:INT64 value:"1"} __vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"4"} values:{type:INT64 value:"3"}} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectINMixedMultiColumnComparision(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	sel := NewRoute(
+		SelectIN,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []RouteValue{
+		&evalengine.RouteValue{
+			Expr: evalengine.NewLiteralInt(1),
+		},
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(3),
+				evalengine.NewLiteralInt(4),
+			),
+		},
+	}
+
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "20-"},
+		results:      []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard ks.-20: dummy_select {__vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: dummy_select {__vals1: type:TUPLE values:{type:INT64 value:"4"}} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
+		`StreamExecuteMulti dummy_select ks.-20: {__vals1: type:TUPLE values:{type:INT64 value:"3"}} ks.20-: {__vals1: type:TUPLE values:{type:INT64 value:"4"}} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectMultiEqualMultiCol(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	sel := NewRoute(
+		SelectMultiEqual,
+		&vindexes.Keyspace{Name: "ks", Sharded: true},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []RouteValue{
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(3),
+			)},
+		&evalengine.RouteValue{
+			Expr: evalengine.NewTupleExpr(
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(4),
+			),
+		},
+	}
+
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-40", "40-"},
+		shardForKsid: []string{"-20", "40-"},
+		results:      []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)] [INT64(3) INT64(4)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f),DestinationKeyspaceID(03d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.40-: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)] [INT64(3) INT64(4)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f),DestinationKeyspaceID(03d2fd8867d50d2dfe)`,
+		`StreamExecuteMulti dummy_select ks.-20: {} ks.40-: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestBuildRowColValues(t *testing.T) {
+	out := buildRowColValues([][]sqltypes.Value{
+		{sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
+		{sqltypes.NewInt64(2), sqltypes.NewInt64(20)},
+	}, []sqltypes.Value{
+		sqltypes.NewInt64(3),
+		sqltypes.NewInt64(4),
+	})
+
+	require.Len(t, out, 4)
+	require.EqualValues(t, "[INT64(1) INT64(10) INT64(3)]", fmt.Sprintf("%s", out[0]))
+	require.EqualValues(t, "[INT64(1) INT64(10) INT64(4)]", fmt.Sprintf("%s", out[1]))
+	require.EqualValues(t, "[INT64(2) INT64(20) INT64(3)]", fmt.Sprintf("%s", out[2]))
+	require.EqualValues(t, "[INT64(2) INT64(20) INT64(4)]", fmt.Sprintf("%s", out[3]))
+}
+
+func TestBuildMultiColumnVindexValues(t *testing.T) {
+	testcases := []struct {
+		input  [][][]sqltypes.Value
+		output [][][]*querypb.Value
+	}{
+		{
+			input: [][][]sqltypes.Value{
+				{
+					{sqltypes.NewInt64(1), sqltypes.NewInt64(10)},
+					{sqltypes.NewInt64(2), sqltypes.NewInt64(20)},
+				}, {
+					{sqltypes.NewInt64(10), sqltypes.NewInt64(10)},
+					{sqltypes.NewInt64(20), sqltypes.NewInt64(20)},
+				},
+			},
+			output: [][][]*querypb.Value{
+				{
+					{sqltypes.ValueToProto(sqltypes.NewInt64(1)), sqltypes.ValueToProto(sqltypes.NewInt64(2))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				}, {
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+					{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				},
+			},
+		}, {
+			input: [][][]sqltypes.Value{{
+				{sqltypes.NewInt64(10), sqltypes.NewInt64(10), sqltypes.NewInt64(1)},
+				{sqltypes.NewInt64(20), sqltypes.NewInt64(20), sqltypes.NewInt64(1)},
+			},
+			},
+			output: [][][]*querypb.Value{{
+				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				{sqltypes.ValueToProto(sqltypes.NewInt64(10)), sqltypes.ValueToProto(sqltypes.NewInt64(20))},
+				{sqltypes.ValueToProto(sqltypes.NewInt64(1))},
+			},
+			},
+		},
+	}
+
+	for idx, testcase := range testcases {
+		t.Run(strconv.Itoa(idx), func(t *testing.T) {
+			out := buildMultiColumnVindexValues(testcase.input)
+			require.EqualValues(t, testcase.output, out)
+		})
+	}
 }

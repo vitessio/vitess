@@ -26,6 +26,7 @@ import {
     fetchSchemas,
     fetchTablet,
     FetchTabletParams,
+    pingTablet,
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
@@ -34,6 +35,8 @@ import {
     fetchWorkflow,
     fetchWorkflows,
     TabletDebugVarsResponse,
+    refreshState,
+    runHealthCheck,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -113,6 +116,36 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
         },
         ...options,
     });
+};
+
+/**
+ * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
+ */
+export const usePingTablet = (
+    params: Parameters<typeof pingTablet>[0],
+    options?: UseQueryOptions<pb.PingTabletResponse, Error>
+) => {
+    return useQuery(['ping-tablet', params], () => pingTablet(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useRefreshState = (
+    params: Parameters<typeof refreshState>[0],
+    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
+) => {
+    return useQuery(['refresh-state', params], () => refreshState(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useHealthCheck = (
+    params: Parameters<typeof runHealthCheck>[0],
+    options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
+) => {
+    return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
 };
 
 export const useExperimentalTabletDebugVars = (

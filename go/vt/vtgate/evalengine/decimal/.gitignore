@@ -1,0 +1,58 @@
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# Folders
+_obj
+_test
+
+# Architecture specific extensions/prefixes
+*.[568vq]
+[568vq].out
+
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+
+_testmain.go
+
+# Artifacts, profiles, etc.
+*.exe
+*.test
+*.prof
+*.tags
+.git
+*.swp
+*.txt
+*.tags
+tags
+*.test
+*.out
+*.zip
+*.gz
+
+# Internal
+literature/
+j/
+
+# Fuzzing
+fuzz/**/corpus
+fuzz/**/crashers
+fuzz/**/suppressions
+
+# Benchmark artifacts
+benchmarks/decbench
+*.xml
+*.class
+.idea/
+benchmarks/regen.go
+
+# Development
+internal/nat/
+
+# Testing
+x.bash
+*.decTest

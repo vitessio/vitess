@@ -18,13 +18,12 @@ package planbuilder
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -69,7 +68,7 @@ func transformCorrelatedSubquery(ctx *planningContext, tree *correlatedSubqueryT
 
 func pushDistinct(plan logicalPlan) {
 	switch n := plan.(type) {
-	case *route:
+	case *routeGen4:
 		n.Select.MakeDistinct()
 	case *concatenateGen4:
 		for _, source := range n.sources {
@@ -133,11 +132,11 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 }
 
 func mergeSubQueryPlan(ctx *planningContext, inner, outer logicalPlan, n *subqueryTree) logicalPlan {
-	iroute, ok := inner.(*route)
+	iroute, ok := inner.(*routeGen4)
 	if !ok {
 		return nil
 	}
-	oroute, ok := outer.(*route)
+	oroute, ok := outer.(*routeGen4)
 	if !ok {
 		return nil
 	}
@@ -153,7 +152,7 @@ func mergeSubQueryPlan(ctx *planningContext, inner, outer logicalPlan, n *subque
 }
 
 // mergeSystemTableInformation copies over information from the second route to the first and appends to it
-func mergeSystemTableInformation(a *route, b *route) logicalPlan {
+func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
 	// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
 	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
@@ -180,7 +179,7 @@ func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, er
 		return nil, err
 	}
 
-	rb, isRoute := plan.(*route)
+	rb, isRoute := plan.(*routeGen4)
 	if !isRoute {
 		return &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
@@ -230,7 +229,7 @@ func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logical
 	var result logicalPlan
 	if len(sources) == 1 {
 		src := sources[0]
-		if rb, isRoute := src.(*route); isRoute && rb.isSingleShard() {
+		if rb, isRoute := src.(*routeGen4); isRoute && rb.isSingleShard() {
 			// if we have a single shard route, we don't need to do anything to make it distinct
 			rb.Select.SetLimit(n.limit)
 			rb.Select.SetOrderBy(n.ordering)
@@ -328,11 +327,11 @@ func transformAndMerge(ctx *planningContext, n *concatenateTree) ([]logicalPlan,
 }
 
 func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logicalPlan) logicalPlan {
-	lroute, ok := left.(*route)
+	lroute, ok := left.(*routeGen4)
 	if !ok {
 		return nil
 	}
-	rroute, ok := right.(*route)
+	rroute, ok := right.(*routeGen4)
 	if !ok {
 		return nil
 	}
@@ -361,7 +360,7 @@ func createLogicalPlan(ctx *planningContext, source queryTree, selStmt *sqlparse
 	return plan, nil
 }
 
-func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
+func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -378,7 +377,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 	}
 
 	if n.selected != nil {
-		for _, predicate := range n.selected.predicates {
+		_, isMultiColumn := n.selected.foundVindex.(vindexes.MultiColumn)
+		for idx, predicate := range n.selected.predicates {
 			switch predicate := predicate.(type) {
 			case *sqlparser.ComparisonExpr:
 				if predicate.Operator == sqlparser.InOp {
@@ -389,6 +389,10 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 							if extractedSubquery != nil {
 								extractedSubquery.SetArgName(engine.ListVarName)
 							}
+						}
+						if isMultiColumn {
+							predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
+							continue
 						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
 					}
@@ -429,11 +433,13 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 		where = &sqlparser.Where{Expr: predicates, Type: sqlparser.WhereClause}
 	}
 
-	var singleColumn vindexes.SingleColumn
-	var values []sqltypes.PlanValue
+	var vindex vindexes.Vindex
+	var values []engine.RouteValue
 	if n.selectedVindex() != nil {
-		singleColumn = n.selected.foundVindex.(vindexes.SingleColumn)
-		values = n.selected.values
+		vindex = n.selected.foundVindex
+		for _, value := range n.selected.values {
+			values = append(values, &evalengine.RouteValue{Expr: value})
+		}
 	}
 
 	var expressions sqlparser.SelectExprs
@@ -464,12 +470,12 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 	if n.selected != nil && len(n.selected.valueExprs) > 0 {
 		condition = n.selected.valueExprs[0]
 	}
-	return &route{
+	return &routeGen4{
 		eroute: &engine.Route{
 			Opcode:              n.routeOpCode,
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            n.keyspace,
-			Vindex:              singleColumn,
+			Vindex:              vindex,
 			Values:              values,
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,

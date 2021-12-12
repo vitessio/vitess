@@ -631,7 +631,25 @@ Gen4 plan same as above
     "Vindex": "binary"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from pin_test",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from pin_test where 1 != 1",
+    "Query": "select * from pin_test",
+    "Table": "pin_test",
+    "Values": [
+      "VARBINARY(\"\\x80\")"
+    ],
+    "Vindex": "binary"
+  }
+}
 
 # select from dual on sharded keyspace
 "select @@session.auto_increment_increment from user.dual"
@@ -1032,7 +1050,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user where name ='abc' AND (id = 4) limit 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where `name` = 'abc' and id = 4 limit 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(4)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Multiple parenthesized expressions
 "select * from user where (id = 4) AND (name ='abc') limit 5"
@@ -1055,7 +1091,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(4)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Multiple parenthesized expressions
 "select * from user where (id = 4 and name ='abc') limit 5"
@@ -1078,7 +1132,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user where (id = 4 and name ='abc') limit 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 4 and `name` = 'abc' limit 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(4)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Column Aliasing with Table.Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2"
@@ -1101,7 +1173,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
+    "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col desc limit 2",
+    "Table": "`user`",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
@@ -1124,7 +1214,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user0_.col as col0_ from `user` as user0_ where 1 != 1",
+    "Query": "select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc limit 3",
+    "Table": "`user`",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Booleans and parenthesis
 "select * from user where (id = 1) AND name = true limit 5"
@@ -1147,7 +1255,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user where (id = 1) AND name = true limit 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 1 and `name` = true limit 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Column as boolean-ish
 "select * from user where (id = 1) AND name limit 5"
@@ -1170,7 +1296,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user where (id = 1) AND name limit 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 1 and `name` limit 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # PK as fake boolean, and column as boolean-ish
 "select * from user where (id = 5) AND name = true limit 5"
@@ -1193,7 +1337,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user where (id = 5) AND name = true limit 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 5 and `name` = true limit 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # top level subquery in select
 "select a, (select col from user) from unsharded"
@@ -1421,7 +1583,25 @@ Gen4 error: symbol t.col not found
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from music where user_id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
+    "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
+    "Table": "music",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # union with the same target shard last_insert_id
 "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1"
@@ -1444,7 +1624,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
+    "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
+    "Table": "music",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # unsharded union in derived table
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
@@ -1691,7 +1889,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from music where 1 != 1",
+    "Query": "select * from music where user_id = 1",
+    "Table": "music",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # sql_calc_found_rows with limit
 "select sql_calc_found_rows * from music limit 100"
@@ -1825,7 +2041,45 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music where 1 != 1",
+        "Query": "select * from music where user_id = 1 limit 2",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from music where 1 != 1",
+        "Query": "select count(*) from music where user_id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # sql_calc_found_rows with group by and having
 "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
@@ -1952,10 +2206,10 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # select from unsharded keyspace into outfile
-"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'"
+"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'"
 {
   "QueryType": "SELECT",
-  "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
+  "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectUnsharded",
@@ -2024,7 +2278,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select (select u.id from `user` as u where 1 != 1), a.id from `user` as a where 1 != 1",
+    "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
+    "Table": "`user`",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Add two tables with the same column in a join
 "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded"
@@ -2573,7 +2845,7 @@ Gen4 plan same as above
         "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
         "Table": "user_extra",
         "Values": [
-          3
+          "INT64(3)"
         ],
         "Vindex": "user_index"
       }
@@ -2618,7 +2890,7 @@ Gen4 plan same as above
         "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
         "Table": "user_extra",
         "Values": [
-          3
+          "INT64(3)"
         ],
         "Vindex": "user_index"
       }

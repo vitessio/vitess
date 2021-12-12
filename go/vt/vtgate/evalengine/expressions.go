@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -24,12 +26,11 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
 )
 
 type (
@@ -39,6 +40,12 @@ type (
 		numval    uint64
 		bytes     []byte
 		tuple     *[]EvalResult
+		decimal   *decimalResult
+	}
+
+	decimalResult struct {
+		num  decimal.Big
+		frac int
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -54,6 +61,10 @@ type (
 		Type(env *ExpressionEnv) (querypb.Type, error)
 		Collation() collations.TypedCollation
 		format(buf *strings.Builder, wrap bool)
+	}
+
+	RouteValue struct {
+		Expr Expr
 	}
 
 	Literal struct {
@@ -73,6 +84,41 @@ type (
 		TypedCollation collations.TypedCollation
 	}
 )
+
+// EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
+func EmptyExpressionEnv() *ExpressionEnv {
+	return &ExpressionEnv{
+		BindVars: make(map[string]*querypb.BindVariable),
+	}
+}
+
+// ResolveValue allows for retrieval of the value we expose for public consumption
+func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
+	env := &ExpressionEnv{
+		BindVars: bindVars,
+	}
+	evalResul, err := rv.Expr.Evaluate(env)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	return evalResul.Value(), nil
+}
+
+// ResolveList allows for retrieval of the value we expose for public consumption
+func (rv *RouteValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
+	env := &ExpressionEnv{
+		BindVars: bindVars,
+	}
+	evalResul, err := rv.Expr.Evaluate(env)
+	if err != nil {
+		return nil, err
+	}
+	return evalResul.TupleValues(), nil
+}
+
+func (rv *RouteValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(FormatExpr(rv.Expr))
+}
 
 func (t TupleExpr) Collation() collations.TypedCollation {
 	// a Tuple does not have a collation, but an individual collation for every element of the tuple
@@ -154,6 +200,24 @@ func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
 }
 
+// TupleValues allows for retrieval of the value we expose for public consumption
+func (e EvalResult) TupleValues() []sqltypes.Value {
+	if e.tuple == nil {
+		return nil
+	}
+
+	values := *e.tuple
+	result := make([]sqltypes.Value, 0, len(values))
+	for _, val := range values {
+		result = append(result, val.Value())
+	}
+	return result
+}
+
+func (e EvalResult) textual() bool {
+	return sqltypes.IsText(e.typ) || sqltypes.IsBinary(e.typ)
+}
+
 var collationNull = collations.TypedCollation{
 	Collation:    collations.CollationBinaryID,
 	Coercibility: collations.CoerceIgnorable,
@@ -161,7 +225,7 @@ var collationNull = collations.TypedCollation{
 }
 
 func NewLiteralNull() Expr {
-	return &Literal{Val: EvalResult{typ: querypb.Type_NULL_TYPE, collation: collationNull}}
+	return &Literal{Val: resultNull}
 }
 
 // NewLiteralIntFromBytes returns a literal expression
@@ -181,21 +245,28 @@ var collationNumeric = collations.TypedCollation{
 
 // NewLiteralInt returns a literal expression
 func NewLiteralInt(i int64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Int64, numval: uint64(i), collation: collationNumeric}}
+	return &Literal{Val: newEvalInt64(i)}
 }
 
 // NewLiteralFloat returns a literal expression
 func NewLiteralFloat(val float64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(val), collation: collationNumeric}}
+	return &Literal{Val: newEvalFloat(val)}
 }
 
-// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
-func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
-	fval, err := strconv.ParseFloat(string(val), 64)
+// NewLiteralRealFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralRealFromBytes(val []byte) (Expr, error) {
+	if bytes.IndexByte(val, 'e') >= 0 || bytes.IndexByte(val, 'E') >= 0 {
+		fval, err := strconv.ParseFloat(string(val), 64)
+		if err != nil {
+			return nil, err
+		}
+		return &Literal{Val: newEvalFloat(fval)}, nil
+	}
+	dec, err := newDecimalString(string(val))
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}}, nil
+	return &Literal{Val: newEvalDecimal(dec)}, nil
 }
 
 // NewLiteralString returns a literal expression
@@ -218,12 +289,21 @@ func NewBindVar(key string, collation collations.TypedCollation) Expr {
 	}
 }
 
-// NewColumn returns a bind variable
+// NewColumn returns a column expression
 func NewColumn(offset int, collation collations.TypedCollation) Expr {
 	return &Column{
 		Offset:    offset,
 		collation: collation,
 	}
+}
+
+// NewTupleExpr returns a tuple expression
+func NewTupleExpr(exprs ...Expr) Expr {
+	tupleExpr := make(TupleExpr, 0, len(exprs))
+	for _, f := range exprs {
+		tupleExpr = append(tupleExpr, f)
+	}
+	return tupleExpr
 }
 
 // Evaluate implements the Expr interface
@@ -251,8 +331,8 @@ func (t TupleExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 }
 
 // Evaluate implements the Expr interface
-func (b *BindVariable) Evaluate(env *ExpressionEnv) (EvalResult, error) {
-	val, ok := env.BindVars[b.Key]
+func (bv *BindVariable) Evaluate(env *ExpressionEnv) (EvalResult, error) {
+	val, ok := env.BindVars[bv.Key]
 	if !ok {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
 	}
@@ -260,12 +340,12 @@ func (b *BindVariable) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	eval.collation = b.collation
+	eval.collation = bv.collation
 	return eval, nil
 }
 
-func (b *BindVariable) Collation() collations.TypedCollation {
-	return b.collation
+func (bv *BindVariable) Collation() collations.TypedCollation {
+	return bv.collation
 }
 
 // Evaluate implements the Expr interface
@@ -281,11 +361,11 @@ func (c *Column) Collation() collations.TypedCollation {
 }
 
 // Type implements the Expr interface
-func (b *BindVariable) Type(env *ExpressionEnv) (querypb.Type, error) {
+func (bv *BindVariable) Type(env *ExpressionEnv) (querypb.Type, error) {
 	e := env.BindVars
-	v, found := e[b.Key]
+	v, found := e[bv.Key]
 	if !found {
-		return querypb.Type_NULL_TYPE, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", b.Key)
+		return querypb.Type_NULL_TYPE, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key)
 	}
 	return v.Type, nil
 }
@@ -318,40 +398,68 @@ func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
 	return ltype
 }
 
-func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
-	switch val.Type {
+func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
+	switch typ {
 	case sqltypes.Int64:
-		ival, err := strconv.ParseInt(string(val.Value), 10, 64)
+		ival, err := strconv.ParseInt(string(value), 10, 64)
 		if err != nil {
 			ival = 0
 		}
 		return EvalResult{typ: sqltypes.Int64, numval: uint64(ival)}, nil
 	case sqltypes.Int32:
-		ival, err := strconv.ParseInt(string(val.Value), 10, 32)
+		ival, err := strconv.ParseInt(string(value), 10, 32)
 		if err != nil {
 			ival = 0
 		}
 		return EvalResult{typ: sqltypes.Int32, numval: uint64(ival)}, nil
 	case sqltypes.Uint64:
-		uval, err := strconv.ParseUint(string(val.Value), 10, 64)
+		uval, err := strconv.ParseUint(string(value), 10, 64)
 		if err != nil {
 			uval = 0
 		}
 		return EvalResult{typ: sqltypes.Uint64, numval: uval}, nil
 	case sqltypes.Float64:
-		fval, err := strconv.ParseFloat(string(val.Value), 64)
+		fval, err := strconv.ParseFloat(string(value), 64)
 		if err != nil {
 			fval = 0
 		}
 		return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}, nil
+	case sqltypes.Decimal:
+		dec, err := newDecimalString(string(value))
+		if err != nil {
+			return EvalResult{}, err
+		}
+		return newEvalDecimal(dec), nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
-		return EvalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
+		return EvalResult{typ: sqltypes.VarBinary, bytes: value}, nil
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
-		return EvalResult{typ: val.Type, bytes: val.Value}, nil
+		return EvalResult{typ: typ, bytes: value}, nil
 	case sqltypes.Null:
 		return EvalResult{typ: sqltypes.Null}, nil
+	default:
+		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", typ.String())
 	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
+
+}
+func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
+	switch val.Type {
+	case querypb.Type_TUPLE:
+		tuple := make([]EvalResult, 0, len(val.Values))
+		for _, value := range val.Values {
+			single, err := evaluateByTypeSingle(value.Type, value.Value)
+			if err != nil {
+				return EvalResult{}, err
+			}
+			tuple = append(tuple, single)
+		}
+		return EvalResult{
+			typ:   querypb.Type_TUPLE,
+			tuple: &tuple,
+		}, nil
+
+	default:
+		return evaluateByTypeSingle(val.Type, val.Value)
+	}
 }
 
 // debugString prints the entire EvalResult in a debug format

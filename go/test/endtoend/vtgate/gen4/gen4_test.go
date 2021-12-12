@@ -70,6 +70,7 @@ func TestCorrelatedExistsSubquery(t *testing.T) {
 
 	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`, `[[INT64(100)]]`)
 	utils.AssertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`, `[[INT64(1)] [INT64(4)] [INT64(100)]]`)
+	utils.AssertMatches(t, conn, `select id from t1 where id in (select id from t2) order by id`, `[[INT64(1)] [INT64(100)]]`)
 }
 
 func TestGroupBy(t *testing.T) {
@@ -253,4 +254,25 @@ func TestHashJoin(t *testing.T) {
 	utils.Exec(t, conn, `set workload = olap`)
 	defer utils.Exec(t, conn, `set workload = oltp`)
 	utils.AssertMatches(t, conn, `select /*vt+ ALLOW_HASH_JOIN */ t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
+}
+
+func TestMultiColumnVindex(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.ExecAllowError(t, conn, `delete from user_region`)
+	utils.Exec(t, conn, `insert into user_region(id, cola, colb) values (1, 1, 2),(2, 30, 40),(3, 500, 600),(4, 30, 40),(5, 10000, 30000),(6, 422333, 40),(7, 30, 60)`)
+
+	for _, workload := range []string{"olap", "oltp"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf(`set workload = %s`, workload))
+			utils.AssertMatches(t, conn, `select id from user_region where cola = 1 and colb = 2`, `[[INT64(1)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb = 40 order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb in (40,60) order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)] [INT64(7)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 422333`, `[[INT64(6)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 30 and colb = 60`, `[[INT64(7)]]`)
+		})
+	}
 }
