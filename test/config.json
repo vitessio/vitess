@@ -391,6 +391,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"onlineddl_scheduler": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_scheduler",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],

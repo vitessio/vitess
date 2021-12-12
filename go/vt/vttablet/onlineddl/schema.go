@@ -68,6 +68,7 @@ const (
 	alterSchemaMigrationsTableRemovedNoDefaultColNames = "ALTER TABLE _vt.schema_migrations add column dropped_no_default_column_names text NOT NULL"
 	alterSchemaMigrationsTableExpandedColNames         = "ALTER TABLE _vt.schema_migrations add column expanded_column_names text NOT NULL"
 	alterSchemaMigrationsTableRevertibleNotes          = "ALTER TABLE _vt.schema_migrations add column revertible_notes text NOT NULL"
+	alterSchemaMigrationsTableAllowConcurrent          = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -84,9 +85,10 @@ const (
 		migration_status,
 		tablet,
 		retain_artifacts_seconds,
-		postpone_completion
+		postpone_completion,
+		allow_concurrent
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
@@ -255,8 +257,6 @@ const (
 	`
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
-			strategy,
-			options,
 			postpone_completion,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
@@ -286,12 +286,6 @@ const (
 			AND migration_statement=%a
 		LIMIT 1
 	`
-	sqlSelectCountReadyMigrations = `SELECT
-			count(*) as count_ready
-		FROM _vt.schema_migrations
-		WHERE
-			migration_status='ready'
-	`
 	sqlSelectStaleMigrations = `SELECT
 			migration_uuid
 		FROM _vt.schema_migrations
@@ -300,7 +294,10 @@ const (
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
 	sqlSelectPendingMigrations = `SELECT
-			migration_uuid
+			migration_uuid,
+			keyspace,
+			mysql_table,
+			migration_status
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
@@ -364,37 +361,12 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlSelectReadyMigration = `SELECT
-			id,
-			migration_uuid,
-			keyspace,
-			shard,
-			mysql_schema,
-			mysql_table,
-			migration_statement,
-			strategy,
-			options,
-			added_timestamp,
-			ready_timestamp,
-			started_timestamp,
-			liveness_timestamp,
-			completed_timestamp,
-			migration_status,
-			log_path,
-			log_file,
-			retries,
-			ddl_action,
-			artifacts,
-			tablet,
-			added_unique_keys,
-			removed_unique_keys,
-			migration_context,
-			retain_artifacts_seconds,
-			postpone_completion
+	sqlSelectReadyMigrations = `SELECT
+			migration_uuid
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
-		LIMIT 1
+		ORDER BY id
 	`
 	sqlSelectPTOSCMigrationTriggers = `SELECT
 			TRIGGER_SCHEMA as trigger_schema,
@@ -583,4 +555,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableRemovedNoDefaultColNames,
 	alterSchemaMigrationsTableExpandedColNames,
 	alterSchemaMigrationsTableRevertibleNotes,
+	alterSchemaMigrationsTableAllowConcurrent,
 }
