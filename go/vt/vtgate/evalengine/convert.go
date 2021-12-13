@@ -355,16 +355,19 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		lit, ok := expr.(*Literal)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "character set introducers are only supported for literals")
-		}
 		coll := collations.Local().DefaultCollationForCharset(node.CharacterSet[1:])
 		if coll == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown character set")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown character set: %s", node.CharacterSet)
 		}
-		lit.Val.collation.Collation = coll.ID()
-		return lit, nil
+		switch lit := expr.(type) {
+		case *Literal:
+			lit.Val.collation.Collation = coll.ID()
+		case *BindVariable:
+			lit.collation.Collation = coll.ID()
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] character set introducers are only supported for literals and arguments")
+		}
+		return expr, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }
