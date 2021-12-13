@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -161,14 +162,16 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner, reuseCol, hasAggregation bool) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *routeGen4:
-		value, err := makePlanValue(expr.Expr)
-		if err != nil {
-			return 0, false, err
-		}
 		_, isColName := expr.Expr.(*sqlparser.ColName)
-		badExpr := value == nil && !isColName
-		if !inner && badExpr {
-			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
+		if !isColName {
+			_, err := evalengine.Convert(expr.Expr, semTable)
+			if err != nil {
+				if vterrors.Code(err) != vtrpcpb.Code_UNIMPLEMENTED {
+					return 0, false, err
+				} else if !inner {
+					return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
+				}
+			}
 		}
 		if reuseCol {
 			if i := checkIfAlreadyExists(expr, node.Select, semTable); i != -1 {

@@ -524,13 +524,15 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	inc, err := resolveNumber(qre.plan.NextCount, qre.bindVars)
+	result, err := qre.plan.NextCount.Evaluate(evalengine.EnvWithBindVars(qre.bindVars))
 	if err != nil {
 		return nil, err
 	}
 	tableName := qre.plan.TableName()
-	if inc < 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %d", tableName, inc)
+	v := result.Value()
+	inc, err := v.ToInt64()
+	if err != nil || inc < 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %s", tableName, v.String())
 	}
 
 	t := qre.plan.Table
@@ -956,13 +958,4 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
-}
-
-// resolveNumber extracts a number from a bind variable or sql value.
-func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) (int64, error) {
-	v, err := pv.ResolveValue(bindVars)
-	if err != nil {
-		return 0, err
-	}
-	return evalengine.ToInt64(v)
 }

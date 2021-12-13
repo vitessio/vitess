@@ -138,15 +138,15 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 
 func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
 	plan := newLimit(input)
-	lookup := &noColumnLookup{semTable: semantics.EmptySemTable()}
-	pv, err := evalengine.Convert(limit.Rowcount, lookup)
+	emptySemTable := semantics.EmptySemTable()
+	pv, err := evalengine.Convert(limit.Rowcount, emptySemTable)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
 	plan.elimit.Count = pv
 
 	if limit.Offset != nil {
-		pv, err = evalengine.Convert(limit.Offset, lookup)
+		pv, err = evalengine.Convert(limit.Offset, emptySemTable)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}

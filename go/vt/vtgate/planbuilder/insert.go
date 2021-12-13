@@ -165,7 +165,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 		}
 	}
 
-	noColLkp := &noColumnLookup{semTable: semantics.EmptySemTable()}
 	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
 	routeValues := make([][][]evalengine.Expr, len(eins.Table.ColumnVindexes))
 	for vIdx, colVindex := range eins.Table.ColumnVindexes {
@@ -174,7 +173,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				innerpv, err := evalengine.Convert(row[colNum], noColLkp)
+				innerpv, err := evalengine.Convert(row[colNum], semantics.EmptySemTable())
 				if err != nil {
 					return nil, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
 				}
@@ -230,14 +229,13 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
 	rows := ins.Rows.(sqlparser.Values)
 	autoIncValues := make([]evalengine.Expr, 0, len(rows))
-	lookup := &noColumnLookup{semTable: semantics.EmptySemTable()}
 	for rowNum, row := range rows {
 		// Support the DEFAULT keyword by treating it as null
 		if _, ok := row[colNum].(*sqlparser.Default); ok {
 			row[colNum] = &sqlparser.NullVal{}
 		}
 
-		pv, err := evalengine.Convert(row[colNum], lookup)
+		pv, err := evalengine.Convert(row[colNum], semantics.EmptySemTable())
 		if err != nil {
 			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}

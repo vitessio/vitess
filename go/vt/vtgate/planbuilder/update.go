@@ -143,9 +143,7 @@ func initialQuery(ksidCol string, table *vindexes.Table) (*sqlparser.TrackedBuff
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
 func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
-	pv, err := evalengine.Convert(upd.Expr, &noColumnLookup{
-		semTable: semantics.EmptySemTable(),
-	})
+	pv, err := evalengine.Convert(upd.Expr, semantics.EmptySemTable())
 	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
 		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr))
 		return nil, err
