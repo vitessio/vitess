@@ -71,40 +71,62 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		r.clause = "group statement"
 
 	case *sqlparser.Literal:
-		currScope, found := r.scoper.specialExprScopes[node]
-		if !found {
-			break
-		}
-		num, err := strconv.Atoi(node.Val)
+		newNode, err := r.rewriteOrderByExpr(node)
 		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
-
+			return err
 		}
-		if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+		if newNode != nil {
+			cursor.Replace(newNode)
 		}
-
-		for i := 0; i < num; i++ {
-			expr := currScope.selectStmt.SelectExprs[i]
-			_, ok := expr.(*sqlparser.AliasedExpr)
-			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
-			}
-		}
-
-		aliasedExpr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	case *sqlparser.CollateExpr:
+		lit, ok := node.Expr.(*sqlparser.Literal)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
+			return nil
 		}
-
-		if !aliasedExpr.As.IsEmpty() {
-			cursor.Replace(sqlparser.NewColName(aliasedExpr.As.String()))
-		} else {
-			expr := realCloneOfColNames(aliasedExpr.Expr, currScope.isUnion)
-			cursor.Replace(expr)
+		newNode, err := r.rewriteOrderByExpr(lit)
+		if err != nil {
+			return err
+		}
+		if newNode != nil {
+			node.Expr = newNode
 		}
 	}
 	return nil
+}
+
+func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
+	currScope, found := r.scoper.specialExprScopes[node]
+	if !found {
+		return nil, nil
+	}
+	num, err := strconv.Atoi(node.Val)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
+
+	}
+	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+	}
+
+	for i := 0; i < num; i++ {
+		expr := currScope.selectStmt.SelectExprs[i]
+		_, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
+		}
+	}
+
+	aliasedExpr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
+	}
+
+	if !aliasedExpr.As.IsEmpty() {
+		return sqlparser.NewColName(aliasedExpr.As.String()), nil
+	}
+
+	expr := realCloneOfColNames(aliasedExpr.Expr, currScope.isUnion)
+	return expr, nil
 }
 
 // realCloneOfColNames clones all the expressions including ColName.
