@@ -229,7 +229,7 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
 	rows := ins.Rows.(sqlparser.Values)
-	autoIncValues := make([]evalengine.Expr, len(rows))
+	autoIncValues := make([]evalengine.Expr, 0, len(rows))
 	lookup := &noColumnLookup{semTable: semantics.EmptySemTable()}
 	for rowNum, row := range rows {
 		// Support the DEFAULT keyword by treating it as null
