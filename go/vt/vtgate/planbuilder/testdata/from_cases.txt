@@ -133,7 +133,7 @@ Gen4 error: Incorrect usage/placement of 'NEXT'
         "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq1"
+          ":__sq1"
         ],
         "Vindex": "user_index"
       }
@@ -1432,7 +1432,7 @@ Gen4 plan same as above
     "Query": "select `user`.col from `user` join user_extra on `user`.id = 5 and `user`.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1557,44 +1557,6 @@ Gen4 plan same as above
         "Query": "select `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
-          5
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join user_extra on user.id = 5",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
-        "Table": "`user`",
-        "Values": [
           "INT64(5)"
         ],
         "Vindex": "user_index"
@@ -1613,6 +1575,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sharded join, non-col reference LHS
 "select user.col from user join user_extra on 5 = user.id"
@@ -1636,44 +1599,6 @@ Gen4 plan same as above
         "Query": "select `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
-          5
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join user_extra on 5 = user.id",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
-        "Table": "`user`",
-        "Values": [
           "INT64(5)"
         ],
         "Vindex": "user_index"
@@ -1692,6 +1617,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
@@ -1977,7 +1903,7 @@ Gen4 plan same as above
     "Query": "select ref.col from ref join (select aa from `user` where `user`.id = 1) as `user`",
     "Table": "`user`, ref",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -2056,30 +1982,12 @@ Gen4 plan same as above
     "Query": "select id from (select id, col from `user` where id = 5) as t",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select id from (select id, col from user where id = 5) as t",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from (select id, col from `user` where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id, col from `user` where id = 5) as t",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # derived table with join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
@@ -2097,7 +2005,7 @@ Gen4 plan same as above
     "Query": "select t.id from (select id from `user` where id = 5) as t join user_extra on t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2138,7 +2046,7 @@ Gen4 plan same as above
     "Query": "select t.id from (select `user`.id from `user` where `user`.id = 5) as t join user_extra on t.id = user_extra.user_id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2230,7 +2138,7 @@ Gen4 error: Duplicate column name 'id'
         "Query": "select t.id from (select id from `user` where id = 5) as t",
         "Table": "`user`",
         "Values": [
-          5
+          "INT64(5)"
         ],
         "Vindex": "user_index"
       },
@@ -2307,30 +2215,12 @@ Gen4 error: Duplicate column name 'id'
     "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select id from (select id, col from route1 where id = 5) as t",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from (select id, col from `user` as route1 where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id, col from `user` as route1 where id = 5) as t",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # derived table missing columns
 "select t.id from (select id from user) as t join user_extra on t.id = user_extra.user_id where t.col = 42"
@@ -2367,7 +2257,7 @@ Gen4 error: symbol t.col not found
     "Query": "select id from (select id, col from `user` as route1) as t where id = 5",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2493,7 +2383,7 @@ Gen4 error: symbol id not found
     "Query": "select id from (select id from (select id from `user`) as u) as t where id = 5",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -2534,7 +2424,7 @@ Gen4 error: symbol id not found
     "Query": "select u.col, e.col from (select col from `user` where id = 5) as u join (select col from user_extra where user_id = 5) as e",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -3923,7 +3813,7 @@ Gen4 plan same as above
         "Query": "select 1 from user_extra where user_extra.assembly_id = :user_id and user_extra.user_id = 2",
         "Table": "user_extra",
         "Values": [
-          2
+          "INT64(2)"
         ],
         "Vindex": "user_index"
       }
@@ -4575,7 +4465,7 @@ Gen4 plan same as above
             "Query": "select id from `user` where col = :__sq1 and :__sq_has_values2 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              "::__sq2"
+              ":__sq2"
             ],
             "Vindex": "user_index"
           }

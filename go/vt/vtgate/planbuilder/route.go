@@ -17,11 +17,12 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -161,7 +162,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []engine.RouteValue{pv}
+			rb.eroute.Values = []engine.RouteValue{&evalengine.RouteValue{Expr: pv}}
 			vals.Right = sqlparser.ListArg(engine.ListVarName)
 		case nil:
 			// no-op.
@@ -170,7 +171,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []engine.RouteValue{pv}
+			rb.eroute.Values = []engine.RouteValue{&evalengine.RouteValue{Expr: pv}}
 		}
 	}
 
@@ -255,23 +256,23 @@ func (rb *route) prepareTheAST() {
 
 // procureValues procures and converts the input into
 // the expected types for rb.Values.
-func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
-	switch val := val.(type) {
+func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (evalengine.Expr, error) {
+	switch typedVal := val.(type) {
 	case sqlparser.ValTuple:
-		pv := sqltypes.PlanValue{}
-		for _, val := range val {
-			v, err := rb.procureValues(plan, jt, val)
+		exprs := make([]evalengine.Expr, 0, len(typedVal))
+		for _, item := range typedVal {
+			v, err := rb.procureValues(plan, jt, item)
 			if err != nil {
-				return pv, err
+				return nil, err
 			}
-			pv.Values = append(pv.Values, v)
+			exprs = append(exprs, v)
 		}
-		return pv, nil
+		return evalengine.NewTupleExpr(exprs...), nil
 	case *sqlparser.ColName:
-		joinVar := jt.Procure(plan, val, rb.Order())
-		return sqltypes.PlanValue{Key: joinVar}, nil
+		joinVar := jt.Procure(plan, typedVal, rb.Order())
+		return evalengine.NewBindVar(joinVar, collations.TypedCollation{}), nil
 	default:
-		return sqlparser.NewPlanValue(val)
+		return evalengine.Convert(typedVal, semantics.EmptySemTable())
 	}
 }
 
