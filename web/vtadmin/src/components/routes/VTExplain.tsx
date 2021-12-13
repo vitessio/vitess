@@ -18,7 +18,6 @@ import { orderBy } from 'lodash-es';
 
 import { vtadmin as pb } from '../../proto/vtadmin';
 import { useKeyspaces, useVTExplain } from '../../hooks/api';
-import { Button } from '../Button';
 import { Select } from '../inputs/Select';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
@@ -99,7 +98,9 @@ export const VTExplain = () => {
                             </Label>
                         </div>
                         <div className={style.buttons}>
-                            <Button type="submit">Run VTExplain</Button>
+                            <button className="btn" type="submit">
+                                Run VTExplain
+                            </button>
                         </div>
                     </form>
                 </section>
