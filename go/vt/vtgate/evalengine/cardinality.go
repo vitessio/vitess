@@ -159,5 +159,16 @@ func (expr TupleExpr) cardinality(env *ExpressionEnv) (int, error) {
 }
 
 func (expr *CollateExpr) cardinality(env *ExpressionEnv) (int, error) {
-	return expr.Expr.cardinality(env)
+	return expr.Inner.cardinality(env)
+}
+
+func (n *NotExpr) cardinality(env *ExpressionEnv) (int, error) {
+	card, err := n.Inner.cardinality(env)
+	if err != nil {
+		return 1, err
+	}
+	if card != 1 {
+		return 1, cardinalityError(1)
+	}
+	return 1, nil
 }

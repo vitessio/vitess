@@ -119,9 +119,11 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			return nil, err
 		}
 		comp := &ComparisonExpr{
-			Op:    translateComparisonOperator(node.Operator),
-			Left:  left,
-			Right: right,
+			GenericBinaryExpr: GenericBinaryExpr{
+				Left:  left,
+				Right: right,
+			},
+			Op: translateComparisonOperator(node.Operator),
 		}
 		if err := comp.mergeCollations(); err != nil {
 			return nil, err
@@ -173,9 +175,11 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			return nil, err
 		}
 		return &BinaryExpr{
-			Op:    op,
-			Left:  left,
-			Right: right,
+			GenericBinaryExpr: GenericBinaryExpr{
+				Left:  left,
+				Right: right,
+			},
+			Op: op,
 		}, nil
 	case sqlparser.ValTuple:
 		var exprs TupleExpr
@@ -199,7 +203,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown collation: '%s'", node.Collation)
 		}
 		return &CollateExpr{
-			Expr: expr,
+			UnaryExpr: UnaryExpr{expr},
 			TypedCollation: collations.TypedCollation{
 				Collation:    coll.ID(),
 				Coercibility: collations.CoerceExplicit,

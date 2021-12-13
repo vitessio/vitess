@@ -17,9 +17,11 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -55,4 +57,56 @@ func (e *EvalResult) ToBooleanStrict() (bool, error) {
 		}
 	}
 	return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "is not a boolean")
+}
+
+type boolean int8
+
+const (
+	boolFalse boolean = 0
+	boolTrue  boolean = 1
+	boolNULL  boolean = -1
+)
+
+func makeboolean(b bool) boolean {
+	if b {
+		return boolTrue
+	}
+	return boolFalse
+}
+
+func (b boolean) not() boolean {
+	switch b {
+	case boolFalse:
+		return boolTrue
+	case boolTrue:
+		return boolFalse
+	default:
+		return b
+	}
+}
+
+func (b boolean) evalResult() EvalResult {
+	if b == boolNULL {
+		return resultNull
+	}
+	return evalResultBool(b == boolTrue)
+}
+
+func (e *EvalResult) truthy() (boolean, error) {
+	switch e.typ {
+	case sqltypes.Null:
+		return boolNULL, nil
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64, sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
+		return makeboolean(e.numval != 0), nil
+	case sqltypes.Float64, sqltypes.Float32:
+		return makeboolean(math.Float64frombits(e.numval) != 0.0), nil
+	case sqltypes.Decimal:
+		return makeboolean(!e.decimal.num.IsZero()), nil
+	case sqltypes.VarBinary:
+		return makeboolean(parseStringToFloat(string(e.bytes)) != 0.0), nil
+	case querypb.Type_TUPLE:
+		return boolFalse, cardinalityError(1)
+	default:
+		return boolTrue, nil
+	}
 }

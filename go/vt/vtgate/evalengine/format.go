@@ -114,8 +114,14 @@ func (t TupleExpr) format(w *formatter, depth int) {
 
 func (c *CollateExpr) format(w *formatter, depth int) {
 	w.Indent(depth)
-	c.Expr.format(w, depth)
+	c.Inner.format(w, depth)
 	coll := collations.Local().LookupByID(c.TypedCollation.Collation)
 	w.WriteString(" COLLATE ")
 	w.WriteString(coll.Name())
+}
+
+func (n *NotExpr) format(w *formatter, depth int) {
+	w.Indent(depth)
+	w.WriteString("NOT ")
+	n.Inner.format(w, depth)
 }

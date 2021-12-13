@@ -176,7 +176,7 @@ func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error
 	if expr == nil {
 		return 0, nil
 	}
-	evalResult, err := expr.Evaluate(env)
+	evalResult, err := env.Evaluate(expr)
 	if err != nil {
 		return 0, err
 	}

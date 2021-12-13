@@ -36,8 +36,8 @@ type (
 	}
 
 	ComparisonExpr struct {
+		GenericBinaryExpr
 		Op                      ComparisonOp
-		Left, Right             Expr
 		CoerceLeft, CoerceRight collations.Coercion
 		TypedCollation          collations.TypedCollation
 	}
