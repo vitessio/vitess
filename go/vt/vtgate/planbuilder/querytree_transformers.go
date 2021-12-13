@@ -83,8 +83,7 @@ func transformVindexTree(ctx *planningContext, n *vindexTree) (logicalPlan, erro
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
 	}
 
-	lookup := &noColumnLookup{semTable: ctx.semTable}
-	expr, err := evalengine.Convert(n.value, lookup)
+	expr, err := evalengine.Convert(n.value, ctx.semTable)
 	if err != nil {
 		return nil, err
 	}

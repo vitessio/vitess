@@ -56,8 +56,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	size += cached.FieldQuery.CachedSize(true)
 	// field FullQuery *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
 	size += cached.FullQuery.CachedSize(true)
-	// field NextCount vitess.io/vitess/go/sqltypes.PlanValue
-	size += cached.NextCount.CachedSize(false)
+
 	// field WhereClause *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
 	size += cached.WhereClause.CachedSize(true)
 	// field FullStmt vitess.io/vitess/go/vt/sqlparser.Statement
