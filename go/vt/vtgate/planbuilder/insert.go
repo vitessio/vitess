@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -166,19 +165,20 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 		}
 	}
 
+	noColLkp := &noColumnLookup{semTable: semantics.EmptySemTable()}
 	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
-	routeValues := make([]sqltypes.PlanValue, len(eins.Table.ColumnVindexes))
+	routeValues := make([][][]evalengine.Expr, len(eins.Table.ColumnVindexes))
 	for vIdx, colVindex := range eins.Table.ColumnVindexes {
-		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(colVindex.Columns))
+		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
 		for colIdx, col := range colVindex.Columns {
-			routeValues[vIdx].Values[colIdx].Values = make([]sqltypes.PlanValue, len(rows))
+			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				innerpv, err := sqlparser.NewPlanValue(row[colNum])
+				innerpv, err := evalengine.Convert(row[colNum], noColLkp)
 				if err != nil {
 					return nil, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
 				}
-				routeValues[vIdx].Values[colIdx].Values[rowNum] = innerpv
+				routeValues[vIdx][colIdx][rowNum] = innerpv
 			}
 		}
 	}
