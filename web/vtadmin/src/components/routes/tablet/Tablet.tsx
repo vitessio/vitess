@@ -27,7 +27,7 @@ import { ExternalTabletLink } from '../../links/ExternalTabletLink';
 import { TabletServingPip } from '../../pips/TabletServingPip';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
-import Settings from './Settings';
+import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
 
@@ -44,7 +44,6 @@ export const Tablet = () => {
 
     const { data: tablet, ...tq } = useTablet({ alias, clusterID });
     const { data: debugVars } = useExperimentalTabletDebugVars({ alias, clusterID });
-
     if (tq.error) {
         return (
             <div className={style.placeholder}>
@@ -103,7 +102,7 @@ export const Tablet = () => {
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
                     <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="Settings" to={`${url}/settings`} />
+                    <Tab text="Advanced" to={`${url}/advanced`} />
                 </TabContainer>
 
                 <Switch>
@@ -120,8 +119,8 @@ export const Tablet = () => {
                             )}
                         </div>
                     </Route>
-                    <Route path={`${path}/settings`}>
-                        <Settings />
+                    <Route path={`${path}/advanced`}>
+                        <Advanced tablet={tablet} />
                     </Route>
                     <Redirect from={path} to={`${path}/qps`} />
                 </Switch>
