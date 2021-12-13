@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -376,7 +377,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	}
 
 	if n.selected != nil {
-		for _, predicate := range n.selected.predicates {
+		_, isMultiColumn := n.selected.foundVindex.(vindexes.MultiColumn)
+		for idx, predicate := range n.selected.predicates {
 			switch predicate := predicate.(type) {
 			case *sqlparser.ComparisonExpr:
 				if predicate.Operator == sqlparser.InOp {
@@ -387,6 +389,10 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 							if extractedSubquery != nil {
 								extractedSubquery.SetArgName(engine.ListVarName)
 							}
+						}
+						if isMultiColumn {
+							predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
+							continue
 						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
 					}
@@ -427,15 +433,13 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 		where = &sqlparser.Where{Expr: predicates, Type: sqlparser.WhereClause}
 	}
 
-	var singleColumn vindexes.SingleColumn
-	var value engine.RouteValue
+	var vindex vindexes.Vindex
+	var values []engine.RouteValue
 	if n.selectedVindex() != nil {
-		vdx, ok := n.selected.foundVindex.(vindexes.SingleColumn)
-		if !ok || len(n.selected.values) != 1 {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
+		vindex = n.selected.foundVindex
+		for _, value := range n.selected.values {
+			values = append(values, &evalengine.RouteValue{Expr: value})
 		}
-		singleColumn = vdx
-		value = &evalengine.RouteValue{Expr: n.selected.values[0]}
 	}
 
 	var expressions sqlparser.SelectExprs
@@ -471,8 +475,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 			Opcode:              n.routeOpCode,
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            n.keyspace,
-			Vindex:              singleColumn,
-			Value:               value,
+			Vindex:              vindex,
+			Values:              values,
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},

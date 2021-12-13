@@ -34,6 +34,7 @@ const (
 	singletonContextFlag   = "singleton-context"
 	allowZeroInDateFlag    = "allow-zero-in-date"
 	postponeCompletionFlag = "postpone-completion"
+	allowConcurrentFlag    = "allow-concurrent"
 	vreplicationTestSuite  = "vreplication-test-suite"
 )
 
@@ -142,6 +143,11 @@ func (setting *DDLStrategySetting) IsPostponeCompletion() bool {
 	return setting.hasFlag(postponeCompletionFlag)
 }
 
+// IsAllowConcurrent checks if strategy options include -allow-concurrent
+func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
+	return setting.hasFlag(allowConcurrentFlag)
+}
+
 // IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
@@ -159,6 +165,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, singletonContextFlag):
 		case isFlag(opt, allowZeroInDateFlag):
 		case isFlag(opt, postponeCompletionFlag):
+		case isFlag(opt, allowConcurrentFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		default:
 			validOpts = append(validOpts, opt)
