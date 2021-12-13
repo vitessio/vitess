@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 @import './style/fonts.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@import './style/components.css';
 
 :root {
     /* Greyscale */
@@ -51,8 +54,8 @@
 
     /* Inputs + other form controls */
     --inputHeightSmall: 2.4rem;
-    --inputHeightMedium: 3.6rem;
-    --inputHeightLarge: 4.8rem;
+    --inputHeightMedium: 3.7rem;
+    --inputHeightLarge: 4.6rem;
 
     /* Tables */
     --tableCellPadding: 1.6rem;
