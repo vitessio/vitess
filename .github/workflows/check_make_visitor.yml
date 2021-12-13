@@ -18,12 +18,10 @@ jobs:
     - name: Get dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
-        sudo service mysql stop
+        sudo apt-get install -y make unzip g++ etcd curl git wget
         sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
+        go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make minimaltools
       run: |
