@@ -510,7 +510,8 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err != nil {
 				return err
 			}
-			resolved, err := pv.Evaluate(evalengine.EmptyExpressionEnv())
+			env := evalengine.EmptyExpressionEnv()
+			resolved, err := env.Evaluate(pv)
 			if err != nil {
 				return err
 			}

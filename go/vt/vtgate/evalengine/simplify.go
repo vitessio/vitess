@@ -33,11 +33,7 @@ func (expr *Column) constant() bool {
 	return false
 }
 
-func (expr *BinaryExpr) constant() bool {
-	return expr.Left.constant() && expr.Right.constant()
-}
-
-func (expr *ComparisonExpr) constant() bool {
+func (expr *GenericBinaryExpr) constant() bool {
 	return expr.Left.constant() && expr.Right.constant()
 }
 
@@ -50,8 +46,8 @@ func (expr TupleExpr) constant() bool {
 	return true
 }
 
-func (expr *CollateExpr) constant() bool {
-	return expr.Expr.constant()
+func (expr *UnaryExpr) constant() bool {
+	return expr.Inner.constant()
 }
 
 func (expr *Literal) simplify() error {
@@ -66,7 +62,7 @@ func (expr *Column) simplify() error {
 	return nil
 }
 
-func (expr *BinaryExpr) simplify() error {
+func (expr *GenericBinaryExpr) simplify() error {
 	var err error
 	expr.Left, err = simplifyExpr(expr.Left)
 	if err != nil {
@@ -82,12 +78,7 @@ func (expr *BinaryExpr) simplify() error {
 func (expr *ComparisonExpr) simplify() error {
 	var err error
 
-	expr.Left, err = simplifyExpr(expr.Left)
-	if err != nil {
-		return err
-	}
-	expr.Right, err = simplifyExpr(expr.Right)
-	if err != nil {
+	if err = expr.GenericBinaryExpr.simplify(); err != nil {
 		return err
 	}
 
@@ -174,9 +165,9 @@ func (expr TupleExpr) simplify() error {
 	return nil
 }
 
-func (expr *CollateExpr) simplify() error {
+func (expr *UnaryExpr) simplify() error {
 	var err error
-	expr.Expr, err = simplifyExpr(expr.Expr)
+	expr.Inner, err = simplifyExpr(expr.Inner)
 	return err
 }
 

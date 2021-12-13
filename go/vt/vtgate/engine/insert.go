@@ -303,7 +303,8 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// Scan input values to compute the number of values to generate, and
 	// keep track of where they should be filled.
-	resolved, err := ins.Generate.Values.Evaluate(evalengine.EnvWithBindVars(bindVars))
+	env := evalengine.EnvWithBindVars(bindVars)
+	resolved, err := env.Evaluate(ins.Generate.Values)
 	if err != nil {
 		return 0, err
 	}
@@ -374,7 +375,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 		for colIdx, colValues := range vColValues {
 			rowsResolvedValues := make([]sqltypes.Value, 0, len(colValues))
 			for _, colValue := range colValues {
-				result, err := colValue.Evaluate(env)
+				result, err := env.Evaluate(colValue)
 				if err != nil {
 					return nil, nil, err
 				}

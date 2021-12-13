@@ -33,8 +33,8 @@ type (
 	}
 
 	BinaryExpr struct {
-		Op          BinaryOp
-		Left, Right Expr
+		GenericBinaryExpr
+		Op BinaryOp
 	}
 
 	// Binary ops

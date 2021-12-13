@@ -61,9 +61,11 @@ func (tc testCase) run(t *testing.T) {
 		Row:      tc.row,
 	}
 	cmp := &ComparisonExpr{
-		Op:    tc.op,
-		Left:  tc.v1,
-		Right: tc.v2,
+		GenericBinaryExpr: GenericBinaryExpr{
+			Left:  tc.v1,
+			Right: tc.v2,
+		},
+		Op: tc.op,
 	}
 	if err := cmp.mergeCollations(); err != nil {
 		t.Fatalf("error while merging collations: %v", err)
