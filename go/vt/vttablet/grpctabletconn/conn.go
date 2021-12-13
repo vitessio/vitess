@@ -743,8 +743,9 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 	if err != nil {
 		return err
 	}
+	r := binlogdatapb.VStreamRowsResponseFromVTPool()
+	defer r.ReturnToVTPool()
 	for {
-		r := binlogdatapb.VStreamRowsResponseFromVTPool()
 		err := stream.RecvMsg(r)
 		if err != nil {
 			return tabletconn.ErrorFromGRPC(err)
@@ -755,7 +756,7 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 		if err := send(r); err != nil {
 			return err
 		}
-		r.ReturnToVTPool()
+		r.ResetVT()
 	}
 }
 
