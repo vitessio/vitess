@@ -59,10 +59,12 @@ var (
 	KeyspaceShard = keyspaceName + "/" + shardName
 )
 
+// SetupReparentCluster is used to setup the reparent cluster
 func SetupReparentCluster(t *testing.T) *cluster.LocalProcessCluster {
 	return setupCluster(context.Background(), t, shardName, []string{cell1, cell2}, []int{3, 1})
 }
 
+// TeardownCluster is used to teardown the reparent cluster
 func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	clusterInstance.Teardown()
 }
@@ -187,6 +189,7 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	return connParams
 }
 
+// RunSQL is used to run a SQL command directly on the MySQL instance of a vttablet
 func RunSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
@@ -206,10 +209,12 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 
 // region ers
 
+// Ers runs the ERS
 func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, totalTimeout, waitReplicasTimeout string) (string, error) {
 	return ErsIgnoreTablet(clusterInstance, tab, totalTimeout, waitReplicasTimeout, nil, false)
 }
 
+// ErsIgnoreTablet is used to run ERS
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
@@ -239,6 +244,7 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }
 
+// ErsWithVtctl runs ERS via vtctl binary
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
@@ -248,6 +254,7 @@ func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) 
 
 // region validations
 
+// ValidateTopology is used to validate the topology
 func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster, pingTablets bool) {
 	args := []string{"Validate"}
 
@@ -259,6 +266,7 @@ func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	require.NoError(t, err)
 }
 
+// ConfirmReplication confirms that the replication is working properly
 func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) int {
 	ctx := context.Background()
 	insertVal++
@@ -274,6 +282,7 @@ func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 	return n
 }
 
+// ConfirmOldPrimaryIsHangingAround confirms that the old primary is hanging around
 func ConfirmOldPrimaryIsHangingAround(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
@@ -326,6 +335,7 @@ func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessC
 	return tabletType == topodatapb.TabletType_PRIMARY
 }
 
+// CheckInsertedValues checks that the given value is present in the given tablet
 func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
 	// wait until it gets the data
 	timeout := time.Now().Add(15 * time.Second)
@@ -343,6 +353,7 @@ func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 	return fmt.Errorf("data is not yet replicated on tablet %s", tablet.Alias)
 }
 
+// CheckCountOfInsertedValues checks that the number of inserted values matches the given count on the given tablet
 func CheckCountOfInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, count int) error {
 	selectSQL := "select * from vt_insert_test"
 	qr := RunSQL(ctx, t, selectSQL, tablet)
@@ -356,6 +367,7 @@ func CheckCountOfInsertedValues(ctx context.Context, t *testing.T, tablet *clust
 
 // region tablet operations
 
+// StopTablet stops the tablet
 func StopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 	require.NoError(t, err)
@@ -365,6 +377,7 @@ func StopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	}
 }
 
+// RestartTablet restarts the tablet
 func RestartTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
@@ -373,6 +386,7 @@ func RestartTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, t
 	require.NoError(t, err)
 }
 
+// ResurrectTablet is used to resurrect the given tablet
 func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
@@ -390,6 +404,7 @@ func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster
 	require.NoError(t, err)
 }
 
+// DeleteTablet is used to delete the given tablet
 func DeleteTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"DeleteTablet",
@@ -402,6 +417,7 @@ func DeleteTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, ta
 
 // region get info
 
+// GetNewPrimary is used to find the new primary of the cluster.
 func GetNewPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *cluster.Vttablet {
 	var newPrimary *cluster.Vttablet
 	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets[1:] {
