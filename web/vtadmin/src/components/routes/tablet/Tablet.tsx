@@ -27,6 +27,7 @@ import { ExternalTabletLink } from '../../links/ExternalTabletLink';
 import { TabletServingPip } from '../../pips/TabletServingPip';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
+import Settings from './Settings';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
 
@@ -102,6 +103,7 @@ export const Tablet = () => {
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
                     <Tab text="JSON" to={`${url}/json`} />
+                    <Tab text="Settings" to={`${url}/settings`} />
                 </TabContainer>
 
                 <Switch>
@@ -117,6 +119,9 @@ export const Tablet = () => {
                                 <Code code={JSON.stringify(debugVars, null, 2)} />
                             )}
                         </div>
+                    </Route>
+                    <Route path={`${path}/settings`}>
+                        <Settings />
                     </Route>
                     <Redirect from={path} to={`${path}/qps`} />
                 </Switch>
