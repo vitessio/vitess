@@ -120,6 +120,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		"-enable_semi_sync",
 		"-init_populate_metadata",
 		"-track_schema_versions=true",
+		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
+		// All the tests in this package reparent frequently between different tablets
+		// This means that Promoting a tablet to primary is sometimes immediately followed by a DemotePrimary call.
+		// In this case, the close method and initSchema method of the onlineDDL executor race.
+		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
+		// DemotePrimary rpc is stalled!
+		"-enable_online_ddl=false",
 	}
 
 	// Initialize Cluster
