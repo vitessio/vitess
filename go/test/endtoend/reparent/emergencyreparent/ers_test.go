@@ -208,3 +208,74 @@ func TestPullFromRdonly(t *testing.T) {
 	err = utils.CheckInsertedValues(ctx, t, newPrimary, insertVal)
 	require.NoError(t, err)
 }
+
+func TestReparentDownPrimary(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	ctx := context.Background()
+
+	// Make the current primary agent and database unavailable.
+	utils.StopTablet(t, tablets[0], true)
+
+	// Perform a planned reparent operation, will try to contact
+	// the current primary and fail somewhat quickly
+	_, err := utils.PrsWithTimeout(t, clusterInstance, tablets[1], false, "1s", "5s")
+	require.Error(t, err)
+
+	utils.ValidateTopology(t, clusterInstance, false)
+
+	// Run forced reparent operation, this should now proceed unimpeded.
+	out, err := utils.Ers(clusterInstance, tablets[1], "60s", "30s")
+	log.Infof("EmergencyReparentShard Output: %v", out)
+	require.NoError(t, err)
+
+	// Check that old primary tablet is left around for human intervention.
+	utils.ConfirmOldPrimaryIsHangingAround(t, clusterInstance)
+
+	// Now we'll manually remove it, simulating a human cleaning up a dead primary.
+	utils.DeleteTablet(t, clusterInstance, tablets[0])
+
+	// Now validate topo is correct.
+	utils.ValidateTopology(t, clusterInstance, false)
+	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
+	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[2], tablets[3]})
+	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+func TestReparentNoChoiceDownPrimary(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	var err error
+
+	ctx := context.Background()
+
+	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// Make the current primary agent and database unavailable.
+	utils.StopTablet(t, tablets[0], true)
+
+	// Run forced reparent operation, this should now proceed unimpeded.
+	out, err := utils.Ers(clusterInstance, nil, "120s", "61s")
+	require.NoError(t, err, out)
+
+	// Check that old primary tablet is left around for human intervention.
+	utils.ConfirmOldPrimaryIsHangingAround(t, clusterInstance)
+	// Now we'll manually remove the old primary, simulating a human cleaning up a dead primary.
+	utils.DeleteTablet(t, clusterInstance, tablets[0])
+	utils.ValidateTopology(t, clusterInstance, false)
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	// Validate new primary is not old primary.
+	require.NotEqual(t, newPrimary.Alias, tablets[0].Alias)
+
+	// Check new primary has latest transaction.
+	err = utils.CheckInsertedValues(ctx, t, newPrimary, insertVal)
+	require.NoError(t, err)
+
+	// bring back the old primary as a replica, check that it catches up
+	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
