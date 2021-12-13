@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package emergencyreparent
+package utils
 
 import (
 	"context"
@@ -37,20 +37,16 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
-	// ClusterInstance instance to be used for test with different params
-	clusterInstance *cluster.LocalProcessCluster
-	tmClient        *tmc.Client
-	keyspaceName    = "ks"
-	dbName          = "vt_" + keyspaceName
-	username        = "vt_dba"
-	hostname        = "localhost"
-	insertVal       = 1
-	insertSQL       = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
-	sqlSchema       = `
+	keyspaceName = "ks"
+	dbName       = "vt_" + keyspaceName
+	username     = "vt_dba"
+	hostname     = "localhost"
+	insertVal    = 1
+	insertSQL    = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
+	sqlSchema    = `
 	create table vt_insert_test (
 	id bigint,
 	msg varchar(64),
@@ -60,23 +56,20 @@ var (
 	cell1         = "zone1"
 	cell2         = "zone2"
 	shardName     = "0"
-	keyspaceShard = keyspaceName + "/" + shardName
-
-	tab1, tab2, tab3, tab4 *cluster.Vttablet
+	KeyspaceShard = keyspaceName + "/" + shardName
 )
 
-func setupReparentCluster(t *testing.T) {
-	tablets := setupCluster(context.Background(), t, shardName, []string{cell1, cell2}, []int{3, 1})
-	tab1, tab2, tab3, tab4 = tablets[0], tablets[1], tablets[2], tablets[3]
+func SetupReparentCluster(t *testing.T) *cluster.LocalProcessCluster {
+	return setupCluster(context.Background(), t, shardName, []string{cell1, cell2}, []int{3, 1})
 }
 
-func teardownCluster() {
+func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	clusterInstance.Teardown()
 }
 
-func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int) []*cluster.Vttablet {
+func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int) *cluster.LocalProcessCluster {
 	var tablets []*cluster.Vttablet
-	clusterInstance = cluster.NewCluster(cells[0], hostname)
+	clusterInstance := cluster.NewCluster(cells[0], hostname)
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -144,13 +137,11 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		}
 	}
 
-	// create tablet manager client
-	tmClient = tmc.NewClient()
-	setupShard(ctx, t, shardName, tablets)
-	return tablets
+	setupShard(ctx, t, clusterInstance, shardName, tablets)
+	return clusterInstance
 }
 
-func setupShard(ctx context.Context, t *testing.T, shardName string, tablets []*cluster.Vttablet) {
+func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
 	for _, tablet := range tablets {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
@@ -170,16 +161,16 @@ func setupShard(ctx context.Context, t *testing.T, shardName string, tablets []*
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablets[0].Alias)
 	require.NoError(t, err)
 
-	validateTopology(t, true)
+	ValidateTopology(t, clusterInstance, true)
 
 	// create Tables
-	runSQL(ctx, t, sqlSchema, tablets[0])
+	RunSQL(ctx, t, sqlSchema, tablets[0])
 
-	checkPrimaryTablet(t, tablets[0])
+	checkPrimaryTablet(t, clusterInstance, tablets[0])
 
-	validateTopology(t, false)
+	ValidateTopology(t, clusterInstance, false)
 	time.Sleep(100 * time.Millisecond) // wait for replication to catchup
-	strArray := getShardReplicationPositions(t, keyspaceName, shardName, true)
+	strArray := getShardReplicationPositions(t, clusterInstance, keyspaceName, shardName, true)
 	assert.Equal(t, len(tablets), len(strArray))
 	assert.Contains(t, strArray[0], "primary") // primary first
 }
@@ -196,7 +187,7 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	return connParams
 }
 
-func runSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
+func RunSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
 	require.Nil(t, err)
@@ -215,11 +206,11 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 
 // region ers
 
-func ers(tab *cluster.Vttablet, totalTimeout, waitReplicasTimeout string) (string, error) {
-	return ersIgnoreTablet(tab, totalTimeout, waitReplicasTimeout, nil, false)
+func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, totalTimeout, waitReplicasTimeout string) (string, error) {
+	return ErsIgnoreTablet(clusterInstance, tab, totalTimeout, waitReplicasTimeout, nil, false)
 }
 
-func ersIgnoreTablet(tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
+func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
 		args = append(args, "-action_timeout", timeout)
@@ -248,7 +239,7 @@ func ersIgnoreTablet(tab *cluster.Vttablet, timeout, waitReplicasTimeout string,
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }
 
-func ersWithVtctl() (string, error) {
+func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
@@ -257,7 +248,7 @@ func ersWithVtctl() (string, error) {
 
 // region validations
 
-func validateTopology(t *testing.T, pingTablets bool) {
+func ValidateTopology(t *testing.T, clusterInstance *cluster.LocalProcessCluster, pingTablets bool) {
 	args := []string{"Validate"}
 
 	if pingTablets {
@@ -268,28 +259,29 @@ func validateTopology(t *testing.T, pingTablets bool) {
 	require.NoError(t, err)
 }
 
-func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) {
+func ConfirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) int {
 	ctx := context.Background()
 	insertVal++
 	n := insertVal // unique value ...
 	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf(insertSQL, n, n)
-	runSQL(ctx, t, insertSQL, primary)
+	RunSQL(ctx, t, insertSQL, primary)
 	time.Sleep(100 * time.Millisecond)
 	for _, tab := range replicas {
-		err := checkInsertedValues(ctx, t, tab, n)
+		err := CheckInsertedValues(ctx, t, tab, n)
 		require.NoError(t, err)
 	}
+	return n
 }
 
-func confirmOldPrimaryIsHangingAround(t *testing.T) {
+func ConfirmOldPrimaryIsHangingAround(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
 	require.Contains(t, out, "already has primary")
 }
 
 // Makes sure the tablet type is primary, and its health check agrees.
-func checkPrimaryTablet(t *testing.T, tablet *cluster.Vttablet) {
+func checkPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
 	require.NoError(t, err)
 	var tabletInfo topodatapb.Tablet
@@ -311,7 +303,7 @@ func checkPrimaryTablet(t *testing.T, tablet *cluster.Vttablet) {
 }
 
 // isHealthyPrimaryTablet will return if tablet is primary AND healthy.
-func isHealthyPrimaryTablet(t *testing.T, tablet *cluster.Vttablet) bool {
+func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) bool {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
 	require.Nil(t, err)
 	var tabletInfo topodatapb.Tablet
@@ -334,13 +326,13 @@ func isHealthyPrimaryTablet(t *testing.T, tablet *cluster.Vttablet) bool {
 	return tabletType == topodatapb.TabletType_PRIMARY
 }
 
-func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
+func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
 	// wait until it gets the data
 	timeout := time.Now().Add(15 * time.Second)
 	i := 0
 	for time.Now().Before(timeout) {
 		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
-		qr := runSQL(ctx, t, selectSQL, tablet)
+		qr := RunSQL(ctx, t, selectSQL, tablet)
 		if len(qr.Rows) == 1 {
 			return nil
 		}
@@ -351,9 +343,9 @@ func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 	return fmt.Errorf("data is not yet replicated on tablet %s", tablet.Alias)
 }
 
-func checkCountOfInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, count int) error {
+func CheckCountOfInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, count int) error {
 	selectSQL := "select * from vt_insert_test"
-	qr := runSQL(ctx, t, selectSQL, tablet)
+	qr := RunSQL(ctx, t, selectSQL, tablet)
 	if len(qr.Rows) == count {
 		return nil
 	}
@@ -364,7 +356,7 @@ func checkCountOfInsertedValues(ctx context.Context, t *testing.T, tablet *clust
 
 // region tablet operations
 
-func stopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
+func StopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 	require.NoError(t, err)
 	if stopDatabase {
@@ -373,7 +365,7 @@ func stopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	}
 }
 
-func restartTablet(t *testing.T, tab *cluster.Vttablet) {
+func RestartTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
 	require.NoError(t, err)
@@ -381,7 +373,7 @@ func restartTablet(t *testing.T, tab *cluster.Vttablet) {
 	require.NoError(t, err)
 }
 
-func resurrectTablet(ctx context.Context, t *testing.T, tab *cluster.Vttablet) {
+func ResurrectTablet(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
 	require.NoError(t, err)
@@ -389,16 +381,16 @@ func resurrectTablet(ctx context.Context, t *testing.T, tab *cluster.Vttablet) {
 	require.NoError(t, err)
 
 	// As there is already a primary the new replica will come directly in SERVING state
-	tab1.VttabletProcess.ServingStatus = "SERVING"
+	tab.VttabletProcess.ServingStatus = "SERVING"
 	// Start the tablet
 	err = tab.VttabletProcess.Setup()
 	require.NoError(t, err)
 
-	err = checkInsertedValues(ctx, t, tab, insertVal)
+	err = CheckInsertedValues(ctx, t, tab, insertVal)
 	require.NoError(t, err)
 }
 
-func deleteTablet(t *testing.T, tab *cluster.Vttablet) {
+func DeleteTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"DeleteTablet",
 		"-allow_primary",
@@ -410,10 +402,10 @@ func deleteTablet(t *testing.T, tab *cluster.Vttablet) {
 
 // region get info
 
-func getNewPrimary(t *testing.T) *cluster.Vttablet {
+func GetNewPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *cluster.Vttablet {
 	var newPrimary *cluster.Vttablet
-	for _, tablet := range []*cluster.Vttablet{tab2, tab3, tab4} {
-		if isHealthyPrimaryTablet(t, tablet) {
+	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets[1:] {
+		if isHealthyPrimaryTablet(t, clusterInstance, tablet) {
 			newPrimary = tablet
 			break
 		}
@@ -422,7 +414,7 @@ func getNewPrimary(t *testing.T) *cluster.Vttablet {
 	return newPrimary
 }
 
-func getShardReplicationPositions(t *testing.T, keyspaceName, shardName string, doPrint bool) []string {
+func getShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, doPrint bool) []string {
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardName))
 	require.NoError(t, err)
