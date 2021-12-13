@@ -160,6 +160,9 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}, {
 		sql:    "select *, id from t1 group by 2",
 		expErr: "cannot use column offsets in group statement when using `*`",
+	}, {
+		sql:    "select id from t1 order by 1 collate utf8_general_ci",
+		expSQL: "select id from t1 order by id collate utf8_general_ci asc",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

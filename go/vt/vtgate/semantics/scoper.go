@@ -122,6 +122,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 }
 
 func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
+	coll, ok := e.(*sqlparser.CollateExpr)
+	if ok {
+		e = coll.Expr
+	}
 	l, ok := e.(*sqlparser.Literal)
 	if !ok {
 		return nil
