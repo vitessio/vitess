@@ -59,7 +59,7 @@ type Insert struct {
 	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
 	// Insert.Values[i].Values[j] represents values for the j'th column of the given colVindex (j < len(colVindex[i].Columns)
 	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
-	VindexValues []sqltypes.PlanValue
+	VindexValues [][][]evalengine.Expr
 
 	// Table specifies the table for the insert.
 	Table *vindexes.Table
@@ -110,7 +110,7 @@ func NewSimpleInsert(opcode InsertOpcode, table *vindexes.Table, keyspace *vinde
 }
 
 // NewInsert creates a new Insert.
-func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues []sqltypes.PlanValue, table *vindexes.Table, prefix string, mid []string, suffix string) *Insert {
+func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues [][][]evalengine.Expr, table *vindexes.Table, prefix string, mid []string, suffix string) *Insert {
 	return &Insert{
 		Opcode:       opcode,
 		Keyspace:     keyspace,
@@ -366,14 +366,19 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// require inputs in that format.
 	vindexRowsValues := make([][][]sqltypes.Value, len(ins.VindexValues))
 	rowCount := 0
+	env := evalengine.EnvWithBindVars(bindVars)
 	for vIdx, vColValues := range ins.VindexValues {
-		if len(vColValues.Values) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
+		if len(vColValues) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
 		}
-		for colIdx, colValues := range vColValues.Values {
-			rowsResolvedValues, err := colValues.ResolveList(bindVars)
-			if err != nil {
-				return nil, nil, err
+		for colIdx, colValues := range vColValues {
+			rowsResolvedValues := make([]sqltypes.Value, 0, len(colValues))
+			for _, colValue := range colValues {
+				result, err := colValue.Evaluate(env)
+				if err != nil {
+					return nil, nil, err
+				}
+				rowsResolvedValues = append(rowsResolvedValues, result.Value())
 			}
 			// This is the first iteration: allocate for transpose.
 			if colIdx == 0 {

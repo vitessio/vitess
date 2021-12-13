@@ -200,14 +200,11 @@ func TestInsertShardedSimple(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
-				// 3 rows.
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+			{
+				evalengine.NewLiteralInt(1),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -234,18 +231,14 @@ func TestInsertShardedSimple(t *testing.T) {
 	ins = NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
-				// 3 rows.
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}},
-			}},
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -273,19 +266,16 @@ func TestInsertShardedSimple(t *testing.T) {
 	ins = NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
-				// 3 rows.
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}},
-			}},
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
 		}},
+
 		ks.Tables["t1"],
 		"prefix",
 		[]string{" mid1", " mid2", " mid3"},
@@ -343,15 +333,13 @@ func TestInsertShardedFail(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
-				// 1 row
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+			{
+				evalengine.NewLiteralInt(1),
+			},
 		}},
+
 		ks.Tables["t1"],
 		"prefix",
 		[]string{" mid1", " mid2", " mid3"},
@@ -392,18 +380,14 @@ func TestInsertShardedGenerate(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// 3 rows.
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -512,51 +496,33 @@ func TestInsertShardedOwned(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
 		}, {
 			// colVindex columns: c1, c2
-			Values: []sqltypes.PlanValue{{
-				// rows for c1
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(4),
-				}, {
-					Value: sqltypes.NewInt64(5),
-				}, {
-					Value: sqltypes.NewInt64(6),
-				}},
-			}, {
-				// rows for c2
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(7),
-				}, {
-					Value: sqltypes.NewInt64(8),
-				}, {
-					Value: sqltypes.NewInt64(9),
-				}},
-			}},
+			{
+				evalengine.NewLiteralInt(4),
+				evalengine.NewLiteralInt(5),
+				evalengine.NewLiteralInt(6),
+			},
+			{
+				evalengine.NewLiteralInt(7),
+				evalengine.NewLiteralInt(8),
+				evalengine.NewLiteralInt(9),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
-				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(10),
-				}, {
-					Value: sqltypes.NewInt64(11),
-				}, {
-					Value: sqltypes.NewInt64(12),
-				}},
-			}},
+			{
+				evalengine.NewLiteralInt(10),
+				evalengine.NewLiteralInt(11),
+				evalengine.NewLiteralInt(12),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -636,22 +602,17 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
-				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NULL,
-				}},
-			}},
+			{
+				evalengine.NullExpr,
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -715,33 +676,25 @@ func TestInsertShardedGeo(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: region, id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for region
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(255),
-				}},
-			}, {
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(255),
+			},
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(1),
+			},
 		}, {
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(1),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -827,59 +780,41 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	ins := NewInsert(
 		InsertShardedIgnore,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}, {
-					Value: sqltypes.NewInt64(4),
-				}},
-			}},
+
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+				evalengine.NewLiteralInt(4),
+			},
 		}, {
 			// colVindex columns: c1, c2
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c1
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(5),
-				}, {
-					Value: sqltypes.NewInt64(6),
-				}, {
-					Value: sqltypes.NewInt64(7),
-				}, {
-					Value: sqltypes.NewInt64(8),
-				}},
-			}, {
+				evalengine.NewLiteralInt(5),
+				evalengine.NewLiteralInt(6),
+				evalengine.NewLiteralInt(7),
+				evalengine.NewLiteralInt(8),
+			},
+			{
 				// rows for c2
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(9),
-				}, {
-					Value: sqltypes.NewInt64(10),
-				}, {
-					Value: sqltypes.NewInt64(11),
-				}, {
-					Value: sqltypes.NewInt64(12),
-				}},
-			}},
+				evalengine.NewLiteralInt(9),
+				evalengine.NewLiteralInt(10),
+				evalengine.NewLiteralInt(11),
+				evalengine.NewLiteralInt(12),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(13),
-				}, {
-					Value: sqltypes.NewInt64(14),
-				}, {
-					Value: sqltypes.NewInt64(15),
-				}, {
-					Value: sqltypes.NewInt64(16),
-				}},
-			}},
+				evalengine.NewLiteralInt(13),
+				evalengine.NewLiteralInt(14),
+				evalengine.NewLiteralInt(15),
+				evalengine.NewLiteralInt(16),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -1001,22 +936,18 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	ins := NewInsert(
 		InsertShardedIgnore,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NULL,
-				}},
-			}},
+				evalengine.NullExpr,
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -1100,51 +1031,36 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
 		}, {
 			// colVindex columns: c1, c2
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c1
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(4),
-				}, {
-					Value: sqltypes.NewInt64(5),
-				}, {
-					Value: sqltypes.NewInt64(6),
-				}},
-			}, {
+				evalengine.NewLiteralInt(4),
+				evalengine.NewLiteralInt(5),
+				evalengine.NewLiteralInt(6),
+			},
+			{
 				// rows for c2
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(7),
-				}, {
-					Value: sqltypes.NewInt64(8),
-				}, {
-					Value: sqltypes.NewInt64(9),
-				}},
-			}},
+				evalengine.NewLiteralInt(7),
+				evalengine.NewLiteralInt(8),
+				evalengine.NewLiteralInt(9),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(10),
-				}, {
-					Value: sqltypes.NewInt64(11),
-				}, {
-					Value: sqltypes.NewInt64(12),
-				}},
-			}},
+				evalengine.NewLiteralInt(10),
+				evalengine.NewLiteralInt(11),
+				evalengine.NewLiteralInt(12),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -1239,30 +1155,22 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	ins := NewInsert(
 		InsertShardedIgnore,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(10),
-				}, {
-					Value: sqltypes.NewInt64(11),
-				}, {
-					Value: sqltypes.NewInt64(12),
-				}},
-			}},
+				evalengine.NewLiteralInt(10),
+				evalengine.NewLiteralInt(11),
+				evalengine.NewLiteralInt(12),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -1348,22 +1256,18 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(2),
-				}},
-			}},
+				evalengine.NewLiteralInt(2),
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -1426,51 +1330,36 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(2),
-				}, {
-					Value: sqltypes.NewInt64(3),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
 		}, {
 			// colVindex columns: c1, c2
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c1
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NULL,
-				}, {
-					Value: sqltypes.NULL,
-				}, {
-					Value: sqltypes.NULL,
-				}},
-			}, {
+				evalengine.NullExpr,
+				evalengine.NullExpr,
+				evalengine.NullExpr,
+			},
+			{
 				// rows for c2
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NULL,
-				}, {
-					Value: sqltypes.NULL,
-				}, {
-					Value: sqltypes.NULL,
-				}},
-			}},
+				evalengine.NullExpr,
+				evalengine.NullExpr,
+				evalengine.NullExpr,
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NULL,
-				}, {
-					Value: sqltypes.NULL,
-				}, {
-					Value: sqltypes.NULL,
-				}},
-			}},
+				evalengine.NullExpr,
+				evalengine.NullExpr,
+				evalengine.NullExpr,
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -1552,22 +1441,18 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 	ins := NewInsert(
 		InsertSharded,
 		ks.Keyspace,
-		[]sqltypes.PlanValue{{
+		[][][]evalengine.Expr{{
 			// colVindex columns: id
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}},
-			}},
+				evalengine.NewLiteralInt(1),
+			},
 		}, {
 			// colVindex columns: c3
-			Values: []sqltypes.PlanValue{{
+			{
 				// rows for c3
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NULL,
-				}},
-			}},
+				evalengine.NullExpr,
+			},
 		}},
 		ks.Tables["t1"],
 		"prefix",

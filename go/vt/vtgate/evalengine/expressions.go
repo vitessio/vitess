@@ -313,7 +313,7 @@ func NewColumn(offset int, collation collations.TypedCollation) Expr {
 }
 
 // NewTupleExpr returns a tuple expression
-func NewTupleExpr(exprs ...Expr) Expr {
+func NewTupleExpr(exprs ...Expr) TupleExpr {
 	tupleExpr := make(TupleExpr, 0, len(exprs))
 	for _, f := range exprs {
 		tupleExpr = append(tupleExpr, f)

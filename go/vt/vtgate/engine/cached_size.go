@@ -227,12 +227,16 @@ func (cached *Generate) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(48)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	// field Values vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Values.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *GroupByParams) CachedSize(alloc bool) int64 {
@@ -287,11 +291,23 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	size += cached.Keyspace.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field VindexValues []vitess.io/vitess/go/sqltypes.PlanValue
+	// field VindexValues [][][]vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValues)) * int64(88))
+		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValues)) * int64(24))
 		for _, elem := range cached.VindexValues {
-			size += elem.CachedSize(false)
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(24))
+				for _, elem := range elem {
+					{
+						size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(16))
+						for _, elem := range elem {
+							if cc, ok := elem.(cachedObject); ok {
+								size += cc.CachedSize(true)
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 	// field Table *vitess.io/vitess/go/vt/vtgate/vindexes.Table
