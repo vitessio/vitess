@@ -192,7 +192,7 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	return &Concatenate{
 		Distinct:    node.Distinct,
 		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
-		Sources:     []Operator{opLHS, opRHS},
+		Sources:     []LogicalOperator{opLHS, opRHS},
 		OrderBy:     node.OrderBy,
 		Limit:       node.Limit,
 	}, nil

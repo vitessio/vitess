@@ -505,6 +505,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with testing SingleRow Projection
 "create view user.view_a as select 42 from user"
