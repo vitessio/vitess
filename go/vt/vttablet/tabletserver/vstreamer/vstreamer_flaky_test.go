@@ -2071,6 +2071,8 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 		for i, want := range wantset {
 			// CurrentTime is not testable.
 			evs[i].CurrentTime = 0
+			evs[i].Keyspace = ""
+			evs[i].Shard = ""
 			switch want {
 			case "begin":
 				if evs[i].Type != binlogdatapb.VEventType_BEGIN {
