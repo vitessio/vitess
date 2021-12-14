@@ -315,16 +315,19 @@ func mergeOrJoinOp(ctx *planningContext, lhs, rhs abstract.PhysicalOperator, joi
 		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
 	}
 
-	newPlan, err := tryMergeOp(ctx, lhs, rhs, joinPredicates, merger)
-	if err != nil {
-		return nil, err
-	}
+	newPlan, _ := tryMergeOp(ctx, lhs, rhs, joinPredicates, merger)
 	if newPlan != nil {
 		return newPlan, nil
 	}
 
-	var tree abstract.PhysicalOperator = &applyJoin{LHS: lhs.Clone(), RHS: rhs.Clone(), vars: map[string]int{}}
+	var tree abstract.PhysicalOperator = &applyJoin{
+		LHS:      lhs.Clone(),
+		RHS:      rhs.Clone(),
+		vars:     map[string]int{},
+		leftJoin: !inner,
+	}
 	for _, predicate := range joinPredicates {
+		var err error
 		tree, err = PushPredicate(ctx, predicate, tree)
 		if err != nil {
 			return nil, err

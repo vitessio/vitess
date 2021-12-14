@@ -690,6 +690,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Three-way left join
 "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col"
@@ -3544,6 +3545,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # implicit table reference for unsharded keyspace
 "select main.foo.col from main.foo"
