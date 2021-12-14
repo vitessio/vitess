@@ -736,6 +736,84 @@ func (c *Conn) writeLoadInfilePacket(fileName string) error {
 	return c.writeEphemeralPacket()
 }
 
+// LoadInfile sends the LoadInfilePacket to the client requesting the remote
+// file |file|. It returns a ReadCloser to read the contents of the remote file
+// as it comes back from the client.
+//
+// This method should only be called from |ComQuery| and |ComMultiQuery|
+// implementations within a Handler implementation.
+//
+// The returned |ReadCloser| uniquely owns the client communication while it is
+// open. |Close| must be called on the |ReadCloser| before any results are
+// streamed to the |result| callback of the |Handler|, for example.
+//
+// If the ReadCloser is closed before the entire file is read, the Close()
+// method will block while the remainder of the file contents are read from the
+// client and discarded.
+func (c *Conn) LoadInfile(file string) (io.ReadCloser, error) {
+	err := c.writeLoadInfilePacket(file)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.flush()
+	if err != nil {
+		return nil, err
+	}
+
+	reader, writer := io.Pipe()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Read contents from client response, write it to |writer|.
+		data, err := c.readEphemeralPacket()
+		if err != nil {
+			writer.CloseWithError(err)
+			return
+		}
+		var drain bool
+		for len(data) != 0 {
+			if !drain {
+				_, err = writer.Write(data)
+			}
+			if err != nil {
+				// The reader was closed prematurely; drain the
+				// file contents from the connection.
+				drain = true
+			}
+			c.recycleReadPacket()
+			data, err = c.readEphemeralPacket()
+			if err != nil {
+				writer.CloseWithError(err)
+				return
+			}
+
+		}
+		c.recycleReadPacket()
+		writer.Close()
+	}()
+	// We use finalizingReader to ensure that the call to |reader.Close()|
+	// synchronizes with the goroutine responsible for reading the client
+	// response. This needs to be called before a Handler implementation
+	// starts returning results on the result callback.
+	return &finalizingReader{
+		reader,
+		func() { wg.Wait() },
+	}, nil
+}
+
+type finalizingReader struct {
+	io.ReadCloser
+	Finalize func()
+}
+
+func (r *finalizingReader) Close() error {
+	err := r.ReadCloser.Close()
+	r.Finalize()
+	return err
+}
+
 func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file string) error {
 	// First send the load infile packet and flush the connector
 	err := c.writeLoadInfilePacket(file)
@@ -850,7 +928,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		var err error
 
 		for query, err = c.execQuery(query, handler, multiStatements); err == nil && query != ""; {
-			query, err = c.execQuery(query, handler, multiStatements);
+			query, err = c.execQuery(query, handler, multiStatements)
 		}
 		if err != nil {
 			return err
