@@ -85,7 +85,7 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	return resp, respBody, err
 }
 
-func TestBasicVreplicationWorkflow(t *testing.T) {
+func TestBasicVreplicationWorkflow2(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -125,14 +125,40 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 
 	reshardMerchant2to3SplitMerge(t)
 	reshardMerchant3to1Merge(t)
+}
+
+func TestBasicVreplicationWorkflow1(t *testing.T) {
+	defaultCellName := "zone1"
+	allCells := []string{"zone1"}
+	allCellNames = "zone1"
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
+
+	require.NotNil(t, vc)
+	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
+	defer func() { defaultReplicas = 1 }()
+
+	defer vc.TearDown(t)
+
+	defaultCell = vc.Cells[defaultCellName]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t, vc)
+	insertInitialData(t)
+
+	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
+	// the tenant table was to test a specific case with binary sharding keys. Drop it now so that we don't
+	// have to update the rest of the tests
+	execVtgateQuery(t, vtgateConn, "customer", "drop table tenant")
 
 	insertMoreCustomers(t, 16)
 	reshardCustomer2to4Split(t, nil, "")
-	expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
 	reshardCustomer3to2SplitMerge(t)
-	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
 	reshardCustomer3to1Merge(t)
-	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
 }
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {

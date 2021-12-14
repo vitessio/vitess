@@ -1031,13 +1031,22 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
-		"vreplication_basic": {
+		"vreplication_basic1": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow1"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"Shard": "vreplication_basic1",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_basic2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic2",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_failover": {
