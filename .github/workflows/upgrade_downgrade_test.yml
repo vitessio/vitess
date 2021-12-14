@@ -16,15 +16,6 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
-    - uses: Dreamcodeio/pr-has-label-action@master
-      id: checkLabel
-      with:
-        label: Upgrade Downgrade
-
-    - name: Cancel ${{ steps.checkLabel.outputs.checkedLabel }} workflow if the Upgrade Downgrade testing label is not set on a Pull Request
-      if: ${{ steps.checkLabel.outputs.hasLabel == false }}
-      uses: andymckay/cancel-action@0.2
-
     - name: Check latest versions
       run: echo ${{ needs.get_latest_versions.outputs.matrix }}
 
