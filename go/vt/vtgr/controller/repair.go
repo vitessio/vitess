@@ -653,6 +653,10 @@ func (shard *GRShard) failoverLocked(ctx context.Context) error {
 		return err
 	}
 	shard.logger.Infof("Successfully failover MySQL to %v for %v", candidate.instanceKey.Hostname, formatKeyspaceShard(shard.KeyspaceShard))
+	if !shard.isActive.Get() {
+		shard.logger.Infof("Skip vttablet failover on an inactive shard %v", formatKeyspaceShard(shard.KeyspaceShard))
+		return nil
+	}
 	// Make sure we still hold the topo server lock before moving on
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err

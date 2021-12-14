@@ -4,5 +4,7 @@ rules:
     - "get"
     - "create"
     - "delete"
+    - "put"
+    - "ping"
     subjects: ["*"]
     clusters: ["*"]

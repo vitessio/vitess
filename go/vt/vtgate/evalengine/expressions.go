@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -25,12 +26,11 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
 )
 
 type (
@@ -40,6 +40,12 @@ type (
 		numval    uint64
 		bytes     []byte
 		tuple     *[]EvalResult
+		decimal   *decimalResult
+	}
+
+	decimalResult struct {
+		num  decimal.Big
+		frac int
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -78,6 +84,13 @@ type (
 		TypedCollation collations.TypedCollation
 	}
 )
+
+// EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
+func EmptyExpressionEnv() *ExpressionEnv {
+	return &ExpressionEnv{
+		BindVars: make(map[string]*querypb.BindVariable),
+	}
+}
 
 // ResolveValue allows for retrieval of the value we expose for public consumption
 func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
@@ -201,6 +214,10 @@ func (e EvalResult) TupleValues() []sqltypes.Value {
 	return result
 }
 
+func (e EvalResult) textual() bool {
+	return sqltypes.IsText(e.typ) || sqltypes.IsBinary(e.typ)
+}
+
 var collationNull = collations.TypedCollation{
 	Collation:    collations.CollationBinaryID,
 	Coercibility: collations.CoerceIgnorable,
@@ -208,7 +225,7 @@ var collationNull = collations.TypedCollation{
 }
 
 func NewLiteralNull() Expr {
-	return &Literal{Val: EvalResult{typ: querypb.Type_NULL_TYPE, collation: collationNull}}
+	return &Literal{Val: resultNull}
 }
 
 // NewLiteralIntFromBytes returns a literal expression
@@ -228,21 +245,28 @@ var collationNumeric = collations.TypedCollation{
 
 // NewLiteralInt returns a literal expression
 func NewLiteralInt(i int64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Int64, numval: uint64(i), collation: collationNumeric}}
+	return &Literal{Val: newEvalInt64(i)}
 }
 
 // NewLiteralFloat returns a literal expression
 func NewLiteralFloat(val float64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(val), collation: collationNumeric}}
+	return &Literal{Val: newEvalFloat(val)}
 }
 
-// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
-func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
-	fval, err := strconv.ParseFloat(string(val), 64)
+// NewLiteralRealFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralRealFromBytes(val []byte) (Expr, error) {
+	if bytes.IndexByte(val, 'e') >= 0 || bytes.IndexByte(val, 'E') >= 0 {
+		fval, err := strconv.ParseFloat(string(val), 64)
+		if err != nil {
+			return nil, err
+		}
+		return &Literal{Val: newEvalFloat(fval)}, nil
+	}
+	dec, err := newDecimalString(string(val))
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}}, nil
+	return &Literal{Val: newEvalDecimal(dec)}, nil
 }
 
 // NewLiteralString returns a literal expression
@@ -265,12 +289,21 @@ func NewBindVar(key string, collation collations.TypedCollation) Expr {
 	}
 }
 
-// NewColumn returns a bind variable
+// NewColumn returns a column expression
 func NewColumn(offset int, collation collations.TypedCollation) Expr {
 	return &Column{
 		Offset:    offset,
 		collation: collation,
 	}
+}
+
+// NewTupleExpr returns a tuple expression
+func NewTupleExpr(exprs ...Expr) Expr {
+	tupleExpr := make(TupleExpr, 0, len(exprs))
+	for _, f := range exprs {
+		tupleExpr = append(tupleExpr, f)
+	}
+	return tupleExpr
 }
 
 // Evaluate implements the Expr interface
@@ -391,6 +424,12 @@ func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
 			fval = 0
 		}
 		return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}, nil
+	case sqltypes.Decimal:
+		dec, err := newDecimalString(string(value))
+		if err != nil {
+			return EvalResult{}, err
+		}
+		return newEvalDecimal(dec), nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
 		return EvalResult{typ: sqltypes.VarBinary, bytes: value}, nil
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:

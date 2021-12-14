@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,7 +40,7 @@ import (
 
 var (
 	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
-	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
+	setSuperReadOnly = flag.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
 )
 
 // ReplicationStatus returns the replication status
@@ -431,7 +432,11 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if *setSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			return nil, err
+			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+				log.Warningf("server does not know about super_read_only, continuing anyway...")
+			} else {
+				return nil, err
+			}
 		}
 	} else {
 		if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {

@@ -169,7 +169,7 @@ type TestGroupState struct {
 }
 
 // BuildGroupView builds gruop view from input
-func BuildGroupView(alias, groupName, host string, port int, readOnly bool, inputs []TestGroupState) *GroupView {
+func BuildGroupView(alias, groupName, host string, port int, readOnly bool, stalenessResult int, inputs []TestGroupState) *GroupView {
 	view := NewGroupView(alias, host, port)
 	view.GroupName = groupName
 	// group_name, member_host, member_port, member_state, member_role, is_local
@@ -185,6 +185,7 @@ func BuildGroupView(alias, groupName, host string, port int, readOnly bool, inpu
 			member.ReadOnly = readOnly
 		}
 		view.UnresolvedMembers = append(view.UnresolvedMembers, member)
+		view.HeartbeatStaleness = stalenessResult
 	}
 	return view
 }
