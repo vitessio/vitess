@@ -1,20 +1,18 @@
-# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
-
-name: Cluster (mysql80)
+name: {{.Name}}
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (mysql80)')
+  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+  GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (mysql80)
-    runs-on: ubuntu-20.04
+    name: Run endtoend tests on {{.Name}}
+    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
 
     steps:
     - name: Set up Go
@@ -51,11 +49,23 @@ jobs:
         # install JUnit report formatter
         go get -u github.com/vitessio/go-junit-report@HEAD
 
+        {{if .InstallXtraBackup}}
+
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
+
+        {{end}}
+
+    {{if .MakeTools}}
+
+    - name: Installing zookeeper and consul
+      run: |
+          make tools
+
+    {{end}}
 
     - name: Setup launchable dependencies
       run: |
@@ -76,7 +86,7 @@ jobs:
         set -x
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard mysql80 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       run: |
@@ -86,3 +96,4 @@ jobs:
         # print test output
         cat output.txt
       if: always()
+
