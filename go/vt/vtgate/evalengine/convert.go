@@ -81,7 +81,7 @@ func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Exp
 	case sqlparser.GreaterEqualOp:
 		return &ComparisonExpr{coercedExpr, compareGE{}}, nil
 	case sqlparser.NullSafeEqualOp:
-		return &NullSafeComparisonExpr{coercedExpr}, nil
+		return &ComparisonExpr{coercedExpr, compareNullSafeEQ{}}, nil
 	case sqlparser.LikeOp:
 		return &LikeExpr{BinaryCoercedExpr: coercedExpr}, nil
 	case sqlparser.NotLikeOp:

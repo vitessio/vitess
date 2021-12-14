@@ -61,31 +61,19 @@ func (expr *Column) cardinality(*ExpressionEnv) (int, error) {
 	return 1, nil
 }
 
-func (expr *ArithmeticExpr) cardinality(env *ExpressionEnv) (int, error) {
+func (expr *BinaryExpr) cardinality(env *ExpressionEnv) (int, error) {
 	card1, err := expr.Left.cardinality(env)
 	if err != nil {
 		return 1, err
 	}
-	card2, err := expr.Right.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	if card1 != 1 || card2 != 1 {
+	if card1 != 1 {
 		return 1, cardinalityError(1)
 	}
-	return 1, nil
-}
-
-func (expr *LogicalExpr) cardinality(env *ExpressionEnv) (int, error) {
-	card1, err := expr.Left.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
 	card2, err := expr.Right.cardinality(env)
 	if err != nil {
 		return 1, err
 	}
-	if card1 != 1 || card2 != 1 {
+	if card2 != 1 {
 		return 1, cardinalityError(1)
 	}
 	return 1, nil
@@ -109,21 +97,6 @@ func subcardinality(env *ExpressionEnv, expr Expr, n int) (int, error) {
 	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 }
 
-func (expr *LikeExpr) cardinality(env *ExpressionEnv) (int, error) {
-	card1, err := expr.Left.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	card2, err := expr.Right.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	if card1 != 1 || card2 != 1 {
-		return 1, cardinalityError(1)
-	}
-	return 1, nil
-}
-
 func (expr *InExpr) cardinality(env *ExpressionEnv) (int, error) {
 	card1, err := expr.Left.cardinality(env)
 	if err != nil {
@@ -142,7 +115,7 @@ func (expr *InExpr) cardinality(env *ExpressionEnv) (int, error) {
 	return 1, nil
 }
 
-func (expr *BinaryExpr) cardinality(env *ExpressionEnv) (int, error) {
+func (expr *ComparisonExpr) cardinality(env *ExpressionEnv) (int, error) {
 	card1, err := expr.Left.cardinality(env)
 	if err != nil {
 		return 1, err

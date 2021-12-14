@@ -55,15 +55,18 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
+	if lVal.null() {
+		return resultNull, nil
+	}
 	rVal, err := b.Right.eval(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
-	if lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE {
-		return EvalResult{}, cardinalityError(1)
-	}
-	if hasNullEvalResult(lVal, rVal) {
+	if rVal.null() {
 		return resultNull, nil
+	}
+	if lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE {
+		panic("failed to typecheck tuples")
 	}
 	return b.Op.eval(lVal, rVal)
 }

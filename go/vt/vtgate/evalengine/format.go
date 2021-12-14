@@ -91,10 +91,6 @@ func (c *ComparisonExpr) format(w *formatter, depth int) {
 	w.formatBinary(c.Left, c.Op.String(), c.Right, depth)
 }
 
-func (c *NullSafeComparisonExpr) format(w *formatter, depth int) {
-	w.formatBinary(c.Left, "<=>", c.Right, depth)
-}
-
 func (c *LikeExpr) format(w *formatter, depth int) {
 	op := "LIKE"
 	if c.Negate {
