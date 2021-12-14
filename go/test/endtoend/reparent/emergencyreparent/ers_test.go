@@ -212,9 +212,9 @@ func TestTwoReplicasNoReplicationStatus(t *testing.T) {
 
 	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tab2.Alias, `STOP SLAVE; RESET REPLICA ALL`)
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tab2.Alias, `STOP SLAVE; RESET SLAVE ALL`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tab3.Alias, `STOP SLAVE; RESET REPLICA ALL`)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tab3.Alias, `STOP SLAVE; RESET SLAVE ALL`)
 	require.NoError(t, err)
 
 	out, err := ers(tab4, "60s", "30s")
