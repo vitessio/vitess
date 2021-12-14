@@ -126,7 +126,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"-enable_online_ddl=false",
+		"-queryserver_enable_online_ddl=false",
 	}
 
 	// Initialize Cluster
