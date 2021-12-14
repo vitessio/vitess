@@ -21,6 +21,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
@@ -160,6 +163,7 @@ func StopReplicationAndBuildStatusMaps(
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
 	ignoredTablets sets.String,
+	tabletToWaitFor *topodata.TabletAlias,
 	logger logutil.Logger,
 ) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
@@ -168,15 +172,20 @@ func StopReplicationAndBuildStatusMaps(
 		statusMap        = map[string]*replicationdatapb.StopReplicationStatus{}
 		primaryStatusMap = map[string]*replicationdatapb.PrimaryStatus{}
 		m                sync.Mutex
-		errChan          = make(chan error)
+		errChan          = make(chan concurrency.Error)
 	)
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 
-	fillStatus := func(alias string, tabletInfo *topo.TabletInfo) {
-		err := vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "fillStatus did not successfully complete")
-		defer func() { errChan <- err }()
+	fillStatus := func(alias string, tabletInfo *topo.TabletInfo, mustWaitForTablet bool) {
+		var concurrencyErr concurrency.Error
+		var err error
+		defer func() {
+			concurrencyErr.Err = err
+			concurrencyErr.MustWaitFor = mustWaitForTablet
+			errChan <- concurrencyErr
+		}()
 
 		logger.Infof("getting replication position from %v", alias)
 
@@ -209,9 +218,18 @@ func StopReplicationAndBuildStatusMaps(
 		}
 	}
 
+	tabletAliasToWaitFor := ""
+	numErrosToWaitFor := 0
+	if tabletToWaitFor != nil {
+		tabletAliasToWaitFor = topoproto.TabletAliasString(tabletToWaitFor)
+	}
 	for alias, tabletInfo := range tabletMap {
 		if !ignoredTablets.Has(alias) {
-			go fillStatus(alias, tabletInfo)
+			mustWaitFor := tabletAliasToWaitFor == alias
+			if mustWaitFor {
+				numErrosToWaitFor++
+			}
+			go fillStatus(alias, tabletInfo, mustWaitFor)
 		}
 	}
 
@@ -219,6 +237,7 @@ func StopReplicationAndBuildStatusMaps(
 		NumGoroutines:        len(tabletMap) - ignoredTablets.Len(),
 		NumRequiredSuccesses: len(tabletMap) - ignoredTablets.Len() - 1,
 		NumAllowedErrors:     1,
+		NumErrorsToWaitFor:   numErrosToWaitFor,
 	}
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)

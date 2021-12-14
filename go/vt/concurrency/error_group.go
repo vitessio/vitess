@@ -49,6 +49,12 @@ type ErrorGroup struct {
 	NumGoroutines        int
 	NumRequiredSuccesses int
 	NumAllowedErrors     int
+	NumErrorsToWaitFor   int
+}
+
+type Error struct {
+	Err         error
+	MustWaitFor bool
 }
 
 // Wait waits for a group of goroutines that are sending errors to the given
@@ -69,10 +75,11 @@ type ErrorGroup struct {
 // When finished consuming results from all goroutines, cancelled or otherwise,
 // Wait returns an AllErrorRecorder that contains all errors returned by any of
 // those goroutines. It does not close the error channel.
-func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan error) *AllErrorRecorder {
+func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan Error) *AllErrorRecorder {
 	errCounter := 0
 	successCounter := 0
 	responseCounter := 0
+	mustWaitForCounter := 0
 	rec := &AllErrorRecorder{}
 
 	if eg.NumGoroutines < 1 {
@@ -81,13 +88,16 @@ func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan error) *AllErro
 
 	for err := range errors {
 		responseCounter++
+		if err.MustWaitFor {
+			mustWaitForCounter++
+		}
 
-		switch err {
+		switch err.Err {
 		case nil:
 			successCounter++
 		default:
 			errCounter++
-			rec.RecordError(err)
+			rec.RecordError(err.Err)
 		}
 
 		// Even though we cancel in the next conditional, we need to keep
@@ -97,7 +107,7 @@ func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan error) *AllErro
 			break
 		}
 
-		if errCounter > eg.NumAllowedErrors || successCounter >= eg.NumRequiredSuccesses {
+		if mustWaitForCounter >= eg.NumErrorsToWaitFor && (errCounter > eg.NumAllowedErrors || successCounter >= eg.NumRequiredSuccesses) {
 			cancel()
 		}
 	}

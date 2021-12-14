@@ -695,15 +695,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(
-				ctx,
-				tt.tmc,
-				&events.Reparent{},
-				tt.tabletMap,
-				tt.waitReplicasTimeout,
-				tt.ignoredTablets,
-				logger,
-			)
+			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, nil, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
