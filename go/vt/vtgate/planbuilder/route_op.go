@@ -55,6 +55,26 @@ func (r *routeOp) TableID() semantics.TableSet {
 
 // Cost implements the Operator interface
 func (r *routeOp) Cost() int {
+	switch r.routeOpCode {
+	case // these op codes will never be compared with each other - they are assigned by a rule and not a comparison
+		engine.SelectDBA,
+		engine.SelectNext,
+		engine.SelectNone,
+		engine.SelectReference,
+		engine.SelectUnsharded:
+		return 0
+	// TODO revisit these costs when more of the gen4 planner is done
+	case engine.SelectEqualUnique:
+		return 1
+	case engine.SelectEqual:
+		return 5
+	case engine.SelectIN:
+		return 10
+	case engine.SelectMultiEqual:
+		return 10
+	case engine.SelectScatter:
+		return 20
+	}
 	return 1
 }
 

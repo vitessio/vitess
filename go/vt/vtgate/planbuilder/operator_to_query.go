@@ -18,7 +18,10 @@ package planbuilder
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
@@ -27,13 +30,14 @@ import (
 func toSQL(ctx *planningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
+	q.produce()
 	return q.sel
 }
 
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *tableOp:
-		qb.addTable(op.qtable.Table.Name.String(), op.qtable.Alias.As.String())
+		qb.addTable(op.qtable.Table.Name.String(), op.qtable.Alias.As.String(), op.TableID())
 		for _, pred := range op.qtable.Predicates {
 			qb.addPredicate(pred)
 		}
@@ -68,15 +72,11 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	}
 }
 
-func (qb *queryBuilder) produce() sqlparser.SelectStatement {
-	query := qb.sel
-	if sel, ok := query.(*sqlparser.Select); ok && len(sel.SelectExprs) == 0 {
-		sel.SelectExprs = append(sel.SelectExprs, &sqlparser.StarExpr{})
-	}
-	return query
+func (qb *queryBuilder) produce() {
+	sort.Sort(qb)
 }
 
-func (qb *queryBuilder) addTable(tableName, alias string) {
+func (qb *queryBuilder) addTable(tableName, alias string, tableID semantics.TableSet) {
 	if qb.sel == nil {
 		qb.sel = &sqlparser.Select{}
 	}
@@ -90,6 +90,7 @@ func (qb *queryBuilder) addTable(tableName, alias string) {
 	})
 	qb.sel = sel
 	qb.tableNames = append(qb.tableNames, tableName)
+	qb.tableIDsInFrom = append(qb.tableIDsInFrom, tableID)
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
@@ -155,6 +156,7 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 	sel := qb.sel.(*sqlparser.Select)
 	otherSel := other.sel.(*sqlparser.Select)
 	sel.From = append(sel.From, otherSel.From...)
+	qb.tableIDsInFrom = append(qb.tableIDsInFrom, other.tableIDsInFrom...)
 	sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
 
 	var predicate sqlparser.Expr
@@ -215,8 +217,28 @@ func (qb *queryBuilder) convertToDerivedTable() string {
 }
 
 type queryBuilder struct {
-	ctx        *planningContext
-	sel        sqlparser.SelectStatement
-	grouped    bool
-	tableNames []string
+	ctx            *planningContext
+	sel            sqlparser.SelectStatement
+	grouped        bool
+	tableIDsInFrom []semantics.TableSet
+	tableNames     []string
+}
+
+// Len implements the Sort interface
+func (qb *queryBuilder) Len() int {
+	return len(qb.tableIDsInFrom)
+}
+
+// Less implements the Sort interface
+func (qb *queryBuilder) Less(i, j int) bool {
+	return qb.tableIDsInFrom[i].TableOffset() < qb.tableIDsInFrom[j].TableOffset()
+}
+
+// Swap implements the Sort interface
+func (qb *queryBuilder) Swap(i, j int) {
+	sel, isSel := qb.sel.(*sqlparser.Select)
+	if isSel {
+		sel.From[i], sel.From[j] = sel.From[j], sel.From[i]
+	}
+	qb.tableIDsInFrom[i], qb.tableIDsInFrom[j] = qb.tableIDsInFrom[j], qb.tableIDsInFrom[i]
 }
