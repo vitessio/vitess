@@ -30,6 +30,8 @@ type applyJoin struct {
 	// arguments that need to be copied from the LHS/RHS
 	vars map[string]int
 
+	leftJoin bool
+
 	predicate sqlparser.Expr
 }
 

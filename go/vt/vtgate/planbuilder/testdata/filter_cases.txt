@@ -671,6 +671,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Multi-table unique vindex constraint on left-joined right table
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
@@ -712,6 +713,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # Multi-route unique vindex constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
@@ -3300,6 +3302,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # this query lead to a nil pointer error
 "select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)"

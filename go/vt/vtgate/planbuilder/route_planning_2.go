@@ -48,16 +48,16 @@ func createPhysicalOperator(ctx *planningContext, opTree abstract.LogicalOperato
 		default:
 			return greedySolve2(ctx, op)
 		}
-	// case *abstract.Join:
-	//	treeInner, err := optimizeQuery(ctx, op.LHS)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	treeOuter, err := optimizeQuery(ctx, op.RHS)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	return mergeOrJoin(ctx, treeInner, treeOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+	case *abstract.Join:
+		opInner, err := createPhysicalOperator(ctx, op.LHS)
+		if err != nil {
+			return nil, err
+		}
+		opOuter, err := createPhysicalOperator(ctx, op.RHS)
+		if err != nil {
+			return nil, err
+		}
+		return mergeOrJoinOp(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	// case *abstract.Derived:
 	//	treeInner, err := optimizeQuery(ctx, op.Inner)
 	//	if err != nil {
@@ -312,10 +312,7 @@ func getJoinOpFor(ctx *planningContext, cm opCacheMap, lhs, rhs abstract.Physica
 func mergeOrJoinOp(ctx *planningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
 	merger := func(a, b *routeOp) (*routeOp, error) {
-		// if inner {
-		return createRouteOperatorForInnerJoin(ctx, a, b, joinPredicates)
-		// }
-		// return createRoutePlanForOuter(ctx, a, b, newTabletSet, joinPredicates), nil
+		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
 	}
 
 	newPlan, err := tryMergeOp(ctx, lhs, rhs, joinPredicates, merger)
@@ -336,7 +333,7 @@ func mergeOrJoinOp(ctx *planningContext, lhs, rhs abstract.PhysicalOperator, joi
 	return tree, nil
 }
 
-func createRouteOperatorForInnerJoin(ctx *planningContext, aRoute, bRoute *routeOp, joinPredicates []sqlparser.Expr) (*routeOp, error) {
+func createRouteOperatorForJoin(ctx *planningContext, aRoute, bRoute *routeOp, joinPredicates []sqlparser.Expr, inner bool) (*routeOp, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -354,9 +351,10 @@ func createRouteOperatorForInnerJoin(ctx *planningContext, aRoute, bRoute *route
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
 		source: &applyJoin{
-			LHS:  aRoute.source,
-			RHS:  bRoute.source,
-			vars: map[string]int{},
+			LHS:      aRoute.source,
+			RHS:      bRoute.source,
+			vars:     map[string]int{},
+			leftJoin: !inner,
 		},
 	}
 

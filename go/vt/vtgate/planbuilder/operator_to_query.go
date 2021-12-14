@@ -54,7 +54,11 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		}
 		qbR := &queryBuilder{ctx: qb.ctx}
 		buildQuery(op.RHS, qbR)
-		qb.joinWith(qbR, op.predicate)
+		if op.leftJoin {
+			qb.joinOuterWith(qbR, op.predicate)
+		} else {
+			qb.joinInnerWith(qbR, op.predicate)
+		}
 	case *filterOp:
 		buildQuery(op.source, qb)
 		for _, pred := range op.predicates {
@@ -101,16 +105,7 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 
 	sel := qb.sel.(*sqlparser.Select)
-	if qb.grouped {
-		if sel.Having == nil {
-			sel.Having = &sqlparser.Where{
-				Type: sqlparser.HavingClause,
-				Expr: expr,
-			}
-		} else {
-			sel.Having.Expr = sqlparser.AndExpressions(sel.Having.Expr, expr)
-		}
-	} else if sel.Where == nil {
+	if sel.Where == nil {
 		sel.Where = &sqlparser.Where{
 			Type: sqlparser.WhereClause,
 			Expr: expr,
@@ -120,39 +115,12 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 }
 
-func (qb *queryBuilder) vectorGroupBy(grouping []*sqlparser.AliasedExpr, aggrFuncs []*sqlparser.AliasedExpr) {
-	sel := qb.sel.(*sqlparser.Select)
-	var exprs []sqlparser.SelectExpr
-	var groupBy sqlparser.GroupBy
-	for _, expr := range aggrFuncs {
-		exprs = append(exprs, expr)
-	}
-	for _, expr := range grouping {
-		exprs = append(exprs, expr)
-		groupBy = append(groupBy, expr.Expr)
-	}
-	sel.SelectExprs = append(sel.SelectExprs, exprs...)
-	sel.GroupBy = groupBy
-	qb.grouped = true
-}
-
 func (qb *queryBuilder) addProjection(projection *sqlparser.AliasedExpr) {
 	sel := qb.sel.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, projection)
 }
 
-func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr) {
-	if other.grouped {
-		dtName := other.convertToDerivedTable()
-		other.rewriteExprForDerivedTable(onCondition, dtName)
-	}
-
-	if qb.grouped {
-		dtName := qb.convertToDerivedTable()
-		qb.rewriteExprForDerivedTable(onCondition, dtName)
-	}
-
-	// neither of the inputs needs to be put into a derived table. we can just merge them together
+func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser.Expr) {
 	sel := qb.sel.(*sqlparser.Select)
 	otherSel := other.sel.(*sqlparser.Select)
 	sel.From = append(sel.From, otherSel.From...)
@@ -171,6 +139,51 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 	}
 
 	qb.addPredicate(onCondition)
+}
+
+func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser.Expr) {
+	sel := qb.sel.(*sqlparser.Select)
+	otherSel := other.sel.(*sqlparser.Select)
+	var lhs sqlparser.TableExpr
+	if len(sel.From) == 1 {
+		lhs = sel.From[0]
+	} else {
+		lhs = &sqlparser.ParenTableExpr{Exprs: sel.From}
+	}
+	var rhs sqlparser.TableExpr
+	if len(otherSel.From) == 1 {
+		rhs = otherSel.From[0]
+	} else {
+		rhs = &sqlparser.ParenTableExpr{Exprs: otherSel.From}
+	}
+	sel.From = []sqlparser.TableExpr{&sqlparser.JoinTableExpr{
+		LeftExpr:  lhs,
+		RightExpr: rhs,
+		Join:      sqlparser.LeftJoinType,
+		Condition: &sqlparser.JoinCondition{
+			On: onCondition,
+		},
+	}}
+	tableSet := semantics.EmptyTableSet()
+	for _, set := range qb.tableIDsInFrom {
+		tableSet.MergeInPlace(set)
+	}
+	for _, set := range other.tableIDsInFrom {
+		tableSet.MergeInPlace(set)
+	}
+
+	qb.tableIDsInFrom = []semantics.TableSet{tableSet}
+	sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
+	var predicate sqlparser.Expr
+	if sel.Where != nil {
+		predicate = sel.Where.Expr
+	}
+	if otherSel.Where != nil {
+		predicate = sqlparser.AndExpressions(predicate, otherSel.Where.Expr)
+	}
+	if predicate != nil {
+		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
+	}
 }
 
 func (qb *queryBuilder) rewriteExprForDerivedTable(expr sqlparser.Expr, dtName string) {
@@ -219,7 +232,6 @@ func (qb *queryBuilder) convertToDerivedTable() string {
 type queryBuilder struct {
 	ctx            *planningContext
 	sel            sqlparser.SelectStatement
-	grouped        bool
 	tableIDsInFrom []semantics.TableSet
 	tableNames     []string
 }
