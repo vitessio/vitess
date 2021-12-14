@@ -162,7 +162,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []engine.RouteValue{&evalengine.RouteValue{Expr: pv}}
+			rb.eroute.Values = []evalengine.Expr{pv}
 			vals.Right = sqlparser.ListArg(engine.ListVarName)
 		case nil:
 			// no-op.
@@ -171,7 +171,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []engine.RouteValue{&evalengine.RouteValue{Expr: pv}}
+			rb.eroute.Values = []evalengine.Expr{pv}
 		}
 	}
 

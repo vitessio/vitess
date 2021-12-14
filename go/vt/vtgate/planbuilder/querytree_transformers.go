@@ -439,12 +439,10 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	}
 
 	var vindex vindexes.Vindex
-	var values []engine.RouteValue
+	var values []evalengine.Expr
 	if n.selectedVindex() != nil {
 		vindex = n.selected.foundVindex
-		for _, value := range n.selected.values {
-			values = append(values, &evalengine.RouteValue{Expr: value})
-		}
+		values = n.selected.values
 	}
 
 	var expressions sqlparser.SelectExprs
