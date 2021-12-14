@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"io"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -30,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
+
+var verboseLogging = false
 
 type (
 	opCacheMap map[tableSetPair]abstract.PhysicalOperator
@@ -220,16 +224,15 @@ func mergeRouteOps(ctx *planningContext, qg *abstract.QueryGraph, physicalOps []
 		}
 		// if we found a plan, we'll replace the two plans that were joined with the join plan created
 		if bestTree != nil {
-			replace := 0
 			// we remove one plan, and replace the other
 			if rIdx > lIdx {
 				physicalOps = removeOpAt(physicalOps, rIdx)
-				replace = lIdx
+				physicalOps = removeOpAt(physicalOps, lIdx)
 			} else {
 				physicalOps = removeOpAt(physicalOps, lIdx)
-				replace = rIdx
+				physicalOps = removeOpAt(physicalOps, rIdx)
 			}
-			physicalOps[replace] = bestTree
+			physicalOps = append(physicalOps, bestTree)
 		} else {
 			if crossJoinsOK {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not happen")
@@ -271,6 +274,16 @@ func findBestJoinOp(
 				return nil, 0, 0, err
 			}
 			if bestPlan == nil || plan.Cost() < bestPlan.Cost() {
+				if verboseLogging {
+					log.Warningf("New Best Plan - %v and cost - %d", plan.TableID(), plan.Cost())
+					switch node := plan.(type) {
+					case *applyJoin:
+						log.Warningf("Join Plan - lhs - %v, rhs - %v", node.LHS.TableID(), node.RHS.TableID())
+					case *routeOp:
+						joinOp := node.source.(*applyJoin)
+						log.Warningf("Route Plan - lhs - %v, rhs - %v", joinOp.LHS.TableID(), joinOp.RHS.TableID())
+					}
+				}
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
 				lIdx = i

@@ -1290,6 +1290,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # index hints, make sure they are not stripped.
 "select user.col from user use index(a)"
@@ -1734,6 +1735,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # sharded join, non-unique vindex
 "select user.col from user_extra join user on user_extra.user_id = user.name"
@@ -1820,6 +1822,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # join with reference table
 "select user.col from user join ref"
@@ -3819,6 +3822,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # join with bindvariables
 "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2"
@@ -3909,6 +3913,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # verify ',' vs JOIN precedence
 "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
@@ -4187,6 +4192,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # alias on column from derived table. TODO: to support alias in SimpleProjection engine primitive.
 "select a as k from (select count(*) as a from user) t"

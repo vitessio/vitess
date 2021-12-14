@@ -79,6 +79,7 @@
     ]
   }
 }
+Gen4++
 
 # bind var already in use
 "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid"
@@ -161,6 +162,7 @@
     ]
   }
 }
+Gen4++
 
 # wire-up join with join, going left
 "select u1.id from user u1 join user u2 join user u3 where u3.col = u1.col"

@@ -3238,6 +3238,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # routing rules subquery merge with alias
 "select col from user where id = (select id from route1 as a where a.id = user.id)"
