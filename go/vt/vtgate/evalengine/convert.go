@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -32,39 +34,93 @@ type (
 
 var ErrConvertExprNotSupported = "expr cannot be converted, not supported"
 
-// translateComparisonOperator takes in a sqlparser.ComparisonExprOperator and
-// returns the corresponding ComparisonOp
-func translateComparisonOperator(op sqlparser.ComparisonExprOperator) ComparisonOp {
+func convertComparisonExpr(op sqlparser.ComparisonExprOperator, left, right sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
+	l, err := convertExpr(left, lookup)
+	if err != nil {
+		return nil, err
+	}
+	r, err := convertExpr(right, lookup)
+	if err != nil {
+		return nil, err
+	}
+	return convertComparisonExpr2(op, l, r)
+}
+
+func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Expr) (Expr, error) {
+	binaryExpr := BinaryExpr{
+		Left:  left,
+		Right: right,
+	}
+
+	if op == sqlparser.InOp || op == sqlparser.NotInOp {
+		return &InExpr{
+			BinaryExpr: binaryExpr,
+			Negate:     op == sqlparser.NotInOp,
+			Hashed:     nil,
+		}, nil
+	}
+
+	coercedExpr := BinaryCoercedExpr{
+		BinaryExpr: binaryExpr,
+	}
+	if err := coercedExpr.coerce(); err != nil {
+		return nil, err
+	}
+
 	switch op {
 	case sqlparser.EqualOp:
-		return &EqualOp{"=", func(cmp int) bool { return cmp == 0 }}
-	case sqlparser.LessThanOp:
-		return &EqualOp{"<", func(cmp int) bool { return cmp < 0 }}
-	case sqlparser.GreaterThanOp:
-		return &EqualOp{">", func(cmp int) bool { return cmp > 0 }}
-	case sqlparser.LessEqualOp:
-		return &EqualOp{"<=", func(cmp int) bool { return cmp <= 0 }}
-	case sqlparser.GreaterEqualOp:
-		return &EqualOp{">=", func(cmp int) bool { return cmp >= 0 }}
+		return &ComparisonExpr{coercedExpr, compareEQ{}}, nil
 	case sqlparser.NotEqualOp:
-		return &EqualOp{"!=", func(cmp int) bool { return cmp != 0 }}
+		return &ComparisonExpr{coercedExpr, compareNE{}}, nil
+	case sqlparser.LessThanOp:
+		return &ComparisonExpr{coercedExpr, compareLT{}}, nil
+	case sqlparser.LessEqualOp:
+		return &ComparisonExpr{coercedExpr, compareLE{}}, nil
+	case sqlparser.GreaterThanOp:
+		return &ComparisonExpr{coercedExpr, compareGT{}}, nil
+	case sqlparser.GreaterEqualOp:
+		return &ComparisonExpr{coercedExpr, compareGE{}}, nil
 	case sqlparser.NullSafeEqualOp:
-		return &NullSafeEqualOp{}
-	case sqlparser.InOp:
-		return &InOp{}
-	case sqlparser.NotInOp:
-		return &InOp{Negate: true}
+		return &NullSafeComparisonExpr{coercedExpr}, nil
 	case sqlparser.LikeOp:
-		return &LikeOp{}
+		return &LikeExpr{BinaryCoercedExpr: coercedExpr}, nil
 	case sqlparser.NotLikeOp:
-		return &LikeOp{Negate: true}
-	case sqlparser.RegexpOp:
-		return &RegexpOp{}
-	case sqlparser.NotRegexpOp:
-		return &RegexpOp{Negate: true}
+		return &LikeExpr{BinaryCoercedExpr: coercedExpr, Negate: true}, nil
 	default:
-		return nil
+		return nil, fmt.Errorf("unsupported comparison operator %q", op.ToString())
 	}
+}
+
+func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
+	l, err := convertExpr(left, lookup)
+	if err != nil {
+		return nil, err
+	}
+	r, err := convertExpr(right, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	var logic func(l, r boolean) boolean
+	switch opname {
+	case "AND":
+		logic = func(l, r boolean) boolean { return l.and(r) }
+	case "OR":
+		logic = func(l, r boolean) boolean { return l.or(r) }
+	case "XOR":
+		logic = func(l, r boolean) boolean { return l.xor(r) }
+	default:
+		panic("unexpected logical operator")
+	}
+
+	return &LogicalExpr{
+		BinaryExpr: BinaryExpr{
+			Left:  l,
+			Right: r,
+		},
+		op:     logic,
+		opname: opname,
+	}, nil
 }
 
 func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedCollation {
@@ -110,25 +166,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		collation := getCollation(node, lookup)
 		return NewColumn(idx, collation), nil
 	case *sqlparser.ComparisonExpr:
-		left, err := convertExpr(node.Left, lookup)
-		if err != nil {
-			return nil, err
-		}
-		right, err := convertExpr(node.Right, lookup)
-		if err != nil {
-			return nil, err
-		}
-		comp := &ComparisonExpr{
-			GenericBinaryExpr: GenericBinaryExpr{
-				Left:  left,
-				Right: right,
-			},
-			Op: translateComparisonOperator(node.Operator),
-		}
-		if err := comp.mergeCollations(); err != nil {
-			return nil, err
-		}
-		return comp, nil
+		return convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
 		return NewBindVar(string(node), collation), nil
@@ -152,17 +190,29 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			return NewLiteralInt(1), nil
 		}
 		return NewLiteralInt(0), nil
+	case *sqlparser.AndExpr:
+		return convertLogicalExpr("AND", node.Left, node.Right, lookup)
+	case *sqlparser.OrExpr:
+		return convertLogicalExpr("OR", node.Left, node.Right, lookup)
+	case *sqlparser.XorExpr:
+		return convertLogicalExpr("XOR", node.Left, node.Right, lookup)
+	case *sqlparser.NotExpr:
+		inner, err := convertExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+		return &NotExpr{UnaryExpr{inner}}, nil
 	case *sqlparser.BinaryExpr:
-		var op BinaryOp
+		var op ArithmeticOp
 		switch node.Operator {
 		case sqlparser.PlusOp:
-			op = &Addition{}
+			op = &OpAddition{}
 		case sqlparser.MinusOp:
-			op = &Subtraction{}
+			op = &OpSubstraction{}
 		case sqlparser.MultOp:
-			op = &Multiplication{}
+			op = &OpMultiplication{}
 		case sqlparser.DivOp:
-			op = &Division{}
+			op = &OpDivision{}
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 		}
@@ -174,8 +224,8 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &BinaryExpr{
-			GenericBinaryExpr: GenericBinaryExpr{
+		return &ArithmeticExpr{
+			BinaryExpr: BinaryExpr{
 				Left:  left,
 				Right: right,
 			},

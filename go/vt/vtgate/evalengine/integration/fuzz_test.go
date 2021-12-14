@@ -109,7 +109,7 @@ var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\d+)\) 
 
 var knownErrors = []*regexp.Regexp{
 	regexp.MustCompile(`value is out of range in '(.*?)'`),
-	// regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
+	regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
 }
 
 func errorsMatch(remote, local error) bool {
@@ -130,6 +130,40 @@ func errorsMatch(remote, local error) bool {
 		}
 	}
 	return false
+}
+
+func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
+	stmt, err := sqlparser.Parse(query)
+	if err != nil {
+		return evalengine.EvalResult{}, false, err
+	}
+
+	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+	local, err := func() (expr evalengine.Expr, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("PANIC: %v", r)
+			}
+		}()
+		expr, err = evalengine.ConvertEx(astExpr, dummyCollation(45), true)
+		return
+	}()
+
+	var eval evalengine.EvalResult
+	var evaluated bool
+	if err == nil {
+		evaluated = true
+		eval, err = func() (eval evalengine.EvalResult, err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("PANIC: %v", r)
+				}
+			}()
+			eval, err = (*evalengine.ExpressionEnv)(nil).Evaluate(local)
+			return
+		}()
+	}
+	return eval, evaluated, err
 }
 
 func TestGenerateFuzzCases(t *testing.T) {
@@ -164,37 +198,7 @@ nextCase:
 	for len(golden) < *fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 
-		stmt, err := sqlparser.Parse(query)
-		if err != nil {
-			t.Fatalf("bad codegen: %v", err)
-		}
-
-		var eval evalengine.EvalResult
-		var evaluated bool
-
-		astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-		local, localErr := func() (expr evalengine.Expr, err error) {
-			defer func() {
-				if r := recover(); r != nil {
-					err = fmt.Errorf("PANIC: %v", r)
-				}
-			}()
-			expr, err = evalengine.ConvertEx(astExpr, dummyCollation(45), true)
-			return
-		}()
-		if localErr == nil {
-			evaluated = true
-			eval, localErr = func() (eval evalengine.EvalResult, err error) {
-				defer func() {
-					if r := recover(); r != nil {
-						err = fmt.Errorf("PANIC: %v", r)
-					}
-				}()
-				eval, err = (*evalengine.ExpressionEnv)(nil).Evaluate(local)
-				return
-			}()
-		}
-
+		eval, evaluated, localErr := safeEvaluate(query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil {

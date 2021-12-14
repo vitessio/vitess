@@ -61,7 +61,22 @@ func (expr *Column) cardinality(*ExpressionEnv) (int, error) {
 	return 1, nil
 }
 
-func (expr *BinaryExpr) cardinality(env *ExpressionEnv) (int, error) {
+func (expr *ArithmeticExpr) cardinality(env *ExpressionEnv) (int, error) {
+	card1, err := expr.Left.cardinality(env)
+	if err != nil {
+		return 1, err
+	}
+	card2, err := expr.Right.cardinality(env)
+	if err != nil {
+		return 1, err
+	}
+	if card1 != 1 || card2 != 1 {
+		return 1, cardinalityError(1)
+	}
+	return 1, nil
+}
+
+func (expr *LogicalExpr) cardinality(env *ExpressionEnv) (int, error) {
 	card1, err := expr.Left.cardinality(env)
 	if err != nil {
 		return 1, err
@@ -94,55 +109,63 @@ func subcardinality(env *ExpressionEnv, expr Expr, n int) (int, error) {
 	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 }
 
-func (expr *ComparisonExpr) cardinality(env *ExpressionEnv) (int, error) {
+func (expr *LikeExpr) cardinality(env *ExpressionEnv) (int, error) {
 	card1, err := expr.Left.cardinality(env)
 	if err != nil {
 		return 1, err
 	}
+	card2, err := expr.Right.cardinality(env)
+	if err != nil {
+		return 1, err
+	}
+	if card1 != 1 || card2 != 1 {
+		return 1, cardinalityError(1)
+	}
+	return 1, nil
+}
 
-	switch expr.Op.(type) {
-	case *InOp:
-		card2, _ := expr.Right.cardinality(env)
-		for n := 0; n < card2; n++ {
+func (expr *InExpr) cardinality(env *ExpressionEnv) (int, error) {
+	card1, err := expr.Left.cardinality(env)
+	if err != nil {
+		return 1, err
+	}
+	card2, _ := expr.Right.cardinality(env)
+	for n := 0; n < card2; n++ {
+		subcard2, err := subcardinality(env, expr.Right, n)
+		if err != nil {
+			return 1, err
+		}
+		if card1 != subcard2 {
+			return 1, cardinalityError(card1)
+		}
+	}
+	return 1, nil
+}
+
+func (expr *BinaryExpr) cardinality(env *ExpressionEnv) (int, error) {
+	card1, err := expr.Left.cardinality(env)
+	if err != nil {
+		return 1, err
+	}
+	card2, err := expr.Right.cardinality(env)
+	if err != nil {
+		return 1, err
+	}
+	if card1 != card2 {
+		return 1, cardinalityError(card1)
+	}
+	if card1 > 1 {
+		for n := 0; n < card1; n++ {
+			subcard1, err := subcardinality(env, expr.Left, n)
+			if err != nil {
+				return 1, err
+			}
 			subcard2, err := subcardinality(env, expr.Right, n)
 			if err != nil {
 				return 1, err
 			}
-			if card1 != subcard2 {
-				return 1, cardinalityError(card1)
-			}
-		}
-
-	case *LikeOp:
-		card2, err := expr.Right.cardinality(env)
-		if err != nil {
-			return 1, err
-		}
-		if card1 != 1 || card2 != 1 {
-			return 1, cardinalityError(1)
-		}
-
-	default:
-		card2, err := expr.Right.cardinality(env)
-		if err != nil {
-			return 1, err
-		}
-		if card1 != card2 {
-			return 1, cardinalityError(card1)
-		}
-		if card1 > 1 {
-			for n := 0; n < card1; n++ {
-				subcard1, err := subcardinality(env, expr.Left, n)
-				if err != nil {
-					return 1, err
-				}
-				subcard2, err := subcardinality(env, expr.Right, n)
-				if err != nil {
-					return 1, err
-				}
-				if subcard1 != subcard2 {
-					return 1, cardinalityError(subcard1)
-				}
+			if subcard1 != subcard2 {
+				return 1, cardinalityError(subcard1)
 			}
 		}
 	}

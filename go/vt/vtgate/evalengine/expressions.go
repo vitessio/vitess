@@ -73,10 +73,23 @@ type (
 		Inner Expr
 	}
 
-	GenericBinaryExpr struct {
+	BinaryExpr struct {
 		Left, Right Expr
 	}
 )
+
+var _ Expr = (*Literal)(nil)
+var _ Expr = (*BindVariable)(nil)
+var _ Expr = (*Column)(nil)
+var _ Expr = (*ArithmeticExpr)(nil)
+var _ Expr = (*ComparisonExpr)(nil)
+var _ Expr = (*InExpr)(nil)
+var _ Expr = (*NullSafeComparisonExpr)(nil)
+var _ Expr = (*LikeExpr)(nil)
+var _ Expr = (TupleExpr)(nil)
+var _ Expr = (*CollateExpr)(nil)
+var _ Expr = (*LogicalExpr)(nil)
+var _ Expr = (*NotExpr)(nil)
 
 func (c *UnaryExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
 	return c.Inner.Type(env)
@@ -101,14 +114,6 @@ func EmptyExpressionEnv() *ExpressionEnv {
 func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
 	return &ExpressionEnv{BindVars: bindVars}
 }
-
-var _ Expr = (*Literal)(nil)
-var _ Expr = (*BindVariable)(nil)
-var _ Expr = (*Column)(nil)
-var _ Expr = (*BinaryExpr)(nil)
-var _ Expr = (*ComparisonExpr)(nil)
-var _ Expr = (TupleExpr)(nil)
-var _ Expr = (*CollateExpr)(nil)
 
 // NullExpr is just what you are lead to believe
 var NullExpr = &Literal{Val: resultNull}

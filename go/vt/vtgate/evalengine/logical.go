@@ -22,24 +22,114 @@ import (
 )
 
 type (
-	BinaryLogicalExpr struct {
-		Left, Right Expr
+	LogicalOp interface {
+		eval(left, right EvalResult) (boolean, error)
+		String()
+	}
+
+	LogicalExpr struct {
+		BinaryExpr
+		op     func(left, right boolean) boolean
+		opname string
 	}
 	NotExpr struct {
 		UnaryExpr
 	}
+
+	OpLogicalAnd struct{}
+
+	boolean int8
 )
+
+const (
+	boolFalse boolean = 0
+	boolTrue  boolean = 1
+	boolNULL  boolean = -1
+)
+
+func makeboolean(b bool) boolean {
+	if b {
+		return boolTrue
+	}
+	return boolFalse
+}
+
+func (b boolean) not() boolean {
+	switch b {
+	case boolFalse:
+		return boolTrue
+	case boolTrue:
+		return boolFalse
+	default:
+		return b
+	}
+}
+
+func (left boolean) and(right boolean) boolean {
+	// Logical AND.
+	// Evaluates to 1 if all operands are nonzero and not NULL, to 0 if one or more operands are 0, otherwise NULL is returned.
+	switch {
+	case left == boolTrue && right == boolTrue:
+		return boolTrue
+	case left == boolFalse || right == boolFalse:
+		return boolFalse
+	default:
+		return boolNULL
+	}
+}
+
+func (left boolean) or(right boolean) boolean {
+	// Logical OR. When both operands are non-NULL, the result is 1 if any operand is nonzero, and 0 otherwise.
+	// With a NULL operand, the result is 1 if the other operand is nonzero, and NULL otherwise.
+	// If both operands are NULL, the result is NULL.
+	switch {
+	case left == boolNULL:
+		if right == boolTrue {
+			return boolTrue
+		}
+		return boolNULL
+
+	case right == boolNULL:
+		if left == boolTrue {
+			return boolTrue
+		}
+		return boolNULL
+
+	default:
+		if left == boolTrue || right == boolTrue {
+			return boolTrue
+		}
+		return boolFalse
+	}
+}
+
+func (left boolean) xor(right boolean) boolean {
+	// Logical XOR. Returns NULL if either operand is NULL.
+	// For non-NULL operands, evaluates to 1 if an odd number of operands is nonzero, otherwise 0 is returned.
+	switch {
+	case left == boolNULL || right == boolNULL:
+		return boolNULL
+	default:
+		if left != right {
+			return boolTrue
+		}
+		return boolFalse
+	}
+}
+
+func (b boolean) evalResult() EvalResult {
+	if b == boolNULL {
+		return resultNull
+	}
+	return evalResultBool(b == boolTrue)
+}
 
 func (n *NotExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	res, err := n.Inner.eval(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
-	b, err := res.truthy()
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return b.not().evalResult(), nil
+	return res.nonzero().not().evalResult(), nil
 }
 
 func (n *NotExpr) Type(*ExpressionEnv) (querypb.Type, error) {
@@ -47,5 +137,29 @@ func (n *NotExpr) Type(*ExpressionEnv) (querypb.Type, error) {
 }
 
 func (n *NotExpr) Collation() collations.TypedCollation {
+	return collationNumeric
+}
+
+func (l *LogicalExpr) eval(env *ExpressionEnv) (EvalResult, error) {
+	lVal, err := l.Left.eval(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	rVal, err := l.Right.eval(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	if lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE {
+		panic("did not typecheck tuples")
+		// return EvalResult{}, cardinalityError(1)
+	}
+	return l.op(lVal.nonzero(), rVal.nonzero()).evalResult(), nil
+}
+
+func (l *LogicalExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
+	return querypb.Type_UINT64, nil
+}
+
+func (n *LogicalExpr) Collation() collations.TypedCollation {
 	return collationNumeric
 }
