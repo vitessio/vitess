@@ -33,7 +33,7 @@ func (expr *Column) constant() bool {
 	return false
 }
 
-func (expr *GenericBinaryExpr) constant() bool {
+func (expr *BinaryExpr) constant() bool {
 	return expr.Left.constant() && expr.Right.constant()
 }
 
@@ -62,7 +62,7 @@ func (expr *Column) simplify() error {
 	return nil
 }
 
-func (expr *GenericBinaryExpr) simplify() error {
+func (expr *BinaryExpr) simplify() error {
 	var err error
 	expr.Left, err = simplifyExpr(expr.Left)
 	if err != nil {
@@ -75,10 +75,79 @@ func (expr *GenericBinaryExpr) simplify() error {
 	return nil
 }
 
-func (expr *ComparisonExpr) simplify() error {
+func (expr *LikeExpr) simplify() error {
+	if err := expr.BinaryCoercedExpr.simplify(); err != nil {
+		return err
+	}
+
+	lit2, _ := expr.Right.(*Literal)
+	if lit2 != nil && lit2.Val.textual() && expr.MergedCollation.Valid() {
+		coll := collations.Local().LookupByID(expr.MergedCollation.Collation)
+		expr.Match = coll.Wildcard(lit2.Val.bytes, 0, 0, 0)
+	}
+	return nil
+}
+
+func (inexpr *InExpr) simplify() error {
+	if err := inexpr.BinaryExpr.simplify(); err != nil {
+		return err
+	}
+
+	tuple, ok := inexpr.Right.(TupleExpr)
+	if !ok {
+		return nil
+	}
+
+	var (
+		collation collations.ID
+		typ       querypb.Type
+		optimize  = true
+	)
+
+	for i, expr := range tuple {
+		if lit, ok := expr.(*Literal); ok {
+			thisColl := lit.Val.collation.Collation
+			thisTyp := lit.Val.typ
+			if i == 0 {
+				collation = thisColl
+				typ = thisTyp
+				continue
+			}
+			if collation == thisColl && typ == thisTyp {
+				continue
+			}
+		}
+		optimize = false
+		break
+	}
+
+	if optimize {
+		inexpr.Hashed = make(map[HashCode]int)
+		for i, expr := range tuple {
+			lit := expr.(*Literal)
+			hash, err := lit.Val.nullSafeHashcode()
+			if err != nil {
+				inexpr.Hashed = nil
+				break
+			}
+			if collidx, collision := inexpr.Hashed[hash]; collision {
+				cmp, _, err := evalCompareAll(lit.Val, tuple[collidx].(*Literal).Val, true)
+				if cmp != 0 || err != nil {
+					inexpr.Hashed = nil
+					break
+				}
+				continue
+			}
+			inexpr.Hashed[hash] = i
+		}
+	}
+	return nil
+}
+
+func (expr *BinaryCoercedExpr) simplify() error {
 	var err error
 
-	if err = expr.GenericBinaryExpr.simplify(); err != nil {
+	if err = expr.BinaryExpr.simplify(); err != nil {
 		return err
 	}
 
@@ -87,68 +156,13 @@ func (expr *ComparisonExpr) simplify() error {
 
 	if lit1 != nil && expr.CoerceLeft != nil {
 		lit1.Val.bytes, _ = expr.CoerceLeft(nil, lit1.Val.bytes)
-		lit1.Val.collation = expr.TypedCollation
+		lit1.Val.collation = expr.MergedCollation
 		expr.CoerceLeft = nil
 	}
 	if lit2 != nil && expr.CoerceRight != nil {
 		lit2.Val.bytes, _ = expr.CoerceRight(nil, lit2.Val.bytes)
-		lit2.Val.collation = expr.TypedCollation
+		lit2.Val.collation = expr.MergedCollation
 		expr.CoerceRight = nil
-	}
-
-	switch op := expr.Op.(type) {
-	case *LikeOp:
-		if lit2 != nil && lit2.Val.textual() && expr.TypedCollation.Valid() {
-			coll := collations.Local().LookupByID(expr.TypedCollation.Collation)
-			op.Match = coll.Wildcard(lit2.Val.bytes, 0, 0, 0)
-		}
-
-	case *InOp:
-		if tuple, ok := expr.Right.(TupleExpr); ok {
-			var (
-				collation collations.ID
-				typ       querypb.Type
-				optimize  = true
-			)
-
-			for i, expr := range tuple {
-				if lit, ok := expr.(*Literal); ok {
-					thisColl := lit.Val.collation.Collation
-					thisTyp := lit.Val.typ
-					if i == 0 {
-						collation = thisColl
-						typ = thisTyp
-						continue
-					}
-					if collation == thisColl && typ == thisTyp {
-						continue
-					}
-				}
-				optimize = false
-				break
-			}
-
-			if optimize {
-				op.Hashed = make(map[HashCode]int)
-				for i, expr := range tuple {
-					lit := expr.(*Literal)
-					hash, err := lit.Val.nullSafeHashcode()
-					if err != nil {
-						op.Hashed = nil
-						break
-					}
-					if collidx, collision := op.Hashed[hash]; collision {
-						cmp, _, err := evalCompareAll(lit.Val, tuple[collidx].(*Literal).Val)
-						if cmp != 0 || err != nil {
-							op.Hashed = nil
-							break
-						}
-						continue
-					}
-					op.Hashed[hash] = i
-				}
-			}
-		}
 	}
 
 	return nil

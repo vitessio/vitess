@@ -50,6 +50,23 @@ func (f *formatter) Indent(depth int) {
 	}
 }
 
+func (f *formatter) formatBinary(left Expr, op string, right Expr, depth int) {
+	f.Indent(depth)
+	if depth > 0 {
+		f.WriteByte('(')
+	}
+
+	left.format(f, depth+1)
+	f.WriteString(" ")
+	f.WriteString(op)
+	f.WriteString(" ")
+	right.format(f, depth+1)
+
+	if depth > 0 {
+		f.WriteByte(')')
+	}
+}
+
 func (l *Literal) format(w *formatter, depth int) {
 	w.Indent(depth)
 	w.WriteString(l.Val.Value().String())
@@ -66,38 +83,32 @@ func (c *Column) format(w *formatter, depth int) {
 	fmt.Fprintf(w, "[COLUMN %d]", c.Offset)
 }
 
-func (b *BinaryExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
-	if depth > 0 {
-		w.WriteByte('(')
-	}
-
-	b.Left.format(w, depth+1)
-	w.WriteString(" ")
-	w.WriteString(b.Op.String())
-	w.WriteString(" ")
-	b.Right.format(w, depth+1)
-
-	if depth > 0 {
-		w.WriteByte(')')
-	}
+func (b *ArithmeticExpr) format(w *formatter, depth int) {
+	w.formatBinary(b.Left, b.Op.String(), b.Right, depth)
 }
 
 func (c *ComparisonExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
-	if depth > 0 {
-		w.WriteByte('(')
-	}
+	w.formatBinary(c.Left, c.Op.String(), c.Right, depth)
+}
 
-	c.Left.format(w, depth+1)
-	w.WriteString(" ")
-	w.WriteString(c.Op.String())
-	w.WriteString(" ")
-	c.Right.format(w, depth+1)
+func (c *NullSafeComparisonExpr) format(w *formatter, depth int) {
+	w.formatBinary(c.Left, "<=>", c.Right, depth)
+}
 
-	if depth > 0 {
-		w.WriteByte(')')
+func (c *LikeExpr) format(w *formatter, depth int) {
+	op := "LIKE"
+	if c.Negate {
+		op = "NOT LIKE"
 	}
+	w.formatBinary(c.Left, op, c.Right, depth)
+}
+
+func (c *InExpr) format(w *formatter, depth int) {
+	op := "IN"
+	if c.Negate {
+		op = "NOT IN"
+	}
+	w.formatBinary(c.Left, op, c.Right, depth)
 }
 
 func (t TupleExpr) format(w *formatter, depth int) {
@@ -124,4 +135,8 @@ func (n *NotExpr) format(w *formatter, depth int) {
 	w.Indent(depth)
 	w.WriteString("NOT ")
 	n.Inner.format(w, depth)
+}
+
+func (b *LogicalExpr) format(w *formatter, depth int) {
+	w.formatBinary(b.Left, b.opname, b.Right, depth)
 }

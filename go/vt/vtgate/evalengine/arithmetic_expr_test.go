@@ -35,13 +35,13 @@ func TestBinaryOpTypes(t *testing.T) {
 		l, r, e querypb.Type
 	}
 	type ops struct {
-		op        BinaryOp
+		op        ArithmeticOp
 		testcases []testcase
 	}
 
 	tests := []ops{
 		{
-			op: &Addition{},
+			op: &OpAddition{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Int64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Uint64},
@@ -54,7 +54,7 @@ func TestBinaryOpTypes(t *testing.T) {
 				{sqltypes.Float64, sqltypes.Float64, sqltypes.Float64},
 			},
 		}, {
-			op: &Subtraction{},
+			op: &OpSubstraction{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Int64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Uint64},
@@ -67,7 +67,7 @@ func TestBinaryOpTypes(t *testing.T) {
 				{sqltypes.Float64, sqltypes.Float64, sqltypes.Float64},
 			},
 		}, {
-			op: &Multiplication{},
+			op: &OpMultiplication{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Int64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Uint64},
@@ -80,7 +80,7 @@ func TestBinaryOpTypes(t *testing.T) {
 				{sqltypes.Float64, sqltypes.Float64, sqltypes.Float64},
 			},
 		}, {
-			op: &Division{},
+			op: &OpDivision{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Float64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Float64},
