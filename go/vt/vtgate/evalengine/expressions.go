@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -63,10 +62,6 @@ type (
 		format(buf *strings.Builder, wrap bool)
 	}
 
-	RouteValue struct {
-		Expr Expr
-	}
-
 	Literal struct {
 		Val EvalResult
 	}
@@ -93,29 +88,6 @@ func EmptyExpressionEnv() *ExpressionEnv {
 // EnvWithBindVars returns an expression environment with no current row, but with bindvars
 func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
 	return &ExpressionEnv{BindVars: bindVars}
-}
-
-// ResolveValue allows for retrieval of the value we expose for public consumption
-func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
-	env := EnvWithBindVars(bindVars)
-	evalResul, err := rv.Expr.Evaluate(env)
-	if err != nil {
-		return sqltypes.Value{}, err
-	}
-	return evalResul.Value(), nil
-}
-
-// ResolveList allows for retrieval of the value we expose for public consumption
-func (rv *RouteValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
-	evalResul, err := rv.Expr.Evaluate(EnvWithBindVars(bindVars))
-	if err != nil {
-		return nil, err
-	}
-	return evalResul.TupleValues(), nil
-}
-
-func (rv *RouteValue) MarshalJSON() ([]byte, error) {
-	return json.Marshal(FormatExpr(rv.Expr))
 }
 
 func (t TupleExpr) Collation() collations.TypedCollation {
