@@ -11,13 +11,42 @@ concurrency:
 # (vtgate, vttablet, etc) built on different versions.
 
 jobs:
+  get_latest_release:
+    if: github.repository == 'vitessio/vitess'
+    name: Get latest release
+    runs-on: ubuntu-latest
+    outputs:
+      latest_release: ${{ steps.set-outpout.outputs.matrix }}
+
+    steps:
+      - name: Check out to HEAD
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Get latest major release of Vitess
+        run: |
+          last_major_releases=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.0$' | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n1)
+          echo "latest_releases=$(echo "$last_major_releases" | awk ' BEGIN { ORS = ""; print "["; } { print "\/\@{\\\"project\\\":\\\"v"$0"\\\"}\/\@"; } END { print "]"; }' | sed "s^\/\@\/\@^, ^g;s^\/\@^^g")" >> $GITHUB_ENV
+
+      - name: Set output
+        id: set-outpout
+        run: |
+          echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
+
+
   upgrade_downgrade_test:
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-18.04
+    needs:
+      - get_latest_release
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJSON(needs.get_latest_release.outputs.latest_release)}}
 
     steps:
     - name: Check latest versions
-      run: echo ${{ needs.get_latest_versions.outputs.matrix }}
+      run: echo ${{ matrix.project }}
 
     - name: Set up Go
       uses: actions/setup-go@v2
@@ -50,11 +79,10 @@ jobs:
         sudo apt-get install percona-xtrabackup-24
 
     # Checkout to the other version of Vitess
-    - name: Check out other version's code
+    - name: Check out other version's code (${{ matrix.project }})
       uses: actions/checkout@v2
       with:
-        # TODO: use a not-hardcoded git ref
-        ref: "de06fcaa9252bf36cf4723af40ad05f7e5f214dd"
+        ref: ${{ matrix.project }}
 
     - name: Get dependencies for other version
       run: |
