@@ -59,6 +59,52 @@ func checkChecksum(t *testing.T, tw *TopologyWatcher, want uint32) {
 	}
 }
 
+func TestStartAndCloseTopoWatcher(t *testing.T) {
+	ts := memorytopo.NewServer("aa")
+	fhc := NewFakeHealthCheck(nil)
+	topologyWatcherOperations.ZeroAll()
+	tw := NewCellTabletsWatcher(context.Background(), ts, fhc, nil, "aa", 100*time.Microsecond, true, 5)
+
+	done := make(chan bool, 3)
+	result := make(chan bool, 1)
+	go func() {
+		// We wait for the done channel three times since we execute three
+		// topo-watcher actions (Start, Stop and Wait), once we have read
+		// from the done channel three times we know we have completed all
+		// the actions, the test is then successful.
+		// Each action has a one-second timeout after which the test will be
+		// marked as failed.
+		for i := 0; i < 3; i++ {
+			select {
+			case <-time.After(1 * time.Second):
+				close(result)
+				return
+			case <-done:
+				break
+			}
+		}
+		result <- true
+	}()
+
+	tw.Start()
+	done <- true
+
+	// This sleep gives enough time to the topo-watcher to do 10 iterations
+	// The topo-watcher's refresh interval is set to 100 microseconds.
+	time.Sleep(1 * time.Millisecond)
+
+	tw.Stop()
+	done <- true
+
+	tw.wg.Wait()
+	done <- true
+
+	_, ok := <-result
+	if !ok {
+		t.Fatal("timed out")
+	}
+}
+
 func TestCellTabletsWatcher(t *testing.T) {
 	checkWatcher(t, true)
 }
