@@ -517,7 +517,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
 	reparentJournalPos := ""
-	// needsReload is used to keep track whether we need to refresh the state
+	// needsRefresh is used to keep track of whether we need to refresh the state
 	// of the new primary tablet. The only case that we need to reload the state
 	// is when we are initializing the new primary. The reason is that the first
 	// time we try to setup all the components like vreplication.Engine, they fail
@@ -525,7 +525,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// A call to Refresh state fixes all the components. This isn't strictly necessary
 	// in the sense that all the components will retry initialization anyways after some
 	// time, so even without a call to RefreshState, they all converge correctly.
-	needsReload := false
+	needsRefresh := false
 
 	// Depending on whether we can find a current primary, and what the caller
 	// specified as the candidate primary, we will do one of four kinds of
@@ -561,7 +561,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
 		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
-		needsReload = true
+		needsRefresh = true
 	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
@@ -588,7 +588,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	if needsReload {
+	if needsRefresh {
 		// Refresh the state to force the tabletserver to reconnect after db has been created.
 		if err := pr.tmc.RefreshState(ctx, ev.NewPrimary); err != nil {
 			pr.logger.Warningf("RefreshState failed: %v", err)
