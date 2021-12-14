@@ -50,10 +50,10 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, error) {
 	// TODO systay we should move the decision of which join to use to the greedy algorithm,
 	// and thus represented as a queryTree
-	//canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
-	//if err != nil {
+	// canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
+	// if err != nil {
 	//	return nil, err
-	//}
+	// }
 
 	lhs, err := transformOpToLogicalPlan(ctx, n.LHS)
 	if err != nil {
@@ -84,7 +84,7 @@ func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, 
 	//		ComparisonType: coercedType,
 	//		Collation:      lhsInfo.typ.Collation,
 	//	}, nil
-	//}
+	// }
 	return &joinGen4{
 		Left:      lhs,
 		Right:     rhs,
@@ -164,15 +164,16 @@ func transformUnionOpPlan(ctx *planningContext, op *unionOp) (logicalPlan, error
 	var err error
 	if op.distinct {
 		sources, err = transformAndMergeOp(ctx, op)
-	} else {
-		sources, err = transformAndMergeOp(ctx, op) // TODO: this is WRONG
-	}
-	if err != nil {
-		return nil, err
-	}
-	if op.distinct {
+		if err != nil {
+			return nil, err
+		}
 		for _, source := range sources {
 			pushDistinct(source)
+		}
+	} else {
+		sources, err = transformAndMergeInOrderOp(ctx, op)
+		if err != nil {
+			return nil, err
 		}
 	}
 	var result logicalPlan
@@ -186,6 +187,8 @@ func transformUnionOpPlan(ctx *planningContext, op *unionOp) (logicalPlan, error
 			return src, nil
 		}
 		result = src
+	} else {
+		result = &concatenateGen4{sources: sources}
 	}
 	if op.distinct {
 		return newDistinct(result, getCollationsForOp(ctx, op)), nil
@@ -194,9 +197,10 @@ func transformUnionOpPlan(ctx *planningContext, op *unionOp) (logicalPlan, error
 
 }
 
-func transformAndMergeOp(ctx *planningContext, op *unionOp) ([]logicalPlan, error) {
-	var sources []logicalPlan
+func transformAndMergeOp(ctx *planningContext, op *unionOp) (sources []logicalPlan, err error) {
 	for i, source := range op.sources {
+		// first we go over all the operator inputs and turn them into logical plans,
+		// including horizon planning
 		plan, err := createLogicalPlanOp(ctx, source, op.selectStmts[i])
 		if err != nil {
 			return nil, err
@@ -204,6 +208,8 @@ func transformAndMergeOp(ctx *planningContext, op *unionOp) ([]logicalPlan, erro
 		sources = append(sources, plan)
 	}
 
+	// next we'll go over all the plans from and check if any two can be merged. if they can, they are merged,
+	// and we continue checking for pairs of plans that can be merged into a single route
 	idx := 0
 	for idx < len(sources) {
 		keep := make([]bool, len(sources))
@@ -233,6 +239,32 @@ func transformAndMergeOp(ctx *planningContext, op *unionOp) ([]logicalPlan, erro
 		}
 		idx++
 		sources = phase
+	}
+	return sources, nil
+}
+
+func transformAndMergeInOrderOp(ctx *planningContext, op *unionOp) (sources []logicalPlan, err error) {
+	// We go over all the input operators and turn them into logical plans
+	for i, source := range op.sources {
+		plan, err := createLogicalPlanOp(ctx, source, op.selectStmts[i])
+		if err != nil {
+			return nil, err
+		}
+		if i == 0 {
+			sources = append(sources, plan)
+			continue
+		}
+
+		// next we check if the last plan we produced can be merged with this new plan
+		last := sources[len(sources)-1]
+		newPlan := mergeUnionLogicalPlans(ctx, last, plan)
+		if newPlan != nil {
+			// if we could merge them, let's replace the last plan with this new merged one
+			sources[len(sources)-1] = newPlan
+			continue
+		}
+		// else we just add the new plan to the end of list
+		sources = append(sources, plan)
 	}
 	return sources, nil
 }
