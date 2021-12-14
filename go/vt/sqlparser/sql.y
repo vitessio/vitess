@@ -139,6 +139,9 @@ func skipToEnd(yylex interface{}) {
   partSpec      *PartitionSpec
   showFilter    *ShowFilter
   over          *Over
+  frame         *Frame
+  frameExtent   *FrameExtent
+  frameBound    *frameBound
   caseStatementCases []CaseStatementCase
   caseStatementCase CaseStatementCase
   ifStatementConditions []IfStatementCondition
@@ -274,6 +277,7 @@ func skipToEnd(yylex interface{}) {
 
 // Window functions
 %token <bytes> OVER WINDOW GROUPING GROUPS
+%token <bytes> CURRENT ROWS RANGE
 %token <bytes> AVG BIT_AND BIT_OR BIT_XOR COUNT JSON_ARRAYAGG JSON_OBJECTAGG MAX MIN STDDEV_POP STDDEV STD STDDEV_SAMP
 %token <bytes> SUM VAR_POP VARIANCE VAR_SAMP CUME_DIST DENSE_RANK FIRST_VALUE LAG LAST_VALUE LEAD NTH_VALUE NTILE
 %token <bytes> ROW_NUMBER PERCENT_RANK RANK
@@ -339,7 +343,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolean> enforced_opt
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val as_of_opt integral_or_value_arg
+%type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
@@ -359,6 +363,9 @@ func skipToEnd(yylex interface{}) {
 %type <triggerOrder> trigger_order_opt
 %type <order> order
 %type <over> over over_opt
+%type <frame> frame_opt
+%type <frameExtent> frame_extent
+%type <frameBound> frame_bound
 %type <int> lexer_position lexer_old_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
@@ -3263,7 +3270,6 @@ select_expression:
     $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
   }
 
-// TODO: handle ROWS UNBOUNDED PRECEDING et al
 over:
   OVER sql_id
   {
@@ -3273,10 +3279,11 @@ over:
   {
     $$ = &Over{OrderBy: $3}
   }
-| OVER openb PARTITION BY expression_list order_by_opt closeb
+| OVER openb PARTITION BY expression_list order_by_opt frame_opt closeb
   {
-    $$ = &Over{PartitionBy: $5, OrderBy: $6}
+    $$ = &Over{PartitionBy: $5, OrderBy: $6, Frame: $7}
   }
+
 
 over_opt:
   {
@@ -3285,6 +3292,95 @@ over_opt:
 | over
   {
     $$ = $1
+  }
+
+frame_opt:
+  {
+    $$ = nil
+  }
+| ROWS frame_extent
+  {
+    $$ = &Frame{Unit: RowsUnit, Extent: $2}
+  }
+| RANGE frame_extent
+  {
+    $$ = &Frame{Unit: RangeUnit, Extent: $2}
+  }
+
+frame_extent:
+ BETWEEN frame_bound AND frame_bound
+    {
+       startBound := $2
+       endBound := $4
+       switch {
+       case startBound.Type == UnboundedFollowing:
+         yylex.Error("frame start cannot be UNBOUNDED FOLLOWING")
+         return 1
+       case endBound.Type == UnboundedPreceding:
+         yylex.Error("frame end cannot be UNBOUNDED PRECEDING")
+         return 1
+       case startBound.Type == CurrentRow && endBound.Type == ExprPreceding:
+         yylex.Error("frame starting from current row cannot have preceding rows")
+         return 1
+       case startBound.Type == ExprFollowing && endBound.Type == ExprPreceding:
+         yylex.Error("frame starting from following row cannot have preceding rows")
+         return 1
+       case startBound.Type == ExprFollowing && endBound.Type == CurrentRow:
+         yylex.Error("frame starting from following row cannot have preceding rows")
+         return 1
+       }
+       $$ = &FrameExtent{Start: startBound, End: endBound}
+    }
+| frame_bound
+  {
+    startBound := $1
+     switch {
+     case startBound.Type == UnboundedFollowing:
+       yylex.Error("frame start cannot be UNBOUNDED FOLLOWING")
+       return 1
+     case startBound.Type == ExprFollowing:
+       yylex.Error("frame starting from following row cannot end with current row")
+       return 1
+     }
+     $$ = &FrameExtent{Start: startBound}
+  }
+
+frame_bound:
+UNBOUNDED PRECEDING
+  {
+    $$ = &frameBound{Type: UnboundedPreceding}
+  }
+| UNBOUNDED FOLLOWING
+  {
+    $$ = &frameBound{Type: UnboundedFollowing}
+  }
+| CURRENT ROW
+  {
+    $$ = &frameBound{Type: CurrentRow}
+  }
+| integral_or_interval_expr PRECEDING
+  {
+    $$ = &frameBound{
+       Expr: $1,
+       Type: ExprPreceding,
+     }
+  }
+| integral_or_interval_expr FOLLOWING
+  {
+    $$ = &frameBound{
+       Expr: $1,
+       Type: ExprFollowing,
+     }
+  }
+
+integral_or_interval_expr:
+INTEGRAL
+  {
+    $$ = NewIntVal($1)
+  }
+| INTERVAL value sql_id
+  {
+    $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
 
 as_ci_opt:
@@ -5170,6 +5266,7 @@ reserved_keyword:
 | COUNT
 | CREATE
 | CROSS
+| CURRENT
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
@@ -5191,6 +5288,7 @@ reserved_keyword:
 | EXPLAIN
 | FALSE
 | FIRST
+| FOLLOWING
 | FOR
 | FORCE
 | FROM
@@ -5360,7 +5458,6 @@ non_reserved_keyword:
 | FIXED
 | FLOAT_TYPE
 | FLUSH
-| FOLLOWING
 | FOREIGN
 | FULLTEXT
 | FUNCTION
@@ -5453,6 +5550,7 @@ non_reserved_keyword:
 | PROCESS
 | QUERY
 | RANDOM
+| RANGE
 | READ
 | REAL
 | REFERENCE
@@ -5471,6 +5569,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| ROWS
 | SAVEPOINT
 | SCHEMAS
 | SCHEMA_NAME
@@ -5540,6 +5639,7 @@ column_name_safe_reserved_keyword:
 | BIT_XOR
 | COUNT
 | CUME_DIST
+| CURRENT
 | DENSE_RANK
 | FIRST_VALUE
 | JSON_ARRAYAGG

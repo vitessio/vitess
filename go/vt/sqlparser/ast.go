@@ -133,7 +133,7 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 // For select statements, capture the verbatim select expressions from the original query text
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
-		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
+		s.walkSubtree(func(node SQLNode) (bool, error) {
 			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
 				_, ok := node.Expr.(*ColName)
 				if ok {
@@ -3054,6 +3054,7 @@ type Over struct {
 	PartitionBy Exprs
 	OrderBy     OrderBy
 	WindowName  ColIdent
+	Frame       *Frame
 }
 
 // Format formats the node.
@@ -4916,6 +4917,99 @@ func (node *Order) walkSubtree(visit Visit) error {
 		visit,
 		node.Expr,
 	)
+}
+
+type FrameUnit int
+
+const (
+	// RangeUnit is the mode of specifying frame in terms of logical range (e.g. 100 units cheaper).
+	RangeUnit FrameUnit = iota
+	// RowsUnit is the mode of specifying frame in terms of physical offsets (e.g. 1 row before etc).
+	RowsUnit
+)
+
+// Frame represents a window Frame clause
+type Frame struct {
+	Unit   FrameUnit
+	Extent *FrameExtent
+}
+
+// Format formats the node.
+func (node *Frame) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	switch node.Unit {
+	case RangeUnit:
+		buf.Myprintf(" RANGE")
+	case RowsUnit:
+		buf.Myprintf(" ROWS")
+	}
+}
+
+func (node *Frame) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// FrameExtent defines the start and end bounds for a window frame
+type FrameExtent struct {
+	Start, End *frameBound
+}
+
+// Format formats the node.
+func (node *FrameExtent) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	if node.End != nil {
+		buf.Myprintf(" BETWEEN")
+		node.Start.print(buf)
+		buf.Myprintf(" AND")
+		node.End.print(buf)
+	} else {
+		node.Start.print(buf)
+	}
+}
+
+type BoundType int
+
+const (
+	// CurrentRow represents the current row position
+	CurrentRow BoundType = iota
+	// UnboundedFollowing includes all rows after CURRENT ROW in the active partition
+	UnboundedFollowing
+	// UnboundedPreceding includes all rows before CURRENT ROW in the active partition
+	UnboundedPreceding
+	// ExprPreceding matches N rows or value sets before the CURRENT ROW
+	ExprPreceding
+	// ExprFollowing matches N rows or value sets after the CURRENT ROW
+	ExprFollowing
+)
+
+// frameBound defines one direction of row or range inclusion
+type frameBound struct {
+	Expr Expr
+	Type BoundType
+}
+
+// Format formats the node.
+func (node *frameBound) print(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	switch node.Type {
+	case CurrentRow:
+		buf.Myprintf(" CURRENT ROW")
+	case UnboundedPreceding:
+		buf.Myprintf(" UNBOUNDED PRECEDING")
+	case UnboundedFollowing:
+		buf.Myprintf(" UNBOUNDED FOLLOWING")
+	case ExprPreceding:
+		buf.Myprintf(" %v PRECEDING", node.Expr)
+	case ExprFollowing:
+		buf.Myprintf(" %v FOLLOWING", node.Expr)
+	}
 }
 
 // Limit represents a LIMIT clause.

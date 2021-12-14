@@ -1917,6 +1917,50 @@ var (
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
+			input: "select name, dense_rank() over (partition by x order by y ROWS CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y ROWS 2 PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS UNBOUNDED PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS INTERVAL 5 DAY PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS INTERVAL '2:30' MINUTE_SECOND PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN CURRENT ROW AND CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y ROWS BETWEEN INTERVAL 5 DAY PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y ROWS BETWEEN INTERVAL '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y RANGE CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y RANGE 2 PRECEDING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y RANGE UNBOUNDED PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x RANGE INTERVAL 5 DAY PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x RANGE INTERVAL '2:30' MINUTE_SECOND PRECEDING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y RANGE BETWEEN INTERVAL 5 DAY PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y RANGE BETWEEN INTERVAL '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over window_name from t",
+		}, {
+			input: "select name, dense_rank() over window_name from t",
+		}, {
 			input: `SELECT pk,
 					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as max,
 					(SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as min

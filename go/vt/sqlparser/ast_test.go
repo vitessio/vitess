@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"reflect"
 	"strings"
 	"testing"
@@ -874,6 +875,51 @@ func TestSplitStatementToPieces(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
+	}
+}
+
+func TestWindowErrors(t *testing.T) {
+	testcases := []struct {
+		input  string
+		output string
+	}{
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS UNBOUNDED FOLLOWING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS 1 FOLLOWING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN CURRENT ROW AND 1 PRECEDING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN UNBOUNDED FOLLOWING AND 1 PRECEDING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN CURRENT ROW AND UNBOUNDED PRECEDING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN UNBOUNDED FOLLOWING AND UNBOUNDED PRECEDING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED PRECEDING) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN UNBOUNDED FOLLOWING AND CURRENT ROW) from t",
+		},
+		{
+			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN 1 FOLLOWING AND CURRENT ROW) from t",
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.input, func(t *testing.T) {
+			_, err := Parse(tt.input)
+			require.Error(t, err)
+		})
 	}
 }
 
