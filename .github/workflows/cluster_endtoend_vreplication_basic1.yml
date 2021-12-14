@@ -69,14 +69,4 @@ jobs:
 
         set -x
 
-        # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_basic1 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
-
-    - name: Print test output and Record test result in launchable
-      run: |
-        # send recorded tests to launchable
-        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
-
-        # print test output
-        cat output.txt
-      if: always()
+        go run test.go -docker=true -follow -shard vreplication_basic1
