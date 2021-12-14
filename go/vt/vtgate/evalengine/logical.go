@@ -132,11 +132,11 @@ func (n *NotExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	return res.nonzero().not().evalResult(), nil
 }
 
-func (n *NotExpr) Type(*ExpressionEnv) (querypb.Type, error) {
+func (n *NotExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
 
-func (n *NotExpr) Collation() collations.TypedCollation {
+func (n *NotExpr) collation() collations.TypedCollation {
 	return collationNumeric
 }
 
@@ -156,10 +156,10 @@ func (l *LogicalExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	return l.op(lVal.nonzero(), rVal.nonzero()).evalResult(), nil
 }
 
-func (l *LogicalExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
+func (l *LogicalExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
 
-func (n *LogicalExpr) Collation() collations.TypedCollation {
+func (n *LogicalExpr) collation() collations.TypedCollation {
 	return collationNumeric
 }

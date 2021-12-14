@@ -30,8 +30,8 @@ type (
 
 	// ArithmeticOp allows arithmetic expressions to not have to evaluate child expressions - this is done by the BinaryExpr
 	ArithmeticOp interface {
-		Evaluate(left, right EvalResult) (EvalResult, error)
-		Type(left querypb.Type) querypb.Type
+		eval(left, right EvalResult) (EvalResult, error)
+		typeof(left querypb.Type) querypb.Type
 		String() string
 	}
 
@@ -46,7 +46,7 @@ var _ ArithmeticOp = (*OpSubstraction)(nil)
 var _ ArithmeticOp = (*OpMultiplication)(nil)
 var _ ArithmeticOp = (*OpDivision)(nil)
 
-func (b *ArithmeticExpr) Collation() collations.TypedCollation {
+func (b *ArithmeticExpr) collation() collations.TypedCollation {
 	return collationNumeric
 }
 
@@ -65,79 +65,43 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	if hasNullEvalResult(lVal, rVal) {
 		return resultNull, nil
 	}
-	return b.Op.Evaluate(lVal, rVal)
+	return b.Op.eval(lVal, rVal)
 }
 
 // Type implements the Expr interface
-func (b *ArithmeticExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
-	ltype, err := b.Left.Type(env)
+func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
+	ltype, err := b.Left.typeof(env)
 	if err != nil {
 		return 0, err
 	}
-	rtype, err := b.Right.Type(env)
+	rtype, err := b.Right.typeof(env)
 	if err != nil {
 		return 0, err
 	}
 	typ := mergeNumericalTypes(ltype, rtype)
-	return b.Op.Type(typ), nil
+	return b.Op.typeof(typ), nil
 }
 
-// Evaluate implements the ArithmeticOp interface
-func (a *OpAddition) Evaluate(left, right EvalResult) (EvalResult, error) {
+func (a *OpAddition) eval(left, right EvalResult) (EvalResult, error) {
 	return addNumericWithError(left, right)
 }
+func (a *OpAddition) typeof(left querypb.Type) querypb.Type { return left }
+func (a *OpAddition) String() string                        { return "+" }
 
-// Evaluate implements the ArithmeticOp interface
-func (s *OpSubstraction) Evaluate(left, right EvalResult) (EvalResult, error) {
+func (s *OpSubstraction) eval(left, right EvalResult) (EvalResult, error) {
 	return subtractNumericWithError(left, right)
 }
+func (s *OpSubstraction) typeof(left querypb.Type) querypb.Type { return left }
+func (s *OpSubstraction) String() string                        { return "-" }
 
-// Evaluate implements the ArithmeticOp interface
-func (m *OpMultiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
+func (m *OpMultiplication) eval(left, right EvalResult) (EvalResult, error) {
 	return multiplyNumericWithError(left, right)
 }
+func (m *OpMultiplication) typeof(left querypb.Type) querypb.Type { return left }
+func (m *OpMultiplication) String() string                        { return "*" }
 
-// Evaluate implements the ArithmeticOp interface
-func (d *OpDivision) Evaluate(left, right EvalResult) (EvalResult, error) {
+func (d *OpDivision) eval(left, right EvalResult) (EvalResult, error) {
 	return divideNumericWithError(left, right, true)
 }
-
-// Type implements the ArithmeticOp interface
-func (a *OpAddition) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-// Type implements the ArithmeticOp interface
-func (s *OpSubstraction) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-// Type implements the ArithmeticOp interface
-func (m *OpMultiplication) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-// Type implements the ArithmeticOp interface
-func (d *OpDivision) Type(querypb.Type) querypb.Type {
-	return sqltypes.Float64
-}
-
-// String implements the ArithmeticOp interface
-func (a *OpAddition) String() string {
-	return "+"
-}
-
-// String implements the ArithmeticOp interface
-func (s *OpSubstraction) String() string {
-	return "-"
-}
-
-// String implements the ArithmeticOp interface
-func (m *OpMultiplication) String() string {
-	return "*"
-}
-
-// String implements the ArithmeticOp interface
-func (d *OpDivision) String() string {
-	return "/"
-}
+func (d *OpDivision) typeof(querypb.Type) querypb.Type { return sqltypes.Float64 }
+func (d *OpDivision) String() string                   { return "/" }
