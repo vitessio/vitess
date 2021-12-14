@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
@@ -38,16 +40,8 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 		return transformRouteOpPlan(ctx, op)
 	case *applyJoin:
 		return transformApplyJoinOpPlan(ctx, op)
-		// case *derivedTree:
-		// 	return transformDerivedPlan(ctx, n)
-		// case *subqueryTree:
-		// 	return transformSubqueryTree(ctx, n)
-		// case *concatenateTree:
-		// 	return transformConcatenatePlan(ctx, n)
-		// case *vindexTree:
-		// 	return transformVindexTree(n)
-		// case *correlatedSubqueryTree:
-		// 	return transformCorrelatedSubquery(ctx, n)
+	case *unionOp:
+		return transformUnionOpPlan(ctx, op)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformOpToLogicalPlan)", op)
@@ -163,4 +157,112 @@ func getAllTableNames(op *routeOp) []string {
 	}
 	sort.Strings(tableNames)
 	return tableNames
+}
+
+func transformUnionOpPlan(ctx *planningContext, op *unionOp) (logicalPlan, error) {
+	var sources []logicalPlan
+	var err error
+	if op.distinct {
+		sources, err = transformAndMergeOp(ctx, op)
+	} else {
+		sources, err = transformAndMergeOp(ctx, op) // TODO: this is WRONG
+	}
+	if err != nil {
+		return nil, err
+	}
+	if op.distinct {
+		for _, source := range sources {
+			pushDistinct(source)
+		}
+	}
+	var result logicalPlan
+	if len(sources) == 1 {
+		src := sources[0]
+		if rb, isRoute := src.(*routeGen4); isRoute && rb.isSingleShard() {
+			// if we have a single shard route, we don't need to do anything to make it distinct
+			// TODO
+			// rb.Select.SetLimit(op.limit)
+			// rb.Select.SetOrderBy(op.ordering)
+			return src, nil
+		}
+		result = src
+	}
+	if op.distinct {
+		return newDistinct(result, getCollationsForOp(ctx, op)), nil
+	}
+	return result, nil
+
+}
+
+func transformAndMergeOp(ctx *planningContext, op *unionOp) ([]logicalPlan, error) {
+	var sources []logicalPlan
+	for i, source := range op.sources {
+		plan, err := createLogicalPlanOp(ctx, source, op.selectStmts[i])
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, plan)
+	}
+
+	idx := 0
+	for idx < len(sources) {
+		keep := make([]bool, len(sources))
+		srcA := sources[idx]
+		merged := false
+		for j, srcB := range sources {
+			if j <= idx {
+				continue
+			}
+			newPlan := mergeUnionLogicalPlans(ctx, srcA, srcB)
+			if newPlan != nil {
+				sources[idx] = newPlan
+				srcA = newPlan
+				merged = true
+			} else {
+				keep[j] = true
+			}
+		}
+		if !merged {
+			return sources, nil
+		}
+		var phase []logicalPlan
+		for i, source := range sources {
+			if keep[i] || i <= idx {
+				phase = append(phase, source)
+			}
+		}
+		idx++
+		sources = phase
+	}
+	return sources, nil
+}
+
+func createLogicalPlanOp(ctx *planningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
+	plan, err := transformOpToLogicalPlan(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if selStmt != nil {
+		plan, err = planHorizon(ctx, plan, selStmt)
+		if err != nil {
+			return nil, err
+		}
+		if err := setMiscFunc(plan, selStmt); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+func getCollationsForOp(ctx *planningContext, n *unionOp) []collations.ID {
+	var colls []collations.ID
+	for _, expr := range n.selectStmts[0].SelectExprs {
+		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
+		}
+		typ := ctx.semTable.CollationFor(aliasedE.Expr)
+		colls = append(colls, typ)
+	}
+	return colls
 }

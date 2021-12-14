@@ -16,6 +16,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # union distinct between two scatter selects
 "select id from user union select id from music"
@@ -75,6 +76,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # union all between two SelectEqualUnique
 "select id from user where id = 1 union all select id from user where id = 5"
@@ -188,6 +190,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
@@ -928,6 +931,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # multiple unions
 "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user"
@@ -1574,6 +1578,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes
 "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra"

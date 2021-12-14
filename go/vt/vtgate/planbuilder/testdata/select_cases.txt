@@ -1486,6 +1486,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # union with the same target shard last_insert_id
 "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1"
@@ -1509,6 +1510,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # unsharded union in derived table
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
@@ -1579,6 +1581,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # unsharded union
 "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
@@ -1651,6 +1654,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules: ensure directives are not lost
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
