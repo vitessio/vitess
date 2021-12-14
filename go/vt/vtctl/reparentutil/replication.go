@@ -181,8 +181,9 @@ func StopReplicationAndBuildStatusMaps(
 		logger.Infof("getting replication position from %v", alias)
 
 		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
-		switch err {
-		case mysql.ErrNotReplica:
+		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		switch {
+		case isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica:
 			var primaryStatus *replicationdatapb.PrimaryStatus
 
 			primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
@@ -197,7 +198,7 @@ func StopReplicationAndBuildStatusMaps(
 			m.Lock()
 			primaryStatusMap[alias] = primaryStatus
 			m.Unlock()
-		case nil:
+		case err == nil:
 			m.Lock()
 			statusMap[alias] = stopReplicationStatus
 			m.Unlock()
