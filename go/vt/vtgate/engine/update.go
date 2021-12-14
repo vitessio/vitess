@@ -135,11 +135,15 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 }
 
 func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	key, err := upd.Values[0].ResolveValue(bindVars)
+	env := &evalengine.ExpressionEnv{
+		BindVars: bindVars,
+	}
+
+	key, err := upd.Values[0].Evaluate(env)
 	if err != nil {
 		return nil, err
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key.Value())
 	if err != nil {
 		return nil, err
 	}

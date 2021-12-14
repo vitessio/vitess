@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Theme, useTheme } from '../../hooks/useTheme';
-import { Button } from '../Button';
 import { Icon, Icons } from '../Icon';
 import { Select } from '../inputs/Select';
 import { ContentContainer } from '../layout/ContentContainer';
@@ -11,6 +10,7 @@ import { TextInput } from '../TextInput';
 import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
 
+/* eslint-disable jsx-a11y/anchor-is-valid */
 export const Debug = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
@@ -44,6 +44,29 @@ export const Debug = () => {
                             </div>
                         ))}
                     </div>
+                </section>
+
+                <section>
+                    <h3 className="mt-12 mb-8">Colours</h3>
+                    {[
+                        ['danger', 'danger-50', 'danger-200'],
+                        ['success', 'success-50', 'success-200'],
+                        ['warning', 'warning-50', 'warning-200'],
+                        ['vtblue', 'vtblue-50', 'vtblue-200'],
+                        ['vtblue-dark', 'vtblue-dark-50', 'vtblue-dark-200'],
+                        ['gray-75', 'gray-100', 'gray-200', 'gray-400', 'gray-600', 'gray-800', 'gray-900'],
+                    ].map((colors, idx) => {
+                        return (
+                            <div className="flex my-8" key={idx}>
+                                {colors.map((c) => (
+                                    <div className="mr-4" key={c}>
+                                        <div className={`w-40 h-16 rounded bg-${c}`} />
+                                        <div className={`text-sm font-semibold text-${c}`}>{c}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
                 </section>
 
                 <section>
@@ -236,94 +259,66 @@ export const Debug = () => {
                                 size="large"
                                 placeholder="Button-adjacent"
                             />
-                            <Button size="large">Primary</Button>
-                            <Button secondary size="large">
+                            <button className="btn btn-lg" type="button">
+                                Primary
+                            </button>
+                            <button className="btn btn-lg btn-secondary" type="button">
                                 Secondary
-                            </Button>
+                            </button>
                         </div>
                         <div className={style.inputRow}>
                             <TextInput iconLeft={Icons.search} iconRight={Icons.delete} placeholder="Button-adjacent" />
-                            <Button>Primary</Button>
-                            <Button secondary>Secondary</Button>
+                            <button className="btn" type="button">
+                                Primary
+                            </button>
+                            <button className="btn btn-secondary" type="button">
+                                Secondary
+                            </button>
                         </div>
                     </div>
                 </section>
 
                 <section>
                     <h3 className="mt-12 mb-8">Buttons</h3>
-                    <div className={style.buttonContainer}>
-                        {/* Large */}
-                        <Button size="large">Button</Button>
-                        <Button secondary size="large">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} size="large">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} secondary size="large">
-                            Button
-                        </Button>
-                        <Button disabled size="large">
-                            Button
-                        </Button>
-                        <Button disabled secondary size="large">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} size="large">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} secondary size="large">
-                            Button
-                        </Button>
 
-                        {/* Medium */}
-                        <Button size="medium">Button</Button>
-                        <Button secondary size="medium">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} size="medium">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} secondary size="medium">
-                            Button
-                        </Button>
-                        <Button disabled size="medium">
-                            Button
-                        </Button>
-                        <Button disabled secondary size="medium">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} size="medium">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} secondary size="medium">
-                            Button
-                        </Button>
+                    {['btn-lg', '', 'btn-sm'].map((s, idx) => {
+                        return (
+                            <div className="my-16">
+                                {['', 'btn-danger', 'btn-warning', 'btn-success'].map((v) => {
+                                    return (
+                                        <div className="flex gap-4 my-6" key={`${idx}-${v}`}>
+                                            <button className={`btn ${s} ${v}`}>Button</button>
+                                            <a className={`btn ${s} ${v}`} href="#">
+                                                Link
+                                            </a>
 
-                        {/* Small */}
-                        <Button size="small">Button</Button>
-                        <Button secondary size="small">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} size="small">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} secondary size="small">
-                            Button
-                        </Button>
-                        <Button disabled size="small">
-                            Button
-                        </Button>
-                        <Button disabled secondary size="small">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} size="small">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} secondary size="small">
-                            Button
-                        </Button>
-                    </div>
+                                            <button className={`btn ${s} ${v} btn-secondary`}>Button</button>
+                                            <a className={`btn ${s} ${v} btn-secondary`} href="#">
+                                                Link
+                                            </a>
+
+                                            <button className={`btn ${s} ${v} btn-secondary`}>
+                                                <Icon icon={Icons.circleAdd} />
+                                                Button
+                                            </button>
+                                            <a className={`btn ${s} ${v} btn-secondary`} href="#">
+                                                <Icon icon={Icons.circleAdd} />
+                                                Link
+                                            </a>
+
+                                            <button className={`btn ${s} ${v}`} disabled>
+                                                Button
+                                            </button>
+                                            <button className={`btn ${s} ${v} btn-secondary`} disabled>
+                                                <Icon icon={Icons.circleAdd} />
+                                                Button
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
                 </section>
             </div>
         </ContentContainer>

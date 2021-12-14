@@ -67,10 +67,11 @@ type heartbeatWriter struct {
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
-	mu     sync.Mutex
-	isOpen bool
-	pool   *dbconnpool.ConnectionPool
-	ticks  *timer.Timer
+	mu           sync.Mutex
+	isOpen       bool
+	appPool      *dbconnpool.ConnectionPool
+	allPrivsPool *dbconnpool.ConnectionPool
+	ticks        *timer.Timer
 }
 
 // newHeartbeatWriter creates a new heartbeatWriter.
@@ -92,7 +93,8 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		pool: dbconnpool.NewConnectionPool("HeartbeatWritePool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
 	}
 }
 
@@ -120,7 +122,8 @@ func (w *heartbeatWriter) Open() {
 	// block this thread, and we could end up in a deadlock.
 	// Instead, we try creating the database and table in each tick which runs in a go routine
 	// keeping us safe from hanging the main thread.
-	w.pool.Open(w.env.Config().DB.AppWithDB())
+	w.appPool.Open(w.env.Config().DB.AppWithDB())
+	w.allPrivsPool.Open(w.env.Config().DB.AllPrivsWithDB())
 	w.enableWrites(true)
 	w.isOpen = true
 }
@@ -137,7 +140,8 @@ func (w *heartbeatWriter) Close() {
 	}
 
 	w.enableWrites(false)
-	w.pool.Close()
+	w.appPool.Close()
+	w.allPrivsPool.Close()
 	w.isOpen = false
 	log.Info("Hearbeat Writer: closed")
 }
@@ -172,16 +176,22 @@ func (w *heartbeatWriter) write() error {
 	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
+	allPrivsConn, err := w.allPrivsPool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer allPrivsConn.Recycle()
+
 	upsert, err := w.bindHeartbeatVars(sqlUpsertHeartbeat)
 	if err != nil {
 		return err
 	}
-	conn, err := w.pool.Get(ctx)
+	appConn, err := w.appPool.Get(ctx)
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
-	_, err = withDDL.Exec(ctx, upsert, conn.ExecuteFetch)
+	defer appConn.Recycle()
+	_, err = withDDL.Exec(ctx, upsert, appConn.ExecuteFetch, allPrivsConn.ExecuteFetch)
 	if err != nil {
 		return err
 	}

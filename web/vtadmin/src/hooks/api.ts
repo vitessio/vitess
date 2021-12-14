@@ -35,6 +35,8 @@ import {
     fetchWorkflow,
     fetchWorkflows,
     TabletDebugVarsResponse,
+    refreshState,
+    runHealthCheck,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -124,6 +126,26 @@ export const usePingTablet = (
     options?: UseQueryOptions<pb.PingTabletResponse, Error>
 ) => {
     return useQuery(['ping-tablet', params], () => pingTablet(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useRefreshState = (
+    params: Parameters<typeof refreshState>[0],
+    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
+) => {
+    return useQuery(['refresh-state', params], () => refreshState(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useHealthCheck = (
+    params: Parameters<typeof runHealthCheck>[0],
+    options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
+) => {
+    return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
 };
 
 export const useExperimentalTabletDebugVars = (

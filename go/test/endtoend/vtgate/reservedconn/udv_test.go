@@ -55,7 +55,7 @@ func TestSetUDV(t *testing.T) {
 		query: "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */",
 	}, { // This is handled at vtgate.
 		query:        "select @foo, @bar, @baz, @tablet",
-		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARBINARY("foobar")]]`, rowsReturned: 1,
+		expectedRows: `[[VARBINARY("abc") INT64(42) DECIMAL(30.5) VARBINARY("foobar")]]`, rowsReturned: 1,
 	}, { // Cannot really check a specific value for sql_mode as it will differ based on database selected to run these tests.
 		query:        "select @OLD_SQL_MODE = @@SQL_MODE",
 		expectedRows: `[[INT64(1)]]`, rowsReturned: 1,
@@ -100,7 +100,7 @@ func TestSetUDV(t *testing.T) {
 		expectedRows: `[]`,
 	}, {
 		query:        "select @foo = @bar, @dd, @tt",
-		expectedRows: `[[INT32(1) DATE("2020-10-20") TIME("10:15:00")]]`, rowsReturned: 1,
+		expectedRows: `[[UINT64(1) DATE("2020-10-20") TIME("10:15:00")]]`, rowsReturned: 1,
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)

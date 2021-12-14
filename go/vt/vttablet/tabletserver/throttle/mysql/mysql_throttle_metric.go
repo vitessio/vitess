@@ -13,8 +13,6 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
-
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
 // MetricsQueryType indicates the type of metrics query on MySQL backend. See following.
@@ -118,44 +116,6 @@ func ReadThrottleMetric(probe *Probe, clusterName string, overrideGetMetricFunc 
 		}()
 	}(mySQLThrottleMetric, started)
 
-	if overrideGetMetricFunc != nil {
-		mySQLThrottleMetric = overrideGetMetricFunc()
-		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
-	}
-
-	dbURI := probe.GetDBUri("information_schema")
-	db, fromCache, err := sqlutils.GetDB(dbURI)
-
-	if err != nil {
-		mySQLThrottleMetric.Err = err
-		return mySQLThrottleMetric
-	}
-	if !fromCache {
-		db.SetMaxOpenConns(maxPoolConnections)
-		db.SetMaxIdleConns(maxIdleConnections)
-	}
-	metricsQueryType := GetMetricsQueryType(probe.MetricQuery)
-	switch metricsQueryType {
-	case MetricsQueryTypeSelect:
-		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&mySQLThrottleMetric.Value)
-		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
-	case MetricsQueryTypeShowGlobal:
-		var variableName string // just a placeholder
-		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&variableName, &mySQLThrottleMetric.Value)
-		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
-	case MetricsQueryTypeDefault:
-		mySQLThrottleMetric.Err = sqlutils.QueryRowsMap(db, `show slave status`, func(m sqlutils.RowMap) error {
-			IOThreadRunning := m.GetString("Slave_IO_Running")
-			SQLThreadRunning := m.GetString("Slave_SQL_Running")
-			replicationLagSeconds := m.GetNullInt64("Seconds_Behind_Master")
-			if !replicationLagSeconds.Valid {
-				return fmt.Errorf("replication not running; Slave_IO_Running=%+v, Slave_SQL_Running=%+v", IOThreadRunning, SQLThreadRunning)
-			}
-			mySQLThrottleMetric.Value = float64(replicationLagSeconds.Int64)
-			return nil
-		})
-		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
-	}
-	mySQLThrottleMetric.Err = fmt.Errorf("Unsupported metrics query type: %s", probe.MetricQuery)
-	return mySQLThrottleMetric
+	mySQLThrottleMetric = overrideGetMetricFunc()
+	return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
 }
