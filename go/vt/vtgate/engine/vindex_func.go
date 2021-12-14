@@ -41,7 +41,7 @@ type VindexFunc struct {
 	Cols []int
 	// TODO(sougou): add support for MultiColumn.
 	Vindex vindexes.SingleColumn
-	Value  sqltypes.PlanValue
+	Value  evalengine.Expr
 
 	// VindexFunc does not take inputs
 	noInputs
@@ -108,11 +108,13 @@ func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	k, err := vf.Value.ResolveValue(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	k, err := vf.Value.Evaluate(env)
 	if err != nil {
 		return nil, err
 	}
-	vkey, err := evalengine.Cast(k, sqltypes.VarBinary)
+	value := k.Value()
+	vkey, err := evalengine.Cast(value, sqltypes.VarBinary)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +122,7 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 		Fields: vf.Fields,
 	}
 
-	destinations, err := vf.Vindex.Map(vcursor, []sqltypes.Value{k})
+	destinations, err := vf.Vindex.Map(vcursor, []sqltypes.Value{value})
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +215,7 @@ func (vf *VindexFunc) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Fields":  fields,
 		"Columns": vf.Cols,
-		"Value":   vf.Value,
+		"Value":   evalengine.FormatExpr(vf.Value),
 	}
 	if vf.Vindex != nil {
 		other["Vindex"] = vf.Vindex.String()

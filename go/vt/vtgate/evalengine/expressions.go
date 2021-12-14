@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -63,10 +62,6 @@ type (
 		format(buf *strings.Builder, wrap bool)
 	}
 
-	RouteValue struct {
-		Expr Expr
-	}
-
 	Literal struct {
 		Val EvalResult
 	}
@@ -87,37 +82,12 @@ type (
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return &ExpressionEnv{
-		BindVars: make(map[string]*querypb.BindVariable),
-	}
+	return EnvWithBindVars(map[string]*querypb.BindVariable{})
 }
 
-// ResolveValue allows for retrieval of the value we expose for public consumption
-func (rv *RouteValue) ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error) {
-	env := &ExpressionEnv{
-		BindVars: bindVars,
-	}
-	evalResul, err := rv.Expr.Evaluate(env)
-	if err != nil {
-		return sqltypes.Value{}, err
-	}
-	return evalResul.Value(), nil
-}
-
-// ResolveList allows for retrieval of the value we expose for public consumption
-func (rv *RouteValue) ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
-	env := &ExpressionEnv{
-		BindVars: bindVars,
-	}
-	evalResul, err := rv.Expr.Evaluate(env)
-	if err != nil {
-		return nil, err
-	}
-	return evalResul.TupleValues(), nil
-}
-
-func (rv *RouteValue) MarshalJSON() ([]byte, error) {
-	return json.Marshal(FormatExpr(rv.Expr))
+// EnvWithBindVars returns an expression environment with no current row, but with bindvars
+func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
+	return &ExpressionEnv{BindVars: bindVars}
 }
 
 func (t TupleExpr) Collation() collations.TypedCollation {
@@ -224,17 +194,29 @@ var collationNull = collations.TypedCollation{
 	Repertoire:   collations.RepertoireASCII,
 }
 
-func NewLiteralNull() Expr {
-	return &Literal{Val: resultNull}
-}
+// NullExpr is just what you are lead to believe
+var NullExpr = &Literal{Val: resultNull}
 
-// NewLiteralIntFromBytes returns a literal expression
-func NewLiteralIntFromBytes(val []byte) (Expr, error) {
-	ival, err := strconv.ParseInt(string(val), 10, 64)
+// NewLiteralIntegralFromBytes returns a literal expression.
+// It tries to return an int64, but if the value is too large, it tries with an uint64
+func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
+	str := string(val)
+	ival, err := strconv.ParseInt(str, 10, 64)
+	if err == nil {
+		return NewLiteralInt(ival), nil
+	}
+
+	// let's try with uint if we overflowed
+	numError, ok := err.(*strconv.NumError)
+	if !ok || numError.Err != strconv.ErrRange {
+		return nil, err
+	}
+
+	uval, err := strconv.ParseUint(str, 0, 64)
 	if err != nil {
 		return nil, err
 	}
-	return NewLiteralInt(ival), nil
+	return NewLiteralUint(uval), nil
 }
 
 var collationNumeric = collations.TypedCollation{
@@ -246,6 +228,11 @@ var collationNumeric = collations.TypedCollation{
 // NewLiteralInt returns a literal expression
 func NewLiteralInt(i int64) Expr {
 	return &Literal{Val: newEvalInt64(i)}
+}
+
+// NewLiteralUint returns a literal expression
+func NewLiteralUint(i uint64) Expr {
+	return &Literal{Val: newEvalUint64(i)}
 }
 
 // NewLiteralFloat returns a literal expression
@@ -298,7 +285,7 @@ func NewColumn(offset int, collation collations.TypedCollation) Expr {
 }
 
 // NewTupleExpr returns a tuple expression
-func NewTupleExpr(exprs ...Expr) Expr {
+func NewTupleExpr(exprs ...Expr) TupleExpr {
 	tupleExpr := make(TupleExpr, 0, len(exprs))
 	for _, f := range exprs {
 		tupleExpr = append(tupleExpr, f)
@@ -435,7 +422,7 @@ func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
 		return EvalResult{typ: typ, bytes: value}, nil
 	case sqltypes.Null:
-		return EvalResult{typ: sqltypes.Null}, nil
+		return resultNull, nil
 	default:
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", typ.String())
 	}

@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -67,7 +66,6 @@ func (m *memorySortGen4) SupplyWeightString(colNumber int, alsoAddToGroupBy bool
 
 func (m *memorySortGen4) Primitive() engine.Primitive {
 	return &engine.MemorySort{
-		UpperLimit:          sqltypes.PlanValue{},
 		OrderBy:             m.orderBy,
 		Input:               m.input.Primitive(),
 		TruncateColumnCount: m.truncateColumnCount,

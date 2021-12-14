@@ -19,6 +19,8 @@ package engine
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
@@ -26,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestMemorySortExecute(t *testing.T) {
@@ -67,9 +68,7 @@ func TestMemorySortExecute(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
-	require.NoError(t, err)
-	ms.UpperLimit = upperlimit
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
@@ -130,13 +129,11 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
-		require.NoError(t, err)
-		ms.UpperLimit = upperlimit
+		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
-		err = ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -190,9 +187,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
-	require.NoError(t, err)
-	ms.UpperLimit = upperlimit
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
@@ -275,13 +270,11 @@ func TestMemorySortStreamExecuteCollation(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
-		require.NoError(t, err)
-		ms.UpperLimit = upperlimit
+		ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
-		err = ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -336,9 +329,7 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
-	require.NoError(t, err)
-	ms.UpperLimit = upperlimit
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
@@ -395,9 +386,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	utils.MustMatch(t, wantResults, results)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
-	require.NoError(t, err)
-	ms.UpperLimit = upperlimit
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
@@ -556,9 +545,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
-	require.NoError(t, err)
-	ms.UpperLimit = upperlimit
+	ms.UpperLimit = evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
