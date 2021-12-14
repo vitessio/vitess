@@ -87,7 +87,7 @@ func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Exp
 	case sqlparser.NotLikeOp:
 		return &LikeExpr{BinaryCoercedExpr: coercedExpr, Negate: true}, nil
 	default:
-		return nil, fmt.Errorf("unsupported comparison operator %q", op.ToString())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrConvertExprNotSupported, op.ToString())
 	}
 }
 
@@ -267,15 +267,15 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		}
 		coll := collations.Local().DefaultCollationForCharset(node.CharacterSet[1:])
 		if coll == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown character set: %s", node.CharacterSet)
+			panic(fmt.Sprintf("unknown character set: %s", node.CharacterSet))
 		}
 		switch lit := expr.(type) {
 		case *Literal:
 			lit.Val.collation.Collation = coll.ID()
 		case *BindVariable:
-			lit.collation.Collation = coll.ID()
+			lit.coll.Collation = coll.ID()
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] character set introducers are only supported for literals and arguments")
+			panic(fmt.Sprintf("character set introducers are only supported for literals and arguments"))
 		}
 		return expr, nil
 	}

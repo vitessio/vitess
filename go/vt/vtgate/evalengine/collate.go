@@ -30,23 +30,23 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	return res, nil
 }
 
-func (c *CollateExpr) Collation() collations.TypedCollation {
+func (c *CollateExpr) collation() collations.TypedCollation {
 	return c.TypedCollation
 }
 
-func (t TupleExpr) Collation() collations.TypedCollation {
+func (t TupleExpr) collation() collations.TypedCollation {
 	// a Tuple does not have a collation, but an individual collation for every element of the tuple
 	return collations.TypedCollation{}
 }
 
-func (l *Literal) Collation() collations.TypedCollation {
+func (l *Literal) collation() collations.TypedCollation {
 	return l.Val.collation
 }
 
-func (bv *BindVariable) Collation() collations.TypedCollation {
-	return bv.collation
+func (bv *BindVariable) collation() collations.TypedCollation {
+	return bv.coll
 }
 
-func (c *Column) Collation() collations.TypedCollation {
-	return c.collation
+func (c *Column) collation() collations.TypedCollation {
+	return c.coll
 }

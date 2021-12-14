@@ -107,7 +107,7 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) error {
 	env := evalengine.EnvWithBindVars(bindVars)
 	for i, col := range p.Cols {
-		q, err := p.Exprs[i].Type(env)
+		q, err := env.TypeOf(p.Exprs[i])
 		if err != nil {
 			return err
 		}

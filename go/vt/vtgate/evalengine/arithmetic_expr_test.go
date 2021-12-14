@@ -99,7 +99,7 @@ func TestBinaryOpTypes(t *testing.T) {
 		for _, tc := range op.testcases {
 			name := fmt.Sprintf("%s %s %s", tc.l.String(), reflect.TypeOf(op.op).String(), tc.r.String())
 			t.Run(name, func(t *testing.T) {
-				result := op.op.Type(tc.l)
+				result := op.op.typeof(tc.l)
 				assert.Equal(t, tc.e, result)
 			})
 		}

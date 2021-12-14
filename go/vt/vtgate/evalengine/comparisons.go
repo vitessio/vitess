@@ -96,7 +96,7 @@ func (compareGE) resolve(n int) bool { return n >= 0 }
 func (compareGE) fulleq() bool       { return false }
 func (compareGE) String() string     { return ">=" }
 
-func (c *BinaryCoercedExpr) Collation() collations.TypedCollation {
+func (c *BinaryCoercedExpr) collation() collations.TypedCollation {
 	// the collation of a binary operation is always integer, not the shared collation
 	// between the two subexpressions
 	return collationNumeric
@@ -105,8 +105,8 @@ func (c *BinaryCoercedExpr) Collation() collations.TypedCollation {
 func (c *BinaryCoercedExpr) coerce() error {
 	var err error
 
-	leftColl := c.Left.Collation()
-	rightColl := c.Right.Collation()
+	leftColl := c.Left.collation()
+	rightColl := c.Right.collation()
 
 	if leftColl.Valid() && rightColl.Valid() {
 		env := collations.Local()
@@ -333,7 +333,7 @@ func evalResultBool(b bool) EvalResult {
 	return EvalResult{typ: typ, collation: collationNumeric, numval: 0}
 }
 
-// Evaluate implements the Expr interface
+// eval implements the Expr interface
 func (c *ComparisonExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	lVal, rVal, err := c.evalInner(env)
 	if err != nil {
@@ -347,7 +347,7 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 }
 
 // Type implements the Expr interface
-func (c *ComparisonExpr) Type(*ExpressionEnv) (querypb.Type, error) {
+func (c *ComparisonExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
 
@@ -364,11 +364,11 @@ func (n *NullSafeComparisonExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 }
 
 // Type implements the ComparisonOp interface
-func (n *NullSafeComparisonExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
+func (n *NullSafeComparisonExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
 
-// Evaluate implements the ComparisonOp interface
+// eval implements the ComparisonOp interface
 func (i *InExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	left, right, err := i.evalInner(env)
 	if err != nil {
@@ -428,11 +428,11 @@ func (i *InExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	return boolResult(found, i.Negate), nil
 }
 
-func (i *InExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
+func (i *InExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_INT64, nil
 }
 
-func (i *InExpr) Collation() collations.TypedCollation {
+func (i *InExpr) collation() collations.TypedCollation {
 	return collationNumeric
 }
 
@@ -480,10 +480,10 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 }
 
 // Type implements the ComparisonOp interface
-func (l *LikeExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
+func (l *LikeExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
 
-func (l *LikeExpr) Collation() collations.TypedCollation {
+func (l *LikeExpr) collation() collations.TypedCollation {
 	return collationNumeric
 }
