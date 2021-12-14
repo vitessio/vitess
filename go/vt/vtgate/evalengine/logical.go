@@ -54,6 +54,13 @@ func makeboolean(b bool) boolean {
 	return boolFalse
 }
 
+func makeboolean2(b, isNull bool) boolean {
+	if isNull {
+		return boolNULL
+	}
+	return makeboolean(b)
+}
+
 func (b boolean) not() boolean {
 	switch b {
 	case boolFalse:

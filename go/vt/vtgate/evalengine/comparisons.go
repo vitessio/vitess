@@ -38,10 +38,6 @@ type (
 		Op ComparisonOp
 	}
 
-	NullSafeComparisonExpr struct {
-		BinaryCoercedExpr
-	}
-
 	LikeExpr struct {
 		BinaryCoercedExpr
 		Negate bool
@@ -55,46 +51,60 @@ type (
 	}
 
 	ComparisonOp interface {
-		fulleq() bool
-		resolve(int) bool
 		String() string
+		compare(left, right EvalResult) (boolean, error)
 	}
 
-	compareEQ struct{}
-	compareNE struct{}
-	compareLT struct{}
-	compareLE struct{}
-	compareGT struct{}
-	compareGE struct{}
+	compareEQ         struct{}
+	compareNE         struct{}
+	compareLT         struct{}
+	compareLE         struct{}
+	compareGT         struct{}
+	compareGE         struct{}
+	compareNullSafeEQ struct{}
 )
 
-var (
-	resultNull = EvalResult{typ: sqltypes.Null, collation: collationNull}
-)
+func (compareEQ) String() string { return "=" }
+func (compareEQ) compare(left, right EvalResult) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, true)
+	return makeboolean2(cmp == 0, isNull), err
+}
 
-func (compareEQ) resolve(n int) bool { return n == 0 }
-func (compareEQ) fulleq() bool       { return true }
-func (compareEQ) String() string     { return "=" }
+func (compareNE) String() string { return "!=" }
+func (compareNE) compare(left, right EvalResult) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, true)
+	return makeboolean2(cmp != 0, isNull), err
+}
 
-func (compareNE) resolve(n int) bool { return n != 0 }
-func (compareNE) fulleq() bool       { return true }
-func (compareNE) String() string     { return "!=" }
+func (compareLT) String() string { return "<" }
+func (compareLT) compare(left, right EvalResult) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false)
+	return makeboolean2(cmp < 0, isNull), err
+}
 
-func (compareLT) resolve(n int) bool { return n < 0 }
-func (compareLT) fulleq() bool       { return false }
-func (compareLT) String() string     { return "<" }
+func (compareLE) String() string { return "<=" }
+func (compareLE) compare(left, right EvalResult) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false)
+	return makeboolean2(cmp <= 0, isNull), err
+}
 
-func (compareLE) resolve(n int) bool { return n <= 0 }
-func (compareLE) fulleq() bool       { return false }
-func (compareLE) String() string     { return "<=" }
+func (compareGT) String() string { return ">" }
+func (compareGT) compare(left, right EvalResult) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false)
+	return makeboolean2(cmp > 0, isNull), err
+}
 
-func (compareGT) resolve(n int) bool { return n > 0 }
-func (compareGT) fulleq() bool       { return false }
-func (compareGT) String() string     { return ">" }
+func (compareGE) String() string { return ">=" }
+func (compareGE) compare(left, right EvalResult) (boolean, error) {
+	cmp, isNull, err := evalCompareAll(left, right, false)
+	return makeboolean2(cmp >= 0, isNull), err
+}
 
-func (compareGE) resolve(n int) bool { return n >= 0 }
-func (compareGE) fulleq() bool       { return false }
-func (compareGE) String() string     { return ">=" }
+func (compareNullSafeEQ) String() string { return "<=>" }
+func (compareNullSafeEQ) compare(left, right EvalResult) (boolean, error) {
+	cmp, err := evalCompareNullSafe(left, right)
+	return makeboolean(cmp), err
+}
 
 func (c *BinaryCoercedExpr) collation() collations.TypedCollation {
 	// the collation of a binary operation is always integer, not the shared collation
@@ -339,32 +349,15 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	n, isNull, err := evalCompareAll(lVal, rVal, c.Op.fulleq())
-	if isNull {
-		return resultNull, nil
+	cmp, err := c.Op.compare(lVal, rVal)
+	if err != nil {
+		return EvalResult{}, err
 	}
-	return evalResultBool(c.Op.resolve(n)), nil
+	return cmp.evalResult(), nil
 }
 
 // Type implements the Expr interface
 func (c *ComparisonExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_UINT64, nil
-}
-
-func (n *NullSafeComparisonExpr) eval(env *ExpressionEnv) (EvalResult, error) {
-	lVal, rVal, err := n.evalInner(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	cmp, err := evalCompareNullSafe(lVal, rVal)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return evalResultBool(cmp), nil
-}
-
-// Type implements the ComparisonOp interface
-func (n *NullSafeComparisonExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
 
@@ -454,9 +447,9 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	var matched bool
 	switch {
 	case left.typ == querypb.Type_TUPLE || right.typ == querypb.Type_TUPLE:
-		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
+		panic("failed to typecheck tuples")
 
-	case hasNullEvalResult(left, right):
+	case left.null() || right.null():
 		return resultNull, nil
 
 	case left.textual() && right.textual():

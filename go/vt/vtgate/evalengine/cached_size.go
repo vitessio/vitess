@@ -228,18 +228,6 @@ func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	size += cached.UnaryExpr.CachedSize(false)
 	return size
 }
-func (cached *NullSafeComparisonExpr) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(64)
-	}
-	// field BinaryCoercedExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryCoercedExpr
-	size += cached.BinaryCoercedExpr.CachedSize(false)
-	return size
-}
 func (cached *UnaryExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

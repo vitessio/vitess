@@ -29,13 +29,17 @@ type (
 	}
 )
 
+var (
+	resultNull = EvalResult{typ: sqltypes.Null, collation: collationNull}
+)
+
 // Value allows for retrieval of the value we expose for public consumption
-func (e EvalResult) Value() sqltypes.Value {
+func (e *EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
 }
 
 // TupleValues allows for retrieval of the value we expose for public consumption
-func (e EvalResult) TupleValues() []sqltypes.Value {
+func (e *EvalResult) TupleValues() []sqltypes.Value {
 	if e.tuple == nil {
 		return nil
 	}
@@ -48,8 +52,12 @@ func (e EvalResult) TupleValues() []sqltypes.Value {
 	return result
 }
 
-func (e EvalResult) textual() bool {
+func (e *EvalResult) textual() bool {
 	return sqltypes.IsText(e.typ) || sqltypes.IsBinary(e.typ)
+}
+
+func (e *EvalResult) null() bool {
+	return e.typ == sqltypes.Null
 }
 
 // debugString prints the entire EvalResult in a debug format
