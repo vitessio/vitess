@@ -1037,7 +1037,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic1",
-			"RetryMax": 1,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vreplication_basic2": {
@@ -1046,7 +1046,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic2",
-			"RetryMax": 1,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vstream_failover": {
