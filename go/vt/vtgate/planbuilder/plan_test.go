@@ -244,6 +244,7 @@ func TestSysVarSetDisabled(t *testing.T) {
 
 func TestOne(t *testing.T) {
 	verboseLogging = true
+	// runGen4New = false
 	defer func() {
 		verboseLogging = false
 	}()

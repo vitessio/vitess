@@ -906,6 +906,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Join on weird column (col is not in select)
 "select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id"
@@ -988,6 +989,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # wire-up with limit primitive
 "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10"

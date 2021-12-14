@@ -70,11 +70,11 @@ func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, 
 		return nil, err
 	}
 	opCode := engine.InnerJoin
-	//if n.leftJoin {
-	//	opCode = engine.LeftJoin
-	//}
+	if n.leftJoin {
+		opCode = engine.LeftJoin
+	}
 
-	//if canHashJoin {
+	// if canHashJoin {
 	//	coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
 	//	if err != nil {
 	//		return nil, err

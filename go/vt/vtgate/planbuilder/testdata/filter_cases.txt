@@ -1277,6 +1277,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # routing rules: choose the redirected table
 "select col from route1 where id = 1"
@@ -1436,6 +1437,7 @@ Gen4++
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)",
   "Instructions": {
     "OperatorType": "Join",
+
     "Variant": "Join",
     "JoinColumnIndexes": "1",
     "JoinVars": {

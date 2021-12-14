@@ -72,6 +72,7 @@ Gen4++
 "select user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
 "unsupported: cross-shard left join and column expressions"
 Gen4 plan same as above
+Gen4++
 
 # left join with expressions, with three-way join (different code path)
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
