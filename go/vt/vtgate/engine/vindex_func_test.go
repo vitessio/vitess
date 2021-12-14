@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -260,6 +262,6 @@ func testVindexFunc(v vindexes.SingleColumn) *VindexFunc {
 		Cols:   []int{0, 1, 2, 3, 4},
 		Opcode: VindexMap,
 		Vindex: v,
-		Value:  int64PlanValue(1),
+		Value:  evalengine.NewLiteralInt(1),
 	}
 }

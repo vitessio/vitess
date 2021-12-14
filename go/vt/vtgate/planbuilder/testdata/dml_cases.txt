@@ -1243,7 +1243,7 @@ Gen4 plan same as above
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
-"could not compute value for vindex or auto-inc column: expression is too complex 'id'"
+"could not compute value for vindex or auto-inc column: column access not supported here"
 Gen4 plan same as above
 
 # insert invalid table
