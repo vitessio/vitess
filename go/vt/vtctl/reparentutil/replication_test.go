@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -401,7 +403,9 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					Err        error
 				}{
 					"zone1-0000000100": {
-						Err: mysql.ErrNotReplica,
+						// In the tabletManager implementation of StopReplicationAndGetStatus
+						// we wrap the error and then send it via GRPC. This should still work as expected.
+						Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
