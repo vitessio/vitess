@@ -120,6 +120,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 #almost dereks query - two queries with order by and limit being scattered to two different sets of tablets
 "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)"
@@ -171,6 +172,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
@@ -280,6 +282,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # union all on scatter and single route
 "select id from user where id = 1 union select id from user where id = 1  union all select id from user"
@@ -319,6 +322,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
@@ -775,6 +779,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
@@ -866,6 +871,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT
 "(select id from user order by 1 desc) union (select id from user order by 1 asc)"
@@ -1120,6 +1126,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # union distinct between a scatter query and a join (other side)
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
@@ -1233,6 +1240,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # unmergable because we are using aggregation
 "select count(*) as s from user union select count(*) as s from music"
@@ -1336,6 +1344,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Union in derived table with first SELECT being an UNION
 "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t"
@@ -1559,6 +1568,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # silly query that should be collapsed into a single unsharded UNION route
 "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1) union select 1 from unsharded union all select 1 from unsharded order by 1"
