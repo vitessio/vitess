@@ -40,6 +40,7 @@ const (
 	unitTestSelfHostedDatabases   = ""
 	dockerFileTemplate            = "templates/dockerfile.tpl"
 	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
+	clusterTestDockerTemplate     = "templates/cluster_endtoend_test_docker.tpl"
 )
 
 var (
@@ -101,13 +102,15 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
-		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",
-		"vreplication_v2",
 	}
 
 	clusterSelfHostedList = []string{}
+	clusterDockerList     = []string{
+		"vreplication_basic",
+		"vreplication_v2",
+	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
@@ -158,7 +161,8 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
-	generateClusterWorkflows()
+	generateClusterWorkflows(clusterList, clusterTestTemplateFormatStr)
+	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
 	// tests that will use self-hosted runners
 	err := generateSelfHostedUnitTestWorkflows()
@@ -267,8 +271,8 @@ func generateSelfHostedClusterWorkflows() error {
 	return nil
 }
 
-func generateClusterWorkflows() {
-	clusters := canonnizeList(clusterList)
+func generateClusterWorkflows(list []string, tpl string) {
+	clusters := canonnizeList(list)
 	for _, cluster := range clusters {
 		test := &clusterTest{
 			Name:  fmt.Sprintf("Cluster (%s)", cluster),
@@ -299,10 +303,11 @@ func generateClusterWorkflows() {
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
 		var tplPlatform string
+		template := tpl
 		if test.Platform != "" {
 			tplPlatform = "_" + test.Platform
+			template = fmt.Sprintf(tpl, tplPlatform)
 		}
-		template := fmt.Sprintf(clusterTestTemplateFormatStr, tplPlatform)
 		err := writeFileFromTemplate(template, path, test)
 		if err != nil {
 			log.Print(err)
