@@ -32,7 +32,9 @@ const (
 	unitTestTemplate  = "templates/unit_test.tpl"
 	unitTestDatabases = "mysql57, mariadb103, mysql80, mariadb102"
 
-	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
+	// An empty string will cause the default non platform specific template
+	// to be used.
+	clusterTestTemplateFormatStr = "templates/cluster_endtoend_test%s.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
 	unitTestSelfHostedDatabases   = ""
@@ -125,7 +127,7 @@ type unitTest struct {
 }
 
 type clusterTest struct {
-	Name, Shard                  string
+	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20                     bool
 }
@@ -255,6 +257,7 @@ func generateSelfHostedClusterWorkflows() error {
 		if err != nil {
 			return err
 		}
+
 		filePath := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
 		err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
 		if err != nil {
@@ -289,12 +292,18 @@ func generateClusterWorkflows() {
 		for _, ubuntu20Cluster := range ubuntu20Clusters {
 			if ubuntu20Cluster == cluster {
 				test.Ubuntu20 = true
+				test.Platform = "mysql80"
 				break
 			}
 		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
-		err := writeFileFromTemplate(clusterTestTemplate, path, test)
+		var tplPlatform string
+		if test.Platform != "" {
+			tplPlatform = "_" + test.Platform
+		}
+		template := fmt.Sprintf(clusterTestTemplateFormatStr, tplPlatform)
+		err := writeFileFromTemplate(template, path, test)
 		if err != nil {
 			log.Print(err)
 		}
