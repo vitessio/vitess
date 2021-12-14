@@ -11,10 +11,26 @@ concurrency:
 # (vtgate, vttablet, etc) built on different versions.
 
 jobs:
-  get_latest_release:
+  get_upgrade_downgrade_label:
     if: github.repository == 'vitessio/vitess'
+    name: Get the Upgrade Downgrade pull request label
+    runs-on: ubuntu-latest
+    outputs:
+      hasLabel: ${{ steps.check_label.outputs.hasLabel }}
+
+    steps:
+      - name: Check Label
+        uses: Dreamcodeio/pr-has-label-action@master
+        id: check_label
+        with:
+          label: Upgrade Downgrade
+
+  get_latest_release:
+    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel == 'true')
     name: Get latest release
     runs-on: ubuntu-latest
+    needs:
+      - get_upgrade_downgrade_label
     outputs:
       latest_release: ${{ steps.set-outpout.outputs.matrix }}
 
@@ -34,18 +50,19 @@ jobs:
         run: |
           echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
 
-
   upgrade_downgrade_test:
+    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel == 'true')
     name: Run Upgrade Downgrade Test
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     needs:
+      - get_upgrade_downgrade_label
       - get_latest_release
     strategy:
       fail-fast: false
       matrix: ${{fromJSON(needs.get_latest_release.outputs.latest_release)}}
 
     steps:
-    - name: Check latest versions
+    - name: Check latest versions # TODO: remove this step
       run: echo ${{ matrix.project }}
 
     - name: Set up Go
@@ -78,17 +95,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    # Checkout to the other version of Vitess
+    # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ matrix.project }})
       uses: actions/checkout@v2
       with:
         ref: ${{ matrix.project }}
 
-    - name: Get dependencies for other version
+    - name: Get dependencies for the last release
       run: |
         go mod download
 
-    - name: Building other version's binaries
+    - name: Building last release's binaries
       timeout-minutes: 10
       run: |
         source build.env
@@ -97,15 +114,15 @@ jobs:
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
 
-      # Checkout to the current version of Vitess
-    - name: Check out current version's code
+      # Checkout to this build's commit
+    - name: Check out commit's code
       uses: actions/checkout@v2
 
-    - name: Get dependencies for current version
+    - name: Get dependencies for this commit
       run: |
         go mod download
 
-    - name: Building current version's binaries
+    - name: Building the binaries for this commit
       timeout-minutes: 10
       run: |
         source build.env
@@ -113,7 +130,8 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
-    - name: Run simple test with current versions for both binaries
+    # Running a test with vtgate and vttablet using version n
+    - name: Run query serving tests (vtgate=N, vttablet=N)
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -121,14 +139,16 @@ jobs:
         source build.env
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 30
 
-    - name: Use other version VTGate
+    # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
+    - name: Use last release's VTGate
       run: |
         source build.env
 
         cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
         vtgate --version
 
-    - name: Run simple test old version vtgate and current version vttablet
+    # Running a test with vtgate at version n-1 and vttablet at version n
+    - name: Run query serving tests (vtgate=N-1, vttablet=N)
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -136,6 +156,7 @@ jobs:
         source build.env
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 30
 
+    # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n-1
     - name: Use current version VTGate, and other version VTTablet
       run: |
         source build.env
@@ -145,7 +166,8 @@ jobs:
         vtgate --version
         vttablet --version
 
-    - name: Run simple test current version vtgate and old version vttablet
+    # Running a test with vtgate at version n and vttablet at version n-1
+    - name: Run query serving tests (vtgate=N, vttablet=N-1)
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
