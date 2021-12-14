@@ -21,22 +21,20 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // FindValidEmergencyReparentCandidates will find candidates for an emergency
@@ -163,7 +161,7 @@ func StopReplicationAndBuildStatusMaps(
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
 	ignoredTablets sets.String,
-	tabletToWaitFor *topodata.TabletAlias,
+	tabletToWaitFor *topodatapb.TabletAlias,
 	logger logutil.Logger,
 ) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
