@@ -135,3 +135,7 @@ func (ge *RegionExperimental) Verify(vcursor VCursor, rowsColValues [][]sqltypes
 	}
 	return result, nil
 }
+
+func (ge *RegionExperimental) PartialVindex() bool {
+	return true
+}
