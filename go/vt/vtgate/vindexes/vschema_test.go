@@ -2673,4 +2673,8 @@ func TestRegionalExperimental(t *testing.T) {
 	table, err := vschema.FindTable("ksa", "user_region")
 	require.NoError(t, err)
 	require.Len(t, table.ColumnVindexes, 2)
+	require.True(t, table.ColumnVindexes[0].IsUnique())
+	require.False(t, table.ColumnVindexes[1].IsUnique())
+	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
+	require.EqualValues(t, 2, table.ColumnVindexes[1].Cost())
 }
