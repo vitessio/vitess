@@ -348,12 +348,17 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				t.Owned = append(t.Owned, columnVindex)
 			}
 
-			_, isMultiColumn := vindex.(MultiColumn)
+			mcv, isMultiColumn := vindex.(MultiColumn)
 			if !isMultiColumn {
 				continue
 			}
 			if i != 0 {
 				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindex %s should be a primary vindex for table %s", ind.Name, tname)
+			}
+			if !mcv.PartialVindex() {
+				// Partial column selection not allowed.
+				// Do not create subset column vindex.
+				continue
 			}
 			cost := vindex.Cost()
 			for i := len(columns) - 1; i > 0; i-- {
