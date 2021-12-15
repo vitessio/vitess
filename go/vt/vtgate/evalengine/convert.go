@@ -275,7 +275,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case *BindVariable:
 			lit.coll.Collation = coll.ID()
 		default:
-			panic(fmt.Sprintf("character set introducers are only supported for literals and arguments"))
+			panic("character set introducers are only supported for literals and arguments")
 		}
 		return expr, nil
 	}
