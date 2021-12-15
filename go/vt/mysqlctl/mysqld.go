@@ -75,6 +75,7 @@ var (
 	PoolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 
 	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
+	mycnfRetainFile   = flag.Bool("mysqlctl_mycnf_retain_file", false, "if set, use existing my.cnf if possible")
 	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 
 	// Deprecated
@@ -785,6 +786,16 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Infof("make_mycnf hook doesn't exist, reading template files")
+
+		if *mycnfRetainFile {
+			_, err := os.ReadFile(outFile)
+			if err != nil {
+				log.Infof("cannot read my.cnf, proceeding with default template")
+			} else {
+				log.Infof("reusing existing my.cnf file")
+				return nil
+			}
+		}
 		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplate())
 	case hook.HOOK_SUCCESS:
 		configData, err = cnf.fillMycnfTemplate(hr.Stdout)

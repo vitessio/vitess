@@ -2,6 +2,8 @@
 
 - `vtctl/vtctlclient ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted: `vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce`
 
+- `-mysqlctl_mycnf_retain_file` was added to skip recreating `my.cnf` while restoring backup
+
 ## Major Changes
 
 ### vttablet -use_super_read_only flag now defaults to true
