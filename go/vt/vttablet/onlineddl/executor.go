@@ -3194,6 +3194,7 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
+	revertedUUID, _ := onlineDDL.GetRevertUUID()
 
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
@@ -3212,6 +3213,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
 		sqltypes.BoolBindVariable(e.allowConcurrentMigration(onlineDDL)),
+		sqltypes.StringBindVariable(revertedUUID),
 	)
 	if err != nil {
 		return nil, err
