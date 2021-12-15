@@ -95,15 +95,22 @@ func TestTypes(t *testing.T) {
 	}
 
 	for _, query := range queries {
-		remote, err := conn.ExecuteFetch("SELECT "+query, 1, false)
+		query = "SELECT " + query
+		remote, err := conn.ExecuteFetch(query, 1, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("%s => %s", query, remote.Rows[0][0])
+		local, _, err := safeEvaluate(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if local.Value().String() != remote.Rows[0][0].String() {
+			t.Errorf("mismatch for query %q: local=%v, remote=%v", query, local.Value().String(), remote.Rows[0][0].String())
+		}
 	}
 }
 
-var fuzzMaxFailures = flag.Int("fuzz-total", 100, "maximum number of failures to fuzz for")
+var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
 var fuzzSeed = flag.Int64("fuzz-seed", 1234, "RNG seed when generating fuzz expressions")
 var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\d+)\) during query: (.*?)`)
 
