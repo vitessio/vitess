@@ -548,11 +548,6 @@ func (c *CreateUser) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (c *CreateUser) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // RenameUser represents the RENAME USER statement.
 type RenameUser struct {
 	Accounts []AccountRename
@@ -572,11 +567,6 @@ func (r *RenameUser) Format(buf *TrackedBuffer) {
 		}
 		buf.Myprintf(" %s", accountRename.String())
 	}
-}
-
-// walkSubtree implements the interface Statement.
-func (r *RenameUser) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // DropUser represents the DROP USER statement.
@@ -605,11 +595,6 @@ func (d *DropUser) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (d *DropUser) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // CreateRole represents the CREATE ROLE statement.
 type CreateRole struct {
 	IfNotExists bool
@@ -636,11 +621,6 @@ func (c *CreateRole) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (c *CreateRole) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // DropRole represents the DROP ROLE statement.
 type DropRole struct {
 	IfExists bool
@@ -665,11 +645,6 @@ func (d *DropRole) Format(buf *TrackedBuffer) {
 		}
 		buf.Myprintf(" %s", role.String())
 	}
-}
-
-// walkSubtree implements the interface Statement.
-func (d *DropRole) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // GrantPrivilege represents the GRANT...ON...TO statement.
@@ -722,11 +697,6 @@ func (g *GrantPrivilege) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (g *GrantPrivilege) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // GrantRole represents the GRANT...TO statement.
 type GrantRole struct {
 	Roles []AccountName
@@ -760,11 +730,6 @@ func (g *GrantRole) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (g *GrantRole) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // GrantProxy represents the GRANT PROXY statement.
 type GrantProxy struct {
 	On AccountName
@@ -789,11 +754,6 @@ func (g *GrantProxy) Format(buf *TrackedBuffer) {
 	if g.WithGrantOption {
 		buf.Myprintf(" with grant option")
 	}
-}
-
-// walkSubtree implements the interface Statement.
-func (g *GrantProxy) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // RevokePrivilege represents the REVOKE...ON...FROM statement.
@@ -838,11 +798,6 @@ func (r *RevokePrivilege) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (r *RevokePrivilege) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // RevokeAllPrivileges represents the REVOKE ALL statement.
 type RevokeAllPrivileges struct {
 	From []AccountName
@@ -862,11 +817,6 @@ func (r *RevokeAllPrivileges) Format(buf *TrackedBuffer) {
 		}
 		buf.Myprintf(" %s", user.String())
 	}
-}
-
-// walkSubtree implements the interface Statement.
-func (r *RevokeAllPrivileges) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // RevokeRole represents the REVOKE...FROM statement.
@@ -898,11 +848,6 @@ func (r *RevokeRole) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (r *RevokeRole) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // RevokeProxy represents the REVOKE PROXY statement.
 type RevokeProxy struct {
 	On AccountName
@@ -923,11 +868,6 @@ func (r *RevokeProxy) Format(buf *TrackedBuffer) {
 		}
 		buf.Myprintf(" %s", user.String())
 	}
-}
-
-// walkSubtree implements the interface Statement.
-func (r *RevokeProxy) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // ShowGrants represents the SHOW GRANTS statement.
@@ -963,11 +903,6 @@ func (s *ShowGrants) Format(buf *TrackedBuffer) {
 	}
 }
 
-// walkSubtree implements the interface Statement.
-func (s *ShowGrants) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // ShowPrivileges represents the SHOW PRIVILEGES statement.
 type ShowPrivileges struct {}
 
@@ -979,11 +914,6 @@ func (s *ShowPrivileges) iStatement() {}
 // Format implements the interface Statement.
 func (s *ShowPrivileges) Format(buf *TrackedBuffer) {
 	buf.Myprintf("show privileges")
-}
-
-// walkSubtree implements the interface Statement.
-func (s *ShowPrivileges) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // atoi is a shortcut for converting integer SQLVals to integers.

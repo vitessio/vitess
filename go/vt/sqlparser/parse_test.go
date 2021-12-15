@@ -2547,7 +2547,7 @@ func assertTestcaseOutput(t *testing.T, tcase parseTest, tree Statement) {
 	// For tests that require it, clear the InputExpression of selected expressions so they print their reproduced
 	// values, rather than the input values. In most cases this is due to a bug in parsing, and there should be a
 	// skipped test. But in some cases it's intentional, to test the behavior of parser logic.
-	if tcase.serializeSelectExprs {
+	if tree, ok := tree.(WalkableSQLNode); tcase.serializeSelectExprs && ok {
 		tree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
 			if ae, ok := node.(*AliasedExpr); ok {
 				ae.InputExpression = ""
