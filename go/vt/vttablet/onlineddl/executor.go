@@ -3194,7 +3194,7 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
-	revertedUUID, _ := onlineDDL.GetRevertUUID()
+	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
