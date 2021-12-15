@@ -52,9 +52,9 @@ type FilesBackupStorage struct {
 	// arn represents the ARN for the encrypted S3 bucket.
 	arn string
 
-	// filesCreatorFn creates a files.Files with the given argument. It can be
+	// files represents the a file system abstraction. It can be
 	// replaced for testing purposes.
-	filesCreatorFn func(region, bucket, arn string) (files.Files, error)
+	files files.Files
 }
 
 // ListBackups satisfies backupstorage.BackupStorage.
@@ -151,11 +151,10 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 		return nil, errors.New("backup_arn is not specified")
 	}
 
-	var impl files.Files
-	var err error
 	rootPath := path.Join("/", backupID, dir)
 
-	if f.filesCreatorFn == nil {
+	impl := f.files
+	if impl == nil {
 		sess, err := session.NewSession()
 		if err != nil {
 			return nil, vterrors.Wrap(err, "failed to initialize aws session")
@@ -164,11 +163,6 @@ func (f *FilesBackupStorage) createHandle(ctx context.Context, backupID, dir, na
 		impl, err = files.NewEncryptedS3Files(sess, f.region, f.bucket, "", f.arn)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "could not create encrypted s3 files")
-		}
-	} else {
-		impl, err = f.filesCreatorFn(f.region, f.bucket, f.arn)
-		if err != nil {
-			return nil, err
 		}
 	}
 

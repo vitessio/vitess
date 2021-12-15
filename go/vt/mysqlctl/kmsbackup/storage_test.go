@@ -22,6 +22,7 @@ import (
 var (
 	awsCredFile    = flag.String("aws-credentials-file", "", "AWS Credentials file")
 	awsCredProfile = flag.String("aws-credentials-profile", "", "Profile for AWS Credentials")
+	awsS3Bucket    = flag.String("aws-s3-bucket", "planetscale-vitess-private-ci", "Bucket to use for S3 for AWS Credentials")
 )
 
 func TestMain(m *testing.M) {
@@ -34,7 +35,6 @@ func TestFileBackupStorage_ListBackups(t *testing.T) {
 
 	content := fmt.Sprintf(`%s="1234"`, lastBackupLabel)
 	tmpfile := createTempFile(t, content)
-
 	t.Cleanup(func() { os.Remove(tmpfile) })
 
 	os.Setenv(annotationsFilePath, tmpfile)
@@ -130,6 +130,42 @@ func TestFilesBackupStorage_StartBackup(t *testing.T) {
 	assert.NoError(t, handle.AbortBackup(ctx))
 }
 
+func TestFilesBackupStorage_StartBackup_sanityCheck(t *testing.T) {
+	ctx := context.Background()
+
+	backupID := rand.Int63()
+	content := fmt.Sprintf(`%v="%v"`, backupIDLabel, backupID)
+	tmpfile := createTempFile(t, content)
+	t.Cleanup(func() { os.Remove(tmpfile) })
+
+	os.Setenv(annotationsFilePath, tmpfile)
+
+	fbs := testFilesBackupStorage(t)
+
+	handle, err := fbs.StartBackup(ctx, "a", "b")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		handle.(*filesBackupHandle).fs.RemoveAll(ctx, fmt.Sprintf("/%v", backupID))
+	})
+
+	w, err := handle.AddFile(ctx, "ssfile", 10)
+	require.NoError(t, err)
+	w.Write([]byte("test content"))
+	require.NoError(t, err)
+	w.Close()
+
+	w, err = handle.AddFile(ctx, backupManifestFileName, 10)
+	require.NoError(t, err)
+	w.Close()
+
+	// make sure that a nonexistent file causes an error
+	fbh := handle.(*filesBackupHandle)
+	fbh.filesAdded["/nonexistent"] = struct{}{}
+	_, err = handle.AddFile(ctx, backupManifestFileName, 10)
+	assert.Error(t, err)
+
+}
+
 func TestFilesBackupStorage_API(t *testing.T) {
 	ctx := context.Background()
 	fbs := testFilesBackupStorage(t)
@@ -141,33 +177,31 @@ func testFilesBackupStorage(t *testing.T) *FilesBackupStorage {
 	t.Helper()
 
 	region := "us-east-1"
-	bucket := "planetscale-vitess-private-ci"
+	bucket := *awsS3Bucket
 	arn := "not-used"
 
 	testDir := t.TempDir()
 
-	filesCreator := func(region, bucket, arn string) (files.Files, error) {
-		return files.NewLocalFiles(testDir)
-	}
+	fs, err := files.NewLocalFiles(testDir)
+	require.NoError(t, err)
 
 	if *awsCredFile != "" {
-		sess := session.New(&aws.Config{
+		sess, err := session.NewSession(&aws.Config{
 			Credentials: credentials.NewSharedCredentials(*awsCredFile, *awsCredProfile),
 			Region:      aws.String(region),
 		})
+		require.NoError(t, err)
 
-		filesCreator = func(region, bucket, arn string) (files.Files, error) {
-			return files.NewS3Files(sess, region, bucket, ""), nil
-		}
+		fs = files.NewS3Files(sess, region, bucket, "")
 	} else {
 		t.Logf("s3 integration is disabled, using local filesystem abstraction")
 	}
 
 	f := &FilesBackupStorage{
-		region:         region,
-		bucket:         bucket,
-		arn:            arn,
-		filesCreatorFn: filesCreator,
+		region: region,
+		bucket: bucket,
+		arn:    arn,
+		files:  fs,
 	}
 
 	return f
