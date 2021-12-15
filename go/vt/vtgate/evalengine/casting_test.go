@@ -28,36 +28,36 @@ import (
 
 func TestEvalResultToBooleanStrict(t *testing.T) {
 	trueValues := []*EvalResult{{
-		typ:    sqltypes.Int64,
-		numval: 1,
+		typ2:    sqltypes.Int64,
+		numval2: 1,
 	}, {
-		typ:    sqltypes.Uint64,
-		numval: 1,
+		typ2:    sqltypes.Uint64,
+		numval2: 1,
 	}, {
-		typ:    sqltypes.Int8,
-		numval: 1,
+		typ2:    sqltypes.Int8,
+		numval2: 1,
 	}}
 
 	falseValues := []*EvalResult{{
-		typ:    sqltypes.Int64,
-		numval: 0,
+		typ2:    sqltypes.Int64,
+		numval2: 0,
 	}, {
-		typ:    sqltypes.Uint64,
-		numval: 0,
+		typ2:    sqltypes.Uint64,
+		numval2: 0,
 	}, {
-		typ:    sqltypes.Int8,
-		numval: 0,
+		typ2:    sqltypes.Int8,
+		numval2: 0,
 	}}
 
 	invalid := []*EvalResult{{
-		typ:   sqltypes.VarChar,
-		bytes: []byte("foobar"),
+		typ2:   sqltypes.VarChar,
+		bytes2: []byte("foobar"),
 	}, {
-		typ:    sqltypes.Float32,
-		numval: math.Float64bits(1.0),
+		typ2:    sqltypes.Float32,
+		numval2: math.Float64bits(1.0),
 	}, {
-		typ:    sqltypes.Int64,
-		numval: 12,
+		typ2:    sqltypes.Int64,
+		numval2: 12,
 	}}
 
 	for _, res := range trueValues {

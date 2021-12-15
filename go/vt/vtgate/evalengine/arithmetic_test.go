@@ -1157,7 +1157,7 @@ func TestAddNumeric(t *testing.T) {
 		err: dataOutOfRangeError(uint64(18446744073709551615), 2, "BIGINT UNSIGNED", "+"),
 	}}
 	for _, tcase := range tcases {
-		got, err := addNumericWithError(tcase.v1, tcase.v2)
+		got, err := addNumericWithError(resolved(tcase.v1), resolved(tcase.v2))
 		if err != nil {
 			if tcase.err == nil {
 				t.Fatal(err)
@@ -1175,8 +1175,8 @@ func TestPrioritize(t *testing.T) {
 	ival := newEvalInt64(-1)
 	uval := newEvalUint64(1)
 	fval := newEvalFloat(1.2)
-	textIntval := EvalResult{typ: querypb.Type_VARBINARY, bytes: []byte("-1")}
-	textFloatval := EvalResult{typ: querypb.Type_VARBINARY, bytes: []byte("1.2")}
+	textIntval := EvalResult{typ2: querypb.Type_VARBINARY, bytes2: []byte("-1")}
+	textFloatval := EvalResult{typ2: querypb.Type_VARBINARY, bytes2: []byte("1.2")}
 
 	tcases := []struct {
 		v1, v2     EvalResult
@@ -1224,9 +1224,9 @@ func TestPrioritize(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
-			got1, got2 := makeNumericAndPrioritize(tcase.v1, tcase.v2)
-			utils.MustMatch(t, tcase.out1, got1, "makeNumericAndPrioritize")
-			utils.MustMatch(t, tcase.out2, got2, "makeNumericAndPrioritize")
+			got1, got2 := makeNumericAndPrioritize(resolved(tcase.v1), resolved(tcase.v2))
+			utils.MustMatch(t, tcase.out1, got1.evalresult(), "makeNumericAndPrioritize")
+			utils.MustMatch(t, tcase.out2, got2.evalresult(), "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -1247,7 +1247,7 @@ func TestToSqlValue(t *testing.T) {
 		out: NewInt64(1),
 	}, {
 		typ: querypb.Type_INT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
+		v:   newEvalFloat(1.2e-16),
 		out: NewInt64(0),
 	}, {
 		typ: querypb.Type_UINT64,
@@ -1259,7 +1259,7 @@ func TestToSqlValue(t *testing.T) {
 		out: NewUint64(1),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
+		v:   newEvalFloat(1.2e-16),
 		out: NewUint64(0),
 	}, {
 		typ: querypb.Type_FLOAT64,
@@ -1271,7 +1271,7 @@ func TestToSqlValue(t *testing.T) {
 		out: TestValue(querypb.Type_FLOAT64, "1"),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
+		v:   newEvalFloat(1.2e-16),
 		out: TestValue(querypb.Type_FLOAT64, "1.2e-16"),
 	}, {
 		typ: querypb.Type_DECIMAL,
@@ -1284,7 +1284,7 @@ func TestToSqlValue(t *testing.T) {
 	}, {
 		// For float, we should not use scientific notation.
 		typ: querypb.Type_DECIMAL,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
+		v:   newEvalFloat(1.2e-16),
 		out: TestValue(querypb.Type_DECIMAL, "0.00000000000000012"),
 	}}
 	for _, tcase := range tcases {
@@ -1330,16 +1330,16 @@ func TestCompareNumeric(t *testing.T) {
 	for aIdx, aVal := range values {
 		for bIdx, bVal := range values {
 			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, aVal.debugString(), bVal.debugString()), func(t *testing.T) {
-				result, err := compareNumeric(aVal, bVal)
+				result, err := compareNumeric(resolved(aVal), resolved(bVal))
 				require.NoError(t, err)
 				assert.Equal(t, cmpResults[aIdx][bIdx], result)
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					if aVal.typ == bVal.typ {
+					if aVal.typ2 == bVal.typ2 {
 						// hash codes can only be compared if they are coerced to the same type first
-						aHash := numericalHashCode(aVal)
-						bHash := numericalHashCode(bVal)
+						aHash, _ := aVal.nullSafeHashcode()
+						bHash, _ := bVal.nullSafeHashcode()
 						assert.Equal(t, aHash, bHash, "hash code does not match")
 					}
 				}
@@ -1631,13 +1631,13 @@ func BenchmarkAddGoNonInterface(b *testing.B) {
 	v1 := newEvalInt64(1)
 	v2 := newEvalInt64(12)
 	for i := 0; i < b.N; i++ {
-		if v1.typ != querypb.Type_INT64 {
+		if v1.typ2 != querypb.Type_INT64 {
 			b.Error("type assertion failed")
 		}
-		if v2.typ != querypb.Type_INT64 {
+		if v2.typ2 != querypb.Type_INT64 {
 			b.Error("type assertion failed")
 		}
-		v1 = EvalResult{typ: querypb.Type_INT64, numval: uint64(int64(v1.numval) + int64(v2.numval))}
+		v1 = newEvalInt64(int64(v1.numval2) + int64(v2.numval2))
 	}
 }
 

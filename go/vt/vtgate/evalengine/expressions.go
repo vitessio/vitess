@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"bytes"
-	"math"
 	"strconv"
 	"unicode/utf8"
 
@@ -92,8 +91,25 @@ var _ Expr = (*NotExpr)(nil)
 
 var noenv *ExpressionEnv = nil
 
-func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
-	_, err := expr.cardinality(env)
+type evalError struct {
+	error
+}
+
+func throwEvalError(err error) {
+	panic(evalError{err})
+}
+
+func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if ee, ok := r.(evalError); ok {
+				err = ee.error
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	_, err = expr.cardinality(env)
 	if err != nil {
 		return EvalResult{}, err
 	}
@@ -179,7 +195,7 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) Expr {
 			break
 		}
 	}
-	return &Literal{Val: EvalResult{typ: sqltypes.VarBinary, bytes: val, collation: collation}}
+	return &Literal{Val: EvalResult{typ2: sqltypes.VarBinary, bytes2: val, collation2: collation}}
 }
 
 // NewBindVar returns a bind variable
@@ -217,17 +233,13 @@ func (l *Literal) eval(*ExpressionEnv) (EvalResult, error) {
 }
 
 func (t TupleExpr) eval(env *ExpressionEnv) (EvalResult, error) {
-	var tup []EvalResult
+	var tup []item = make([]item, 0, len(t))
 	for _, expr := range t {
-		evalRes, err := expr.eval(env)
-		if err != nil {
-			return EvalResult{}, err
-		}
-		tup = append(tup, evalRes)
+		tup = append(tup, env.item(expr))
 	}
 	return EvalResult{
-		typ:   querypb.Type_TUPLE,
-		tuple: &tup,
+		typ2:   querypb.Type_TUPLE,
+		tuple2: &tup,
 	}, nil
 }
 
@@ -241,7 +253,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	eval.collation = bv.coll
+	eval.collation2 = bv.coll
 	return eval, nil
 }
 
@@ -249,7 +261,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (EvalResult, error) {
 func (c *Column) eval(env *ExpressionEnv) (EvalResult, error) {
 	value := env.Row[c.Offset]
 	numeric, err := newEvalResult(value)
-	numeric.collation = c.coll
+	numeric.collation2 = c.coll
 	return numeric, err
 }
 
@@ -265,7 +277,7 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (querypb.Type, error) {
 
 // typeof implements the Expr interface
 func (l *Literal) typeof(*ExpressionEnv) (querypb.Type, error) {
-	return l.Val.typ, nil
+	return l.Val.typ2, nil
 }
 
 // typeof implements the Expr interface
@@ -298,25 +310,26 @@ func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
 		if err != nil {
 			ival = 0
 		}
-		return EvalResult{typ: sqltypes.Int64, numval: uint64(ival)}, nil
+		return newEvalInt64(ival), nil
 	case sqltypes.Int32:
 		ival, err := strconv.ParseInt(string(value), 10, 32)
 		if err != nil {
 			ival = 0
 		}
-		return EvalResult{typ: sqltypes.Int32, numval: uint64(ival)}, nil
+		// TODO: type32
+		return newEvalInt64(ival), nil
 	case sqltypes.Uint64:
 		uval, err := strconv.ParseUint(string(value), 10, 64)
 		if err != nil {
 			uval = 0
 		}
-		return EvalResult{typ: sqltypes.Uint64, numval: uval}, nil
+		return newEvalUint64(uval), nil
 	case sqltypes.Float64:
 		fval, err := strconv.ParseFloat(string(value), 64)
 		if err != nil {
 			fval = 0
 		}
-		return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}, nil
+		return newEvalFloat(fval), nil
 	case sqltypes.Decimal:
 		dec, err := newDecimalString(string(value))
 		if err != nil {
@@ -324,9 +337,9 @@ func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
 		}
 		return newEvalDecimal(dec), nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
-		return EvalResult{typ: sqltypes.VarBinary, bytes: value}, nil
+		return EvalResult{typ2: sqltypes.VarBinary, bytes2: value}, nil
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
-		return EvalResult{typ: typ, bytes: value}, nil
+		return EvalResult{typ2: typ, bytes2: value}, nil
 	case sqltypes.Null:
 		return resultNull, nil
 	default:
@@ -337,17 +350,17 @@ func evaluateByTypeSingle(typ querypb.Type, value []byte) (EvalResult, error) {
 func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 	switch val.Type {
 	case querypb.Type_TUPLE:
-		tuple := make([]EvalResult, 0, len(val.Values))
+		tuple := make([]item, 0, len(val.Values))
 		for _, value := range val.Values {
 			single, err := evaluateByTypeSingle(value.Type, value.Value)
 			if err != nil {
 				return EvalResult{}, err
 			}
-			tuple = append(tuple, single)
+			tuple = append(tuple, item{res: &single})
 		}
 		return EvalResult{
-			typ:   querypb.Type_TUPLE,
-			tuple: &tuple,
+			typ2:   querypb.Type_TUPLE,
+			tuple2: &tuple,
 		}, nil
 
 	default:
