@@ -3699,6 +3699,7 @@ frame_opt:
     $$ = &Frame{Unit: RangeUnit, Extent: $2}
   }
 
+// enforce PRECEDING < CURRENT ROW < FOLLOWING
 frame_extent:
  BETWEEN frame_bound AND frame_bound
     {
@@ -3765,6 +3766,7 @@ UNBOUNDED PRECEDING
      }
   }
 
+// TODO : support prepared statements
 integral_or_interval_expr:
 INTEGRAL
   {

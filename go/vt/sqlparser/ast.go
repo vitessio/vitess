@@ -4849,13 +4849,13 @@ func (node *Order) walkSubtree(visit Visit) error {
 type FrameUnit int
 
 const (
-	// RangeUnit is the mode of specifying frame in terms of logical range (e.g. 100 units cheaper).
+	// RangeUnit matches by value comparison (e.g. 100 units cheaper)
 	RangeUnit FrameUnit = iota
-	// RowsUnit is the mode of specifying frame in terms of physical offsets (e.g. 1 row before etc).
+	// RowsUnit matches by row position offset (e.g. 1 row before)
 	RowsUnit
 )
 
-// Frame represents a window Frame clause
+// Frame represents a window Frame clause.
 type Frame struct {
 	Unit   FrameUnit
 	Extent *FrameExtent
@@ -4875,12 +4875,18 @@ func (node *Frame) Format(buf *TrackedBuffer) {
 }
 
 func (node *Frame) walkSubtree(visit Visit) error {
-	return nil
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Extent,
+	)
 }
 
-// FrameExtent defines the start and end bounds for a window frame
+// FrameExtent defines the start and end bounds for a window frame.
 type FrameExtent struct {
-	Start, End *frameBound
+	Start, End *FrameBound
 }
 
 // Format formats the node.
@@ -4898,29 +4904,41 @@ func (node *FrameExtent) Format(buf *TrackedBuffer) {
 	}
 }
 
+func (node *FrameExtent) walkSubtree(visit Visit) error {
+	return nil
+}
+
 type BoundType int
 
 const (
-	// CurrentRow represents the current row position
+	// CurrentRow represents the current row position or value range
 	CurrentRow BoundType = iota
 	// UnboundedFollowing includes all rows after CURRENT ROW in the active partition
 	UnboundedFollowing
 	// UnboundedPreceding includes all rows before CURRENT ROW in the active partition
 	UnboundedPreceding
-	// ExprPreceding matches N rows or value sets before the CURRENT ROW
+	// ExprPreceding matches N rows or a value range after CURRENT ROW
 	ExprPreceding
-	// ExprFollowing matches N rows or value sets after the CURRENT ROW
+	// ExprFollowing matches N rows or a value range after CURRENT ROW
 	ExprFollowing
 )
 
-// frameBound defines one direction of row or range inclusion
-type frameBound struct {
+// FrameBound defines one direction of row or range inclusion.
+type FrameBound struct {
 	Expr Expr
 	Type BoundType
 }
 
 // Format formats the node.
-func (node *frameBound) print(buf *TrackedBuffer) {
+func (node *FrameBound) Format(buf *TrackedBuffer) {
+	return
+}
+
+func (node *FrameExtent) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (node *FrameBound) print(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}

@@ -131,7 +131,7 @@ type yySymType struct {
 	over                     *Over
 	frame                    *Frame
 	frameExtent              *FrameExtent
-	frameBound               *frameBound
+	frameBound               *FrameBound
 	caseStatementCases       []CaseStatementCase
 	caseStatementCase        CaseStatementCase
 	ifStatementConditions    []IfStatementCondition
@@ -10056,25 +10056,25 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3742
 		{
-			yyVAL.frameBound = &frameBound{Type: UnboundedPreceding}
+			yyVAL.frameBound = &FrameBound{Type: UnboundedPreceding}
 		}
 	case 711:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3746
 		{
-			yyVAL.frameBound = &frameBound{Type: UnboundedFollowing}
+			yyVAL.frameBound = &FrameBound{Type: UnboundedFollowing}
 		}
 	case 712:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3750
 		{
-			yyVAL.frameBound = &frameBound{Type: CurrentRow}
+			yyVAL.frameBound = &FrameBound{Type: CurrentRow}
 		}
 	case 713:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3754
 		{
-			yyVAL.frameBound = &frameBound{
+			yyVAL.frameBound = &FrameBound{
 				Expr: yyDollar[1].expr,
 				Type: ExprPreceding,
 			}
@@ -10083,7 +10083,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3761
 		{
-			yyVAL.frameBound = &frameBound{
+			yyVAL.frameBound = &FrameBound{
 				Expr: yyDollar[1].expr,
 				Type: ExprFollowing,
 			}
