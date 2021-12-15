@@ -1485,9 +1485,6 @@ var (
 			input:  "show plugins",
 			output: "show plugins",
 		}, {
-			input:  "show privileges",
-			output: "show privileges",
-		}, {
 			input: "show procedure status",
 		}, {
 			input: "show procedure status where Name = 'hi'",
@@ -2161,6 +2158,33 @@ var (
 			input:  "CREATE USER UserName1@localhost IDENTIFIED BY 'some_auth1', UserName2@localhost IDENTIFIED BY 'some_auth2' DEFAULT ROLE role1, role2@localhost",
 			output: "create user `UserName1`@`localhost` identified by 'some_auth1', `UserName2`@`localhost` identified by 'some_auth2' default role `role1`@`%`, `role2`@`localhost`",
 		}, {
+			input:  "CREATE USER UserName@localhost REQUIRE NONE",
+			output: "create user `UserName`@`localhost`",
+		}, {
+			input:  "CREATE USER UserName@localhost REQUIRE X509",
+			output: "create user `UserName`@`localhost` require X509",
+		}, {
+			input:  "CREATE USER UserName@localhost REQUIRE SUBJECT 'some_subject' AND ISSUER 'some_issuer'",
+			output: "create user `UserName`@`localhost` require issuer 'some_issuer' and subject 'some_subject'",
+		}, {
+			input:  "CREATE USER UserName@localhost WITH MAX_CONNECTIONS_PER_HOUR 3 MAX_QUERIES_PER_HOUR 20",
+			output: "create user `UserName`@`localhost` with max_queries_per_hour 20 max_connections_per_hour 3",
+		}, {
+			input:  "CREATE USER UserName@localhost PASSWORD EXPIRE NEVER ACCOUNT LOCK PASSWORD HISTORY 5",
+			output: "create user `UserName`@`localhost` password expire never password history 5 account lock",
+		}, {
+			input:  "CREATE USER UserName@localhost PASSWORD_LOCK_TIME UNBOUNDED ACCOUNT LOCK PASSWORD REUSE INTERVAL 90 DAY ACCOUNT UNLOCK",
+			output: "create user `UserName`@`localhost` password reuse interval 90 day password_lock_time unbounded",
+		}, {
+			input:  "CREATE USER UserName@localhost COMMENT 'hello'",
+			output: "create user `UserName`@`localhost` attribute '{\"comment\": \"hello\"}'",
+		}, {
+			input:  "CREATE USER UserName@localhost COMMENT 'text\"here'",
+			output: "create user `UserName`@`localhost` attribute '{\"comment\": \"text\\\"here\"}'",
+		}, {
+			input:  "CREATE USER UserName@localhost ATTRIBUTE '{\"attr\": \"attr_text\"}'",
+			output: "create user `UserName`@`localhost` attribute '{\"attr\": \"attr_text\"}'",
+		}, {
 			input:  "RENAME USER UserName1@localhost TO UserName2@localhost, UserName3 TO UserName4",
 			output: "rename user `UserName1`@`localhost` to `UserName2`@`localhost`, `UserName3`@`%` to `UserName4`@`%`",
 		}, {
@@ -2257,6 +2281,105 @@ var (
 			input:  "DROP ROLE IF EXISTS role1, role2@localhost",
 			output: "drop role if exists `role1`@`%`, `role2`@`localhost`",
 		}, {
+			input:  "GRANT ALL ON * TO UserName",
+			output: "grant all on * to `UserName`@`%`",
+		}, {
+			input:  "GRANT ALL ON *.* TO UserName",
+			output: "grant all on *.* to `UserName`@`%`",
+		}, {
+			input:  "GRANT ALL ON db.* TO UserName",
+			output: "grant all on `db`.* to `UserName`@`%`",
+		}, {
+			input:  "GRANT ALL ON db.tbl TO UserName",
+			output: "grant all on `db`.`tbl` to `UserName`@`%`",
+		}, {
+			input:  "GRANT ALL ON `db`.`tbl` TO UserName",
+			output: "grant all on `db`.`tbl` to `UserName`@`%`",
+		}, {
+			input:  "GRANT ALL ON tbl TO UserName",
+			output: "grant all on `tbl` to `UserName`@`%`",
+		}, {
+			input:  "GRANT ALL ON TABLE tbl TO UserName",
+			output: "grant all on table `tbl` to `UserName`@`%`",
+		}, {
+			input:  "GRANT SELECT (col1, col2), UPDATE (col2) ON db.tbl TO UserName",
+			output: "grant select (`col1`, `col2`), update (`col2`) on `db`.`tbl` to `UserName`@`%`",
+		}, {
+			input:  "GRANT ALL ON tbl TO UserName1@localhost, UserName2",
+			output: "grant all on `tbl` to `UserName1`@`localhost`, `UserName2`@`%`",
+		}, {
+			input:  "GRANT ALL ON tbl TO UserName WITH GRANT OPTION",
+			output: "grant all on `tbl` to `UserName`@`%` with grant option",
+		}, {
+			input:  "GRANT ALL ON tbl TO UserName AS OtherUser",
+			output: "grant all on `tbl` to `UserName`@`%` as `OtherUser`@`%`",
+		}, {
+			input:  "GRANT ALL ON tbl TO UserName AS OtherUser WITH ROLE ALL",
+			output: "grant all on `tbl` to `UserName`@`%` as `OtherUser`@`%` with role all",
+		}, {
+			input:  "GRANT ALL ON tbl TO UserName AS OtherUser WITH ROLE ALL EXCEPT NotThisRole",
+			output: "grant all on `tbl` to `UserName`@`%` as `OtherUser`@`%` with role all except `NotThisRole`@`%`",
+		}, {
+			input:  "GRANT Role1 TO UserName",
+			output: "grant `Role1`@`%` to `UserName`@`%`",
+		}, {
+			input:  "GRANT Role1, Role2 TO UserName1, UserName2",
+			output: "grant `Role1`@`%`, `Role2`@`%` to `UserName1`@`%`, `UserName2`@`%`",
+		}, {
+			input:  "GRANT Role1 TO UserName WITH ADMIN OPTION",
+			output: "grant `Role1`@`%` to `UserName`@`%` with admin option",
+		}, {
+			input:  "GRANT PROXY ON UserName TO Role1, Role2",
+			output: "grant proxy on `UserName`@`%` to `Role1`@`%`, `Role2`@`%`",
+		}, {
+			input:  "GRANT PROXY ON UserName TO Role1, Role2 WITH GRANT OPTION",
+			output: "grant proxy on `UserName`@`%` to `Role1`@`%`, `Role2`@`%` with grant option",
+		}, {
+			input:  "REVOKE ALL ON * FROM UserName",
+			output: "revoke all on * from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL ON *.* FROM UserName",
+			output: "revoke all on *.* from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL ON db.* FROM UserName",
+			output: "revoke all on `db`.* from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL ON db.tbl FROM UserName",
+			output: "revoke all on `db`.`tbl` from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL ON `db`.`tbl` FROM UserName",
+			output: "revoke all on `db`.`tbl` from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL ON tbl FROM UserName",
+			output: "revoke all on `tbl` from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL ON TABLE tbl FROM UserName",
+			output: "revoke all on table `tbl` from `UserName`@`%`",
+		}, {
+			input:  "REVOKE SELECT (col1, col2), UPDATE (col2) ON db.tbl FROM UserName",
+			output: "revoke select (`col1`, `col2`), update (`col2`) on `db`.`tbl` from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL ON tbl FROM UserName1@localhost, UserName2",
+			output: "revoke all on `tbl` from `UserName1`@`localhost`, `UserName2`@`%`",
+		}, {
+			input:  "REVOKE ALL, GRANT OPTION FROM UserName",
+			output: "revoke all privileges, grant option from `UserName`@`%`",
+		}, {
+			input:  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM UserName",
+			output: "revoke all privileges, grant option from `UserName`@`%`",
+		}, {
+			input:  "REVOKE Role1 FROM UserName",
+			output: "revoke `Role1`@`%` from `UserName`@`%`",
+		}, {
+			input:  "REVOKE Role1, Role2 FROM UserName1, UserName2",
+			output: "revoke `Role1`@`%`, `Role2`@`%` from `UserName1`@`%`, `UserName2`@`%`",
+		}, {
+			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
+			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
+		}, {
+			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
+			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
+		}, {
 			input:  "SHOW GRANTS",
 			output: "show grants",
 		}, {
@@ -2271,6 +2394,9 @@ var (
 		}, {
 			input:  "SHOW GRANTS FOR UserName USING role1, role2",
 			output: "show grants for `UserName`@`%` using `role1`@`%`, `role2`@`%`",
+		}, {
+			input:  "SHOW PRIVILEGES",
+			output: "show privileges",
 		}, {
 			input:  "kill query 123",
 			output: "kill query 123",
@@ -2465,7 +2591,7 @@ func assertTestcaseOutput(t *testing.T, tcase parseTest, tree Statement) {
 	// For tests that require it, clear the InputExpression of selected expressions so they print their reproduced
 	// values, rather than the input values. In most cases this is due to a bug in parsing, and there should be a
 	// skipped test. But in some cases it's intentional, to test the behavior of parser logic.
-	if tcase.serializeSelectExprs {
+	if tree, ok := tree.(WalkableSQLNode); tcase.serializeSelectExprs && ok {
 		tree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
 			if ae, ok := node.(*AliasedExpr); ok {
 				ae.InputExpression = ""
@@ -2740,6 +2866,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "create role ''@localhost",
 		err:   "the anonymous user is not a valid role name",
+	}, {
+		input: "CREATE USER UserName@localhost REQUIRE SUBJECT 'some_subject1' AND SUBJECT 'some_subject2'",
+		err:   "invalid tls options",
+	}, {
+		input: "CREATE USER UserName@localhost REQUIRE SSL AND X509",
+		err:   "invalid tls options",
 	}}
 	for _, tcase := range invalidDDL {
 		_, err := ParseStrictDDL(tcase.input)
