@@ -166,8 +166,19 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	}
 
 	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
-	routeValues := make([][][]evalengine.Expr, len(eins.Table.ColumnVindexes))
-	for vIdx, colVindex := range eins.Table.ColumnVindexes {
+	var colVindexes []*vindexes.ColumnVindex
+	for idx, colVindex := range eins.Table.ColumnVindexes {
+		if idx == 0 {
+			colVindexes = append(colVindexes, colVindex)
+			continue
+		}
+		if multiColV, isMultiColV := colVindex.Vindex.(vindexes.MultiColumn); isMultiColV && multiColV.PartialVindex() {
+			continue
+		}
+		colVindexes = append(colVindexes, colVindex)
+	}
+	routeValues := make([][][]evalengine.Expr, len(colVindexes))
+	for vIdx, colVindex := range colVindexes {
 		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
 		for colIdx, col := range colVindex.Columns {
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
@@ -181,7 +192,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 			}
 		}
 	}
-	for _, colVindex := range eins.Table.ColumnVindexes {
+	for _, colVindex := range colVindexes {
 		for _, col := range colVindex.Columns {
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
