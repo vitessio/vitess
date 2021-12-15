@@ -35,7 +35,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
@@ -183,13 +182,14 @@ func init() {
 	Register("stln", NewSTLN)
 	Register("stlu", NewSTLU)
 	Register("stlo", NewSTLO)
+	Register("region_experimental_test", NewRegionExperimental)
 }
 
 func TestUnshardedVSchemaValid(t *testing.T) {
 	err := ValidateKeyspace(&vschemapb.Keyspace{
 		Sharded:  false,
-		Vindexes: make(map[string]*vschema.Vindex),
-		Tables:   make(map[string]*vschema.Table),
+		Vindexes: make(map[string]*vschemapb.Vindex),
+		Tables:   make(map[string]*vschemapb.Table),
 	})
 	if err != nil {
 		t.Errorf("TestUnshardedVSchemaValid:\n%v", err)
@@ -2641,4 +2641,36 @@ func TestFindSingleKeyspace(t *testing.T) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
 	}
+}
+
+func TestRegionalExperimental(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ksa": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"regional_vdx": {
+						Type: "region_experimental_test",
+						Params: map[string]string{
+							"region_bytes": "1",
+						},
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"user_region": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Columns: []string{"cola", "colb"},
+								Name:    "regional_vdx",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	table, err := vschema.FindTable("ksa", "user_region")
+	require.NoError(t, err)
+	require.Len(t, table.ColumnVindexes, 2)
 }
