@@ -217,7 +217,7 @@ func StopReplicationAndBuildStatusMaps(
 	}
 
 	tabletAliasToWaitFor := ""
-	numErrosToWaitFor := 0
+	numErrorsToWaitFor := 0
 	if tabletToWaitFor != nil {
 		tabletAliasToWaitFor = topoproto.TabletAliasString(tabletToWaitFor)
 	}
@@ -225,7 +225,7 @@ func StopReplicationAndBuildStatusMaps(
 		if !ignoredTablets.Has(alias) {
 			mustWaitFor := tabletAliasToWaitFor == alias
 			if mustWaitFor {
-				numErrosToWaitFor++
+				numErrorsToWaitFor++
 			}
 			go fillStatus(alias, tabletInfo, mustWaitFor)
 		}
@@ -235,7 +235,7 @@ func StopReplicationAndBuildStatusMaps(
 		NumGoroutines:        len(tabletMap) - ignoredTablets.Len(),
 		NumRequiredSuccesses: len(tabletMap) - ignoredTablets.Len() - 1,
 		NumAllowedErrors:     1,
-		NumErrorsToWaitFor:   numErrosToWaitFor,
+		NumErrorsToWaitFor:   numErrorsToWaitFor,
 	}
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)
