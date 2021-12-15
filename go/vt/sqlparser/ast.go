@@ -4934,7 +4934,7 @@ func (node *FrameBound) Format(buf *TrackedBuffer) {
 	return
 }
 
-func (node *FrameExtent) walkSubtree(visit Visit) error {
+func (node *FrameBound) walkSubtree(visit Visit) error {
 	return nil
 }
 

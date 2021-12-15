@@ -141,7 +141,7 @@ func skipToEnd(yylex interface{}) {
   over          *Over
   frame         *Frame
   frameExtent   *FrameExtent
-  frameBound    *frameBound
+  frameBound    *FrameBound
   caseStatementCases []CaseStatementCase
   caseStatementCase CaseStatementCase
   ifStatementConditions []IfStatementCondition
@@ -3741,26 +3741,26 @@ frame_extent:
 frame_bound:
 UNBOUNDED PRECEDING
   {
-    $$ = &frameBound{Type: UnboundedPreceding}
+    $$ = &FrameBound{Type: UnboundedPreceding}
   }
 | UNBOUNDED FOLLOWING
   {
-    $$ = &frameBound{Type: UnboundedFollowing}
+    $$ = &FrameBound{Type: UnboundedFollowing}
   }
 | CURRENT ROW
   {
-    $$ = &frameBound{Type: CurrentRow}
+    $$ = &FrameBound{Type: CurrentRow}
   }
 | integral_or_interval_expr PRECEDING
   {
-    $$ = &frameBound{
+    $$ = &FrameBound{
        Expr: $1,
        Type: ExprPreceding,
      }
   }
 | integral_or_interval_expr FOLLOWING
   {
-    $$ = &frameBound{
+    $$ = &FrameBound{
        Expr: $1,
        Type: ExprFollowing,
      }
