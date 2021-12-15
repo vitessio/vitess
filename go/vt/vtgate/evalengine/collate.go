@@ -39,10 +39,10 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	if err := collations.Local().EnsureCollate(res.collation.Collation, c.TypedCollation.Collation); err != nil {
+	if err := collations.Local().EnsureCollate(res.collation2.Collation, c.TypedCollation.Collation); err != nil {
 		return EvalResult{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
-	res.collation = c.TypedCollation
+	res.collation2 = c.TypedCollation
 	return res, nil
 }
 
@@ -56,7 +56,7 @@ func (t TupleExpr) collation() collations.TypedCollation {
 }
 
 func (l *Literal) collation() collations.TypedCollation {
-	return l.Val.collation
+	return l.Val.collation2
 }
 
 func (bv *BindVariable) collation() collations.TypedCollation {

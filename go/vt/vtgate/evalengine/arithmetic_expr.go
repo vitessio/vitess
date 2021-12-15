@@ -30,7 +30,7 @@ type (
 
 	// ArithmeticOp allows arithmetic expressions to not have to evaluate child expressions - this is done by the BinaryExpr
 	ArithmeticOp interface {
-		eval(left, right EvalResult) (EvalResult, error)
+		eval(left, right item) (EvalResult, error)
 		typeof(left querypb.Type) querypb.Type
 		String() string
 	}
@@ -51,24 +51,18 @@ func (b *ArithmeticExpr) collation() collations.TypedCollation {
 }
 
 func (b *ArithmeticExpr) eval(env *ExpressionEnv) (EvalResult, error) {
-	lVal, err := b.Left.eval(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if lVal.null() {
+	left := env.item(b.Left)
+	if left.null() {
 		return resultNull, nil
 	}
-	rVal, err := b.Right.eval(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if rVal.null() {
+	right := env.item(b.Right)
+	if right.null() {
 		return resultNull, nil
 	}
-	if lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE {
+	if right.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
 		panic("failed to typecheck tuples")
 	}
-	return b.Op.eval(lVal, rVal)
+	return b.Op.eval(left, right)
 }
 
 // typeof implements the Expr interface
@@ -85,25 +79,25 @@ func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return b.Op.typeof(typ), nil
 }
 
-func (a *OpAddition) eval(left, right EvalResult) (EvalResult, error) {
+func (a *OpAddition) eval(left, right item) (EvalResult, error) {
 	return addNumericWithError(left, right)
 }
 func (a *OpAddition) typeof(left querypb.Type) querypb.Type { return left }
 func (a *OpAddition) String() string                        { return "+" }
 
-func (s *OpSubstraction) eval(left, right EvalResult) (EvalResult, error) {
+func (s *OpSubstraction) eval(left, right item) (EvalResult, error) {
 	return subtractNumericWithError(left, right)
 }
 func (s *OpSubstraction) typeof(left querypb.Type) querypb.Type { return left }
 func (s *OpSubstraction) String() string                        { return "-" }
 
-func (m *OpMultiplication) eval(left, right EvalResult) (EvalResult, error) {
+func (m *OpMultiplication) eval(left, right item) (EvalResult, error) {
 	return multiplyNumericWithError(left, right)
 }
 func (m *OpMultiplication) typeof(left querypb.Type) querypb.Type { return left }
 func (m *OpMultiplication) String() string                        { return "*" }
 
-func (d *OpDivision) eval(left, right EvalResult) (EvalResult, error) {
+func (d *OpDivision) eval(left, right item) (EvalResult, error) {
 	return divideNumericWithError(left, right, true)
 }
 func (d *OpDivision) typeof(querypb.Type) querypb.Type { return sqltypes.Float64 }

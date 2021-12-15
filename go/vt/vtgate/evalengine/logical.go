@@ -148,19 +148,13 @@ func (n *NotExpr) collation() collations.TypedCollation {
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv) (EvalResult, error) {
-	lVal, err := l.Left.eval(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := l.Right.eval(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE {
+	left := env.item(l.Left)
+	right := env.item(l.Right)
+	if left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
 		panic("did not typecheck tuples")
 		// return EvalResult{}, cardinalityError(1)
 	}
-	return l.op(lVal.nonzero(), rVal.nonzero()).evalResult(), nil
+	return l.op(left.nonzero(), right.nonzero()).evalResult(), nil
 }
 
 func (l *LogicalExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
