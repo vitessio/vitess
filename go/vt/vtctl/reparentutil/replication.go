@@ -188,31 +188,31 @@ func StopReplicationAndBuildStatusMaps(
 		logger.Infof("getting replication position from %v", alias)
 
 		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
-		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		switch {
-		case isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica:
-			var primaryStatus *replicationdatapb.PrimaryStatus
+		if err != nil {
+			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
+				var primaryStatus *replicationdatapb.PrimaryStatus
 
-			primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
-			if err != nil {
-				msg := "replica %v thinks it's primary but we failed to demote it"
-				err = vterrors.Wrapf(err, msg+": %v", alias, err)
+				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
+				if err != nil {
+					msg := "replica %v thinks it's primary but we failed to demote it"
+					err = vterrors.Wrapf(err, msg+": %v", alias, err)
 
-				logger.Warningf(msg, alias)
-				return
+					logger.Warningf(msg, alias)
+					return
+				}
+
+				m.Lock()
+				primaryStatusMap[alias] = primaryStatus
+				m.Unlock()
+			} else {
+				logger.Warningf("failed to get replication status from %v: %v", alias, err)
+				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
-
-			m.Lock()
-			primaryStatusMap[alias] = primaryStatus
-			m.Unlock()
-		case err == nil:
+		} else {
 			m.Lock()
 			statusMap[alias] = stopReplicationStatus
 			m.Unlock()
-		default:
-			logger.Warningf("failed to get replication status from %v: %v", alias, err)
-
-			err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 		}
 	}
 
