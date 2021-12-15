@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func FormatExpr(expr Expr) string {
@@ -69,7 +70,20 @@ func (f *formatter) formatBinary(left Expr, op string, right Expr, depth int) {
 
 func (l *Literal) format(w *formatter, depth int) {
 	w.Indent(depth)
-	w.WriteString(l.Val.Value().String())
+	switch l.Val.typ {
+	case querypb.Type_TUPLE:
+		w.WriteByte('(')
+		for i, val := range l.Val.TupleValues() {
+			if i > 0 {
+				w.WriteString(", ")
+			}
+			w.WriteString(val.String())
+		}
+		w.WriteByte(')')
+
+	default:
+		w.WriteString(l.Val.Value().String())
+	}
 }
 
 func (bv *BindVariable) format(w *formatter, depth int) {
