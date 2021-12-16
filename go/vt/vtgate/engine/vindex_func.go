@@ -109,7 +109,7 @@ func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	env := evalengine.EnvWithBindVars(bindVars)
-	k, err := vf.Value.Evaluate(env)
+	k, err := env.Evaluate(vf.Value)
 	if err != nil {
 		return nil, err
 	}
