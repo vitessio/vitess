@@ -2002,6 +2002,11 @@ type (
 		Exprs     SelectExprs
 	}
 
+	JSONAggregateExpr struct {
+		Name    ColIdent
+		Columns []*ColName
+	}
+
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
 		Distinct  bool
@@ -2126,6 +2131,7 @@ func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
 func (*ExtractedSubquery) iExpr() {}
+func (*JSONAggregateExpr) iExpr() {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

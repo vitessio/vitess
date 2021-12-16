@@ -314,6 +314,8 @@ var keywords = []keyword{
 	{"invoker", INVOKER},
 	{"join", JOIN},
 	{"json", JSON},
+	{"json_arrayagg", JSON_ARRAYAGG},
+	{"json_objectagg", JSON_OBJECTAGG},
 	{"json_table", JSON_TABLE},
 	{"key", KEY},
 	{"keys", KEYS},
