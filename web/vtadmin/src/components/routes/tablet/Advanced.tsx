@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
+import { useSnackbar } from '../../Snackbar';
 import { TextInput } from '../../TextInput';
 
 interface AdvancedProps {
@@ -15,12 +16,13 @@ interface RouteParams {
 }
 
 const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
+    const { warn } = useSnackbar()
     const { clusterID, alias } = useParams<RouteParams>();
     const [typedAlias, setTypedAlias] = useState('')
     return (
-        <div>
+        <div className="pt-4">
             <div className="my-8">
-                <h3 className="mb-4 font-medium">Replication</h3>
+                <h3 className="mb-4">Replication</h3>
                 <div className="w-full border rounded-lg border-gray-400" >
                     <div className="p-8 border-b border-gray-400">
                         <div className="flex justify-between items-center">
@@ -28,7 +30,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             <a href="https://vitess.io/docs/reference/programs/vtctl/tablets/#startreplication" target="_blank" rel="noreferrer" className="text-gray-900 h-6 w-6 ml-1"><Icon icon={Icons.open} className="text-gray-900 fill-current" /></a>
                         </div>
                         <p className="text-base m-0">
-                            This will run the underlying database command to start replication on tablet <span className="font-bold">{alias}</span>. For example, in mysql 5.7, this is <span className="font-mono text-sm p-1 bg-gray-100">start slave</span>.
+                            This will run the underlying database command to start replication on tablet <span className="font-bold">{alias}</span>. For example, in mysql 8, this will be <span className="font-mono text-sm p-1 bg-gray-100">start replication</span>.
                         </p>
                         {isPrimary(tablet) && <p className="text-danger"><Icon icon={Icons.alertFail} className='fill-current text-danger inline mr-2' />Command StartTablet cannot be run on the primary tablet.</p>}
                         <button className="btn btn-secondary mt-4" disabled={isPrimary(tablet)}>Start replication</button>
@@ -47,7 +49,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                 </div>
             </div>
             <div className="my-8">
-                <h3 className="mb-4 font-medium">Reparent</h3>
+                <h3 className="mb-4">Reparent</h3>
                 <div className="w-full border rounded-lg border-gray-400" >
                     <div className="p-8 border-b border-gray-400">
                         <div className="flex justify-between items-center">
@@ -65,7 +67,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                 </div>
             </div>
             <div className="my-8">
-                <h3 className="mb-4 font-medium">Danger</h3>
+                <h3 className="mb-4">Danger</h3>
                 <div className="border border-danger rounded-lg p-8">
                     <div className="flex justify-between items-center">
                         <p className="text-base font-bold m-0 text-gray-900">Delete Tablet</p>
@@ -80,7 +82,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                     <div className="w-1/3">
                         <TextInput placeholder="zone-xxx" value={typedAlias} onChange={e => setTypedAlias(e.target.value)} />
                     </div>
-                    <button className="btn btn-secondary btn-danger mt-4" disabled={typedAlias !== alias}>Delete</button>
+                    <button className="btn btn-secondary btn-danger mt-4" disabled={typedAlias !== alias} onClick={() => warn('dangerous')}>Delete</button>
                 </div>
             </div>
         </div>

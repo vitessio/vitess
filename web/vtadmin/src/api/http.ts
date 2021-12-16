@@ -225,6 +225,20 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
     return pb.Tablet.create(result);
 };
 
+export interface DeleteTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: "DELETE" });
+
+    const err = pb.DeleteTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.DeleteTabletResponse.create(result);
+}
+
 export interface PingTabletParams {
     clusterID?: string;
     alias: string;

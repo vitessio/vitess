@@ -40,6 +40,8 @@ service VTAdmin {
     rpc DeleteKeyspace(DeleteKeyspaceRequest) returns (vtctldata.DeleteKeyspaceResponse) {};
     // DeleteShard deletes one or more shards in the given cluster and keyspace.
     rpc DeleteShards(DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
+    // DeleteTablet deletes a tablet from the topology
+    rpc DeleteTablet(DeleteTabletRequest) returns (DeleteTabletResponse) {};
     // FindSchema returns a single Schema that matches the provided table name
     // across all specified clusters IDs. Not specifying a set of cluster IDs
     // causes the search to span all configured clusters.
@@ -237,6 +239,15 @@ message DeleteKeyspaceRequest {
 message DeleteShardsRequest {
     string cluster_id = 1;
     vtctldata.DeleteShardsRequest options = 2;
+}
+
+message DeleteTabletRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message DeleteTabletResponse {
+    string status = 1;
 }
 
 message FindSchemaRequest {
