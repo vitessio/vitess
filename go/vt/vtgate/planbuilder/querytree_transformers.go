@@ -46,7 +46,7 @@ func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, 
 	case *concatenateTree:
 		return transformConcatenatePlan(ctx, n)
 	case *vindexTree:
-		return transformVindexTree(n)
+		return transformVindexTree(ctx, n)
 	case *correlatedSubqueryTree:
 		return transformCorrelatedSubquery(ctx, n)
 	}
@@ -77,10 +77,15 @@ func pushDistinct(plan logicalPlan) {
 	}
 }
 
-func transformVindexTree(n *vindexTree) (logicalPlan, error) {
+func transformVindexTree(ctx *planningContext, n *vindexTree) (logicalPlan, error) {
 	single, ok := n.vindex.(vindexes.SingleColumn)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
+	}
+
+	expr, err := evalengine.Convert(n.value, ctx.semTable)
+	if err != nil {
+		return nil, err
 	}
 	plan := &vindexFunc{
 		order:         1,
@@ -89,7 +94,7 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 		eVindexFunc: &engine.VindexFunc{
 			Opcode: n.opCode,
 			Vindex: single,
-			Value:  n.value,
+			Value:  expr,
 		},
 	}
 
@@ -434,12 +439,10 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	}
 
 	var vindex vindexes.Vindex
-	var values []engine.RouteValue
+	var values []evalengine.Expr
 	if n.selectedVindex() != nil {
 		vindex = n.selected.foundVindex
-		for _, value := range n.selected.values {
-			values = append(values, &evalengine.RouteValue{Expr: value})
-		}
+		values = n.selected.values
 	}
 
 	var expressions sqlparser.SelectExprs

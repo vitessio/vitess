@@ -83,6 +83,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/tchap/go-patricia v2.2.6+incompatible
 	github.com/tebeka/selenium v0.9.9
+	github.com/tidwall/gjson v1.12.1
 	github.com/tinylib/msgp v1.1.1 // indirect
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
@@ -174,6 +175,8 @@ require (
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.0.1 // indirect
 	go.opencensus.io v0.23.0 // indirect

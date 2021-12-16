@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,7 +31,7 @@ type vindexTree struct {
 	vindex  vindexes.Vindex
 	solved  semantics.TableSet
 	columns []*sqlparser.ColName
-	value   sqltypes.PlanValue
+	value   sqlparser.Expr
 }
 
 var _ queryTree = (*vindexTree)(nil)

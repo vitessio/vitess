@@ -603,8 +603,10 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 				// Update the VGtid and send that instead.
 				sgtid.Gtid = event.Gtid
 				events[j] = &binlogdatapb.VEvent{
-					Type:  binlogdatapb.VEventType_VGTID,
-					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Type:     binlogdatapb.VEventType_VGTID,
+					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Keyspace: event.Keyspace,
+					Shard:    event.Shard,
 				}
 			} else if event.Type == binlogdatapb.VEventType_LASTPK {
 				var foundIndex = -1
@@ -630,8 +632,10 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 					}
 				}
 				events[j] = &binlogdatapb.VEvent{
-					Type:  binlogdatapb.VEventType_VGTID,
-					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Type:     binlogdatapb.VEventType_VGTID,
+					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Keyspace: event.Keyspace,
+					Shard:    event.Shard,
 				}
 			}
 		}

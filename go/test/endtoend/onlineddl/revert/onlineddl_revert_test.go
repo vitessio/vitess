@@ -220,6 +220,15 @@ func TestSchemaChange(t *testing.T) {
 
 	var uuids []string
 	ddlStrategy := "online"
+
+	testRevertedUUID := func(t *testing.T, uuid string, expectRevertedUUID string) {
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			revertedUUID := row["reverted_uuid"].ToString()
+			assert.Equal(t, expectRevertedUUID, revertedUUID)
+		}
+	}
 	// CREATE
 	t.Run("CREATE TABLE IF NOT EXISTS where table does not exist", func(t *testing.T) {
 		// The table does not exist
@@ -227,27 +236,34 @@ func TestSchemaChange(t *testing.T) {
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
+		testRevertedUUID(t, uuid, "")
 	})
 	t.Run("revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
 		// The table existed, so it will now be dropped (renamed)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		revertedUUID := uuids[len(uuids)-1]
+		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
+		testRevertedUUID(t, uuid, revertedUUID)
 	})
 	t.Run("revert revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
 		// Table was dropped (renamed) so it will now be restored
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		revertedUUID := uuids[len(uuids)-1]
+		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
+		testRevertedUUID(t, uuid, revertedUUID)
 	})
 	t.Run("revert revert revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
 		// Table was restored, so it will now be dropped (renamed)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
+		revertedUUID := uuids[len(uuids)-1]
+		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
+		testRevertedUUID(t, uuid, revertedUUID)
 	})
 	t.Run("online CREATE TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createStatement, ddlStrategy, "vtgate", "just-created")
@@ -256,6 +272,7 @@ func TestSchemaChange(t *testing.T) {
 		checkTable(t, tableName, true)
 		initTable(t)
 		testSelectTableMetrics(t)
+		testRevertedUUID(t, uuid, "")
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
 		// This will drop the table (well, actually, rename it away)

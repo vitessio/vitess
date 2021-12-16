@@ -95,45 +95,6 @@ Gen4 plan same as above
         "Query": "select id from `user` where id = 1",
         "Table": "`user`",
         "Values": [
-          1
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5",
-        "Table": "`user`",
-        "Values": [
-          5
-        ],
-        "Vindex": "user_index"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where id = 1 union all select id from user where id = 5",
-  "Instructions": {
-    "OperatorType": "Concatenate",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 1",
-        "Table": "`user`",
-        "Values": [
           "INT64(1)"
         ],
         "Vindex": "user_index"
@@ -156,6 +117,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 #almost dereks query - two queries with order by and limit being scattered to two different sets of tablets
 "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)"
@@ -167,7 +129,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 1,
+        "Count": "INT64(1)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -186,7 +148,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Limit",
-        "Count": 1,
+        "Count": "INT64(1)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -275,7 +237,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 5,
+        "Count": "INT64(5)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -294,7 +256,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Limit",
-        "Count": 5,
+        "Count": "INT64(5)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -335,41 +297,6 @@ Gen4 plan same as above
         "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
         "Table": "`user`",
         "Values": [
-          1
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user`",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
-  "Instructions": {
-    "OperatorType": "Concatenate",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
-        "Table": "`user`",
-        "Values": [
           "INT64(1)"
         ],
         "Vindex": "user_index"
@@ -388,6 +315,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
@@ -774,7 +702,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "Query": "select * from music where id = 1",
             "Table": "music",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "music_user_map"
           },
@@ -789,7 +717,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "Query": "select * from `user` where id = 1",
             "Table": "`user`",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "user_index"
           }
@@ -865,7 +793,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "Query": "select 1 from music where id = 1",
             "Table": "music",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "music_user_map"
           },
@@ -880,7 +808,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             "Query": "select 1 from music where id = 2",
             "Table": "music",
             "Values": [
-              2
+              "INT64(2)"
             ],
             "Vindex": "music_user_map"
           }
@@ -1546,7 +1474,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select id from user union select 3 limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Distinct",
@@ -1588,7 +1516,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   "Original": "select id from user union select 3 limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Distinct",
