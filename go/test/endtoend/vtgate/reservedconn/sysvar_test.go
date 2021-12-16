@@ -29,25 +29,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-func TestCharsetIntro(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	checkedExec(t, conn, "delete from test")
-	checkedExec(t, conn, "insert into test (id,val1) values (666, _binary'abc')")
-	checkedExec(t, conn, "update test set val1 = _latin1'xyz' where id = 666")
-	checkedExec(t, conn, "delete from test where val1 = _utf8'xyz'")
-	qr := checkedExec(t, conn, "select id from test where val1 = _utf8mb4'xyz'")
-	require.EqualValues(t, 0, qr.RowsAffected)
-}
-
 func TestSetSysVarSingle(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()

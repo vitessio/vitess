@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -504,18 +506,18 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := sqlparser.NewPlanValue(val)
+			pv, err := evalengine.Convert(val, semantics.EmptySemTable())
 			if err != nil {
 				return err
 			}
-			resolved, err := pv.ResolveValue(nil)
+			resolved, err := pv.Evaluate(evalengine.EmptyExpressionEnv())
 			if err != nil {
 				return err
 			}
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: opcode,
 				ColNum: colnum,
-				Value:  resolved,
+				Value:  resolved.Value(),
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {

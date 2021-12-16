@@ -22,11 +22,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // StatementType encodes the type of a SQL statement
@@ -450,63 +445,6 @@ func IsSimpleTuple(node Expr) bool {
 	}
 	// It's a subquery
 	return false
-}
-
-// NewPlanValue builds a sqltypes.PlanValue from an Expr.
-func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
-	switch node := node.(type) {
-	case Argument:
-		return sqltypes.PlanValue{Key: string(node)}, nil
-	case *Literal:
-		switch node.Type {
-		case IntVal:
-			n, err := sqltypes.NewIntegral(string(node.Val))
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: n}, nil
-		case FloatVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Bytes())}, nil
-		case StrVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes())}, nil
-		case HexVal:
-			v, err := node.HexDecode()
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
-		}
-	case ListArg:
-		return sqltypes.PlanValue{ListKey: string(node)}, nil
-	case ValTuple:
-		pv := sqltypes.PlanValue{
-			Values: make([]sqltypes.PlanValue, 0, len(node)),
-		}
-		for _, val := range node {
-			innerpv, err := NewPlanValue(val)
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			if innerpv.ListKey != "" || innerpv.Values != nil {
-				return sqltypes.PlanValue{}, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: nested lists")
-			}
-			pv.Values = append(pv.Values, innerpv)
-		}
-		return pv, nil
-	case *NullVal:
-		return sqltypes.PlanValue{}, nil
-	case *UnaryExpr:
-		switch node.Operator {
-		case NStringOp:
-			return NewPlanValue(node.Expr)
-		}
-	case *IntroducerExpr:
-		switch node.CharacterSet {
-		case UBinaryStr, Utf8mb4Str, Utf8Str, Latin1Str: // for some charset introducers, we can just ignore them
-			return NewPlanValue(node.Expr)
-		}
-	}
-	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
 
 //IsLockingFunc returns true for all functions that are used to work with mysql advisory locks

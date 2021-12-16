@@ -280,7 +280,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	case *sqlparser.Literal:
 		switch node.Type {
 		case sqlparser.IntVal:
-			return NewLiteralIntFromBytes(node.Bytes())
+			return NewLiteralIntegralFromBytes(node.Bytes())
 		case sqlparser.FloatVal:
 			return NewLiteralRealFromBytes(node.Bytes())
 		case sqlparser.StrVal:
@@ -332,7 +332,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		}
 		return exprs, nil
 	case *sqlparser.NullVal:
-		return NewLiteralNull(), nil
+		return NullExpr, nil
 	case *sqlparser.CollateExpr:
 		expr, err := convertExpr(node.Expr, lookup)
 		if err != nil {
@@ -350,6 +350,24 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 				Repertoire:   collations.RepertoireUnicode,
 			},
 		}, nil
+	case *sqlparser.IntroducerExpr:
+		expr, err := convertExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+		coll := collations.Local().DefaultCollationForCharset(node.CharacterSet[1:])
+		if coll == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown character set: %s", node.CharacterSet)
+		}
+		switch lit := expr.(type) {
+		case *Literal:
+			lit.Val.collation.Collation = coll.ID()
+		case *BindVariable:
+			lit.collation.Collation = coll.ID()
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] character set introducers are only supported for literals and arguments")
+		}
+		return expr, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }

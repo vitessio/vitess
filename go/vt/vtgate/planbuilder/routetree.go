@@ -17,14 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
-	"strings"
-
-	"vitess.io/vitess/go/mysql/collations"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -458,7 +453,7 @@ func (rp *routeTree) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) 
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, _ := evalengine.Convert(expr, &noColumnLookup{semTable: ctx.semTable})
+		pv, _ := evalengine.Convert(expr, ctx.semTable)
 		if pv != nil {
 			return pv
 		}
@@ -466,24 +461,6 @@ func (rp *routeTree) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) 
 
 	return nil
 }
-
-type noColumnLookup struct {
-	semTable *semantics.SemTable
-}
-
-var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
-
-// ColumnLookup implements the ConverterLookup interface
-func (lookup *noColumnLookup) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, columnNotSupportedErr
-}
-
-// CollationIDLookup implements the ConverterLookup interface
-func (lookup *noColumnLookup) CollationIDLookup(expr sqlparser.Expr) collations.ID {
-	return lookup.semTable.CollationFor(expr)
-}
-
-var _ evalengine.ConverterLookup = (*noColumnLookup)(nil)
 
 func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range rp.vindexPreds {
@@ -730,22 +707,6 @@ func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
 	}
 
 	return engine.SelectEqual
-}
-
-// makePlanValue transforms a sqlparser.Expr into a sqltypes.PlanValue.
-// If the expression is too complex e.g: not an argument/literal/tuple/null/unary, then
-// the method will not fail, instead it will exit with nil values.
-func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	value, err := sqlparser.NewPlanValue(n)
-	if err != nil {
-		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
-		if strings.Contains(err.Error(), "expression is too complex") {
-			return nil, nil
-		}
-		// something else went wrong, return the error
-		return nil, err
-	}
-	return &value, nil
 }
 
 // costFor returns a cost struct to make route choices easier to compare

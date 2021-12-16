@@ -98,7 +98,7 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (evalengine.Expr, sql
 		default:
 			continue
 		}
-		expr, err := evalengine.Convert(comparison.Right, &noColumnLookup{semTable: semantics.EmptySemTable()})
+		expr, err := evalengine.Convert(comparison.Right, semantics.EmptySemTable())
 		if err != nil {
 			continue
 		}

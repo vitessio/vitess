@@ -284,7 +284,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 }
 
 func (sct *sandboxTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
-	panic("not supported: WatchSrvKeyspace")
+	// panic("not supported: WatchSrvKeyspace")
 }
 
 // WatchSrvVSchema is part of the srvtopo.Server interface.
