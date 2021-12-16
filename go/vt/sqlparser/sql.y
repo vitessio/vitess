@@ -189,7 +189,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <str> EXTRACT
+%token <str> EXTRACT JSON_ARRAYAGG JSON_OBJECTAGG
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
@@ -4652,6 +4652,14 @@ UTC_DATE func_paren_opt
 | EXTRACT openb interval FROM expression closeb
   {
 	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
+  }
+ | JSON_ARRAYAGG openb column_name closeb
+  {
+    $$ = &JSONAggregateExpr{Name: NewColIdent($1), Columns: []*ColName{$3}}
+  }
+| JSON_OBJECTAGG openb column_name ',' column_name closeb
+  {
+    $$ = &JSONAggregateExpr{Name: NewColIdent($1), Columns: []*ColName{$3, $5}}
   }
 
 interval:
