@@ -141,32 +141,36 @@ func TestDecimalRoundings(t *testing.T) {
 
 	// (14620 / 9432456) / (24250 / 9432456)
 	found := false
-	a := resolved(newEvalInt64(14620))
-	b := resolved(newEvalInt64(24250))
-	d := resolved(newEvalInt64(9432456))
+	a := newEvalInt64(14620)
+	b := newEvalInt64(24250)
+	d := newEvalInt64(9432456)
 
 	for i := 0; i < 7; i++ {
 		var ri = decimal.RoundingMode(i)
 		decimalContextSQL.RoundingMode = ri
 
-		x, _ := decimalDivide(a, d, 4)
-		y, _ := decimalDivide(b, d, 4)
-		z, _ := decimalDivide(resolved(x), resolved(y), 4)
+		var x, y, z, xx EvalResult
+
+		_ = decimalDivide(&a, &d, 4, &x)
+		_ = decimalDivide(&b, &d, 4, &y)
+		_ = decimalDivide(&x, &y, 4, &z)
 
 		aa, _ := newDecimalString("10.333000000")
 		bb, _ := newDecimalString("12.34500")
-		xx, _ := decimalDivide(resolved(newEvalDecimal(aa)), resolved(newEvalDecimal(bb)), 5)
+		aad := newEvalDecimal(aa)
+		bbd := newEvalDecimal(bb)
+		_ = decimalDivide(&aad, &bbd, 5, &xx)
 
 		for j := 0; j < 7; j++ {
 			var ok1, ok2 bool
 			var rj = decimal.RoundingMode(j)
 
-			str := string(z.decimal2.num.FormatCustom(z.decimal2.frac, rj))
+			str := string(z.decimal().num.FormatCustom(z.decimal().frac, rj))
 			if str == "0.60288653" {
 				ok1 = true
 			}
 
-			str = string(xx.decimal2.num.FormatCustom(xx.decimal2.num.Precision(), rj))
+			str = string(xx.decimal().num.FormatCustom(xx.decimal().num.Precision(), rj))
 			if str == "0.837019036046982584042122316" {
 				ok2 = true
 			}

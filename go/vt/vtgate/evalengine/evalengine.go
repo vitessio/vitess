@@ -64,35 +64,35 @@ func Cast(v sqltypes.Value, typ querypb.Type) (sqltypes.Value, error) {
 
 // ToUint64 converts Value to uint64.
 func ToUint64(v sqltypes.Value) (uint64, error) {
-	num, err := newIntegralNumeric(v)
-	if err != nil {
+	var num EvalResult
+	if err := num.setValueIntegralNumeric(v); err != nil {
 		return 0, err
 	}
-	switch num.typ2 {
+	switch num.typeof() {
 	case sqltypes.Int64:
-		if num.numval2 > math.MaxInt64 {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: %d", int64(num.numval2))
+		if num.uint64() > math.MaxInt64 {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: %d", num.int64())
 		}
-		return num.numval2, nil
+		return num.uint64(), nil
 	case sqltypes.Uint64:
-		return num.numval2, nil
+		return num.uint64(), nil
 	}
 	panic("unreachable")
 }
 
 // ToInt64 converts Value to int64.
 func ToInt64(v sqltypes.Value) (int64, error) {
-	num, err := newIntegralNumeric(v)
-	if err != nil {
+	var num EvalResult
+	if err := num.setValueIntegralNumeric(v); err != nil {
 		return 0, err
 	}
-	switch num.typ2 {
+	switch num.typeof() {
 	case sqltypes.Int64:
-		return int64(num.numval2), nil
+		return num.int64(), nil
 	case sqltypes.Uint64:
-		ival := int64(num.numval2)
+		ival := num.int64()
 		if ival < 0 {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: %d", num.numval2)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: %d", num.uint64())
 		}
 		return ival, nil
 	}
@@ -101,17 +101,17 @@ func ToInt64(v sqltypes.Value) (int64, error) {
 
 // ToFloat64 converts Value to float64.
 func ToFloat64(v sqltypes.Value) (float64, error) {
-	num, err := newEvalResult(v)
-	if err != nil {
+	var num EvalResult
+	if err := num.setValue(v); err != nil {
 		return 0, err
 	}
-	switch num.typ2 {
+	switch num.typeof() {
 	case sqltypes.Int64:
-		return float64(int64(num.numval2)), nil
+		return float64(num.int64()), nil
 	case sqltypes.Uint64:
-		return float64(num.numval2), nil
+		return float64(num.uint64()), nil
 	case sqltypes.Float64:
-		return math.Float64frombits(num.numval2), nil
+		return num.float64(), nil
 	}
 
 	if num.textual() {
@@ -147,8 +147,7 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 	return out, err
 }
 
-func compareNumeric(v1, v2 item) (int, error) {
-	var cmp1, cmp2 EvalResult
+func compareNumeric(v1, v2 *EvalResult) (int, error) {
 	// Equalize the types the same way MySQL does
 	// https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 	switch v1.typeof() {
@@ -158,11 +157,11 @@ func compareNumeric(v1, v2 item) (int, error) {
 			if v1.uint64() > math.MaxInt64 {
 				return -1, nil
 			}
-			cmp1 = newEvalUint64(v1.uint64())
+			v1.setUint64(v1.uint64())
 		case sqltypes.Float64:
-			cmp1 = newEvalFloat(float64(v1.int64()))
+			v1.setFloat(float64(v1.int64()))
 		case sqltypes.Decimal:
-			cmp1 = newEvalDecimal(newDecimalInt64(v1.int64()))
+			v1.setDecimal(newDecimalInt64(v1.int64()))
 		}
 	case sqltypes.Uint64:
 		switch v2.typeof() {
@@ -170,54 +169,47 @@ func compareNumeric(v1, v2 item) (int, error) {
 			if v2.uint64() > math.MaxInt64 {
 				return 1, nil
 			}
-			cmp2 = newEvalUint64(v2.uint64())
+			v2.setUint64(v2.uint64())
 		case sqltypes.Float64:
-			cmp1 = newEvalFloat(float64(v1.uint64()))
+			v1.setFloat(float64(v1.uint64()))
 		case sqltypes.Decimal:
-			cmp1 = newEvalDecimal(newDecimalUint64(v1.uint64()))
+			v1.setDecimal(newDecimalUint64(v1.uint64()))
 		}
 	case sqltypes.Float64:
 		switch v2.typeof() {
 		case sqltypes.Int64:
-			cmp2 = newEvalFloat(float64(v2.int64()))
+			v2.setFloat(float64(v2.int64()))
 		case sqltypes.Uint64:
 			if v1.float64() < 0 {
 				return -1, nil
 			}
-			cmp2 = newEvalFloat(float64(v2.uint64()))
+			v2.setFloat(float64(v2.uint64()))
 		case sqltypes.Decimal:
 			f, ok := v2.decimal().num.Float64()
 			if !ok {
 				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 			}
-			cmp2 = newEvalFloat(f)
+			v2.setFloat(f)
 		}
 	case sqltypes.Decimal:
 		switch v2.typeof() {
 		case sqltypes.Int64:
-			cmp2 = newEvalDecimal(newDecimalInt64(v2.int64()))
+			v2.setDecimal(newDecimalInt64(v2.int64()))
 		case sqltypes.Uint64:
-			cmp2 = newEvalDecimal(newDecimalUint64(v2.uint64()))
+			v2.setDecimal(newDecimalUint64(v2.uint64()))
 		case sqltypes.Float64:
 			f, ok := v1.decimal().num.Float64()
 			if !ok {
 				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 			}
-			cmp1 = newEvalFloat(f)
+			v1.setFloat(f)
 		}
 	}
 
-	if cmp1.typ2 == 0 {
-		cmp1 = v1.evalresult()
-	}
-	if cmp2.typ2 == 0 {
-		cmp2 = v2.evalresult()
-	}
-
 	// Both values are of the same type.
-	switch cmp1.typ2 {
+	switch v1.typeof() {
 	case sqltypes.Int64:
-		v1v, v2v := int64(cmp1.numval2), int64(cmp2.numval2)
+		v1v, v2v := v1.int64(), v2.int64()
 		switch {
 		case v1v == v2v:
 			return 0, nil
@@ -226,13 +218,13 @@ func compareNumeric(v1, v2 item) (int, error) {
 		}
 	case sqltypes.Uint64:
 		switch {
-		case cmp1.numval2 == cmp2.numval2:
+		case v1.uint64() == v2.uint64():
 			return 0, nil
-		case cmp1.numval2 < cmp2.numval2:
+		case v1.uint64() < v2.uint64():
 			return -1, nil
 		}
 	case sqltypes.Float64:
-		v1v, v2v := math.Float64frombits(cmp1.numval2), math.Float64frombits(cmp2.numval2)
+		v1v, v2v := v1.float64(), v2.float64()
 		switch {
 		case v1v == v2v:
 			return 0, nil
@@ -240,14 +232,14 @@ func compareNumeric(v1, v2 item) (int, error) {
 			return -1, nil
 		}
 	case sqltypes.Decimal:
-		return cmp1.decimal2.num.Cmp(&cmp2.decimal2.num), nil
+		return v1.decimal().num.Cmp(&v2.decimal().num), nil
 	}
 
 	// v1>v2
 	return 1, nil
 }
 
-func parseDate(expr item) (t time.Time, err error) {
+func parseDate(expr *EvalResult) (t time.Time, err error) {
 	switch expr.typeof() {
 	case sqltypes.Date:
 		t, err = time.Parse("2006-01-02", expr.string())
@@ -268,7 +260,7 @@ func parseDate(expr item) (t time.Time, err error) {
 
 // matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
 // that does not return an error.
-func matchExprWithAnyDateFormat(expr item) (t time.Time, err error) {
+func matchExprWithAnyDateFormat(expr *EvalResult) (t time.Time, err error) {
 	layouts := []string{"2006-01-02", "2006-01-02 15:04:05", "15:04:05"}
 	for _, layout := range layouts {
 		t, err = time.Parse(layout, expr.string())
@@ -289,7 +281,7 @@ func matchExprWithAnyDateFormat(expr item) (t time.Time, err error) {
 // Date comparison based on:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 // 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
-func compareDates(l, r item) (int, error) {
+func compareDates(l, r *EvalResult) (int, error) {
 	lTime, err := parseDate(l)
 	if err != nil {
 		return 0, err
@@ -302,7 +294,7 @@ func compareDates(l, r item) (int, error) {
 	return compareGoTimes(lTime, rTime)
 }
 
-func compareDateAndString(l, r item) (int, error) {
+func compareDateAndString(l, r *EvalResult) (int, error) {
 	var lTime, rTime time.Time
 	var err error
 	switch {
@@ -328,9 +320,9 @@ func compareDateAndString(l, r item) (int, error) {
 	return compareGoTimes(lTime, rTime)
 }
 
-func mergeCollations(left, right item) (item, item, error) {
+func mergeCollations(left, right *EvalResult) error {
 	if !left.textual() || !right.textual() {
-		return left, right, nil
+		return nil
 	}
 	env := collations.Local()
 	tc, coerceLeft, coerceRight, err := env.MergeCollations(left.collation(), right.collation(), collations.CoercionOptions{
@@ -338,17 +330,17 @@ func mergeCollations(left, right item) (item, item, error) {
 		ConvertWithCoercion: true,
 	})
 	if err != nil {
-		return item{}, item{}, err
+		return err
 	}
 	if coerceLeft != nil {
-		left.res.bytes2, _ = coerceLeft(nil, left.bytes())
+		left.bytes3, _ = coerceLeft(nil, left.bytes())
 	}
 	if coerceRight != nil {
-		right.res.bytes2, _ = coerceRight(nil, right.bytes())
+		right.bytes3, _ = coerceRight(nil, right.bytes())
 	}
-	left.res.collation2 = tc
-	right.res.collation2 = tc
-	return left, right, nil
+	left.replaceCollation(tc)
+	right.replaceCollation(tc)
+	return nil
 }
 
 func compareGoTimes(lTime, rTime time.Time) (int, error) {
@@ -363,7 +355,7 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 
 // More on string collations coercibility on MySQL documentation:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
-func compareStrings(l, r item) int {
+func compareStrings(l, r *EvalResult) int {
 	if l.collation().Collation != r.collation().Collation {
 		panic("compareStrings: did not coerce")
 	}

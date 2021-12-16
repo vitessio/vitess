@@ -271,7 +271,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		}
 		switch lit := expr.(type) {
 		case *Literal:
-			lit.Val.collation2.Collation = coll.ID()
+			lit.Val.replaceCollationID(coll.ID())
 		case *BindVariable:
 			lit.coll.Collation = coll.ID()
 		default:

@@ -26,7 +26,7 @@ func cardinalityError(expected int) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", expected)
 }
 
-func checkTupleCardinality(lVal, rVal item) (bool, error) {
+func checkTupleCardinality(lVal, rVal *EvalResult) (bool, error) {
 	switch {
 	case lVal.typeof() == querypb.Type_TUPLE && rVal.typeof() == querypb.Type_TUPLE:
 		return true, nil
