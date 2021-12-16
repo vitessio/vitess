@@ -146,10 +146,7 @@ func testString(op Operator) string {
 		sprintf := fmt.Sprintf("SubQuery: {\n\tSubQueries: [\n%s]\n\tOuter: %s\n}", join, outer)
 		return sprintf
 	case *Vindex:
-		value := op.Value.Value.ToString()
-		if value == "" {
-			value = op.Value.Key
-		}
+		value := sqlparser.String(op.Value)
 		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
 	case *Concatenate:
 		var inners []string

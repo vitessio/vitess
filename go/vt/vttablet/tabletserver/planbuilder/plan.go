@@ -20,7 +20,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -163,7 +164,7 @@ type Plan struct {
 	FullQuery *sqlparser.ParsedQuery
 
 	// NextCount stores the count for "select next".
-	NextCount sqltypes.PlanValue
+	NextCount evalengine.Expr
 
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.

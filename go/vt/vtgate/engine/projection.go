@@ -38,10 +38,7 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 		return nil, err
 	}
 
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars)
 	if wantfields {
 		err := p.addFields(result, bindVars)
 		if err != nil {
@@ -71,10 +68,7 @@ func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*quer
 		return err
 	}
 
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars)
 	if wantields {
 		err = p.addFields(result, bindVars)
 		if err != nil {
@@ -111,7 +105,7 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) error {
-	env := &evalengine.ExpressionEnv{BindVars: bindVars}
+	env := evalengine.EnvWithBindVars(bindVars)
 	for i, col := range p.Cols {
 		q, err := p.Exprs[i].Type(env)
 		if err != nil {

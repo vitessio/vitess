@@ -928,22 +928,22 @@ func TestInOp(t *testing.T) {
 			op:  &InOp{},
 		}, {
 			name: "integer not In tuple - null value",
-			v1:   NewLiteralInt(51), v2: TupleExpr{NewLiteralNull()},
+			v1:   NewLiteralInt(51), v2: TupleExpr{NullExpr},
 			out: nil,
 			op:  &InOp{},
 		}, {
-			name: "integer not In tuple but with Null inside",
-			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralNull(), NewLiteralInt(51), NewLiteralInt(54), NewLiteralNull()},
+			name: "integer not In tuple but with NullExpr inside",
+			v1:   NewLiteralInt(52), v2: TupleExpr{NullExpr, NewLiteralInt(51), NewLiteralInt(54), NullExpr},
 			out: nil,
 			op:  &InOp{},
 		}, {
 			name: "integer In tuple with null inside",
-			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralNull(), NewLiteralInt(52), NewLiteralInt(54)},
+			v1:   NewLiteralInt(52), v2: TupleExpr{NullExpr, NewLiteralInt(52), NewLiteralInt(54)},
 			out: &T,
 			op:  &InOp{},
 		}, {
-			name: "Null In tuple",
-			v1:   NewLiteralNull(), v2: TupleExpr{NewLiteralNull(), NewLiteralInt(52), NewLiteralInt(54)},
+			name: "NullExpr In tuple",
+			v1:   NullExpr, v2: TupleExpr{NullExpr, NewLiteralInt(52), NewLiteralInt(54)},
 			out: nil,
 			op:  &InOp{},
 		},
@@ -986,22 +986,22 @@ func TestNotInOp(t *testing.T) {
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer not In tuple - null value",
-			v1:   NewLiteralInt(51), v2: TupleExpr{NewLiteralNull()},
+			v1:   NewLiteralInt(51), v2: TupleExpr{NullExpr},
 			out: nil,
 			op:  &InOp{Negate: true},
 		}, {
-			name: "integer not In tuple but with Null inside",
-			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralNull(), NewLiteralInt(51), NewLiteralInt(54), NewLiteralNull()},
+			name: "integer not In tuple but with NullExpr inside",
+			v1:   NewLiteralInt(52), v2: TupleExpr{NullExpr, NewLiteralInt(51), NewLiteralInt(54), NullExpr},
 			out: nil,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer In tuple with null inside",
-			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralNull(), NewLiteralInt(52), NewLiteralInt(54)},
+			v1:   NewLiteralInt(52), v2: TupleExpr{NullExpr, NewLiteralInt(52), NewLiteralInt(54)},
 			out: &F,
 			op:  &InOp{Negate: true},
 		}, {
-			name: "Null In tuple",
-			v1:   NewLiteralNull(), v2: TupleExpr{NewLiteralNull(), NewLiteralInt(52), NewLiteralInt(54)},
+			name: "NullExpr In tuple",
+			v1:   NullExpr, v2: TupleExpr{NullExpr, NewLiteralInt(52), NewLiteralInt(54)},
 			out: nil,
 			op:  &InOp{Negate: true},
 		},
@@ -1019,25 +1019,25 @@ func TestNullComparisons(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "null not like string",
-			v1:   NewLiteralNull(), v2: NewLiteralString([]byte("foo"), defaultCollation),
+			v1:   NullExpr, v2: NewLiteralString([]byte("foo"), defaultCollation),
 			op: &LikeOp{Negate: true},
 		},
 		{
 			name: "null equal integer",
-			v1:   NewLiteralNull(), v2: NewLiteralInt(10),
+			v1:   NullExpr, v2: NewLiteralInt(10),
 			op: &EqualOp{"=", func(cmp int) bool {
 				return cmp == 0
 			}},
 		},
 		{
 			name: "null null-safe-equal null",
-			v1:   NewLiteralNull(), v2: NewLiteralNull(),
+			v1:   NullExpr, v2: NullExpr,
 			out: &T,
 			op:  &NullSafeEqualOp{},
 		},
 		{
 			name: "0 null-safe-equal null",
-			v1:   NewLiteralInt(0), v2: NewLiteralNull(),
+			v1:   NewLiteralInt(0), v2: NullExpr,
 			out: &F,
 			op:  &NullSafeEqualOp{},
 		},
