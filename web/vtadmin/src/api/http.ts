@@ -231,7 +231,7 @@ export interface DeleteTabletParams {
 }
 
 export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: "DELETE" });
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: "delete" });
 
     const err = pb.DeleteTabletResponse.verify(result);
     if (err) throw Error(err);

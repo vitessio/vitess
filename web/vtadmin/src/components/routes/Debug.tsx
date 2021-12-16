@@ -356,7 +356,7 @@ const Snackbars: React.FC = () => {
                     }
                     return <button onClick={onClick} className={`btn btn-secondary mr-2`} key={i}>{i}</button>
                 })
-            })
+            }
         </div>
     )
 }

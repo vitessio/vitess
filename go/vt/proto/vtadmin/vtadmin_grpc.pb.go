@@ -79,6 +79,10 @@ type VTAdminClient interface {
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
+	// ReparentTablet reparents a tablet to the current primary in the shard. This
+	// only works if the current replica position matches the last known reparent
+	// action.
+	ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error)
 	// RunHealthCheck runs a health check on the tablet
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
@@ -318,6 +322,15 @@ func (c *vTAdminClient) RefreshState(ctx context.Context, in *RefreshStateReques
 	return out, nil
 }
 
+func (c *vTAdminClient) ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error) {
+	out := new(ReparentTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReparentTablet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error) {
 	out := new(RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RunHealthCheck", in, out, opts...)
@@ -400,6 +413,10 @@ type VTAdminServer interface {
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
+	// ReparentTablet reparents a tablet to the current primary in the shard. This
+	// only works if the current replica position matches the last known reparent
+	// action.
+	ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error)
 	// RunHealthCheck runs a health check on the tablet
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
@@ -485,6 +502,9 @@ func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest
 }
 func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshState not implemented")
+}
+func (UnimplementedVTAdminServer) ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -955,6 +975,24 @@ func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReparentTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReparentTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReparentTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReparentTablet(ctx, req.(*ReparentTabletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RunHealthCheckRequest)
 	if err := dec(in); err != nil {
@@ -1097,6 +1135,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshState",
 			Handler:    _VTAdmin_RefreshState_Handler,
+		},
+		{
+			MethodName: "ReparentTablet",
+			Handler:    _VTAdmin_ReparentTablet_Handler,
 		},
 		{
 			MethodName: "RunHealthCheck",
