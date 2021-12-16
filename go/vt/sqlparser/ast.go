@@ -3013,12 +3013,16 @@ func (node *Over) Format(buf *TrackedBuffer) {
 	if !node.WindowName.IsEmpty() {
 		buf.Myprintf("over %v", node.WindowName)
 	} else {
+		// TODO: extra space after openb if no PARTITION BY
 		buf.Myprintf("over (")
 		if len(node.PartitionBy) > 0 {
 			buf.Myprintf("partition by %v", node.PartitionBy)
 		}
 		if len(node.OrderBy) > 0 {
 			buf.Myprintf("%v", node.OrderBy)
+		}
+		if node.Frame != nil {
+			buf.Myprintf("%v", node.Frame)
 		}
 		buf.Myprintf(")")
 	}
@@ -4868,9 +4872,9 @@ func (node *Frame) Format(buf *TrackedBuffer) {
 	}
 	switch node.Unit {
 	case RangeUnit:
-		buf.Myprintf(" RANGE")
+		buf.Myprintf(" RANGE %v", node.Extent)
 	case RowsUnit:
-		buf.Myprintf(" ROWS")
+		buf.Myprintf(" ROWS %v", node.Extent)
 	}
 }
 
@@ -4895,17 +4899,21 @@ func (node *FrameExtent) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.End != nil {
-		buf.Myprintf(" BETWEEN")
-		node.Start.print(buf)
-		buf.Myprintf(" AND")
-		node.End.print(buf)
+		buf.Myprintf("BETWEEN %v AND %v", node.Start, node.End)
 	} else {
-		node.Start.print(buf)
+		buf.Myprintf("%v", node.Start)
 	}
 }
 
 func (node *FrameExtent) walkSubtree(visit Visit) error {
-	return nil
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Start,
+		node.End,
+	)
 }
 
 type BoundType int
@@ -4931,30 +4939,32 @@ type FrameBound struct {
 
 // Format formats the node.
 func (node *FrameBound) Format(buf *TrackedBuffer) {
-	return
-}
-
-func (node *FrameBound) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *FrameBound) print(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
 
 	switch node.Type {
 	case CurrentRow:
-		buf.Myprintf(" CURRENT ROW")
+		buf.Myprintf("CURRENT ROW")
 	case UnboundedPreceding:
-		buf.Myprintf(" UNBOUNDED PRECEDING")
+		buf.Myprintf("UNBOUNDED PRECEDING")
 	case UnboundedFollowing:
-		buf.Myprintf(" UNBOUNDED FOLLOWING")
+		buf.Myprintf("UNBOUNDED FOLLOWING")
 	case ExprPreceding:
-		buf.Myprintf(" %v PRECEDING", node.Expr)
+		buf.Myprintf("%v PRECEDING", node.Expr)
 	case ExprFollowing:
-		buf.Myprintf(" %v FOLLOWING", node.Expr)
+		buf.Myprintf("%v FOLLOWING", node.Expr)
 	}
+}
+
+func (node *FrameBound) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
+	)
 }
 
 // Limit represents a LIMIT clause.

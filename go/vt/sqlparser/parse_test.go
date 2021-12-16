@@ -1815,144 +1815,212 @@ var (
 		}, {
 			input: "delete from t partition (p0) where a = 1",
 		}, {
-			input: "select name, dense_rank() over () from t",
+			input:                "select name, dense_rank() over () from t",
+			serializeSelectExprs: true,
 		}, {
-			input:  "select name, avg(a) over (partition by b) as avg from t",
-			output: "select name, avg(a) over (partition by b) as `avg` from t",
+			input:                "select name, avg(a) over (partition by b) as avg from t",
+			output:               "select name, avg(a) over (partition by b) as `avg` from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, bit_and(a) over (partition by b) from t",
+			input:                "select name, bit_and(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, bit_or(a) over (partition by b) from t",
+			input:                "select name, bit_or(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, bit_xor(a) over (partition by b) from t",
+			input:                "select name, bit_xor(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, count(distinct a) over (partition by b) from t",
+			input:                "select name, count(distinct a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input:  "select name, count(a) over (partition by b) as count from t",
-			output: "select name, count(a) over (partition by b) as `count` from t",
+			input:                "select name, count(a) over (partition by b) as count from t",
+			output:               "select name, count(a) over (partition by b) as `count` from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, json_arrayagg(a) over (partition by b) from t",
+			input:                "select name, json_arrayagg(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, json_objectagg(a) over (partition by b) from t",
+			input:                "select name, json_objectagg(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, max(a) over (partition by b) from t",
+			input:                "select name, max(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, min(a) over (partition by b) from t",
+			input:                "select name, min(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, stddev_pop(a) over (partition by b) from t",
+			input:                "select name, stddev_pop(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, stddev(a) over (partition by b) from t",
+			input:                "select name, stddev(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, std(a) over (partition by b) from t",
+			input:                "select name, std(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, stddev_samp(a) over (partition by b) from t",
+			input:                "select name, stddev_samp(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, sum(a) over (partition by b) from t",
+			input:                "select name, sum(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input:  "select name, sum(distinct a) over (partition by b) as SUM from t",
-			output: "select name, sum(distinct a) over (partition by b) as `SUM` from t",
+			input:                "select name, sum(distinct a) over (partition by b) as SUM from t",
+			output:               "select name, sum(distinct a) over (partition by b) as `SUM` from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, var_pop(a) over (partition by b) from t",
+			input:                "select name, var_pop(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, variance(a) over (partition by b) from t",
+			input:                "select name, variance(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, cume_dist() over (partition by b) from t",
+			input:                "select name, cume_dist() over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, cume_dist() over (partition by b) - 1 in (1, 2) as included from t",
+			input:                "select name, cume_dist() over (partition by b) - 1 in (1, 2) as included from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, cume_dist() over (partition by b) = dense_rank() over () as included from t",
+			input:                "select name, cume_dist() over (partition by b) = dense_rank() over () as included from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by b) from t",
+			input:                "select name, dense_rank() over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, first_value(a) over (partition by b) from t",
+			input:                "select name, first_value(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, lag(a) over (partition by b) from t",
+			input:                "select name, lag(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, last_value(a) over (partition by b) from t",
+			input:                "select name, last_value(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, lead(a) over (partition by b) from t",
+			input:                "select name, lead(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, nth_value(a) over (partition by b) from t",
+			input:                "select name, nth_value(a) over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, ntile() over (partition by b) from t",
+			input:                "select name, ntile() over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, percent_rank() over (partition by b) from t",
+			input:                "select name, percent_rank() over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, rank() over (partition by b) from t",
+			input:                "select name, rank() over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by b) from t",
+			input:                "select name, row_number() over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by b) from t",
+			input:                "select name, dense_rank() over (partition by b) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c asc) from t",
+			input:                "select name, dense_rank() over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, cume_dist() over (partition by b order by c asc) from t",
+			input:                "select name, cume_dist() over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, first_value(a) over (partition by b order by c asc) from t",
+			input:                "select name, first_value(a) over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, lag(a) over (partition by b order by c asc) from t",
+			input:                "select name, lag(a) over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, last_value(a) over (partition by b order by c asc) from t",
+			input:                "select name, last_value(a) over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, lead(a) over (partition by b order by c asc) from t",
+			input:                "select name, lead(a) over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, nth_value(a) over (partition by b order by c asc) from t",
+			input:                "select name, nth_value(a) over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, ntile() over (partition by b order by c asc) from t",
+			input:                "select name, ntile() over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, percent_rank() over (partition by b order by c asc) from t",
+			input:                "select name, percent_rank() over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, rank() over (partition by b order by c asc) from t",
+			input:                "select name, rank() over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by b order by c asc) from t",
+			input:                "select name, row_number() over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (order by b) from t",
+			input:                "select name, dense_rank() over ( order by b asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c) from t",
+			input:                "select name, dense_rank() over (partition by b order by c asc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
+			input:                "select name, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over window_name from t",
+			input:                "select name, dense_rank() over window_name from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y ROWS CURRENT ROW) from t",
+			input:                "select name, dense_rank() over (partition by x order by y asc ROWS CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x order by y ROWS 2 PRECEDING) from t",
+			input:                "select name, row_number() over (partition by x order by y asc ROWS 2 PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x ROWS UNBOUNDED PRECEDING) from t",
+			input:                "select name, row_number() over (partition by x ROWS UNBOUNDED PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x ROWS INTERVAL 5 DAY PRECEDING) from t",
+			input:                "select name, row_number() over (partition by x ROWS interval 5 DAY PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x ROWS INTERVAL '2:30' MINUTE_SECOND PRECEDING) from t",
+			input:                "select name, row_number() over (partition by x ROWS interval '2:30' MINUTE_SECOND PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x order by y ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+			input:                "select name, row_number() over (partition by x order by y asc ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN CURRENT ROW AND CURRENT ROW) from t",
+			input:                "select name, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+			input:                "select name, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x order by y ROWS BETWEEN INTERVAL 5 DAY PRECEDING AND CURRENT ROW) from t",
+			input:                "select name, row_number() over (partition by x ROWS BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x order by y ROWS BETWEEN INTERVAL '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+			input:                "select name, row_number() over (partition by x ROWS BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y RANGE CURRENT ROW) from t",
+			input:                "select name, dense_rank() over (partition by x RANGE CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y RANGE 2 PRECEDING) from t",
+			input:                "select name, dense_rank() over (partition by x RANGE 2 PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y RANGE UNBOUNDED PRECEDING) from t",
+			input:                "select name, dense_rank() over (partition by x RANGE UNBOUNDED PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x RANGE INTERVAL 5 DAY PRECEDING) from t",
+			input:                "select name, row_number() over (partition by x RANGE interval 5 DAY PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x RANGE INTERVAL '2:30' MINUTE_SECOND PRECEDING) from t",
+			input:                "select name, row_number() over (partition by x RANGE interval '2:30' MINUTE_SECOND PRECEDING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+			input:                "select name, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+			input:                "select name, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, dense_rank() over (partition by x order by y RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) from t",
+			input:                "select name, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x order by y RANGE BETWEEN INTERVAL 5 DAY PRECEDING AND CURRENT ROW) from t",
+			input:                "select name, row_number() over (partition by x RANGE BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
-			input: "select name, row_number() over (partition by x order by y RANGE BETWEEN INTERVAL '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+			input:                "select name, row_number() over (partition by x RANGE BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
