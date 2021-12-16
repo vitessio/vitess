@@ -1521,6 +1521,7 @@ type TableSpec struct {
 	PartitionOption *PartitionOption
 }
 
+// JSONTableExpr describes the components of the function JSON_TABLE
 type JSONTableExpr struct {
 	Expr    Expr
 	Filter  Expr
@@ -1528,18 +1529,22 @@ type JSONTableExpr struct {
 	Alias   TableIdent
 }
 
+// JtOnResponseType describes whether the column has a default, null or error type
 type JtOnResponseType int
 
+// JtColumnDefinition describes the structure of column definition in JSON_TABLE
 type JtColumnDefinition struct {
 	JtOrdinal    *JtOrdinalColDef
 	JtPath       *JtPathColDef
 	JtNestedPath *JtNestedPathColDef
 }
 
+// JtOrdinalColDef is a type of column definition similar to using AUTO_INCREMENT with a column
 type JtOrdinalColDef struct {
 	Name ColIdent
 }
 
+// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
 type JtPathColDef struct {
 	Name            ColIdent
 	Type            ColumnType
@@ -1550,10 +1555,13 @@ type JtPathColDef struct {
 	ErrorOnResponse *JtOnResponse
 }
 
+// JtNestedPathColDef is type of column definition with nested column definitions
 type JtNestedPathColDef struct {
 	Path    Expr
 	Columns []*JtColumnDefinition
 }
+
+// JtOnResponse specifies for a column the JtOnResponseType along with the expression for default and error
 type JtOnResponse struct {
 	ResponseType JtOnResponseType
 	Expr         Expr
@@ -1596,11 +1604,11 @@ type ColumnStorage int
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	/* We need Null to be *bool to distinguish 3 cases -
-	1. When Not Null is specified (Null = false)
-	2. When Null is specified (Null = true)
-	3. When nothing is specified (Null = nil)
-	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
-	Therefore we do not know whether the column is nullable or not in case 3.
+	   1. When Not Null is specified (Null = false)
+	   2. When Null is specified (Null = true)
+	   3. When nothing is specified (Null = nil)
+	   The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
+	   Therefore we do not know whether the column is nullable or not in case 3.
 	*/
 	Null          *bool
 	Autoincrement bool
