@@ -1,7 +1,7 @@
 import React from 'react'
 import { Icon, Icons } from './Icon'
 import { Intent } from './intent'
-import { ToastContainer, toast, Slide } from 'react-toastify'
+import { ToastContainer, toast, Slide, ToastOptions } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css';
 interface SnackbarProps {
     message: string
@@ -28,8 +28,8 @@ const Snackbar: React.FC<SnackbarProps & { closeToast?: () => void }> = ({ close
     console.log(props)
     return (
         <div className={`flex font-medium text-sm text-${intentColor} border border-${intentColor} items-center bg-gray-100 justify-between py-6 px-8 z-20 rounded-xl bg-${translateIntentColor(intent)}`}>
-            <div className='flex items-center'>
-                {icon && <Icon icon={icon} className={`mr-4 fill-current h-8 w-8`} />}
+            <div className='flex items-center shrink-0'>
+                {icon && <Icon icon={icon} className={`mr-4 fill-current h-8 w-8 min-h-8 min-w-8 shrink-0`} />}
                 {message}
             </div>
             <button onClick={closeToast}><Icon icon={Icons.delete} className='fill-current text-gray-900 h-6 w-6 ml-8' /></button>
@@ -58,14 +58,14 @@ interface AddSnackbarParams {
 }
 
 export const SnackbarContext = React.createContext<SnackbarContextProps>(defaultProps)
-const addSnackbar = (props: AddSnackbarParams) => {
-    toast(({ closeToast }) => <Snackbar closeToast={closeToast} key={props.message} {...props} />, { className: 'mb-2' })
+const addSnackbar = (props: AddSnackbarParams, options?: ToastOptions) => {
+    toast(({ closeToast }) => <Snackbar closeToast={closeToast} key={props.message} {...props} />, { className: 'mb-2', ...options })
 }
 
-export const warn = (message: string) => addSnackbar({ message, intent: Intent.warning, icon: Icons.alertFail })
-export const danger = (message: string) => addSnackbar({ message, intent: Intent.danger, icon: Icons.alertFail })
-export const success = (message: string) => addSnackbar({ message, intent: Intent.success, icon: Icons.checkSuccess })
-export const info = (message: string) => addSnackbar({ message, intent: Intent.none, icon: Icons.info })
+export const warn = (message: string, options?: ToastOptions) => addSnackbar({ message, intent: Intent.warning, icon: Icons.alertFail }, options)
+export const danger = (message: string, options?: ToastOptions) => addSnackbar({ message, intent: Intent.danger, icon: Icons.alertFail }, options)
+export const success = (message: string, options?: ToastOptions) => addSnackbar({ message, intent: Intent.success, icon: Icons.checkSuccess }, options)
+export const info = (message: string, options?: ToastOptions) => addSnackbar({ message, intent: Intent.none, icon: Icons.info }, options)
 
 export const SnackbarContainer: React.FC = ({ children }) => {
     return (
