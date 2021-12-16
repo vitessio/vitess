@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useHistory, useParams } from 'react-router-dom';
-import { deleteTablet } from '../../../api/http';
+import { deleteTablet, reparentTablet } from '../../../api/http';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
@@ -18,16 +18,16 @@ interface RouteParams {
 
 const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
     const { clusterID, alias } = useParams<RouteParams>();
-    const [typedAlias, setTypedAlias] = useState('')
-    const [deleteLoading, setDeleteLoading] = useState(false)
     const history = useHistory()
 
+    // DeleteTablet
+    const [typedAlias, setTypedAlias] = useState('')
+    const [deleteLoading, setDeleteLoading] = useState(false)
     const onDeleteTablet = async () => {
         setDeleteLoading(true)
         let result
         try {
             result = await deleteTablet({ alias, clusterID })
-            console.log(result)
             if (result) {
                 success(`Successfully deleted tablet ${alias}`)
             }
@@ -38,6 +38,21 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
         setDeleteLoading(false)
     }
 
+    // ReparentTablet
+    const [reparentLoading, setReparentLoading] = useState(false)
+    const onReparentTablet = async () => {
+        setReparentLoading(true)
+        let result
+        try {
+            result = await reparentTablet({ alias, clusterID })
+            if (result) {
+                success(`Successfully reparented tablet ${alias} under primary ${result.primary}`, { autoClose: 7000 })
+            }
+        } catch (e) {
+            warn(`There was an error reparenting tablet: ${e}`)
+        }
+        setReparentLoading(false)
+    }
     return (
         <div className="pt-4">
             <div className="my-8">
@@ -81,7 +96,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
 
                         </p>
                         {isPrimary(tablet) && <p className="text-danger"><Icon icon={Icons.alertFail} className='fill-current text-danger inline mr-2' />Command ReparentTablet cannot be run on the primary tablet.</p>}
-                        <button className="btn btn-secondary mt-4" disabled={isPrimary(tablet)}>Reparent tablet</button>
+                        <button className="btn btn-secondary mt-4" disabled={isPrimary(tablet) || reparentLoading} onClick={onReparentTablet}>Reparent tablet</button>
                     </div>
                 </div>
             </div>
