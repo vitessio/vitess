@@ -203,6 +203,7 @@ func insertInitialData(t *testing.T) {
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
 		log.Infof("Done inserting initial data")
 
 		validateCount(t, vtgateConn, "product:0", "product", 2)

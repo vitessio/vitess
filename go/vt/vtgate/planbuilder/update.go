@@ -17,10 +17,11 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -63,7 +64,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 	changedVindexes := make(map[string]*engine.VindexValues)
 	buf, offset := initialQuery(ksidCol, table)
 	for i, vindex := range table.ColumnVindexes {
-		vindexValueMap := make(map[string]sqltypes.PlanValue)
+		vindexValueMap := make(map[string]evalengine.Expr)
 		first := true
 		for _, vcol := range vindex.Columns {
 			// Searching in order of columns in colvindex.
@@ -141,11 +142,11 @@ func initialQuery(ksidCol string, table *vindexes.Table) (*sqlparser.TrackedBuff
 // extractValueFromUpdate given an UpdateExpr attempts to extracts the Value
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
-func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (sqltypes.PlanValue, error) {
-	pv, err := sqlparser.NewPlanValue(upd.Expr)
+func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
+	pv, err := evalengine.Convert(upd.Expr, semantics.EmptySemTable())
 	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
-		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: %v", upd.Name.Name)
-		return sqltypes.PlanValue{}, err
+		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr))
+		return nil, err
 	}
 	return pv, nil
 }

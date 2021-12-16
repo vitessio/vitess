@@ -104,7 +104,8 @@ func TestTabletGatewayBeginExecuteBatch(t *testing.T) {
 }
 
 func TestTabletGatewayShuffleTablets(t *testing.T) {
-	tg := NewTabletGateway(context.Background(), nil, nil, "local")
+	hc := discovery.NewFakeHealthCheck(nil)
+	tg := NewTabletGateway(context.Background(), hc, nil, "local")
 
 	ts1 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell1", "host1"),

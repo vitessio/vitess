@@ -104,7 +104,7 @@ func TestMergeJoins(t *testing.T) {
 	}}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result, _ := tryMerge(&planningContext{semTable: semantics.NewSemTable()}, tc.l, tc.r, tc.predicates, nil) // fakeMerger ? how to test this
+			result, _ := tryMerge(&planningContext{semTable: semantics.EmptySemTable()}, tc.l, tc.r, tc.predicates, nil) // fakeMerger ? how to test this
 			assert.Equal(t, tc.expected, result)
 		})
 	}
@@ -168,7 +168,7 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 		tables:      []relation{m2, m3},
 		predicates:  []sqlparser.Expr{equals(col1, col2)},
 	}
-	semTable := semantics.NewSemTable()
+	semTable := semantics.EmptySemTable()
 	merge, _ := tryMerge(&planningContext{semTable: semTable}, a, b, []sqlparser.Expr{}, fakeMerger)
 	assert.NotNil(merge)
 }
