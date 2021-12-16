@@ -61,7 +61,7 @@ func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
 		env.Row = row
-		evalResult, err := f.Predicate.Evaluate(env)
+		evalResult, err := env.Evaluate(f.Predicate)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +84,7 @@ func (f *Filter) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		var rows [][]sqltypes.Value
 		for _, row := range results.Rows {
 			env.Row = row
-			evalResult, err := f.Predicate.Evaluate(env)
+			evalResult, err := env.Evaluate(f.Predicate)
 			if err != nil {
 				return err
 			}

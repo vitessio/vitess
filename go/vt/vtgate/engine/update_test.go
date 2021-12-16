@@ -90,7 +90,7 @@ func TestUpdateEqual(t *testing.T) {
 	// Failure case
 	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", collations.TypedCollation{})}
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `Bind variable not found`)
+	require.EqualError(t, err, `query arguments missing for aa`)
 }
 
 func TestUpdateScatter(t *testing.T) {

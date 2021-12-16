@@ -463,7 +463,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	env := evalengine.EnvWithBindVars(bindVars)
 	var specifiedKS string
 	for _, tableSchema := range route.SysTableTableSchema {
-		result, err := tableSchema.Evaluate(env)
+		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +481,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 
 	tableNames := map[string]string{}
 	for tblBvName, sysTableName := range route.SysTableTableName {
-		val, err := sysTableName.Evaluate(env)
+		val, err := env.Evaluate(sysTableName)
 		if err != nil {
 			return nil, err
 		}
@@ -581,7 +581,8 @@ func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Values[0].Evaluate(evalengine.EnvWithBindVars(bindVars))
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -597,9 +598,10 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 }
 
 func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
 	var rowValue []sqltypes.Value
 	for _, rvalue := range route.Values {
-		v, err := rvalue.Evaluate(evalengine.EnvWithBindVars(bindVars))
+		v, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -687,7 +689,8 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 }
 
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Values[0].Evaluate(evalengine.EnvWithBindVars(bindVars))
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -706,13 +709,13 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 	isSingleVal := map[int]interface{}{}
 	env := evalengine.EnvWithBindVars(bindVars)
 	for colIdx, rvalue := range route.Values {
-		result, err := rvalue.Evaluate(env)
+		result, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
 		}
 		lv = result.TupleValues()
 		if lv == nil {
-			v, err := rvalue.Evaluate(env)
+			v, err := env.Evaluate(rvalue)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -759,7 +762,8 @@ func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqlt
 }
 
 func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Values[0].Evaluate(evalengine.EnvWithBindVars(bindVars))
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -778,7 +782,7 @@ func (route *Route) paramsSelectMultiEqualMultiCol(vcursor VCursor, bindVars map
 	var multiColValues [][]sqltypes.Value
 	env := evalengine.EnvWithBindVars(bindVars)
 	for _, rvalue := range route.Values {
-		v, err := rvalue.Evaluate(env)
+		v, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
 		}
