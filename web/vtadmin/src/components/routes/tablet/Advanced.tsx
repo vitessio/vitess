@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { useParams } from 'react-router-dom';
+import { useHistory, useParams } from 'react-router-dom';
+import { deleteTablet } from '../../../api/http';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
-import { warn } from '../../Snackbar';
+import { success, warn } from '../../Snackbar';
 import { TextInput } from '../../TextInput';
 
 interface AdvancedProps {
@@ -18,6 +19,25 @@ interface RouteParams {
 const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
     const { clusterID, alias } = useParams<RouteParams>();
     const [typedAlias, setTypedAlias] = useState('')
+    const [deleteLoading, setDeleteLoading] = useState(false)
+    const history = useHistory()
+
+    const onDeleteTablet = async () => {
+        setDeleteLoading(true)
+        let result
+        try {
+            result = await deleteTablet({ alias, clusterID })
+            console.log(result)
+            if (result) {
+                success(`Successfully deleted tablet ${alias}`)
+            }
+            history.push('/tablets')
+        } catch (e) {
+            warn(`There was an error deleting tablet: ${e}`)
+        }
+        setDeleteLoading(false)
+    }
+
     return (
         <div className="pt-4">
             <div className="my-8">
@@ -81,7 +101,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                     <div className="w-1/3">
                         <TextInput placeholder="zone-xxx" value={typedAlias} onChange={e => setTypedAlias(e.target.value)} />
                     </div>
-                    <button className="btn btn-secondary btn-danger mt-4" disabled={typedAlias !== alias} onClick={() => warn('dangerous')}>Delete</button>
+                    <button className="btn btn-secondary btn-danger mt-4" disabled={(typedAlias !== alias) || deleteLoading} onClick={onDeleteTablet}>{deleteLoading ? 'Deleting...' : 'Delete'}</button>
                 </div>
             </div>
         </div>

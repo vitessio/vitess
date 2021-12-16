@@ -70,7 +70,7 @@ export const info = (message: string) => addSnackbar({ message, intent: Intent.n
 export const SnackbarContainer: React.FC = ({ children }) => {
     return (
         <div className='fixed right-10 bottom-6' id='snackbar-container'>
-            <ToastContainer toastClassName='mb-2' autoClose={false} position='bottom-right' closeButton={false} closeOnClick hideProgressBar pauseOnHover transition={Slide} />
+            <ToastContainer toastClassName='mb-2' autoClose={3000} position='bottom-right' closeButton={false} closeOnClick hideProgressBar pauseOnHover transition={Slide} />
         </div>
     )
 }
