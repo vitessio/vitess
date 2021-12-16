@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
-import { useSnackbar } from '../../Snackbar';
+import { warn } from '../../Snackbar';
 import { TextInput } from '../../TextInput';
 
 interface AdvancedProps {
@@ -16,7 +16,6 @@ interface RouteParams {
 }
 
 const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
-    const { warn } = useSnackbar()
     const { clusterID, alias } = useParams<RouteParams>();
     const [typedAlias, setTypedAlias] = useState('')
     return (

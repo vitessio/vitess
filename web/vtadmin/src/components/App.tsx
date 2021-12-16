@@ -35,7 +35,7 @@ import { Tablet } from './routes/tablet/Tablet';
 import { Backups } from './routes/Backups';
 import { Shard } from './routes/shard/Shard';
 import { Vtctlds } from './routes/Vtctlds';
-import { SnackbarProvider } from './Snackbar';
+import { SnackbarContainer } from './Snackbar';
 
 export const App = () => {
     return (
@@ -44,81 +44,80 @@ export const App = () => {
                 <div className={style.navContainer}>
                     <NavRail />
                 </div>
-                <SnackbarProvider>
-                    <div className={style.mainContainer}>
-                        <Switch>
-                            <Route path="/backups">
-                                <Backups />
-                            </Route>
+                <SnackbarContainer />
+                <div className={style.mainContainer}>
+                    <Switch>
+                        <Route path="/backups">
+                            <Backups />
+                        </Route>
 
-                            <Route path="/clusters">
-                                <Clusters />
-                            </Route>
+                        <Route path="/clusters">
+                            <Clusters />
+                        </Route>
 
-                            <Route path="/gates">
-                                <Gates />
-                            </Route>
+                        <Route path="/gates">
+                            <Gates />
+                        </Route>
 
-                            <Route path="/keyspaces">
-                                <Keyspaces />
-                            </Route>
+                        <Route path="/keyspaces">
+                            <Keyspaces />
+                        </Route>
 
-                            <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
-                                <Shard />
-                            </Route>
+                        <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
+                            <Shard />
+                        </Route>
 
-                            <Route path="/keyspace/:clusterID/:name">
-                                <Keyspace />
-                            </Route>
+                        <Route path="/keyspace/:clusterID/:name">
+                            <Keyspace />
+                        </Route>
 
-                            <Route path="/schemas">
-                                <Schemas />
-                            </Route>
+                        <Route path="/schemas">
+                            <Schemas />
+                        </Route>
 
-                            <Route path="/schema/:clusterID/:keyspace/:table">
-                                <Schema />
-                            </Route>
+                        <Route path="/schema/:clusterID/:keyspace/:table">
+                            <Schema />
+                        </Route>
 
-                            <Route path="/tablets">
-                                <Tablets />
-                            </Route>
+                        <Route path="/tablets">
+                            <Tablets />
+                        </Route>
 
-                            <Route path="/tablet/:clusterID/:alias">
-                                <Tablet />
-                            </Route>
+                        <Route path="/tablet/:clusterID/:alias">
+                            <Tablet />
+                        </Route>
 
-                            <Route path="/vtctlds">
-                                <Vtctlds />
-                            </Route>
+                        <Route path="/vtctlds">
+                            <Vtctlds />
+                        </Route>
 
-                            <Route path="/vtexplain">
-                                <VTExplain />
-                            </Route>
+                        <Route path="/vtexplain">
+                            <VTExplain />
+                        </Route>
 
-                            <Route path="/workflows">
-                                <Workflows />
-                            </Route>
+                        <Route path="/workflows">
+                            <Workflows />
+                        </Route>
 
-                            <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
-                                <Stream />
-                            </Route>
+                        <Route path="/workflow/:clusterID/:keyspace/:workflowName/stream/:tabletCell/:tabletUID/:streamID">
+                            <Stream />
+                        </Route>
 
-                            <Route path="/workflow/:clusterID/:keyspace/:name">
-                                <Workflow />
-                            </Route>
+                        <Route path="/workflow/:clusterID/:keyspace/:name">
+                            <Workflow />
+                        </Route>
 
-                            <Route path="/debug">
-                                <Debug />
-                            </Route>
+                        <Route path="/debug">
+                            <Debug />
+                        </Route>
 
-                            <Redirect exact from="/" to="/tablets" />
+                        <Redirect exact from="/" to="/tablets" />
 
-                            <Route>
-                                <Error404 />
-                            </Route>
-                        </Switch>
-                    </div>
-                </SnackbarProvider>
+                        <Route>
+                            <Error404 />
+                        </Route>
+                    </Switch>
+                </div>
             </div>
         </Router>
     );
