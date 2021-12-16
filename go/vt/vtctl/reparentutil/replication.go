@@ -27,13 +27,14 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // FindValidEmergencyReparentCandidates will find candidates for an emergency
@@ -160,6 +161,7 @@ func StopReplicationAndBuildStatusMaps(
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
 	ignoredTablets sets.String,
+	tabletToWaitFor *topodatapb.TabletAlias,
 	logger logutil.Logger,
 ) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
@@ -168,49 +170,64 @@ func StopReplicationAndBuildStatusMaps(
 		statusMap        = map[string]*replicationdatapb.StopReplicationStatus{}
 		primaryStatusMap = map[string]*replicationdatapb.PrimaryStatus{}
 		m                sync.Mutex
-		errChan          = make(chan error)
+		errChan          = make(chan concurrency.Error)
 	)
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 
-	fillStatus := func(alias string, tabletInfo *topo.TabletInfo) {
-		err := vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "fillStatus did not successfully complete")
-		defer func() { errChan <- err }()
+	fillStatus := func(alias string, tabletInfo *topo.TabletInfo, mustWaitForTablet bool) {
+		var concurrencyErr concurrency.Error
+		var err error
+		defer func() {
+			concurrencyErr.Err = err
+			concurrencyErr.MustWaitFor = mustWaitForTablet
+			errChan <- concurrencyErr
+		}()
 
 		logger.Infof("getting replication position from %v", alias)
 
 		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
-		switch err {
-		case mysql.ErrNotReplica:
-			var primaryStatus *replicationdatapb.PrimaryStatus
+		if err != nil {
+			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
+				var primaryStatus *replicationdatapb.PrimaryStatus
 
-			primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
-			if err != nil {
-				msg := "replica %v thinks it's primary but we failed to demote it"
-				err = vterrors.Wrapf(err, msg+": %v", alias, err)
+				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
+				if err != nil {
+					msg := "replica %v thinks it's primary but we failed to demote it"
+					err = vterrors.Wrapf(err, msg+": %v", alias, err)
 
-				logger.Warningf(msg, alias)
-				return
+					logger.Warningf(msg, alias)
+					return
+				}
+
+				m.Lock()
+				primaryStatusMap[alias] = primaryStatus
+				m.Unlock()
+			} else {
+				logger.Warningf("failed to get replication status from %v: %v", alias, err)
+				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
-
-			m.Lock()
-			primaryStatusMap[alias] = primaryStatus
-			m.Unlock()
-		case nil:
+		} else {
 			m.Lock()
 			statusMap[alias] = stopReplicationStatus
 			m.Unlock()
-		default:
-			logger.Warningf("failed to get replication status from %v: %v", alias, err)
-
-			err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 		}
 	}
 
+	tabletAliasToWaitFor := ""
+	numErrorsToWaitFor := 0
+	if tabletToWaitFor != nil {
+		tabletAliasToWaitFor = topoproto.TabletAliasString(tabletToWaitFor)
+	}
 	for alias, tabletInfo := range tabletMap {
 		if !ignoredTablets.Has(alias) {
-			go fillStatus(alias, tabletInfo)
+			mustWaitFor := tabletAliasToWaitFor == alias
+			if mustWaitFor {
+				numErrorsToWaitFor++
+			}
+			go fillStatus(alias, tabletInfo, mustWaitFor)
 		}
 	}
 
@@ -218,6 +235,7 @@ func StopReplicationAndBuildStatusMaps(
 		NumGoroutines:        len(tabletMap) - ignoredTablets.Len(),
 		NumRequiredSuccesses: len(tabletMap) - ignoredTablets.Len() - 1,
 		NumAllowedErrors:     1,
+		NumErrorsToWaitFor:   numErrorsToWaitFor,
 	}
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)

@@ -279,3 +279,21 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	// bring back the old primary as a replica, check that it catches up
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
 }
+
+// TestTwoReplicasNoReplicationStatus checks that ERS is able to fix
+// two replicas which do not have any replication status
+func TestTwoReplicasNoReplicationStatus(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE; RESET SLAVE ALL`)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE; RESET SLAVE ALL`)
+	require.NoError(t, err)
+
+	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
+	require.NoError(t, err, out)
+}

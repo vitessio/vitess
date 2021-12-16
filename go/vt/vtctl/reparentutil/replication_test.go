@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -277,6 +279,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		tabletMap                map[string]*topo.TabletInfo
 		waitReplicasTimeout      time.Duration
 		ignoredTablets           sets.String
+		tabletToWaitFor          *topodatapb.TabletAlias
 		expectedStatusMap        map[string]*replicationdatapb.StopReplicationStatus
 		expectedPrimaryStatusMap map[string]*replicationdatapb.PrimaryStatus
 		shouldErr                bool
@@ -401,7 +404,9 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					Err        error
 				}{
 					"zone1-0000000100": {
-						Err: mysql.ErrNotReplica,
+						// In the tabletManager implementation of StopReplicationAndGetStatus
+						// we wrap the error and then send it via GRPC. This should still work as expected.
+						Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
@@ -683,6 +688,85 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 			expectedPrimaryStatusMap: nil,
 			shouldErr:                true,
 		},
+		{
+			name: "slow tablet is the new primary requested",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusDelays: map[string]time.Duration{
+					"zone1-0000000102": 1 * time.Second, // zone1-0000000102 is slow to respond but has to be included since it is the requested primary
+				},
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "100-before"},
+							After:  &replicationdatapb.Status{Position: "100-after"},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "101-before"},
+							After:  &replicationdatapb.Status{Position: "101-after"},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "102-before"},
+							After:  &replicationdatapb.Status{Position: "102-after"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			tabletToWaitFor: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			ignoredTablets: sets.NewString(),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					Before: &replicationdatapb.Status{Position: "100-before"},
+					After:  &replicationdatapb.Status{Position: "100-after"},
+				},
+				"zone1-0000000101": {
+					Before: &replicationdatapb.Status{Position: "101-before"},
+					After:  &replicationdatapb.Status{Position: "101-after"},
+				},
+				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{Position: "102-before"},
+					After:  &replicationdatapb.Status{Position: "102-after"},
+				},
+			},
+			waitReplicasTimeout:      time.Minute,
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			shouldErr:                false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -691,15 +775,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(
-				ctx,
-				tt.tmc,
-				&events.Reparent{},
-				tt.tabletMap,
-				tt.waitReplicasTimeout,
-				tt.ignoredTablets,
-				logger,
-			)
+			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
