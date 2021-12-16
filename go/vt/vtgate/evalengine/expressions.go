@@ -253,7 +253,7 @@ func (c *Column) eval(env *ExpressionEnv) (EvalResult, error) {
 	return numeric, err
 }
 
-// Type implements the Expr interface
+// typeof implements the Expr interface
 func (bv *BindVariable) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	e := env.BindVars
 	v, found := e[bv.Key]
@@ -263,12 +263,12 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return v.Type, nil
 }
 
-// Type implements the Expr interface
+// typeof implements the Expr interface
 func (l *Literal) typeof(*ExpressionEnv) (querypb.Type, error) {
 	return l.Val.typ, nil
 }
 
-// Type implements the Expr interface
+// typeof implements the Expr interface
 func (t TupleExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_TUPLE, nil
 }

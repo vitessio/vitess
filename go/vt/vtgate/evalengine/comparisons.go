@@ -356,7 +356,7 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	return cmp.evalResult(), nil
 }
 
-// Type implements the Expr interface
+// typeof implements the Expr interface
 func (c *ComparisonExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
@@ -472,7 +472,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (EvalResult, error) {
 	return evalResultBool(matched == !l.Negate), nil
 }
 
-// Type implements the ComparisonOp interface
+// typeof implements the ComparisonOp interface
 func (l *LikeExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_UINT64, nil
 }
