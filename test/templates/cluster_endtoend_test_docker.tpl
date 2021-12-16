@@ -1,12 +1,10 @@
-# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
-
-name: Cluster (vreplication_v2)
+name: {{.Name}}
 on: [push, pull_request]
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vreplication_v2)
-    runs-on: ubuntu-latest
+    name: Run endtoend tests on {{.Name}}
+    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-latest{{end}}
 
     steps:
     - name: Set up Go
@@ -24,4 +22,5 @@ jobs:
     - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
-        go run test.go -docker=true --follow -shard vreplication_v2
+        go run test.go -docker=true --follow -shard {{.Shard}}
+
