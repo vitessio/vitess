@@ -133,7 +133,7 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 // For select statements, capture the verbatim select expressions from the original query text
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
-		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
+		s.walkSubtree(func(node SQLNode) (bool, error) {
 			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
 				_, ok := node.Expr.(*ColName)
 				if ok {
@@ -3005,6 +3005,7 @@ type Over struct {
 	PartitionBy Exprs
 	OrderBy     OrderBy
 	WindowName  ColIdent
+	Frame       *Frame
 }
 
 // Format formats the node.
@@ -3012,12 +3013,16 @@ func (node *Over) Format(buf *TrackedBuffer) {
 	if !node.WindowName.IsEmpty() {
 		buf.Myprintf("over %v", node.WindowName)
 	} else {
+		// TODO: extra space after openb if no PARTITION BY
 		buf.Myprintf("over (")
 		if len(node.PartitionBy) > 0 {
 			buf.Myprintf("partition by %v", node.PartitionBy)
 		}
 		if len(node.OrderBy) > 0 {
 			buf.Myprintf("%v", node.OrderBy)
+		}
+		if node.Frame != nil {
+			buf.Myprintf("%v", node.Frame)
 		}
 		buf.Myprintf(")")
 	}
@@ -4836,6 +4841,123 @@ func (node *Order) Format(buf *TrackedBuffer) {
 }
 
 func (node *Order) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
+	)
+}
+
+type FrameUnit int
+
+const (
+	// RangeUnit matches by value comparison (e.g. 100 units cheaper)
+	RangeUnit FrameUnit = iota
+	// RowsUnit matches by row position offset (e.g. 1 row before)
+	RowsUnit
+)
+
+// Frame represents a window Frame clause.
+type Frame struct {
+	Unit   FrameUnit
+	Extent *FrameExtent
+}
+
+// Format formats the node.
+func (node *Frame) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	switch node.Unit {
+	case RangeUnit:
+		buf.Myprintf(" RANGE %v", node.Extent)
+	case RowsUnit:
+		buf.Myprintf(" ROWS %v", node.Extent)
+	}
+}
+
+func (node *Frame) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Extent,
+	)
+}
+
+// FrameExtent defines the start and end bounds for a window frame.
+type FrameExtent struct {
+	Start, End *FrameBound
+}
+
+// Format formats the node.
+func (node *FrameExtent) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	if node.End != nil {
+		buf.Myprintf("BETWEEN %v AND %v", node.Start, node.End)
+	} else {
+		buf.Myprintf("%v", node.Start)
+	}
+}
+
+func (node *FrameExtent) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Start,
+		node.End,
+	)
+}
+
+type BoundType int
+
+const (
+	// CurrentRow represents the current row position or value range
+	CurrentRow BoundType = iota
+	// UnboundedFollowing includes all rows after CURRENT ROW in the active partition
+	UnboundedFollowing
+	// UnboundedPreceding includes all rows before CURRENT ROW in the active partition
+	UnboundedPreceding
+	// ExprPreceding matches N rows or a value range after CURRENT ROW
+	ExprPreceding
+	// ExprFollowing matches N rows or a value range after CURRENT ROW
+	ExprFollowing
+)
+
+// FrameBound defines one direction of row or range inclusion.
+type FrameBound struct {
+	Expr Expr
+	Type BoundType
+}
+
+// Format formats the node.
+func (node *FrameBound) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	switch node.Type {
+	case CurrentRow:
+		buf.Myprintf("CURRENT ROW")
+	case UnboundedPreceding:
+		buf.Myprintf("UNBOUNDED PRECEDING")
+	case UnboundedFollowing:
+		buf.Myprintf("UNBOUNDED FOLLOWING")
+	case ExprPreceding:
+		buf.Myprintf("%v PRECEDING", node.Expr)
+	case ExprFollowing:
+		buf.Myprintf("%v FOLLOWING", node.Expr)
+	}
+}
+
+func (node *FrameBound) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}

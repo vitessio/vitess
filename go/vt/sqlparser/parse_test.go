@@ -32,9 +32,9 @@ import (
 )
 
 type parseTest struct {
-	input                string
-	output               string
-	serializeSelectExprs bool
+	input                      string
+	output                     string
+	useSelectExpressionLiteral bool
 }
 
 var (
@@ -56,12 +56,15 @@ var (
 			input:  "select `a`, `'b'` from t",
 			output: "select a, `'b'` from t",
 		}, {
-			input:  `select "'ain't'", '"hello"' from t`,
-			output: `select 'ain't', "hello" from t`,
+			input:                      `select "'ain't'", '"hello"' from t`,
+			output:                     `select 'ain't', "hello" from t`,
+			useSelectExpressionLiteral: true,
 		}, {
-			input: `select "1" + "2" from t`,
+			input:                      `select "1" + "2" from t`,
+			useSelectExpressionLiteral: true,
 		}, {
-			input: `select '1' + "2" from t`,
+			input:                      `select '1' + "2" from t`,
+			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select * from information_schema.columns",
 			output: "select * from information_schema.`columns`",
@@ -78,15 +81,17 @@ var (
 		}, {
 			input: "select -1 from t where b = -2",
 		}, {
+			input:                      "select - -1 from t",
+			output:                     "select - -1 from t",
+			useSelectExpressionLiteral: true,
+		}, {
+			input:                      "select -   -1 from t",
+			output:                     "select -   -1 from t",
+			useSelectExpressionLiteral: true,
+		}, {
 			input:  "select - -1 from t",
-			output: "select - -1 from t",
-		}, {
-			input:  "select -   -1 from t",
-			output: "select -   -1 from t",
-		}, {
-			input:                "select - -1 from t",
-			output:               "select 1 from t",
-			serializeSelectExprs: true, // not a bug, we are testing that - -1 becomes 1
+			output: "select 1 from t",
+			// not a bug, we are testing that - -1 becomes 1
 		}, {
 			input:  "select 1 from t // aa\n",
 			output: "select 1 from t",
@@ -97,13 +102,11 @@ var (
 			input:  "select 1 from t # aa\n",
 			output: "select 1 from t",
 		}, {
-			input:                "select 1 --aa\nfrom t",
-			output:               "select 1 from t",
-			serializeSelectExprs: true,
+			input:  "select 1 --aa\nfrom t",
+			output: "select 1 from t",
 		}, {
-			input:                "select 1 #aa\nfrom t",
-			output:               "select 1 from t",
-			serializeSelectExprs: true,
+			input:  "select 1 #aa\nfrom t",
+			output: "select 1 from t",
 		}, {
 			input: "select /* simplest */ 1 from t",
 		}, {
@@ -127,15 +130,14 @@ var (
 		}, {
 			input: "select /* @ */ @@a from b",
 		}, {
-			input:                "select /* \\0 */ '\\0' from a",
-			serializeSelectExprs: true,
+			input: "select /* \\0 */ '\\0' from a",
 		}, {
-			input:  "select /* \\0 */ '\\0' from a",
-			output: "select /* \\0 */ \\0 from a",
+			input:                      "select /* \\0 */ '\\0' from a",
+			output:                     "select /* \\0 */ \\0 from a",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:                "select 1 /* drop this comment */ from t",
-			output:               "select 1 from t",
-			serializeSelectExprs: true,
+			input:  "select 1 /* drop this comment */ from t",
+			output: "select 1 from t",
 		}, {
 			input: "select /* union */ 1 from t union select 1 from t",
 		}, {
@@ -190,8 +192,7 @@ var (
 			input:  "select all col from t",
 			output: "select col from t",
 		}, {
-			input:                "select /* straight_join */ straight_join 1 from t",
-			serializeSelectExprs: true,
+			input: "select /* straight_join */ straight_join 1 from t",
 		}, {
 			input: "select /* for update */ 1 from t for update",
 		}, {
@@ -208,9 +209,8 @@ var (
 			input:  "select /* column alias */ a as b from t",
 			output: "select /* column alias */ a as b from t",
 		}, {
-			input:                "select /* column alias */ a b from t",
-			output:               "select /* column alias */ a as b from t",
-			serializeSelectExprs: true,
+			input:  "select /* column alias */ a b from t",
+			output: "select /* column alias */ a as b from t",
 		}, {
 			input:  "select t.Date as Date from t",
 			output: "select t.`Date` as `Date` from t",
@@ -225,9 +225,8 @@ var (
 			input:  "select /* column alias as string */ a as \"b\" from t",
 			output: "select /* column alias as string */ a as b from t",
 		}, {
-			input:                "select /* column alias as string without as */ a \"b\" from t",
-			output:               "select /* column alias as string without as */ a as b from t",
-			serializeSelectExprs: true,
+			input:  "select /* column alias as string without as */ a \"b\" from t",
+			output: "select /* column alias as string without as */ a as b from t",
 		}, {
 			input: "select /* a.* */ a.* from t",
 		}, {
@@ -241,8 +240,7 @@ var (
 		}, {
 			input: "select next :a values from t",
 		}, {
-			input:                "select /* `By`.* */ `By`.* from t",
-			serializeSelectExprs: true,
+			input: "select /* `By`.* */ `By`.* from t",
 		}, {
 			input: "select /* `By`.* */ `By`.* from t",
 		}, {
@@ -599,52 +597,58 @@ var (
 		}, {
 			input: "select /* keyword a.b */ `By`.`bY` from t",
 		}, {
-			input:  "select /* string */ 'a' from t",
-			output: "select /* string */ a from t",
-		}, {
-			input:                "select /* double quoted string */ \"a\" from t",
-			output:               "select /* double quoted string */ 'a' from t",
-			serializeSelectExprs: true,
+			input:                      "select /* string */ 'a' from t",
+			output:                     "select /* string */ a from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
-			output: "select /* double quoted string */ a from t",
+			output: "select /* double quoted string */ 'a' from t",
 		}, {
-			input:                "select /* quote quote in string */ 'a''a' from t",
-			output:               "select /* quote quote in string */ 'a\\'a' from t",
-			serializeSelectExprs: true,
+			input:                      "select /* double quoted string */ \"a\" from t",
+			output:                     "select /* double quoted string */ a from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:                "select /* double quote quote in string */ \"a\"\"a\" from t",
-			output:               "select /* double quote quote in string */ 'a\\\"a' from t",
-			serializeSelectExprs: true,
+			input:  "select /* quote quote in string */ 'a''a' from t",
+			output: "select /* quote quote in string */ 'a\\'a' from t",
 		}, {
-			input:                "select /* quote in double quoted string */ \"a'a\" from t",
-			output:               "select /* quote in double quoted string */ 'a\\'a' from t",
-			serializeSelectExprs: true,
+			input:  "select /* double quote quote in string */ \"a\"\"a\" from t",
+			output: "select /* double quote quote in string */ 'a\\\"a' from t",
+		}, {
+			input:  "select /* quote in double quoted string */ \"a'a\" from t",
+			output: "select /* quote in double quoted string */ 'a\\'a' from t",
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
 			output: "select /* quote in double quoted string */ a'a from t",
+
+			useSelectExpressionLiteral: true,
 		}, {
-			input:  "select /* backslash quote in string */ 'a\\'a' from t",
-			output: "select /* backslash quote in string */ a\\'a from t",
+			input:                      "select /* backslash quote in string */ 'a\\'a' from t",
+			output:                     "select /* backslash quote in string */ a\\'a from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* literal backslash in string */ 'a\\\\na' from t",
 			output: "select /* literal backslash in string */ a\\\\na from t",
+
+			useSelectExpressionLiteral: true,
 		}, {
-			input:  "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
-			output: "select /* all escapes */ \\0\\'\\\"\\b\\n\\r\\t\\Z\\\\ from t",
-		}, {
-			input:                "select /* non-escape */ '\\x' from t",
-			output:               "select /* non-escape */ 'x' from t",
-			serializeSelectExprs: true,
+			input:                      "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
+			output:                     "select /* all escapes */ \\0\\'\\\"\\b\\n\\r\\t\\Z\\\\ from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
-			output: "select /* non-escape */ \\x from t",
+			output: "select /* non-escape */ 'x' from t",
 		}, {
-			input:  "select /* unescaped backslash */ '\n' from t",
-			output: "select /* unescaped backslash */ \n from t",
+			input:                      "select /* non-escape */ '\\x' from t",
+			output:                     "select /* non-escape */ \\x from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:  "select /* escaped backslash */ '\\n' from t",
-			output: "select /* escaped backslash */ \\n from t",
+			input:                      "select /* unescaped backslash */ '\n' from t",
+			output:                     "select /* unescaped backslash */ \n from t",
+			useSelectExpressionLiteral: true,
+		}, {
+			input:                      "select /* escaped backslash */ '\\n' from t",
+			output:                     "select /* escaped backslash */ \\n from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* value argument */ :a from t",
 		}, {
@@ -652,19 +656,17 @@ var (
 		}, {
 			input: "select /* value argument with dot */ :a.b from t",
 		}, {
-			input:                "select /* positional argument */ ? from t",
-			output:               "select /* positional argument */ :v1 from t",
-			serializeSelectExprs: true,
+			input:  "select /* positional argument */ ? from t",
+			output: "select /* positional argument */ :v1 from t",
 		}, {
-			input: "select /* positional argument */ ? from t",
+			input:                      "select /* positional argument */ ? from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:                "select /* positional argument */ ? from t limit ?",
-			output:               "select /* positional argument */ :v1 from t limit :v2",
-			serializeSelectExprs: true,
+			input:  "select /* positional argument */ ? from t limit ?",
+			output: "select /* positional argument */ :v1 from t limit :v2",
 		}, {
-			input:                "select /* multiple positional arguments */ ?, ? from t",
-			output:               "select /* multiple positional arguments */ :v1, :v2 from t",
-			serializeSelectExprs: true,
+			input:  "select /* multiple positional arguments */ ?, ? from t",
+			output: "select /* multiple positional arguments */ :v1, :v2 from t",
 		}, {
 			input: "select /* list arg */ * from t where a in ::list",
 		}, {
@@ -674,19 +676,19 @@ var (
 		}, {
 			input: "select /* octal */ 010 from t",
 		}, {
-			input:                "select /* hex */ x'f0A1' from t",
-			output:               "select /* hex */ X'f0A1' from t",
-			serializeSelectExprs: true,
+			input:  "select /* hex */ x'f0A1' from t",
+			output: "select /* hex */ X'f0A1' from t",
 		}, {
-			input: "select /* hex */ x'f0A1' from t",
+			input:                      "select /* hex */ x'f0A1' from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* hex caps */ X'F0a1' from t",
 		}, {
-			input:                "select /* bit literal */ b'0101' from t",
-			output:               "select /* bit literal */ B'0101' from t",
-			serializeSelectExprs: true,
+			input:  "select /* bit literal */ b'0101' from t",
+			output: "select /* bit literal */ B'0101' from t",
 		}, {
-			input: "select /* bit literal */ b'0101' from t",
+			input:                      "select /* bit literal */ b'0101' from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* bit literal caps */ B'010011011010' from t",
 		}, {
@@ -711,11 +713,11 @@ var (
 		}, {
 			input: "select /* limit a,b */ 1 from t limit 4, 5",
 		}, {
-			input:                "select /* binary unary */ a- -b from t",
-			output:               "select /* binary unary */ a - -b from t",
-			serializeSelectExprs: true,
+			input:  "select /* binary unary */ a- -b from t",
+			output: "select /* binary unary */ a - -b from t",
 		}, {
-			input: "select /* binary unary */ a- -b from t",
+			input:                      "select /* binary unary */ a- -b from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* - - */ - -b from t",
 		}, {
@@ -729,9 +731,11 @@ var (
 		}, {
 			input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 		}, {
-			input: "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
+			input:                      "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input: "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
+			input:                      "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select /* dual */ 1 from dual",
 		}, {
@@ -774,12 +778,12 @@ var (
 		}, {
 			input: "select /* dual */ 1 from dual",
 		}, {
-			input:                "select * from (select 'tables') tables",
-			output:               "select * from (select 'tables' from dual) as `tables`",
-			serializeSelectExprs: true,
-		}, {
 			input:  "select * from (select 'tables') tables",
-			output: "select * from (select tables from dual) as `tables`",
+			output: "select * from (select 'tables' from dual) as `tables`",
+		}, {
+			input:                      "select * from (select 'tables') tables",
+			output:                     "select * from (select tables from dual) as `tables`",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "insert /* simple */ into a values (1)",
 		}, {
@@ -1652,9 +1656,8 @@ var (
 			input:  "show count ( * ) errors",
 			output: "show count(*) errors",
 		}, {
-			input:                "select warnings from t",
-			output:               "select `warnings` from t",
-			serializeSelectExprs: true,
+			input:  "select warnings from t",
+			output: "select `warnings` from t",
 		}, {
 			input:  "show foobar",
 			output: "show foobar",
@@ -1728,8 +1731,7 @@ var (
 			input:  "select * from t order by a collate utf8_general_ci",
 			output: "select * from t order by a collate utf8_general_ci asc",
 		}, {
-			input:                "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
-			serializeSelectExprs: true,
+			input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 		}, {
 			input: "select * from t group by a collate utf8_general_ci",
 		}, {
@@ -1757,21 +1759,23 @@ var (
 		}, {
 			input: "select k from t1 join t2 order by a collate latin1_german2_ci asc, b collate latin1_german2_ci asc",
 		}, {
-			input:                "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
-			output:               "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
-			serializeSelectExprs: true,
+			input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
+			output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 		}, {
 			input:  "select /* drop trailing semicolon */ 1 from dual;",
 			output: "select /* drop trailing semicolon */ 1 from dual",
 		}, {
-			input:  "select /* cache directive */ sql_no_cache 'foo' from t",
-			output: "select /* cache directive */ sql_no_cache foo from t",
+			input:                      "select /* cache directive */ sql_no_cache 'foo' from t",
+			output:                     "select /* cache directive */ sql_no_cache foo from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:  "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
-			output: "select /* sql_calc_rows directive */ sql_calc_found_rows foo from t",
+			input:                      "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
+			output:                     "select /* sql_calc_rows directive */ sql_calc_found_rows foo from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:  "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
-			output: "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows foo from t",
+			input:                      "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
+			output:                     "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows foo from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select binary 'a' = 'A' from t",
 		}, {
@@ -1793,7 +1797,8 @@ var (
 		}, {
 			input: "select name, group_concat(score) from t group by name",
 		}, {
-			input: `select concAt(  "a",    "b", "c"  ) from t group by name`,
+			input:                      `select concAt(  "a",    "b", "c"  ) from t group by name`,
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 		}, {
@@ -1906,11 +1911,55 @@ var (
 		}, {
 			input: "select name, row_number() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, dense_rank() over (order by b) from t",
+			input: "select name, dense_rank() over ( order by b asc) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c) from t",
+			input: "select name, dense_rank() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
+			input: "select name, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
+		}, {
+			input: "select name, dense_rank() over window_name from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x order by y asc ROWS CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y asc ROWS 2 PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS UNBOUNDED PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS interval 5 DAY PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS interval '2:30' MINUTE_SECOND PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y asc ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x ROWS BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x RANGE CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x RANGE 2 PRECEDING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x RANGE UNBOUNDED PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x RANGE interval 5 DAY PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x RANGE interval '2:30' MINUTE_SECOND PRECEDING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x RANGE BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, row_number() over (partition by x RANGE BETWEEN interval '2:30' MINUTE_SECOND PRECEDING AND CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over window_name from t",
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
@@ -1920,6 +1969,7 @@ var (
 					FROM one_pk opk
 					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
 					ORDER BY max`,
+			useSelectExpressionLiteral: true,
 			output: "select pk, (SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as `max`," +
 				" (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as `min` " +
 				"from one_pk as opk " +
@@ -2093,11 +2143,13 @@ var (
 			input:  "create definer = me procedure p1(v1 int) comment 'some_comment' not deterministic select now()",
 			output: "create definer = me procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
 		}, {
-			input:  "SELECT FORMAT(45124,2) FROM test",
-			output: "select FORMAT(45124,2) from test",
+			input:                      "SELECT FORMAT(45124,2) FROM test",
+			output:                     "select FORMAT(45124,2) from test",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:  "SELECT FORMAT(45124,2,'de_DE') FROM test",
-			output: "select FORMAT(45124,2,'de_DE') from test",
+			input:                      "SELECT FORMAT(45124,2,'de_DE') FROM test",
+			output:                     "select FORMAT(45124,2,'de_DE') from test",
+			useSelectExpressionLiteral: true,
 		}, {
 			input:  "CREATE USER UserName@localhost",
 			output: "create user `UserName`@`localhost`",
@@ -2547,9 +2599,9 @@ func assertTestcaseOutput(t *testing.T, tcase parseTest, tree Statement) {
 	// For tests that require it, clear the InputExpression of selected expressions so they print their reproduced
 	// values, rather than the input values. In most cases this is due to a bug in parsing, and there should be a
 	// skipped test. But in some cases it's intentional, to test the behavior of parser logic.
-	if tree, ok := tree.(WalkableSQLNode); tcase.serializeSelectExprs && ok {
+	if tree, ok := tree.(WalkableSQLNode); ok {
 		tree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
-			if ae, ok := node.(*AliasedExpr); ok {
+			if ae, ok := node.(*AliasedExpr); !tcase.useSelectExpressionLiteral && ok {
 				ae.InputExpression = ""
 			}
 			return true, nil
@@ -2878,8 +2930,7 @@ func TestCaseSensitivity(t *testing.T) {
 		}, {
 			input: "select B.* from c",
 		}, {
-			input:                "select B.A from c",
-			serializeSelectExprs: true,
+			input: "select B.A from c",
 		}, {
 			input: "select B.A from c",
 		}, {
@@ -2899,12 +2950,12 @@ func TestCaseSensitivity(t *testing.T) {
 		}, {
 			input: "select A(distinct B, C) from b",
 		}, {
-			input:                "select A(ALL B, C) from b",
-			output:               "select A(B, C) from b",
-			serializeSelectExprs: true,
-		}, {
 			input:  "select A(ALL B, C) from b",
-			output: "select A(ALL B, C) from b",
+			output: "select A(B, C) from b",
+		}, {
+			input:                      "select A(ALL B, C) from b",
+			output:                     "select A(ALL B, C) from b",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select IF(B, C) from b",
 		}, {
@@ -2941,31 +2992,32 @@ func TestCaseSensitivity(t *testing.T) {
 func TestKeywords(t *testing.T) {
 	validSQL := []parseTest{
 		{
-			input:                "select current_timestamp",
-			output:               "select current_timestamp() from dual",
-			serializeSelectExprs: true,
+			input:  "select current_timestamp",
+			output: "select current_timestamp() from dual",
 		}, {
-			input:  "select current_TIMESTAMP",
-			output: "select current_TIMESTAMP from dual",
+			input:                      "select current_TIMESTAMP",
+			output:                     "select current_TIMESTAMP from dual",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "update t set a = current_timestamp()",
 		}, {
 			input: "update t set a = current_timestamp(5)",
 		}, {
-			input:                "select a, current_date from t",
-			output:               "select a, current_date() from t",
-			serializeSelectExprs: true,
+			input:  "select a, current_date from t",
+			output: "select a, current_date() from t",
 		}, {
-			input:  "select a, current_DATE from t",
-			output: "select a, current_DATE from t",
+			input:                      "select a, current_DATE from t",
+			output:                     "select a, current_DATE from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input:                "select a, current_user from t",
-			output:               "select a, current_user() from t",
-			serializeSelectExprs: true,
+			input:  "select a, current_user from t",
+			output: "select a, current_user() from t",
 		}, {
-			input: "select a, current_USER from t",
+			input:                      "select a, current_USER from t",
+			useSelectExpressionLiteral: true,
 		}, {
-			input: "select a, Current_USER(     ) from t",
+			input:                      "select a, Current_USER(     ) from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input:  "insert into t(a, b) values (current_date, current_date())",
 			output: "insert into t(a, b) values (current_date(), current_date())",
@@ -2986,12 +3038,12 @@ func TestKeywords(t *testing.T) {
 			input:  "update t set b = utc_timestamp + 5",
 			output: "update t set b = utc_timestamp() + 5",
 		}, {
-			input:                "select utc_time, utc_date, utc_time(6)",
-			output:               "select utc_time(), utc_date(), utc_time(6) from dual",
-			serializeSelectExprs: true,
+			input:  "select utc_time, utc_date, utc_time(6)",
+			output: "select utc_time(), utc_date(), utc_time(6) from dual",
 		}, {
-			input:  "select utc_TIME, UTC_date, utc_time(6)",
-			output: "select utc_TIME, UTC_date, utc_time(6) from dual",
+			input:                      "select utc_TIME, UTC_date, utc_time(6)",
+			output:                     "select utc_TIME, UTC_date, utc_time(6) from dual",
+			useSelectExpressionLiteral: true,
 		}, {
 			input:  "select 1 from dual where localtime > utc_time",
 			output: "select 1 from dual where localtime() > utc_time()",
@@ -3044,13 +3096,11 @@ func TestKeywords(t *testing.T) {
 			input:  "delete from x where status = 32",
 			output: "delete from x where `status` = 32",
 		}, {
-			input:                "select status from t",
-			output:               "select `status` from t",
-			serializeSelectExprs: true,
+			input:  "select status from t",
+			output: "select `status` from t",
 		}, {
-			input:                "select variables from t",
-			output:               "select `variables` from t",
-			serializeSelectExprs: true,
+			input:  "select variables from t",
+			output: "select `variables` from t",
 		}}
 
 	for _, tcase := range validSQL {
@@ -3081,11 +3131,11 @@ func runParseTestCase(t *testing.T, tcase parseTest) bool {
 func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
-			input:                "select cast('abc' as date) from t",
-			output:               "select convert('abc', date) from t",
-			serializeSelectExprs: true,
+			input:  "select cast('abc' as date) from t",
+			output: "select convert('abc', date) from t",
 		}, {
-			input: "select cast('abc' as date) from t",
+			input:                      "select cast('abc' as date) from t",
+			useSelectExpressionLiteral: true,
 		}, {
 			input: "select convert('abc', binary(4)) from t",
 		}, {
@@ -3107,18 +3157,16 @@ func TestConvert(t *testing.T) {
 		}, {
 			input: "select convert('abc', signed) from t",
 		}, {
-			input:                "select convert('abc', signed integer) from t",
-			output:               "select convert('abc', signed) from t",
-			serializeSelectExprs: true,
+			input:  "select convert('abc', signed integer) from t",
+			output: "select convert('abc', signed) from t",
 		}, {
 			input:  "select convert('abc', signed) from t",
 			output: "select convert('abc', signed) from t",
 		}, {
 			input: "select convert('abc', unsigned) from t",
 		}, {
-			input:                "select convert('abc', unsigned integer) from t",
-			output:               "select convert('abc', unsigned) from t",
-			serializeSelectExprs: true,
+			input:  "select convert('abc', unsigned integer) from t",
+			output: "select convert('abc', unsigned) from t",
 		}, {
 			input:  "select convert('abc', unsigned) from t",
 			output: "select convert('abc', unsigned) from t",
@@ -3184,7 +3232,7 @@ func TestConvert(t *testing.T) {
 
 func TestSubStr(t *testing.T) {
 
-	// serializeSelectExprs here is not a bug: these are tests that various substring forms get parsed correctly
+	// various substring forms get parsed correctly
 	validSQL := []parseTest{{
 		input: `select substr('foobar', 1) from t`,
 	}, {
@@ -3196,41 +3244,38 @@ func TestSubStr(t *testing.T) {
 		input:  "select substring(a, 1, 6) from t",
 		output: "select substring(a, 1, 6) from t",
 	}, {
-		input:                "select substring(a from 1 for 6) from t",
-		output:               "select substr(a, 1, 6) from t",
-		serializeSelectExprs: true,
+		input:  "select substring(a from 1 for 6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}, {
-		input: "select substring(a from 1 for 6) from t",
+		input:                      "select substring(a from 1 for 6) from t",
+		useSelectExpressionLiteral: true,
 	}, {
-		input:                "select substring(a from 1 for 6) from t",
-		output:               "select substr(a, 1, 6) from t",
-		serializeSelectExprs: true,
+		input:  "select substring(a from 1 for 6) from t",
+		output: "select substr(a, 1, 6) from t",
 	}, {
-		input: "select substring(a from 1 for 6) from t",
+		input:                      "select substring(a from 1 for 6) from t",
+		useSelectExpressionLiteral: true,
 	}, {
-		input: "select substring(a from 1  for   6) from t",
+		input:                      "select substring(a from 1  for   6) from t",
+		useSelectExpressionLiteral: true,
 	}, {
-		input:                `select substr("foo" from 1 for 2) from t`,
-		output:               `select substr('foo', 1, 2) from t`,
-		serializeSelectExprs: true,
+		input:  `select substr("foo" from 1 for 2) from t`,
+		output: `select substr('foo', 1, 2) from t`,
 	}, {
-		input:                `select substring("foo", 1, 2) from t`,
-		output:               `select substring('foo', 1, 2) from t`,
-		serializeSelectExprs: true,
+		input:  `select substring("foo", 1, 2) from t`,
+		output: `select substring('foo', 1, 2) from t`,
 	}, {
-		input:                `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
-		output:               `select substr(substr('foo', 1, 2), 1, 2) from t`,
-		serializeSelectExprs: true,
+		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
 	}, {
-		input: `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		input:                      `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		useSelectExpressionLiteral: true,
 	}, {
-		input:                `select substr(substring("foo", 1, 2), 3, 4) from t`,
-		output:               `select substr(substring('foo', 1, 2), 3, 4) from t`,
-		serializeSelectExprs: true,
+		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
+		output: `select substr(substring('foo', 1, 2), 3, 4) from t`,
 	}, {
-		input:                `select substr(substr("foo", 1), 2) from t`,
-		output:               `select substr(substr('foo', 1), 2) from t`,
-		serializeSelectExprs: true,
+		input:  `select substr(substr("foo", 1), 2) from t`,
+		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 
 	for _, tcase := range validSQL {
@@ -3897,9 +3942,8 @@ func TestLoadData(t *testing.T) {
 func TestEscape(t *testing.T) {
 	testCases := []parseTest{
 		{
-			input:                `SELECT * FROM test WHERE col LIKE "%$_%" ESCAPE "$"`,
-			output:               `select * from test where col like '%$_%' escape '$'`,
-			serializeSelectExprs: true,
+			input:  `SELECT * FROM test WHERE col LIKE "%$_%" ESCAPE "$"`,
+			output: `select * from test where col like '%$_%' escape '$'`,
 		},
 	}
 	for _, tcase := range testCases {
@@ -3910,34 +3954,28 @@ func TestEscape(t *testing.T) {
 func TestTrim(t *testing.T) {
 	testCases := []parseTest{
 		{
-			input:                `SELECT TRIM("foo")`,
-			output:               `select trim(both ' ' from 'foo') from dual`,
-			serializeSelectExprs: true,
+			input:  `SELECT TRIM("foo")`,
+			output: `select trim(both ' ' from 'foo') from dual`,
 		},
 		{
-			input:                `SELECT TRIM("bar" FROM "foo")`,
-			output:               `select trim(both 'bar' from 'foo') from dual`,
-			serializeSelectExprs: true,
+			input:  `SELECT TRIM("bar" FROM "foo")`,
+			output: `select trim(both 'bar' from 'foo') from dual`,
 		},
 		{
-			input:                `SELECT TRIM(LEADING "bar" FROM "foo")`,
-			output:               `select trim(leading 'bar' from 'foo') from dual`,
-			serializeSelectExprs: true,
+			input:  `SELECT TRIM(LEADING "bar" FROM "foo")`,
+			output: `select trim(leading 'bar' from 'foo') from dual`,
 		},
 		{
-			input:                `SELECT TRIM(TRAILING "bar" FROM "foo")`,
-			output:               `select trim(trailing 'bar' from 'foo') from dual`,
-			serializeSelectExprs: true,
+			input:  `SELECT TRIM(TRAILING "bar" FROM "foo")`,
+			output: `select trim(trailing 'bar' from 'foo') from dual`,
 		},
 		{
-			input:                `SELECT TRIM(BOTH "bar" FROM "foo")`,
-			output:               `select trim(both 'bar' from 'foo') from dual`,
-			serializeSelectExprs: true,
+			input:  `SELECT TRIM(BOTH "bar" FROM "foo")`,
+			output: `select trim(both 'bar' from 'foo') from dual`,
 		},
 		{
-			input:                `SELECT TRIM(TRIM("foobar"))`,
-			output:               `select trim(both ' ' from trim(both ' ' from 'foobar')) from dual`,
-			serializeSelectExprs: true,
+			input:  `SELECT TRIM(TRIM("foobar"))`,
+			output: `select trim(both ' ' from trim(both ' ' from 'foobar')) from dual`,
 		},
 	}
 	for _, tcase := range testCases {
