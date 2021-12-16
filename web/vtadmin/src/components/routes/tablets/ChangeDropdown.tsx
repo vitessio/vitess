@@ -3,8 +3,9 @@ import Divider from '../../dropdown/Divider';
 import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
 import { Icons } from '../../Icon';
+import { Intent } from '../../intent';
 
-interface ChangeDropdownProps {}
+interface ChangeDropdownProps { }
 
 const ChangeDropdown: React.FC<ChangeDropdownProps> = () => {
     return (
@@ -13,7 +14,7 @@ const ChangeDropdown: React.FC<ChangeDropdownProps> = () => {
             <MenuItem>Set ReadOnly</MenuItem>
             <MenuItem>Set ReadWrite</MenuItem>
             <Divider />
-            <MenuItem intent="danger">Delete Tablet</MenuItem>
+            <MenuItem intent={Intent.danger}>Delete Tablet</MenuItem>
         </Dropdown>
     );
 };

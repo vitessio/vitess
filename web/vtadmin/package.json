@@ -37,6 +37,7 @@
     "source-map-explorer": "^2.5.2",
     "tailwindcss": "npm:@tailwindcss/postcss7-compat@^2.2.17",
     "typescript": "^4.1.3",
+    "uuid": "^8.3.2",
     "web-vitals": "^0.2.4"
   },
   "scripts": {
@@ -83,6 +84,7 @@
     "@testing-library/react": "^11.2.5",
     "@testing-library/react-hooks": "^5.0.3",
     "@types/lodash-es": "^4.17.4",
+    "@types/uuid": "^8.3.3",
     "msw": "^0.24.4",
     "prettier": "^2.2.1",
     "protobufjs": "^6.10.2",

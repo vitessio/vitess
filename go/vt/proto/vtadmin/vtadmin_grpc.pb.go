@@ -27,6 +27,8 @@ type VTAdminClient interface {
 	DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.DeleteKeyspaceResponse, error)
 	// DeleteShard deletes one or more shards in the given cluster and keyspace.
 	DeleteShards(ctx context.Context, in *DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error)
+	// DeleteTablet deletes a tablet from the topology
+	DeleteTablet(ctx context.Context, in *DeleteTabletRequest, opts ...grpc.CallOption) (*DeleteTabletResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -121,6 +123,15 @@ func (c *vTAdminClient) DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRe
 func (c *vTAdminClient) DeleteShards(ctx context.Context, in *DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error) {
 	out := new(vtctldata.DeleteShardsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/DeleteShards", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) DeleteTablet(ctx context.Context, in *DeleteTabletRequest, opts ...grpc.CallOption) (*DeleteTabletResponse, error) {
+	out := new(DeleteTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/DeleteTablet", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -337,6 +348,8 @@ type VTAdminServer interface {
 	DeleteKeyspace(context.Context, *DeleteKeyspaceRequest) (*vtctldata.DeleteKeyspaceResponse, error)
 	// DeleteShard deletes one or more shards in the given cluster and keyspace.
 	DeleteShards(context.Context, *DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error)
+	// DeleteTablet deletes a tablet from the topology
+	DeleteTablet(context.Context, *DeleteTabletRequest) (*DeleteTabletResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -409,6 +422,9 @@ func (UnimplementedVTAdminServer) DeleteKeyspace(context.Context, *DeleteKeyspac
 }
 func (UnimplementedVTAdminServer) DeleteShards(context.Context, *DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteShards not implemented")
+}
+func (UnimplementedVTAdminServer) DeleteTablet(context.Context, *DeleteTabletRequest) (*DeleteTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTablet not implemented")
 }
 func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest) (*Schema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindSchema not implemented")
@@ -557,6 +573,24 @@ func _VTAdmin_DeleteShards_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).DeleteShards(ctx, req.(*DeleteShardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_DeleteTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).DeleteTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/DeleteTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).DeleteTablet(ctx, req.(*DeleteTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -979,6 +1013,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteShards",
 			Handler:    _VTAdmin_DeleteShards_Handler,
+		},
+		{
+			MethodName: "DeleteTablet",
+			Handler:    _VTAdmin_DeleteTablet_Handler,
 		},
 		{
 			MethodName: "FindSchema",

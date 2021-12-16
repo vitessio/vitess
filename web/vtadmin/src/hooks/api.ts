@@ -37,6 +37,7 @@ import {
     TabletDebugVarsResponse,
     refreshState,
     runHealthCheck,
+    deleteTablet,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -118,6 +119,15 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
     });
 };
 
+/**
+ * useDeleteTablet is a query hook that deletes a single tablet by alias and optionally, cluster id.
+ */
+export const useDeleteTablet = (
+    params: Parameters<typeof deleteTablet>[0],
+    options?: UseQueryOptions<pb.DeleteTabletResponse, Error>
+) => {
+    return useQuery(['delete-tablet', params], () => deleteTablet(params), options);
+};
 /**
  * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
  */
