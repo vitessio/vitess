@@ -83,7 +83,7 @@ func (expr *LikeExpr) simplify() error {
 	lit2, _ := expr.Right.(*Literal)
 	if lit2 != nil && lit2.Val.textual() && expr.MergedCollation.Valid() {
 		coll := collations.Local().LookupByID(expr.MergedCollation.Collation)
-		expr.Match = coll.Wildcard(lit2.Val.bytes2, 0, 0, 0)
+		expr.Match = coll.Wildcard(lit2.Val.bytes(), 0, 0, 0)
 	}
 	return nil
 }
@@ -106,8 +106,8 @@ func (inexpr *InExpr) simplify() error {
 
 	for i, expr := range tuple {
 		if lit, ok := expr.(*Literal); ok {
-			thisColl := lit.Val.collation2.Collation
-			thisTyp := lit.Val.typ2
+			thisColl := lit.Val.collation().Collation
+			thisTyp := lit.Val.typeof()
 			if i == 0 {
 				collation = thisColl
 				typ = thisTyp
@@ -131,7 +131,7 @@ func (inexpr *InExpr) simplify() error {
 				break
 			}
 			if collidx, collision := inexpr.Hashed[hash]; collision {
-				cmp, _, err := evalCompareAll(resolved(lit.Val), resolved(tuple[collidx].(*Literal).Val), true)
+				cmp, _, err := evalCompareAll(&lit.Val, &tuple[collidx].(*Literal).Val, true)
 				if cmp != 0 || err != nil {
 					inexpr.Hashed = nil
 					break
@@ -155,13 +155,13 @@ func (expr *BinaryCoercedExpr) simplify() error {
 	lit2, _ := expr.Right.(*Literal)
 
 	if lit1 != nil && expr.CoerceLeft != nil {
-		lit1.Val.bytes2, _ = expr.CoerceLeft(nil, lit1.Val.bytes2)
-		lit1.Val.collation2 = expr.MergedCollation
+		b, _ := expr.CoerceLeft(nil, lit1.Val.bytes())
+		lit1.Val.replaceBytes(b, expr.MergedCollation)
 		expr.CoerceLeft = nil
 	}
 	if lit2 != nil && expr.CoerceRight != nil {
-		lit2.Val.bytes2, _ = expr.CoerceRight(nil, lit2.Val.bytes2)
-		lit2.Val.collation2 = expr.MergedCollation
+		b, _ := expr.CoerceRight(nil, lit2.Val.bytes())
+		lit2.Val.replaceBytes(b, expr.MergedCollation)
 		expr.CoerceRight = nil
 	}
 

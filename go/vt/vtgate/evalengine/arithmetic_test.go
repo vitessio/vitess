@@ -1095,7 +1095,7 @@ func TestNewIntegralNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}}
 	for _, tcase := range tcases {
-		got, err := newIntegralNumeric(tcase.v)
+		got, err := newEvalResultNumeric(tcase.v)
 		if err != nil && !vterrors.Equals(err, tcase.err) {
 			t.Errorf("newIntegralNumeric(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1157,7 +1157,8 @@ func TestAddNumeric(t *testing.T) {
 		err: dataOutOfRangeError(uint64(18446744073709551615), 2, "BIGINT UNSIGNED", "+"),
 	}}
 	for _, tcase := range tcases {
-		got, err := addNumericWithError(resolved(tcase.v1), resolved(tcase.v2))
+		var got EvalResult
+		err := addNumericWithError(&tcase.v1, &tcase.v2, &got)
 		if err != nil {
 			if tcase.err == nil {
 				t.Fatal(err)
@@ -1175,8 +1176,8 @@ func TestPrioritize(t *testing.T) {
 	ival := newEvalInt64(-1)
 	uval := newEvalUint64(1)
 	fval := newEvalFloat(1.2)
-	textIntval := EvalResult{typ2: querypb.Type_VARBINARY, bytes2: []byte("-1")}
-	textFloatval := EvalResult{typ2: querypb.Type_VARBINARY, bytes2: []byte("1.2")}
+	textIntval := newEvalRaw(querypb.Type_VARBINARY, []byte("-1"))
+	textFloatval := newEvalRaw(querypb.Type_VARBINARY, []byte("1.2"))
 
 	tcases := []struct {
 		v1, v2     EvalResult
@@ -1224,9 +1225,9 @@ func TestPrioritize(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
-			got1, got2 := makeNumericAndPrioritize(resolved(tcase.v1), resolved(tcase.v2))
-			utils.MustMatch(t, tcase.out1, got1.evalresult(), "makeNumericAndPrioritize")
-			utils.MustMatch(t, tcase.out2, got2.evalresult(), "makeNumericAndPrioritize")
+			got1, got2 := makeNumericAndPrioritize(&tcase.v1, &tcase.v2)
+			utils.MustMatch(t, tcase.out1.value(), got1.value(), "makeNumericAndPrioritize")
+			utils.MustMatch(t, tcase.out2.value(), got2.value(), "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -1330,13 +1331,13 @@ func TestCompareNumeric(t *testing.T) {
 	for aIdx, aVal := range values {
 		for bIdx, bVal := range values {
 			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, aVal.debugString(), bVal.debugString()), func(t *testing.T) {
-				result, err := compareNumeric(resolved(aVal), resolved(bVal))
+				result, err := compareNumeric(&aVal, &bVal)
 				require.NoError(t, err)
 				assert.Equal(t, cmpResults[aIdx][bIdx], result)
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					if aVal.typ2 == bVal.typ2 {
+					if aVal.typeof() == bVal.typeof() {
 						// hash codes can only be compared if they are coerced to the same type first
 						aHash, _ := aVal.nullSafeHashcode()
 						bHash, _ := bVal.nullSafeHashcode()
@@ -1631,13 +1632,13 @@ func BenchmarkAddGoNonInterface(b *testing.B) {
 	v1 := newEvalInt64(1)
 	v2 := newEvalInt64(12)
 	for i := 0; i < b.N; i++ {
-		if v1.typ2 != querypb.Type_INT64 {
+		if v1.typeof() != querypb.Type_INT64 {
 			b.Error("type assertion failed")
 		}
-		if v2.typ2 != querypb.Type_INT64 {
+		if v2.typeof() != querypb.Type_INT64 {
 			b.Error("type assertion failed")
 		}
-		v1 = newEvalInt64(int64(v1.numval2) + int64(v2.numval2))
+		v1 = newEvalInt64(v1.int64() + v2.int64())
 	}
 }
 

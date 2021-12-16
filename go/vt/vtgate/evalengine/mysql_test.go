@@ -94,6 +94,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT ((0, NULL, "fOo", 0) * ("FOO" <=> ("FOO" LIKE ("fOo", (("fOo", 0, 1, -1) < 1), "fOo", "fOo")))) > "fOo"`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
+	eval, err := testSingle(t, `SELECT 1 NOT IN (0, "foo", ("foo" - (NULL <= 0)), -1)`)
+	t.Logf("eval=%s err=%v", eval.Value(), err) // want value="NULL"
 }

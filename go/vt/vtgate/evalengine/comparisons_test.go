@@ -65,15 +65,15 @@ func (tc testCase) run(t *testing.T) {
 		t.Fatalf("failed to convert: %v", err)
 	}
 
-	got, err := cmp.eval(env)
+	got, err := env.Evaluate(cmp)
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
-			require.EqualValues(t, 1, got.numval2)
+			require.EqualValues(t, uint64(1), got.uint64())
 		} else if tc.out != nil && !*tc.out {
-			require.EqualValues(t, 0, got.numval2)
+			require.EqualValues(t, uint64(0), got.uint64())
 		} else {
-			require.EqualValues(t, sqltypes.Null, got.typ2)
+			require.EqualValues(t, sqltypes.Null, got.typeof())
 		}
 	} else {
 		require.EqualError(t, err, tc.err)
