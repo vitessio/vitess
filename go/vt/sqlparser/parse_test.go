@@ -41,6 +41,12 @@ var (
 		output     string
 		partialDDL bool
 	}{{
+		input:  "SELECT o_id, JSON_OBJECTAGG(attribute, value) FROM t3 GROUP BY o_id",
+		output: "select o_id, JSON_OBJECTAGG(attribute,value) from t3 group by o_id",
+	}, {
+		input:  "SELECT o_id, JSON_ARRAYAGG(attribute) AS attributes FROM t3 GROUP BY o_id",
+		output: "select o_id, JSON_ARRAYAGG(attribute) as attributes from t3 group by o_id",
+	}, {
 		input:  "SELECT * FROM  JSON_TABLE(    '[{\"a\": 1, \"b\": [11,111]}, {\"a\": 2, \"b\": [22,222]}]', '$[*]' COLUMNS(a INT PATH '$.a', NESTED PATH '$.b[*]' COLUMNS (b1 INT PATH '$'), NESTED PATH '$.b[*]' COLUMNS (b2 INT PATH '$'))) AS jt",
 		output: "select * from json_table('[{\\\"a\\\": 1, \\\"b\\\": [11,111]}, {\\\"a\\\": 2, \\\"b\\\": [22,222]}]', '$[*]' columns(\n\ta INT path '$.a' ,\n\tnested path '$.b[*]' columns(\n\tb1 INT path '$' \n),\n\tnested path '$.b[*]' columns(\n\tb2 INT path '$' \n)\n\t)\n) as jt",
 	}, {
@@ -2331,6 +2337,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select 1, next value from seq",
 		err:   "syntax error",
+	}, {
+		input: "SELECT o_id, JSON_OBJECTAGG(attribute, value, o_id) FROM t3 GROUP BY o_id",
+		err:   "syntax error at position 46",
+	}, {
+		input: "SELECT o_id, JSON_ARRAYAGG(attribute, o_id) AS attributes FROM t3 GROUP BY o_id",
+		err:   "syntax error at position 38",
 	}}
 
 	for _, tcase := range invalidSQL {
