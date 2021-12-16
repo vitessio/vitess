@@ -2502,3 +2502,16 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 		node.Expr.formatFast(buf)
 	}
 }
+
+func (node *JSONAggregateExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Name.String())
+	buf.WriteByte('(')
+
+	sz := len(node.Columns)
+	for i := 0; i < sz-1; i++ {
+		buf.printExpr(node, node.Columns[i], true)
+		buf.WriteByte(',')
+	}
+	buf.printExpr(node, node.Columns[sz-1], true)
+	buf.WriteByte(')')
+}

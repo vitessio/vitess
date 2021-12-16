@@ -1909,3 +1909,13 @@ func (node *JtOnResponse) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "default %v", node.Expr)
 	}
 }
+
+func (node *JSONAggregateExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.Name.String())
+
+	sz := len(node.Columns)
+	for i := 0; i < sz-1; i++ {
+		buf.astPrintf(node, "%v,", node.Columns[i])
+	}
+	buf.astPrintf(node, "%v)", node.Columns[sz-1])
+}

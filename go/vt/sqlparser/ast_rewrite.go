@@ -166,6 +166,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
 		return a.rewriteIsolationLevel(parent, node, replacer)
+	case *JSONAggregateExpr:
+		return a.rewriteRefOfJSONAggregateExpr(parent, node, replacer)
 	case *JSONTableExpr:
 		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
 	case *JoinCondition:
@@ -2500,6 +2502,42 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 		parent.(*IsExpr).Left = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONAggregateExpr(parent SQLNode, node *JSONAggregateExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*JSONAggregateExpr).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	for x, el := range node.Columns {
+		if !a.rewriteRefOfColName(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*JSONAggregateExpr).Columns[idx] = newNode.(*ColName)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5407,6 +5445,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *JSONAggregateExpr:
+		return a.rewriteRefOfJSONAggregateExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:

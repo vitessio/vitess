@@ -1311,6 +1311,25 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *JSONAggregateExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field Columns []*vitess.io/vitess/go/vt/sqlparser.ColName
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(8))
+		for _, elem := range cached.Columns {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *JSONTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

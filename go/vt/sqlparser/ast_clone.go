@@ -167,6 +167,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
+	case *JSONAggregateExpr:
+		return CloneRefOfJSONAggregateExpr(in)
 	case *JSONTableExpr:
 		return CloneRefOfJSONTableExpr(in)
 	case *JoinCondition:
@@ -1077,6 +1079,17 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	}
 	out := *n
 	out.Left = CloneExpr(n.Left)
+	return &out
+}
+
+// CloneRefOfJSONAggregateExpr creates a deep clone of the input.
+func CloneRefOfJSONAggregateExpr(n *JSONAggregateExpr) *JSONAggregateExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Columns = CloneSliceOfRefOfColName(n.Columns)
 	return &out
 }
 
@@ -2191,6 +2204,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONAggregateExpr:
+		return CloneRefOfJSONAggregateExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -2542,6 +2557,18 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	res := make([]*IndexOption, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfIndexOption(x))
+	}
+	return res
+}
+
+// CloneSliceOfRefOfColName creates a deep clone of the input.
+func CloneSliceOfRefOfColName(n []*ColName) []*ColName {
+	if n == nil {
+		return nil
+	}
+	res := make([]*ColName, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfColName(x))
 	}
 	return res
 }

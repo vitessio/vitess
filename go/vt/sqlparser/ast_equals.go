@@ -458,6 +458,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
+	case *JSONAggregateExpr:
+		b, ok := inB.(*JSONAggregateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAggregateExpr(a, b)
 	case *JSONTableExpr:
 		b, ok := inB.(*JSONTableExpr)
 		if !ok {
@@ -1859,6 +1865,18 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 	}
 	return EqualsExpr(a.Left, b.Left) &&
 		a.Right == b.Right
+}
+
+// EqualsRefOfJSONAggregateExpr does deep equals between the two objects.
+func EqualsRefOfJSONAggregateExpr(a, b *JSONAggregateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsSliceOfRefOfColName(a.Columns, b.Columns)
 }
 
 // EqualsRefOfJSONTableExpr does deep equals between the two objects.
@@ -3382,6 +3400,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b)
+	case *JSONAggregateExpr:
+		b, ok := inB.(*JSONAggregateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONAggregateExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -4062,6 +4086,19 @@ func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsRefOfIndexOption(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfRefOfColName does deep equals between the two objects.
+func EqualsSliceOfRefOfColName(a, b []*ColName) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfColName(a[i], b[i]) {
 			return false
 		}
 	}
