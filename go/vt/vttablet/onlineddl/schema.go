@@ -69,6 +69,8 @@ const (
 	alterSchemaMigrationsTableExpandedColNames         = "ALTER TABLE _vt.schema_migrations add column expanded_column_names text NOT NULL"
 	alterSchemaMigrationsTableRevertibleNotes          = "ALTER TABLE _vt.schema_migrations add column revertible_notes text NOT NULL"
 	alterSchemaMigrationsTableAllowConcurrent          = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRevertedUUID             = "ALTER TABLE _vt.schema_migrations add column reverted_uuid varchar(64) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -86,9 +88,10 @@ const (
 		tablet,
 		retain_artifacts_seconds,
 		postpone_completion,
-		allow_concurrent
+		allow_concurrent,
+		reverted_uuid
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
@@ -556,4 +559,6 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableExpandedColNames,
 	alterSchemaMigrationsTableRevertibleNotes,
 	alterSchemaMigrationsTableAllowConcurrent,
+	alterSchemaMigrationsTableRevertedUUID,
+	alterSchemaMigrationsTableRevertedUUIDIndex,
 }
