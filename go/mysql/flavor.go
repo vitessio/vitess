@@ -32,7 +32,7 @@ import (
 var (
 	// ErrNotReplica means there is no replication status.
 	// Returned by ShowReplicationStatus().
-	ErrNotReplica = errors.New("no replication status")
+	ErrNotReplica = NewSQLError(ERNotReplica, SSUnknownSQLState, "no replication status")
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
