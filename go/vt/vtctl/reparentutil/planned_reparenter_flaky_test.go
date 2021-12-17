@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -2790,6 +2791,80 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				},
 			},
 
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "shard initialization with no new primary provided",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "reparent journal position",
+						Error:  nil,
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Error: mysql.ErrNotReplica,
+					},
+					"zone1-0000000100": {
+						Error: fmt.Errorf("not providing replication status, so that 200 wins"),
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				// Shard has no current primary in the beginning.
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:        &events.Reparent{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			opts:      PlannedReparentOptions{},
 			shouldErr: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
