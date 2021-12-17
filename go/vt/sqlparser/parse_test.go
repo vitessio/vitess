@@ -41,6 +41,27 @@ var (
 		output     string
 		partialDDL bool
 	}{{
+		input:  "SELECT JSON_PRETTY('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}')",
+		output: "select JSON_PRETTY('{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') from dual",
+	}, {
+		input:  "SELECT JSON_PRETTY(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}')",
+		output: "select JSON_PRETTY(N'{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') from dual",
+	}, {
+		input:  "SELECT jcol, JSON_STORAGE_SIZE(jcol) AS Size FROM jtable",
+		output: "select jcol, JSON_STORAGE_SIZE(jcol) as Size from jtable",
+	}, {
+		input:  "SELECT jcol, JSON_STORAGE_SIZE(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}') AS Size FROM jtable",
+		output: "select jcol, JSON_STORAGE_SIZE(N'{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') as Size from jtable",
+	}, {
+		input:  "SELECT JSON_STORAGE_SIZE('[100, \"sakila\", [1, 3, 5], 425.05]') AS A, JSON_STORAGE_SIZE('{\"a\": 1000, \"b\": \"a\", \"c\": \"[1, 3, 5, 7]\"}') AS B, JSON_STORAGE_SIZE('{\"a\": 1000, \"b\": \"wxyz\", \"c\": \"[1, 3, 5, 7]\"}') AS C,JSON_STORAGE_SIZE('[100, \"json\", [[10, 20, 30], 3, 5], 425.05]') AS D",
+		output: "select JSON_STORAGE_SIZE('[100, \\\"sakila\\\", [1, 3, 5], 425.05]') as A, JSON_STORAGE_SIZE('{\\\"a\\\": 1000, \\\"b\\\": \\\"a\\\", \\\"c\\\": \\\"[1, 3, 5, 7]\\\"}') as B, JSON_STORAGE_SIZE('{\\\"a\\\": 1000, \\\"b\\\": \\\"wxyz\\\", \\\"c\\\": \\\"[1, 3, 5, 7]\\\"}') as C, JSON_STORAGE_SIZE('[100, \\\"json\\\", [[10, 20, 30], 3, 5], 425.05]') as D from dual",
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(jcol) FROM jtable",
+		output: "select JSON_STORAGE_FREE(jcol) from jtable",
+	}, {
+		input:  "SELECT JSON_STORAGE_FREE(N'{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}')",
+		output: "select JSON_STORAGE_FREE(N'{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') from dual",
+	}, {
 		input:  "SELECT o_id, JSON_OBJECTAGG(attribute, value) FROM t3 GROUP BY o_id",
 		output: "select o_id, JSON_OBJECTAGG(attribute,value) from t3 group by o_id",
 	}, {
@@ -2343,6 +2364,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT o_id, JSON_ARRAYAGG(attribute, o_id) AS attributes FROM t3 GROUP BY o_id",
 		err:   "syntax error at position 38",
+	}, {
+		input: "SELECT JSON_PRETTY(colname1, colname2) from sometable",
+		err:   "syntax error at position 29",
 	}}
 
 	for _, tcase := range invalidSQL {
