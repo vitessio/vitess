@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -730,11 +732,21 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "shard has no current primary and new primary not provided",
+			name: "shard has no current primary and new primary not provided - initialisation test",
 			ev: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
 					PrimaryAlias: nil,
 				}, nil),
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": { // most advanced position
+						Error: mysql.ErrNotReplica,
+					},
+				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -743,17 +755,25 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
+						Type: topodatapb.TabletType_REPLICA,
 					},
 				},
 			},
 			opts:           &PlannedReparentOptions{},
-			expectedIsNoop: true,
+			expectedIsNoop: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
 					PrimaryAlias: nil,
 				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
 			},
-			shouldErr: true,
+			shouldErr: false,
 		},
 	}
 
