@@ -68,8 +68,11 @@ func (rp Position) Equal(other Position) bool {
 
 // AtLeast returns true if this position is equal to or after another.
 func (rp Position) AtLeast(other Position) bool {
+	if other.GTIDSet == nil {
+		return true
+	}
 	if rp.GTIDSet == nil {
-		return other.GTIDSet == nil
+		return false
 	}
 	return rp.GTIDSet.Contains(other.GTIDSet)
 }
