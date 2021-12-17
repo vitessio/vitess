@@ -183,10 +183,6 @@ func (pr *PlannedReparenter) preflightChecks(
 
 	ev.NewPrimary = proto.Clone(newPrimaryTabletInfo.Tablet).(*topodatapb.Tablet)
 
-	if topoproto.TabletAliasIsZero(ev.ShardInfo.PrimaryAlias) {
-		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the shard has no current primary, use EmergencyReparentShard instead")
-	}
-
 	return false, nil
 }
 
@@ -299,6 +295,37 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 
 	if ctx.Err() == context.DeadlineExceeded {
 		// PromoteReplica succeeded, but we ran out of time. PRS needs to be
+		// re-run to complete fully.
+		return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "PLannedReparent timed out after successfully promoting primary-elect %v; please re-run to fix up the replicas", primaryElectAliasStr)
+	}
+
+	return rp, nil
+}
+
+func (pr *PlannedReparenter) performInitialPromotion(
+	ctx context.Context,
+	primaryElect *topodatapb.Tablet,
+	opts PlannedReparentOptions,
+) (string, error) {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer promoteCancel()
+
+	// During the initialization phase we have to use InitPrimary instead of PromoteReplica
+	// This is because the two operations while being largely similar have a very subtle difference
+	// InitPrimary first sets the MySQL instance to read-write and creates the database (if it does not exist)
+	// before it fixes the semi sync.
+	// PromoteReplica on the other hand, first fixes semi-sync before setting the MySQL instance to read-write.
+	// This is done to guarantee safety, in the sense that the semi-sync is on before we start accepting writes.
+	// However, during initialization, it is likely that the database would not be created in the MySQL instance.
+	// Therefore, we have to first set read-write mode, create the database and then fix semi-sync, otherwise we get blocked.
+	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect)
+	if err != nil {
+		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
+	}
+
+	if ctx.Err() == context.DeadlineExceeded {
+		// InitPrimary succeeded, but we ran out of time. PRS needs to be
 		// re-run to complete fully.
 		return "", vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "PLannedReparent timed out after successfully promoting primary-elect %v; please re-run to fix up the replicas", primaryElectAliasStr)
 	}
@@ -496,22 +523,36 @@ func (pr *PlannedReparenter) reparentShardLocked(
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
 	reparentJournalPos := ""
+	// needsRefresh is used to keep track of whether we need to refresh the state
+	// of the new primary tablet. The only case that we need to reload the state
+	// is when we are initializing the new primary. The reason is that the first
+	// time we try to setup all the components like vreplication.Engine, they fail
+	// since the database isn't created until we setServing.
+	// A call to Refresh state fixes all the components. This isn't strictly necessary
+	// in the sense that all the components will retry initialization anyways after some
+	// time, so even without a call to RefreshState, they all converge correctly.
+	needsRefresh := false
 
 	// Depending on whether we can find a current primary, and what the caller
-	// specified as the candidate primary, we will do one of three kinds of
+	// specified as the candidate primary, we will do one of four kinds of
 	// promotions:
+	// 1) There is no current primary and the shard info also does not have
+	// anything stored. This happens when none of the tablets have ever been promoted.
+	// So we can promote the primary-elect without any issues. After that all we need
+	// to do is to reparent all the tablets to that primary which is accomplished in the
+	// common code path.
 	//
-	// 1) There is no clear current primary. In this case we will try to
+	// 2) There is no clear current primary. In this case we will try to
 	// determine if it's safe to promote the candidate specified by the caller.
 	// If it's not -- including if any tablet in the shard is unreachable -- we
 	// bail. We also don't attempt to rollback a failed demotion in this case.
 	//
-	// 2) The current primary is the same as the candidate primary specified by
+	// 3) The current primary is the same as the candidate primary specified by
 	// the caller. In this case, we assume there was a previous PRS for this
 	// primary, and the caller is re-issuing the call to fix-up any replicas. We
 	// also idempotently set the desired primary as read-write, just in case.
 	//
-	// 3) The current primary and the desired primary differ. In this case, we
+	// 4) The current primary and the desired primary differ. In this case, we
 	// perform a graceful promotion, in which we validate the desired primary is
 	// sufficiently up-to-date, demote the current primary, wait for the desired
 	// primary to catch up to that position, and set the desired primary
@@ -522,16 +563,21 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// inserted in the new primary's journal, so we can use it below to check
 	// that all the replicas have attached to new primary successfully.
 	switch {
-	case currentPrimary == nil:
-		// Case (1): no clear current primary. Try to find a safe promotion
+	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias == nil:
+		// Case (1): no primary has been elected ever. Initialize
+		// the primary-elect tablet
+		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
+		needsRefresh = true
+	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias != nil:
+		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
 		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
-		// Case (2): desired new primary is the current primary. Attempt to fix
+		// Case (3): desired new primary is the current primary. Attempt to fix
 		// up replicas to recover from a previous partial promotion.
 		reparentJournalPos, err = pr.performPartialPromotionRecovery(ctx, ev.NewPrimary)
 	default:
-		// Case (3): desired primary and current primary differ. Do a graceful
+		// Case (4): desired primary and current primary differ. Do a graceful
 		// demotion-then-promotion.
 		reparentJournalPos, err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, tabletMap, opts)
 	}
@@ -548,6 +594,12 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
+	if needsRefresh {
+		// Refresh the state to force the tabletserver to reconnect after db has been created.
+		if err := pr.tmc.RefreshState(ctx, ev.NewPrimary); err != nil {
+			pr.logger.Warningf("RefreshState failed: %v", err)
+		}
+	}
 	return nil
 }
 

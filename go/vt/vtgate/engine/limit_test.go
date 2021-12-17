@@ -527,7 +527,7 @@ func TestLimitInvalidCount(t *testing.T) {
 		Count: evalengine.NewBindVar("l", collations.TypedCollation{}),
 	}
 	_, _, err := l.getCountAndOffset(nil)
-	assert.EqualError(t, err, "Bind variable not found")
+	assert.EqualError(t, err, "query arguments missing for l")
 
 	l.Count = evalengine.NewLiteralFloat(1.2)
 	_, _, err = l.getCountAndOffset(nil)
