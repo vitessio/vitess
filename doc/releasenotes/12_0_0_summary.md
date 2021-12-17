@@ -3,8 +3,10 @@
 This release includes the following major changes or new features.
 
 ### Inclusive Naming
-A number of commands and RPCs have been deprecated as we move from `master` to `primary`. 
+A number of CLI commands and vttablet RPCs have been deprecated as we move from `master` to `primary`. 
 All functionality is backwards compatible except as noted under Incompatible Changes.
+Deprecated commands and flags will be removed in the next release (13.0).
+Deprecated vttablet RPCs will be removed in the subsequent release (14.0).
 
 ### Gen4 Planner
 
@@ -12,6 +14,21 @@ The newest version of the query planner, `Gen4`, becomes an experimental feature
 While `Gen4` has been under development for a few release cycles, we have now reached parity with its predecessor, `v3`.
 
 To use `Gen4`, VTGate's `-planner_version` flag needs to be set to `gen4`.
+
+### Query Buffering during failovers
+In order to support buffering during resharding cutovers in addition to primary failovers, a new implementation
+of query buffering has been added.
+This is considered experimental. To enable it the flag `buffer_implementation` should be set to `keyspace_events`.
+The existing implementation (flag value `healthcheck`) will be deprecated in a future release.
+
+## Known Issues
+
+- A critical vulnerability [CVE-2021-44228](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44228) in the Apache Log4j logging library was disclosed on Dec 9.
+  The project provided release `2.15.0` with a patch that mitigates the impact of this CVE. It was quickly found that the initial patch was insufficient, and an additional CVE
+  [CVE-2021-45046](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-45046) followed.
+  This has been fixed in release `2.16.0`. This release, `v12.0.0`, uses a version of Log4j below `2.16.0`, for this reason we encourage you to use `v12.0.2` instead, which contains the patch for the vulnerability.
+
+- An issue related to `-keep_data` being ignored in v2 vreplication workflows (#9174), has been fixed in release `>= v12.0.1`.
 
 ## Incompatible Changes
 
@@ -38,6 +55,23 @@ If you have reserved connections disabled, you will get the `old` Vitess behavio
 
 ## Deprecations
 
-The command `vtctl VExec` is deprecated and removed. All Online DDL commands should run through `vtctl OnlineDDL`.
+### CLI commands
+`VExec` is deprecated and removed. All Online DDL commands should be run through `OnlineDDL`.
 
-The command `vtctl OnlineDDL revert` is deprecated. Use `REVERT VITESS_MIGRATION '...'` SQL command either via `vtctl ApplySchema` or via `vtgate`.
+`OnlineDDL revert` is deprecated. Use `REVERT VITESS_MIGRATION '...'` SQL command either via `ApplySchema` or via `vtgate`.
+
+`InitShardMaster` is deprecated, use `InitShardPrimary` instead.
+
+`SetShardIsMasterServing` is deprecated, use `SetShardIsPrimaryServing` instead.
+
+Various command flags have been deprecated and new variants provided.
+* `DeleteTablet` flag `allow_master` replaced with `allow_primary`
+* `PlannedReparentShard` flag `avoid_master` replaced with `avoid_tablet`
+* `PlannedReparentShard` flag `new_master` replaced with `new_primary`
+* `BackupShard` flag `allow_master` replaced with `allow_primary`
+* `Backup` flag `allow_master` replaced with `allow_primary`
+* `EmergencyReparentShard` flag `new_master` replaced with `new_primary`
+* `ReloadSchemeShard` flag `include_master` replaced with `include_primary`
+* `ReloadSchemaKeyspace` flag `include_master` replaced with `include_primary`
+* `ValidateSchemaKeyspace` flag `skip-no-master` replaced with `skip-no-primary`
+
