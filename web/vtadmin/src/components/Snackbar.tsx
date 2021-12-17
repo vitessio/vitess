@@ -38,9 +38,9 @@ const Snackbar: React.FC<SnackbarProps & { closeToast?: () => void }> = ({
                 intent
             )}`}
         >
-            <div className="flex items-center shrink-0">
-                {icon && <Icon icon={icon} className={`mr-4 fill-current h-8 w-8 min-h-8 min-w-8 shrink-0`} />}
-                {message}
+            <div className="flex items-center">
+                {icon && <div className="shrink-0"><Icon icon={icon} className={`shrink-0 mr-4 fill-current h-8 w-8 min-h-8 min-w-8`} /></div>}
+                <div className="grow-0 whitespace-normal">{message}</div>
             </div>
             <button onClick={closeToast}>
                 <Icon icon={Icons.delete} className="fill-current text-gray-900 h-6 w-6 ml-8" />
@@ -91,7 +91,7 @@ export const SnackbarContainer: React.FC = ({ children }) => {
         <div className="fixed right-10 bottom-6" id="snackbar-container">
             <ToastContainer
                 toastClassName="mb-2"
-                autoClose={3000}
+                autoClose={false}
                 position="bottom-right"
                 closeButton={false}
                 closeOnClick
