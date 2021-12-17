@@ -649,9 +649,8 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 		},
 		{
 			// this doesn't cause an actual error from ChooseNewPrimary, because
-			// the only way to do that is to set AvoidPrimaryAlias == nil, and
-			// that gets checked in preflightChecks before calling
-			// ChooseNewPrimary for other reasons. however we do check that we
+			// there is no way to do that other than something going horribly wrong
+			// in go runtime, however we do check that we
 			// get a non-nil result from ChooseNewPrimary in preflightChecks and
 			// bail out if we don't, so we're forcing that case here.
 			name: "cannot choose new primary-elect",
