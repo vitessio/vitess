@@ -170,6 +170,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONAggregateExpr(parent, node, replacer)
 	case *JSONTableExpr:
 		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
+	case *JSONUtilityExpr:
+		return a.rewriteRefOfJSONUtilityExpr(parent, node, replacer)
 	case *JoinCondition:
 		return a.rewriteRefOfJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
@@ -2582,6 +2584,43 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	}
 	if !a.rewriteTableIdent(node, node.Alias, func(newNode, parent SQLNode) {
 		parent.(*JSONTableExpr).Alias = newNode.(TableIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONUtilityExpr(parent SQLNode, node *JSONUtilityExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*JSONUtilityExpr).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
+		parent.(*JSONUtilityExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
+		parent.(*JSONUtilityExpr).Column = newNode.(*ColName)
 	}) {
 		return false
 	}
@@ -5447,6 +5486,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case *JSONAggregateExpr:
 		return a.rewriteRefOfJSONAggregateExpr(parent, node, replacer)
+	case *JSONUtilityExpr:
+		return a.rewriteRefOfJSONUtilityExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:

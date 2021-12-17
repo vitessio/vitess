@@ -1357,6 +1357,24 @@ func (cached *JSONTableExpr) CachedSize(alloc bool) int64 {
 	size += cached.Alias.CachedSize(false)
 	return size
 }
+func (cached *JSONUtilityExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field StringArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.StringArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Column *vitess.io/vitess/go/vt/sqlparser.ColName
+	size += cached.Column.CachedSize(true)
+	return size
+}
 func (cached *JoinCondition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

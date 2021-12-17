@@ -1919,3 +1919,12 @@ func (node *JSONAggregateExpr) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%v)", node.Columns[sz-1])
 }
+
+func (node *JSONUtilityExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.Name.String())
+	if node.Column != nil {
+		buf.astPrintf(node, "%v)", node.Column)
+	} else {
+		buf.astPrintf(node, "%v)", node.StringArg)
+	}
+}

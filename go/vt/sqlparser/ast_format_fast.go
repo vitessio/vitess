@@ -2515,3 +2515,15 @@ func (node *JSONAggregateExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Columns[sz-1], true)
 	buf.WriteByte(')')
 }
+
+func (node *JSONUtilityExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Name.String())
+	buf.WriteByte('(')
+	if node.Column != nil {
+		buf.printExpr(node, node.Column, true)
+		buf.WriteByte(')')
+	} else {
+		buf.printExpr(node, node.StringArg, true)
+		buf.WriteByte(')')
+	}
+}
