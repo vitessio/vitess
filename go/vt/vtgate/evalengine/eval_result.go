@@ -51,13 +51,9 @@ type (
 )
 
 func (er *EvalResult) init(env *ExpressionEnv, expr Expr) {
-	tt, err := expr.typeof(env)
-	if err != nil {
-		throwEvalError(err)
-	}
 	er.expr = expr
 	er.env = env
-	er.typ3 = tt
+	er.typ3 = expr.typeof(env)
 }
 
 const typecheckEval = false

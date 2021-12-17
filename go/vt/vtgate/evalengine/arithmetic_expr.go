@@ -67,7 +67,7 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
+func (b *ArithmeticExpr) typeof(env *ExpressionEnv) querypb.Type {
 	/*
 		ltype, err := b.Left.typeof(env)
 		if err != nil {
@@ -81,7 +81,7 @@ func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
 		return b.Op.typeof(typ), nil
 	*/
 	// TODO: make this less aggressive
-	return -1, nil
+	return -1
 }
 
 func (a *OpAddition) eval(left, right, out *EvalResult) error {

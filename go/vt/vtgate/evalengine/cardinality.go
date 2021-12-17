@@ -39,132 +39,14 @@ func checkTupleCardinality(lVal, rVal *EvalResult) (bool, error) {
 	}
 }
 
-func (expr *Literal) cardinality(*ExpressionEnv) (int, error) {
-	return 1, nil
-}
-
-func (expr *BindVariable) cardinality(env *ExpressionEnv) (int, error) {
-	val, found := env.BindVars[expr.Key]
-	if !found {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", expr.Key)
-	}
-	switch val.Type {
-	case querypb.Type_TUPLE:
-		return len(val.Values), nil
-	default:
-		return 1, nil
+func (expr *BinaryExpr) ensureCardinality(env *ExpressionEnv, expected int) {
+	if expected != 1 {
+		throwEvalError(cardinalityError(1))
 	}
 }
 
-func (expr *Column) cardinality(*ExpressionEnv) (int, error) {
-	// columns cannot be tuples
-	return 1, nil
-}
-
-func (expr *BinaryExpr) cardinality(env *ExpressionEnv) (int, error) {
-	card1, err := expr.Left.cardinality(env)
-	if err != nil {
-		return 1, err
+func (expr *UnaryExpr) ensureCardinality(env *ExpressionEnv, expected int) {
+	if expected != 1 {
+		throwEvalError(cardinalityError(1))
 	}
-	if card1 != 1 {
-		return 1, cardinalityError(1)
-	}
-	card2, err := expr.Right.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	if card2 != 1 {
-		return 1, cardinalityError(1)
-	}
-	return 1, nil
-}
-
-func subcardinality(env *ExpressionEnv, expr Expr, n int) (int, error) {
-	switch expr := expr.(type) {
-	case TupleExpr:
-		return expr[n].cardinality(env)
-	case *BindVariable:
-		val, found := env.BindVars[expr.Key]
-		if !found {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", expr.Key)
-		}
-		switch val.Type {
-		case querypb.Type_TUPLE:
-			// values under this tuple cannot be nested tuples
-			return 1, nil
-		}
-	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
-}
-
-func (expr *InExpr) cardinality(env *ExpressionEnv) (int, error) {
-	card1, err := expr.Left.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	card2, _ := expr.Right.cardinality(env)
-	for n := 0; n < card2; n++ {
-		subcard2, err := subcardinality(env, expr.Right, n)
-		if err != nil {
-			return 1, err
-		}
-		if card1 != subcard2 {
-			return 1, cardinalityError(card1)
-		}
-	}
-	return 1, nil
-}
-
-func (expr *ComparisonExpr) cardinality(env *ExpressionEnv) (int, error) {
-	card1, err := expr.Left.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	card2, err := expr.Right.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	if card1 != card2 {
-		return 1, cardinalityError(card1)
-	}
-	if card1 > 1 {
-		for n := 0; n < card1; n++ {
-			subcard1, err := subcardinality(env, expr.Left, n)
-			if err != nil {
-				return 1, err
-			}
-			subcard2, err := subcardinality(env, expr.Right, n)
-			if err != nil {
-				return 1, err
-			}
-			if subcard1 != subcard2 {
-				return 1, cardinalityError(subcard1)
-			}
-		}
-	}
-	return 1, nil
-}
-
-func (expr TupleExpr) cardinality(env *ExpressionEnv) (int, error) {
-	for _, subexpr := range expr {
-		if _, err := subexpr.cardinality(env); err != nil {
-			return len(expr), err
-		}
-	}
-	return len(expr), nil
-}
-
-func (expr *CollateExpr) cardinality(env *ExpressionEnv) (int, error) {
-	return expr.Inner.cardinality(env)
-}
-
-func (n *NotExpr) cardinality(env *ExpressionEnv) (int, error) {
-	card, err := n.Inner.cardinality(env)
-	if err != nil {
-		return 1, err
-	}
-	if card != 1 {
-		return 1, cardinalityError(1)
-	}
-	return 1, nil
 }

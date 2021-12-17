@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +27,23 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+func knownBadQuery(expr Expr) bool {
+	isNullSafeComparison := func(expr Expr) bool {
+		if cmp, ok := expr.(*ComparisonExpr); ok {
+			return cmp.Op.String() == "<=>"
+		}
+		return false
+	}
+
+	if isNullSafeComparison(expr) {
+		cmp := expr.(*ComparisonExpr)
+		return isNullSafeComparison(cmp.Left) || isNullSafeComparison(cmp.Right)
+	}
+	return false
+}
+
+var errKnownBadQuery = errors.New("this query is known to give bad results in MySQL")
 
 func testSingle(t *testing.T, query string) (EvalResult, error) {
 	stmt, err := sqlparser.Parse(query)
@@ -36,7 +54,9 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
 	converted, err := ConvertEx(astExpr, dummyCollation(45), false)
 	if err == nil {
-		// t.Logf("%s", PrettyPrint(converted))
+		if knownBadQuery(converted) {
+			return EvalResult{}, errKnownBadQuery
+		}
 		return noenv.Evaluate(converted)
 	}
 	return EvalResult{}, err
@@ -66,6 +86,10 @@ func TestMySQLGolden(t *testing.T) {
 			for _, tc := range testcases {
 				debug := fmt.Sprintf("\n// Debug\neval, err := testSingle(t, `%s`)\nt.Logf(\"eval=%%s err=%%v\", eval.Value(), err) // want value=%q\n", tc.Query, tc.Value)
 				eval, err := testSingle(t, tc.Query)
+				if err == errKnownBadQuery {
+					ok++
+					continue
+				}
 				if err != nil {
 					if tc.Error == "" {
 						t.Errorf("query: %s\nmysql val: %s\nvitess err: %s\n%s", tc.Query, tc.Value, err.Error(), debug)
@@ -94,6 +118,24 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT 1 NOT IN (0, "foo", ("foo" - (NULL <= 0)), -1)`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value="NULL"
+	eval, err := testSingle(t, `SELECT ((NULL, ("foo" >= -1), "FOO", NULL), "fOo", ("foo" < ("fOo", -1, "FOO", 0)), NULL) <=> (0, "foo", 0, NULL)`)
+	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
+}
+
+func TestDebug2(t *testing.T) {
+	// Debug
+	eval, err := testSingle(t, `SELECT ((("FOO" / "FOO") + -1) + (("foo", ((NULL, -1, 1, 1) * -1), ("foo", 0, NULL, NULL), "fOo") >= "foo")) + "fOo"`)
+	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
+}
+
+func TestDebug3(t *testing.T) {
+	// Debug
+	eval, err := testSingle(t, `SELECT (0, ("fOo" NOT LIKE ((NULL LIKE "foo"), "foo", -1, NULL)), "foo", "fOo") <=> "fOo"`)
+	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
+}
+
+func TestDebug4(t *testing.T) {
+	// Debug
+	eval, err := testSingle(t, `SELECT ("foo", (("foo" >= "fOo"), 0, ((1, (NULL >= "foo"), (1 LIKE "fOo"), "fOo"), "fOo", (-1 <=> "FOO"), 1), NULL), 0, 1) != ("FOO", ("FOO", 1, NULL, -1), 1, (NULL != NULL))`)
+	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }

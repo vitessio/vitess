@@ -39,9 +39,8 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		eval(env *ExpressionEnv, result *EvalResult)
-		typeof(env *ExpressionEnv) (querypb.Type, error)
+		typeof(env *ExpressionEnv) querypb.Type
 		collation() collations.TypedCollation
-		cardinality(env *ExpressionEnv) (int, error)
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify() error
@@ -96,7 +95,119 @@ type evalError struct {
 }
 
 func throwEvalError(err error) {
+	// fmt.Fprintf(os.Stderr, "eval error: %v\n", err)
 	panic(evalError{err})
+}
+
+func (env *ExpressionEnv) cardinality(expr Expr) int {
+	switch expr := expr.(type) {
+	case *BindVariable:
+		val := expr.bvar(env)
+		if val.Type == querypb.Type_TUPLE {
+			return len(val.Values)
+		}
+		return 1
+
+	case TupleExpr:
+		return len(expr)
+
+	default:
+		return 1
+	}
+}
+
+func (env *ExpressionEnv) ensureCardinality(expr Expr, expected int) {
+	if env.cardinality(expr) != expected {
+		throwEvalError(cardinalityError(expected))
+	}
+}
+
+func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
+	switch expr := expr.(type) {
+	case *BindVariable:
+		if expr.bvar(env).Type == querypb.Type_TUPLE {
+			return nil, 1
+		}
+		panic("should never happen")
+	case TupleExpr:
+		return expr[nth], env.cardinality(expr[nth])
+	default:
+		return expr, 1
+	}
+}
+
+func (env *ExpressionEnv) typecheckComparison(expr1 Expr, card1 int, expr2 Expr, card2 int) {
+	switch {
+	case card1 == 1 && card2 == 1:
+		env.typecheck(expr1)
+		env.typecheck(expr2)
+	case card1 == card2:
+		for n := 0; n < card1; n++ {
+			left1, leftcard1 := env.subexpr(expr1, n)
+			right1, rightcard1 := env.subexpr(expr2, n)
+			env.typecheckComparison(left1, leftcard1, right1, rightcard1)
+		}
+	default:
+		env.typecheck(expr1)
+		env.typecheck(expr2)
+		throwEvalError(cardinalityError(card1))
+	}
+}
+
+func (env *ExpressionEnv) typecheck(expr Expr) {
+	if expr == nil {
+		return
+	}
+
+	switch expr := expr.(type) {
+	case *ArithmeticExpr:
+		env.typecheck(expr.Left)
+		env.ensureCardinality(expr.Left, 1)
+
+		env.typecheck(expr.Right)
+		env.ensureCardinality(expr.Right, 1)
+
+	case *ComparisonExpr:
+		left := env.cardinality(expr.Left)
+		right := env.cardinality(expr.Right)
+		env.typecheckComparison(expr.Left, left, expr.Right, right)
+
+	case *LogicalExpr:
+		env.typecheck(expr.Left)
+		env.ensureCardinality(expr.Left, 1)
+
+		env.typecheck(expr.Right)
+		env.ensureCardinality(expr.Right, 1)
+
+	case *InExpr:
+		env.typecheck(expr.Left)
+		left := env.cardinality(expr.Left)
+
+		right := env.cardinality(expr.Right)
+		if right == 1 {
+			throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
+		}
+
+		for n := 0; n < right; n++ {
+			subexpr, subcard := env.subexpr(expr.Right, n)
+			env.typecheck(subexpr)
+			if left != subcard {
+				throwEvalError(cardinalityError(left))
+			}
+		}
+
+	case *LikeExpr:
+		env.typecheck(expr.Left)
+		env.ensureCardinality(expr.Left, 1)
+
+		env.typecheck(expr.Right)
+		env.ensureCardinality(expr.Right, 1)
+
+	case TupleExpr:
+		for _, subexpr := range expr {
+			env.typecheck(subexpr)
+		}
+	}
 }
 
 func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
@@ -109,16 +220,23 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
 			}
 		}
 	}()
-	_, err = expr.cardinality(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
+	env.typecheck(expr)
 	expr.eval(env, &er)
 	return
 }
 
-func (env *ExpressionEnv) TypeOf(expr Expr) (querypb.Type, error) {
-	return expr.typeof(env)
+func (env *ExpressionEnv) TypeOf(expr Expr) (ty querypb.Type, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if ee, ok := r.(evalError); ok {
+				err = ee.error
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	ty = expr.typeof(env)
+	return
 }
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
@@ -239,7 +357,7 @@ func NewTupleExpr(exprs ...Expr) TupleExpr {
 	return tupleExpr
 }
 
-func (c *UnaryExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
+func (c *UnaryExpr) typeof(env *ExpressionEnv) querypb.Type {
 	return c.Inner.typeof(env)
 }
 
@@ -256,13 +374,23 @@ func (t TupleExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.setTuple(tup)
 }
 
-// eval implements the Expr interface
-func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
+func (t TupleExpr) ensureCardinality(_ *ExpressionEnv, expected int) {
+	if len(t) != expected {
+		throwEvalError(cardinalityError(expected))
+	}
+}
+
+func (bv *BindVariable) bvar(env *ExpressionEnv) *querypb.BindVariable {
 	val, ok := env.BindVars[bv.Key]
 	if !ok {
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found"))
 	}
-	result.setBindVar(val, bv.coll)
+	return val
+}
+
+// eval implements the Expr interface
+func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
+	result.setBindVar(bv.bvar(env), bv.coll)
 }
 
 // eval implements the Expr interface
@@ -274,29 +402,42 @@ func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 	result.replaceCollation(c.coll)
 }
 
+func (c *Column) ensureCardinality(_ *ExpressionEnv, expected int) {
+	// columns cannot have TUPLE values
+	if expected != 1 {
+		throwEvalError(cardinalityError(1))
+	}
+}
+
 // typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv) (querypb.Type, error) {
+func (bv *BindVariable) typeof(env *ExpressionEnv) querypb.Type {
 	e := env.BindVars
 	v, found := e[bv.Key]
 	if !found {
-		return querypb.Type_NULL_TYPE, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key)
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key))
 	}
-	return v.Type, nil
+	return v.Type
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv) (querypb.Type, error) {
-	return l.Val.typeof(), nil
+func (l *Literal) typeof(*ExpressionEnv) querypb.Type {
+	return l.Val.typeof()
+}
+
+func (l *Literal) ensureCardinality(env *ExpressionEnv, expected int) {
+	if expected != 1 {
+		throwEvalError(cardinalityError(1))
+	}
 }
 
 // typeof implements the Expr interface
-func (t TupleExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_TUPLE, nil
+func (t TupleExpr) typeof(*ExpressionEnv) querypb.Type {
+	return querypb.Type_TUPLE
 }
 
-func (c *Column) typeof(env *ExpressionEnv) (querypb.Type, error) {
+func (c *Column) typeof(env *ExpressionEnv) querypb.Type {
 	value := env.Row[c.Offset]
-	return value.Type(), nil
+	return value.Type()
 }
 
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
