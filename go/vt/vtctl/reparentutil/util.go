@@ -52,9 +52,6 @@ func ChooseNewPrimary(
 	// (TODO:@ajm188) it's a little gross we need to pass this, maybe embed in the context?
 	logger logutil.Logger,
 ) (*topodatapb.TabletAlias, error) {
-	if avoidPrimaryAlias == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet to avoid for reparent is not provided, cannot choose new primary")
-	}
 
 	var primaryCell string
 	if shardInfo.PrimaryAlias != nil {
@@ -74,7 +71,7 @@ func ChooseNewPrimary(
 		switch {
 		case primaryCell != "" && tablet.Alias.Cell != primaryCell:
 			continue
-		case topoproto.TabletAliasEqual(tablet.Alias, avoidPrimaryAlias):
+		case avoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, avoidPrimaryAlias):
 			continue
 		case tablet.Tablet.Type != topodatapb.TabletType_REPLICA:
 			continue
