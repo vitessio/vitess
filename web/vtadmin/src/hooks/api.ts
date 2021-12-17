@@ -37,7 +37,6 @@ import {
     TabletDebugVarsResponse,
     refreshState,
     runHealthCheck,
-    deleteTablet,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
