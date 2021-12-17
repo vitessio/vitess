@@ -331,35 +331,37 @@ export const Debug = () => {
 };
 
 const Snackbars: React.FC = () => {
-    const intents = Object.keys(Intent)
+    const intents = Object.keys(Intent);
     return (
         <div>
             <h3 className="mt-12 mb-8">Snackbars</h3>
 
-            {
-                intents.map(i => {
-                    const onClick = () => {
-                        switch (i) {
-                            case 'danger':
-                                danger("This is a danger snackbar.")
-                                break;
-                            case 'success':
-                                success("This is a success snackbar.")
-                                break;
-                            case 'none':
-                                info('This is an info snackbar.')
-                                break;
-                            case 'warning':
-                                warn('This is a warn snackbar.')
-                                break;
-                        }
+            {intents.map((i) => {
+                const onClick = () => {
+                    switch (i) {
+                        case 'danger':
+                            danger('This is a danger snackbar.');
+                            break;
+                        case 'success':
+                            success('This is a success snackbar.');
+                            break;
+                        case 'none':
+                            info('This is an info snackbar.');
+                            break;
+                        case 'warning':
+                            warn('This is a warn snackbar.');
+                            break;
                     }
-                    return <button onClick={onClick} className={`btn btn-secondary mr-2`} key={i}>{i}</button>
-                })
-            }
+                };
+                return (
+                    <button onClick={onClick} className={`btn btn-secondary mr-2`} key={i}>
+                        {i}
+                    </button>
+                );
+            })}
         </div>
-    )
-}
+    );
+};
 
 const FRUITS: { emoji: string; name: string; id: string }[] = [
     { emoji: '🍎', name: 'apple (red)', id: 'red_apple' },

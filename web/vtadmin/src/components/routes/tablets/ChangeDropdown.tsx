@@ -5,7 +5,7 @@ import MenuItem from '../../dropdown/MenuItem';
 import { Icons } from '../../Icon';
 import { Intent } from '../../intent';
 
-interface ChangeDropdownProps { }
+interface ChangeDropdownProps {}
 
 const ChangeDropdown: React.FC<ChangeDropdownProps> = () => {
     return (
