@@ -228,6 +228,7 @@ table tbody td[rowSpan] {
     margin: 0px !important;
 }
 
-.Toastify__toast-theme--light, .Toastify__toast-theme--dark {
+.Toastify__toast-theme--light,
+.Toastify__toast-theme--dark {
     background: none !important;
 }

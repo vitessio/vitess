@@ -231,13 +231,13 @@ export interface DeleteTabletParams {
 }
 
 export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: "delete" });
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: 'delete' });
 
     const err = pb.DeleteTabletResponse.verify(result);
     if (err) throw Error(err);
 
     return pb.DeleteTabletResponse.create(result);
-}
+};
 
 export interface ReparentTabletParams {
     clusterID: string;
@@ -245,13 +245,13 @@ export interface ReparentTabletParams {
 }
 
 export const reparentTablet = async ({ clusterID, alias }: ReparentTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: "put" });
+    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
 
     const err = pb.ReparentTabletResponse.verify(result);
     if (err) throw Error(err);
 
     return pb.ReparentTabletResponse.create(result);
-}
+};
 
 export interface PingTabletParams {
     clusterID?: string;
@@ -303,7 +303,7 @@ export const startReplication = async ({ clusterID, alias }: StartReplicationPar
     if (err) throw Error(err);
 
     return pb.StartReplicationResponse.create(result);
-}
+};
 
 export interface StopReplicationParams {
     clusterID?: string;
@@ -316,7 +316,7 @@ export const stopReplication = async ({ clusterID, alias }: StopReplicationParam
     if (err) throw Error(err);
 
     return pb.StopReplicationResponse.create(result);
-}
+};
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;
     data?: TabletDebugVars;
