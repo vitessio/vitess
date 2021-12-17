@@ -167,12 +167,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 
 	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
 	var colVindexes []*vindexes.ColumnVindex
-	for idx, colVindex := range eins.Table.ColumnVindexes {
-		if idx == 0 {
-			colVindexes = append(colVindexes, colVindex)
-			continue
-		}
-		if multiColV, isMultiColV := colVindex.Vindex.(vindexes.MultiColumn); isMultiColV && multiColV.PartialVindex() {
+	for _, colVindex := range eins.Table.ColumnVindexes {
+		if colVindex.IgnoreInDML() {
 			continue
 		}
 		colVindexes = append(colVindexes, colVindex)
@@ -202,6 +198,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 		}
 	}
 	eins.VindexValues = routeValues
+	eins.ColVindexes = colVindexes
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
 	return eins, nil

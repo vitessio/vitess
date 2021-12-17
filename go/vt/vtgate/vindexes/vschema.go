@@ -103,13 +103,14 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Columns  []sqlparser.ColIdent `json:"columns"`
-	Type     string               `json:"type"`
-	Name     string               `json:"name"`
-	Owned    bool                 `json:"owned,omitempty"`
-	Vindex   Vindex               `json:"vindex"`
-	isUnique bool
-	cost     int
+	Columns     []sqlparser.ColIdent `json:"columns"`
+	Type        string               `json:"type"`
+	Name        string               `json:"name"`
+	Owned       bool                 `json:"owned,omitempty"`
+	Vindex      Vindex               `json:"vindex"`
+	isUnique    bool
+	cost        int
+	ignoreInDML bool
 }
 
 // IsUnique is used to tell whether the ColumnVindex
@@ -123,6 +124,11 @@ func (c *ColumnVindex) IsUnique() bool {
 // ColumnVindex
 func (c *ColumnVindex) Cost() int {
 	return c.cost
+}
+
+// IgnoreInDML is used to let planner and engine know that they need to be ignored for dml queries.
+func (c *ColumnVindex) IgnoreInDML() bool {
+	return c.ignoreInDML
 }
 
 // Column describes a column.
@@ -365,13 +371,13 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				columnSubset := columns[:i]
 				cost++
 				columnVindex = &ColumnVindex{
-					Columns:  columnSubset,
-					Type:     vindexInfo.Type,
-					Name:     ind.Name,
-					Owned:    owned,
-					Vindex:   vindex,
-					isUnique: false,
-					cost:     cost,
+					Columns:     columnSubset,
+					Type:        vindexInfo.Type,
+					Name:        ind.Name,
+					Owned:       owned,
+					Vindex:      vindex,
+					cost:        cost,
+					ignoreInDML: true,
 				}
 				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			}
