@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -441,6 +443,25 @@ func TestFindPositionForTablet(t *testing.T) {
 				},
 			},
 			expectedPosition: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+		}, {
+			name: "no replication status",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedPosition: "",
 		}, {
 			name: "relay log",
 			tmc: &testutil.TabletManagerClient{
