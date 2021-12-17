@@ -70,7 +70,7 @@ const (
 	AllIntermediatePrimaryReplicasNotReplicating             AnalysisCode = "AllIntermediatePrimaryReplicasNotReplicating"
 	FirstTierReplicaFailingToConnectToPrimary                AnalysisCode = "FirstTierReplicaFailingToConnectToPrimary"
 	BinlogServerFailingToConnectToPrimary                    AnalysisCode = "BinlogServerFailingToConnectToPrimary"
-	PlannedReparentShard                                     AnalysisCode = "PlannedReparentShard"
+	GraceFulPrimaryTakeover                                  AnalysisCode = "GracefulPrimaryTakeover"
 )
 
 const (
