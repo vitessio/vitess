@@ -183,6 +183,16 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
+	InitPrimaryDelays map[string]time.Duration
+	// keyed by tablet alias. injects a sleep to the end of the function
+	// regardless of parent context timeout or error result.
+	InitPrimaryPostDelays map[string]time.Duration
+	// keyed by tablet alias.
+	InitPrimaryResults map[string]struct {
+		Result string
+		Error  error
+	}
+	// keyed by tablet alias.
 	RefreshStateResults map[string]error
 	// keyed by `<tablet_alias>/<wait_pos>`.
 	ReloadSchemaDelays map[string]time.Duration
@@ -478,6 +488,42 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	}
 
 	if result, ok := fake.PromoteReplicaResults[key]; ok {
+		return result.Result, result.Error
+	}
+
+	return "", assert.AnError
+}
+
+// InitPrimary is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	if fake.InitPrimaryResults == nil {
+		return "", assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	defer func() {
+		if fake.InitPrimaryPostDelays == nil {
+			return
+		}
+
+		if delay, ok := fake.InitPrimaryPostDelays[key]; ok {
+			time.Sleep(delay)
+		}
+	}()
+
+	if fake.InitPrimaryDelays != nil {
+		if delay, ok := fake.InitPrimaryDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.InitPrimaryResults[key]; ok {
 		return result.Result, result.Error
 	}
 

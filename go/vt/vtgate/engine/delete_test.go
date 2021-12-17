@@ -88,7 +88,7 @@ func TestDeleteEqual(t *testing.T) {
 	expr := evalengine.NewBindVar("aa", collations.TypedCollation{})
 	del.Values = []evalengine.Expr{expr}
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, "Bind variable not found")
+	require.EqualError(t, err, "query arguments missing for aa")
 }
 
 func TestDeleteEqualNoRoute(t *testing.T) {

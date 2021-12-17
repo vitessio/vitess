@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -94,16 +95,83 @@ func TestTypes(t *testing.T) {
 	}
 
 	for _, query := range queries {
-		remote, err := conn.ExecuteFetch("SELECT "+query, 1, false)
+		query = "SELECT " + query
+		remote, err := conn.ExecuteFetch(query, 1, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("%s => %s", query, remote.Rows[0][0])
+		local, _, err := safeEvaluate(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if local.Value().String() != remote.Rows[0][0].String() {
+			t.Errorf("mismatch for query %q: local=%v, remote=%v", query, local.Value().String(), remote.Rows[0][0].String())
+		}
 	}
 }
 
 var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
 var fuzzSeed = flag.Int64("fuzz-seed", 1234, "RNG seed when generating fuzz expressions")
+var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\d+)\) during query: (.*?)`)
+
+var knownErrors = []*regexp.Regexp{
+	regexp.MustCompile(`value is out of range in '(.*?)'`),
+	regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
+}
+
+func errorsMatch(remote, local error) bool {
+	rem := extractError.FindStringSubmatch(remote.Error())
+	if rem == nil {
+		panic("could not extract error message")
+	}
+
+	remoteMessage := rem[1]
+	localMessage := local.Error()
+
+	if remoteMessage == localMessage {
+		return true
+	}
+	for _, re := range knownErrors {
+		if re.MatchString(remoteMessage) /* && re.MatchString(localMessage) */ {
+			return true
+		}
+	}
+	return false
+}
+
+func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
+	stmt, err := sqlparser.Parse(query)
+	if err != nil {
+		return evalengine.EvalResult{}, false, err
+	}
+
+	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+	local, err := func() (expr evalengine.Expr, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("PANIC: %v", r)
+			}
+		}()
+		expr, err = evalengine.ConvertEx(astExpr, dummyCollation(45), true)
+		return
+	}()
+
+	var eval evalengine.EvalResult
+	var evaluated bool
+	if err == nil {
+		evaluated = true
+		eval, err = func() (eval evalengine.EvalResult, err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("PANIC: %v", r)
+				}
+			}()
+			eval, err = (*evalengine.ExpressionEnv)(nil).Evaluate(local)
+			return
+		}()
+	}
+	return eval, evaluated, err
+}
 
 func TestGenerateFuzzCases(t *testing.T) {
 	if *fuzzMaxFailures <= 0 {
@@ -133,40 +201,11 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
+nextCase:
 	for len(golden) < *fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 
-		stmt, err := sqlparser.Parse(query)
-		if err != nil {
-			t.Fatalf("bad codegen: %v", err)
-		}
-
-		var eval evalengine.EvalResult
-		var evaluated bool
-
-		astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-		local, localErr := func() (expr evalengine.Expr, err error) {
-			defer func() {
-				if r := recover(); r != nil {
-					err = fmt.Errorf("PANIC: %v", r)
-				}
-			}()
-			expr, err = evalengine.ConvertEx(astExpr, dummyCollation(45), true)
-			return
-		}()
-		if localErr == nil {
-			evaluated = true
-			eval, localErr = func() (eval evalengine.EvalResult, err error) {
-				defer func() {
-					if r := recover(); r != nil {
-						err = fmt.Errorf("PANIC: %v", r)
-					}
-				}()
-				eval, err = local.Evaluate(nil)
-				return
-			}()
-		}
-
+		eval, evaluated, localErr := safeEvaluate(query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil {
@@ -174,7 +213,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 				t.Errorf("local query %q failed: %v (eval=%v); mysql response: %s", query, localErr, evaluated, remote.Rows[0][0].String())
 				goto failed
 			}
-			if !strings.Contains(remoteErr.Error(), localErr.Error()) {
+			if !errorsMatch(remoteErr, localErr) {
 				t.Errorf("mismatch in errors for %q: local=%q (eval=%v), remote=%q", query, localErr.Error(), evaluated, remoteErr.Error())
 				goto failed
 			}
@@ -182,6 +221,11 @@ func TestGenerateFuzzCases(t *testing.T) {
 		}
 
 		if remoteErr != nil {
+			for _, ke := range knownErrors {
+				if ke.MatchString(remoteErr.Error()) {
+					continue nextCase
+				}
+			}
 			t.Errorf("remote query %q failed: %v, local=%s", query, remoteErr.Error(), eval.Value().String())
 			goto failed
 		}

@@ -1100,6 +1100,13 @@ func (x *Big) IsNaN(quiet int) bool {
 	return quiet >= 0 && x.form&qnan == qnan || quiet <= 0 && x.form&snan == snan
 }
 
+func (x *Big) IsZero() bool {
+	if debug {
+		x.validate()
+	}
+	return x.IsFinite() && x.isZero()
+}
+
 // IsInt reports whether x is an integer.
 //
 // Infinity and NaN values are not integers.
