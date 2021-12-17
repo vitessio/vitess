@@ -773,3 +773,19 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[]`)
 }
+
+func TestCharsetIntro(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "delete from t4")
+	defer utils.Exec(t, conn, "delete from t4")
+
+	utils.Exec(t, conn, "insert into t4 (id1,id2) values (666, _binary'abc')")
+	utils.Exec(t, conn, "update t4 set id2 = _latin1'xyz' where id1 = 666")
+	utils.Exec(t, conn, "delete from t4 where id2 = _utf8'xyz'")
+	qr := utils.Exec(t, conn, "select id1 from t4 where id2 = _utf8mb4'xyz'")
+	require.EqualValues(t, 0, qr.RowsAffected)
+}

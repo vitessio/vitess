@@ -19,6 +19,8 @@ package engine
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/key"
@@ -63,8 +65,8 @@ func createRoute() *Route {
 func TestPlanDescriptionWithInputs(t *testing.T) {
 	route := createRoute()
 	routeDescr := getDescriptionFor(route)
-	count := int64PlanValue(12)
-	offset := int64PlanValue(4)
+	count := evalengine.NewLiteralInt(12)
+	offset := evalengine.NewLiteralInt(4)
 	limit := &Limit{
 		Count:  count,
 		Offset: offset,
@@ -76,8 +78,8 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 	expected := PrimitiveDescription{
 		OperatorType: "Limit",
 		Other: map[string]interface{}{
-			"Count":  count.Value,
-			"Offset": offset.Value,
+			"Count":  evalengine.FormatExpr(count),
+			"Offset": evalengine.FormatExpr(offset),
 		},
 		Inputs: []PrimitiveDescription{routeDescr},
 	}

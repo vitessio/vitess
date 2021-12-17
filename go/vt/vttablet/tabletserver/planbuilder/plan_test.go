@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -54,9 +56,8 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		FullQuery:   p.FullQuery,
 		WhereClause: p.WhereClause,
 	}
-	if !p.NextCount.IsNull() {
-		b, _ := p.NextCount.MarshalJSON()
-		mplan.NextCount = string(b)
+	if p.NextCount != nil {
+		mplan.NextCount = evalengine.FormatExpr(p.NextCount)
 	}
 	return json.Marshal(&mplan)
 }

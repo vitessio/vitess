@@ -90,7 +90,7 @@ func TestUpdateEqual(t *testing.T) {
 	// Failure case
 	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", collations.TypedCollation{})}
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `Bind variable not found`)
+	require.EqualError(t, err, `query arguments missing for aa`)
 }
 
 func TestUpdateScatter(t *testing.T) {
@@ -210,15 +210,15 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c1": {Value: sqltypes.NewInt64(1)},
-					"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]evalengine.Expr{
+					"c1": evalengine.NewLiteralInt(1),
+					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]evalengine.Expr{
+					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
 			},
@@ -349,15 +349,15 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c1": {Value: sqltypes.NewInt64(1)},
-					"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]evalengine.Expr{
+					"c1": evalengine.NewLiteralInt(1),
+					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]evalengine.Expr{
+					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
 			},
@@ -511,15 +511,15 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c1": {Value: sqltypes.NewInt64(1)},
-					"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]evalengine.Expr{
+					"c1": evalengine.NewLiteralInt(1),
+					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]evalengine.Expr{
+					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
 			},

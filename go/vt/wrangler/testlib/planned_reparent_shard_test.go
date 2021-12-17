@@ -271,7 +271,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	checkSemiSyncEnabled(t, false, true, goodReplica1, goodReplica2, oldPrimary)
 }
 
-func TestPlannedReparentNoPrimary(t *testing.T) {
+func TestPlannedReparentInitialization(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -284,13 +284,75 @@ func TestPlannedReparentNoPrimary(t *testing.T) {
 	defer vp.Close()
 
 	// Create a few replicas.
-	replica1 := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, nil)
-	NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
-	NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_primary", topoproto.TabletAliasString(replica1.Tablet.Alias)})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "the shard has no current primary")
+	// new primary
+	newPrimary.FakeMysqlDaemon.ReadOnly = true
+	newPrimary.FakeMysqlDaemon.Replicating = true
+	newPrimary.FakeMysqlDaemon.PromoteResult = mysql.Position{
+		GTIDSet: mysql.MariadbGTIDSet{
+			7: mysql.MariadbGTID{
+				Domain:   7,
+				Server:   456,
+				Sequence: 991,
+			},
+		},
+	}
+	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
+	}
+	newPrimary.StartActionLoop(t, wr)
+	defer newPrimary.StopActionLoop(t)
+
+	// goodReplica1 is replicating
+	goodReplica1.FakeMysqlDaemon.ReadOnly = true
+	goodReplica1.FakeMysqlDaemon.Replicating = true
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	goodReplica1.StartActionLoop(t, wr)
+	defer goodReplica1.StopActionLoop(t)
+
+	// goodReplica2 is not replicating
+	goodReplica2.FakeMysqlDaemon.ReadOnly = true
+	goodReplica2.FakeMysqlDaemon.Replicating = false
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE SET MASTER",
+	}
+	defer goodReplica2.StopActionLoop(t)
+
+	// run PlannedReparentShard
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "-new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	require.NoError(t, err)
+
+	// check what was run
+	err = newPrimary.FakeMysqlDaemon.CheckSuperQueryList()
+	require.NoError(t, err)
+	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
+	require.NoError(t, err)
+	err = goodReplica2.FakeMysqlDaemon.CheckSuperQueryList()
+	require.NoError(t, err)
+
+	assert.False(t, newPrimary.FakeMysqlDaemon.ReadOnly, "newPrimary.FakeMysqlDaemon.ReadOnly set")
+	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
+	assert.True(t, goodReplica2.FakeMysqlDaemon.ReadOnly, "goodReplica2.FakeMysqlDaemon.ReadOnly not set")
+
+	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
+	assert.False(t, goodReplica2.FakeMysqlDaemon.Replicating, "goodReplica2.FakeMysqlDaemon.Replicating set")
+
+	checkSemiSyncEnabled(t, true, true, newPrimary)
+	checkSemiSyncEnabled(t, false, true, goodReplica1, goodReplica2)
 }
 
 // TestPlannedReparentShardWaitForPositionFail simulates a failure of the WaitForPosition call

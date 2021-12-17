@@ -78,7 +78,7 @@ type Route struct {
 	Vindex vindexes.Vindex
 
 	// Values specifies the vindex values to use for routing.
-	Values []RouteValue
+	Values []evalengine.Expr
 
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
@@ -105,16 +105,6 @@ type Route struct {
 
 	// Route does not need transaction handling
 	noTxNeeded
-}
-
-type RouteValue interface {
-	// ResolveValue allows for retrieval of the value we expose for public consumption
-	ResolveValue(bindVars map[string]*querypb.BindVariable) (sqltypes.Value, error)
-
-	// ResolveList allows for retrieval of the value we expose for public consumption
-	ResolveList(bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error)
-
-	MarshalJSON() ([]byte, error)
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
@@ -470,14 +460,10 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return defaultRoute()
 	}
 
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-		Row:      []sqltypes.Value{},
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars)
 	var specifiedKS string
 	for _, tableSchema := range route.SysTableTableSchema {
-		result, err := tableSchema.Evaluate(env)
+		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -495,7 +481,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 
 	tableNames := map[string]string{}
 	for tblBvName, sysTableName := range route.SysTableTableName {
-		val, err := sysTableName.Evaluate(env)
+		val, err := env.Evaluate(sysTableName)
 		if err != nil {
 			return nil, err
 		}
@@ -595,11 +581,12 @@ func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Values[0].ResolveValue(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, []sqltypes.Value{value})
+	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, []sqltypes.Value{value.Value()})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -611,13 +598,14 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 }
 
 func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
 	var rowValue []sqltypes.Value
 	for _, rvalue := range route.Values {
-		v, err := rvalue.ResolveValue(bindVars)
+		v, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
 		}
-		rowValue = append(rowValue, v)
+		rowValue = append(rowValue, v.Value())
 	}
 
 	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
@@ -701,11 +689,12 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 }
 
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Values[0].ResolveList(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, values, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value)
+	rss, values, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -718,18 +707,20 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 	var err error
 	var lv []sqltypes.Value
 	isSingleVal := map[int]interface{}{}
+	env := evalengine.EnvWithBindVars(bindVars)
 	for colIdx, rvalue := range route.Values {
-		lv, err = rvalue.ResolveList(bindVars)
+		result, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
 		}
+		lv = result.TupleValues()
 		if lv == nil {
-			v, err := rvalue.ResolveValue(bindVars)
+			v, err := env.Evaluate(rvalue)
 			if err != nil {
 				return nil, nil, err
 			}
 			isSingleVal[colIdx] = nil
-			lv = []sqltypes.Value{v}
+			lv = []sqltypes.Value{v.Value()}
 		}
 		multiColValues = append(multiColValues, lv)
 	}
@@ -771,11 +762,12 @@ func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqlt
 }
 
 func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	value, err := route.Values[0].ResolveList(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value)
+	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -788,12 +780,13 @@ func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]
 
 func (route *Route) paramsSelectMultiEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	var multiColValues [][]sqltypes.Value
+	env := evalengine.EnvWithBindVars(bindVars)
 	for _, rvalue := range route.Values {
-		v, err := rvalue.ResolveList(bindVars)
+		v, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
 		}
-		multiColValues = append(multiColValues, v)
+		multiColValues = append(multiColValues, v.TupleValues())
 	}
 
 	// transpose from multi col value to vindex keys with one value from each multi column values.
@@ -988,7 +981,11 @@ func (route *Route) description() PrimitiveDescription {
 		other["Vindex"] = route.Vindex.String()
 	}
 	if route.Values != nil {
-		other["Values"] = route.Values
+		formattedValues := make([]string, 0, len(route.Values))
+		for _, value := range route.Values {
+			formattedValues = append(formattedValues, evalengine.FormatExpr(value))
+		}
+		other["Values"] = formattedValues
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["

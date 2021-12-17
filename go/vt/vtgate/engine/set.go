@@ -118,10 +118,8 @@ func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 	if len(input.Rows) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-		Row:      input.Rows[0],
-	}
+	env := evalengine.EnvWithBindVars(bindVars)
+	env.Row = input.Rows[0]
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(vcursor, env)
 		if err != nil {
@@ -183,7 +181,7 @@ func (u *UserDefinedVariable) VariableName() string {
 
 // Execute implements the SetOp interface method.
 func (u *UserDefinedVariable) Execute(vcursor VCursor, env *evalengine.ExpressionEnv) error {
-	value, err := u.Expr.Evaluate(env)
+	value, err := env.Evaluate(u.Expr)
 	if err != nil {
 		return err
 	}
@@ -513,7 +511,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env *evalengine.ExpressionE
 }
 
 func (svss *SysVarSetAware) evalAsInt64(env *evalengine.ExpressionEnv) (int64, error) {
-	value, err := svss.Expr.Evaluate(env)
+	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
 		return 0, err
 	}
@@ -530,7 +528,7 @@ func (svss *SysVarSetAware) evalAsInt64(env *evalengine.ExpressionEnv) (int64, e
 }
 
 func (svss *SysVarSetAware) evalAsFloat(env *evalengine.ExpressionEnv) (float64, error) {
-	value, err := svss.Expr.Evaluate(env)
+	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
 		return 0, err
 	}
@@ -544,7 +542,7 @@ func (svss *SysVarSetAware) evalAsFloat(env *evalengine.ExpressionEnv) (float64,
 }
 
 func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv) (string, error) {
-	value, err := svss.Expr.Evaluate(env)
+	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
 		return "", err
 	}
@@ -557,7 +555,7 @@ func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv) (string,
 }
 
 func (svss *SysVarSetAware) setBoolSysVar(env *evalengine.ExpressionEnv, setter func(bool) error) error {
-	value, err := svss.Expr.Evaluate(env)
+	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
 		return err
 	}
