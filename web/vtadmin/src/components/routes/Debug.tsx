@@ -349,7 +349,7 @@ const Snackbars: React.FC = () => {
                             info('This is an info snackbar.');
                             break;
                         case 'warning':
-                            warn('This is a warn snackbar.');
+                            warn('This is a warn snackbar with a very very very very very very very long message.');
                             break;
                     }
                 };
