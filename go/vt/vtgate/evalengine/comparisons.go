@@ -314,9 +314,9 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
+func (c *ComparisonExpr) typeof(*ExpressionEnv) querypb.Type {
 	// TODO: make this less aggressive
-	return -1, nil
+	return -1
 }
 
 // eval implements the ComparisonOp interface
@@ -382,10 +382,10 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	boolResult(found, i.Negate, result)
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
+func (i *InExpr) typeof(env *ExpressionEnv) querypb.Type {
 	// TODO: make this less aggressive
 	// return querypb.Type_INT64, nil
-	return -1, nil
+	return -1
 }
 
 func (i *InExpr) collation() collations.TypedCollation {
@@ -439,10 +439,10 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
+func (l *LikeExpr) typeof(env *ExpressionEnv) querypb.Type {
 	// TODO: make this less aggressive
 	// return querypb.Type_UINT64, nil
-	return -1, nil
+	return -1
 }
 
 func (l *LikeExpr) collation() collations.TypedCollation {
