@@ -845,6 +845,8 @@ func TestInsertSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user(id, v, name) values (3, 2, 'myname2')", 1)
 
 	sbc1.Queries = nil
 	_, err = executorExec(executor, "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", nil)
@@ -858,6 +860,40 @@ func TestInsertSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_lastname_keyspace_id_map(name, lastname, keyspace_id) values(:name_0, :lastname_0, :keyspace_id_0)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into user2(id, name, lastname) values (2, 'myname', 'mylastname')", 1)
+
+	// insert with binary values
+	executor.normalize = true
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+	sbclookup.Queries = nil
+	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, :vtg2, :_name_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_Id_0":   sqltypes.Int64BindVariable(1),
+			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"__seq0":  sqltypes.Int64BindVariable(1),
+			"vtg1":    sqltypes.Int64BindVariable(1),
+			"vtg2":    sqltypes.Int64BindVariable(2),
+			"vtg3":    sqltypes.BytesBindVariable([]byte("myname")),
+		},
+	}}
+	assertQueries(t, sbc1, wantQueries)
+	assertQueries(t, sbc2, nil)
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"user_id_0": sqltypes.Uint64BindVariable(1),
+		},
+	}}
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1, :vtg2, _binary :vtg3)", 1)
 }
 
 func TestInsertShardedKeyrange(t *testing.T) {

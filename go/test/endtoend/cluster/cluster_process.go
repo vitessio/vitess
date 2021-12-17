@@ -321,6 +321,147 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 		for _, tablet := range shard.Vttablets {
+			log.Infof("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort)
+
+			if err = tablet.VttabletProcess.Setup(); err != nil {
+				log.Errorf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err)
+				return
+			}
+		}
+
+		// Make first tablet as primary
+		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
+			return
+		}
+		keyspace.Shards = append(keyspace.Shards, *shard)
+	}
+	// if the keyspace is present then append the shard info
+	existingKeyspace := false
+	for idx, ks := range cluster.Keyspaces {
+		if ks.Name == keyspace.Name {
+			cluster.Keyspaces[idx].Shards = append(cluster.Keyspaces[idx].Shards, keyspace.Shards...)
+			existingKeyspace = true
+		}
+	}
+	if !existingKeyspace {
+		cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
+	}
+
+	// Apply Schema SQL
+	if keyspace.SchemaSQL != "" {
+		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+			log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
+			return
+		}
+	}
+
+	//Apply VSchema
+	if keyspace.VSchema != "" {
+		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
+			return
+		}
+	}
+
+	log.Infof("Done creating keyspace: %v ", keyspace.Name)
+	return
+}
+
+// StartUnshardedKeyspaceLegacy starts unshared keyspace with shard name as "0"
+func (cluster *LocalProcessCluster) StartUnshardedKeyspaceLegacy(keyspace Keyspace, replicaCount int, rdonly bool) error {
+	return cluster.StartKeyspaceLegacy(keyspace, []string{"0"}, replicaCount, rdonly)
+}
+
+// StartKeyspaceLegacy starts required number of shard and the corresponding tablets
+// keyspace : struct containing keyspace name, Sqlschema to apply, VSchema to apply
+// shardName : list of shard names
+// replicaCount: total number of replicas excluding shard primary and rdonly
+// rdonly: whether readonly tablets needed
+// customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
+// after they're created.
+func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...interface{}) (err error) {
+	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
+	if rdonly {
+		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
+	}
+
+	log.Infof("Starting keyspace: %v", keyspace.Name)
+	if !cluster.ReusingVTDATAROOT {
+		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	}
+	var mysqlctlProcessList []*exec.Cmd
+	for _, shardName := range shardNames {
+		shard := &Shard{
+			Name: shardName,
+		}
+		log.Infof("Starting shard: %v", shardName)
+		mysqlctlProcessList = []*exec.Cmd{}
+		for i := 0; i < totalTabletsRequired; i++ {
+			// instantiate vttablet object with reserved ports
+			tabletUID := cluster.GetAndReserveTabletUID()
+			tablet := &Vttablet{
+				TabletUID: tabletUID,
+				Type:      "replica",
+				HTTPPort:  cluster.GetAndReservePort(),
+				GrpcPort:  cluster.GetAndReservePort(),
+				MySQLPort: cluster.GetAndReservePort(),
+				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
+			}
+			if i == 0 { // Make the first one as primary
+				tablet.Type = "primary"
+			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
+				tablet.Type = "rdonly"
+			}
+			// Start Mysqlctl process
+			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
+			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
+				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
+				return err
+			}
+			mysqlctlProcessList = append(mysqlctlProcessList, proc)
+
+			// start vttablet process
+			tablet.VttabletProcess = VttabletProcessInstance(
+				tablet.HTTPPort,
+				tablet.GrpcPort,
+				tablet.TabletUID,
+				cluster.Cell,
+				shardName,
+				keyspace.Name,
+				cluster.VtctldProcess.Port,
+				tablet.Type,
+				cluster.TopoProcess.Port,
+				cluster.Hostname,
+				cluster.TmpDirectory,
+				cluster.VtTabletExtraArgs,
+				cluster.EnableSemiSync,
+				cluster.DefaultCharset)
+			tablet.Alias = tablet.VttabletProcess.TabletPath
+			if cluster.ReusingVTDATAROOT {
+				tablet.VttabletProcess.ServingStatus = "SERVING"
+			}
+			shard.Vttablets = append(shard.Vttablets, tablet)
+			// Apply customizations
+			for _, customizer := range customizers {
+				if f, ok := customizer.(func(*VttabletProcess)); ok {
+					f(tablet.VttabletProcess)
+				} else {
+					return fmt.Errorf("type mismatch on customizer: %T", customizer)
+				}
+			}
+		}
+
+		// wait till all mysqlctl is instantiated
+		for _, proc := range mysqlctlProcessList {
+			if err = proc.Wait(); err != nil {
+				log.Errorf("unable to start mysql process %v: %v", proc, err)
+				return err
+			}
+		}
+		for _, tablet := range shard.Vttablets {
 			if !cluster.ReusingVTDATAROOT {
 				if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
 					log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)

@@ -214,7 +214,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
         "Query": "select id from `user` having :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq1"
+          ":__sq1"
         ],
         "Vindex": "user_index"
       }
@@ -278,30 +278,12 @@ Gen4 error: Column 'col1' in field list is ambiguous
     "Query": "select col from `user` where id = 5 order by aa asc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where id = 5 order by aa",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select col from `user` where 1 != 1",
-    "Query": "select col from `user` where id = 5 order by aa asc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY uses column numbers
 "select col from user where id = 1 order by 1"
@@ -319,7 +301,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
     "Query": "select col from `user` where id = 1 order by 1 asc",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -680,7 +662,7 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by null",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -774,7 +756,7 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -869,7 +851,7 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -1023,7 +1005,7 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by RAND()",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -1148,30 +1130,12 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by col asc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from user where id = 5 order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select * from `user` where id = 5 order by col asc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Order by, qualified '*' expression
 "select user.* from user where id = 5 order by user.col"
@@ -1189,30 +1153,12 @@ Gen4 plan same as above
     "Query": "select `user`.* from `user` where id = 5 order by `user`.col asc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select user.* from user where id = 5 order by user.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select `user`.* from `user` where 1 != 1",
-    "Query": "select `user`.* from `user` where id = 5 order by `user`.col asc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Order by, '*' expression with qualified reference
 "select * from user where id = 5 order by user.col"
@@ -1230,30 +1176,12 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by `user`.col asc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from user where id = 5 order by user.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select * from `user` where id = 5 order by `user`.col asc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Order by, '*' expression in a subquery
 "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)"
@@ -1383,30 +1311,12 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by `user`.col collate utf8_general_ci asc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from user where id = 5 order by user.col collate utf8_general_ci",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select * from `user` where id = 5 order by `user`.col collate utf8_general_ci asc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by with math functions
 "select * from user where id = 5 order by -col1"
@@ -1424,30 +1334,12 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by -col1 asc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from user where id = 5 order by -col1",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select * from `user` where id = 5 order by -col1 asc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by with string operations
 "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc"
@@ -1465,30 +1357,12 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select * from `user` where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by with math operations
 "select * from user where id = 5 order by id+col collate utf8_general_ci desc"
@@ -1506,30 +1380,12 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by id + col collate utf8_general_ci desc",
     "Table": "`user`",
     "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from user where id = 5 order by id+col collate utf8_general_ci desc",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select * from `user` where id = 5 order by id + col collate utf8_general_ci desc",
-    "Table": "`user`",
-    "Values": [
       "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by derived table column
 "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
@@ -1547,7 +1403,7 @@ Gen4 plan same as above
     "Query": "select * from `user` as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1588,30 +1444,12 @@ Gen4 plan same as above
     "Query": "select col from `user` as route1 where id = 1 order by col asc",
     "Table": "`user`",
     "Values": [
-      1
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select col from route1 where id = 1 order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select col from `user` as route1 where 1 != 1",
-    "Query": "select col from `user` as route1 where id = 1 order by col asc",
-    "Table": "`user`",
-    "Values": [
       "INT64(1)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # LIMIT
 "select col1 from user where id = 1 limit 1"
@@ -1629,30 +1467,12 @@ Gen4 plan same as above
     "Query": "select col1 from `user` where id = 1 limit 1",
     "Table": "`user`",
     "Values": [
-      1
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select col1 from user where id = 1 limit 1",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select col1 from `user` where 1 != 1",
-    "Query": "select col1 from `user` where id = 1 limit 1",
-    "Table": "`user`",
-    "Values": [
       "INT64(1)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # limit for joins. Can't push down the limit because result
 # counts get multiplied by join operations.
@@ -1662,7 +1482,7 @@ Gen4 plan same as above
   "Original": "select user.col from user join user_extra limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -1706,7 +1526,7 @@ Gen4 plan same as above
   "Original": "select col from user limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1731,7 +1551,7 @@ Gen4 plan same as above
   "Original": "select col from user limit :a",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": null,
+    "Count": ":a",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1756,7 +1576,7 @@ Gen4 plan same as above
   "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 5,
+    "Count": "INT64(5)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1781,7 +1601,7 @@ Gen4 plan same as above
   "Original": "select col from user where col in (select col1 from user) limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -1839,9 +1659,29 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# invalid limit expression
+# arithmetic limit
 "select id from user limit 1+1"
-"unexpected expression in LIMIT: expression is too complex '1 + 1'"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user limit 1+1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": "INT64(2)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` limit :__upper_limit",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 Gen4 plan same as above
 
 # order by column alias

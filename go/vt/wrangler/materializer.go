@@ -65,6 +65,34 @@ const (
 	createDDLAsCopyDropConstraint = "copy:drop_constraint"
 )
 
+// addTablesToVSchema adds tables to an (unsharded) vschema. Depending on copyAttributes It will also add any sequence info
+// that is associated with a table by copying it from the vschema of the source keyspace.
+// For a migrate workflow we do not copy attributes since the source keyspace is just a proxy to import data into Vitess
+// Todo: For now we only copy sequence but later we may also want to copy other attributes like authoritative column flag and list of columns
+func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace string, targetVSchema *vschemapb.Keyspace, tables []string, copyAttributes bool) error {
+	if targetVSchema.Tables == nil {
+		targetVSchema.Tables = make(map[string]*vschemapb.Table)
+	}
+	for _, table := range tables {
+		targetVSchema.Tables[table] = &vschemapb.Table{}
+	}
+
+	if copyAttributes { // if source keyspace is provided, copy over the sequence info.
+		srcVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			srcTable, ok := srcVSchema.Tables[table]
+			if ok {
+				targetVSchema.Tables[table].AutoIncrement = srcTable.AutoIncrement
+			}
+		}
+
+	}
+	return nil
+}
+
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
@@ -74,7 +102,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	var externalTopo *topo.Server
 	var err error
 
-	if externalCluster != "" {
+	if externalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
 		externalTopo, err = wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
 		if err != nil {
 			return err
@@ -82,6 +110,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		wr.sourceTs = externalTopo
 		log.Infof("Successfully opened external topo: %+v", externalTopo)
 	}
+
 	var vschema *vschemapb.Keyspace
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
@@ -150,11 +179,8 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 		if !vschema.Sharded {
-			if vschema.Tables == nil {
-				vschema.Tables = make(map[string]*vschemapb.Table)
-			}
-			for _, table := range tables {
-				vschema.Tables[table] = &vschemapb.Table{}
+			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+				return err
 			}
 		}
 	}

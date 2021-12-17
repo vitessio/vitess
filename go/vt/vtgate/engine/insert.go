@@ -59,7 +59,7 @@ type Insert struct {
 	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
 	// Insert.Values[i].Values[j] represents values for the j'th column of the given colVindex (j < len(colVindex[i].Columns)
 	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
-	VindexValues []sqltypes.PlanValue
+	VindexValues [][][]evalengine.Expr
 
 	// Table specifies the table for the insert.
 	Table *vindexes.Table
@@ -110,7 +110,7 @@ func NewSimpleInsert(opcode InsertOpcode, table *vindexes.Table, keyspace *vinde
 }
 
 // NewInsert creates a new Insert.
-func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues []sqltypes.PlanValue, table *vindexes.Table, prefix string, mid []string, suffix string) *Insert {
+func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues [][][]evalengine.Expr, table *vindexes.Table, prefix string, mid []string, suffix string) *Insert {
 	return &Insert{
 		Opcode:       opcode,
 		Keyspace:     keyspace,
@@ -128,10 +128,10 @@ type Generate struct {
 	Keyspace *vindexes.Keyspace
 	Query    string
 	// Values are the supplied values for the column, which
-	// will be stored as a list within the PlanValue. New
+	// will be stored as a list within the expression. New
 	// values will be generated based on how many were not
 	// supplied (NULL).
-	Values sqltypes.PlanValue
+	Values evalengine.Expr
 }
 
 // InsertOpcode is a number representing the opcode
@@ -303,12 +303,14 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// Scan input values to compute the number of values to generate, and
 	// keep track of where they should be filled.
-	resolved, err := ins.Generate.Values.ResolveList(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	resolved, err := env.Evaluate(ins.Generate.Values)
 	if err != nil {
 		return 0, err
 	}
 	count := int64(0)
-	for _, val := range resolved {
+	values := resolved.TupleValues()
+	for _, val := range values {
 		if shouldGenerate(val) {
 			count++
 		}
@@ -338,7 +340,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// Fill the holes where no value was supplied.
 	cur := insertID
-	for i, v := range resolved {
+	for i, v := range values {
 		if shouldGenerate(v) {
 			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.Int64BindVariable(cur)
 			cur++
@@ -365,14 +367,19 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// require inputs in that format.
 	vindexRowsValues := make([][][]sqltypes.Value, len(ins.VindexValues))
 	rowCount := 0
+	env := evalengine.EnvWithBindVars(bindVars)
 	for vIdx, vColValues := range ins.VindexValues {
-		if len(vColValues.Values) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
+		if len(vColValues) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
 		}
-		for colIdx, colValues := range vColValues.Values {
-			rowsResolvedValues, err := colValues.ResolveList(bindVars)
-			if err != nil {
-				return nil, nil, err
+		for colIdx, colValues := range vColValues {
+			rowsResolvedValues := make([]sqltypes.Value, 0, len(colValues))
+			for _, colValue := range colValues {
+				result, err := env.Evaluate(colValue)
+				if err != nil {
+					return nil, nil, err
+				}
+				rowsResolvedValues = append(rowsResolvedValues, result.Value())
 			}
 			// This is the first iteration: allocate for transpose.
 			if colIdx == 0 {
@@ -613,8 +620,8 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 	return nil
 }
 
-//InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
-//to make sure they both produce the same names
+// InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
+// to make sure they both produce the same names
 func InsertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
 }

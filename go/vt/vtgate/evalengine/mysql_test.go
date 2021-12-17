@@ -34,9 +34,10 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := ConvertEx(astExpr, dummyCollation(45), true)
+	converted, err := ConvertEx(astExpr, dummyCollation(45), false)
 	if err == nil {
-		return converted.Evaluate(nil)
+		// t.Logf("%s", PrettyPrint(converted))
+		return noenv.Evaluate(converted)
 	}
 	return EvalResult{}, err
 }
@@ -60,14 +61,18 @@ func TestMySQLGolden(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			var ok int
+
 			for _, tc := range testcases {
-				debug := fmt.Sprintf("\n// Debug\neval, err := testSingle(t, %q)\nt.Logf(\"eval=%%s err=%%s\", eval.Value(), err)\n", tc.Query)
+				debug := fmt.Sprintf("\n// Debug\neval, err := testSingle(t, `%s`)\nt.Logf(\"eval=%%s err=%%v\", eval.Value(), err) // want value=%q\n", tc.Query, tc.Value)
 				eval, err := testSingle(t, tc.Query)
 				if err != nil {
 					if tc.Error == "" {
 						t.Errorf("query: %s\nmysql val: %s\nvitess err: %s\n%s", tc.Query, tc.Value, err.Error(), debug)
-					} else if !strings.Contains(tc.Error, err.Error()) {
+					} else if !strings.HasPrefix(tc.Error, err.Error()) {
 						t.Errorf("query: %s\nmysql err: %s\nvitess err: %s\n%s", tc.Query, tc.Error, err.Error(), debug)
+					} else {
+						ok++
 					}
 					continue
 				}
@@ -79,13 +84,16 @@ func TestMySQLGolden(t *testing.T) {
 					t.Errorf("query: %s\nmysql val: %s\nvitess val: %s\n%s", tc.Query, tc.Value, eval.Value(), debug)
 					continue
 				}
+				ok++
 			}
+
+			t.Logf("passed %d/%d tests (%.02f%%)", ok, len(testcases), 100*float64(ok)/float64(len(testcases)))
 		})
 	}
 }
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, "SELECT -1 LIKE (0 + NULL)")
-	t.Logf("eval=%s err=%s", eval.Value(), err)
+	eval, err := testSingle(t, `SELECT ((0, NULL, "fOo", 0) * ("FOO" <=> ("FOO" LIKE ("fOo", (("fOo", 0, 1, -1) < 1), "fOo", "fOo")))) > "fOo"`)
+	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }

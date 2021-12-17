@@ -65,26 +65,26 @@ func TestConvertSimplification(t *testing.T) {
 		{"42", ok("INT64(42)"), ok("INT64(42)")},
 		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
 		{"1.0e0 + (1 + 1) * 8.0e0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
-		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") like VARBINARY(\"poke%\")"), ok("UINT64(1)")},
+		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") LIKE VARBINARY(\"poke%\")"), ok("UINT64(1)")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
-			ok(`VARBINARY("foo") COLLATE utf8mb4_general_ci in (VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz"))`),
+			ok(`VARBINARY("foo") COLLATE utf8mb4_general_ci IN (VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz"))`),
 			err("COLLATION 'latin1_swedish_ci' is not valid for CHARACTER SET 'utf8mb4'"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
-			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("charizard"))`),
+			ok(`VARBINARY("pokemon") IN (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("charizard"))`),
 			ok("INT64(0)"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
-			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"))`),
+			ok(`VARBINARY("pokemon") IN (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"))`),
 			ok("INT64(1)"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
-			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), NULL)`),
+			ok(`VARBINARY("pokemon") IN (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), NULL)`),
 			ok(`INT64(1)`),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
-			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL)`),
+			ok(`VARBINARY("pokemon") IN (VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL)`),
 			ok(`NULL`),
 		},
 		{"0 + NULL", ok("INT64(0) + NULL"), ok("NULL")},
@@ -217,18 +217,16 @@ func TestEvaluate(t *testing.T) {
 			sqltypesExpr, err := Convert(astExpr, dummyCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := &ExpressionEnv{
-				BindVars: map[string]*querypb.BindVariable{
+			env := EnvWithBindVars(
+				map[string]*querypb.BindVariable{
 					"exp":                  sqltypes.Int64BindVariable(66),
 					"string_bind_variable": sqltypes.StringBindVariable("bar"),
 					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-				},
-				Row: nil,
-			}
+				})
 
 			// When
-			r, err := sqltypesExpr.Evaluate(env)
+			r, err := env.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
@@ -265,7 +263,7 @@ func TestEvaluateTuple(t *testing.T) {
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := sqltypesExpr.Evaluate(nil)
+			r, err := noenv.Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)

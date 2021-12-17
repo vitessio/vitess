@@ -168,7 +168,7 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 // If both values are not null, a numeric value is built
 // from each input: Signed->int64, Unsigned->uint64, Float->float64.
 // Otherwise the 'best type fit' is chosen for the number: int64 or float64.
-// Addition is performed by upgrading types as needed, or in case
+// OpAddition is performed by upgrading types as needed, or in case
 // of overflow: int64->uint64, int64->float64, uint64->float64.
 // Unsigned ints can only be added to positive ints. After the
 // addition, if one of the input types was Decimal, then

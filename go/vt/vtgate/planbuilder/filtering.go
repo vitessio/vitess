@@ -20,6 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -108,7 +111,7 @@ func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, err
 		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)")
 	}
 	var err error
-	node.eVindexFunc.Value, err = sqlparser.NewPlanValue(comparison.Right)
+	node.eVindexFunc.Value, err = evalengine.Convert(comparison.Right, semantics.EmptySemTable())
 	if err != nil {
 		return nil, fmt.Errorf("unsupported: where clause for vindex function must be of the form id = <val>: %v", err)
 	}

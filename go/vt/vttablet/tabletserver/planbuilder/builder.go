@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -48,7 +51,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
-		v, err := sqlparser.NewPlanValue(nextVal.Expr)
+		v, err := evalengine.Convert(nextVal.Expr, semantics.EmptySemTable())
 		if err != nil {
 			return nil, err
 		}
