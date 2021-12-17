@@ -79,12 +79,14 @@ type VTAdminClient interface {
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
-	// ReparentTablet reparents a tablet to the current primary in the shard. This
-	// only works if the current replica position matches the last known reparent
-	// action.
+	// ReparentTablet
 	ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error)
 	// RunHealthCheck runs a health check on the tablet
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
+	// StartReplication will run the underlying database command to start replication on a tablet
+	StartReplication(ctx context.Context, in *StartReplicationRequest, opts ...grpc.CallOption) (*StartReplicationResponse, error)
+	// StopReplication will run th underlying database command to stop replication on a tablet
+	StopReplication(ctx context.Context, in *StopReplicationRequest, opts ...grpc.CallOption) (*StopReplicationResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
 }
@@ -340,6 +342,24 @@ func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRe
 	return out, nil
 }
 
+func (c *vTAdminClient) StartReplication(ctx context.Context, in *StartReplicationRequest, opts ...grpc.CallOption) (*StartReplicationResponse, error) {
+	out := new(StartReplicationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StartReplication", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) StopReplication(ctx context.Context, in *StopReplicationRequest, opts ...grpc.CallOption) (*StopReplicationResponse, error) {
+	out := new(StopReplicationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StopReplication", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
 	out := new(VTExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
@@ -413,12 +433,14 @@ type VTAdminServer interface {
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
-	// ReparentTablet reparents a tablet to the current primary in the shard. This
-	// only works if the current replica position matches the last known reparent
-	// action.
+	// ReparentTablet
 	ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error)
 	// RunHealthCheck runs a health check on the tablet
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
+	// StartReplication will run the underlying database command to start replication on a tablet
+	StartReplication(context.Context, *StartReplicationRequest) (*StartReplicationResponse, error)
+	// StopReplication will run th underlying database command to stop replication on a tablet
+	StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
 	mustEmbedUnimplementedVTAdminServer()
@@ -508,6 +530,12 @@ func (UnimplementedVTAdminServer) ReparentTablet(context.Context, *ReparentTable
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVTAdminServer) StartReplication(context.Context, *StartReplicationRequest) (*StartReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartReplication not implemented")
+}
+func (UnimplementedVTAdminServer) StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopReplication not implemented")
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
@@ -1011,6 +1039,42 @@ func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_StartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StartReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StartReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StartReplication(ctx, req.(*StartReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_StopReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StopReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StopReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StopReplication(ctx, req.(*StopReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
@@ -1143,6 +1207,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _VTAdmin_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "StartReplication",
+			Handler:    _VTAdmin_StartReplication_Handler,
+		},
+		{
+			MethodName: "StopReplication",
+			Handler:    _VTAdmin_StopReplication_Handler,
 		},
 		{
 			MethodName: "VTExplain",

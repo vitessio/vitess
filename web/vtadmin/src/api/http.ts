@@ -291,6 +291,32 @@ export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams)
 
     return pb.RunHealthCheckResponse.create(result);
 };
+
+export interface StartReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const startReplication = async ({ clusterID, alias }: StartReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/start-replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StartReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StartReplicationResponse.create(result);
+}
+
+export interface StopReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const stopReplication = async ({ clusterID, alias }: StopReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/stop-replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StopReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StopReplicationResponse.create(result);
+}
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;
     data?: TabletDebugVars;

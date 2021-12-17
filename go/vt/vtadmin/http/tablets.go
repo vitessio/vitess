@@ -98,3 +98,25 @@ func RunHealthCheck(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(result, err)
 }
+
+// StartReplication
+func StartReplication(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	result, err := api.server.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
+		Alias:      vars["tablet"],
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+
+	return NewJSONResponse(result, err)
+}
+
+// StartReplication
+func StopReplication(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	result, err := api.server.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
+		Alias:      vars["tablet"],
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+
+	return NewJSONResponse(result, err)
+}
