@@ -189,7 +189,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <str> EXTRACT JSON_ARRAYAGG JSON_OBJECTAGG
+%token <str> EXTRACT JSON_ARRAYAGG JSON_OBJECTAGG JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
@@ -410,7 +410,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt json_utility_name
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -4660,6 +4660,28 @@ UTC_DATE func_paren_opt
 | JSON_OBJECTAGG openb column_name ',' column_name closeb
   {
     $$ = &JSONAggregateExpr{Name: NewColIdent($1), Columns: []*ColName{$3, $5}}
+  }
+| json_utility_name openb column_name closeb
+  {
+    $$ = &JSONUtilityExpr{Name: $1, Column: $3}
+  }
+| json_utility_name openb text_literal closeb
+  {
+    $$ = &JSONUtilityExpr{Name: $1, StringArg: $3}
+  }
+
+json_utility_name:
+JSON_PRETTY
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_STORAGE_FREE
+  {
+    $$ = NewColIdent($1)
+  }
+| JSON_STORAGE_SIZE
+  {
+    $$ = NewColIdent($1)
   }
 
 interval:
