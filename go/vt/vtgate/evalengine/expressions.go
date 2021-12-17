@@ -95,8 +95,13 @@ type evalError struct {
 }
 
 func throwEvalError(err error) {
-	// fmt.Fprintf(os.Stderr, "eval error: %v\n", err)
 	panic(evalError{err})
+}
+
+func throwCardinalityError(expected int) {
+	panic(evalError{
+		vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", expected),
+	})
 }
 
 func (env *ExpressionEnv) cardinality(expr Expr) int {
@@ -118,7 +123,7 @@ func (env *ExpressionEnv) cardinality(expr Expr) int {
 
 func (env *ExpressionEnv) ensureCardinality(expr Expr, expected int) {
 	if env.cardinality(expr) != expected {
-		throwEvalError(cardinalityError(expected))
+		throwCardinalityError(expected)
 	}
 }
 
@@ -150,7 +155,7 @@ func (env *ExpressionEnv) typecheckComparison(expr1 Expr, card1 int, expr2 Expr,
 	default:
 		env.typecheck(expr1)
 		env.typecheck(expr2)
-		throwEvalError(cardinalityError(card1))
+		throwCardinalityError(card1)
 	}
 }
 
@@ -182,7 +187,6 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 	case *InExpr:
 		env.typecheck(expr.Left)
 		left := env.cardinality(expr.Left)
-
 		right := env.cardinality(expr.Right)
 		if right == 1 {
 			throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
@@ -192,7 +196,7 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 			subexpr, subcard := env.subexpr(expr.Right, n)
 			env.typecheck(subexpr)
 			if left != subcard {
-				throwEvalError(cardinalityError(left))
+				throwCardinalityError(left)
 			}
 		}
 
@@ -374,12 +378,6 @@ func (t TupleExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.setTuple(tup)
 }
 
-func (t TupleExpr) ensureCardinality(_ *ExpressionEnv, expected int) {
-	if len(t) != expected {
-		throwEvalError(cardinalityError(expected))
-	}
-}
-
 func (bv *BindVariable) bvar(env *ExpressionEnv) *querypb.BindVariable {
 	val, ok := env.BindVars[bv.Key]
 	if !ok {
@@ -402,13 +400,6 @@ func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 	result.replaceCollation(c.coll)
 }
 
-func (c *Column) ensureCardinality(_ *ExpressionEnv, expected int) {
-	// columns cannot have TUPLE values
-	if expected != 1 {
-		throwEvalError(cardinalityError(1))
-	}
-}
-
 // typeof implements the Expr interface
 func (bv *BindVariable) typeof(env *ExpressionEnv) querypb.Type {
 	e := env.BindVars
@@ -424,12 +415,6 @@ func (l *Literal) typeof(*ExpressionEnv) querypb.Type {
 	return l.Val.typeof()
 }
 
-func (l *Literal) ensureCardinality(env *ExpressionEnv, expected int) {
-	if expected != 1 {
-		throwEvalError(cardinalityError(1))
-	}
-}
-
 // typeof implements the Expr interface
 func (t TupleExpr) typeof(*ExpressionEnv) querypb.Type {
 	return querypb.Type_TUPLE
@@ -438,18 +423,4 @@ func (t TupleExpr) typeof(*ExpressionEnv) querypb.Type {
 func (c *Column) typeof(env *ExpressionEnv) querypb.Type {
 	value := env.Row[c.Offset]
 	return value.Type()
-}
-
-func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
-	switch ltype {
-	case sqltypes.Int64:
-		if rtype == sqltypes.Uint64 || rtype == sqltypes.Float64 {
-			return rtype
-		}
-	case sqltypes.Uint64:
-		if rtype == sqltypes.Float64 {
-			return rtype
-		}
-	}
-	return ltype
 }

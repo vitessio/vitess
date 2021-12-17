@@ -58,7 +58,7 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 		out.setNull()
 		return
 	}
-	if right.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
+	if left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
 		panic("failed to typecheck tuples")
 	}
 	if err := b.Op.eval(&left, &right, out); err != nil {

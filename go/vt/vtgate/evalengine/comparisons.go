@@ -189,12 +189,20 @@ func evalCoerceAndCompareNullSafe(lVal, rVal *EvalResult) (bool, error) {
 	return evalCompareNullSafe(lVal, rVal)
 }
 
-func evalCompareNullSafe(lVal, rVal *EvalResult) (bool, error) {
-	tuple, err := checkTupleCardinality(lVal, rVal)
-	if err != nil {
-		return false, err
+func compareAsTuples(lVal, rVal *EvalResult) bool {
+	left := lVal.typeof() == querypb.Type_TUPLE
+	right := rVal.typeof() == querypb.Type_TUPLE
+	if left && right {
+		return true
 	}
-	if tuple {
+	if left || right {
+		panic("did not typecheck tuples")
+	}
+	return false
+}
+
+func evalCompareNullSafe(lVal, rVal *EvalResult) (bool, error) {
+	if compareAsTuples(lVal, rVal) {
 		return evalCompareTuplesNullSafe(lVal, rVal)
 	}
 	if lVal.null() || rVal.null() {
@@ -227,11 +235,7 @@ func evalCompareMany(left, right []EvalResult, fulleq bool) (int, bool, error) {
 }
 
 func evalCompareAll(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
-	tuple, err := checkTupleCardinality(lVal, rVal)
-	if err != nil {
-		return 0, false, err
-	}
-	if tuple {
+	if compareAsTuples(lVal, rVal) {
 		return evalCompareMany(lVal.tuple(), rVal.tuple(), fulleq)
 	}
 	if lVal.null() || rVal.null() {
