@@ -233,7 +233,7 @@ func TestChooseNewPrimary(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "primary alias is nil",
+			name: "avoid primary alias is nil",
 			tmc: &chooseNewPrimaryTestTMClient{
 				replicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000101": {
@@ -268,8 +268,50 @@ func TestChooseNewPrimary(t *testing.T) {
 				},
 			},
 			avoidPrimaryAlias: nil,
-			expected:          nil,
-			shouldErr:         true,
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			shouldErr: false,
+		}, {
+			name: "avoid primary alias and shard primary are nil",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000100": {
+						Position: "",
+					},
+					"zone1-0000000101": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+					},
+				},
+			},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: nil,
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			shouldErr: false,
 		},
 		{
 			name: "no replicas in primary cell",
