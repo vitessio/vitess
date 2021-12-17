@@ -143,12 +143,18 @@ func (pr *PlannedReparenter) preflightChecks(
 	tabletMap map[string]*topo.TabletInfo,
 	opts *PlannedReparentOptions, // we take a pointer here to set NewPrimaryAlias
 ) (isNoop bool, err error) {
-	if topoproto.TabletAliasEqual(opts.NewPrimaryAlias, opts.AvoidPrimaryAlias) {
+	// We don't want to fail when both NewPrimaryAlias and AvoidPrimaryAlias are nil.
+	// But when they are both nil, we assign AvoidPrimaryAlias to be ShardInfo.PrimaryAlias.
+	// In the case, where we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
+	// all the three will be nil.
+	if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, opts.AvoidPrimaryAlias) {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(opts.NewPrimaryAlias))
 	}
 
 	if opts.NewPrimaryAlias == nil {
-		if !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.PrimaryAlias) {
+		// We don't want to fail when both ShardInfo.PrimaryAlias and AvoidPrimaryAlias are nil.
+		// This happens when we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
+		if ev.ShardInfo.PrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.PrimaryAlias) {
 			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
 			return true, nil
 		}
