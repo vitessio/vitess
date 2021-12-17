@@ -39,7 +39,11 @@ const Snackbar: React.FC<SnackbarProps & { closeToast?: () => void }> = ({
             )}`}
         >
             <div className="flex items-center">
-                {icon && <div className="shrink-0"><Icon icon={icon} className={`shrink-0 mr-4 fill-current h-8 w-8 min-h-8 min-w-8`} /></div>}
+                {icon && (
+                    <div className="shrink-0">
+                        <Icon icon={icon} className={`shrink-0 mr-4 fill-current h-8 w-8 min-h-8 min-w-8`} />
+                    </div>
+                )}
                 <div className="grow-0 whitespace-normal">{message}</div>
             </div>
             <button onClick={closeToast}>
@@ -72,7 +76,7 @@ interface AddSnackbarParams {
 export const SnackbarContext = React.createContext<SnackbarContextProps>(defaultProps);
 const addSnackbar = (props: AddSnackbarParams, options?: ToastOptions) => {
     toast(({ closeToast }) => <Snackbar closeToast={closeToast} key={props.message} {...props} />, {
-        className: 'mb-2',
+        className: 'mb-2 rounded-2xl',
         ...options,
     });
 };
