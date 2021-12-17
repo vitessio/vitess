@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useHistory, useParams } from 'react-router-dom';
-import { deleteTablet, reparentTablet } from '../../../api/http';
+import { deleteTablet, reparentTablet, startReplication, stopReplication } from '../../../api/http';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
@@ -53,6 +53,39 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
         }
         setReparentLoading(false)
     }
+
+    // StartReplication
+    const [startReplicationLoading, setStartReplicationLoading] = useState(false)
+    const onStartReplication = async () => {
+        setStartReplicationLoading(true)
+        let result
+        try {
+            result = await startReplication({ alias, clusterID })
+            if (result.status === 'ok') {
+                success(`Successfully started replication on tablet ${alias}.`, { autoClose: 7000 })
+            }
+        } catch (e) {
+            warn(`There was an error starting replication on tablet: ${e}`)
+        }
+        setStartReplicationLoading(false)
+    }
+
+    // StopReplication
+    const [stopReplicationLoading, setStopReplicationLoading] = useState(false)
+    const onStopReplication = async () => {
+        setStopReplicationLoading(true)
+        let result
+        try {
+            result = await stopReplication({ alias, clusterID })
+            if (result.status === 'ok') {
+                success(`Successfully stopped replication on tablet ${alias}.`, { autoClose: 7000 })
+            }
+        } catch (e) {
+            warn(`There was an error stopping replication on tablet: ${e}`)
+        }
+        setStopReplicationLoading(false)
+    }
+
     return (
         <div className="pt-4">
             <div className="my-8">
@@ -67,7 +100,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             This will run the underlying database command to start replication on tablet <span className="font-bold">{alias}</span>. For example, in mysql 8, this will be <span className="font-mono text-sm p-1 bg-gray-100">start replication</span>.
                         </p>
                         {isPrimary(tablet) && <p className="text-danger"><Icon icon={Icons.alertFail} className='fill-current text-danger inline mr-2' />Command StartTablet cannot be run on the primary tablet.</p>}
-                        <button className="btn btn-secondary mt-4" disabled={isPrimary(tablet)}>Start replication</button>
+                        <button onClick={onStartReplication} className="btn btn-secondary mt-4" disabled={isPrimary(tablet) || startReplicationLoading}>Start replication</button>
                     </div>
                     <div className="p-8">
                         <div className="flex justify-between items-center">
@@ -78,7 +111,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             This will run the underlying database command to stop replication on tablet <span className="font-bold">{alias}</span>. For example, in mysql 8, this will be <span className="font-mono text-sm p-1 bg-gray-100">stop replication</span>.
                         </p>
                         {isPrimary(tablet) && <p className="text-danger"><Icon icon={Icons.alertFail} className='fill-current text-danger inline mr-2' />Command StopTablet cannot be run on the primary tablet.</p>}
-                        <button className="btn btn-secondary mt-4" disabled={isPrimary(tablet)}>Stop replication</button>
+                        <button onClick={onStopReplication} className="btn btn-secondary mt-4" disabled={isPrimary(tablet) || stopReplicationLoading}>Stop replication</button>
                     </div>
                 </div>
             </div>
