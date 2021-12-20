@@ -27,10 +27,6 @@ func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, ddl *DDL) {
-  yylex.(*Tokenizer).partialDDL = ddl
-}
-
 func incNesting(yylex interface{}) bool {
   yylex.(*Tokenizer).nesting++
   if yylex.(*Tokenizer).nesting == 200 {
@@ -1920,7 +1916,6 @@ create_table_prefix:
     }
 
     $$ = &DDL{Action: CreateStr, Table: $5, IfNotExists: ne, Temporary: neTemp}
-    setDDL(yylex, $$)
   }
 
 table_spec:

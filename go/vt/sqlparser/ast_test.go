@@ -198,10 +198,15 @@ func TestDDL(t *testing.T) {
 		output   Statement
 		affected []string
 	}{{
-		query: "create table a",
+		query: "create table a (id int)",
 		output: &DDL{
-			Action: CreateStr,
-			Table:  TableName{Name: NewTableIdent("a")},
+			Action:    CreateStr,
+			Table:     TableName{Name: NewTableIdent("a")},
+			TableSpec: &TableSpec{
+				Columns: []*ColumnDefinition{
+					&ColumnDefinition{Name: NewColIdent("id"), Type: ColumnType{Type: "int"}},
+				},
+			},
 		},
 		affected: []string{"a"},
 	}, {

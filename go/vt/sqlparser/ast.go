@@ -26,7 +26,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/dolthub/vitess/go/vt/log"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
@@ -108,15 +107,6 @@ func ParseOne(sql string) (Statement, int, error) {
 
 func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	if yyParsePooled(tokenizer) != 0 {
-		if tokenizer.partialDDL != nil {
-			if typ, val := tokenizer.Scan(); typ != 0 {
-				return nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
-			}
-			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
-			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, nil
-		}
-
 		if se, ok := tokenizer.LastError.(vterrors.SyntaxError); ok {
 			return nil, vterrors.NewWithCause(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error(), se)
 		} else {
@@ -185,33 +175,6 @@ func stringIsUnbrokenQuote(s string, quoteChar byte) bool {
 	return true
 }
 
-// ParseStrictDDL is the same as Parse except it errors on
-// partially parsed DDL statements.
-func ParseStrictDDL(sql string) (Statement, error) {
-	tokenizer := NewStringTokenizer(sql)
-	if yyParsePooled(tokenizer) != 0 {
-		return nil, tokenizer.LastError
-	}
-	if tokenizer.ParseTree == nil {
-		return nil, ErrEmpty
-	}
-	return tokenizer.ParseTree, nil
-}
-
-// ParseOneStrictDDL is the same as ParseOne but it errors on partially parsed
-// DDL statements.
-func ParseOneStrictDDL(sql string) (Statement, int, error) {
-	tokenizer := NewStringTokenizer(sql)
-	tokenizer.stopAfterFirstStmt = true
-	if yyParsePooled(tokenizer) != 0 {
-		return nil, 0, tokenizer.LastError
-	}
-	if tokenizer.ParseTree == nil {
-		return nil, tokenizer.Position, ErrEmpty
-	}
-	return tokenizer.ParseTree, tokenizer.Position, nil
-}
-
 // ParseTokenizer is a raw interface to parse from the given tokenizer.
 // This does not used pooled parsers, and should not be used in general.
 func ParseTokenizer(tokenizer *Tokenizer) int {
@@ -224,16 +187,6 @@ func ParseTokenizer(tokenizer *Tokenizer) int {
 // the next call to ParseNext to parse any subsequent SQL statements. When
 // there are no more statements to parse, a error of io.EOF is returned.
 func ParseNext(tokenizer *Tokenizer) (Statement, error) {
-	return parseNext(tokenizer, false)
-}
-
-// ParseNextStrictDDL is the same as ParseNext except it errors on
-// partially parsed DDL statements.
-func ParseNextStrictDDL(tokenizer *Tokenizer) (Statement, error) {
-	return parseNext(tokenizer, true)
-}
-
-func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 	if tokenizer.lastChar == ';' {
 		tokenizer.next()
 		tokenizer.skipBlank()
@@ -245,10 +198,6 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 	tokenizer.reset()
 	tokenizer.multi = true
 	if yyParsePooled(tokenizer) != 0 {
-		if tokenizer.partialDDL != nil && !strict {
-			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, nil
-		}
 		return nil, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {

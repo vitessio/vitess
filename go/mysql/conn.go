@@ -1039,12 +1039,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		if !c.DisableClientMultiStatements && c.Capabilities&CapabilityClientMultiStatements != 0 {
 			var ri int
-			statement, ri, err = sqlparser.ParseOneStrictDDL(query)
+			statement, ri, err = sqlparser.ParseOne(query)
 			if ri < len(query) {
 				remainder = query[ri:]
 			}
 		} else {
-			statement, err = sqlparser.ParseStrictDDL(query)
+			statement, err = sqlparser.Parse(query)
 		}
 		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {

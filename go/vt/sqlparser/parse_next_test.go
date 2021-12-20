@@ -60,10 +60,10 @@ func TestIgnoreSpecialComments(t *testing.T) {
 
 	tokenizer := NewTokenizer(&sql)
 	tokenizer.SkipSpecialComments = true
-	one, err := ParseNextStrictDDL(tokenizer)
+	one, err := ParseNext(tokenizer)
 	require.NoError(t, err)
 
-	two, err := ParseNextStrictDDL(tokenizer)
+	two, err := ParseNext(tokenizer)
 	require.NoError(t, err)
 
 	assert.Equal(t, "select 1 from dual", String(one))
@@ -140,14 +140,6 @@ func TestParseNextEdgeCases(t *testing.T) {
 		name:  "Semicolin inside a string",
 		input: "set character set ';'; select 1 from a",
 		want:  []string{"set charset ';'", "select 1 from a"},
-	}, {
-		name:  "Partial DDL",
-		input: "create table a; select 1 from a",
-		want:  []string{"create table a", "select 1 from a"},
-	}, {
-		name:  "Partial DDL",
-		input: "create table a ignore me this is garbage; select 1 from a",
-		want:  []string{"create table a", "select 1 from a"},
 	}}
 
 	for _, test := range tests {
@@ -180,35 +172,20 @@ func TestParseNextEdgeCases(t *testing.T) {
 }
 
 // TestParseNextEdgeCases tests various ParseNext edge cases.
-func TestParseNextStrictNonStrict(t *testing.T) {
+func TestParseStrictErr(t *testing.T) {
 	// This is one of the edge cases above.
 	input := "create table a ignore me this is garbage; select 1 from a"
 	want := []string{"create table a", "select 1 from a"}
 
-	// First go through as expected with non-strict DDL parsing.
-	var sql bytes.Buffer
+	// Now try again with strict parsing and observe the expected error.
+	sql := bytes.Buffer{}
 	sql.WriteString(input)
 	tokens := NewTokenizer(&sql)
-
-	for i, want := range want {
-		tree, err := ParseNext(tokens)
-		if err != nil {
-			t.Fatalf("[%d] ParseNext(%q) err = %q, want nil", i, input, err)
-		}
-		if got := String(tree); got != want {
-			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
-		}
-	}
-
-	// Now try again with strict parsing and observe the expected error.
-	sql = bytes.Buffer{}
-	sql.WriteString(input)
-	tokens = NewTokenizer(&sql)
-	_, err := ParseNextStrictDDL(tokens)
+	_, err := ParseNext(tokens)
 	if err == nil || !strings.Contains(err.Error(), "ignore") {
 		t.Fatalf("ParseNext(%q) err = %q, want ignore", input, err)
 	}
-	tree, err := ParseNextStrictDDL(tokens)
+	tree, err := ParseNext(tokens)
 	if err != nil {
 		t.Fatalf("ParseNext(%q) err = %q, want nil", input, err)
 	}
