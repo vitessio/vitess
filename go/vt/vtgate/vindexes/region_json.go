@@ -155,5 +155,5 @@ func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 }
 
 func (rv *RegionJSON) PartialVindex() bool {
-	return true
+	return false
 }
