@@ -133,12 +133,10 @@ func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
 		if expr.bvar(env).Type == querypb.Type_TUPLE {
 			return nil, 1
 		}
-		panic("should never happen")
 	case TupleExpr:
 		return expr[nth], env.cardinality(expr[nth])
-	default:
-		return expr, 1
 	}
+	panic("subexpr called on non-tuple")
 }
 
 func (env *ExpressionEnv) typecheckComparison(expr1 Expr, card1 int, expr2 Expr, card2 int) {
@@ -188,7 +186,8 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		env.typecheck(expr.Left)
 		left := env.cardinality(expr.Left)
 		right := env.cardinality(expr.Right)
-		if right == 1 {
+
+		if expr.Right.typeof(env) != querypb.Type_TUPLE {
 			throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
 		}
 
@@ -381,7 +380,7 @@ func (t TupleExpr) eval(env *ExpressionEnv, result *EvalResult) {
 func (bv *BindVariable) bvar(env *ExpressionEnv) *querypb.BindVariable {
 	val, ok := env.BindVars[bv.Key]
 	if !ok {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found"))
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key))
 	}
 	return val
 }
@@ -391,6 +390,11 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 	result.setBindVar(bv.bvar(env), bv.coll)
 }
 
+// typeof implements the Expr interface
+func (bv *BindVariable) typeof(env *ExpressionEnv) querypb.Type {
+	return bv.bvar(env).Type
+}
+
 // eval implements the Expr interface
 func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 	value := env.Row[c.Offset]
@@ -398,16 +402,6 @@ func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 		throwEvalError(err)
 	}
 	result.replaceCollation(c.coll)
-}
-
-// typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv) querypb.Type {
-	e := env.BindVars
-	v, found := e[bv.Key]
-	if !found {
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key))
-	}
-	return v.Type
 }
 
 // typeof implements the Expr interface
