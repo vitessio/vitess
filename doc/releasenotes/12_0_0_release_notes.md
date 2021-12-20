@@ -14,6 +14,15 @@ While `Gen4` has been under development for a few release cycles, we have now re
 
 To use `Gen4`, VTGate's `-planner_version` flag needs to be set to `gen4`.
 
+## Known Issues
+
+- A critical vulnerability [CVE-2021-44228](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44228) in the Apache Log4j logging library was disclosed on Dec 9.
+  The project provided release `2.15.0` with a patch that mitigates the impact of this CVE. It was quickly found that the initial patch was insufficient, and an additional CVE
+  [CVE-2021-45046](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-45046) followed.
+  This has been fixed in release `2.16.0`. This release, `v12.0.0`, uses a version of Log4j below `2.16.0`, for this reason we encourage you to use `v12.0.2` instead, which contains the patch for the vulnerability.
+
+- An issue related to `-keep_data` being ignored in v2 vreplication workflows (#9174), has been fixed in release `>= v12.0.1`.
+
 ## Incompatible Changes
 
 ### vtctl command output
