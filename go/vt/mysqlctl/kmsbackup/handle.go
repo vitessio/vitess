@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"sync"
 
 	"github.com/planetscale/common-libs/files"
 
@@ -26,6 +27,7 @@ type filesBackupHandle struct {
 
 	// filesAdded contains all files added so far. It's used for sanity checks
 	filesAdded map[string]struct{}
+	filesMu    sync.Mutex // protects filesAdded
 
 	// dir and name are stored and returned as is from the original request.
 	dir  string
@@ -78,7 +80,9 @@ func (f *filesBackupHandle) createRoot(ctx context.Context) error {
 // AddFile satisfiles backupstorage.BackupHandle.
 func (f *filesBackupHandle) AddFile(ctx context.Context, filename string, approxFileSize int64) (io.WriteCloser, error) {
 	filePath := path.Join(f.rootPath, filename)
+	f.filesMu.Lock()
 	f.filesAdded[filePath] = struct{}{}
+	f.filesMu.Unlock()
 
 	// since the manifest file is added last(see // go/vt/mysqlctl/builtinbackupengine.go),
 	// once we got the manifest file, we make sure:
@@ -125,7 +129,16 @@ func (f *filesBackupHandle) AbortBackup(ctx context.Context) error {
 
 // sanityCheck verifies that all added files are present.
 func (f *filesBackupHandle) sanityCheck(ctx context.Context) error {
+	// let's copy just the filenames, because the stat commands might take
+	// time, and we shouldn't keep the lock for longer times.
+	f.filesMu.Lock()
+	files := make([]string, 0, len(f.filesAdded))
 	for filename := range f.filesAdded {
+		files = append(files, filename)
+	}
+	f.filesMu.Unlock()
+
+	for _, filename := range files {
 		if _, err := f.fs.Stat(ctx, filename); err != nil {
 			return vterrors.Wrapf(err, "file %v does not exist", filename)
 		}
