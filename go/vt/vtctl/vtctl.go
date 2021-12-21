@@ -1666,17 +1666,6 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	deniedTablesStr := subFlags.String("denied_tables", "", "Specifies a comma-separated list of tables to add to the denylist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
 
-	// DEPRECATION START: remove after 12.0
-	blacklistedTablesStr := subFlags.String("blacklisted_tables", "", "Specifies a comma-separated list of tables to add to the denylist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
-
-	if *deniedTablesStr != "" && *blacklistedTablesStr != "" {
-		return fmt.Errorf("cannot specify both denied_tables and blacklisted_tables")
-	}
-	if *deniedTablesStr == "" && *blacklistedTablesStr != "" {
-		*deniedTablesStr = *blacklistedTablesStr
-	}
-	// DEPRECATION ends
-
 	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits.")
 	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes. This flag requires 'denied_tables' and 'remove' to be unset, otherwise it's ignored.")
 	if err := subFlags.Parse(args); err != nil {
