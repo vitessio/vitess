@@ -46,6 +46,9 @@ type vstreamManager struct {
 	cell     string
 }
 
+// maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
+const maxSkewTimeoutSeconds = 10 * 60
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -98,8 +101,6 @@ type vstream struct {
 
 	vsm *vstreamManager
 
-	rss []*srvtopo.ResolvedShard
-
 	eventCh           chan []*binlogdatapb.VEvent
 	heartbeatInterval uint32
 	ts                *topo.Server
@@ -142,7 +143,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		journaler:          make(map[int64]*journalEvent),
 		minimizeSkew:       flags.GetMinimizeSkew(),
 		stopOnReshard:      flags.GetStopOnReshard(),
-		skewTimeoutSeconds: 10 * 60,
+		skewTimeoutSeconds: maxSkewTimeoutSeconds,
 		timestamps:         make(map[string]int64),
 		vsm:                vsm,
 		eventCh:            make(chan []*binlogdatapb.VEvent),

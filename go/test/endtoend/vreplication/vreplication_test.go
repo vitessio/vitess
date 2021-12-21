@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +26,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -162,6 +167,8 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name)
 }
 
+// TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test the tablet picker's alias functionality
+// We also reuse the setup of this test to validate that the "vstream * from" vtgate query functionality is functional
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	mainClusterConfig.vreplicationCompressGTID = true
@@ -193,7 +200,68 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
+	t.Run("VStreamFrom", func(t *testing.T) {
+		testVStreamFrom(t, "product", 2)
+	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
+}
+
+// testVStreamFrom confirms that the "vstream * from" endpoint is serving data
+func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: vtgate.MySQLServerPort,
+	}
+	ch := make(chan bool, 1)
+	go func() {
+		streamConn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer streamConn.Close()
+		_, err = streamConn.ExecuteFetch("set workload='olap'", 1000, false)
+		require.NoError(t, err)
+
+		query := fmt.Sprintf("vstream * from %s", table)
+		err = streamConn.ExecuteStreamFetch(query)
+		require.NoError(t, err)
+
+		wantFields := []*querypb.Field{{
+			Name: "op",
+			Type: sqltypes.VarChar,
+		}, {
+			Name: "pid",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "description",
+			Type: sqltypes.VarBinary,
+		}}
+		gotFields, err := streamConn.Fields()
+		require.NoError(t, err)
+		for i, field := range gotFields {
+			gotFields[i] = &querypb.Field{
+				Name: field.Name,
+				Type: field.Type,
+			}
+		}
+		utils.MustMatch(t, wantFields, gotFields)
+
+		gotRows, err := streamConn.FetchNext(nil)
+		require.NoError(t, err)
+		log.Infof("QR1:%v\n", gotRows)
+
+		gotRows, err = streamConn.FetchNext(nil)
+		require.NoError(t, err)
+		log.Infof("QR2:%+v\n", gotRows)
+
+		ch <- true
+	}()
+
+	select {
+	case <-ch:
+		return
+	case <-time.After(5 * time.Second):
+		t.Fatal("nothing streamed within timeout")
+	}
 }
 
 func insertInitialData(t *testing.T) {
