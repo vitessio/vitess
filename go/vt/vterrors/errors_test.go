@@ -17,6 +17,7 @@ limitations under the License.
 package vterrors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -25,7 +26,6 @@ import (
 	"testing"
 
 	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
-	"golang.org/x/net/context"
 )
 
 func TestWrapNil(t *testing.T) {

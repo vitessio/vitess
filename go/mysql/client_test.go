@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"io/ioutil"
 	"net"
 	"os"
@@ -25,8 +26,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // assertSQLError makes sure we get the right error.

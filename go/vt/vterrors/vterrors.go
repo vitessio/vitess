@@ -86,12 +86,12 @@ limitations under the License.
 package vterrors
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 
 	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
-	"golang.org/x/net/context"
 )
 
 // LogErrStacks controls whether or not printing errors includes the

@@ -17,13 +17,12 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 type filePosFlavor struct {

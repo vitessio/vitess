@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -26,8 +27,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	vtenv "github.com/dolthub/vitess/go/vt/env"
