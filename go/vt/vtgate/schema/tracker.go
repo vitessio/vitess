@@ -133,7 +133,6 @@ func (t *Tracker) newUpdateController() *updateController {
 }
 
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
-
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
 		log.Warningf("Unable to add keyspace to tracker: %v", err)
@@ -262,11 +261,11 @@ func (tm *tableMap) delete(ks, tbl string) {
 	delete(m, tbl)
 }
 
-// This empties out any previous schema for for all tables in a keyspace
+// This empties out any previous schema for for all tables in a keyspace.
 // You should call this before initializing/loading a keyspace of the same
-// name in the cache
+// name in the cache.
 func (t *Tracker) clearKeyspaceTables(ks string) {
-	if t.tables != nil {
+	if t.tables != nil && t.tables.m != nil {
 		delete(t.tables.m, ks)
 	}
 }
