@@ -2537,9 +2537,14 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
   }
-| CONSTRAINT UNIQUE index_or_key name_opt
+| CONSTRAINT name_opt UNIQUE index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($2) + " " + string($3), Name: NewColIdent($4), Unique: true}
+    var name string
+    name = $2
+    if name == "" {
+      name = $5
+    }
+    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent(name), Unique: true}
   }
 | UNIQUE index_or_key name_opt
   {

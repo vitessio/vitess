@@ -3607,6 +3607,7 @@ func TestCreateTable(t *testing.T) {
 			"	full_name varchar,\n" +
 			"	constraint unique key (full_name),\n" +
 			"	constraint unique index named (full_name),\n" +
+			"	constraint namedx unique (full_name),\n" +
 			"	constraint pk primary key (id)\n" +
 			")",
 		output: "create table t (\n" +
@@ -3614,6 +3615,7 @@ func TestCreateTable(t *testing.T) {
 			"	full_name varchar,\n" +
 			"	unique key (full_name),\n" +
 			"	unique index named (full_name),\n" +
+			"	unique  namedx (full_name),\n" +
 			"	primary key (id)\n" +
 			")",
 	}, {
