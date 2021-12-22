@@ -10,7 +10,9 @@ In addition, all Vitess-managed databases will be started with `super-read-only`
 It is expected that this change is safe and backwards-compatible. Anyone who is relying on the current behavior should pass `-use_super_read_only=false` on the vttablet command line, and make sure they are using a custom my.cnf instead of the one provided as the default by Vitess.
 
 ### vtgate -buffer_implementation now defaults to keyspace_events
-The default value used to be `healthcheck`. The new `keyspace_events` implementation has been tested in production with good results and shows more consistent buffering behavior during PlannedReparentShard operations. The `keyspace_events` implementation utilizes heuristics to detect additional cluster states where buffering is safe to perform, including cases where the primary may be down. If there is a need to revert back to the previous buffer implementation, ensure buffering is enabled in vtgate and pass the flag `-buffer_implementation=healthcheck`. 
+The default value used to be `healthcheck`. The new `keyspace_events` implementation has been tested in production with good results and shows more consistent buffering behavior during PlannedReparentShard operations. The `keyspace_events` implementation utilizes heuristics to detect additional cluster states where buffering is safe to perform, including cases where the primary may be down. If there is a need to revert back to the previous buffer implementation, ensure buffering is enabled in vtgate and pass the flag `-buffer_implementation=healthcheck`.
+
+The default buffer timings have also been adjusted to span additional time. The `buffer_window` has been adjusted from `10s` to `1m`, the `buffer_max_failover_duration` has been changed from `20s` to `1m`; and finally the `buffer_min_time_between_failovers` has been adjusted from `1m` to `2m`. 
 
 ### ddl_strategy: -postpone-completion flag
 

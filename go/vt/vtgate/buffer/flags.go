@@ -31,10 +31,10 @@ var (
 	bufferEnabled       = flag.Bool("enable_buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
 	bufferEnabledDryRun = flag.Bool("enable_buffer_dry_run", false, "Detect and log failover events, but do not actually buffer requests.")
 
-	bufferWindow                  = flag.Duration("buffer_window", 10*time.Second, "Duration for how long a request should be buffered at most.")
+	bufferWindow                  = flag.Duration("buffer_window", 1*time.Minute, "Duration for how long a request should be buffered at most.")
 	bufferSize                    = flag.Int("buffer_size", 1000, "Maximum number of buffered requests in flight (across all ongoing failovers).")
-	bufferMaxFailoverDuration     = flag.Duration("buffer_max_failover_duration", 20*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
-	bufferMinTimeBetweenFailovers = flag.Duration("buffer_min_time_between_failovers", 1*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")
+	bufferMaxFailoverDuration     = flag.Duration("buffer_max_failover_duration", 1*time.Minute, "Stop buffering completely if a failover takes longer than this duration.")
+	bufferMinTimeBetweenFailovers = flag.Duration("buffer_min_time_between_failovers", 2*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")
 
 	bufferDrainConcurrency = flag.Int("buffer_drain_concurrency", 1, "Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer.")
 	bufferKeyspaceShards   = flag.String("buffer_keyspace_shards", "", "If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.")

@@ -28,10 +28,10 @@ func TestVerifyFlags(t *testing.T) {
 		flag.Set("enable_buffer", "false")
 		flag.Set("enable_buffer_dry_run", "false")
 		flag.Set("buffer_size", "1000")
-		flag.Set("buffer_window", "10s")
+		flag.Set("buffer_window", "1m")
 		flag.Set("buffer_keyspace_shards", "")
-		flag.Set("buffer_max_failover_duration", "20s")
-		flag.Set("buffer_min_time_between_failovers", "1m")
+		flag.Set("buffer_max_failover_duration", "1m")
+		flag.Set("buffer_min_time_between_failovers", "2m")
 	}
 
 	// Verify that the non-allowed (non-trivial) flag combinations are caught.
