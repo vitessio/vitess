@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -28,6 +29,8 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*VindexFunc)(nil)
@@ -134,7 +137,11 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 		switch d := destinations[0].(type) {
 		case key.DestinationKeyRange:
 			if d.KeyRange != nil {
-				result.Rows = append(result.Rows, vf.buildRow(vkey, nil, d.KeyRange))
+				row, err := vf.buildRow(vkey, nil, d.KeyRange)
+				if err != nil {
+					return result, err
+				}
+				result.Rows = append(result.Rows, row)
 			}
 		case key.DestinationKeyspaceID:
 			if len(d) > 0 {
@@ -147,25 +154,37 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 					if err != nil {
 						return nil, err
 					}
-					result.Rows = append(result.Rows, vf.buildRow(vkey, d, kr[0]))
+					row, err := vf.buildRow(vkey, d, kr[0])
+					if err != nil {
+						return result, err
+					}
+					result.Rows = append(result.Rows, row)
 				} else {
-					result.Rows = append(result.Rows, vf.buildRow(vkey, d, nil))
+					row, err := vf.buildRow(vkey, d, nil)
+					if err != nil {
+						return result, err
+					}
+					result.Rows = append(result.Rows, row)
 				}
 			}
 		case key.DestinationKeyspaceIDs:
 			for _, ksid := range d {
-				result.Rows = append(result.Rows, vf.buildRow(vkey, ksid, nil))
+				row, err := vf.buildRow(vkey, ksid, nil)
+				if err != nil {
+					return result, err
+				}
+				result.Rows = append(result.Rows, row)
 			}
 		case key.DestinationNone:
 			// Nothing to do.
 		default:
-			panic("unexpected")
+			return result, vterrors.NewErrorf(vtrpcpb.Code_INTERNAL, vterrors.WrongTypeForVar, "unexpected destination type: %T", d)
 		}
 	}
 	return result, nil
 }
 
-func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.KeyRange) []sqltypes.Value {
+func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.KeyRange) ([]sqltypes.Value, error) {
 	row := make([]sqltypes.Value, 0, len(vf.Fields))
 	for _, col := range vf.Cols {
 		switch col {
@@ -202,10 +221,10 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 				row = append(row, sqltypes.NULL)
 			}
 		default:
-			panic("BUG: unexpected column number")
+			return row, vterrors.NewErrorf(vtrpc.Code_OUT_OF_RANGE, vterrors.BadFieldError, "column %v out of range", col)
 		}
 	}
-	return row
+	return row, nil
 }
 
 func (vf *VindexFunc) description() PrimitiveDescription {
