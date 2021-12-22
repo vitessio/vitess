@@ -29,7 +29,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -221,7 +220,7 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 				row = append(row, sqltypes.NULL)
 			}
 		default:
-			return row, vterrors.NewErrorf(vtrpc.Code_OUT_OF_RANGE, vterrors.BadFieldError, "column %v out of range", col)
+			return row, vterrors.NewErrorf(vtrpcpb.Code_OUT_OF_RANGE, vterrors.BadFieldError, "column %v out of range", col)
 		}
 	}
 	return row, nil
