@@ -31,6 +31,52 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
+func TestUnownedLookupInsertNull(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t9(id, parent_id) VALUES (1, 1)")
+	utils.Exec(t, conn, "insert into t9(id, parent_id) VALUES (2, 2)")
+
+	utils.Exec(t, conn, "insert into t8(id, parent_id, t9_id) VALUES (1, 1, NULL)")
+	utils.Exec(t, conn, "insert into t8(id, parent_id, t9_id) VALUES (2, 1, 1)")
+	utils.Exec(t, conn, "insert into t8(id, parent_id, t9_id) VALUES (3, 2, 2)")
+
+	// Cleanup
+	utils.Exec(t, conn, "delete from t8 WHERE parent_id = 1")
+	utils.Exec(t, conn, "delete from t8 WHERE parent_id = 2")
+	utils.Exec(t, conn, "delete from t9 WHERE parent_id = 1")
+	utils.Exec(t, conn, "delete from t9 WHERE parent_id = 2")
+	utils.Exec(t, conn, "delete from t9_id_to_keyspace_id_idx WHERE id = 1")
+	utils.Exec(t, conn, "delete from t9_id_to_keyspace_id_idx WHERE id = 2")
+}
+
+func TestUnownedLookupInsertChecksKeyspaceIdsAreMatching(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t9(id, parent_id) VALUES (1, 1)")
+
+	// This fails because the keyspace id for `parent_id` does not match the one for `t9_id`
+	_, err = conn.ExecuteFetch("insert into t8(id, parent_id, t9_id) VALUES (4, 2, 1)", 1, false)
+	require.EqualError(t, err, "values [[INT64(1)]] for column [t9_id] does not map to keyspace ids (errno 1105) (sqlstate HY000) during query: insert into t8(id, parent_id, t9_id) VALUES (4, 2, 1)")
+
+	// This fails because the `t9_id` value can't be mapped to a keyspace id
+	_, err = conn.ExecuteFetch("insert into t8(id, parent_id, t9_id) VALUES (4, 2, 2)", 1, false)
+	require.EqualError(t, err, "values [[INT64(2)]] for column [t9_id] does not map to keyspace ids (errno 1105) (sqlstate HY000) during query: insert into t8(id, parent_id, t9_id) VALUES (4, 2, 2)")
+
+	// Cleanup
+	utils.Exec(t, conn, "delete from t9 WHERE parent_id = 1")
+}
+
 func TestConsistentLookup(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
