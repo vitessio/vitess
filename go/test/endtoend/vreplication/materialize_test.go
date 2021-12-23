@@ -75,12 +75,12 @@ func testShardedMaterialize(t *testing.T) {
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "-", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks1, "0"), 1)
 
-	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "-", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks2, "0"), 1)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -89,11 +89,11 @@ func testShardedMaterialize(t *testing.T) {
 	_, err := vtgateConn.ExecuteFetch(initDataQuery, 0, false)
 	require.NoError(t, err)
 	materialize(t, smMaterializeSpec)
-	tab := vc.Cells[defaultCell.Name].Keyspaces[ks2].Shards["-"].Tablets["zone1-200"].Vttablet
+	tab := vc.getPrimaryTablet(t, ks2, "0")
 	catchup(t, tab, "wf1", "Materialize")
 
 	validateCount(t, vtgateConn, ks2, "tx", 2)
-	validateQuery(t, vtgateConn, "ks2:-", "select id, val from tx",
+	validateQuery(t, vtgateConn, "ks2:0", "select id, val from tx",
 		`[[INT64(3) VARBINARY("def")] [INT64(5) VARBINARY("def")]]`)
 }
 
@@ -192,12 +192,12 @@ func testMaterialize(t *testing.T) {
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "-", smMaterializeVSchemaSource, smMaterializeSchemaSource, defaultReplicas, defaultRdonly, 300)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", smMaterializeVSchemaSource, smMaterializeSchemaSource, defaultReplicas, defaultRdonly, 300)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, "0"), 1)
 
-	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "-", smMaterializeVSchemaTarget, smMaterializeSchemaTarget, defaultReplicas, defaultRdonly, 400)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", smMaterializeVSchemaTarget, smMaterializeSchemaTarget, defaultReplicas, defaultRdonly, 400)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "0"), 1)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -207,8 +207,7 @@ func testMaterialize(t *testing.T) {
 	_, err := vtgateConn.ExecuteFetch(materializeInitDataQuery, 0, false)
 	require.NoError(t, err)
 
-	ks2Keyspace := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
-	ks2Primary := ks2Keyspace.Shards["-"].Tablets["zone1-400"].Vttablet
+	ks2Primary := vc.getPrimaryTablet(t, targetKs, "0")
 	_, err = ks2Primary.QueryTablet(customFunc, targetKs, true)
 	require.NoError(t, err)
 
