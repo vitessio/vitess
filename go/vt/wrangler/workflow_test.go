@@ -173,7 +173,7 @@ func TestMoveTablesV2(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
+		TabletTypes:    "REPLICA,RDONLY,PRIMARY",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -280,7 +280,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	expectMoveTablesQueries(t, tme)
 
 	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "rdonly"
+	wf.params.TabletTypes = "RDONLY"
 	wf.params.Cells = "cell1"
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. Replica not switched. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
@@ -292,7 +292,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	require.Equal(t, "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "replica"
+	wf.params.TabletTypes = "REPLICA"
 	wf.params.Cells = "cell1,cell2"
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateReadsSwitched, wf.CurrentState())
