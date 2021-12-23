@@ -373,7 +373,7 @@ func (vrw *VReplicationWorkflow) getTabletTypes() []topodatapb.TabletType {
 func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasPrimary bool, err error) {
 	tabletTypesArr := strings.Split(vrw.params.TabletTypes, ",")
 	for _, tabletType := range tabletTypesArr {
-		switch tabletType {
+		switch strings.ToLower(tabletType) {
 		case "replica":
 			hasReplica = true
 		case "rdonly":
