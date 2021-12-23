@@ -193,7 +193,7 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 	span.Annotate("is_primary", isPrimary)
 
 	if isPrimary && !allowPrimary {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot delete tablet %v as it is a master, pass AllowPrimary = true", topoproto.TabletAliasString(alias))
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot delete tablet %v as it is a primary, pass AllowPrimary = true", topoproto.TabletAliasString(alias))
 	}
 
 	// Update the Shard object if the primary was scrapped. We do this before
@@ -210,7 +210,7 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 		if _, err := ts.UpdateShardFields(lockCtx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
 			if !topoproto.TabletAliasEqual(si.PrimaryAlias, alias) {
 				log.Warningf(
-					"Deleting master %v from shard %v/%v but master in Shard object was %v",
+					"Deleting primary %v from shard %v/%v but primary in Shard object was %v",
 					topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias),
 				)
 
@@ -258,7 +258,7 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 	}
 
 	if shard.PrimaryAlias != nil && shard.PrimaryAlias.Cell == cell {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot remove cell %v; shard master %v is in cell", cell, topoproto.TabletAliasString(shard.PrimaryAlias))
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot remove cell %v; shard primary %v is in cell", cell, topoproto.TabletAliasString(shard.PrimaryAlias))
 	}
 
 	replication, err := ts.GetShardReplication(ctx, cell, keyspace, shardName)
