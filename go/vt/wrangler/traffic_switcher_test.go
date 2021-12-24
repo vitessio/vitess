@@ -842,7 +842,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 	}
 	dropSourcesInvalid()
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false, false)
 	require.Error(t, err, "Workflow has not completed, cannot DropSources")
 
 	tme.dbSourceClients[0].addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
@@ -873,7 +873,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
-	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, true)
+	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
 	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
@@ -900,7 +900,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
-	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, true)
+	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunRenameSources, *results))
 	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
@@ -934,7 +934,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, false, false)
 	require.NoError(t, err)
 	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
 	checkRouting(t, tme.wr, map[string][]string{})
