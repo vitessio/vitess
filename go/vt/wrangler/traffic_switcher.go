@@ -71,19 +71,20 @@ type trafficSwitcher struct {
 	workflow      string
 
 	// if frozen is true, the rest of the fields are not set.
-	frozen          bool
-	reverseWorkflow string
-	id              int64
-	sources         map[string]*workflow.MigrationSource
-	targets         map[string]*workflow.MigrationTarget
-	sourceKeyspace  string
-	targetKeyspace  string
-	tables          []string
-	sourceKSSchema  *vindexes.KeyspaceSchema
-	optCells        string //cells option passed to MoveTables/Reshard
-	optTabletTypes  string //tabletTypes option passed to MoveTables/Reshard
-	externalCluster string
-	externalTopo    *topo.Server
+	frozen           bool
+	reverseWorkflow  string
+	id               int64
+	sources          map[string]*workflow.MigrationSource
+	targets          map[string]*workflow.MigrationTarget
+	sourceKeyspace   string
+	targetKeyspace   string
+	tables           []string
+	keepRoutingRules bool
+	sourceKSSchema   *vindexes.KeyspaceSchema
+	optCells         string //cells option passed to MoveTables/Reshard
+	optTabletTypes   string //tabletTypes option passed to MoveTables/Reshard
+	externalCluster  string
+	externalTopo     *topo.Server
 }
 
 /*
@@ -573,6 +574,7 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
 	}
+	ts.keepRoutingRules = keepRoutingRules
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -1363,19 +1365,21 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 			return nil
 		})
 	}
-
-	//check if table is routable
 	wg.Wait()
-	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
-		if err != nil {
-			rec.RecordError(fmt.Errorf("could not get RoutingRules"))
-		}
-		for fromTable, toTables := range rules {
-			for _, toTable := range toTables {
-				for _, table := range ts.Tables() {
-					if toTable == fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table) {
-						rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.SourceKeyspaceName(), table, fromTable))
+
+	if !ts.keepRoutingRules {
+		//check if table is routable
+		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+			}
+			for fromTable, toTables := range rules {
+				for _, toTable := range toTables {
+					for _, table := range ts.Tables() {
+						if toTable == fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table) {
+							rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.SourceKeyspaceName(), table, fromTable))
+						}
 					}
 				}
 			}
