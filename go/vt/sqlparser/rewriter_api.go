@@ -90,6 +90,15 @@ func (c *Cursor) Replace(newNode SQLNode) {
 	c.node = newNode
 }
 
+// ReplacerF returns a replace func that will work even when the cursor has moved to a different node.
+func (c *Cursor) ReplacerF() func(newNode SQLNode) {
+	replacer := c.replacer
+	parent := c.parent
+	return func(newNode SQLNode) {
+		replacer(newNode, parent)
+	}
+}
+
 // ReplaceAndRevisit replaces the current node in the parent field with this new object.
 // When used, this will abort the visitation of the current node - no post or children visited,
 // and the new node visited.
