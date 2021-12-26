@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -201,9 +202,45 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
+	bothReturnSameResult := func(expr sqlparser.Expr) bool {
+		query := "SELECT " + sqlparser.String(expr)
+
+		eval, evaluated, localErr := safeEvaluate(query)
+		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
+
+		if localErr != nil {
+			if remoteErr == nil || !errorsMatch(remoteErr, localErr) {
+				return false
+			}
+			return true
+		}
+
+		if remoteErr != nil || !evaluated {
+			return false
+		}
+
+		return eval.Value().String() == remote.Rows[0][0].String()
+	}
+
 nextCase:
-	for len(golden) < *fuzzMaxFailures {
+	for len(golden) < 100 {
 		query := "SELECT " + gen.expr()
+		stmt, _ := sqlparser.Parse(query)
+		astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+
+		if bothReturnSameResult(astExpr) {
+			continue
+		}
+
+		log.Infof("found inconsistency - will try to simplify: %s", query)
+
+		astExpr = sqlparser.SimplifyExpr(astExpr, func(expr sqlparser.Expr) bool {
+			return !bothReturnSameResult(expr)
+		})
+
+		query = "SELECT " + sqlparser.String(astExpr)
+
+		log.Infof("simplified to: %s", query)
 
 		eval, evaluated, localErr := safeEvaluate(query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
