@@ -156,6 +156,9 @@ func (s *shrinker) next() Expr {
 			// we'll simplify by halving the current value and decreasing it by one
 			half := num / 2
 			oneLess := num - 1
+			if num < 0 {
+				oneLess = num + 1
+			}
 
 			s.queue = append(s.queue, NewIntLiteral(fmt.Sprintf("%d", half)))
 			if oneLess != half {
