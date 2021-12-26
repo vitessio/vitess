@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // CheckF is used to see if the given expression exhibits the sought after issue
@@ -135,6 +135,14 @@ func (s *shrinker) next() Expr {
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *Literal:
 		switch e.Type {
+		case StrVal:
+			half := len(e.Val) / 2
+			if half >= 1 {
+				s.queue = append(s.queue, &Literal{Type: StrVal, Val: e.Val[:half]})
+				s.queue = append(s.queue, &Literal{Type: StrVal, Val: e.Val[half:]})
+			} else {
+				return nil
+			}
 		case IntVal:
 			num, err := strconv.ParseInt(e.Val, 0, 64)
 			if err != nil {
@@ -153,9 +161,22 @@ func (s *shrinker) next() Expr {
 			if oneLess != half {
 				s.queue = append(s.queue, NewIntLiteral(fmt.Sprintf("%d", oneLess)))
 			}
+		default:
+			panic(fmt.Sprintf("unhandled type %v", e.Type))
 		}
+	case ValTuple:
+		// first we'll try the individual elements first
+		for _, v := range e {
+			s.queue = append(s.queue, v)
+		}
+		// then we'll try to use the slice but lacking elements
+		for i := range e {
+			s.queue = append(s.queue, append(e[:i], e[i+1:]...))
+		}
+	case *NullVal:
+		return nil
 	default:
-		panic(fmt.Sprintf("%v", e))
+		panic(fmt.Sprintf("%T", e))
 	}
 	return s.next()
 }
