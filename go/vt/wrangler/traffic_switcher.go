@@ -71,19 +71,20 @@ type trafficSwitcher struct {
 	workflow      string
 
 	// if frozen is true, the rest of the fields are not set.
-	frozen          bool
-	reverseWorkflow string
-	id              int64
-	sources         map[string]*workflow.MigrationSource
-	targets         map[string]*workflow.MigrationTarget
-	sourceKeyspace  string
-	targetKeyspace  string
-	tables          []string
-	sourceKSSchema  *vindexes.KeyspaceSchema
-	optCells        string //cells option passed to MoveTables/Reshard
-	optTabletTypes  string //tabletTypes option passed to MoveTables/Reshard
-	externalCluster string
-	externalTopo    *topo.Server
+	frozen           bool
+	reverseWorkflow  string
+	id               int64
+	sources          map[string]*workflow.MigrationSource
+	targets          map[string]*workflow.MigrationTarget
+	sourceKeyspace   string
+	targetKeyspace   string
+	tables           []string
+	keepRoutingRules bool
+	sourceKSSchema   *vindexes.KeyspaceSchema
+	optCells         string //cells option passed to MoveTables/Reshard
+	optTabletTypes   string //tabletTypes option passed to MoveTables/Reshard
+	externalCluster  string
+	externalTopo     *topo.Server
 }
 
 /*
@@ -567,12 +568,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 }
 
 // DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard is cancelled
-func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
 	}
+	ts.keepRoutingRules = keepRoutingRules
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -613,7 +615,7 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 			}
 		}
 	}
-	if err := wr.dropArtifacts(ctx, sw); err != nil {
+	if err := wr.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
 		return nil, err
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
@@ -622,15 +624,17 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 	return sw.logs(), nil
 }
 
-func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
+func (wr *Wrangler) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
 	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
 		return err
 	}
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return err
 	}
-	if err := sw.deleteRoutingRules(ctx); err != nil {
-		return err
+	if !keepRoutingRules {
+		if err := sw.deleteRoutingRules(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -639,7 +643,7 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
 // finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
 // We only cleanup the target for external sources
 func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string,
-	cancel, keepData, dryRun bool) (*[]string, error) {
+	cancel, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -678,7 +682,7 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 }
 
 // DropSources cleans up source tables, shards and denied tables after a MoveTables/Reshard is completed
-func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, keepRoutingRules, force, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -731,7 +735,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 			}
 		}
 	}
-	if err := wr.dropArtifacts(ctx, sw); err != nil {
+	if err := wr.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
 		return nil, err
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
@@ -1361,19 +1365,21 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 			return nil
 		})
 	}
-
-	//check if table is routable
 	wg.Wait()
-	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
-		if err != nil {
-			rec.RecordError(fmt.Errorf("could not get RoutingRules"))
-		}
-		for fromTable, toTables := range rules {
-			for _, toTable := range toTables {
-				for _, table := range ts.Tables() {
-					if toTable == fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table) {
-						rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.SourceKeyspaceName(), table, fromTable))
+
+	if !ts.keepRoutingRules {
+		//check if table is routable
+		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+			}
+			for fromTable, toTables := range rules {
+				for _, toTable := range toTables {
+					for _, table := range ts.Tables() {
+						if toTable == fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table) {
+							rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.SourceKeyspaceName(), table, fromTable))
+						}
 					}
 				}
 			}
