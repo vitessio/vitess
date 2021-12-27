@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"bytes"
 	"math"
 	"strconv"
 	"strings"
@@ -181,21 +182,12 @@ func (m *MultiCol) NeedsVCursor() bool {
 	return false
 }
 
-func (m *MultiCol) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (m *MultiCol) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(rowsColValues))
-	for idx, colValues := range rowsColValues {
-		if m.noOfCols != len(colValues) {
-			// wrong number of column values were passed
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of column values were passed: want %d, got %d", m.noOfCols, len(colValues))
-		}
-		partial := m.noOfCols > len(colValues)
-		ksid := make([]byte, 0, 64)
-		for i, colVal := range colValues {
-			lksid, err := m.columnVdx[idx].Hash(colVal)
-			if err != nil {
-				return nil, err
-			}
-			ksid = append(ksid, lksid[0:m.columnBytes[i]*8]...)
+	for _, colValues := range rowsColValues {
+		partial, ksid, err := m.mapKsid(colValues)
+		if err != nil {
+			return nil, err
 		}
 		if partial {
 			out = append(out, NewKeyRangeFromPrefix(ksid))
@@ -206,11 +198,35 @@ func (m *MultiCol) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key
 	return out, nil
 }
 
-func (m *MultiCol) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	//TODO implement me
-	panic("implement me")
+func (m *MultiCol) Verify(_ VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, 0, len(rowsColValues))
+	for idx, colValues := range rowsColValues {
+		_, ksid, err := m.mapKsid(colValues)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, bytes.Equal(ksid, ksids[idx]))
+	}
+	return out, nil
 }
 
 func (m *MultiCol) PartialVindex() bool {
 	return true
+}
+
+func (m *MultiCol) mapKsid(colValues []sqltypes.Value) (bool, []byte, error) {
+	if m.noOfCols != len(colValues) {
+		// wrong number of column values were passed
+		return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of column values were passed: want %d, got %d", m.noOfCols, len(colValues))
+	}
+	ksid := make([]byte, 0, 64)
+	for idx, colVal := range colValues {
+		lksid, err := m.columnVdx[idx].Hash(colVal)
+		if err != nil {
+			return false, nil, err
+		}
+		ksid = append(ksid, lksid[0:m.columnBytes[idx]*8]...)
+	}
+	partial := m.noOfCols > len(colValues)
+	return partial, ksid, nil
 }
