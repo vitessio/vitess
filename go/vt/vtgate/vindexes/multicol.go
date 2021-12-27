@@ -33,7 +33,7 @@ type MultiCol struct {
 	name        string
 	cost        int
 	noOfCols    int
-	columnVdx   map[int]Vindex
+	columnVdx   map[int]Hashing
 	columnBytes map[int]int
 }
 
@@ -68,7 +68,7 @@ func NewMultiCol(name string, m map[string]string) (Vindex, error) {
 	}, nil
 }
 
-func getColumnVindex(m map[string]string, colCount int) (map[int]Vindex, int, error) {
+func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, error) {
 	var colVdxs []string
 	colVdxsStr, ok := m[paramColumnVindex]
 	if ok {
@@ -77,7 +77,7 @@ func getColumnVindex(m map[string]string, colCount int) (map[int]Vindex, int, er
 	if len(colVdxs) > colCount {
 		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "number of vindex function provided are more than column count in the parameter '%s'", paramColumnVindex)
 	}
-	columnVdx := make(map[int]Vindex, colCount)
+	columnVdx := make(map[int]Hashing, colCount)
 	vindexCost := 0
 	for i := 0; i < colCount; i++ {
 		selVdx := defaultVindex
@@ -92,12 +92,12 @@ func getColumnVindex(m map[string]string, colCount int) (map[int]Vindex, int, er
 		if err != nil {
 			return nil, 0, err
 		}
-		if !vdx.IsUnique() || vdx.NeedsVCursor() {
-			return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multicol vindex supports only unique and non-vcursor vindex function, passed vindex '%s' is invalid", selVdx)
+		hashVdx, isHashVdx := vdx.(Hashing)
+		if !isHashVdx || !vdx.IsUnique() || vdx.NeedsVCursor() {
+			return nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multicol vindex supports vindexes that exports hashing function, are unique and are non-lookup vindex, passed vindex '%s' is invalid", selVdx)
 		}
 		vindexCost = vindexCost + vdx.Cost()
-		columnVdx[i] = vdx
-
+		columnVdx[i] = hashVdx
 	}
 	return columnVdx, vindexCost, nil
 }
@@ -182,8 +182,28 @@ func (m *MultiCol) NeedsVCursor() bool {
 }
 
 func (m *MultiCol) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
-	//TODO implement me
-	panic("implement me")
+	out := make([]key.Destination, 0, len(rowsColValues))
+	for idx, colValues := range rowsColValues {
+		if m.noOfCols != len(colValues) {
+			// wrong number of column values were passed
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of column values were passed: want %d, got %d", m.noOfCols, len(colValues))
+		}
+		partial := m.noOfCols > len(colValues)
+		ksid := make([]byte, 0, 64)
+		for i, colVal := range colValues {
+			lksid, err := m.columnVdx[idx].Hash(colVal)
+			if err != nil {
+				return nil, err
+			}
+			ksid = append(ksid, lksid[0:m.columnBytes[i]*8]...)
+		}
+		if partial {
+			out = append(out, NewKeyRangeFromPrefix(ksid))
+			continue
+		}
+		out = append(out, key.DestinationKeyspaceID(ksid))
+	}
+	return out, nil
 }
 
 func (m *MultiCol) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
