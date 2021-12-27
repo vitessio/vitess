@@ -93,6 +93,11 @@ type MultiColumn interface {
 	PartialVindex() bool
 }
 
+// Hashing defined the interface for the vindexes that export the Hash function to be used by multi-column vindex.
+type Hashing interface {
+	Hash(id sqltypes.Value) ([]byte, error)
+}
+
 // A Reversible vindex is one that can perform a
 // reverse lookup from a keyspace id to an id. This
 // is optional. If present, VTGate can use it to
