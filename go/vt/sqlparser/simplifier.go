@@ -57,7 +57,7 @@ func SimplifyExpr(in Expr, test CheckF) (smallestKnown Expr) {
 				replace(expr, idx)
 
 				valid := test(current)
-				log.Infof("test: %t - %s", valid, String(current))
+				log.Errorf("test: %t - %s", valid, String(current))
 				if valid {
 					simplified = true
 					break // we will still continue trying to simplify other expressions at this level
