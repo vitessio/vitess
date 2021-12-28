@@ -32,6 +32,7 @@ var (
 	vtParams         mysql.ConnParams
 	shardedKs        = "ks"
 	unshardedKs      = "uks"
+	shardedKsShards  = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
 	Cell             = "test"
 	shardedSchemaSQL = `create table t1(
 	id bigint,
@@ -58,6 +59,13 @@ create table user_region(
 	cola bigint,
 	colb bigint,
 	primary key(id)
+) Engine=InnoDB;
+
+create table region_tbl(
+	rg bigint,
+	uid bigint,
+	msg varchar(50),
+	primary key(uid)
 ) Engine=InnoDB;
 `
 	unshardedSchemaSQL = `create table u_a(
@@ -131,6 +139,14 @@ create table u_b(
 		  "name": "regional_vdx"
 		}
       ]
+    },
+    "region_tbl": {
+	  "column_vindexes": [
+	    {
+          "columns": ["rg","uid"],
+		  "name": "regional_vdx"
+		}
+      ]
 	}
   }
 }`
@@ -174,7 +190,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: shardedSchemaSQL,
 			VSchema:   shardedVSchema,
 		}
-		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 0, false)
+		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
 		if err != nil {
 			return 1
 		}
