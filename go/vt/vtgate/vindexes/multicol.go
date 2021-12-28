@@ -134,9 +134,8 @@ func getColumnBytes(m map[string]string, colCount int) (map[int]int, error) {
 	if pendingCol <= 0 {
 		return columnBytes, nil
 	}
-	colIdx := 0
 	for idx := 0; idx < colCount; idx++ {
-		if _, defined := columnBytes[colIdx]; defined {
+		if _, defined := columnBytes[idx]; defined {
 			continue
 		}
 		bytesToAssign := int(math.Ceil(float64(remainingBytes) / float64(pendingCol)))
@@ -187,7 +186,8 @@ func (m *MultiCol) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([]key.Desti
 	for _, colValues := range rowsColValues {
 		partial, ksid, err := m.mapKsid(colValues)
 		if err != nil {
-			return nil, err
+			out = append(out, key.DestinationNone{})
+			continue
 		}
 		if partial {
 			out = append(out, NewKeyRangeFromPrefix(ksid))
@@ -215,17 +215,30 @@ func (m *MultiCol) PartialVindex() bool {
 }
 
 func (m *MultiCol) mapKsid(colValues []sqltypes.Value) (bool, []byte, error) {
-	if m.noOfCols != len(colValues) {
+	if m.noOfCols < len(colValues) {
 		// wrong number of column values were passed
-		return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of column values were passed: want %d, got %d", m.noOfCols, len(colValues))
+		return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of column values were passed: maximum allowed %d, got %d", m.noOfCols, len(colValues))
 	}
-	ksid := make([]byte, 0, 64)
+	ksid := make([]byte, 0, 8)
+	minLength := 0
 	for idx, colVal := range colValues {
 		lksid, err := m.columnVdx[idx].Hash(colVal)
 		if err != nil {
 			return false, nil, err
 		}
-		ksid = append(ksid, lksid[0:m.columnBytes[idx]*8]...)
+		// keyspace id should fill the minimum length i.e. the bytes utilized before the current column hash.
+		padZero := minLength - len(ksid)
+		for ; padZero > 0; padZero-- {
+			ksid = append(ksid, uint8(0))
+		}
+		maxIndex := m.columnBytes[idx]
+		for r, v := range lksid {
+			if r >= maxIndex {
+				break
+			}
+			ksid = append(ksid, v)
+		}
+		minLength = minLength + maxIndex
 	}
 	partial := m.noOfCols > len(colValues)
 	return partial, ksid, nil
