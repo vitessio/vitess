@@ -135,7 +135,7 @@ func (t *Tracker) newUpdateController() *updateController {
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
-		log.Warningf("Unable to add keyspace to tracker: %v", err)
+		log.Warningf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err)
 		return err
 	}
 	return nil
