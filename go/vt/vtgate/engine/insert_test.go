@@ -701,6 +701,12 @@ func TestInsertShardedGeo(t *testing.T) {
 		[]string{" mid1", " mid2"},
 		" suffix",
 	)
+	for _, colVindex := range ks.Tables["t1"].ColumnVindexes {
+		if colVindex.IgnoreInDML() {
+			continue
+		}
+		ins.ColVindexes = append(ins.ColVindexes, colVindex)
+	}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}

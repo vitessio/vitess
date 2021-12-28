@@ -61,6 +61,9 @@ type Insert struct {
 	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
 	VindexValues [][][]evalengine.Expr
 
+	// ColVindexes are the vindexes that will use the VindexValues
+	ColVindexes []*vindexes.ColumnVindex
+
 	// Table specifies the table for the insert.
 	Table *vindexes.Table
 
@@ -368,9 +371,13 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	vindexRowsValues := make([][][]sqltypes.Value, len(ins.VindexValues))
 	rowCount := 0
 	env := evalengine.EnvWithBindVars(bindVars)
+	colVindexes := ins.ColVindexes
+	if colVindexes == nil {
+		colVindexes = ins.Table.ColumnVindexes
+	}
 	for vIdx, vColValues := range ins.VindexValues {
-		if len(vColValues) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
+		if len(vColValues) != len(colVindexes[vIdx].Columns) {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, colVindexes[vIdx].Columns)
 		}
 		for colIdx, colValues := range vColValues {
 			rowsResolvedValues := make([]sqltypes.Value, 0, len(colValues))
@@ -405,16 +412,16 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
-	if len(vindexRowsValues) == 0 || len(ins.Table.ColumnVindexes) == 0 {
+	if len(vindexRowsValues) == 0 || len(colVindexes) == 0 {
 		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.Table.Name)
 	}
-	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
+	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], colVindexes[0])
 	if err != nil {
 		return nil, nil, err
 	}
 
-	for vIdx := 1; vIdx < len(ins.Table.ColumnVindexes); vIdx++ {
-		colVindex := ins.Table.ColumnVindexes[vIdx]
+	for vIdx := 1; vIdx < len(colVindexes); vIdx++ {
+		colVindex := colVindexes[vIdx]
 		var err error
 		if colVindex.Owned {
 			err = ins.processOwned(vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
@@ -428,7 +435,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 
 	// Build 3-d bindvars. Skip rows with nil keyspace ids in case
 	// we're executing an insert ignore.
-	for vIdx, colVindex := range ins.Table.ColumnVindexes {
+	for vIdx, colVindex := range colVindexes {
 		for rowNum, rowColumnKeys := range vindexRowsValues[vIdx] {
 			if keyspaceIDs[rowNum] == nil {
 				// InsertShardedIgnore: skip the row.
