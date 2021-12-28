@@ -65,8 +65,8 @@ type Table struct {
 // which will trigger caching on first use.
 type SequenceInfo struct {
 	sync.Mutex
-	NextVal int64
-	LastVal int64
+	NextVal uint64
+	LastVal uint64
 }
 
 // MessageInfo contains info specific to message tables.

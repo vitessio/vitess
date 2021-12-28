@@ -35,14 +35,14 @@ func TestSequence(t *testing.T) {
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
-			Type: sqltypes.Int64,
+			Type: sqltypes.Uint64,
 		}},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(0),
+			sqltypes.NewUint64(0),
 		}},
 	}
-	for wantval := int64(1); wantval < 10; wantval += 2 {
-		want.Rows[0][0] = sqltypes.NewInt64(wantval)
+	for wantval := uint64(1); wantval < 10; wantval += 2 {
+		want.Rows[0][0] = sqltypes.NewUint64(wantval)
 		qr, err := framework.NewClient().Execute("select next 2 values from vitess_seq", nil)
 		require.NoError(t, err)
 		utils.MustMatch(t, want, qr)
@@ -56,8 +56,8 @@ func TestSequence(t *testing.T) {
 
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(13),
-			sqltypes.NewInt64(3),
+			sqltypes.NewUint64(13),
+			sqltypes.NewUint64(3),
 		}},
 		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
@@ -73,7 +73,7 @@ func TestSequence(t *testing.T) {
 	// Next value generated should be based on the LastVal
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(13),
+			sqltypes.NewUint64(13),
 		}},
 	}
 	utils.MustMatch(t, want, qr)
@@ -85,8 +85,8 @@ func TestSequence(t *testing.T) {
 
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(16),
-			sqltypes.NewInt64(3),
+			sqltypes.NewUint64(16),
+			sqltypes.NewUint64(3),
 		}},
 		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
@@ -102,7 +102,7 @@ func TestSequence(t *testing.T) {
 	// Next value should jump to the high value
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(100),
+			sqltypes.NewUint64(100),
 		}},
 	}
 	utils.MustMatch(t, want, qr)
@@ -113,10 +113,10 @@ func TestResetSequence(t *testing.T) {
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
-			Type: sqltypes.Int64,
+			Type: sqltypes.Uint64,
 		}},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
+			sqltypes.NewUint64(1),
 		}},
 	}
 	qr, err := client.Execute("select next value from vitess_reset_seq", nil)
@@ -136,7 +136,7 @@ func TestResetSequence(t *testing.T) {
 	}
 
 	// Ensure the next value skips previously cached values.
-	want.Rows[0][0] = sqltypes.NewInt64(4)
+	want.Rows[0][0] = sqltypes.NewUint64(4)
 	qr, err = client.Execute("select next value from vitess_reset_seq", nil)
 	if err != nil {
 		t.Fatal(err)
