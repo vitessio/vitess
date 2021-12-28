@@ -58,84 +58,88 @@ func simplifyStatement(
 	// we start by removing one table at a time until we can't anymore
 	semTable, err := semantics.Analyze(in, currentDB, si)
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	for idx := range semTable.Tables {
-		searchedTS := semantics.SingleTableSet(idx)
-		copy := sqlparser.CloneSelectStatement(in)
-		inner, err := semantics.Analyze(copy, currentDB, si)
+		clone := sqlparser.CloneSelectStatement(in)
+		inner, err := semantics.Analyze(clone, currentDB, si)
 		if err != nil {
-			panic(err)
+			panic(err) // this should never happen
 		}
-		simplified := false
-		sqlparser.Rewrite(copy, func(cursor *sqlparser.Cursor) bool {
-			switch node := cursor.Node().(type) {
-			case *sqlparser.JoinTableExpr:
-				lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
-				if ok {
-					ts := inner.TableSetFor(lft)
-					if ts == searchedTS {
-						cursor.Replace(node.RightExpr)
-						simplified = true
-					}
-				}
-				rgt, ok := node.RightExpr.(*sqlparser.AliasedTableExpr)
-				if ok {
-					ts := inner.TableSetFor(rgt)
-					if ts == searchedTS {
-						cursor.Replace(node.LeftExpr)
-						simplified = true
-					}
-				}
-			case *sqlparser.Select:
-				if len(node.From) == 1 {
-					return true
-				}
-				for i, tbl := range node.From {
-					lft, ok := tbl.(*sqlparser.AliasedTableExpr)
-					if ok {
-						ts := inner.TableSetFor(lft)
-						if ts == searchedTS {
-							node.From = append(node.From[:i], node.From[i+1:]...)
-							simplified = true
-							return true
-						}
-					}
-				}
-			case *sqlparser.Where:
-				exprs := sqlparser.SplitAndExpression(nil, node.Expr)
-				var newPredicate sqlparser.Expr
-				for _, expr := range exprs {
-					if !inner.RecursiveDeps(expr).IsOverlapping(searchedTS) {
-						newPredicate = sqlparser.AndExpressions(newPredicate, expr)
-					}
-				}
-				node.Expr = newPredicate
-			case sqlparser.SelectExprs:
-				_, isSel := cursor.Parent().(*sqlparser.Select)
-				if !isSel {
-					return true
-				}
-
-				var newExprs sqlparser.SelectExprs
-				for _, ae := range node {
-					expr, ok := ae.(*sqlparser.AliasedExpr)
-					if !ok {
-						newExprs = append(newExprs, ae)
-						continue
-					}
-					if !inner.RecursiveDeps(expr.Expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr.Expr) {
-						newExprs = append(newExprs, ae)
-					}
-				}
-				cursor.Replace(newExprs)
-			}
-			return true
-		}, nil)
-
-		if simplified && test(copy) {
-			return simplifyStatement(copy, currentDB, si, test)
+		searchedTS := semantics.SingleTableSet(idx)
+		simplified := removeTable(clone, searchedTS, inner)
+		if simplified && test(clone) {
+			return simplifyStatement(clone, currentDB, si, test)
 		}
 	}
 	return in
+}
+
+func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet, inner *semantics.SemTable) bool {
+	simplified := false
+	sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.JoinTableExpr:
+			lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
+			if ok {
+				ts := inner.TableSetFor(lft)
+				if ts == searchedTS {
+					cursor.Replace(node.RightExpr)
+					simplified = true
+				}
+			}
+			rgt, ok := node.RightExpr.(*sqlparser.AliasedTableExpr)
+			if ok {
+				ts := inner.TableSetFor(rgt)
+				if ts == searchedTS {
+					cursor.Replace(node.LeftExpr)
+					simplified = true
+				}
+			}
+		case *sqlparser.Select:
+			if len(node.From) == 1 {
+				return true
+			}
+			for i, tbl := range node.From {
+				lft, ok := tbl.(*sqlparser.AliasedTableExpr)
+				if ok {
+					ts := inner.TableSetFor(lft)
+					if ts == searchedTS {
+						node.From = append(node.From[:i], node.From[i+1:]...)
+						simplified = true
+						return true
+					}
+				}
+			}
+		case *sqlparser.Where:
+			exprs := sqlparser.SplitAndExpression(nil, node.Expr)
+			var newPredicate sqlparser.Expr
+			for _, expr := range exprs {
+				if !inner.RecursiveDeps(expr).IsOverlapping(searchedTS) {
+					newPredicate = sqlparser.AndExpressions(newPredicate, expr)
+				}
+			}
+			node.Expr = newPredicate
+		case sqlparser.SelectExprs:
+			_, isSel := cursor.Parent().(*sqlparser.Select)
+			if !isSel {
+				return true
+			}
+
+			var newExprs sqlparser.SelectExprs
+			for _, ae := range node {
+				expr, ok := ae.(*sqlparser.AliasedExpr)
+				if !ok {
+					newExprs = append(newExprs, ae)
+					continue
+				}
+				if !inner.RecursiveDeps(expr.Expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr.Expr) {
+					newExprs = append(newExprs, ae)
+				}
+			}
+			cursor.Replace(newExprs)
+		}
+		return true
+	}, nil)
+	return simplified
 }
