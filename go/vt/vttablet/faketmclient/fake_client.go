@@ -172,6 +172,11 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, ta
 	return &querypb.QueryResult{}, nil
 }
 
+// KillAllTransatcions is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) KillAllTransactions(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
 //
 // Replication related methods
 //

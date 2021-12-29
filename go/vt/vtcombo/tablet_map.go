@@ -1019,3 +1019,7 @@ func (itmc *internalTabletManagerClient) ReplicaWasPromoted(context.Context, *to
 func (itmc *internalTabletManagerClient) ReplicaWasRestarted(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
+
+func (itmc *internalTabletManagerClient) KillAllTransactions(context.Context, *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}

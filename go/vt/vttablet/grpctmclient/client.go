@@ -1022,3 +1022,14 @@ func (client *Client) RestoreFromBackup(ctx context.Context, tablet *topodatapb.
 func (client *Client) Close() {
 	client.dialer.Close()
 }
+
+// KillAllTransactions is part of the tmclient.TabletManagerClient interface.
+func (client *Client) KillAllTransactions(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.KillAllTransactions(ctx, &tabletmanagerdatapb.KillAllTransactionsRequest{})
+	return err
+}

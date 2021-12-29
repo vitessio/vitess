@@ -769,6 +769,10 @@ func (fra *fakeRPCTM) WaitForPosition(ctx context.Context, pos string) error {
 	panic("unimplemented")
 }
 
+func (fra *fakeRPCTM) KillAllTransactions(ctx context.Context) error {
+	panic("unimplemented")
+}
+
 func tmRPCTestMasterPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rs, err := client.MasterPosition(ctx, tablet)
 	compareError(t, "PrimaryPosition", err, rs, testReplicationPosition)

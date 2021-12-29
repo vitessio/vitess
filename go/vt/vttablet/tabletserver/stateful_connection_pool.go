@@ -103,6 +103,20 @@ func (sf *StatefulConnectionPool) Close() {
 	sf.state.Set(scpClosed)
 }
 
+// KillAllTransactions kills all the transactions without closing the pool
+func (sf *StatefulConnectionPool) KillAllTransactions(ctx context.Context) error {
+	for _, v := range sf.active.GetOutdated(time.Duration(0), "for killing all transactions") {
+		conn := v.(*StatefulConnection)
+		if conn.IsInTransaction() {
+			log.Warningf("killing transaction: %s", conn.String())
+			sf.env.Stats().InternalErrors.Add("KilledTransactions", 1)
+			conn.Close()
+		}
+	}
+
+	return nil
+}
+
 // ShutdownNonTx enters the state where all non-transactional connections are killed.
 // InUse connections will be killed as they are returned.
 func (sf *StatefulConnectionPool) ShutdownNonTx() {

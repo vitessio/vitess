@@ -211,6 +211,11 @@ func (tqsc *Controller) SchemaEngine() *schema.Engine {
 	return nil
 }
 
+// KillAllTransactions is part of the tabletserver.Controller interface
+func (tqsc *Controller) KillAllTransactions(ctx context.Context) error {
+	return nil
+}
+
 // BroadcastHealth is part of the tabletserver.Controller interface
 func (tqsc *Controller) BroadcastHealth() {
 	tqsc.mu.Lock()

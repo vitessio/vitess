@@ -1995,3 +1995,8 @@ func skipQueryPlanCache(options *querypb.ExecuteOptions) bool {
 	}
 	return options.SkipQueryPlanCache || options.HasCreatedTempTables
 }
+
+// KillAllTransactions kills all transactions
+func (tsv *TabletServer) KillAllTransactions(ctx context.Context) error {
+	return tsv.te.txPool.scp.KillAllTransactions(ctx)
+}

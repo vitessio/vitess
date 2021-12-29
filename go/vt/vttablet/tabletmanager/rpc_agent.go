@@ -78,6 +78,8 @@ type RPCTM interface {
 
 	ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error)
 
+	KillAllTransactions(ctx context.Context) error
+
 	// Replication related methods
 	// Deprecated, use PrimaryStatus instead
 	MasterStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)

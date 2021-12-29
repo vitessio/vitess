@@ -108,6 +108,9 @@ type TabletManagerClient interface {
 	// query faster. Close() should close the pool in that case.
 	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error)
 
+	// Kill any open transactions in the tablet
+	KillAllTransactions(ctx context.Context, tablet *topodatapb.Tablet) error
+
 	//
 	// Replication related methods
 	//

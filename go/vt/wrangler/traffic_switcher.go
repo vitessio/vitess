@@ -963,6 +963,11 @@ func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist boo
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		err = ts.killSourceTransactions(ctx)
+		if err != nil {
+			log.Warningf("Error: %s", err)
+			return err
+		}
 		err = ts.changeTableSourceWrites(ctx, disallowWrites)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
@@ -993,6 +998,16 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 		return err
 	})
+}
+
+func (ts *trafficSwitcher) killSourceTransactions(ctx context.Context) error {
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		return ts.killSourceTransactionsOnTablet(ctx, source.GetPrimary().Tablet)
+	})
+}
+
+func (ts *trafficSwitcher) killSourceTransactionsOnTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return ts.wr.TabletManagerClient().KillAllTransactions(ctx, tablet)
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {

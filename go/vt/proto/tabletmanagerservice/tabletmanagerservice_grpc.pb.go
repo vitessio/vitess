@@ -45,6 +45,7 @@ type TabletManagerClient interface {
 	ExecuteFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
 	ExecuteFetchAsAllPrivs(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
+	KillAllTransactions(ctx context.Context, in *tabletmanagerdata.KillAllTransactionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.KillAllTransactionsResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// Deprecated, use PrimaryStatus instead
@@ -293,6 +294,15 @@ func (c *tabletManagerClient) ExecuteFetchAsAllPrivs(ctx context.Context, in *ta
 func (c *tabletManagerClient) ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error) {
 	out := new(tabletmanagerdata.ExecuteFetchAsAppResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/ExecuteFetchAsApp", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) KillAllTransactions(ctx context.Context, in *tabletmanagerdata.KillAllTransactionsRequest, opts ...grpc.CallOption) (*tabletmanagerdata.KillAllTransactionsResponse, error) {
+	out := new(tabletmanagerdata.KillAllTransactionsResponse)
+	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/KillAllTransactions", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -654,6 +664,7 @@ type TabletManagerServer interface {
 	ExecuteFetchAsDba(context.Context, *tabletmanagerdata.ExecuteFetchAsDbaRequest) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
 	ExecuteFetchAsAllPrivs(context.Context, *tabletmanagerdata.ExecuteFetchAsAllPrivsRequest) (*tabletmanagerdata.ExecuteFetchAsAllPrivsResponse, error)
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
+	KillAllTransactions(context.Context, *tabletmanagerdata.KillAllTransactionsRequest) (*tabletmanagerdata.KillAllTransactionsResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
 	// Deprecated, use PrimaryStatus instead
@@ -784,6 +795,9 @@ func (UnimplementedTabletManagerServer) ExecuteFetchAsAllPrivs(context.Context, 
 }
 func (UnimplementedTabletManagerServer) ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsApp not implemented")
+}
+func (UnimplementedTabletManagerServer) KillAllTransactions(context.Context, *tabletmanagerdata.KillAllTransactionsRequest) (*tabletmanagerdata.KillAllTransactionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KillAllTransactions not implemented")
 }
 func (UnimplementedTabletManagerServer) ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplicationStatus not implemented")
@@ -1247,6 +1261,24 @@ func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).ExecuteFetchAsApp(ctx, req.(*tabletmanagerdata.ExecuteFetchAsAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_KillAllTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.KillAllTransactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).KillAllTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tabletmanagerservice.TabletManager/KillAllTransactions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).KillAllTransactions(ctx, req.(*tabletmanagerdata.KillAllTransactionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1901,6 +1933,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExecuteFetchAsApp",
 			Handler:    _TabletManager_ExecuteFetchAsApp_Handler,
+		},
+		{
+			MethodName: "KillAllTransactions",
+			Handler:    _TabletManager_KillAllTransactions_Handler,
 		},
 		{
 			MethodName: "ReplicationStatus",

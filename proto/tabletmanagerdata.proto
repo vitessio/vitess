@@ -446,6 +446,12 @@ message PromoteReplicaResponse {
   string position = 1;
 }
 
+message KillAllTransactionsRequest {
+}
+
+message KillAllTransactionsResponse {
+}
+
 // Backup / Restore related messages
 
 message BackupRequest {

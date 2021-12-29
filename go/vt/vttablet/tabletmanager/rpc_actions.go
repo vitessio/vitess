@@ -56,6 +56,16 @@ func (tm *TabletManager) GetPermissions(ctx context.Context) (*tabletmanagerdata
 	return mysqlctl.GetPermissions(tm.MysqlDaemon)
 }
 
+// KillAllTransactions kills all transactions in the tablet
+func (tm *TabletManager) KillAllTransactions(ctx context.Context) error {
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
+
+	return tm.QueryServiceControl.KillAllTransactions(ctx)
+}
+
 // SetReadOnly makes the mysql instance read-only or read-write.
 func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 	if err := tm.lock(ctx); err != nil {
