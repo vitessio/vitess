@@ -21,6 +21,9 @@ import (
 	"sync"
 	"testing"
 
+	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -28,7 +31,7 @@ import (
 )
 
 func TestSimplifyUnsupportedQuery(t *testing.T) {
-	query := "select user.id+user.foo, count(*), unsharded.name from user join unsharded where unsharded.id = 42"
+	query := "select user.id, user.name, count(*), unsharded.name from user join unsharded where unsharded.id = 42 group by user.id"
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json", true),
 	}
@@ -56,12 +59,17 @@ func TestFindAllExpressions(t *testing.T) {
 	ast, err := sqlparser.Parse(query)
 	require.NoError(t, err)
 	ch := make(chan cursorItem)
-	findExpressions(ast.(sqlparser.SelectStatement), ch)
+	abort := &sync2.AtomicBool{}
+	findExpressions(ast.(sqlparser.SelectStatement), ch, abort)
 	for cursor := range ch {
 		fmt.Println(sqlparser.String(cursor.expr))
 		cursor.replace(sqlparser.NewIntLiteral("1"))
 		fmt.Println(sqlparser.String(ast))
 		cursor.replace(cursor.expr)
+		if _, ok := cursor.expr.(*sqlparser.FuncExpr); ok {
+			abort.Set(true)
+			break
+		}
 		cursor.wg.Done()
 	}
 }
@@ -87,6 +95,8 @@ func simplifyStatement(
 		searchedTS := semantics.SingleTableSet(idx)
 		simplified := removeTable(clone, searchedTS, inner)
 		if simplified && test(clone) {
+			name, _ := semTable.Tables[idx].Name()
+			log.Errorf("removed table %s", name)
 			return simplifyStatement(clone, currentDB, si, test)
 		}
 	}
@@ -94,13 +104,15 @@ func simplifyStatement(
 	// if we get here, we couldn't find a simpler query by just removing one table,
 	// we try to remove select expressions next
 	ch := make(chan cursorItem)
-	findExpressions(in, ch)
+	abort := &sync2.AtomicBool{}
+	findExpressions(in, ch, abort)
 	for cursor := range ch {
 		s := &sqlparser.Shrinker{Orig: cursor.expr}
 		newExpr := s.Next()
 		for newExpr != nil {
 			cursor.replace(newExpr)
 			if test(in) {
+				log.Errorf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(newExpr))
 				return simplifyStatement(in, currentDB, si, test)
 			}
 			newExpr = s.Next()
@@ -179,6 +191,23 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 				}
 			}
 			cursor.Replace(newExprs)
+		case sqlparser.GroupBy:
+			var newExprs sqlparser.GroupBy
+			for _, expr := range node {
+				if !inner.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr) {
+					newExprs = append(newExprs, expr)
+				}
+			}
+			cursor.Replace(newExprs)
+		case sqlparser.OrderBy:
+			var newExprs sqlparser.OrderBy
+			for _, expr := range node {
+				if !inner.RecursiveDeps(expr.Expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr.Expr) {
+					newExprs = append(newExprs, expr)
+				}
+			}
+
+			cursor.Replace(newExprs)
 		}
 		return true
 	}, nil)
@@ -202,7 +231,7 @@ func newCursorItem(ch chan<- cursorItem, expr sqlparser.Expr, replace func(repla
 	wg.Wait()
 }
 
-func findExpressions(clone sqlparser.SelectStatement, ch chan<- cursorItem) {
+func findExpressions(clone sqlparser.SelectStatement, ch chan<- cursorItem, abort *sync2.AtomicBool) {
 	go func() {
 		sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
@@ -219,6 +248,10 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- cursorItem) {
 					newCursorItem(ch, expr.Expr, func(replaceWith sqlparser.Expr) {
 						expr.Expr = replaceWith
 					})
+					if abort.Get() {
+						close(ch)
+						return false
+					}
 				}
 
 			case *sqlparser.Where:
@@ -229,6 +262,10 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- cursorItem) {
 						exprs[idx] = replaceWith
 						node.Expr = sqlparser.AndExpressions(exprs...)
 					})
+					if abort.Get() {
+						close(ch)
+						return false
+					}
 				}
 			}
 			return true
