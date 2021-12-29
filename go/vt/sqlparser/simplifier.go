@@ -51,8 +51,8 @@ func SimplifyExpr(in Expr, test CheckF) (smallestKnown Expr) {
 		for idx, node := range nodes {
 			// simplify each element and create a new expression with the node replaced by the simplification
 			// this means that we not only need the node, but also a way to replace the node
-			s := &shrinker{orig: node}
-			expr := s.next()
+			s := &Shrinker{Orig: node}
+			expr := s.Next()
 			for expr != nil {
 				replace(expr, idx)
 
@@ -65,7 +65,7 @@ func SimplifyExpr(in Expr, test CheckF) (smallestKnown Expr) {
 					// undo the change
 					replace(node, idx)
 				}
-				expr = s.next()
+				expr = s.Next()
 			}
 		}
 		if simplified {
@@ -113,12 +113,12 @@ func depth(e Expr) (depth int) {
 	return
 }
 
-type shrinker struct {
-	orig  Expr
+type Shrinker struct {
+	Orig  Expr
 	queue []Expr
 }
 
-func (s *shrinker) next() Expr {
+func (s *Shrinker) Next() Expr {
 	if s.queue != nil {
 		if len(s.queue) == 0 {
 			return nil
@@ -128,7 +128,7 @@ func (s *shrinker) next() Expr {
 		return nxt
 	}
 
-	switch e := s.orig.(type) {
+	switch e := s.Orig.(type) {
 	case *ComparisonExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *BinaryExpr:
@@ -178,8 +178,22 @@ func (s *shrinker) next() Expr {
 		}
 	case *NullVal:
 		return nil
+	case *FuncExpr:
+		for _, ae := range e.Exprs {
+			expr, ok := ae.(*AliasedExpr)
+			if !ok {
+				continue
+			}
+			s.queue = append(s.queue, expr.Expr)
+		}
+		if s.queue == nil {
+			return nil
+		}
+	case *ColName:
+		return nil
+
 	default:
 		panic(fmt.Sprintf("%T", e))
 	}
-	return s.next()
+	return s.Next()
 }
