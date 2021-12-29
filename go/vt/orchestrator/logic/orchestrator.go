@@ -330,14 +330,14 @@ func onHealthTick() {
 // SubmitPrimariesToKvStores records a cluster's primary (or all clusters primaries) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
-func SubmitPrimariesToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVPair), submittedCount int, err error) {
+func SubmitPrimariesToKvStores(clusterName string, force bool) (kvPairs [](*kv.KeyValuePair), submittedCount int, err error) {
 	kvPairs, err = inst.GetPrimariesKVPairs(clusterName)
 	log.Debugf("kv.SubmitPrimariesToKvStores, clusterName: %s, force: %+v: numPairs: %+v", clusterName, force, len(kvPairs))
 	if err != nil {
 		return kvPairs, submittedCount, log.Errore(err)
 	}
 	var selectedError error
-	var submitKvPairs [](*kv.KVPair)
+	var submitKvPairs [](*kv.KeyValuePair)
 	for _, kvPair := range kvPairs {
 		if !force {
 			// !force: Called periodically to auto-populate KV

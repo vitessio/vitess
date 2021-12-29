@@ -2052,8 +2052,8 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 	return clusters, err
 }
 
-// Get a listing of KVPair for clusters primaries, for all clusters or for a specific cluster.
-func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error) {
+// Get a listing of KeyValuePair for clusters primaries, for all clusters or for a specific cluster.
+func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KeyValuePair), err error) {
 
 	clusterAliasMap := make(map[string]string)
 	clustersInfo, err := ReadClustersInfo(clusterName)

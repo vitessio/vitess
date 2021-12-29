@@ -29,7 +29,7 @@ func GetClusterPrimaryKVKey(clusterAlias string) string {
 	return fmt.Sprintf("%s%s", config.Config.KVClusterPrimaryPrefix, clusterAlias)
 }
 
-func getClusterPrimaryKVPair(clusterAlias string, primaryKey *InstanceKey) *kv.KVPair {
+func getClusterPrimaryKVPair(clusterAlias string, primaryKey *InstanceKey) *kv.KeyValuePair {
 	if clusterAlias == "" {
 		return nil
 	}
@@ -41,7 +41,7 @@ func getClusterPrimaryKVPair(clusterAlias string, primaryKey *InstanceKey) *kv.K
 
 // GetClusterPrimaryKVPairs returns all KV pairs associated with a primary. This includes the
 // full identity of the primary as well as a breakdown by hostname, port, ipv4, ipv6
-func GetClusterPrimaryKVPairs(clusterAlias string, primaryKey *InstanceKey) (kvPairs [](*kv.KVPair)) {
+func GetClusterPrimaryKVPairs(clusterAlias string, primaryKey *InstanceKey) (kvPairs [](*kv.KeyValuePair)) {
 	primaryKVPair := getClusterPrimaryKVPair(clusterAlias, primaryKey)
 	if primaryKVPair == nil {
 		return kvPairs
