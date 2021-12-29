@@ -46,11 +46,30 @@ func TestSimplifyUnsupportedQuery(t *testing.T) {
 		return out == out2
 	})
 
-	t.Fatal(sqlparser.String(simplified))
+	fmt.Println(sqlparser.String(simplified))
 }
 
 func TestFindAllExpressions(t *testing.T) {
-	query := "select user.selectExpr1, unsharded.selectExpr2 from user join unsharded on user.joinCond = unsharded.joinCond where unsharded.wherePred = 42 and wherePred = 'foo' and user.id = unsharded.id"
+	query := `
+select 
+	user.selectExpr1, 
+	unsharded.selectExpr2,
+	count(*) as leCount
+from 
+	user join 
+	unsharded on 
+		user.joinCond = unsharded.joinCond 
+where
+	unsharded.wherePred = 42 and
+	wherePred = 'foo' and 
+	user.id = unsharded.id
+group by 
+	user.groupByExpr1 + unsharded.groupByExpr2
+order by 
+	user.orderByExpr1 desc, 
+	unsharded.orderByExpr2 asc
+limit 123 offset 456
+`
 	ast, err := sqlparser.Parse(query)
 	require.NoError(t, err)
 	ch := make(chan expressionCursor)

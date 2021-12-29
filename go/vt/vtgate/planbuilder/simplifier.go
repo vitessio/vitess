@@ -266,6 +266,94 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 					return false
 				}
 			case *sqlparser.JoinCondition:
+				if node.Using != nil {
+					return false
+				}
+				exprs := sqlparser.SplitAndExpression(nil, node.On)
+				set := func(input []sqlparser.Expr) {
+					node.On = sqlparser.AndExpressions(input...)
+					exprs = input
+				}
+				if !visitExpressions(exprs, set, ch, abort) {
+					return false
+				}
+			case sqlparser.GroupBy:
+				set := func(input []sqlparser.Expr) {
+					node = input
+					cursor.Replace(node)
+				}
+				if !visitExpressions(node, set, ch, abort) {
+					return false
+				}
+			case sqlparser.OrderBy:
+				for idx := 0; idx < len(node); idx++ {
+					order := node[idx]
+					removed := false
+					original := sqlparser.CloneExpr(order.Expr)
+					newCursorItem(
+						ch, order.Expr, abort,
+						/*replace*/ func(replaceWith sqlparser.Expr) {
+							if removed {
+								panic("cant replace after remove without restore")
+							}
+							order.Expr = replaceWith
+						},
+						/*remove*/ func() {
+							if removed {
+								panic("can't remove twice, silly")
+							}
+							withoutElement := append(node[:idx], node[idx+1:]...)
+							cursor.Replace(withoutElement)
+							node = withoutElement
+							removed = true
+						},
+						/*restore*/ func() {
+							if removed {
+								front := make(sqlparser.OrderBy, idx)
+								copy(front, node[:idx])
+								back := make(sqlparser.OrderBy, len(node)-idx)
+								copy(back, node[idx:])
+								frontWithRestoredExpr := append(front, order)
+								node = append(frontWithRestoredExpr, back...)
+								cursor.Replace(node)
+								removed = false
+								return
+							}
+							order.Expr = original
+						},
+					)
+					if abort.Get() {
+						close(ch)
+						return false
+					}
+				}
+			case *sqlparser.Limit:
+				if node.Offset != nil {
+					original := node.Offset
+					newCursorItem(ch, node.Offset, abort,
+						/*replace*/ func(replaceWith sqlparser.Expr) {
+							node.Offset = replaceWith
+						},
+						/*remove*/ func() {
+							node.Offset = nil
+						},
+						/*restore*/ func() {
+							node.Offset = original
+						})
+				}
+				if node.Rowcount != nil {
+					original := node.Rowcount
+					newCursorItem(ch, node.Rowcount, abort,
+						/*replace*/ func(replaceWith sqlparser.Expr) {
+							node.Rowcount = replaceWith
+						},
+						/*remove*/ func() {
+							// removing Rowcount is an invalid op, so we just ignore it
+						},
+						/*restore*/ func() {
+							node.Rowcount = original
+						})
+				}
 
 			}
 			return true
