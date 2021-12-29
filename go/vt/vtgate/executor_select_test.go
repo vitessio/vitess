@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cache"
@@ -2985,6 +2984,122 @@ func TestRegionRange(t *testing.T) {
 				sbc.Queries = nil
 			}
 			require.Equal(t, tcase.noOfShardsTouched, count)
+		})
+	}
+}
+
+func TestMultiCol(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+
+	*GatewayImplementation = tabletGatewayImplementation
+	*plannerVersion = "gen4"
+	defer func() {
+		*plannerVersion = "v3"
+	}()
+	cell := "multicol"
+	ks := "TestExecutor"
+	hc := discovery.NewFakeHealthCheck(nil)
+	s := createSandbox(ks)
+	s.ShardSpec = "-20-20a0-"
+	s.VSchema = executorVSchema
+	serv := newSandboxForCells([]string{cell})
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-20a0", "20a0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := createExecutor(serv, cell, resolver)
+
+	tcases := []struct {
+		cola, colb, colc int
+		shards           []string
+	}{{
+		cola: 202, colb: 1, colc: 1,
+		shards: []string{"-20"},
+	}, {
+		cola: 203, colb: 1, colc: 1,
+		shards: []string{"20-20a0"},
+	}, {
+		cola: 204, colb: 1, colc: 1,
+		shards: []string{"20a0-"},
+	}}
+
+	ctx := context.Background()
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%d_%d_%d", tcase.cola, tcase.colb, tcase.colc), func(t *testing.T) {
+			sql := fmt.Sprintf("select * from multicoltbl where cola = %d and colb = %d and colc = '%d'", tcase.cola, tcase.colb, tcase.colc)
+			_, err := executor.Execute(ctx, "TestMultiCol", session, sql, nil)
+			require.NoError(t, err)
+			var shards []string
+			for _, sbc := range conns {
+				if len(sbc.Queries) > 0 {
+					shards = append(shards, sbc.Tablet().Shard)
+					sbc.Queries = nil
+				}
+			}
+			require.Equal(t, tcase.shards, shards)
+		})
+	}
+}
+
+func TestMultiColPartial(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+
+	*GatewayImplementation = tabletGatewayImplementation
+	*plannerVersion = "gen4"
+	defer func() {
+		*plannerVersion = "v3"
+	}()
+	cell := "multicol"
+	ks := "TestExecutor"
+	hc := discovery.NewFakeHealthCheck(nil)
+	s := createSandbox(ks)
+	s.ShardSpec = "-20-20a0-"
+	s.VSchema = executorVSchema
+	serv := newSandboxForCells([]string{cell})
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-20a0", "20a0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := createExecutor(serv, cell, resolver)
+
+	tcases := []struct {
+		where  string
+		shards []string
+	}{{
+		where:  "cola = 252",
+		shards: []string{"-20"},
+	}, {
+		where:  "cola = 289",
+		shards: []string{"20a0-"},
+	}, {
+		where:  "cola = 606",
+		shards: []string{"20-20a0", "20a0-"},
+	}}
+
+	ctx := context.Background()
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	for _, tcase := range tcases {
+		t.Run(tcase.where, func(t *testing.T) {
+			sql := fmt.Sprintf("select * from multicoltbl where %s", tcase.where)
+			_, err := executor.Execute(ctx, "TestMultiCol", session, sql, nil)
+			require.NoError(t, err)
+			var shards []string
+			for _, sbc := range conns {
+				if len(sbc.Queries) > 0 {
+					shards = append(shards, sbc.Tablet().Shard)
+					sbc.Queries = nil
+				}
+			}
+			require.Equal(t, tcase.shards, shards)
 		})
 	}
 }

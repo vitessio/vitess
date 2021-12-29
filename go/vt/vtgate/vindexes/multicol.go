@@ -69,6 +69,89 @@ func NewMultiCol(name string, m map[string]string) (Vindex, error) {
 	}, nil
 }
 
+func (m *MultiCol) String() string {
+	return m.name
+}
+
+func (m *MultiCol) Cost() int {
+	return m.cost
+}
+
+func (m *MultiCol) IsUnique() bool {
+	return true
+}
+
+func (m *MultiCol) NeedsVCursor() bool {
+	return false
+}
+
+func (m *MultiCol) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(rowsColValues))
+	for _, colValues := range rowsColValues {
+		partial, ksid, err := m.mapKsid(colValues)
+		if err != nil {
+			out = append(out, key.DestinationNone{})
+			continue
+		}
+		if partial {
+			out = append(out, NewKeyRangeFromPrefix(ksid))
+			continue
+		}
+		out = append(out, key.DestinationKeyspaceID(ksid))
+	}
+	return out, nil
+}
+
+func (m *MultiCol) Verify(_ VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, 0, len(rowsColValues))
+	for idx, colValues := range rowsColValues {
+		_, ksid, err := m.mapKsid(colValues)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, bytes.Equal(ksid, ksids[idx]))
+	}
+	return out, nil
+}
+
+func (m *MultiCol) PartialVindex() bool {
+	return true
+}
+
+func (m *MultiCol) mapKsid(colValues []sqltypes.Value) (bool, []byte, error) {
+	if m.noOfCols < len(colValues) {
+		// wrong number of column values were passed
+		return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of column values were passed: maximum allowed %d, got %d", m.noOfCols, len(colValues))
+	}
+	ksid := make([]byte, 0, 8)
+	minLength := 0
+	for idx, colVal := range colValues {
+		lksid, err := m.columnVdx[idx].Hash(colVal)
+		if err != nil {
+			return false, nil, err
+		}
+		// keyspace id should fill the minimum length i.e. the bytes utilized before the current column hash.
+		padZero := minLength - len(ksid)
+		for ; padZero > 0; padZero-- {
+			ksid = append(ksid, uint8(0))
+		}
+		maxIndex := m.columnBytes[idx]
+		for r, v := range lksid {
+			if r >= maxIndex {
+				break
+			}
+			ksid = append(ksid, v)
+		}
+		minLength = minLength + maxIndex
+	}
+	partial := m.noOfCols > len(colValues)
+	return partial, ksid, nil
+}
+
+func init() {
+	Register("multicol", NewMultiCol)
+}
+
 func getColumnVindex(m map[string]string, colCount int) (map[int]Hashing, int, error) {
 	var colVdxs []string
 	colVdxsStr, ok := m[paramColumnVindex]
@@ -159,87 +242,4 @@ func getColumnCount(m map[string]string) (int, error) {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "number of columns should be between 1 and 8 in the parameter '%s'", paramColumnCount)
 	}
 	return colCount, nil
-}
-
-func init() {
-	Register("multicol", NewMultiCol)
-}
-
-func (m *MultiCol) String() string {
-	return m.name
-}
-
-func (m *MultiCol) Cost() int {
-	return m.cost
-}
-
-func (m *MultiCol) IsUnique() bool {
-	return true
-}
-
-func (m *MultiCol) NeedsVCursor() bool {
-	return false
-}
-
-func (m *MultiCol) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(rowsColValues))
-	for _, colValues := range rowsColValues {
-		partial, ksid, err := m.mapKsid(colValues)
-		if err != nil {
-			out = append(out, key.DestinationNone{})
-			continue
-		}
-		if partial {
-			out = append(out, NewKeyRangeFromPrefix(ksid))
-			continue
-		}
-		out = append(out, key.DestinationKeyspaceID(ksid))
-	}
-	return out, nil
-}
-
-func (m *MultiCol) Verify(_ VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, 0, len(rowsColValues))
-	for idx, colValues := range rowsColValues {
-		_, ksid, err := m.mapKsid(colValues)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, bytes.Equal(ksid, ksids[idx]))
-	}
-	return out, nil
-}
-
-func (m *MultiCol) PartialVindex() bool {
-	return true
-}
-
-func (m *MultiCol) mapKsid(colValues []sqltypes.Value) (bool, []byte, error) {
-	if m.noOfCols < len(colValues) {
-		// wrong number of column values were passed
-		return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of column values were passed: maximum allowed %d, got %d", m.noOfCols, len(colValues))
-	}
-	ksid := make([]byte, 0, 8)
-	minLength := 0
-	for idx, colVal := range colValues {
-		lksid, err := m.columnVdx[idx].Hash(colVal)
-		if err != nil {
-			return false, nil, err
-		}
-		// keyspace id should fill the minimum length i.e. the bytes utilized before the current column hash.
-		padZero := minLength - len(ksid)
-		for ; padZero > 0; padZero-- {
-			ksid = append(ksid, uint8(0))
-		}
-		maxIndex := m.columnBytes[idx]
-		for r, v := range lksid {
-			if r >= maxIndex {
-				break
-			}
-			ksid = append(ksid, v)
-		}
-		minLength = minLength + maxIndex
-	}
-	partial := m.noOfCols > len(colValues)
-	return partial, ksid, nil
 }
