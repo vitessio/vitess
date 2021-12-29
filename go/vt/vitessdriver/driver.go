@@ -167,6 +167,9 @@ type Configuration struct {
 	//
 	// Default: "vitess"
 	DriverName string `json:"-"`
+
+	// allows for some magic
+	Session *vtgateconn.VTGateSession
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -205,7 +208,11 @@ func (c *conn) dial() error {
 	if err != nil {
 		return err
 	}
-	c.session = c.conn.Session(c.Target, nil)
+	if c.Configuration.Session != nil {
+		c.session = c.Configuration.Session
+	} else {
+		c.session = c.conn.Session(c.Target, nil)
+	}
 	return nil
 }
 
@@ -229,6 +236,26 @@ func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, e
 func (c *conn) Close() error {
 	c.conn.Close()
 	return nil
+}
+
+// GetDistributedTx allows users to send sessions over the wire and reconnect to an existing transaction
+func GetDistributedTx(ctx context.Context, session *vtgateconn.VTGateSession) (*sql.Tx, error) {
+	db, err := OpenWithConfiguration(Configuration{
+		// include session here - there will be a new *DB created each time
+		// that stores the session state in the &conn{} struct
+		Session: session,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// this should return the only connection associated with the db
+	c, err := db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.BeginTx(ctx, nil)
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
