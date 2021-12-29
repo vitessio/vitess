@@ -132,10 +132,10 @@ func standardHTTP(continuousDiscovery bool) {
 	}
 
 	log.Info("Registering endpoints")
-	http.API.URLPrefix = config.Config.URLPrefix
-	http.Web.URLPrefix = config.Config.URLPrefix
-	http.API.RegisterRequests(m)
-	http.Web.RegisterRequests(m)
+	http.HTTPapi.URLPrefix = config.Config.URLPrefix
+	http.HTTPWeb.URLPrefix = config.Config.URLPrefix
+	http.HTTPapi.RegisterRequests(m)
+	http.HTTPWeb.RegisterRequests(m)
 
 	// Serve
 	if config.Config.ListenSocket != "" {
