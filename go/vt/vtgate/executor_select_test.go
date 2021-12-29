@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -25,20 +26,15 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/test/utils"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"context"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -3058,11 +3054,11 @@ func TestMultiColPartial(t *testing.T) {
 	ks := "TestExecutor"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(ks)
-	s.ShardSpec = "-20-20a0-"
+	s.ShardSpec = "-20-20a0c0-"
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
-	shards := []string{"-20", "20-20a0", "20a0-"}
+	shards := []string{"-20", "20-20a0c0", "20a0c0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
 		sbc := hc.AddTestTablet(cell, shard, 1, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -3078,10 +3074,19 @@ func TestMultiColPartial(t *testing.T) {
 		shards: []string{"-20"},
 	}, {
 		where:  "cola = 289",
-		shards: []string{"20a0-"},
+		shards: []string{"20a0c0-"},
 	}, {
 		where:  "cola = 606",
-		shards: []string{"20-20a0", "20a0-"},
+		shards: []string{"20-20a0c0", "20a0c0-"},
+	}, {
+		where:  "cola = 606 and colb = _binary '\x1f'",
+		shards: []string{"20-20a0c0"},
+	}, {
+		where:  "cola = 606 and colb = _binary '\xa0'",
+		shards: []string{"20-20a0c0", "20a0c0-"},
+	}, {
+		where:  "cola = 606 and colb = _binary '\xa1'",
+		shards: []string{"20a0c0-"},
 	}}
 
 	ctx := context.Background()
