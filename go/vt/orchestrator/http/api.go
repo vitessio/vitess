@@ -499,7 +499,7 @@ func (httpAPI *API) MoveUpReplicas(params martini.Params, r render.Render, req *
 		return
 	}
 
-	replicas, newPrimary, err, errs := inst.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	replicas, newPrimary, errs, err := inst.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -547,7 +547,7 @@ func (httpAPI *API) RepointReplicas(params martini.Params, r render.Render, req 
 		return
 	}
 
-	replicas, err, _ := inst.RepointReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	replicas, _, err := inst.RepointReplicas(&instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -811,7 +811,7 @@ func (httpAPI *API) MoveReplicasGTID(params martini.Params, r render.Render, req
 		return
 	}
 
-	movedReplicas, _, err, errs := inst.MoveReplicasGTID(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
+	movedReplicas, _, errs, err := inst.MoveReplicasGTID(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -906,7 +906,7 @@ func (httpAPI *API) RelocateReplicas(params martini.Params, r render.Render, req
 		return
 	}
 
-	replicas, _, err, errs := inst.RelocateReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
+	replicas, _, errs, err := inst.RelocateReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
