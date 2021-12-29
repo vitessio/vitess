@@ -707,10 +707,6 @@ func getPlanOutput(tcase testCase, vschema *vschemaWrapper) (out string, err err
 
 func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 	if err != nil {
-		state := vterrors.ErrState(err)
-		if state != vterrors.Undefined {
-			return fmt.Sprintf("error: %d", state)
-		}
 		return err.Error()
 	}
 	bout, _ := json.MarshalIndent(plan, "", "  ")

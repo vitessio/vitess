@@ -20,33 +20,75 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// TestSimplifyUnsupportedQuery should be used to whenever we get a planner bug reported
+// It will try to minimize the query to make it easier to understand and work with the bug.
 func TestSimplifyUnsupportedQuery(t *testing.T) {
 	query := "select user.id, user.name, count(*), unsharded.name from user join unsharded where unsharded.id = 42"
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json", true),
+		v:       loadSchema(t, "schema_test.json", true),
+		version: Gen4,
 	}
-	vschema.version = Gen4
 	stmt, reserved, err := sqlparser.Parse2(query)
 	require.NoError(t, err)
 	result, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
 	vschema.currentDb()
 
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	plan, err := BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
-	out := getPlanOrErrorOutput(err, plan)
+	_, err = BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
+	require.Error(t, err)
+	state := vterrors.ErrState(err)
 
 	simplified := simplifyStatement(result.AST.(sqlparser.SelectStatement), vschema.currentDb(), vschema, func(statement sqlparser.SelectStatement) bool {
-		plan, err := BuildFromStmt(query, statement, reservedVars, vschema, result.BindVarNeeds, true, true)
-		out2 := getPlanOrErrorOutput(err, plan)
-		return out == out2
+		_, err := BuildFromStmt(query, statement, reservedVars, vschema, result.BindVarNeeds, true, true)
+		if err == nil {
+			return false
+		}
+		return vterrors.ErrState(err) == state
 	})
 
 	fmt.Println(sqlparser.String(simplified))
+}
+
+func TestUnsupportedFile(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v:       loadSchema(t, "schema_test.json", true),
+		version: Gen4,
+	}
+	fmt.Println(vschema)
+	for tcase := range iterateExecFile("unsupported_cases.txt") {
+		t.Run(fmt.Sprintf("%d:%s", tcase.lineno, tcase.input), func(t *testing.T) {
+			log.Errorf("%s:%d - %s", tcase.file, tcase.lineno, tcase.input)
+			stmt, reserved, err := sqlparser.Parse2(tcase.input)
+			require.NoError(t, err)
+			_, ok := stmt.(sqlparser.SelectStatement)
+			if !ok {
+				t.Skip()
+				return
+			}
+			result, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+			vschema.currentDb()
+
+			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+			plan, err := BuildFromStmt(sqlparser.String(result.AST), result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
+			out := getPlanOrErrorOutput(err, plan)
+
+			simplified := simplifyStatement(result.AST.(sqlparser.SelectStatement), vschema.currentDb(), vschema, func(statement sqlparser.SelectStatement) bool {
+				plan, err := BuildFromStmt(sqlparser.String(statement), statement, reservedVars, vschema, result.BindVarNeeds, true, true)
+				out2 := getPlanOrErrorOutput(err, plan)
+				return out == out2
+			})
+
+			fmt.Println(sqlparser.String(simplified))
+		})
+	}
 }
 
 func TestFindAllExpressions(t *testing.T) {
