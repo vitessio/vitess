@@ -235,7 +235,7 @@ func (applier *CommandApplier) enableGlobalRecoveries(value []byte) interface{} 
 }
 
 func (applier *CommandApplier) putKeyValue(value []byte) interface{} {
-	kvPair := kv.KVPair{}
+	kvPair := kv.KeyValuePair{}
 	if err := json.Unmarshal(value, &kvPair); err != nil {
 		return log.Errore(err)
 	}
