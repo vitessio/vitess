@@ -2651,7 +2651,7 @@ func (httpAPI *API) AcknowledgeRecovery(params martini.Params, r render.Render, 
 	}
 	if orcraft.IsRaftEnabled() {
 		ack := logic.NewRecoveryAcknowledgement(userID, comment)
-		ack.Id = recoveryID
+		ack.ID = recoveryID
 		ack.UID = recoveryUID
 		_, err = orcraft.PublishCommand("ack-recovery", ack)
 	} else {

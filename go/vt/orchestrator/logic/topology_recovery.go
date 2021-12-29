@@ -68,7 +68,7 @@ type RecoveryAcknowledgement struct {
 
 	Key           inst.InstanceKey
 	ClusterName   string
-	Id            int64
+	ID            int64
 	UID           string
 	AllRecoveries bool
 }
@@ -95,14 +95,14 @@ type BlockedTopologyRecovery struct {
 	ClusterName          string
 	Analysis             inst.AnalysisCode
 	LastBlockedTimestamp string
-	BlockingRecoveryId   int64
+	BlockingRecoveryID   int64
 }
 
 // TopologyRecovery represents an entry in the topology_recovery table
 type TopologyRecovery struct {
 	inst.PostponedFunctionsContainer
 
-	Id                        int64
+	ID                        int64
 	UID                       string
 	AnalysisEntry             inst.ReplicationAnalysis
 	SuccessorKey              *inst.InstanceKey
@@ -120,8 +120,8 @@ type TopologyRecovery struct {
 	AcknowledgedAt            string
 	AcknowledgedBy            string
 	AcknowledgedComment       string
-	LastDetectionId           int64
-	RelatedRecoveryId         int64
+	LastDetectionID           int64
+	RelatedRecoveryID         int64
 	Type                      RecoveryType
 	RecoveryType              PrimaryRecoveryType
 }
@@ -138,21 +138,21 @@ func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *Topology
 	return topologyRecovery
 }
 
-func (this *TopologyRecovery) AddError(err error) error {
+func (topologyRecovery *TopologyRecovery) AddError(err error) error {
 	if err != nil {
-		this.AllErrors = append(this.AllErrors, err.Error())
+		topologyRecovery.AllErrors = append(topologyRecovery.AllErrors, err.Error())
 	}
 	return err
 }
 
-func (this *TopologyRecovery) AddErrors(errs []error) {
+func (topologyRecovery *TopologyRecovery) AddErrors(errs []error) {
 	for _, err := range errs {
-		this.AddError(err)
+		topologyRecovery.AddError(err)
 	}
 }
 
 type TopologyRecoveryStep struct {
-	Id          int64
+	ID          int64
 	RecoveryUID string
 	AuditAt     string
 	Message     string
@@ -181,14 +181,18 @@ var emergencyOperationGracefulPeriodMap *cache.Cache
 // InstancesByCountReplicas sorts instances by umber of replicas, descending
 type InstancesByCountReplicas [](*inst.Instance)
 
-func (this InstancesByCountReplicas) Len() int      { return len(this) }
-func (this InstancesByCountReplicas) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this InstancesByCountReplicas) Less(i, j int) bool {
-	if len(this[i].Replicas) == len(this[j].Replicas) {
+func (instancesByCountReplicas InstancesByCountReplicas) Len() int {
+	return len(instancesByCountReplicas)
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Swap(i, j int) {
+	instancesByCountReplicas[i], instancesByCountReplicas[j] = instancesByCountReplicas[j], instancesByCountReplicas[i]
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
+	if len(instancesByCountReplicas[i].Replicas) == len(instancesByCountReplicas[j].Replicas) {
 		// Secondary sorting: prefer more advanced replicas
-		return !this[i].ExecBinlogCoordinates.SmallerThan(&this[j].ExecBinlogCoordinates)
+		return !instancesByCountReplicas[i].ExecBinlogCoordinates.SmallerThan(&instancesByCountReplicas[j].ExecBinlogCoordinates)
 	}
-	return len(this[i].Replicas) < len(this[j].Replicas)
+	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
 }
 
 var recoverDeadIntermediatePrimaryCounter = metrics.NewCounter()
@@ -453,13 +457,13 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 		for _, candidateReplica := range candidateReplicas {
 			if promotedReplica.Key.Equals(&candidateReplica.Key) {
 				// Seems like we promoted a candidate replica (though not in same DC and ENV as dead primary)
-				if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, candidateReplica); satisfied {
+				satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, candidateReplica)
+				if satisfied {
 					// Good enough. No further action required.
 					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoted replica %+v is a good candidate", promotedReplica.Key))
 					return promotedReplica, false, nil
-				} else {
-					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", candidateReplica.Key, reason))
 				}
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", candidateReplica.Key, reason))
 			}
 		}
 	}
@@ -695,7 +699,6 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		})
 	}
 	postErsCompletion(topologyRecovery, analysisEntry, skipProcesses, promotedReplica)
-
 	return true, topologyRecovery, err
 }
 
@@ -1061,7 +1064,7 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadCoPrimary: will recover %+v", *failedInstanceKey))
 
-	var coPrimaryRecoveryType PrimaryRecoveryType = PrimaryRecoveryUnknown
+	var coPrimaryRecoveryType = PrimaryRecoveryUnknown
 	if analysisEntry.OracleGTIDImmediateTopology || analysisEntry.MariaDBGTIDImmediateTopology {
 		coPrimaryRecoveryType = PrimaryRecoveryGTID
 	}
@@ -1324,15 +1327,13 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, false
-		} else {
-			return checkAndRecoverDeadPrimary, true
 		}
+		return checkAndRecoverDeadPrimary, true
 	case inst.LockedSemiSyncPrimary:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, false
-		} else {
-			return checkAndRecoverLockedSemiSyncPrimary, true
 		}
+		return checkAndRecoverLockedSemiSyncPrimary, true
 	// topo
 	case inst.ClusterHasNoPrimary:
 		return electNewPrimary, true
@@ -1613,9 +1614,9 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 	clusterPrimary := clusterPrimaries[0]
 
 	if !destination.SourceKey.Equals(&clusterPrimary.Key) {
-		return nil, fmt.Errorf("You may only promote a direct child of the primary %+v. The primary of %+v is %+v.", clusterPrimary.Key, destination.Key, destination.SourceKey)
+		return nil, fmt.Errorf("you may only promote a direct child of the primary %+v. The primary of %+v is %+v", clusterPrimary.Key, destination.Key, destination.SourceKey)
 	}
-	log.Infof("Will demote %+v and promote %+v instead", clusterPrimary.Key, destination.Key)
+	log.Infof("will demote %+v and promote %+v instead", clusterPrimary.Key, destination.Key)
 
 	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadPrimary, inst.ForcePrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {
@@ -1822,11 +1823,10 @@ func electNewPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKe
 		if err := inst.CheckMoveViaGTID(replica, candidate); err != nil {
 			if err := inst.CheckMoveViaGTID(candidate, replica); err != nil {
 				return false, topologyRecovery, fmt.Errorf("instances are not compatible: %+v %+v: %v", candidate, replica, err)
-			} else {
-				// Make sure the new candidate meets the requirements.
-				if !inst.IsBannedFromBeingCandidateReplica(replica) {
-					candidate = replica
-				}
+			}
+			// Make sure the new candidate meets the requirements.
+			if !inst.IsBannedFromBeingCandidateReplica(replica) {
+				candidate = replica
 			}
 		}
 	}
