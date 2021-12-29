@@ -63,7 +63,7 @@ var isElectedGauge = metrics.NewGauge()
 var isHealthyGauge = metrics.NewGauge()
 var discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
 
-var isElectedNode int64 = 0
+var isElectedNode int64
 
 var recentDiscoveryOperationKeys *cache.Cache
 var kvFoundCache = cache.New(10*time.Minute, time.Minute)
