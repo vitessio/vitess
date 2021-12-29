@@ -26,7 +26,7 @@ import (
 )
 
 func TestSimplifyUnsupportedQuery(t *testing.T) {
-	query := "select user.id, user.name, count(*), unsharded.name, 12 from user join unsharded where unsharded.id = 42"
+	query := "select user.id, user.name, count(*), unsharded.name from user join unsharded where unsharded.id = 42"
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json", true),
 	}
@@ -83,11 +83,11 @@ func exploreExpression(cursor expressionCursor, ast sqlparser.Statement) {
 	defer cursor.wg.Done()
 	fmt.Printf(">> found expression: %s\n", sqlparser.String(cursor.expr))
 	cursor.replace(sqlparser.NewIntLiteral("1"))
-	fmt.Printf("replace it with literal: %s\n", sqlparser.String(ast))
+	fmt.Printf("remove: %s\n", sqlparser.String(ast))
 	cursor.restore()
 	fmt.Printf("restore: %s\n", sqlparser.String(ast))
 	cursor.remove()
-	fmt.Printf("remove: %s\n", sqlparser.String(ast))
+	fmt.Printf("replace it with literal: %s\n", sqlparser.String(ast))
 	cursor.restore()
 	fmt.Printf("restore: %s\n", sqlparser.String(ast))
 }

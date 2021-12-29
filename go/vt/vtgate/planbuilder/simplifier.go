@@ -59,6 +59,16 @@ func simplifyStatement(
 	ch := make(chan expressionCursor)
 	findExpressions(in, ch)
 	for cursor := range ch {
+		// first - let's try to remove the expression
+		cursor.remove()
+		if test(in) {
+			log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
+			cursor.abort()
+			return simplifyStatement(in, currentDB, si, test)
+		}
+
+		// ok, we seem to need this expression. let's see if we can find a simpler version
+		cursor.restore()
 		s := &sqlparser.Shrinker{Orig: cursor.expr}
 		newExpr := s.Next()
 		for newExpr != nil {
@@ -72,7 +82,7 @@ func simplifyStatement(
 		}
 		// if we get here, we failed to simplify this expression,
 		// so we put back in the original expression
-		cursor.replace(cursor.expr)
+		cursor.restore()
 		cursor.wg.Done()
 	}
 
