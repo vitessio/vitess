@@ -1909,7 +1909,7 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 // ReadCountMySQLSnapshots is a utility method to return registered number of snapshots for a given list of hosts
 func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
 	res := make(map[string]int)
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.ServeAgentsHTTP {
 		return res, nil
 	}
 	query := fmt.Sprintf(`
