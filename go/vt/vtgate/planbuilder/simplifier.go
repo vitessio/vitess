@@ -262,41 +262,8 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 					node.Expr = sqlparser.AndExpressions(input...)
 					exprs = input
 				}
-				for idx := 0; idx < len(exprs); idx++ {
-					expr := exprs[idx]
-					removed := false
-					newCursorItem(ch, expr, abort,
-						func(replaceWith sqlparser.Expr) {
-							if removed {
-								panic("cant replace after remove without restore")
-							}
-							exprs[idx] = replaceWith
-							set(exprs)
-						},
-						/*remove*/ func() {
-							if removed {
-								panic("can't remove twice, silly")
-							}
-							set(append(exprs[:idx], exprs[idx+1:]...))
-							removed = true
-						},
-						/*restore*/ func() {
-							if removed {
-								front := make([]sqlparser.Expr, idx)
-								copy(front, exprs[:idx])
-								back := make([]sqlparser.Expr, len(exprs)-idx)
-								copy(back, exprs[idx:])
-								frontWithRestoredExpr := append(front, expr)
-								set(append(frontWithRestoredExpr, back...))
-								removed = false
-								return
-							}
-							exprs[idx] = expr
-							set(exprs)
-						})
-					if abort.Get() {
-						return false
-					}
+				if !visitExpressions(exprs, set, ch, abort) {
+					return false
 				}
 			case *sqlparser.JoinCondition:
 
@@ -305,4 +272,53 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 		}, nil)
 		close(ch)
 	}()
+}
+
+// visitExpressions allows the cursor to visit all expressions in a slice,
+// and can replace or remove items and restore the slice.
+func visitExpressions(
+	exprs []sqlparser.Expr,
+	set func(input []sqlparser.Expr),
+	ch chan<- expressionCursor,
+	abort *sync2.AtomicBool,
+) bool {
+	for idx := 0; idx < len(exprs); idx++ {
+		expr := exprs[idx]
+		removed := false
+		newCursorItem(ch, expr, abort,
+			func(replaceWith sqlparser.Expr) {
+				if removed {
+					panic("cant replace after remove without restore")
+				}
+				exprs[idx] = replaceWith
+				set(exprs)
+			},
+			/*remove*/ func() {
+				if removed {
+					panic("can't remove twice, silly")
+				}
+				exprs = append(exprs[:idx], exprs[idx+1:]...)
+				set(exprs)
+				removed = true
+			},
+			/*restore*/ func() {
+				if removed {
+					front := make([]sqlparser.Expr, idx)
+					copy(front, exprs[:idx])
+					back := make([]sqlparser.Expr, len(exprs)-idx)
+					copy(back, exprs[idx:])
+					frontWithRestoredExpr := append(front, expr)
+					exprs = append(frontWithRestoredExpr, back...)
+					set(exprs)
+					removed = false
+					return
+				}
+				exprs[idx] = expr
+				set(exprs)
+			})
+		if abort.Get() {
+			return false
+		}
+	}
+	return true
 }
