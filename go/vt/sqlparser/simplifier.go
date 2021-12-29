@@ -190,8 +190,8 @@ func (s *Shrinker) Next() Expr {
 			return nil
 		}
 	case *ColName:
-		return nil
-
+		// we can try to replace the column with a literal value
+		s.queue = []Expr{NewIntLiteral("0")}
 	default:
 		panic(fmt.Sprintf("%T", e))
 	}
