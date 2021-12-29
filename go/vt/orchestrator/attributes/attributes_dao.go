@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
-// SetHostAttributes
+// SetHostAttributes is used to set host attributes
 func SetHostAttributes(hostname string, attributeName string, attributeValue string) error {
 	_, err := db.ExecOrchestrator(`
 			replace
@@ -47,7 +47,7 @@ func SetHostAttributes(hostname string, attributeName string, attributeValue str
 }
 
 func getHostAttributesByClause(whereClause string, args []interface{}) ([]HostAttributes, error) {
-	res := []HostAttributes{}
+	var res []HostAttributes
 	query := fmt.Sprintf(`
 		select
 			hostname,
