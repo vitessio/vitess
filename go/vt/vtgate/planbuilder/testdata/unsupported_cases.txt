@@ -59,7 +59,7 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # left join with expressions
-"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
+"select user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
 "unsupported: cross-shard left join and column expressions"
 Gen4 plan same as above
 

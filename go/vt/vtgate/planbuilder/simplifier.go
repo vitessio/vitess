@@ -54,21 +54,27 @@ func simplifyStatement(
 		}
 	}
 
+	// now let's try to simplify * expressions
+	if simplifyStarExpr(in, test) {
+		return simplifyStatement(in, currentDB, si, test)
+	}
+
 	// if we get here, we couldn't find a simpler query by just removing one table,
 	// we try to remove select expressions next
 	ch := make(chan expressionCursor)
 	findExpressions(in, ch)
 	for cursor := range ch {
 		// first - let's try to remove the expression
-		cursor.remove()
-		if test(in) {
-			log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
-			cursor.abort()
-			return simplifyStatement(in, currentDB, si, test)
+		if cursor.remove() {
+			if test(in) {
+				log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
+				cursor.abort()
+				return simplifyStatement(in, currentDB, si, test)
+			}
+			cursor.restore()
 		}
 
 		// ok, we seem to need this expression. let's see if we can find a simpler version
-		cursor.restore()
 		s := &sqlparser.Shrinker{Orig: cursor.expr}
 		newExpr := s.Next()
 		for newExpr != nil {
@@ -87,6 +93,28 @@ func simplifyStatement(
 	}
 
 	return in
+}
+
+func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) bool {
+	simplified := false
+	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
+		se, ok := cursor.Node().(*sqlparser.StarExpr)
+		if !ok {
+			return true
+		}
+		cursor.Replace(&sqlparser.AliasedExpr{
+			Expr: sqlparser.NewIntLiteral("0"),
+		})
+		if test(in) {
+			log.Errorf("replaced star with literal")
+			simplified = true
+			return false
+		}
+		cursor.Replace(se)
+
+		return true
+	}, nil)
+	return simplified
 }
 
 // removeTable removes the table with the given index from the select statement, which includes the FROM clause
@@ -180,7 +208,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 type expressionCursor struct {
 	expr        sqlparser.Expr
 	replace     func(replaceWith sqlparser.Expr)
-	remove      func()
+	remove      func() bool
 	restore     func()
 	wg          *sync.WaitGroup
 	abortMarker *sync2.AtomicBool
@@ -195,7 +223,7 @@ func newCursorItem(
 	expr sqlparser.Expr,
 	abort *sync2.AtomicBool,
 	replace func(replaceWith sqlparser.Expr),
-	remove func(),
+	remove func() bool,
 	restore func(),
 ) {
 	wg := &sync.WaitGroup{}
@@ -237,14 +265,19 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 							}
 							expr.Expr = replaceWith
 						},
-						/*remove*/ func() {
+						/*remove*/ func() bool {
 							if removed {
 								panic("can't remove twice, silly")
+							}
+							if len(node) == 1 {
+								// can't remove the last expressions - we'd end up with an empty SELECT clause
+								return false
 							}
 							withoutElement := append(node[:idx], node[idx+1:]...)
 							cursor.Replace(withoutElement)
 							node = withoutElement
 							removed = true
+							return true
 						},
 						/*restore*/ func() {
 							if removed {
@@ -275,8 +308,14 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 				if !visitExpressions(exprs, set, ch, abort) {
 					return false
 				}
+			case *sqlparser.JoinTableExpr:
+
 			case *sqlparser.JoinCondition:
-				if node.Using != nil {
+				join, ok := cursor.Parent().(*sqlparser.JoinTableExpr)
+				if !ok {
+					return true
+				}
+				if join.Join != sqlparser.NormalJoinType || node.Using != nil {
 					return false
 				}
 				exprs := sqlparser.SplitAndExpression(nil, node.On)
@@ -308,7 +347,7 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 							}
 							order.Expr = replaceWith
 						},
-						/*remove*/ func() {
+						/*remove*/ func() bool {
 							if removed {
 								panic("can't remove twice, silly")
 							}
@@ -316,6 +355,7 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 							cursor.Replace(withoutElement)
 							node = withoutElement
 							removed = true
+							return true
 						},
 						/*restore*/ func() {
 							if removed {
@@ -344,8 +384,9 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 						/*replace*/ func(replaceWith sqlparser.Expr) {
 							node.Offset = replaceWith
 						},
-						/*remove*/ func() {
+						/*remove*/ func() bool {
 							node.Offset = nil
+							return true
 						},
 						/*restore*/ func() {
 							node.Offset = original
@@ -357,8 +398,9 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 						/*replace*/ func(replaceWith sqlparser.Expr) {
 							node.Rowcount = replaceWith
 						},
-						/*remove*/ func() {
-							// removing Rowcount is an invalid op, so we just ignore it
+						/*remove*/ func() bool {
+							// removing Rowcount is an invalid op
+							return false
 						},
 						/*restore*/ func() {
 							node.Rowcount = original
@@ -391,13 +433,14 @@ func visitExpressions(
 				exprs[idx] = replaceWith
 				set(exprs)
 			},
-			/*remove*/ func() {
+			/*remove*/ func() bool {
 				if removed {
 					panic("can't remove twice, silly")
 				}
 				exprs = append(exprs[:idx], exprs[idx+1:]...)
 				set(exprs)
 				removed = true
+				return true
 			},
 			/*restore*/ func() {
 				if removed {
