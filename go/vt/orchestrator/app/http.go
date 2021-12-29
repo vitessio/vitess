@@ -49,13 +49,13 @@ var sslPEMPassword []byte
 var agentSSLPEMPassword []byte
 var discoveryMetrics *collection.Collection
 
-// Http starts serving
-func Http(continuousDiscovery bool) {
+// HTTP starts serving
+func HTTP(continuousDiscovery bool) {
 	promptForSSLPasswords()
 	process.ContinuousRegistration(string(process.OrchestratorExecutionHttpMode), "")
 
 	martini.Env = martini.Prod
-	standardHttp(continuousDiscovery)
+	standardHTTP(continuousDiscovery)
 }
 
 // Iterate over the private keys and get passwords for them
@@ -73,8 +73,8 @@ func promptForSSLPasswords() {
 	}
 }
 
-// standardHttp starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
-func standardHttp(continuousDiscovery bool) {
+// standardHTTP starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
+func standardHTTP(continuousDiscovery bool) {
 	m := martini.Classic()
 
 	switch strings.ToLower(config.Config.AuthenticationMethod) {

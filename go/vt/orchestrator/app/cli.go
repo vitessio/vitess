@@ -1079,7 +1079,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if reason == "" {
 				log.Fatal("--reason option required")
 			}
-			var durationSeconds int = 0
+			var durationSeconds int
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {
@@ -1125,7 +1125,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if reason == "" {
 				log.Fatal("--reason option required")
 			}
-			var durationSeconds int = 0
+			var durationSeconds int
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {
