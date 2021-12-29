@@ -78,7 +78,7 @@ func WriteResolvedHostname(hostname string, resolvedHostname string) error {
 
 // ReadResolvedHostname returns the resolved hostname given a hostname, or empty if not exists
 func ReadResolvedHostname(hostname string) (string, error) {
-	var resolvedHostname string = ""
+	var resolvedHostname string
 
 	query := `
 		select

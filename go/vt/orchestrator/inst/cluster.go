@@ -89,35 +89,35 @@ type ClusterInfo struct {
 }
 
 // ReadRecoveryInfo
-func (this *ClusterInfo) ReadRecoveryInfo() {
-	this.HasAutomatedPrimaryRecovery = this.filtersMatchCluster(config.Config.RecoverPrimaryClusterFilters)
-	this.HasAutomatedIntermediatePrimaryRecovery = this.filtersMatchCluster(config.Config.RecoverIntermediatePrimaryClusterFilters)
+func (clusterInfo *ClusterInfo) ReadRecoveryInfo() {
+	clusterInfo.HasAutomatedPrimaryRecovery = clusterInfo.filtersMatchCluster(config.Config.RecoverPrimaryClusterFilters)
+	clusterInfo.HasAutomatedIntermediatePrimaryRecovery = clusterInfo.filtersMatchCluster(config.Config.RecoverIntermediatePrimaryClusterFilters)
 }
 
 // filtersMatchCluster will see whether the given filters match the given cluster details
-func (this *ClusterInfo) filtersMatchCluster(filters []string) bool {
+func (clusterInfo *ClusterInfo) filtersMatchCluster(filters []string) bool {
 	for _, filter := range filters {
-		if filter == this.ClusterName {
+		if filter == clusterInfo.ClusterName {
 			return true
 		}
-		if filter == this.ClusterAlias {
+		if filter == clusterInfo.ClusterAlias {
 			return true
 		}
 		if strings.HasPrefix(filter, "alias=") {
 			// Match by exact cluster alias name
 			alias := strings.SplitN(filter, "=", 2)[1]
-			if alias == this.ClusterAlias {
+			if alias == clusterInfo.ClusterAlias {
 				return true
 			}
 		} else if strings.HasPrefix(filter, "alias~=") {
 			// Match by cluster alias regex
 			aliasPattern := strings.SplitN(filter, "~=", 2)[1]
-			if matched, _ := regexp.MatchString(aliasPattern, this.ClusterAlias); matched {
+			if matched, _ := regexp.MatchString(aliasPattern, clusterInfo.ClusterAlias); matched {
 				return true
 			}
 		} else if filter == "*" {
 			return true
-		} else if matched, _ := regexp.MatchString(filter, this.ClusterName); matched && filter != "" {
+		} else if matched, _ := regexp.MatchString(filter, clusterInfo.ClusterName); matched && filter != "" {
 			return true
 		}
 	}
@@ -125,12 +125,12 @@ func (this *ClusterInfo) filtersMatchCluster(filters []string) bool {
 }
 
 // ApplyClusterAlias updates the given clusterInfo's ClusterAlias property
-func (this *ClusterInfo) ApplyClusterAlias() {
-	if this.ClusterAlias != "" && this.ClusterAlias != this.ClusterName {
+func (clusterInfo *ClusterInfo) ApplyClusterAlias() {
+	if clusterInfo.ClusterAlias != "" && clusterInfo.ClusterAlias != clusterInfo.ClusterName {
 		// Already has an alias; abort
 		return
 	}
-	if alias := mappedClusterNameToAlias(this.ClusterName); alias != "" {
-		this.ClusterAlias = alias
+	if alias := mappedClusterNameToAlias(clusterInfo.ClusterName); alias != "" {
+		clusterInfo.ClusterAlias = alias
 	}
 }
