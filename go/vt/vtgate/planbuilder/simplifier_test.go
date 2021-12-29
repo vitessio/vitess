@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +28,7 @@ import (
 )
 
 func TestSimplifyUnsupportedQuery(t *testing.T) {
-	query := "select user.id, count(*), unsharded.name from user join unsharded where unsharded.id = 42"
+	query := "select user.id+user.foo, count(*), unsharded.name from user join unsharded where unsharded.id = 42"
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json", true),
 	}
@@ -49,17 +51,33 @@ func TestSimplifyUnsupportedQuery(t *testing.T) {
 	t.Fatal(sqlparser.String(simplified))
 }
 
+func TestFindAllExpressions(t *testing.T) {
+	query := "select user.id, count(*), unsharded.name from user join unsharded where unsharded.id = 42 and name = 'foo' and user.id = unsharded.id"
+	ast, err := sqlparser.Parse(query)
+	require.NoError(t, err)
+	ch := make(chan cursorItem)
+	findExpressions(ast.(sqlparser.SelectStatement), ch)
+	for cursor := range ch {
+		fmt.Println(sqlparser.String(cursor.expr))
+		cursor.replace(sqlparser.NewIntLiteral("1"))
+		fmt.Println(sqlparser.String(ast))
+		cursor.replace(cursor.expr)
+		cursor.wg.Done()
+	}
+}
+
 func simplifyStatement(
 	in sqlparser.SelectStatement,
 	currentDB string,
 	si semantics.SchemaInformation,
 	test func(sqlparser.SelectStatement) bool,
 ) sqlparser.SelectStatement {
-	// we start by removing one table at a time until we can't anymore
 	semTable, err := semantics.Analyze(in, currentDB, si)
 	if err != nil {
 		return nil
 	}
+
+	// we start by removing one table at a time, and see if we still have an interesting plan
 	for idx := range semTable.Tables {
 		clone := sqlparser.CloneSelectStatement(in)
 		inner, err := semantics.Analyze(clone, currentDB, si)
@@ -72,9 +90,32 @@ func simplifyStatement(
 			return simplifyStatement(clone, currentDB, si, test)
 		}
 	}
+
+	// if we get here, we couldn't find a simpler query by just removing one table,
+	// we try to remove select expressions next
+	ch := make(chan cursorItem)
+	findExpressions(in, ch)
+	for cursor := range ch {
+		s := &sqlparser.Shrinker{Orig: cursor.expr}
+		newExpr := s.Next()
+		for newExpr != nil {
+			cursor.replace(newExpr)
+			if test(in) {
+				return simplifyStatement(in, currentDB, si, test)
+			}
+			newExpr = s.Next()
+		}
+		// if we get here, we failed to simplify this expression,
+		// so we put back in the original expression
+		cursor.replace(cursor.expr)
+		cursor.wg.Done()
+	}
+
 	return in
 }
 
+// removeTable removes the table with the given index from the select statement, which includes the FROM clause
+// but also all expressions and predicates that depend on the table
 func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet, inner *semantics.SemTable) bool {
 	simplified := false
 	sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
@@ -142,4 +183,56 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		return true
 	}, nil)
 	return simplified
+}
+
+type cursorItem struct {
+	expr    sqlparser.Expr
+	replace func(replaceWith sqlparser.Expr)
+	wg      *sync.WaitGroup
+}
+
+func newCursorItem(ch chan<- cursorItem, expr sqlparser.Expr, replace func(replaceWith sqlparser.Expr)) {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	ch <- cursorItem{
+		expr:    expr,
+		replace: replace,
+		wg:      wg,
+	}
+	wg.Wait()
+}
+
+func findExpressions(clone sqlparser.SelectStatement, ch chan<- cursorItem) {
+	go func() {
+		sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
+			switch node := cursor.Node().(type) {
+			case sqlparser.SelectExprs:
+				_, isSel := cursor.Parent().(*sqlparser.Select)
+				if !isSel {
+					return true
+				}
+				for _, ae := range node {
+					expr, ok := ae.(*sqlparser.AliasedExpr)
+					if !ok {
+						continue
+					}
+					newCursorItem(ch, expr.Expr, func(replaceWith sqlparser.Expr) {
+						expr.Expr = replaceWith
+					})
+				}
+
+			case *sqlparser.Where:
+				exprs := sqlparser.SplitAndExpression(nil, node.Expr)
+				for idx := 0; idx < len(exprs); idx++ {
+					expr := exprs[idx]
+					newCursorItem(ch, expr, func(replaceWith sqlparser.Expr) {
+						exprs[idx] = replaceWith
+						node.Expr = sqlparser.AndExpressions(exprs...)
+					})
+				}
+			}
+			return true
+		}, nil)
+		close(ch)
+	}()
 }
