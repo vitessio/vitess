@@ -14,30 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sqlparser
+package simplifier
 
 import (
 	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // CheckF is used to see if the given expression exhibits the sought after issue
-type CheckF = func(Expr) bool
+type CheckF = func(sqlparser.Expr) bool
 
-func SimplifyExpr(in Expr, test CheckF) (smallestKnown Expr) {
+func SimplifyExpr(in sqlparser.Expr, test CheckF) (smallestKnown sqlparser.Expr) {
 	var maxDepth, level int
-	resetTo := func(e Expr) {
+	resetTo := func(e sqlparser.Expr) {
 		smallestKnown = e
 		maxDepth = depth(e)
 		level = 0
 	}
 	resetTo(in)
 	for level <= maxDepth {
-		current := CloneExpr(smallestKnown)
+		current := sqlparser.CloneExpr(smallestKnown)
 		nodes, replaceF := getNodesAtLevel(current, level)
-		replace := func(e Expr, idx int) {
+		replace := func(e sqlparser.Expr, idx int) {
 			// if we are at the first level, we are replacing the root,
 			// not rewriting something deep in the tree
 			if level == 0 {
@@ -57,7 +58,7 @@ func SimplifyExpr(in Expr, test CheckF) (smallestKnown Expr) {
 				replace(expr, idx)
 
 				valid := test(current)
-				log.Errorf("test: %t - %s", valid, String(current))
+				log.Errorf("test: %t - %s", valid, sqlparser.String(current))
 				if valid {
 					simplified = true
 					break // we will still continue trying to simplify other expressions at this level
@@ -77,48 +78,48 @@ func SimplifyExpr(in Expr, test CheckF) (smallestKnown Expr) {
 	return smallestKnown
 }
 
-func getNodesAtLevel(e Expr, level int) (result []Expr, replaceF []func(node SQLNode)) {
+func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, replaceF []func(node sqlparser.SQLNode)) {
 	lvl := 0
-	pre := func(cursor *Cursor) bool {
+	pre := func(cursor *sqlparser.Cursor) bool {
 
-		if expr, isExpr := cursor.Node().(Expr); level == lvl && isExpr {
+		if expr, isExpr := cursor.Node().(sqlparser.Expr); level == lvl && isExpr {
 			result = append(result, expr)
 			replaceF = append(replaceF, cursor.ReplacerF())
 		}
 		lvl++
 		return true
 	}
-	post := func(cursor *Cursor) bool {
+	post := func(cursor *sqlparser.Cursor) bool {
 		lvl--
 		return true
 	}
-	Rewrite(e, pre, post)
+	sqlparser.Rewrite(e, pre, post)
 	return
 }
 
-func depth(e Expr) (depth int) {
+func depth(e sqlparser.Expr) (depth int) {
 	lvl := 0
-	pre := func(cursor *Cursor) bool {
+	pre := func(cursor *sqlparser.Cursor) bool {
 		lvl++
 		if lvl > depth {
 			depth = lvl
 		}
 		return true
 	}
-	post := func(cursor *Cursor) bool {
+	post := func(cursor *sqlparser.Cursor) bool {
 		lvl--
 		return true
 	}
-	Rewrite(e, pre, post)
+	sqlparser.Rewrite(e, pre, post)
 	return
 }
 
 type Shrinker struct {
-	Orig  Expr
-	queue []Expr
+	Orig  sqlparser.Expr
+	queue []sqlparser.Expr
 }
 
-func (s *Shrinker) Next() Expr {
+func (s *Shrinker) Next() sqlparser.Expr {
 	if s.queue != nil {
 		if len(s.queue) == 0 {
 			return nil
@@ -129,21 +130,21 @@ func (s *Shrinker) Next() Expr {
 	}
 
 	switch e := s.Orig.(type) {
-	case *ComparisonExpr:
+	case *sqlparser.ComparisonExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
-	case *BinaryExpr:
+	case *sqlparser.BinaryExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
-	case *Literal:
+	case *sqlparser.Literal:
 		switch e.Type {
-		case StrVal:
+		case sqlparser.StrVal:
 			half := len(e.Val) / 2
 			if half >= 1 {
-				s.queue = append(s.queue, &Literal{Type: StrVal, Val: e.Val[:half]})
-				s.queue = append(s.queue, &Literal{Type: StrVal, Val: e.Val[half:]})
+				s.queue = append(s.queue, &sqlparser.Literal{Type: sqlparser.StrVal, Val: e.Val[:half]})
+				s.queue = append(s.queue, &sqlparser.Literal{Type: sqlparser.StrVal, Val: e.Val[half:]})
 			} else {
 				return nil
 			}
-		case IntVal:
+		case sqlparser.IntVal:
 			num, err := strconv.ParseInt(e.Val, 0, 64)
 			if err != nil {
 				panic(err)
@@ -160,14 +161,14 @@ func (s *Shrinker) Next() Expr {
 				oneLess = num + 1
 			}
 
-			s.queue = append(s.queue, NewIntLiteral(fmt.Sprintf("%d", half)))
+			s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", half)))
 			if oneLess != half {
-				s.queue = append(s.queue, NewIntLiteral(fmt.Sprintf("%d", oneLess)))
+				s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", oneLess)))
 			}
 		default:
 			panic(fmt.Sprintf("unhandled type %v", e.Type))
 		}
-	case ValTuple:
+	case sqlparser.ValTuple:
 		// first we'll try the individual elements first
 		for _, v := range e {
 			s.queue = append(s.queue, v)
@@ -176,11 +177,11 @@ func (s *Shrinker) Next() Expr {
 		for i := range e {
 			s.queue = append(s.queue, append(e[:i], e[i+1:]...))
 		}
-	case *NullVal:
+	case *sqlparser.NullVal:
 		return nil
-	case *FuncExpr:
+	case *sqlparser.FuncExpr:
 		for _, ae := range e.Exprs {
-			expr, ok := ae.(*AliasedExpr)
+			expr, ok := ae.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
 			}
@@ -189,9 +190,9 @@ func (s *Shrinker) Next() Expr {
 		if s.queue == nil {
 			return nil
 		}
-	case *ColName:
+	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
-		s.queue = []Expr{NewIntLiteral("0")}
+		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
 	default:
 		return nil
 	}

@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/simplifier"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -253,7 +255,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 
 			log.Infof("found inconsistency - will try to simplify: %s", query)
 
-			astExpr = sqlparser.SimplifyExpr(astExpr, func(expr sqlparser.Expr) bool {
+			astExpr = simplifier.SimplifyExpr(astExpr, func(expr sqlparser.Expr) bool {
 				return bothReturnSameResult(expr).diff() == diff
 			})
 
