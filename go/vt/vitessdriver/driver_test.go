@@ -689,7 +689,7 @@ func TestSessionToken(t *testing.T) {
 	}
 
 	err = noRollbackTx.Rollback()
-	if err != nil && err.Error() != "calling Rollback from a distributed tx is not allowed" {
+	if err == nil || err.Error() != "calling Rollback from a distributed tx is not allowed" {
 		t.Fatal(err)
 	}
 
@@ -700,7 +700,7 @@ func TestSessionToken(t *testing.T) {
 	}
 
 	err = noCommitTx.Commit()
-	if err != nil && err.Error() != "calling Commit from a distributed tx is not allowed" {
+	if err == nil || err.Error() != "calling Commit from a distributed tx is not allowed" {
 		t.Fatal(err)
 	}
 
