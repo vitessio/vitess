@@ -487,3 +487,24 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	}
 	return tablets
 }
+
+func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing.T), func(t *testing.T)) {
+	conn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	_, err := conn.ExecuteFetch("begin", 1000, false)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(query, 1000, false)
+	require.NoError(t, err)
+
+	commit := func(t *testing.T) {
+		_, err = conn.ExecuteFetch("commit", 1000, false)
+		log.Infof("startQuery:commit:err: %+v", err)
+		conn.Close()
+		log.Infof("startQuery:after closing connection")
+	}
+	rollback := func(t *testing.T) {
+		defer conn.Close()
+		_, err = conn.ExecuteFetch("rollback", 1000, false)
+		log.Infof("startQuery:rollback:err: %+v", err)
+	}
+	return commit, rollback
+}
