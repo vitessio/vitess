@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/simplifier"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -38,26 +40,26 @@ func TestSimplifyUnsupportedQuery(t *testing.T) {
 	}
 	stmt, reserved, err := sqlparser.Parse2(query)
 	require.NoError(t, err)
-	result, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
 	vschema.currentDb()
 
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	_, err = BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
+	ast := rewritten.AST
+	_, err = BuildFromStmt(query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
 	require.Error(t, err)
-	state := vterrors.ErrState(err)
 
-	simplified := simplifyStatement(result.AST.(sqlparser.SelectStatement), vschema.currentDb(), vschema, func(statement sqlparser.SelectStatement) bool {
-		_, err := BuildFromStmt(query, statement, reservedVars, vschema, result.BindVarNeeds, true, true)
-		if err == nil {
-			return false
-		}
-		return vterrors.ErrState(err) == state
-	})
+	simplified := simplifier.SimplifyStatement(
+		ast.(sqlparser.SelectStatement),
+		vschema.currentDb(),
+		vschema,
+		keepSameError(query, reservedVars, vschema, rewritten.BindVarNeeds, err),
+	)
 
 	fmt.Println(sqlparser.String(simplified))
 }
 
 func TestUnsupportedFile(t *testing.T) {
+	t.Skip("run manually to see if any queries can be simplified")
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
 		version: Gen4,
@@ -73,82 +75,35 @@ func TestUnsupportedFile(t *testing.T) {
 				t.Skip()
 				return
 			}
-			result, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+			rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
 			vschema.currentDb()
 
 			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-			plan, err := BuildFromStmt(sqlparser.String(result.AST), result.AST, reservedVars, vschema, result.BindVarNeeds, true, true)
-			out := getPlanOrErrorOutput(err, plan)
+			ast := rewritten.AST
+			_, err = BuildFromStmt(sqlparser.String(ast), ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
 
-			simplified := simplifyStatement(result.AST.(sqlparser.SelectStatement), vschema.currentDb(), vschema, func(statement sqlparser.SelectStatement) bool {
-				plan, err := BuildFromStmt(sqlparser.String(statement), statement, reservedVars, vschema, result.BindVarNeeds, true, true)
-				out2 := getPlanOrErrorOutput(err, plan)
-				return out == out2
-			})
+			simplified := simplifier.SimplifyStatement(
+				ast.(sqlparser.SelectStatement),
+				vschema.currentDb(),
+				vschema,
+				keepSameError(tcase.input, reservedVars, vschema, rewritten.BindVarNeeds, err),
+			)
 
 			fmt.Println(sqlparser.String(simplified))
 		})
 	}
 }
 
-func TestFindAllExpressions(t *testing.T) {
-	query := `
-select 
-	user.selectExpr1, 
-	unsharded.selectExpr2,
-	count(*) as leCount
-from 
-	user join 
-	unsharded on 
-		user.joinCond = unsharded.joinCond 
-where
-	unsharded.wherePred = 42 and
-	wherePred = 'foo' and 
-	user.id = unsharded.id
-group by 
-	user.groupByExpr1 + unsharded.groupByExpr2
-order by 
-	user.orderByExpr1 desc, 
-	unsharded.orderByExpr2 asc
-limit 123 offset 456
-`
-	ast, err := sqlparser.Parse(query)
-	require.NoError(t, err)
-	ch := make(chan expressionCursor)
-	findExpressions(ast.(sqlparser.SelectStatement), ch)
-	for cursor := range ch {
-		exploreExpression(cursor, ast)
-	}
-}
-
-func exploreExpression(cursor expressionCursor, ast sqlparser.Statement) {
-	defer cursor.wg.Done()
-	fmt.Printf(">> found expression: %s\n", sqlparser.String(cursor.expr))
-	cursor.replace(sqlparser.NewIntLiteral("1"))
-	fmt.Printf("remove: %s\n", sqlparser.String(ast))
-	cursor.restore()
-	fmt.Printf("restore: %s\n", sqlparser.String(ast))
-	cursor.remove()
-	fmt.Printf("replace it with literal: %s\n", sqlparser.String(ast))
-	cursor.restore()
-	fmt.Printf("restore: %s\n", sqlparser.String(ast))
-}
-
-func TestAbortExpressionCursor(t *testing.T) {
-	query := "select user.id, count(*), unsharded.name from user join unsharded on 13 = 14 where unsharded.id = 42 and name = 'foo' and user.id = unsharded.id"
-	ast, err := sqlparser.Parse(query)
-	require.NoError(t, err)
-	ch := make(chan expressionCursor)
-	findExpressions(ast.(sqlparser.SelectStatement), ch)
-	for cursor := range ch {
-		fmt.Println(sqlparser.String(cursor.expr))
-		cursor.replace(sqlparser.NewIntLiteral("1"))
-		fmt.Println(sqlparser.String(ast))
-		cursor.replace(cursor.expr)
-		if _, ok := cursor.expr.(*sqlparser.FuncExpr); ok {
-			cursor.abort()
-			break
+func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemaWrapper, needs *sqlparser.BindVarNeeds, expected error) func(statement sqlparser.SelectStatement) bool {
+	return func(statement sqlparser.SelectStatement) bool {
+		_, myErr := BuildFromStmt(query, statement, reservedVars, vschema, needs, true, true)
+		if myErr == nil {
+			return false
 		}
-		cursor.wg.Done()
+		state := vterrors.ErrState(expected)
+		if state == vterrors.Undefined {
+			return expected.Error() == myErr.Error()
+		}
+		return vterrors.ErrState(myErr) == state
 	}
 }

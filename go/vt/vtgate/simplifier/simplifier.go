@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package simplifier
 
 import (
 	"sync"
@@ -25,9 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// simplifyStatement simplifies the AST of a query. It basically iteratevely prunes leaves of the AST, as long as the pruning
+// SimplifyStatement simplifies the AST of a query. It basically iteratevely prunes leaves of the AST, as long as the pruning
 // continues to return true from the `test` function.
-func simplifyStatement(
+func SimplifyStatement(
 	in sqlparser.SelectStatement,
 	currentDB string,
 	si semantics.SchemaInformation,
@@ -50,13 +50,13 @@ func simplifyStatement(
 		if simplified && test(clone) {
 			name, _ := semTable.Tables[idx].Name()
 			log.Errorf("removed table %s", name)
-			return simplifyStatement(clone, currentDB, si, test)
+			return SimplifyStatement(clone, currentDB, si, test)
 		}
 	}
 
 	// now let's try to simplify * expressions
 	if simplifyStarExpr(in, test) {
-		return simplifyStatement(in, currentDB, si, test)
+		return SimplifyStatement(in, currentDB, si, test)
 	}
 
 	// if we get here, we couldn't find a simpler query by just removing one table,
@@ -69,20 +69,20 @@ func simplifyStatement(
 			if test(in) {
 				log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
 				cursor.abort()
-				return simplifyStatement(in, currentDB, si, test)
+				return SimplifyStatement(in, currentDB, si, test)
 			}
 			cursor.restore()
 		}
 
 		// ok, we seem to need this expression. let's see if we can find a simpler version
-		s := &sqlparser.Shrinker{Orig: cursor.expr}
+		s := &Shrinker{Orig: cursor.expr}
 		newExpr := s.Next()
 		for newExpr != nil {
 			cursor.replace(newExpr)
 			if test(in) {
 				log.Errorf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(newExpr))
 				cursor.abort()
-				return simplifyStatement(in, currentDB, si, test)
+				return SimplifyStatement(in, currentDB, si, test)
 			}
 			newExpr = s.Next()
 		}
