@@ -255,9 +255,6 @@ func DistributedTxFromSessionToken(ctx context.Context, c Configuration) (*sql.T
 	if c.SessionToken == "" {
 		return nil, errors.New("c.SessionToken is required")
 	}
-	if c.Address == "" {
-		return nil, errors.New("c.Address is required")
-	}
 
 	db, err := OpenWithConfiguration(c)
 	if err != nil {
