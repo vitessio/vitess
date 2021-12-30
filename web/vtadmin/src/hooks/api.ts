@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult } from 'react-query';
+import { useMutation, UseMutationOptions, useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult } from 'react-query';
 import {
     fetchBackups,
     fetchClusters,
@@ -37,6 +37,7 @@ import {
     TabletDebugVarsResponse,
     refreshState,
     runHealthCheck,
+    deleteTablet,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -118,6 +119,15 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
     });
 };
 
+/**
+ * 
+ * useDeleteTablet is a mutate hook that dletes a tablet by alias and optionally, cluster id.
+ */
+export const useDeleteTablet = (params: Parameters<typeof deleteTablet>[0], options: UseMutationOptions) => {
+    return useMutation(() => {
+        return deleteTablet(params)
+    }, options)
+}
 /**
  * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
  */

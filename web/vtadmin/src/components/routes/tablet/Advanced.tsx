@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
 import { deleteTablet, reparentTablet, startReplication, stopReplication } from '../../../api/http';
+import { useDeleteTablet } from '../../../hooks/api';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
@@ -20,23 +21,12 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
     const { clusterID, alias } = useParams<RouteParams>();
     const history = useHistory();
     const primary = isPrimary(tablet);
-    // DeleteTablet
     const [typedAlias, setTypedAlias] = useState('');
-    const [deleteLoading, setDeleteLoading] = useState(false);
-    const onDeleteTablet = async () => {
-        setDeleteLoading(true);
-        let result;
-        try {
-            result = await deleteTablet({ alias, clusterID });
-            if (result) {
-                success(`Successfully deleted tablet ${alias}`);
-            }
-            history.push('/tablets');
-        } catch (e) {
-            warn(`There was an error deleting tablet: ${e}`);
-        }
-        setDeleteLoading(false);
-    };
+
+    const deleteTabletMutation = useDeleteTablet({ alias, clusterID }, {
+        onSuccess: () => { success(`Successfully deleted tablet ${alias}`); history.push('/tablets'); },
+        onError: (error, variables, context) => warn(`There was an error deleting tablet: ${error}`)
+    })
 
     // ReparentTablet
     const [reparentLoading, setReparentLoading] = useState(false);
@@ -228,10 +218,10 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                     </div>
                     <button
                         className="btn btn-secondary btn-danger mt-4"
-                        disabled={typedAlias !== alias || deleteLoading}
-                        onClick={onDeleteTablet}
+                        disabled={typedAlias !== alias || deleteTabletMutation.isLoading}
+                        onClick={() => deleteTabletMutation.mutate}
                     >
-                        {deleteLoading ? 'Deleting...' : 'Delete'}
+                        {deleteTabletMutation.isLoading ? 'Deleting...' : 'Delete'}
                     </button>
                 </div>
             </div>
