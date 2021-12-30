@@ -98,9 +98,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                 href="https://vitess.io/docs/reference/programs/vtctl/tablets/#startreplication"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-gray-900 h-6 w-6 ml-1"
+                                className="text-gray-900 ml-1"
                             >
-                                <Icon icon={Icons.open} className="text-gray-900 fill-current" />
+                                <span className="text-sm font-semibold text-gray-900">Documentation</span><Icon icon={Icons.open} className="h-6 w-6 ml-1 inline-block text-gray-900 fill-current" />
                             </a>
                         </div>
                         <p className="text-base m-0">
@@ -129,9 +129,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                 href="https://vitess.io/docs/reference/programs/vtctl/tablets/#stopreplication"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-gray-900 h-6 w-6 ml-1"
+                                className="text-gray-900"
                             >
-                                <Icon icon={Icons.open} className="text-gray-900 fill-current" />
+                                <span className="text-sm font-semibold text-gray-900">Documentation</span> <Icon icon={Icons.open} className="ml-1 inline-block h-6 w-6 text-gray-900 fill-current" />
                             </a>
                         </div>
                         <p className="text-base m-0">
@@ -165,9 +165,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                 href="https://vitess.io/docs/reference/programs/vtctl/tablets/#reparenttablet"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-gray-900 h-6 w-6 ml-1"
+                                className="text-gray-900 ml-1"
                             >
-                                <Icon icon={Icons.open} className="text-gray-900 fill-current" />
+                                <span className="text-sm font-semibold text-gray-900">Documentation</span><Icon icon={Icons.open} className="ml-1 h-6 w-6 inline-block text-gray-900 fill-current" />
                             </a>
                         </div>
                         <p className="text-base m-0">
@@ -200,9 +200,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             href="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
                             target="_blank"
                             rel="noreferrer"
-                            className="text-gray-900 h-6 w-6 ml-1"
+                            className="text-gray-900 ml-1 inline-block"
                         >
-                            <Icon icon={Icons.open} className="text-gray-900 fill-current" />
+                            <span className="text-sm font-semibold text-gray-900">Documentation</span><Icon icon={Icons.open} className="ml-1 h-6 w-6 text-gray-900 fill-current inline" />
                         </a>
                     </div>
                     <p className="text-base mt-0">
@@ -235,7 +235,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 
