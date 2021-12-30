@@ -211,8 +211,11 @@ func (tqsc *Controller) SchemaEngine() *schema.Engine {
 	return nil
 }
 
-// KillAllTransactions is part of the tabletserver.Controller interface
-func (tqsc *Controller) KillAllTransactions(ctx context.Context) error {
+func (tqsc *Controller) StopQueryService(ctx context.Context) error {
+	return nil
+}
+
+func (tqsc *Controller) StartQueryService(ctx context.Context) error {
 	return nil
 }
 

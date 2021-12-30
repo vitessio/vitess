@@ -446,10 +446,16 @@ message PromoteReplicaResponse {
   string position = 1;
 }
 
-message KillAllTransactionsRequest {
+message StopQueryServiceRequest {
 }
 
-message KillAllTransactionsResponse {
+message StopQueryServiceResponse {
+}
+
+message StartQueryServiceRequest {
+}
+
+message StartQueryServiceResponse {
 }
 
 // Backup / Restore related messages

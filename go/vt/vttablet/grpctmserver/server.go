@@ -244,11 +244,18 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 	return response, nil
 }
 
-func (s *server) KillAllTransactions(ctx context.Context, request *tabletmanagerdatapb.KillAllTransactionsRequest) (response *tabletmanagerdatapb.KillAllTransactionsResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "KillAllTransactions", request, response, true /*verbose*/, &err)
+func (s *server) StopQueryService(ctx context.Context, request *tabletmanagerdatapb.StopQueryServiceRequest) (response *tabletmanagerdatapb.StopQueryServiceResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "StopQueryService", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.KillAllTransactionsResponse{}
-	return response, s.tm.KillAllTransactions(ctx)
+	response = &tabletmanagerdatapb.StopQueryServiceResponse{}
+	return response, s.tm.StopQueryService(ctx)
+}
+
+func (s *server) StartQueryService(ctx context.Context, request *tabletmanagerdatapb.StartQueryServiceRequest) (response *tabletmanagerdatapb.StartQueryServiceResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "StartQueryService", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.StartQueryServiceResponse{}
+	return response, s.tm.StartQueryService(ctx)
 }
 
 //

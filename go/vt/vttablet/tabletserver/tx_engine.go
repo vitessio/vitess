@@ -587,3 +587,7 @@ func (te *TxEngine) Release(connID int64) error {
 
 	return nil
 }
+
+func (te *TxEngine) SetShutdownGracePeriod(sgp time.Duration) {
+	te.shutdownGracePeriod = sgp
+}

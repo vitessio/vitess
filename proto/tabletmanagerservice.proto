@@ -80,7 +80,9 @@ service TabletManager {
 
   rpc ExecuteFetchAsApp(tabletmanagerdata.ExecuteFetchAsAppRequest) returns (tabletmanagerdata.ExecuteFetchAsAppResponse) {};
 
-  rpc KillAllTransactions(tabletmanagerdata.KillAllTransactionsRequest) returns (tabletmanagerdata.KillAllTransactionsResponse) {};
+  rpc StopQueryService(tabletmanagerdata.StopQueryServiceRequest) returns (tabletmanagerdata.StopQueryServiceResponse) {};
+
+  rpc StartQueryService(tabletmanagerdata.StartQueryServiceRequest) returns (tabletmanagerdata.StartQueryServiceResponse) {};
 
   //
   // Replication related methods

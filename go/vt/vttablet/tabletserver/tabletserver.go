@@ -1996,7 +1996,18 @@ func skipQueryPlanCache(options *querypb.ExecuteOptions) bool {
 	return options.SkipQueryPlanCache || options.HasCreatedTempTables
 }
 
-// KillAllTransactions kills all transactions
-func (tsv *TabletServer) KillAllTransactions(ctx context.Context) error {
-	return tsv.te.txPool.scp.KillAllTransactions(ctx)
+func (tsv *TabletServer) StopQueryService(ctx context.Context) error {
+	// Let's temporarily override the default shutdown grace period so that
+	// we give things a little bit of time to finish but then move forward
+	txe, ok := tsv.sm.te.(*TxEngine)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected transaction engine type. Expected *TxEngine but got: %T", tsv.sm.te)
+	}
+	txe.SetShutdownGracePeriod(100 * time.Millisecond)
+	defer txe.SetShutdownGracePeriod(tsv.config.GracePeriods.ShutdownSeconds.Get())
+	return tsv.sm.SetServingType(tsv.sm.target.TabletType, time.Now(), StateNotServing, "stopping query service")
+}
+
+func (tsv *TabletServer) StartQueryService(ctx context.Context) error {
+	return tsv.sm.SetServingType(tsv.sm.target.TabletType, time.Now(), StateServing, "starting query service")
 }

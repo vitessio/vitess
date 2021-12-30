@@ -435,7 +435,6 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 		vrw.params.Workflow = workflow.ReverseWorkflowName(vrw.params.Workflow)
 		log.Infof("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw)
 	}
-	log.Infof("Killing all transactions on the source keyspace of %s before switching writes to prevent long running transactions from modifying the data after switching", vrw.params.SourceKeyspace)
 	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
 		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun)
 	if err != nil {

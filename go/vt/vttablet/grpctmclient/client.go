@@ -1023,13 +1023,24 @@ func (client *Client) Close() {
 	client.dialer.Close()
 }
 
-// KillAllTransactions is part of the tmclient.TabletManagerClient interface.
-func (client *Client) KillAllTransactions(ctx context.Context, tablet *topodatapb.Tablet) error {
+// StopQueryService is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StopQueryService(ctx context.Context, tablet *topodatapb.Tablet) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	_, err = c.KillAllTransactions(ctx, &tabletmanagerdatapb.KillAllTransactionsRequest{})
+	_, err = c.StopQueryService(ctx, &tabletmanagerdatapb.StopQueryServiceRequest{})
+	return err
+}
+
+// StopQueryService is part of the tmclient.TabletManagerClient interface.
+func (client *Client) StartQueryService(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.StartQueryService(ctx, &tabletmanagerdatapb.StartQueryServiceRequest{})
 	return err
 }

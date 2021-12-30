@@ -769,7 +769,11 @@ func (fra *fakeRPCTM) WaitForPosition(ctx context.Context, pos string) error {
 	panic("unimplemented")
 }
 
-func (fra *fakeRPCTM) KillAllTransactions(ctx context.Context) error {
+func (fra *fakeRPCTM) StopQueryService(ctx context.Context) error {
+	panic("unimplemented")
+}
+
+func (fra *fakeRPCTM) StartQueryService(ctx context.Context) error {
 	panic("unimplemented")
 }
 

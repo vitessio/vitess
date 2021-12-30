@@ -1006,7 +1006,7 @@
 		},
 		"vreplication_multicell": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-timeout", "20m", "-run", "MultiCell"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
@@ -1024,7 +1024,7 @@
 		},
 		"vreplication_cellalias": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-timeout", "20m", "-run", "CellAlias"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
@@ -1033,7 +1033,7 @@
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-timeout", "20m", "-run", "TestBasicVreplicationWorkflow"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
@@ -1114,7 +1114,7 @@
 		},
 		"vreplication_v2": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-timeout", "20m", "-run", "TestBasicV2Workflows"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
@@ -1123,7 +1123,7 @@
 		},
 		"vreplication_migrate": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-timeout", "20m", "-run", "TestMigrate"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",

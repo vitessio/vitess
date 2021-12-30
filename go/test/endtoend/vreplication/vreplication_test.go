@@ -550,6 +550,7 @@ func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
 }
 
 func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string) {
+	currentWorkflowType = wrangler.ReshardWorkflow
 	t.Run("reshard", func(t *testing.T) {
 		if cells == nil {
 			cells = []*Cell{defaultCell}
@@ -909,6 +910,7 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
+	currentWorkflowType = wrangler.MoveTablesWorkflow
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-v1", "-cells="+cell, "-workflow="+workflow,
 		"-tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
@@ -970,9 +972,10 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	}
 }
 
+// switchWrites will make the SwitchWrites vtctl call
 func switchWrites(t *testing.T, ksWorkflow string, reverse bool) {
-	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
+	const SwitchWritesTimeout = "150s" // max: 3 tablet picker 30s waits + 60s buffer for query service stop+start
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-timeout="+SwitchWritesTimeout,
 		"-filtered_replication_wait_time="+SwitchWritesTimeout, fmt.Sprintf("-reverse=%t", reverse), ksWorkflow)
 	if output != "" {
 		fmt.Printf("Output of SwitchWrites for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
@@ -980,6 +983,14 @@ func switchWrites(t *testing.T, ksWorkflow string, reverse bool) {
 	//printSwitchWritesExtraDebug is useful when debugging failures in SwitchWrites due to corner cases/races
 	_ = printSwitchWritesExtraDebug
 	require.NoError(t, err, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
+
+	// For MoveTables we stop and start the query service on the source primary tablets.
+	// This means that the tablet may go through a SERVING->NOT_SERVING->SERVING cycle in
+	// vtgates.
+	if currentWorkflowType == wrangler.MoveTablesWorkflow {
+		err = vc.WaitForPrimaryTabletsToHealthyInVtgate()
+		require.NoError(t, err, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
+	}
 }
 
 func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {

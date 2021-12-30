@@ -47,6 +47,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -58,9 +59,14 @@ const (
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
 
+// queryServicestate specifies the desired state of the query service
+type queryServiceState int
+
 const (
 	allowWrites = accessType(iota)
 	disallowWrites
+	queryServiceStop  = queryServiceState(0)
+	queryServiceStart = queryServiceState(1)
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -129,6 +135,45 @@ func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource
 			}
 		}(source)
 	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (ts *trafficSwitcher) ExecQueryServiceActionOnAllPrimarySources(ctx context.Context, state queryServiceState) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	type doneRecorder struct {
+		record map[string]bool
+		mu     sync.Mutex
+	}
+	done := doneRecorder{record: make(map[string]bool)}
+
+	for _, source := range ts.sources {
+		wg.Add(1)
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+			done.mu.Lock()
+			defer done.mu.Unlock()
+			alias := tablet.Alias.String()
+
+			if !done.record[alias] {
+				switch state {
+				case queryServiceStop:
+					if err := ts.TabletManagerClient().StopQueryService(ctx, tablet); err != nil {
+						allErrors.RecordError(err)
+					}
+				case queryServiceStart:
+					if err := ts.TabletManagerClient().StartQueryService(ctx, tablet); err != nil {
+						allErrors.RecordError(err)
+					}
+				default:
+					allErrors.RecordError(vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid query service state: %v", state))
+				}
+				done.record[alias] = true
+			}
+		}(source.GetPrimary().Tablet)
+	}
+
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
 }
@@ -963,11 +1008,6 @@ func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist boo
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.killSourceTransactions(ctx)
-		if err != nil {
-			log.Warningf("Error: %s", err)
-			return err
-		}
 		err = ts.changeTableSourceWrites(ctx, disallowWrites)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
@@ -976,7 +1016,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		log.Warningf("Error: %s", err)
 		return err
 	}
-	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+	if err = ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		var err error
 		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
 		ts.wr.Logger().Infof("Stopped Source Writes. Position for source %v:%v: %v",
@@ -985,11 +1025,16 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 			log.Warningf("Error: %s", err)
 		}
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Now we need to start the query service on the source shard primaries again
+	return ts.ExecQueryServiceActionOnAllPrimarySources(ctx, queryServiceStart)
 }
 
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
-	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+	if err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
 			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
 		}); err != nil {
@@ -997,17 +1042,15 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}
 		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 		return err
-	})
-}
+	}); err != nil {
+		return err
+	}
 
-func (ts *trafficSwitcher) killSourceTransactions(ctx context.Context) error {
-	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		return ts.killSourceTransactionsOnTablet(ctx, source.GetPrimary().Tablet)
-	})
-}
-
-func (ts *trafficSwitcher) killSourceTransactionsOnTablet(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return ts.wr.TabletManagerClient().KillAllTransactions(ctx, tablet)
+	// Now we need to stop the query service on the source shard primaries -- which in turn
+	// closes all DB connections and causes MySQL to roll back any open and/or running
+	// statements/transactions ASAP -- in order to prevent any lost writes from happening
+	// on the source tablets during the SwitchWrites operation
+	return ts.ExecQueryServiceActionOnAllPrimarySources(ctx, queryServiceStop)
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {

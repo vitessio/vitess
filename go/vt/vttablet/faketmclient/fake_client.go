@@ -172,8 +172,13 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, ta
 	return &querypb.QueryResult{}, nil
 }
 
-// KillAllTransatcions is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) KillAllTransactions(ctx context.Context, tablet *topodatapb.Tablet) error {
+// StopQueryService is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) StopQueryService(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
+// StartQueryService is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) StartQueryService(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
 }
 

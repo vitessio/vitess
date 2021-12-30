@@ -94,8 +94,9 @@ type Controller interface {
 	// TopoServer returns the topo server.
 	TopoServer() *topo.Server
 
-	// KillAllTransactions kills all open transactions
-	KillAllTransactions(ctx context.Context) error
+	StopQueryService(ctx context.Context) error
+
+	StartQueryService(ctx context.Context) error
 }
 
 // Ensure TabletServer satisfies Controller interface.

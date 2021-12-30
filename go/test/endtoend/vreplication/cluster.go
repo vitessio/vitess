@@ -508,3 +508,27 @@ func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing
 	}
 	return commit, rollback
 }
+
+// WaitForPrimaryTabletsToHealthyInVtgate waits for all primary tablets in all shards to be healthy in all vtgates
+// This is now useful as SwitchWrites stops and starts the query service on source tablets and so the source tablet
+// primary may go through a SERVING->NOT_SERVING->SERVING cycle.
+func (vc *VitessCluster) WaitForPrimaryTabletsToHealthyInVtgate() (err error) {
+	keyspaces := make(map[string]*Keyspace)
+	vtgates := make([]*cluster.VtgateProcess, 0)
+	for _, cell := range vc.Cells {
+		vtgates = append(vtgates, cell.Vtgates...)
+		for _, keyspace := range cell.Keyspaces {
+			keyspaces[keyspace.Name] = keyspace
+		}
+	}
+	for _, keyspace := range keyspaces {
+		for _, shard := range keyspace.Shards {
+			for _, vtgate := range vtgates {
+				if err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}

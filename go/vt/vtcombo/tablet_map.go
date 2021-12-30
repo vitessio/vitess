@@ -1020,6 +1020,10 @@ func (itmc *internalTabletManagerClient) ReplicaWasRestarted(context.Context, *t
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) KillAllTransactions(context.Context, *topodatapb.Tablet) error {
+func (itmc *internalTabletManagerClient) StopQueryService(context.Context, *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) StartQueryService(context.Context, *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
