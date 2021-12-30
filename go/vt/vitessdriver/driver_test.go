@@ -625,3 +625,88 @@ func TestTxExecStreamingNotAllowed(t *testing.T) {
 		t.Errorf("err: %v, does not contain %s", err, want)
 	}
 }
+
+func TestSessionToken(t *testing.T) {
+	c := Configuration{
+		Protocol: "grpc",
+		Address:  testAddress,
+		Target:   "@primary",
+	}
+
+	ctx := context.Background()
+
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := tx.Prepare("txRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.Exec(int64(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionToken, err := SessionTokenFromTx(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	distributedTxConfig := Configuration{
+		Address:      testAddress,
+		Target:       "@primary",
+		SessionToken: sessionToken,
+	}
+
+	sameTx, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newS, err := sameTx.Prepare("distributedTxRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newS.Exec(int64(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// enforce that Rollback can't be called on the distributed tx
+	noRollbackTx, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noRollbackTx.Rollback()
+	if err != nil && err.Error() != "calling Rollback from a distributed tx is not allowed" {
+		t.Fatal(err)
+	}
+
+	// enforce that Commit can't be called on the distributed tx
+	noCommitTx, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noCommitTx.Commit()
+	if err != nil && err.Error() != "calling Commit from a distributed tx is not allowed" {
+		t.Fatal(err)
+	}
+
+	// finally commit the original tx
+	err = tx.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
+}

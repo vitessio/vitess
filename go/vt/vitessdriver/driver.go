@@ -28,6 +28,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -119,6 +120,13 @@ func (d drv) Open(name string) (driver.Conn, error) {
 
 	c.setDefaults()
 
+	if c.Configuration.SessionToken != "" {
+		c.Configuration.sessionFromToken, err = sessionTokenToSession(c.Configuration.SessionToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if c.convert, err = newConverter(&c.Configuration); err != nil {
 		return nil, err
 	}
@@ -173,7 +181,8 @@ type Configuration struct {
 	DriverName string `json:"-"`
 
 	// allows for some magic
-	Session *vtgateconn.VTGateSession
+	SessionToken     string
+	sessionFromToken *vtgatepb.Session
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -212,8 +221,8 @@ func (c *conn) dial() error {
 	if err != nil {
 		return err
 	}
-	if c.Configuration.Session != nil {
-		c.session = c.Configuration.Session
+	if c.Configuration.sessionFromToken != nil {
+		c.session = c.conn.SessionFromPb(c.Configuration.sessionFromToken)
 	} else {
 		c.session = c.conn.Session(c.Target, nil)
 	}
@@ -242,7 +251,27 @@ func (c *conn) Close() error {
 	return nil
 }
 
-// SessionTokenFromTx serializes the session on the tx, which can be reconstituted
+// DistributedTxFromSessionToken allows users to send serialized sessions over the wire and
+// reconnect to an existing transaction. Setting the sessionToken and address on the
+// supplied configuration is the minimum required
+func DistributedTxFromSessionToken(ctx context.Context, c Configuration) (*sql.Tx, error) {
+	if c.SessionToken == "" {
+		return nil, errors.New("c.SessionToken is required")
+	}
+	if c.Address == "" {
+		return nil, errors.New("c.Address is required")
+	}
+
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		return nil, err
+	}
+
+	// this should return the only connection associated with the db
+	return db.BeginTx(ctx, nil)
+}
+
+// SessionTokenFromTx serializes the sessionFromToken on the tx, which can be reconstituted
 // into a *sql.Tx using DistributedTxFromSessionToken
 func SessionTokenFromTx(ctx context.Context, tx *sql.Tx) (string, error) {
 	var sessionToken string
@@ -255,33 +284,7 @@ func SessionTokenFromTx(ctx context.Context, tx *sql.Tx) (string, error) {
 	return sessionToken, nil
 }
 
-// DistributedTxFromSessionToken allows users to send serialized sessions over the wire and
-// reconnect to an existing transaction
-func DistributedTxFromSessionToken(ctx context.Context, sessionToken string) (*sql.Tx, error) {
-	session, err := sessionTokenToSession(sessionToken)
-	if err != nil {
-		return nil, err
-	}
-
-	db, err := OpenWithConfiguration(Configuration{
-		// include session here - there will be a new *DB created each time
-		// that stores the session state in the &conn{} struct
-		Session: session,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// this should return the only connection associated with the db
-	c, err := db.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.BeginTx(ctx, nil)
-}
-
-func newSessionTokenRow(session *vtgateconn.VTGateSession, c *converter) (driver.Rows, error) {
+func newSessionTokenRow(session *vtgatepb.Session, c *converter) (driver.Rows, error) {
 	sessionToken, err := sessionToSessionToken(session)
 	if err != nil {
 		return nil, err
@@ -300,7 +303,7 @@ func newSessionTokenRow(session *vtgateconn.VTGateSession, c *converter) (driver
 	return newRows(&qr, c), nil
 }
 
-func sessionToSessionToken(session *vtgateconn.VTGateSession) (string, error) {
+func sessionToSessionToken(session *vtgatepb.Session) (string, error) {
 	b, err := proto.Marshal(session)
 	if err != nil {
 		return "", err
@@ -309,13 +312,13 @@ func sessionToSessionToken(session *vtgateconn.VTGateSession) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-func sessionTokenToSession(sessionToken string) (*vtgateconn.VTGateSession, error) {
+func sessionTokenToSession(sessionToken string) (*vtgatepb.Session, error) {
 	b, err := base64.StdEncoding.DecodeString(sessionToken)
 	if err != nil {
 		return nil, err
 	}
 
-	var session *vtgateconn.VTGateSession
+	session := &vtgatepb.Session{}
 	err = proto.Unmarshal(b, session)
 	if err != nil {
 		return nil, err
@@ -325,6 +328,11 @@ func sessionTokenToSession(sessionToken string) (*vtgateconn.VTGateSession, erro
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
+	// if we're loading from an existing session, we need to avoid starting a new transaction
+	if c.Configuration.SessionToken != "" {
+		return c, nil
+	}
+
 	if _, err := c.Exec("begin", nil); err != nil {
 		return nil, err
 	}
@@ -341,11 +349,25 @@ func (c *conn) BeginTx(_ context.Context, opts driver.TxOptions) (driver.Tx, err
 }
 
 func (c *conn) Commit() error {
+	// if we're loading from an existing session, disallow committing/rolling back the transaction
+	// this isn't a technical limitation, but is enforced to prevent misuse, so that only
+	// the original creator of the transaction can commit/rollback
+	if c.Configuration.SessionToken != "" {
+		return errors.New("calling Commit from a distributed tx is not allowed")
+	}
+
 	_, err := c.Exec("commit", nil)
 	return err
 }
 
 func (c *conn) Rollback() error {
+	// if we're loading from an existing session, disallow committing/rolling back the transaction
+	// this isn't a technical limitation, but is enforced to prevent misuse, so that only
+	// the original creator of the transaction can commit/rollback
+	if c.Configuration.SessionToken != "" {
+		return errors.New("calling Rollback from a distributed tx is not allowed")
+	}
+
 	_, err := c.Exec("rollback", nil)
 	return err
 }
@@ -407,9 +429,9 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 }
 
 func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	// special case for serializing the current session state
+	// special case for serializing the current sessionFromToken state
 	if query == "vt_session_token" {
-		return newSessionTokenRow(c.session, c.convert)
+		return newSessionTokenRow(c.session.SessionPb(), c.convert)
 	}
 
 	bv, err := c.convert.bindVarsFromNamedValues(args)
