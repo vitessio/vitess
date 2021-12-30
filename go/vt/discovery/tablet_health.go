@@ -32,7 +32,8 @@ import (
 // TabletHealth represents simple tablet health data that is returned to users of healthcheck.
 // No synchronization is required because we always return a copy.
 type TabletHealth struct {
-	Conn                 queryservice.QueryService
+	// Suppress Conn when converting to JSON
+	Conn                 queryservice.QueryService `json:"-"`
 	Tablet               *topodata.Tablet
 	Target               *query.Target
 	Stats                *query.RealtimeStats

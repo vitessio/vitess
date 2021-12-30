@@ -133,51 +133,51 @@ func TestAPI(t *testing.T) {
 
 	// all-tablets response for keyspace/ks1/tablets/ endpoints
 	keyspaceKs1AllTablets := `[
-		{
-			"alias": {
-				"cell": "cell1",
-				"uid": 100
-			},
-			"hostname": "mysql1-cell1.test.net",
-			"port_map": {
-				"vt": 100
-			},
-			"keyspace": "ks1",
-			"shard": "-80",
-			"key_range": {
-				"end": "gA=="
-			},
-			"type": 2,
-			"mysql_hostname": "mysql1-cell1.test.net",
-			"mysql_port": 3306,
-			"stats": {
-				"realtime": {
-					"replication_lag_seconds": 100
-				},
-				"serving": true,
-			},
-			"url": "http://mysql1-cell1.test.net:100"
-		},
-		{
-			"alias": {
-				"cell": "cell2",
-				"uid": 200
-			},
-			"hostname": "mysql2-cell2.test.net",
-			"port_map": {
-				"vt": 200
-			},
-			"keyspace": "ks1",
-			"shard": "-80",
-			"key_range": {
-				"end": "gA=="
-			},
-			"type": 2,
-			"mysql_hostname": "mysql2-cell2.test.net",
-			"mysql_port": 3306,
-			"url": "http://mysql2-cell2.test.net:200"
-		}
-	]`
+  {
+    "alias": {
+      "cell": "cell1",
+      "uid": 100
+    },
+    "hostname": "mysql1-cell1.test.net",
+    "port_map": {
+      "vt": 100
+    },
+    "keyspace": "ks1",
+    "shard": "-80",
+    "key_range": {
+      "end": "gA=="
+    },
+    "type": 2,
+    "mysql_hostname": "mysql1-cell1.test.net",
+    "mysql_port": 3306,
+    "stats": {
+      "realtime": {
+        "replication_lag_seconds": 100
+      },
+      "serving": true
+    },
+    "url": "http://mysql1-cell1.test.net:100"
+  },
+  {
+    "alias": {
+      "cell": "cell2",
+      "uid": 200
+    },
+    "hostname": "mysql2-cell2.test.net",
+    "port_map": {
+      "vt": 200
+    },
+    "keyspace": "ks1",
+    "shard": "-80",
+    "key_range": {
+      "end": "gA=="
+    },
+    "type": 2,
+    "mysql_hostname": "mysql2-cell2.test.net",
+    "mysql_port": 3306,
+    "url": "http://mysql2-cell2.test.net:200"
+  }
+]`
 
 	// Test cases.
 	table := []struct {
@@ -200,54 +200,54 @@ func TestAPI(t *testing.T) {
 		{"GET", "keyspace/ks1/tablets/80-", "", `[]`, http.StatusOK},
 		{"GET", "keyspace/ks1/tablets/?cells=cell1,cell2", "", keyspaceKs1AllTablets, http.StatusOK},
 		{"GET", "keyspace/ks1/tablets/?cells=cell1", "", `[
-			{
-				"alias": {
-					"cell": "cell1",
-					"uid": 100
-				},
-				"hostname": "mysql1-cell1.test.net",
-				"port_map": {
-					"vt": 100
-				},
-				"keyspace": "ks1",
-				"shard": "-80",
-				"key_range": {
-					"end": "gA=="
-				},
-				"type": 2,
-				"mysql_hostname": "mysql1-cell1.test.net",
-				"mysql_port": 3306,
-				"stats": {
-					"realtime": {
-						"replication_lag_seconds": 100
-					},
-					"serving": true,
-				},
-				"url": "http://mysql1-cell1.test.net:100"
-			}
-		]`, http.StatusOK},
+  {
+    "alias": {
+      "cell": "cell1",
+      "uid": 100
+    },
+    "hostname": "mysql1-cell1.test.net",
+    "port_map": {
+      "vt": 100
+    },
+    "keyspace": "ks1",
+    "shard": "-80",
+    "key_range": {
+      "end": "gA=="
+    },
+    "type": 2,
+    "mysql_hostname": "mysql1-cell1.test.net",
+    "mysql_port": 3306,
+    "stats": {
+      "realtime": {
+        "replication_lag_seconds": 100
+      },
+      "serving": true
+    },
+    "url": "http://mysql1-cell1.test.net:100"
+  }
+]`, http.StatusOK},
 		{"GET", "keyspace/ks1/tablets/?cells=cell3", "", `[]`, http.StatusOK},
 		{"GET", "keyspace/ks1/tablets/?cell=cell2", "", `[
-			{
-				"alias": {
-					"cell": "cell2",
-					"uid": 200
-				},
-				"hostname": "mysql2-cell2.test.net",
-				"port_map": {
-					"vt": 200
-				},
-				"keyspace": "ks1",
-				"shard": "-80",
-				"key_range": {
-					"end": "gA=="
-				},
-				"type": 2,
-				"mysql_hostname": "mysql2-cell2.test.net",
-				"mysql_port": 3306,
-				"url": "http://mysql2-cell2.test.net:200"
-			}
-		]`, http.StatusOK},
+  {
+    "alias": {
+      "cell": "cell2",
+      "uid": 200
+    },
+    "hostname": "mysql2-cell2.test.net",
+    "port_map": {
+      "vt": 200
+    },
+    "keyspace": "ks1",
+    "shard": "-80",
+    "key_range": {
+      "end": "gA=="
+    },
+    "type": 2,
+    "mysql_hostname": "mysql2-cell2.test.net",
+    "mysql_port": 3306,
+    "url": "http://mysql2-cell2.test.net:200"
+  }
+]`, http.StatusOK},
 		{"GET", "keyspace/ks1/tablets/?cell=cell3", "", `[]`, http.StatusOK},
 
 		// Keyspaces
@@ -372,9 +372,9 @@ func TestAPI(t *testing.T) {
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello", http.StatusInternalServerError},
 
 		// Tablet Health
-		{"GET", "tablet_health/cell1/100", "", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
-		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Serving": true, "TabletExternallyReparentedTimestamp": 0,
-		  "Stats": { "replication_lag_seconds": 100 }, "LastError": null }`, http.StatusOK},
+		{"GET", "tablet_health/cell1/100", "", `{ "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
+		  "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 },
+		  "Stats": { "replication_lag_seconds": 100 }, "PrimaryTermStartTime": 0, "LastError": null, "Serving": true}`, http.StatusOK},
 		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>", http.StatusInternalServerError},
 		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid", http.StatusInternalServerError},
 
