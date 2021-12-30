@@ -298,7 +298,7 @@ export interface StartReplicationParams {
 }
 
 export const startReplication = async ({ clusterID, alias }: StartReplicationParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/start-replication?cluster=${clusterID}`, { method: 'put' });
+    const { result } = await vtfetch(`/api/tablet/${alias}/start_replication?cluster=${clusterID}`, { method: 'put' });
     const err = pb.StartReplicationResponse.verify(result);
     if (err) throw Error(err);
 
@@ -311,7 +311,7 @@ export interface StopReplicationParams {
 }
 
 export const stopReplication = async ({ clusterID, alias }: StopReplicationParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/stop-replication?cluster=${clusterID}`, { method: 'put' });
+    const { result } = await vtfetch(`/api/tablet/${alias}/stop_replication?cluster=${clusterID}`, { method: 'put' });
     const err = pb.StopReplicationResponse.verify(result);
     if (err) throw Error(err);
 

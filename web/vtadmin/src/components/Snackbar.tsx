@@ -3,10 +3,12 @@ import { Icon, Icons } from './Icon';
 import { Intent } from './intent';
 import { ToastContainer, toast, Slide, ToastOptions } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
 interface SnackbarProps {
     message: string;
     icon?: Icons;
     intent?: Intent;
+    closeToast?: () => void;
 }
 
 // Needed to choose lighter background color
@@ -23,7 +25,7 @@ const translateIntentColor = (intent: Intent) => {
     }
 };
 
-const Snackbar: React.FC<SnackbarProps & { closeToast?: () => void }> = ({
+const Snackbar: React.FC<SnackbarProps> = ({
     closeToast,
     message,
     icon,
@@ -31,7 +33,7 @@ const Snackbar: React.FC<SnackbarProps & { closeToast?: () => void }> = ({
     ...props
 }) => {
     const intentColor = intent === Intent.none ? 'gray-900' : `${intent}`;
-    console.log(props);
+
     return (
         <div
             className={`flex font-medium text-sm text-${intentColor} border border-${intentColor} items-center bg-gray-100 justify-between py-6 px-8 z-20 rounded-xl bg-${translateIntentColor(

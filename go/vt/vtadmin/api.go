@@ -174,8 +174,8 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/start-replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/stop-replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -905,7 +905,7 @@ func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletReq
 	span, ctx := trace.NewSpan(ctx, "API.DeleteTablet")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PingAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.DeleteAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -938,7 +938,7 @@ func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTable
 	span, ctx := trace.NewSpan(ctx, "API.ReparentTablet")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PingAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1029,12 +1029,12 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
 }
 
-// StartReplication
+// StartReplication starts replication on the specified tablet.
 func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplicationRequest) (*vtadminpb.StartReplicationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.StartReplication")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PingAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1061,12 +1061,12 @@ func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplic
 	return &vtadminpb.StartReplicationResponse{Status: "ok"}, nil
 }
 
-// StopReplication
+// StopReplication stops replication on the specified tablet.
 func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicationRequest) (*vtadminpb.StopReplicationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.StopReplication")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PingAction, req.Alias, req.ClusterIds)
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
