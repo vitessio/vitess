@@ -26,10 +26,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -120,13 +120,6 @@ func (d drv) Open(name string) (driver.Conn, error) {
 
 	c.setDefaults()
 
-	if c.Configuration.SessionToken != "" {
-		c.Configuration.sessionFromToken, err = sessionTokenToSession(c.Configuration.SessionToken)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	if c.convert, err = newConverter(&c.Configuration); err != nil {
 		return nil, err
 	}
@@ -180,9 +173,9 @@ type Configuration struct {
 	// Default: "vitess"
 	DriverName string `json:"-"`
 
-	// allows for some magic
-	SessionToken     string
-	sessionFromToken *vtgatepb.Session
+	// SessionToken is a protobuf encoded vtgatepb.Session represented as base64, which
+	// can be used to distribute a transaction over the wire.
+	SessionToken string
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
@@ -221,8 +214,12 @@ func (c *conn) dial() error {
 	if err != nil {
 		return err
 	}
-	if c.Configuration.sessionFromToken != nil {
-		c.session = c.conn.SessionFromPb(c.Configuration.sessionFromToken)
+	if c.Configuration.SessionToken != "" {
+		sessionFromToken, err := sessionTokenToSession(c.Configuration.SessionToken)
+		if err != nil {
+			return err
+		}
+		c.session = c.conn.SessionFromPb(sessionFromToken)
 	} else {
 		c.session = c.conn.Session(c.Target, nil)
 	}
