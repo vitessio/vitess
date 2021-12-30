@@ -55,6 +55,11 @@ var (
 	targetThrottlerAppName = "vreplication"
 )
 
+// for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
+// we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
+const openTxQuery = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
+const deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
+
 func init() {
 	defaultRdonly = 0
 	defaultReplicas = 1
@@ -114,7 +119,8 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	insertInitialData(t)
 	materializeRollup(t)
 
-	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
+	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName, false)
+
 	// the tenant table was to test a specific case with binary sharding keys. Drop it now so that we don't
 	// have to update the rest of the tests
 	execVtgateQuery(t, vtgateConn, "customer", "drop table tenant")
@@ -144,7 +150,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	allCellNames = "zone1,zone2"
 
-	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestMultiCellVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
@@ -164,7 +170,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name)
+	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
 }
 
 // TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test the tablet picker's alias functionality
@@ -175,7 +181,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	defer func() {
 		mainClusterConfig.vreplicationCompressGTID = false
 	}()
-	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
@@ -203,7 +209,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, "product", 2)
 	})
-	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
+	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
 }
 
 // testVStreamFrom confirms that the "vstream * from" endpoint is serving data
@@ -309,7 +315,7 @@ func insertMoreProductsForTargetThrottler(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
-func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string) {
+func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string, withOpenTx bool) {
 	t.Run("shardCustomer", func(t *testing.T) {
 		workflow := "p2c"
 		sourceKs := "product"
@@ -325,12 +331,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			t.Fatal(err)
 		}
 
-		tables := "customer,tenant"
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
-
 		// Assume we are operating on first cell
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+
+		tables := "customer,tenant"
+		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 
@@ -348,8 +355,21 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
+
+		var commit func(t *testing.T)
+		if withOpenTx {
+			commit, _ = vc.startQuery(t, openTxQuery)
+		}
 		switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
 		switchWrites(t, ksWorkflow, false)
+		if withOpenTx && commit != nil {
+			commit(t)
+		}
+		vdiff(t, "product.p2c_reverse", "")
+		if withOpenTx {
+			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
+		}
+
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
