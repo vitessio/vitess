@@ -17,14 +17,12 @@ limitations under the License.
 package vitessdriver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
 
-	"context"
-
 	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
@@ -224,6 +222,30 @@ var execMap = map[string]struct {
 				"v1": sqltypes.Int64BindVariable(0),
 			},
 			Session: session1,
+		},
+		result:  &sqltypes.Result{},
+		session: session2,
+	},
+	"distributedTxRequest": {
+		execQuery: &queryExecute{
+			SQL: "distributedTxRequest",
+			BindVariables: map[string]*querypb.BindVariable{
+				"v1": sqltypes.Int64BindVariable(1),
+			},
+			Session: &vtgatepb.Session{
+				InTransaction: true,
+				ShardSessions: []*vtgatepb.Session_ShardSession{
+					{
+						Target: &querypb.Target{
+							Keyspace:   "ks",
+							Shard:      "1",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						TransactionId: 1,
+					},
+				},
+				TargetString: "@rdonly",
+			},
 		},
 		result:  &sqltypes.Result{},
 		session: session2,
