@@ -54,8 +54,10 @@ func TestInitShardPrimary(t *testing.T) {
 		"FAKE RESET ALL REPLICATION",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
 
@@ -111,8 +113,10 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		"FAKE RESET ALL REPLICATION",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
 
