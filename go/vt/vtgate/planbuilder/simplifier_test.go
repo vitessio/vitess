@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
 
 	"vitess.io/vitess/go/vt/log"
@@ -30,9 +32,9 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// TestSimplifyUnsupportedQuery should be used to whenever we get a planner bug reported
+// TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported
 // It will try to minimize the query to make it easier to understand and work with the bug.
-func TestSimplifyUnsupportedQuery(t *testing.T) {
+func TestSimplifyBuggyQuery(t *testing.T) {
 	query := "select user.id, user.name, count(*), unsharded.name from user join unsharded where unsharded.id = 42"
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
@@ -75,21 +77,33 @@ func TestUnsupportedFile(t *testing.T) {
 				t.Skip()
 				return
 			}
-			rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+			rewritten, err := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+			if err != nil {
+				t.Skip()
+			}
 			vschema.currentDb()
 
 			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 			ast := rewritten.AST
-			_, err = BuildFromStmt(sqlparser.String(ast), ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
+			origQuery := sqlparser.String(ast)
+			_, err = BuildFromStmt(origQuery, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
 
+			stmt, _, _ = sqlparser.Parse2(tcase.input)
 			simplified := simplifier.SimplifyStatement(
-				ast.(sqlparser.SelectStatement),
+				stmt.(sqlparser.SelectStatement),
 				vschema.currentDb(),
 				vschema,
 				keepSameError(tcase.input, reservedVars, vschema, rewritten.BindVarNeeds, err),
 			)
 
-			fmt.Println(sqlparser.String(simplified))
+			if simplified == nil {
+				t.Skip()
+			}
+
+			simpleQuery := sqlparser.String(simplified)
+			fmt.Println(simpleQuery)
+
+			assert.Equal(t, origQuery, simpleQuery)
 		})
 	}
 }

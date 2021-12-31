@@ -31,22 +31,32 @@ func SimplifyStatement(
 	in sqlparser.SelectStatement,
 	currentDB string,
 	si semantics.SchemaInformation,
-	test func(sqlparser.SelectStatement) bool,
+	testF func(sqlparser.SelectStatement) bool,
 ) sqlparser.SelectStatement {
-	semTable, err := semantics.Analyze(in, currentDB, si)
-	if err != nil {
-		return nil
+	var semTable *semantics.SemTable
+	var err error
+	{
+		// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
+		clone := sqlparser.CloneSelectStatement(in)
+		semTable, err = semantics.Analyze(clone, currentDB, si)
+		if err != nil {
+			return nil
+		}
+	}
+
+	test := func(s sqlparser.SelectStatement) bool {
+		// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
+		return testF(sqlparser.CloneSelectStatement(s))
 	}
 
 	// we start by removing one table at a time, and see if we still have an interesting plan
 	for idx := range semTable.Tables {
 		clone := sqlparser.CloneSelectStatement(in)
-		inner, err := semantics.Analyze(clone, currentDB, si)
 		if err != nil {
 			panic(err) // this should never happen
 		}
 		searchedTS := semantics.SingleTableSet(idx)
-		simplified := removeTable(clone, searchedTS, inner)
+		simplified := removeTable(clone, searchedTS, semTable)
 		if simplified && test(clone) {
 			name, _ := semTable.Tables[idx].Name()
 			log.Errorf("removed table %s", name)
