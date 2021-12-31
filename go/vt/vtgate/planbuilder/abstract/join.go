@@ -45,8 +45,8 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 		// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
 		// where tbl is on the rhs of the left outer join
 		if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-			sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
-			sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID()) {
+			(sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
+				sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID())) {
 			// When the predicate we are pushing is using information from an outer table, we can
 			// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
 			// the predicate will not return true if the table columns are null.
