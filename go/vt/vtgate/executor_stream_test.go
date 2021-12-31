@@ -157,7 +157,7 @@ func TestStreamSQLSharded(t *testing.T) {
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	for _, shard := range shards {
