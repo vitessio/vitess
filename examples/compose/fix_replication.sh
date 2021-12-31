@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # This is a helper script to sync replicas for mysql.
-# It handles the special case where the master has purged bin logs that the replica requires.
+# It handles the special case where the primary has purged bin logs that the replica requires.
 # To use it place a mysql dump of the database on the same directory as this script.
 # The name of the dump must be $KEYSPACE.sql. The script can also download the mysqldump for you.
 # Replication is fixed by restoring the mysqldump and resetting the slave.
@@ -56,7 +56,7 @@ get_slave_status
 # Check if SLAVE_IO is running
 if [[ $SLAVE_IO_RUNNING = "No" && $LAST_ERRNO = 1236 ]]; then
     
-    echo "Master has purged bin logs that slave requires. Sync will require restore from mysqldump"
+    echo "Primary has purged bin logs that replica requires. Sync will require restore from mysqldump"
     if [[ -f $KEYSPACE.sql ]] ; then
         echo "mysqldump file $KEYSPACE.sql exists, attempting to restore.."
         echo "Resetting slave.."
