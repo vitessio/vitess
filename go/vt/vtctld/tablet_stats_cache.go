@@ -510,7 +510,10 @@ func (c *tabletStatsCache) tabletStats(tabletAlias *topodatapb.TabletAlias) (dis
 }
 
 func health(stat *discovery.TabletHealth) float64 {
-	// The tablet is unhealthy if there is an health error.
+	if stat.Stats == nil {
+		return tabletUnhealthy
+	}
+	// The tablet is unhealthy if there is a health error.
 	if stat.Stats.HealthError != "" {
 		return tabletUnhealthy
 	}
@@ -539,9 +542,15 @@ func health(stat *discovery.TabletHealth) float64 {
 }
 
 func replicationLag(stat *discovery.TabletHealth) float64 {
+	if stat.Stats == nil {
+		return float64(-1)
+	}
 	return float64(stat.Stats.ReplicationLagSeconds)
 }
 
 func qps(stat *discovery.TabletHealth) float64 {
+	if stat.Stats == nil {
+		return 0
+	}
 	return stat.Stats.Qps
 }

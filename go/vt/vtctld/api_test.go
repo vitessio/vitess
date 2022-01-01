@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -368,6 +370,28 @@ func TestAPI(t *testing.T) {
 		  "YGridLines":[0.5, 1.5]
 		  }
 		]`, http.StatusOK},
+		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=health", "", `[
+		  {
+		   "Data":[[-1,2],[2,-1]],
+		   "Aliases":null,
+		   "KeyspaceLabel":{"Name":"ks1","Rowspan":2},
+		  "CellAndTypeLabels":[
+		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
+		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
+		  "ShardLabels":["-80","80-"],
+		  "YGridLines":[0.5,1.5]
+		  },
+		  {
+		    "Data":[[2],[2]],
+		   "Aliases":null,
+		   "KeyspaceLabel":{"Name":"ks2","Rowspan":2},
+		  "CellAndTypeLabels":[
+		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
+		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
+		  "ShardLabels":["0"],
+		  "YGridLines":[0.5, 1.5]
+		  }
+		]`, http.StatusOK},
 		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", http.StatusInternalServerError},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello", http.StatusInternalServerError},
 
@@ -424,22 +448,14 @@ func TestAPI(t *testing.T) {
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("[%v] http error: %v", in.path, err)
-				return
-			}
+			require.NoError(t, err, "[%v] http error: %v", in.path)
 
 			body, err := io.ReadAll(resp.Body)
 			resp.Body.Close()
 
-			if err != nil {
-				t.Fatalf("[%v] io.ReadAll(resp.Body) error: %v", in.path, err)
-				return
-			}
+			require.NoError(t, err, "[%v] io.ReadAll(resp.Body) error: %v", in.path)
 
-			if resp.StatusCode != in.statusCode {
-				t.Fatalf("[%v] got unexpected status code %d, want %d", in.path, resp.StatusCode, in.statusCode)
-			}
+			require.Equal(t, in.statusCode, resp.StatusCode)
 
 			got := compactJSON(body)
 			want := compactJSON([]byte(in.want))
@@ -449,10 +465,7 @@ func TestAPI(t *testing.T) {
 				// For unknown reasons errors have a trailing "\n\t\t". Remove it.
 				got = strings.TrimSpace(string(body))
 			}
-			if !strings.HasPrefix(got, want) {
-				t.Fatalf("For path [%v] got\n'%v', want\n'%v'", in.path, got, want)
-				return
-			}
+			require.True(t, strings.HasPrefix(got, want), "For path [%v] got\n'%v', want\n'%v'", in.path, got, want)
 		})
 
 	}
