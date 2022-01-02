@@ -952,7 +952,7 @@ func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.Ta
 func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dbNameOverride := subFlags.String("db_name_override", "", "Overrides the name of the database that the vttablet uses")
 	allowUpdate := subFlags.Bool("allow_update", false, "Use this flag to force initialization if a tablet with the same name already exists. Use with caution.")
-	allowPrimaryOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution.")
+	allowPrimaryOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as primary, and a primary for the keyspace/shard already exists. Use with caution.")
 	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
 	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
 	mysqlHost := subFlags.String("mysql_host", "", "The mysql host for the mysql server")
@@ -2301,6 +2301,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout. -timeout is only supported for SwitchTraffic and ReverseTraffic.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication (default true). -reverse_replication is only supported for SwitchTraffic.")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up).  -keep_data is only supported for Complete and Cancel.")
+	keepRoutingRules := subFlags.Bool("keep_routing_rules", false, "Do not remove the routing rules for the source keyspace.  -keep_routing_rules is only supported for Complete and Cancel.")
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
@@ -2466,6 +2467,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
 		vrwp.KeepData = *keepData
+		vrwp.KeepRoutingRules = *keepRoutingRules
 	}
 	vrwp.WorkflowType = workflowType
 	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
@@ -2823,7 +2825,7 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	_, _, _ = dryRun, keyspace, workflowName
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, *dryRun)
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, false, *dryRun)
 	if err != nil {
 		return err
 	}

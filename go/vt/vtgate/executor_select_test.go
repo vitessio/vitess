@@ -19,6 +19,7 @@ package vtgate
 import (
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2929,4 +2930,61 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 	}
 	require.Nil(t, sbc1.Queries)
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}
+
+func TestRegionRange(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+
+	*GatewayImplementation = tabletGatewayImplementation
+	*plannerVersion = "gen4"
+	defer func() {
+		*plannerVersion = "v3"
+	}()
+	cell := "regioncell"
+	ks := "TestExecutor"
+	hc := discovery.NewFakeHealthCheck(nil)
+	s := createSandbox(ks)
+	s.ShardSpec = "-20-20a0-"
+	s.VSchema = executorVSchema
+	serv := newSandboxForCells([]string{cell})
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-20a0", "20a0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := createExecutor(serv, cell, resolver)
+
+	tcases := []struct {
+		regionID          int
+		noOfShardsTouched int
+	}{{
+		regionID:          31,
+		noOfShardsTouched: 1,
+	}, {
+		regionID:          32,
+		noOfShardsTouched: 2,
+	}, {
+		regionID:          33,
+		noOfShardsTouched: 1,
+	}}
+	for _, tcase := range tcases {
+		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
+			sql := fmt.Sprintf("select * from user_region where cola = %d", tcase.regionID)
+			_, err := executor.Execute(
+				context.Background(),
+				"TestRegionRange",
+				NewAutocommitSession(&vtgatepb.Session{}),
+				sql,
+				nil)
+			require.NoError(t, err)
+			count := 0
+			for _, sbc := range conns {
+				count = count + len(sbc.Queries)
+				sbc.Queries = nil
+			}
+			require.Equal(t, tcase.noOfShardsTouched, count)
+		})
+	}
 }

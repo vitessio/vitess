@@ -183,7 +183,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	tme.expectDeleteReverseVReplication()
 	tme.expectDeleteTargetVReplication()
-	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false); err != nil {
+	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false, false); err != nil {
 		t.Fatal(err)
 	}
 	verifyQueries(t, tme.allDBClients)

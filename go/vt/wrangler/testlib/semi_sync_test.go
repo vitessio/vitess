@@ -32,7 +32,7 @@ func init() {
 
 func checkSemiSyncEnabled(t *testing.T, primary, replica bool, tablets ...*FakeTablet) {
 	for _, tablet := range tablets {
-		assert.Equal(t, primary, tablet.FakeMysqlDaemon.SemiSyncMasterEnabled, "%v: SemiSyncMasterEnabled", topoproto.TabletAliasString(tablet.Tablet.Alias))
+		assert.Equal(t, primary, tablet.FakeMysqlDaemon.SemiSyncPrimaryEnabled, "%v: SemiSyncPrimaryEnabled", topoproto.TabletAliasString(tablet.Tablet.Alias))
 		assert.Equal(t, replica, tablet.FakeMysqlDaemon.SemiSyncReplicaEnabled, "%v: SemiSyncReplicaEnabled", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	}
 }

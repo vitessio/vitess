@@ -89,6 +89,8 @@ type MultiColumn interface {
 	Vindex
 	Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
 	Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
+	// PartialVindex returns true if subset of columns can be passed in to the vindex Map and Verify function.
+	PartialVindex() bool
 }
 
 // A Reversible vindex is one that can perform a
