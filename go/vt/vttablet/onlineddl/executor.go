@@ -255,6 +255,28 @@ func (e *Executor) initSchema(ctx context.Context) error {
 			return err
 		}
 	}
+
+	{
+		// init vreplication table
+
+		// We need to talk to tabletmanager's VREngine. But we're on TabletServer. While we live in the same
+		// process as VREngine, it is actually simpler to get hold of it via gRPC, just like wrangler does.
+		tmClient := tmclient.NewTabletManagerClient()
+		tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+		if err != nil {
+			return err
+		}
+		// This makes sure vreplication DDLs are executed and _vreplication table is created
+		query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
+			sqltypes.StringBindVariable("-"),
+		)
+		if err != nil {
+			return err
+		}
+		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
+			return err
+		}
+	}
 	e.schemaInitialized = true
 	return nil
 }
@@ -1518,7 +1540,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		// migration could have started by a different tablet. We need to actively verify if it is running
 		foundRunning, _, _ = e.isVReplMigrationRunning(ctx, onlineDDL.UUID)
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
-			return foundRunning, fmt.Errorf("Error cancelling migration, vreplication exec error: %+v", err)
+			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 	case schema.DDLStrategyPTOSC:
@@ -1549,7 +1571,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		// gh-ost migrations are easy to kill: just touch their specific panic flag files. We trust
 		// gh-ost to terminate. No need to KILL it. And there's no trigger cleanup.
 		if err := e.createGhostPanicFlagFile(onlineDDL.UUID); err != nil {
-			return foundRunning, fmt.Errorf("Error cancelling gh-ost migration, flag file error: %+v", err)
+			return foundRunning, fmt.Errorf("Error terminating gh-ost migration, flag file error: %+v", err)
 		}
 	}
 	return foundRunning, nil
@@ -1575,16 +1597,19 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
 		return emptyResult, nil
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
+		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
 			return nil, err
 		}
 		rowsAffected = 1
 	}
+	defer e.triggerNextCheckInterval()
 
 	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
 	defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
 
 	if migrationFound {
+		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
 		rowsAffected = 1
 	}
 	if err != nil {
@@ -2045,6 +2070,7 @@ func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDD
 	if err != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 	}
+	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 	return err
 }
 
@@ -3145,6 +3171,7 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if err != nil {
 		return nil, err
 	}
+	defer e.triggerNextCheckInterval()
 	return e.execQuery(ctx, query)
 }
 
