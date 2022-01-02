@@ -40,7 +40,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
 	var ksidVindex vindexes.SingleColumn
 	var ksidCol string
 	for _, index := range table.Ordered {
-		if !index.Vindex.IsUnique() {
+		if !index.IsUnique() {
 			continue
 		}
 		single, ok := index.Vindex.(vindexes.SingleColumn)

@@ -18,8 +18,6 @@ package mysqlctl
 
 /*
 This file contains the reparenting methods for mysqlctl.
-
-TODO(alainjobart) Once refactoring is done, remove unused code paths.
 */
 
 import (
@@ -49,6 +47,18 @@ func CreateReparentJournal() []string {
   replication_position VARBINARY(%v) DEFAULT NULL,
   PRIMARY KEY (time_created_ns))
 ENGINE=InnoDB`, mysql.MaximumPositionSize)}
+}
+
+// AlterReparentJournal returns the commands to execute to change
+// column master_alias -> primary_alias or the other way
+// In 13.0.0 we introduce renaming of primary_alias -> master_alias.
+// This is to support in-place downgrade from a later version.
+// In 14.0.0 we will replace this with renaming of master_alias -> primary_alias.
+// This is to support in-place upgrades from 13.0.x to 14.0.x
+func AlterReparentJournal() []string {
+	return []string{
+		"`ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL`",
+	}
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
