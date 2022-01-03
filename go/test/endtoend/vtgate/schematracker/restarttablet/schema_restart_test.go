@@ -76,12 +76,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// Enable schema tracking
+		// List of users authorized to execute vschema ddl operations
 		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{
-			"-queryserver-config-schema-change-signal",
-			fmt.Sprintf("-queryserver-config-schema-change-signal-interval=%d", signalInterval),
-		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -94,6 +90,10 @@ func TestMain(m *testing.M) {
 
 		// restart the tablet so that the schema.Engine gets a chance to start with existing schema
 		tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+		tablet.VttabletProcess.ExtraArgs = []string{
+			"-queryserver-config-schema-change-signal",
+			fmt.Sprintf("-queryserver-config-schema-change-signal-interval=%d", signalInterval),
+		}
 		if err := tablet.RestartOnlyTablet(); err != nil {
 			return 1
 		}
