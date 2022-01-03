@@ -17,15 +17,15 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"io/ioutil"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // assertSQLError makes sure we get the right error.
@@ -130,5 +130,9 @@ func TestConnectTimeout(t *testing.T) {
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	os.Remove(name)
-	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "")
+	if runtime.GOOS == "darwin" {
+		assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "socket operation on non-socket", "")
+	} else {
+		assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "")
+	}
 }

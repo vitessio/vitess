@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -26,8 +27,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	vtenv "github.com/dolthub/vitess/go/vt/env"
@@ -768,7 +767,7 @@ func TestClearTextServer(t *testing.T) {
 			t.Fatalf("mysql should have failed but returned: %v", output)
 		}
 	} else {
-		if strings.Contains(output, "No such file or directory") {
+		if strings.Contains(output, "No such file or directory") || strings.Contains(output, "(no such file)") {
 			t.Logf("skipping mysql clear text tests, as the clear text plugin cannot be loaded: %v", err)
 			return
 		}
@@ -842,7 +841,7 @@ func TestDialogServer(t *testing.T) {
 	}
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
-	if strings.Contains(output, "No such file or directory") {
+	if strings.Contains(output, "No such file or directory") || strings.Contains(output, "(no such file)") {
 		t.Logf("skipping dialog plugin tests, as the dialog plugin cannot be loaded: %v", err)
 		return
 	}
@@ -952,7 +951,7 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
 
-	checkCountForTLSVer(t, versionTLS12, 1)
+	checkCountForTLSVer(t, versionTLS13, 1)
 	checkCountForTLSVer(t, versionNoTLS, 0)
 	conn.Close()
 

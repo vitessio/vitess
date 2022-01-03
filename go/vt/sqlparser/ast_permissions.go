@@ -50,10 +50,10 @@ func (ar *AccountRename) String() string {
 
 // Authentication represents an account's authentication.
 type Authentication struct {
-	RandomPassword   bool
-	Password         string
-	Identity         string
-	Plugin           string
+	RandomPassword bool
+	Password       string
+	Identity       string
+	Plugin         string
 }
 
 // String returns this Authentication as a formatted string.
@@ -108,6 +108,7 @@ func (awa *AccountWithAuth) String() string {
 
 // TLSOptionItemType defines the type that a TLSOptionItem represents.
 type TLSOptionItemType byte
+
 const (
 	TLSOptionItemType_SSL TLSOptionItemType = iota
 	TLSOptionItemType_X509
@@ -124,10 +125,10 @@ type TLSOptionItem struct {
 
 // TLSOptions represents a new user's TLS options.
 type TLSOptions struct {
-	SSL bool
-	X509 bool
-	Cipher string
-	Issuer string
+	SSL     bool
+	X509    bool
+	Cipher  string
+	Issuer  string
 	Subject string
 }
 
@@ -194,6 +195,7 @@ func (tls *TLSOptions) String() string {
 
 // AccountLimitItemType defines the type that an AccountLimitItem represents.
 type AccountLimitItemType byte
+
 const (
 	AccountLimitItemType_Queries_PH AccountLimitItemType = iota
 	AccountLimitItemType_Updates_PH
@@ -209,10 +211,10 @@ type AccountLimitItem struct {
 
 // AccountLimits represents a new user's maximum limits.
 type AccountLimits struct {
-	MaxQueriesPerHour *SQLVal
-	MaxUpdatesPerHour *SQLVal
+	MaxQueriesPerHour     *SQLVal
+	MaxUpdatesPerHour     *SQLVal
 	MaxConnectionsPerHour *SQLVal
-	MaxUserConnections *SQLVal
+	MaxUserConnections    *SQLVal
 }
 
 // NewAccountLimits returns a new AccountLimits from the given items.
@@ -257,6 +259,7 @@ func (al *AccountLimits) String() string {
 
 // PassLockItemType defines the type that a PassLockItem represents.
 type PassLockItemType byte
+
 const (
 	PassLockItemType_PassExpireDefault PassLockItemType = iota
 	PassLockItemType_PassExpireNever
@@ -360,6 +363,7 @@ func (po *PasswordOptions) String() string {
 
 // PrivilegeType is the type of privilege that is being granted or revoked.
 type PrivilegeType byte
+
 const (
 	PrivilegeType_All PrivilegeType = iota
 	PrivilegeType_Insert
@@ -372,6 +376,7 @@ const (
 
 // GrantObjectType represents the object type that the GRANT or REVOKE statement will apply to.
 type GrantObjectType byte
+
 const (
 	GrantObjectType_Any GrantObjectType = iota
 	GrantObjectType_Table
@@ -381,6 +386,7 @@ const (
 
 // GrantUserAssumptionType is the assumption type that the user executing the GRANT statement will use.
 type GrantUserAssumptionType byte
+
 const (
 	GrantUserAssumptionType_Default GrantUserAssumptionType = iota
 	GrantUserAssumptionType_None
@@ -391,7 +397,7 @@ const (
 
 // PrivilegeLevel defines the level that a privilege applies to.
 type PrivilegeLevel struct {
-	Database string
+	Database     string
 	TableRoutine string
 }
 
@@ -414,9 +420,9 @@ func (p *PrivilegeLevel) String() string {
 
 // Privilege specifies a privilege to be used in a GRANT or REVOKE statement.
 type Privilege struct {
-	Type PrivilegeType
+	Type        PrivilegeType
 	DynamicName string
-	Columns []string
+	Columns     []string
 }
 
 // String returns the Privilege as a formatted string.
@@ -451,8 +457,8 @@ func (p *Privilege) String() string {
 
 // GrantUserAssumption represents the target user that the user executing the GRANT statement will assume the identity of.
 type GrantUserAssumption struct {
-	Type GrantUserAssumptionType
-	User AccountName
+	Type  GrantUserAssumptionType
+	User  AccountName
 	Roles []AccountName
 }
 
@@ -492,14 +498,14 @@ func (gau *GrantUserAssumption) String() string {
 
 // CreateUser represents the CREATE USER statement.
 type CreateUser struct {
-	IfNotExists bool
-	Users []AccountWithAuth
-	DefaultRoles []AccountName
-	TLSOptions *TLSOptions
-	AccountLimits *AccountLimits
+	IfNotExists     bool
+	Users           []AccountWithAuth
+	DefaultRoles    []AccountName
+	TLSOptions      *TLSOptions
+	AccountLimits   *AccountLimits
 	PasswordOptions *PasswordOptions
-	Locked bool
-	Attribute string
+	Locked          bool
+	Attribute       string
 }
 
 var _ Statement = (*CreateUser)(nil)
@@ -571,7 +577,7 @@ func (r *RenameUser) Format(buf *TrackedBuffer) {
 
 // DropUser represents the DROP USER statement.
 type DropUser struct {
-	IfExists bool
+	IfExists     bool
 	AccountNames []AccountName
 }
 
@@ -649,12 +655,12 @@ func (d *DropRole) Format(buf *TrackedBuffer) {
 
 // GrantPrivilege represents the GRANT...ON...TO statement.
 type GrantPrivilege struct {
-	Privileges []Privilege
-	ObjectType GrantObjectType
-	PrivilegeLevel PrivilegeLevel
-	To []AccountName
+	Privileges      []Privilege
+	ObjectType      GrantObjectType
+	PrivilegeLevel  PrivilegeLevel
+	To              []AccountName
 	WithGrantOption bool
-	As *GrantUserAssumption
+	As              *GrantUserAssumption
 }
 
 var _ Statement = (*GrantPrivilege)(nil)
@@ -699,8 +705,8 @@ func (g *GrantPrivilege) Format(buf *TrackedBuffer) {
 
 // GrantRole represents the GRANT...TO statement.
 type GrantRole struct {
-	Roles []AccountName
-	To []AccountName
+	Roles           []AccountName
+	To              []AccountName
 	WithAdminOption bool
 }
 
@@ -732,8 +738,8 @@ func (g *GrantRole) Format(buf *TrackedBuffer) {
 
 // GrantProxy represents the GRANT PROXY statement.
 type GrantProxy struct {
-	On AccountName
-	To []AccountName
+	On              AccountName
+	To              []AccountName
 	WithGrantOption bool
 }
 
@@ -758,10 +764,10 @@ func (g *GrantProxy) Format(buf *TrackedBuffer) {
 
 // RevokePrivilege represents the REVOKE...ON...FROM statement.
 type RevokePrivilege struct {
-	Privileges []Privilege
-	ObjectType GrantObjectType
+	Privileges     []Privilege
+	ObjectType     GrantObjectType
 	PrivilegeLevel PrivilegeLevel
-	From []AccountName
+	From           []AccountName
 }
 
 var _ Statement = (*RevokePrivilege)(nil)
@@ -822,7 +828,7 @@ func (r *RevokeAllPrivileges) Format(buf *TrackedBuffer) {
 // RevokeRole represents the REVOKE...FROM statement.
 type RevokeRole struct {
 	Roles []AccountName
-	From []AccountName
+	From  []AccountName
 }
 
 var _ Statement = (*RevokeRole)(nil)
@@ -850,7 +856,7 @@ func (r *RevokeRole) Format(buf *TrackedBuffer) {
 
 // RevokeProxy represents the REVOKE PROXY statement.
 type RevokeProxy struct {
-	On AccountName
+	On   AccountName
 	From []AccountName
 }
 
@@ -904,7 +910,7 @@ func (s *ShowGrants) Format(buf *TrackedBuffer) {
 }
 
 // ShowPrivileges represents the SHOW PRIVILEGES statement.
-type ShowPrivileges struct {}
+type ShowPrivileges struct{}
 
 var _ Statement = (*ShowPrivileges)(nil)
 
