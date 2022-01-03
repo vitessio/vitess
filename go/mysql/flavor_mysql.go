@@ -17,13 +17,13 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
 	"github.com/dolthub/vitess/go/vt/vterrors"
-	"golang.org/x/net/context"
 )
 
 // mysqlFlavor implements the Flavor interface for Mysql.

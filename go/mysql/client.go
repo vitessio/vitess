@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/dolthub/vitess/go/vt/vttls"
-	"golang.org/x/net/context"
 )
 
 // connectResult is used by Connect.

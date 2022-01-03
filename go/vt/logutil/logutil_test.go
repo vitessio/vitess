@@ -48,6 +48,10 @@ func TestPurgeByCtime(t *testing.T) {
 	if err := os.MkdirAll(logDir, 0777); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
+	logDir, err := filepath.EvalSymlinks(logDir)
+	if err != nil {
+		t.Fatalf("filepath.EvalSymlinks(logDir): %v", err)
+	}
 	defer os.RemoveAll(logDir)
 
 	now := time.Date(2013, 8, 6, 15, 10, 06, 0, time.Now().Location())
@@ -87,6 +91,10 @@ func TestPurgeByMtime(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
 	if err := os.MkdirAll(logDir, 0777); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
+	}
+	logDir, err := filepath.EvalSymlinks(logDir)
+	if err != nil {
+		t.Fatalf("filepath.EvalSymlinks(logDir): %v", err)
 	}
 	defer os.RemoveAll(logDir)
 	createFileWithMtime := func(filename, mtimeStr string) {

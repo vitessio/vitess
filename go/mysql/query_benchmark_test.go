@@ -17,13 +17,12 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"flag"
 	"math/rand"
 	"net"
 	"strings"
 	"testing"
-
-	"golang.org/x/net/context"
 )
 
 var testReadConnBufferSize = DefaultConnBufferSize
