@@ -46,7 +46,6 @@ type Tokenizer struct {
 	LastError            error
 	posVarIndex          int
 	ParseTree            Statement
-	partialDDL           *DDL
 	nesting              int
 	multi                bool
 	specialComment       *Tokenizer
@@ -560,13 +559,6 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 			break
 		}
 		typ, val = tkn.Scan()
-	}
-	if typ == 0 || typ == ';' || typ == LEX_ERROR {
-		// If encounter end of statement or invalid token,
-		// we should not accept partially parsed DDLs. They
-		// should instead result in parser errors. See the
-		// Parse function to see how this is handled.
-		tkn.partialDDL = nil
 	}
 	lval.bytes = val
 	tkn.lastToken = val
@@ -1097,7 +1089,6 @@ func (tkn *Tokenizer) next() {
 // reset clears any internal state.
 func (tkn *Tokenizer) reset() {
 	tkn.ParseTree = nil
-	tkn.partialDDL = nil
 	tkn.specialComment = nil
 	tkn.posVarIndex = 0
 	tkn.nesting = 0

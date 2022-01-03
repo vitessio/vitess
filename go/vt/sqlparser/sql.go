@@ -3,12 +3,11 @@
 //line sql.y:18
 package sqlparser
 
-import (
-	"fmt"
-	__yyfmt__ "fmt"
-)
+import __yyfmt__ "fmt"
 
 //line sql.y:18
+
+import "fmt"
 
 func setParseTree(yylex interface{}, stmt Statement) {
 	yylex.(*Tokenizer).ParseTree = stmt
@@ -16,10 +15,6 @@ func setParseTree(yylex interface{}, stmt Statement) {
 
 func setAllowComments(yylex interface{}, allow bool) {
 	yylex.(*Tokenizer).AllowComments = allow
-}
-
-func setDDL(yylex interface{}, ddl *DDL) {
-	yylex.(*Tokenizer).partialDDL = ddl
 }
 
 func incNesting(yylex interface{}) bool {
@@ -55,7 +50,7 @@ func skipToEnd(yylex interface{}) {
 	yylex.(*Tokenizer).SkipToEnd = true
 }
 
-//line sql.y:69
+//line sql.y:65
 type yySymType struct {
 	yys                      int
 	empty                    struct{}
@@ -5949,38 +5944,38 @@ yydefault:
 
 	case 1:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:479
+//line sql.y:475
 		{
 			setParseTree(yylex, yyDollar[1].statement)
 		}
 	case 2:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:483
+//line sql.y:479
 		{
 			setParseTree(yylex, yyDollar[1].statement)
 			statementSeen(yylex)
 		}
 	case 3:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:490
+//line sql.y:486
 		{
 			yyVAL.statement = yyDollar[1].selStmt
 		}
 	case 36:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:526
+//line sql.y:522
 		{
 			setParseTree(yylex, nil)
 		}
 	case 37:
 		yyDollar = yyS[yypt-11 : yypt+1]
-//line sql.y:532
+//line sql.y:528
 		{
 			yyVAL.statement = &Load{Local: yyDollar[3].boolVal, Infile: yyDollar[4].str, Table: yyDollar[5].tableName, Partition: yyDollar[6].partitions, Charset: yyDollar[7].str, Fields: yyDollar[8].Fields, Lines: yyDollar[9].Lines, IgnoreNum: yyDollar[10].sqlVal, Columns: yyDollar[11].columns}
 		}
 	case 38:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:538
+//line sql.y:534
 		{
 			yyDollar[1].selStmt.SetOrderBy(yyDollar[2].orderBy)
 			yyDollar[1].selStmt.SetLimit(yyDollar[3].limit)
@@ -5989,25 +5984,25 @@ yydefault:
 		}
 	case 39:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:545
+//line sql.y:541
 		{
 			yyVAL.selStmt = &Select{Comments: Comments(yyDollar[2].bytes2), Cache: yyDollar[3].str, SelectExprs: SelectExprs{Nextval{Expr: yyDollar[5].expr}}, From: TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}}
 		}
 	case 40:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:551
+//line sql.y:547
 		{
 			yyVAL.statement = &Stream{Comments: Comments(yyDollar[2].bytes2), SelectExpr: yyDollar[3].selectExpr, Table: yyDollar[5].tableName}
 		}
 	case 41:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:558
+//line sql.y:554
 		{
 			yyVAL.selStmt = yyDollar[1].selStmt
 		}
 	case 42:
 		yyDollar = yyS[yypt-13 : yypt+1]
-//line sql.y:562
+//line sql.y:558
 		{
 			yyVAL.selStmt = &Select{CommonTableExprs: yyDollar[1].tableExprs, Comments: Comments(yyDollar[3].bytes2), Cache: yyDollar[4].str, Distinct: yyDollar[5].str, Hints: yyDollar[7].str, SelectExprs: yyDollar[8].selectExprs, From: yyDollar[10].tableExprs, Where: NewWhere(WhereStr, yyDollar[11].expr), GroupBy: GroupBy(yyDollar[12].exprs), Having: NewWhere(HavingStr, yyDollar[13].expr)}
 			if yyDollar[6].byt == 1 {
@@ -6016,13 +6011,13 @@ yydefault:
 		}
 	case 43:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:569
+//line sql.y:565
 		{
 			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
 		}
 	case 44:
 		yyDollar = yyS[yypt-10 : yypt+1]
-//line sql.y:575
+//line sql.y:571
 		{
 			yyVAL.selStmt = &Select{Comments: Comments(yyDollar[2].bytes2), Cache: yyDollar[3].str, Distinct: yyDollar[4].str, Hints: yyDollar[6].str, SelectExprs: yyDollar[7].selectExprs, From: TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, yyDollar[8].expr), GroupBy: GroupBy(yyDollar[9].exprs), Having: NewWhere(HavingStr, yyDollar[10].expr)}
 			if yyDollar[5].byt == 1 {
@@ -6031,7 +6026,7 @@ yydefault:
 		}
 	case 45:
 		yyDollar = yyS[yypt-12 : yypt+1]
-//line sql.y:582
+//line sql.y:578
 		{
 			yyVAL.selStmt = &Select{Comments: Comments(yyDollar[2].bytes2), Cache: yyDollar[3].str, Distinct: yyDollar[4].str, Hints: yyDollar[6].str, SelectExprs: yyDollar[7].selectExprs, From: yyDollar[9].tableExprs, Where: NewWhere(WhereStr, yyDollar[10].expr), GroupBy: GroupBy(yyDollar[11].exprs), Having: NewWhere(HavingStr, yyDollar[12].expr)}
 			if yyDollar[5].byt == 1 {
@@ -6040,61 +6035,61 @@ yydefault:
 		}
 	case 46:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:591
+//line sql.y:587
 		{
 			yyVAL.tableExprs = yyDollar[2].tableExprs
 		}
 	case 47:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:597
+//line sql.y:593
 		{
 			yyVAL.tableExprs = TableExprs{yyDollar[1].tableExpr}
 		}
 	case 48:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:601
+//line sql.y:597
 		{
 			yyVAL.tableExprs = append(yyDollar[1].tableExprs, yyDollar[3].tableExpr)
 		}
 	case 49:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:607
+//line sql.y:603
 		{
 			yyVAL.tableExpr = &CommonTableExpr{&AliasedTableExpr{Expr: yyDollar[3].simpleTableExpr, As: yyDollar[1].tableIdent}, nil}
 		}
 	case 50:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:611
+//line sql.y:607
 		{
 			yyVAL.tableExpr = &CommonTableExpr{&AliasedTableExpr{Expr: yyDollar[6].simpleTableExpr, As: yyDollar[1].tableIdent}, yyDollar[3].columns}
 		}
 	case 51:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:617
+//line sql.y:613
 		{
 			yyVAL.selStmt = yyDollar[1].selStmt
 		}
 	case 52:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:621
+//line sql.y:617
 		{
 			yyVAL.selStmt = &ParenSelect{Select: yyDollar[2].selStmt}
 		}
 	case 53:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:627
+//line sql.y:623
 		{
 			yyVAL.selStmt = yyDollar[1].selStmt
 		}
 	case 54:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:631
+//line sql.y:627
 		{
 			yyVAL.selStmt = &ParenSelect{Select: yyDollar[2].selStmt}
 		}
 	case 55:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:637
+//line sql.y:633
 		{
 			// insert_data returns a *Insert pre-filled with Columns & Values
 			ins := yyDollar[6].ins
@@ -6108,7 +6103,7 @@ yydefault:
 		}
 	case 56:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:649
+//line sql.y:645
 		{
 			cols := make(Columns, 0, len(yyDollar[7].assignExprs))
 			vals := make(ValTuple, 0, len(yyDollar[8].assignExprs))
@@ -6120,113 +6115,113 @@ yydefault:
 		}
 	case 57:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:661
+//line sql.y:657
 		{
 			yyVAL.str = InsertStr
 		}
 	case 58:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:665
+//line sql.y:661
 		{
 			yyVAL.str = ReplaceStr
 		}
 	case 59:
 		yyDollar = yyS[yypt-9 : yypt+1]
-//line sql.y:671
+//line sql.y:667
 		{
 			yyVAL.statement = &Update{Comments: Comments(yyDollar[2].bytes2), Ignore: yyDollar[3].str, TableExprs: yyDollar[4].tableExprs, Exprs: yyDollar[6].assignExprs, Where: NewWhere(WhereStr, yyDollar[7].expr), OrderBy: yyDollar[8].orderBy, Limit: yyDollar[9].limit}
 		}
 	case 60:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:677
+//line sql.y:673
 		{
 			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].bytes2), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[4].tableName}}, Partitions: yyDollar[5].partitions, Where: NewWhere(WhereStr, yyDollar[6].expr), OrderBy: yyDollar[7].orderBy, Limit: yyDollar[8].limit}
 		}
 	case 61:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:681
+//line sql.y:677
 		{
 			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].bytes2), Targets: yyDollar[4].tableNames, TableExprs: yyDollar[6].tableExprs, Where: NewWhere(WhereStr, yyDollar[7].expr)}
 		}
 	case 62:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:685
+//line sql.y:681
 		{
 			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].bytes2), Targets: yyDollar[3].tableNames, TableExprs: yyDollar[5].tableExprs, Where: NewWhere(WhereStr, yyDollar[6].expr)}
 		}
 	case 63:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:689
+//line sql.y:685
 		{
 			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].bytes2), Targets: yyDollar[3].tableNames, TableExprs: yyDollar[5].tableExprs, Where: NewWhere(WhereStr, yyDollar[6].expr)}
 		}
 	case 64:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:694
+//line sql.y:690
 		{
 		}
 	case 65:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:695
+//line sql.y:691
 		{
 		}
 	case 66:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:699
+//line sql.y:695
 		{
 			yyVAL.tableNames = TableNames{yyDollar[1].tableName.ToViewName()}
 		}
 	case 67:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:703
+//line sql.y:699
 		{
 			yyVAL.tableNames = append(yyVAL.tableNames, yyDollar[3].tableName.ToViewName())
 		}
 	case 68:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:709
+//line sql.y:705
 		{
 			yyVAL.tableNames = TableNames{yyDollar[1].tableName}
 		}
 	case 69:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:713
+//line sql.y:709
 		{
 			yyVAL.tableNames = append(yyVAL.tableNames, yyDollar[3].tableName)
 		}
 	case 70:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:719
+//line sql.y:715
 		{
 			yyVAL.tableNames = TableNames{yyDollar[1].tableName}
 		}
 	case 71:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:723
+//line sql.y:719
 		{
 			yyVAL.tableNames = append(yyVAL.tableNames, yyDollar[3].tableName)
 		}
 	case 72:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:728
+//line sql.y:724
 		{
 			yyVAL.partitions = nil
 		}
 	case 73:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:732
+//line sql.y:728
 		{
 			yyVAL.partitions = yyDollar[3].partitions
 		}
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:738
+//line sql.y:734
 		{
 			yyVAL.statement = &Set{Comments: Comments(yyDollar[2].bytes2), Exprs: yyDollar[3].setVarExprs}
 		}
 	case 75:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:742
+//line sql.y:738
 		{
 			for i := 0; i < len(yyDollar[4].setVarExprs); i++ {
 				yyDollar[4].setVarExprs[i].Scope = SetScope_None
@@ -6235,7 +6230,7 @@ yydefault:
 		}
 	case 76:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:749
+//line sql.y:745
 		{
 			for i := 0; i < len(yyDollar[5].setVarExprs); i++ {
 				yyDollar[5].setVarExprs[i].Scope = yyDollar[3].setScope
@@ -6244,73 +6239,73 @@ yydefault:
 		}
 	case 77:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:758
+//line sql.y:754
 		{
 			yyVAL.setVarExprs = SetVarExprs{yyDollar[1].setVarExpr}
 		}
 	case 78:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:762
+//line sql.y:758
 		{
 			yyVAL.setVarExprs = append(yyVAL.setVarExprs, yyDollar[3].setVarExpr)
 		}
 	case 79:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:768
+//line sql.y:764
 		{
 			yyVAL.setVarExpr = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(yyDollar[3].str))}
 		}
 	case 80:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:772
+//line sql.y:768
 		{
 			yyVAL.setVarExpr = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
 		}
 	case 81:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:776
+//line sql.y:772
 		{
 			yyVAL.setVarExpr = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
 		}
 	case 82:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:782
+//line sql.y:778
 		{
 			yyVAL.str = IsolationLevelRepeatableRead
 		}
 	case 83:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:786
+//line sql.y:782
 		{
 			yyVAL.str = IsolationLevelReadCommitted
 		}
 	case 84:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:790
+//line sql.y:786
 		{
 			yyVAL.str = IsolationLevelReadUncommitted
 		}
 	case 85:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:794
+//line sql.y:790
 		{
 			yyVAL.str = IsolationLevelSerializable
 		}
 	case 86:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:799
+//line sql.y:795
 		{
 			yyVAL.int = yyPosition(yylex)
 		}
 	case 87:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:804
+//line sql.y:800
 		{
 			yyVAL.int = yyOldPosition(yylex)
 		}
 	case 88:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:810
+//line sql.y:806
 		{
 			yyDollar[1].ddl.TableSpec = yyDollar[2].TableSpec
 			if len(yyDollar[1].ddl.TableSpec.Constraints) > 0 {
@@ -6320,39 +6315,39 @@ yydefault:
 		}
 	case 89:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:819
+//line sql.y:815
 		{
 			yyDollar[1].ddl.OptSelect = &OptSelect{Select: yyDollar[3].selStmt}
 			yyVAL.statement = yyDollar[1].ddl
 		}
 	case 90:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:824
+//line sql.y:820
 		{
 			yyDollar[1].ddl.OptLike = &OptLike{LikeTable: yyDollar[3].tableName}
 			yyVAL.statement = yyDollar[1].ddl
 		}
 	case 91:
 		yyDollar = yyS[yypt-11 : yypt+1]
-//line sql.y:829
+//line sql.y:825
 		{
 			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[7].tableName, IndexSpec: &IndexSpec{Action: CreateStr, ToName: yyDollar[4].colIdent, Using: yyDollar[5].colIdent, Type: yyDollar[2].str, Columns: yyDollar[9].indexColumns, Options: yyDollar[11].indexOptions}}
 		}
 	case 92:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:833
+//line sql.y:829
 		{
 			yyVAL.statement = &DDL{Action: CreateStr, View: yyDollar[3].tableName.ToViewName(), ViewExpr: yyDollar[6].selStmt, SubStatementPositionStart: yyDollar[5].int, SubStatementPositionEnd: yyDollar[7].int - 1}
 		}
 	case 93:
 		yyDollar = yyS[yypt-9 : yypt+1]
-//line sql.y:837
+//line sql.y:833
 		{
 			yyVAL.statement = &DDL{Action: CreateStr, View: yyDollar[5].tableName.ToViewName(), ViewExpr: yyDollar[8].selStmt, SubStatementPositionStart: yyDollar[7].int, SubStatementPositionEnd: yyDollar[9].int - 1, OrReplace: true}
 		}
 	case 94:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:841
+//line sql.y:837
 		{
 			var ne bool
 			if yyDollar[3].byt != 0 {
@@ -6362,7 +6357,7 @@ yydefault:
 		}
 	case 95:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:849
+//line sql.y:845
 		{
 			var ne bool
 			if yyDollar[3].byt != 0 {
@@ -6372,19 +6367,19 @@ yydefault:
 		}
 	case 96:
 		yyDollar = yyS[yypt-15 : yypt+1]
-//line sql.y:857
+//line sql.y:853
 		{
 			yyVAL.statement = &DDL{Action: CreateStr, Table: yyDollar[8].tableName, TriggerSpec: &TriggerSpec{Name: string(yyDollar[4].bytes), Time: yyDollar[5].str, Event: yyDollar[6].str, Order: yyDollar[12].triggerOrder, Body: yyDollar[14].statement}, SubStatementPositionStart: yyDollar[13].int, SubStatementPositionEnd: yyDollar[15].int - 1}
 		}
 	case 97:
 		yyDollar = yyS[yypt-11 : yypt+1]
-//line sql.y:861
+//line sql.y:857
 		{
 			yyVAL.statement = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string(yyDollar[4].bytes), Definer: yyDollar[2].str, Params: yyDollar[6].procedureParams, Characteristics: yyDollar[8].characteristics, Body: yyDollar[10].statement}, SubStatementPositionStart: yyDollar[9].int, SubStatementPositionEnd: yyDollar[11].int - 1}
 		}
 	case 98:
 		yyDollar = yyS[yypt-9 : yypt+1]
-//line sql.y:865
+//line sql.y:861
 		{
 			var notExists bool
 			if yyDollar[3].byt != 0 {
@@ -6405,7 +6400,7 @@ yydefault:
 		}
 	case 99:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:884
+//line sql.y:880
 		{
 			var notExists bool
 			if yyDollar[3].byt != 0 {
@@ -6415,496 +6410,496 @@ yydefault:
 		}
 	case 100:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:893
+//line sql.y:889
 		{
 			yyVAL.accountNames = nil
 		}
 	case 101:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:897
+//line sql.y:893
 		{
 			yyVAL.accountNames = yyDollar[3].accountNames
 		}
 	case 102:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:902
+//line sql.y:898
 		{
 			yyVAL.tlsOptionItems = nil
 		}
 	case 103:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:906
+//line sql.y:902
 		{
 			yyVAL.tlsOptionItems = nil
 		}
 	case 104:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:910
+//line sql.y:906
 		{
 			yyVAL.tlsOptionItems = yyDollar[2].tlsOptionItems
 		}
 	case 105:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:916
+//line sql.y:912
 		{
 			yyVAL.tlsOptionItems = []TLSOptionItem{yyDollar[1].tlsOptionItem}
 		}
 	case 106:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:920
+//line sql.y:916
 		{
 			yyVAL.tlsOptionItems = append(yyDollar[1].tlsOptionItems, yyDollar[3].tlsOptionItem)
 		}
 	case 107:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:926
+//line sql.y:922
 		{
 			yyVAL.tlsOptionItem = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_SSL, ItemData: ""}
 		}
 	case 108:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:930
+//line sql.y:926
 		{
 			yyVAL.tlsOptionItem = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_X509, ItemData: ""}
 		}
 	case 109:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:934
+//line sql.y:930
 		{
 			yyVAL.tlsOptionItem = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_Cipher, ItemData: string(yyDollar[2].bytes)}
 		}
 	case 110:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:938
+//line sql.y:934
 		{
 			yyVAL.tlsOptionItem = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_Issuer, ItemData: string(yyDollar[2].bytes)}
 		}
 	case 111:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:942
+//line sql.y:938
 		{
 			yyVAL.tlsOptionItem = TLSOptionItem{TLSOptionItemType: TLSOptionItemType_Subject, ItemData: string(yyDollar[2].bytes)}
 		}
 	case 112:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:947
+//line sql.y:943
 		{
 			yyVAL.accountLimitItems = nil
 		}
 	case 113:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:951
+//line sql.y:947
 		{
 			yyVAL.accountLimitItems = yyDollar[2].accountLimitItems
 		}
 	case 114:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:957
+//line sql.y:953
 		{
 			yyVAL.accountLimitItems = []AccountLimitItem{yyDollar[1].accountLimitItem}
 		}
 	case 115:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:961
+//line sql.y:957
 		{
 			yyVAL.accountLimitItems = append(yyDollar[1].accountLimitItems, yyDollar[2].accountLimitItem)
 		}
 	case 116:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:967
+//line sql.y:963
 		{
 			yyVAL.accountLimitItem = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Queries_PH, Count: NewIntVal(yyDollar[2].bytes)}
 		}
 	case 117:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:971
+//line sql.y:967
 		{
 			yyVAL.accountLimitItem = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Updates_PH, Count: NewIntVal(yyDollar[2].bytes)}
 		}
 	case 118:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:975
+//line sql.y:971
 		{
 			yyVAL.accountLimitItem = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Connections_PH, Count: NewIntVal(yyDollar[2].bytes)}
 		}
 	case 119:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:979
+//line sql.y:975
 		{
 			yyVAL.accountLimitItem = AccountLimitItem{AccountLimitItemType: AccountLimitItemType_Connections, Count: NewIntVal(yyDollar[2].bytes)}
 		}
 	case 120:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:984
+//line sql.y:980
 		{
 			yyVAL.passLockItems = nil
 		}
 	case 121:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:988
+//line sql.y:984
 		{
 			yyVAL.passLockItems = yyDollar[1].passLockItems
 		}
 	case 122:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:994
+//line sql.y:990
 		{
 			yyVAL.passLockItems = []PassLockItem{yyDollar[1].passLockItem}
 		}
 	case 123:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:998
+//line sql.y:994
 		{
 			yyVAL.passLockItems = append(yyDollar[1].passLockItems, yyDollar[2].passLockItem)
 		}
 	case 124:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1004
+//line sql.y:1000
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassExpireDefault, Value: nil}
 		}
 	case 125:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1008
+//line sql.y:1004
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassExpireNever, Value: nil}
 		}
 	case 126:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1012
+//line sql.y:1008
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassExpireInterval, Value: NewIntVal(yyDollar[4].bytes)}
 		}
 	case 127:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1016
+//line sql.y:1012
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassHistory, Value: nil}
 		}
 	case 128:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1020
+//line sql.y:1016
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassHistory, Value: NewIntVal(yyDollar[3].bytes)}
 		}
 	case 129:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1024
+//line sql.y:1020
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassReuseInterval, Value: nil}
 		}
 	case 130:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1028
+//line sql.y:1024
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassReuseInterval, Value: NewIntVal(yyDollar[4].bytes)}
 		}
 	case 131:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1032
+//line sql.y:1028
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassReqCurrentDefault, Value: nil}
 		}
 	case 132:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1036
+//line sql.y:1032
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassReqCurrentOptional, Value: nil}
 		}
 	case 133:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1040
+//line sql.y:1036
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassFailedLogins, Value: NewIntVal(yyDollar[2].bytes)}
 		}
 	case 134:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1044
+//line sql.y:1040
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassLockTime, Value: NewIntVal(yyDollar[2].bytes)}
 		}
 	case 135:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1048
+//line sql.y:1044
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_PassLockTime, Value: nil}
 		}
 	case 136:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1052
+//line sql.y:1048
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_AccountLock, Value: nil}
 		}
 	case 137:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1056
+//line sql.y:1052
 		{
 			yyVAL.passLockItem = PassLockItem{PassLockItemType: PassLockItemType_AccountUnlock, Value: nil}
 		}
 	case 138:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1061
+//line sql.y:1057
 		{
 			yyVAL.str = ""
 		}
 	case 139:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1065
+//line sql.y:1061
 		{
 			comment := string(yyDollar[2].bytes)
 			yyVAL.str = `{"comment": "` + escapeDoubleQuotes(comment) + `"}`
 		}
 	case 140:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1070
+//line sql.y:1066
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 141:
 		yyDollar = yyS[yypt-9 : yypt+1]
-//line sql.y:1076
+//line sql.y:1072
 		{
-			allPriv := []Privilege{{Type: PrivilegeType_All, Columns: nil}}
+			allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
 			yyVAL.statement = &GrantPrivilege{Privileges: allPriv, ObjectType: yyDollar[4].grantObjectType, PrivilegeLevel: yyDollar[5].privilegeLevel, To: yyDollar[7].accountNames, WithGrantOption: yyDollar[8].boolean, As: yyDollar[9].grantAssumption}
 		}
 	case 142:
 		yyDollar = yyS[yypt-9 : yypt+1]
-//line sql.y:1081
+//line sql.y:1077
 		{
 			yyVAL.statement = &GrantPrivilege{Privileges: yyDollar[2].grantPrivileges, ObjectType: yyDollar[4].grantObjectType, PrivilegeLevel: yyDollar[5].privilegeLevel, To: yyDollar[7].accountNames, WithGrantOption: yyDollar[8].boolean, As: yyDollar[9].grantAssumption}
 		}
 	case 143:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1085
+//line sql.y:1081
 		{
 			yyVAL.statement = &GrantRole{Roles: yyDollar[2].accountNames, To: yyDollar[4].accountNames, WithAdminOption: yyDollar[5].boolean}
 		}
 	case 144:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:1089
+//line sql.y:1085
 		{
 			yyVAL.statement = &GrantProxy{On: yyDollar[4].accountName, To: yyDollar[6].accountNames, WithGrantOption: yyDollar[7].boolean}
 		}
 	case 145:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:1095
+//line sql.y:1091
 		{
-			allPriv := []Privilege{{Type: PrivilegeType_All, Columns: nil}}
+			allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
 			yyVAL.statement = &RevokePrivilege{Privileges: allPriv, ObjectType: yyDollar[4].grantObjectType, PrivilegeLevel: yyDollar[5].privilegeLevel, From: yyDollar[7].accountNames}
 		}
 	case 146:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:1100
+//line sql.y:1096
 		{
 			yyVAL.statement = &RevokePrivilege{Privileges: yyDollar[2].grantPrivileges, ObjectType: yyDollar[4].grantObjectType, PrivilegeLevel: yyDollar[5].privilegeLevel, From: yyDollar[7].accountNames}
 		}
 	case 147:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:1104
+//line sql.y:1100
 		{
 			yyVAL.statement = &RevokeAllPrivileges{From: yyDollar[7].accountNames}
 		}
 	case 148:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:1108
+//line sql.y:1104
 		{
 			yyVAL.statement = &RevokeAllPrivileges{From: yyDollar[8].accountNames}
 		}
 	case 149:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1112
+//line sql.y:1108
 		{
 			yyVAL.statement = &RevokeRole{Roles: yyDollar[2].accountNames, From: yyDollar[4].accountNames}
 		}
 	case 150:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:1116
+//line sql.y:1112
 		{
 			yyVAL.statement = &RevokeProxy{On: yyDollar[4].accountName, From: yyDollar[6].accountNames}
 		}
 	case 151:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1122
+//line sql.y:1118
 		{
 			yyVAL.grantPrivilege = Privilege{Type: PrivilegeType_Insert, Columns: yyDollar[2].strs}
 		}
 	case 152:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1126
+//line sql.y:1122
 		{
 			yyVAL.grantPrivilege = Privilege{Type: PrivilegeType_References, Columns: yyDollar[2].strs}
 		}
 	case 153:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1130
+//line sql.y:1126
 		{
 			yyVAL.grantPrivilege = Privilege{Type: PrivilegeType_Select, Columns: yyDollar[2].strs}
 		}
 	case 154:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1134
+//line sql.y:1130
 		{
 			yyVAL.grantPrivilege = Privilege{Type: PrivilegeType_Update, Columns: yyDollar[2].strs}
 		}
 	case 155:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1140
+//line sql.y:1136
 		{
 			yyVAL.grantPrivileges = []Privilege{yyDollar[1].grantPrivilege}
 		}
 	case 156:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1144
+//line sql.y:1140
 		{
 			yyVAL.grantPrivileges = append(yyDollar[1].grantPrivileges, yyDollar[3].grantPrivilege)
 		}
 	case 157:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1149
+//line sql.y:1145
 		{
 			yyVAL.strs = nil
 		}
 	case 158:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1153
+//line sql.y:1149
 		{
 			yyVAL.strs = yyDollar[2].strs
 		}
 	case 159:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1159
+//line sql.y:1155
 		{
 			yyVAL.strs = []string{yyDollar[1].colIdent.String()}
 		}
 	case 160:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1163
+//line sql.y:1159
 		{
 			yyVAL.strs = append(yyDollar[1].strs, yyDollar[3].colIdent.String())
 		}
 	case 161:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1168
+//line sql.y:1164
 		{
 			yyVAL.grantObjectType = GrantObjectType_Any
 		}
 	case 162:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1172
+//line sql.y:1168
 		{
 			yyVAL.grantObjectType = GrantObjectType_Table
 		}
 	case 163:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1176
+//line sql.y:1172
 		{
 			yyVAL.grantObjectType = GrantObjectType_Function
 		}
 	case 164:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1180
+//line sql.y:1176
 		{
 			yyVAL.grantObjectType = GrantObjectType_Procedure
 		}
 	case 165:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1186
+//line sql.y:1182
 		{
 			yyVAL.privilegeLevel = PrivilegeLevel{Database: "", TableRoutine: "*"}
 		}
 	case 166:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1190
+//line sql.y:1186
 		{
 			yyVAL.privilegeLevel = PrivilegeLevel{Database: "*", TableRoutine: "*"}
 		}
 	case 167:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1194
+//line sql.y:1190
 		{
 			yyVAL.privilegeLevel = PrivilegeLevel{Database: "", TableRoutine: yyDollar[1].colIdent.String()}
 		}
 	case 168:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1198
+//line sql.y:1194
 		{
 			yyVAL.privilegeLevel = PrivilegeLevel{Database: yyDollar[1].colIdent.String(), TableRoutine: "*"}
 		}
 	case 169:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1202
+//line sql.y:1198
 		{
 			yyVAL.privilegeLevel = PrivilegeLevel{Database: yyDollar[1].colIdent.String(), TableRoutine: yyDollar[3].colIdent.String()}
 		}
 	case 170:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1207
+//line sql.y:1203
 		{
 			yyVAL.grantAssumption = nil
 		}
 	case 171:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1211
+//line sql.y:1207
 		{
 			yyVAL.grantAssumption = &GrantUserAssumption{Type: GrantUserAssumptionType_Default, User: yyDollar[2].accountName, Roles: nil}
 		}
 	case 172:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1215
+//line sql.y:1211
 		{
 			yyVAL.grantAssumption = &GrantUserAssumption{Type: GrantUserAssumptionType_Default, User: yyDollar[2].accountName, Roles: nil}
 		}
 	case 173:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1219
+//line sql.y:1215
 		{
 			yyVAL.grantAssumption = &GrantUserAssumption{Type: GrantUserAssumptionType_None, User: yyDollar[2].accountName, Roles: nil}
 		}
 	case 174:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1223
+//line sql.y:1219
 		{
 			yyVAL.grantAssumption = &GrantUserAssumption{Type: GrantUserAssumptionType_All, User: yyDollar[2].accountName, Roles: nil}
 		}
 	case 175:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:1227
+//line sql.y:1223
 		{
 			yyVAL.grantAssumption = &GrantUserAssumption{Type: GrantUserAssumptionType_AllExcept, User: yyDollar[2].accountName, Roles: yyDollar[7].accountNames}
 		}
 	case 176:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1231
+//line sql.y:1227
 		{
 			yyVAL.grantAssumption = &GrantUserAssumption{Type: GrantUserAssumptionType_Roles, User: yyDollar[2].accountName, Roles: yyDollar[5].accountNames}
 		}
 	case 177:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1236
+//line sql.y:1232
 		{
 			yyVAL.boolean = false
 		}
 	case 178:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1240
+//line sql.y:1236
 		{
 			yyVAL.boolean = true
 		}
 	case 179:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1245
+//line sql.y:1241
 		{
 			yyVAL.boolean = false
 		}
 	case 180:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1249
+//line sql.y:1245
 		{
 			yyVAL.boolean = true
 		}
 	case 181:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1256
+//line sql.y:1252
 		{
 			yyDollar[1].selStmt.SetOrderBy(yyDollar[2].orderBy)
 			yyDollar[1].selStmt.SetLimit(yyDollar[3].limit)
@@ -6913,181 +6908,181 @@ yydefault:
 		}
 	case 182:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1264
+//line sql.y:1260
 		{
 			yyVAL.procedureParams = nil
 		}
 	case 183:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1268
+//line sql.y:1264
 		{
 			yyVAL.procedureParams = yyDollar[1].procedureParams
 		}
 	case 184:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1274
+//line sql.y:1270
 		{
 			yyVAL.procedureParams = []ProcedureParam{yyDollar[1].procedureParam}
 		}
 	case 185:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1278
+//line sql.y:1274
 		{
 			yyVAL.procedureParams = append(yyVAL.procedureParams, yyDollar[3].procedureParam)
 		}
 	case 186:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1284
+//line sql.y:1280
 		{
 			yyVAL.procedureParam = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string(yyDollar[1].bytes), Type: yyDollar[2].columnType}
 		}
 	case 187:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1288
+//line sql.y:1284
 		{
 			yyVAL.procedureParam = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string(yyDollar[2].bytes), Type: yyDollar[3].columnType}
 		}
 	case 188:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1292
+//line sql.y:1288
 		{
 			yyVAL.procedureParam = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: string(yyDollar[2].bytes), Type: yyDollar[3].columnType}
 		}
 	case 189:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1296
+//line sql.y:1292
 		{
 			yyVAL.procedureParam = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: string(yyDollar[2].bytes), Type: yyDollar[3].columnType}
 		}
 	case 190:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1301
+//line sql.y:1297
 		{
 			yyVAL.characteristics = nil
 		}
 	case 191:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1305
+//line sql.y:1301
 		{
 			yyVAL.characteristics = yyDollar[1].characteristics
 		}
 	case 192:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1311
+//line sql.y:1307
 		{
 			yyVAL.characteristics = []Characteristic{yyDollar[1].characteristic}
 		}
 	case 193:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1315
+//line sql.y:1311
 		{
 			yyVAL.characteristics = append(yyVAL.characteristics, yyDollar[2].characteristic)
 		}
 	case 194:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1321
+//line sql.y:1317
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_Comment, Comment: string(yyDollar[2].bytes)}
 		}
 	case 195:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1325
+//line sql.y:1321
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_LanguageSql}
 		}
 	case 196:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1329
+//line sql.y:1325
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_NotDeterministic}
 		}
 	case 197:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1333
+//line sql.y:1329
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_Deterministic}
 		}
 	case 198:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1337
+//line sql.y:1333
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_ContainsSql}
 		}
 	case 199:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1341
+//line sql.y:1337
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_NoSql}
 		}
 	case 200:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1345
+//line sql.y:1341
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_ReadsSqlData}
 		}
 	case 201:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1349
+//line sql.y:1345
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_ModifiesSqlData}
 		}
 	case 202:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1353
+//line sql.y:1349
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_SqlSecurityDefiner}
 		}
 	case 203:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1357
+//line sql.y:1353
 		{
 			yyVAL.characteristic = Characteristic{Type: CharacteristicValue_SqlSecurityInvoker}
 		}
 	case 204:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1363
+//line sql.y:1359
 		{
 			yyVAL.statement = &BeginEndBlock{Statements: yyDollar[2].statements}
 		}
 	case 205:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1368
+//line sql.y:1364
 		{
 			yyVAL.str = ""
 		}
 	case 206:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1372
+//line sql.y:1368
 		{
 			yyVAL.str = string(yyDollar[3].bytes)
 		}
 	case 207:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1378
+//line sql.y:1374
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 208:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1382
+//line sql.y:1378
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 209:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1386
+//line sql.y:1382
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 210:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1390
+//line sql.y:1386
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 211:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1396
+//line sql.y:1392
 		{
 			anyHost := false
 			if yyDollar[3].str == "%" {
@@ -7097,31 +7092,31 @@ yydefault:
 		}
 	case 212:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1404
+//line sql.y:1400
 		{
 			yyVAL.accountName = AccountName{Name: yyDollar[1].str, Host: "", AnyHost: false}
 		}
 	case 213:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1408
+//line sql.y:1404
 		{
 			yyVAL.accountName = AccountName{Name: yyDollar[1].str, Host: "", AnyHost: true}
 		}
 	case 214:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1414
+//line sql.y:1410
 		{
 			yyVAL.accountNames = []AccountName{yyDollar[1].accountName}
 		}
 	case 215:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1418
+//line sql.y:1414
 		{
 			yyVAL.accountNames = append(yyDollar[1].accountNames, yyDollar[3].accountName)
 		}
 	case 216:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1424
+//line sql.y:1420
 		{
 			if len(yyDollar[1].str) == 0 {
 				yylex.Error("the anonymous user is not a valid role name")
@@ -7131,7 +7126,7 @@ yydefault:
 		}
 	case 217:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1432
+//line sql.y:1428
 		{
 			if len(yyDollar[1].str) == 0 {
 				yylex.Error("the anonymous user is not a valid role name")
@@ -7141,7 +7136,7 @@ yydefault:
 		}
 	case 218:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1440
+//line sql.y:1436
 		{
 			if len(yyDollar[1].str) == 0 {
 				yylex.Error("the anonymous user is not a valid role name")
@@ -7151,560 +7146,560 @@ yydefault:
 		}
 	case 219:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1450
+//line sql.y:1446
 		{
 			yyVAL.accountNames = []AccountName{yyDollar[1].accountName}
 		}
 	case 220:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1454
+//line sql.y:1450
 		{
 			yyVAL.accountNames = append(yyDollar[1].accountNames, yyDollar[3].accountName)
 		}
 	case 221:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1460
+//line sql.y:1456
 		{
 			yyVAL.accountWithAuth = AccountWithAuth{AccountName: yyDollar[1].accountName}
 		}
 	case 222:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1464
+//line sql.y:1460
 		{
 			yyVAL.accountWithAuth = AccountWithAuth{AccountName: yyDollar[1].accountName, Auth1: yyDollar[2].authentication}
 		}
 	case 223:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1468
+//line sql.y:1464
 		{
 			yyVAL.accountWithAuth = AccountWithAuth{AccountName: yyDollar[1].accountName, Auth1: yyDollar[2].authentication, AuthInitial: yyDollar[5].authentication}
 		}
 	case 224:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1472
+//line sql.y:1468
 		{
 			yyVAL.accountWithAuth = AccountWithAuth{AccountName: yyDollar[1].accountName, Auth1: yyDollar[2].authentication, Auth2: yyDollar[4].authentication}
 		}
 	case 225:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:1476
+//line sql.y:1472
 		{
 			yyVAL.accountWithAuth = AccountWithAuth{AccountName: yyDollar[1].accountName, Auth1: yyDollar[2].authentication, Auth2: yyDollar[4].authentication, Auth3: yyDollar[6].authentication}
 		}
 	case 226:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1482
+//line sql.y:1478
 		{
 			yyVAL.authentication = &Authentication{RandomPassword: true}
 		}
 	case 227:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1486
+//line sql.y:1482
 		{
 			yyVAL.authentication = &Authentication{Password: string(yyDollar[3].bytes)}
 		}
 	case 228:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1490
+//line sql.y:1486
 		{
 			yyVAL.authentication = &Authentication{Plugin: string(yyDollar[3].bytes)}
 		}
 	case 229:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:1494
+//line sql.y:1490
 		{
 			yyVAL.authentication = &Authentication{Plugin: string(yyDollar[3].bytes), RandomPassword: true}
 		}
 	case 230:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1498
+//line sql.y:1494
 		{
 			yyVAL.authentication = &Authentication{Plugin: string(yyDollar[3].bytes), Password: string(yyDollar[5].bytes)}
 		}
 	case 231:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1502
+//line sql.y:1498
 		{
 			yyVAL.authentication = &Authentication{Plugin: string(yyDollar[3].bytes), Identity: string(yyDollar[5].bytes)}
 		}
 	case 232:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1508
+//line sql.y:1504
 		{
 			yyVAL.authentication = &Authentication{RandomPassword: true}
 		}
 	case 233:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1512
+//line sql.y:1508
 		{
 			yyVAL.authentication = &Authentication{Password: string(yyDollar[3].bytes)}
 		}
 	case 234:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1516
+//line sql.y:1512
 		{
 			yyVAL.authentication = &Authentication{Plugin: string(yyDollar[3].bytes), Identity: string(yyDollar[5].bytes)}
 		}
 	case 235:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1522
+//line sql.y:1518
 		{
 			yyVAL.accountsWithAuth = []AccountWithAuth{yyDollar[1].accountWithAuth}
 		}
 	case 236:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1526
+//line sql.y:1522
 		{
 			yyVAL.accountsWithAuth = append(yyDollar[1].accountsWithAuth, yyDollar[3].accountWithAuth)
 		}
 	case 237:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1532
+//line sql.y:1528
 		{
 			yyVAL.str = BeforeStr
 		}
 	case 238:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1536
+//line sql.y:1532
 		{
 			yyVAL.str = AfterStr
 		}
 	case 239:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1542
+//line sql.y:1538
 		{
 			yyVAL.str = InsertStr
 		}
 	case 240:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1546
+//line sql.y:1542
 		{
 			yyVAL.str = UpdateStr
 		}
 	case 241:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1550
+//line sql.y:1546
 		{
 			yyVAL.str = DeleteStr
 		}
 	case 242:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1555
+//line sql.y:1551
 		{
 			yyVAL.triggerOrder = nil
 		}
 	case 243:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1559
+//line sql.y:1555
 		{
 			yyVAL.triggerOrder = &TriggerOrder{PrecedesOrFollows: FollowsStr, OtherTriggerName: string(yyDollar[2].bytes)}
 		}
 	case 244:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1563
+//line sql.y:1559
 		{
 			yyVAL.triggerOrder = &TriggerOrder{PrecedesOrFollows: PrecedesStr, OtherTriggerName: string(yyDollar[2].bytes)}
 		}
 	case 245:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1569
+//line sql.y:1565
 		{
 			yyVAL.statement = yyDollar[1].statement
 		}
 	case 250:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1579
+//line sql.y:1575
 		{
 			yyVAL.statement = &BeginEndBlock{Statements: yyDollar[2].statements}
 		}
 	case 251:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1585
+//line sql.y:1581
 		{
 			yyVAL.statement = &CaseStatement{Expr: yyDollar[2].expr, Cases: yyDollar[3].caseStatementCases}
 		}
 	case 252:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:1589
+//line sql.y:1585
 		{
 			yyVAL.statement = &CaseStatement{Expr: yyDollar[2].expr, Cases: yyDollar[3].caseStatementCases, Else: yyDollar[5].statements}
 		}
 	case 253:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1595
+//line sql.y:1591
 		{
 			yyVAL.caseStatementCases = []CaseStatementCase{yyDollar[1].caseStatementCase}
 		}
 	case 254:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1599
+//line sql.y:1595
 		{
 			yyVAL.caseStatementCases = append(yyVAL.caseStatementCases, yyDollar[2].caseStatementCase)
 		}
 	case 255:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1605
+//line sql.y:1601
 		{
 			yyVAL.caseStatementCase = CaseStatementCase{Case: yyDollar[2].expr, Statements: yyDollar[4].statements}
 		}
 	case 256:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:1611
+//line sql.y:1607
 		{
-			conds := []IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
+			conds := []IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
 			yyVAL.statement = &IfStatement{Conditions: conds}
 		}
 	case 257:
 		yyDollar = yyS[yypt-10 : yypt+1]
-//line sql.y:1616
+//line sql.y:1612
 		{
-			conds := []IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
+			conds := []IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
 			yyVAL.statement = &IfStatement{Conditions: conds, Else: yyDollar[7].statements}
 		}
 	case 258:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:1621
+//line sql.y:1617
 		{
 			conds := yyDollar[6].ifStatementConditions
-			conds = append([]IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
+			conds = append([]IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
 			yyVAL.statement = &IfStatement{Conditions: conds}
 		}
 	case 259:
 		yyDollar = yyS[yypt-11 : yypt+1]
-//line sql.y:1627
+//line sql.y:1623
 		{
 			conds := yyDollar[6].ifStatementConditions
-			conds = append([]IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
+			conds = append([]IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
 			yyVAL.statement = &IfStatement{Conditions: conds, Else: yyDollar[8].statements}
 		}
 	case 260:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1635
+//line sql.y:1631
 		{
 			yyVAL.ifStatementConditions = []IfStatementCondition{yyDollar[1].ifStatementCondition}
 		}
 	case 261:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1639
+//line sql.y:1635
 		{
 			yyVAL.ifStatementConditions = append(yyVAL.ifStatementConditions, yyDollar[2].ifStatementCondition)
 		}
 	case 262:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1645
+//line sql.y:1641
 		{
 			yyVAL.ifStatementCondition = IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}
 		}
 	case 263:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1651
+//line sql.y:1647
 		{
 			yyVAL.statement = &Declare{Condition: &DeclareCondition{Name: string(yyDollar[2].bytes), SqlStateValue: string(yyDollar[5].bytes)}}
 		}
 	case 264:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1655
+//line sql.y:1651
 		{
 			yyVAL.statement = &Declare{Condition: &DeclareCondition{Name: string(yyDollar[2].bytes), MysqlErrorCode: NewIntVal(yyDollar[5].bytes)}}
 		}
 	case 265:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1659
+//line sql.y:1655
 		{
 			yyVAL.statement = &Declare{Cursor: &DeclareCursor{Name: string(yyDollar[2].bytes), SelectStmt: yyDollar[5].selStmt}}
 		}
 	case 266:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:1663
+//line sql.y:1659
 		{
 			yyVAL.statement = &Declare{Handler: &DeclareHandler{Action: yyDollar[2].declareHandlerAction, ConditionValues: yyDollar[5].declareHandlerConditions, Statement: yyDollar[6].statement}}
 		}
 	case 267:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1667
+//line sql.y:1663
 		{
 			yyVAL.statement = &Declare{Variables: &DeclareVariables{Names: yyDollar[2].colIdents, VarType: yyDollar[3].columnType}}
 		}
 	case 268:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1671
+//line sql.y:1667
 		{
 			yyDollar[3].columnType.Default = yyDollar[5].expr
 			yyVAL.statement = &Declare{Variables: &DeclareVariables{Names: yyDollar[2].colIdents, VarType: yyDollar[3].columnType}}
 		}
 	case 269:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1678
+//line sql.y:1674
 		{
 			yyVAL.declareHandlerAction = DeclareHandlerAction_Continue
 		}
 	case 270:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1682
+//line sql.y:1678
 		{
 			yyVAL.declareHandlerAction = DeclareHandlerAction_Exit
 		}
 	case 271:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1686
+//line sql.y:1682
 		{
 			yyVAL.declareHandlerAction = DeclareHandlerAction_Undo
 		}
 	case 272:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1692
+//line sql.y:1688
 		{
 			yyVAL.declareHandlerConditions = []DeclareHandlerCondition{yyDollar[1].declareHandlerCondition}
 		}
 	case 273:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1696
+//line sql.y:1692
 		{
 			yyVAL.declareHandlerConditions = append(yyVAL.declareHandlerConditions, yyDollar[3].declareHandlerCondition)
 		}
 	case 274:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1702
+//line sql.y:1698
 		{
 			yyVAL.declareHandlerCondition = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_MysqlErrorCode, MysqlErrorCode: NewIntVal(yyDollar[1].bytes)}
 		}
 	case 275:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1706
+//line sql.y:1702
 		{
 			yyVAL.declareHandlerCondition = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_SqlState, String: string(yyDollar[1].bytes)}
 		}
 	case 276:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1710
+//line sql.y:1706
 		{
 			yyVAL.declareHandlerCondition = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_SqlWarning}
 		}
 	case 277:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1714
+//line sql.y:1710
 		{
 			yyVAL.declareHandlerCondition = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_NotFound}
 		}
 	case 278:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1718
+//line sql.y:1714
 		{
 			yyVAL.declareHandlerCondition = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_SqlException}
 		}
 	case 279:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1722
+//line sql.y:1718
 		{
 			yyVAL.declareHandlerCondition = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_ConditionName, String: string(yyDollar[1].bytes)}
 		}
 	case 280:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1728
+//line sql.y:1724
 		{
 			yyVAL.statement = &Signal{SqlStateValue: string(yyDollar[2].bytes)}
 		}
 	case 281:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1732
+//line sql.y:1728
 		{
 			yyVAL.statement = &Signal{SqlStateValue: string(yyDollar[2].bytes), Info: yyDollar[4].signalInfos}
 		}
 	case 282:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1736
+//line sql.y:1732
 		{
 			yyVAL.statement = &Signal{ConditionName: string(yyDollar[2].bytes)}
 		}
 	case 283:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1740
+//line sql.y:1736
 		{
 			yyVAL.statement = &Signal{ConditionName: string(yyDollar[2].bytes), Info: yyDollar[4].signalInfos}
 		}
 	case 284:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1746
+//line sql.y:1742
 		{
 			yyVAL.bytes = yyDollar[2].bytes
 		}
 	case 285:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1750
+//line sql.y:1746
 		{
 			yyVAL.bytes = yyDollar[3].bytes
 		}
 	case 286:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1756
+//line sql.y:1752
 		{
 			yyVAL.signalInfos = []SignalInfo{yyDollar[1].signalInfo}
 		}
 	case 287:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1760
+//line sql.y:1756
 		{
 			yyVAL.signalInfos = append(yyVAL.signalInfos, yyDollar[3].signalInfo)
 		}
 	case 288:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1766
+//line sql.y:1762
 		{
 			yyVAL.signalInfo = SignalInfo{ConditionItemName: yyDollar[1].signalConditionItemName, Value: yyDollar[3].expr.(*SQLVal)}
 		}
 	case 289:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1772
+//line sql.y:1768
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_ClassOrigin
 		}
 	case 290:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1776
+//line sql.y:1772
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_SubclassOrigin
 		}
 	case 291:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1780
+//line sql.y:1776
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_MessageText
 		}
 	case 292:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1784
+//line sql.y:1780
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_MysqlErrno
 		}
 	case 293:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1788
+//line sql.y:1784
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_ConstraintCatalog
 		}
 	case 294:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1792
+//line sql.y:1788
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_ConstraintSchema
 		}
 	case 295:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1796
+//line sql.y:1792
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_ConstraintName
 		}
 	case 296:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1800
+//line sql.y:1796
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_CatalogName
 		}
 	case 297:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1804
+//line sql.y:1800
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_SchemaName
 		}
 	case 298:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1808
+//line sql.y:1804
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_TableName
 		}
 	case 299:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1812
+//line sql.y:1808
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_ColumnName
 		}
 	case 300:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1816
+//line sql.y:1812
 		{
 			yyVAL.signalConditionItemName = SignalConditionItemName_CursorName
 		}
 	case 301:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1822
+//line sql.y:1818
 		{
 			yyVAL.statement = &Resignal{}
 		}
 	case 302:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1826
+//line sql.y:1822
 		{
 			yyVAL.statement = &Resignal{Signal{SqlStateValue: string(yyDollar[2].bytes)}}
 		}
 	case 303:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1830
+//line sql.y:1826
 		{
 			yyVAL.statement = &Resignal{Signal{SqlStateValue: string(yyDollar[2].bytes), Info: yyDollar[4].signalInfos}}
 		}
 	case 304:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1834
+//line sql.y:1830
 		{
 			yyVAL.statement = &Resignal{Signal{Info: yyDollar[3].signalInfos}}
 		}
 	case 305:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1838
+//line sql.y:1834
 		{
 			yyVAL.statement = &Resignal{Signal{ConditionName: string(yyDollar[2].bytes)}}
 		}
 	case 306:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1842
+//line sql.y:1838
 		{
 			yyVAL.statement = &Resignal{Signal{ConditionName: string(yyDollar[2].bytes), Info: yyDollar[4].signalInfos}}
 		}
 	case 307:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1848
+//line sql.y:1844
 		{
 			yyVAL.statement = &Call{FuncName: string(yyDollar[2].bytes), Params: yyDollar[3].exprs}
 		}
 	case 308:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:1853
+//line sql.y:1849
 		{
 			yyVAL.exprs = nil
 		}
 	case 309:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1857
+//line sql.y:1853
 		{
 			yyVAL.exprs = nil
 		}
 	case 310:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1861
+//line sql.y:1857
 		{
 			yyVAL.exprs = yyDollar[2].exprs
 		}
 	case 311:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1867
+//line sql.y:1863
 		{
 			yyVAL.statements = Statements{yyDollar[1].statement}
 		}
 	case 312:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1871
+//line sql.y:1867
 		{
 			yyVAL.statements = append(yyVAL.statements, yyDollar[3].statement)
 		}
 	case 313:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1877
+//line sql.y:1873
 		{
 			yyVAL.statement = yyDollar[1].selStmt
 		}
 	case 342:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:1911
+//line sql.y:1907
 		{
 			var ne bool
 			if yyDollar[4].byt != 0 {
@@ -7717,32 +7712,31 @@ yydefault:
 			}
 
 			yyVAL.ddl = &DDL{Action: CreateStr, Table: yyDollar[5].tableName, IfNotExists: ne, Temporary: neTemp}
-			setDDL(yylex, yyVAL.ddl)
 		}
 	case 343:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1928
+//line sql.y:1923
 		{
 			yyVAL.TableSpec = yyDollar[2].TableSpec
 			yyVAL.TableSpec.Options = yyDollar[4].str
 		}
 	case 344:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1935
+//line sql.y:1930
 		{
 			yyVAL.TableSpec = &TableSpec{}
 			yyVAL.TableSpec.AddColumn(yyDollar[1].columnDefinition)
 		}
 	case 345:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:1940
+//line sql.y:1935
 		{
 			yyVAL.TableSpec = &TableSpec{}
 			yyVAL.TableSpec.AddConstraint(yyDollar[1].constraintDefinition)
 		}
 	case 346:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:1945
+//line sql.y:1940
 		{
 			yyVAL.TableSpec = &TableSpec{}
 			yyVAL.TableSpec.AddColumn(yyDollar[1].columnDefinition)
@@ -7750,38 +7744,38 @@ yydefault:
 		}
 	case 347:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1951
+//line sql.y:1946
 		{
 			yyVAL.TableSpec.AddColumn(yyDollar[3].columnDefinition)
 		}
 	case 348:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:1955
+//line sql.y:1950
 		{
 			yyVAL.TableSpec.AddColumn(yyDollar[3].columnDefinition)
 			yyVAL.TableSpec.AddConstraint(yyDollar[4].constraintDefinition)
 		}
 	case 349:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1960
+//line sql.y:1955
 		{
 			yyVAL.TableSpec.AddIndex(yyDollar[3].indexDefinition)
 		}
 	case 350:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1964
+//line sql.y:1959
 		{
 			yyVAL.TableSpec.AddConstraint(yyDollar[3].constraintDefinition)
 		}
 	case 351:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1968
+//line sql.y:1963
 		{
 			yyVAL.TableSpec.AddConstraint(yyDollar[3].constraintDefinition)
 		}
 	case 352:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1974
+//line sql.y:1969
 		{
 			if err := yyDollar[2].columnType.merge(yyDollar[3].columnType); err != nil {
 				yylex.Error(err.Error())
@@ -7791,7 +7785,7 @@ yydefault:
 		}
 	case 353:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1982
+//line sql.y:1977
 		{
 			if err := yyDollar[2].columnType.merge(yyDollar[3].columnType); err != nil {
 				yylex.Error(err.Error())
@@ -7801,7 +7795,7 @@ yydefault:
 		}
 	case 354:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:1992
+//line sql.y:1987
 		{
 			if err := yyDollar[2].columnType.merge(yyDollar[3].columnType); err != nil {
 				yylex.Error(err.Error())
@@ -7811,13 +7805,13 @@ yydefault:
 		}
 	case 355:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2001
+//line sql.y:1996
 		{
 			yyVAL.columnType = ColumnType{}
 		}
 	case 356:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2005
+//line sql.y:2000
 		{
 			opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
@@ -7828,7 +7822,7 @@ yydefault:
 		}
 	case 357:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2014
+//line sql.y:2009
 		{
 			opt := ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
@@ -7839,7 +7833,7 @@ yydefault:
 		}
 	case 358:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2023
+//line sql.y:2018
 		{
 			opt := ColumnType{Default: yyDollar[2].optVal}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
@@ -7850,7 +7844,7 @@ yydefault:
 		}
 	case 359:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2032
+//line sql.y:2027
 		{
 			opt := ColumnType{OnUpdate: yyDollar[2].optVal}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
@@ -7861,7 +7855,7 @@ yydefault:
 		}
 	case 360:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2041
+//line sql.y:2036
 		{
 			opt := ColumnType{Autoincrement: yyDollar[2].boolVal, sawai: true}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
@@ -7872,7 +7866,7 @@ yydefault:
 		}
 	case 361:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2050
+//line sql.y:2045
 		{
 			opt := ColumnType{KeyOpt: yyDollar[2].colKeyOpt}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
@@ -7883,7 +7877,7 @@ yydefault:
 		}
 	case 362:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2059
+//line sql.y:2054
 		{
 			opt := ColumnType{Comment: yyDollar[2].sqlVal}
 			if err := yyDollar[1].columnType.merge(opt); err != nil {
@@ -7894,7 +7888,7 @@ yydefault:
 		}
 	case 363:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2070
+//line sql.y:2065
 		{
 			yyVAL.columnType = yyDollar[1].columnType
 			yyVAL.columnType.Unsigned = yyDollar[2].boolVal
@@ -7902,74 +7896,74 @@ yydefault:
 		}
 	case 367:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2081
+//line sql.y:2076
 		{
 			yyVAL.columnType = yyDollar[1].columnType
 			yyVAL.columnType.Length = yyDollar[2].sqlVal
 		}
 	case 368:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2086
+//line sql.y:2081
 		{
 			yyVAL.columnType = yyDollar[1].columnType
 		}
 	case 369:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2092
+//line sql.y:2087
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 370:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2096
+//line sql.y:2091
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 371:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2100
+//line sql.y:2095
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 372:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2104
+//line sql.y:2099
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 373:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2108
+//line sql.y:2103
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 374:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2112
+//line sql.y:2107
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 375:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2116
+//line sql.y:2111
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 376:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2120
+//line sql.y:2115
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 377:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2124
+//line sql.y:2119
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 378:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2130
+//line sql.y:2125
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
@@ -7977,7 +7971,7 @@ yydefault:
 		}
 	case 379:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2136
+//line sql.y:2131
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
@@ -7985,7 +7979,7 @@ yydefault:
 		}
 	case 380:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2142
+//line sql.y:2137
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes)}
 			yyVAL.columnType.Length = yyDollar[3].LengthScaleOption.Length
@@ -7993,7 +7987,7 @@ yydefault:
 		}
 	case 381:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2148
+//line sql.y:2143
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
@@ -8001,7 +7995,7 @@ yydefault:
 		}
 	case 382:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2154
+//line sql.y:2149
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
@@ -8009,7 +8003,7 @@ yydefault:
 		}
 	case 383:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2160
+//line sql.y:2155
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
@@ -8017,7 +8011,7 @@ yydefault:
 		}
 	case 384:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2166
+//line sql.y:2161
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
@@ -8025,7 +8019,7 @@ yydefault:
 		}
 	case 385:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2172
+//line sql.y:2167
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
@@ -8033,266 +8027,266 @@ yydefault:
 		}
 	case 386:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2180
+//line sql.y:2175
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 387:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2184
+//line sql.y:2179
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 388:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2188
+//line sql.y:2183
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 389:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2192
+//line sql.y:2187
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 390:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2196
+//line sql.y:2191
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 391:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2202
+//line sql.y:2197
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal, Charset: yyDollar[3].str, Collate: yyDollar[4].str}
 		}
 	case 392:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2206
+//line sql.y:2201
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal, Charset: yyDollar[3].str, Collate: yyDollar[4].str}
 		}
 	case 393:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2210
+//line sql.y:2205
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Length: yyDollar[3].sqlVal}
 		}
 	case 394:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2214
+//line sql.y:2209
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Length: yyDollar[3].sqlVal}
 		}
 	case 395:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2218
+//line sql.y:2213
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 396:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2222
+//line sql.y:2217
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal, Charset: yyDollar[3].str, Collate: yyDollar[4].str}
 		}
 	case 397:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2226
+//line sql.y:2221
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Length: yyDollar[3].sqlVal, Charset: yyDollar[4].str, Collate: yyDollar[5].str}
 		}
 	case 398:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2230
+//line sql.y:2225
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 399:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2234
+//line sql.y:2229
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Length: yyDollar[3].sqlVal}
 		}
 	case 400:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2238
+//line sql.y:2233
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Length: yyDollar[4].sqlVal}
 		}
 	case 401:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2242
+//line sql.y:2237
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 402:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2246
+//line sql.y:2241
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 403:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2250
+//line sql.y:2245
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Charset: yyDollar[2].str, Collate: yyDollar[3].str}
 		}
 	case 404:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2254
+//line sql.y:2249
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Charset: yyDollar[2].str, Collate: yyDollar[3].str}
 		}
 	case 405:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2258
+//line sql.y:2253
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Charset: yyDollar[2].str, Collate: yyDollar[3].str}
 		}
 	case 406:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2262
+//line sql.y:2257
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Charset: yyDollar[2].str, Collate: yyDollar[3].str}
 		}
 	case 407:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2266
+//line sql.y:2261
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), Charset: yyDollar[2].str, Collate: yyDollar[3].str}
 		}
 	case 408:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2270
+//line sql.y:2265
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Charset: yyDollar[3].str, Collate: yyDollar[4].str}
 		}
 	case 409:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2274
+//line sql.y:2269
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 410:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2278
+//line sql.y:2273
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 411:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2282
+//line sql.y:2277
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 412:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2286
+//line sql.y:2281
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 413:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2290
+//line sql.y:2285
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 414:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:2294
+//line sql.y:2289
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].str, Collate: yyDollar[6].str}
 		}
 	case 415:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:2299
+//line sql.y:2294
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].str, Collate: yyDollar[6].str}
 		}
 	case 416:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2305
+//line sql.y:2300
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 417:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2309
+//line sql.y:2304
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 418:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2313
+//line sql.y:2308
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 419:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2317
+//line sql.y:2312
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 420:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2321
+//line sql.y:2316
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 421:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2325
+//line sql.y:2320
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 422:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2329
+//line sql.y:2324
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 423:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2333
+//line sql.y:2328
 		{
 			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
 		}
 	case 424:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2339
+//line sql.y:2334
 		{
 			yyVAL.strs = make([]string, 0, 4)
 			yyVAL.strs = append(yyVAL.strs, string(yyDollar[1].bytes))
 		}
 	case 425:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2344
+//line sql.y:2339
 		{
 			yyVAL.strs = append(yyDollar[1].strs, string(yyDollar[3].bytes))
 		}
 	case 426:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2349
+//line sql.y:2344
 		{
 			yyVAL.sqlVal = nil
 		}
 	case 427:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2353
+//line sql.y:2348
 		{
 			yyVAL.sqlVal = NewIntVal(yyDollar[2].bytes)
 		}
 	case 428:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2358
+//line sql.y:2353
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{}
 		}
 	case 429:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2362
+//line sql.y:2357
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
 				Length: NewIntVal(yyDollar[2].bytes),
@@ -8301,13 +8295,13 @@ yydefault:
 		}
 	case 430:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2370
+//line sql.y:2365
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{}
 		}
 	case 431:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2374
+//line sql.y:2369
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
 				Length: NewIntVal(yyDollar[2].bytes),
@@ -8315,7 +8309,7 @@ yydefault:
 		}
 	case 432:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2380
+//line sql.y:2375
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
 				Length: NewIntVal(yyDollar[2].bytes),
@@ -8324,200 +8318,200 @@ yydefault:
 		}
 	case 433:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2388
+//line sql.y:2383
 		{
 			yyVAL.boolVal = BoolVal(false)
 		}
 	case 434:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2392
+//line sql.y:2387
 		{
 			yyVAL.boolVal = BoolVal(true)
 		}
 	case 435:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2397
+//line sql.y:2392
 		{
 			yyVAL.boolVal = BoolVal(false)
 		}
 	case 436:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2401
+//line sql.y:2396
 		{
 			yyVAL.boolVal = BoolVal(true)
 		}
 	case 437:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2407
+//line sql.y:2402
 		{
 			yyVAL.optVal = yyDollar[2].expr
 		}
 	case 438:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2413
+//line sql.y:2408
 		{
 			yyVAL.optVal = yyDollar[3].expr
 		}
 	case 439:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2419
+//line sql.y:2414
 		{
 			yyVAL.boolVal = BoolVal(true)
 		}
 	case 440:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2424
+//line sql.y:2419
 		{
 			yyVAL.str = ""
 		}
 	case 441:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2428
+//line sql.y:2423
 		{
 			yyVAL.str = string(yyDollar[3].bytes)
 		}
 	case 442:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2432
+//line sql.y:2427
 		{
 			yyVAL.str = string(yyDollar[3].bytes)
 		}
 	case 443:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2437
+//line sql.y:2432
 		{
 			yyVAL.str = ""
 		}
 	case 444:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2441
+//line sql.y:2436
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 445:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2445
+//line sql.y:2440
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 446:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2451
+//line sql.y:2446
 		{
 			yyVAL.colKeyOpt = colKeyPrimary
 		}
 	case 447:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2455
+//line sql.y:2450
 		{
 			yyVAL.colKeyOpt = colKey
 		}
 	case 448:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2459
+//line sql.y:2454
 		{
 			yyVAL.colKeyOpt = colKeyUniqueKey
 		}
 	case 449:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2463
+//line sql.y:2458
 		{
 			yyVAL.colKeyOpt = colKeyUnique
 		}
 	case 450:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2469
+//line sql.y:2464
 		{
 			yyVAL.sqlVal = NewStrVal(yyDollar[2].bytes)
 		}
 	case 451:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2475
+//line sql.y:2470
 		{
 			yyVAL.indexDefinition = &IndexDefinition{Info: yyDollar[1].indexInfo, Columns: yyDollar[3].indexColumns, Options: yyDollar[5].indexOptions}
 		}
 	case 452:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2479
+//line sql.y:2474
 		{
 			yyVAL.indexDefinition = &IndexDefinition{Info: yyDollar[1].indexInfo, Columns: yyDollar[3].indexColumns}
 		}
 	case 453:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2484
+//line sql.y:2479
 		{
 			yyVAL.indexOptions = nil
 		}
 	case 454:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2488
+//line sql.y:2483
 		{
 			yyVAL.indexOptions = yyDollar[1].indexOptions
 		}
 	case 455:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2494
+//line sql.y:2489
 		{
 			yyVAL.indexOptions = []*IndexOption{yyDollar[1].indexOption}
 		}
 	case 456:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2498
+//line sql.y:2493
 		{
 			yyVAL.indexOptions = append(yyVAL.indexOptions, yyDollar[2].indexOption)
 		}
 	case 457:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2504
+//line sql.y:2499
 		{
 			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].bytes), Using: string(yyDollar[2].bytes)}
 		}
 	case 458:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2508
+//line sql.y:2503
 		{
 			// should not be string
 			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].bytes), Value: NewIntVal(yyDollar[3].bytes)}
 		}
 	case 459:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2513
+//line sql.y:2508
 		{
 			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].bytes), Value: NewStrVal(yyDollar[2].bytes)}
 		}
 	case 460:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2519
+//line sql.y:2514
 		{
 			yyVAL.str = ""
 		}
 	case 461:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2523
+//line sql.y:2518
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 462:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2529
+//line sql.y:2524
 		{
 			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
 		}
 	case 463:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2533
+//line sql.y:2528
 		{
 			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[3].bytes) + " " + string(yyDollar[4].bytes), Name: NewColIdent(string(yyDollar[2].bytes)), Primary: true, Unique: true}
 		}
 	case 464:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2537
+//line sql.y:2532
 		{
 			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].str), Name: NewColIdent(yyDollar[3].str), Spatial: true, Unique: false}
 		}
 	case 465:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2541
+//line sql.y:2536
 		{
 			var name string
 			name = yyDollar[2].str
@@ -8528,349 +8522,349 @@ yydefault:
 		}
 	case 466:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2550
+//line sql.y:2545
 		{
 			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].bytes) + " " + string(yyDollar[2].str), Name: NewColIdent(yyDollar[3].str), Unique: true}
 		}
 	case 467:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2554
+//line sql.y:2549
 		{
 			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].bytes), Name: NewColIdent(yyDollar[2].str), Unique: true}
 		}
 	case 468:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2558
+//line sql.y:2553
 		{
 			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].str), Name: NewColIdent(yyDollar[2].str), Unique: false}
 		}
 	case 469:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2564
+//line sql.y:2559
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 470:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2568
+//line sql.y:2563
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 471:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2572
+//line sql.y:2567
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 472:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2578
+//line sql.y:2573
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 473:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2582
+//line sql.y:2577
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 474:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2587
+//line sql.y:2582
 		{
 			yyVAL.str = ""
 		}
 	case 475:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2591
+//line sql.y:2586
 		{
 			yyVAL.str = yyDollar[1].str
 		}
 	case 476:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2596
+//line sql.y:2591
 		{
 			yyVAL.str = ""
 		}
 	case 477:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2600
+//line sql.y:2595
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 478:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2606
+//line sql.y:2601
 		{
 			yyVAL.indexColumns = []*IndexColumn{yyDollar[1].indexColumn}
 		}
 	case 479:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2610
+//line sql.y:2605
 		{
 			yyVAL.indexColumns = append(yyVAL.indexColumns, yyDollar[3].indexColumn)
 		}
 	case 480:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2616
+//line sql.y:2611
 		{
 			yyVAL.indexColumn = &IndexColumn{Column: yyDollar[1].colIdent, Length: yyDollar[2].sqlVal, Order: yyDollar[3].str}
 		}
 	case 481:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2620
+//line sql.y:2615
 		{
 			yyVAL.indexColumn = &IndexColumn{Column: NewColIdent(string(yyDollar[1].bytes)), Length: yyDollar[2].sqlVal, Order: yyDollar[3].str}
 		}
 	case 482:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2626
+//line sql.y:2621
 		{
 			yyVAL.constraintDefinition = &ConstraintDefinition{Name: string(yyDollar[2].bytes), Details: yyDollar[3].constraintInfo}
 		}
 	case 483:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2630
+//line sql.y:2625
 		{
 			yyVAL.constraintDefinition = &ConstraintDefinition{Name: string(yyDollar[2].bytes), Details: yyDollar[3].constraintInfo}
 		}
 	case 484:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2634
+//line sql.y:2629
 		{
 			yyVAL.constraintDefinition = &ConstraintDefinition{Details: yyDollar[1].constraintInfo}
 		}
 	case 485:
 		yyDollar = yyS[yypt-10 : yypt+1]
-//line sql.y:2640
+//line sql.y:2635
 		{
 			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns}
 		}
 	case 486:
 		yyDollar = yyS[yypt-11 : yypt+1]
-//line sql.y:2644
+//line sql.y:2639
 		{
 			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns, OnDelete: yyDollar[11].ReferenceAction}
 		}
 	case 487:
 		yyDollar = yyS[yypt-11 : yypt+1]
-//line sql.y:2648
+//line sql.y:2643
 		{
 			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns, OnUpdate: yyDollar[11].ReferenceAction}
 		}
 	case 488:
 		yyDollar = yyS[yypt-12 : yypt+1]
-//line sql.y:2652
+//line sql.y:2647
 		{
 			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns, OnDelete: yyDollar[11].ReferenceAction, OnUpdate: yyDollar[12].ReferenceAction}
 		}
 	case 489:
 		yyDollar = yyS[yypt-12 : yypt+1]
-//line sql.y:2656
+//line sql.y:2651
 		{
 			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns, OnDelete: yyDollar[12].ReferenceAction, OnUpdate: yyDollar[11].ReferenceAction}
 		}
 	case 490:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2662
+//line sql.y:2657
 		{
 			yyVAL.constraintDefinition = &ConstraintDefinition{Name: string(yyDollar[2].bytes), Details: yyDollar[3].constraintInfo}
 		}
 	case 491:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2666
+//line sql.y:2661
 		{
 			yyVAL.constraintDefinition = &ConstraintDefinition{Name: string(yyDollar[2].bytes), Details: yyDollar[3].constraintInfo}
 		}
 	case 492:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2670
+//line sql.y:2665
 		{
 			yyVAL.constraintDefinition = &ConstraintDefinition{Details: yyDollar[2].constraintInfo}
 		}
 	case 493:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2674
+//line sql.y:2669
 		{
 			yyVAL.constraintDefinition = &ConstraintDefinition{Details: yyDollar[1].constraintInfo}
 		}
 	case 494:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2680
+//line sql.y:2675
 		{
 			yyVAL.constraintInfo = &CheckConstraintDefinition{Expr: yyDollar[3].expr, Enforced: yyDollar[5].boolean}
 		}
 	case 495:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2686
+//line sql.y:2681
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 496:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2690
+//line sql.y:2685
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 497:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2695
+//line sql.y:2690
 		{
 			yyVAL.str = ""
 		}
 	case 498:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2699
+//line sql.y:2694
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 499:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2703
+//line sql.y:2698
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 500:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2709
+//line sql.y:2704
 		{
 			yyVAL.ReferenceAction = yyDollar[3].ReferenceAction
 		}
 	case 501:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2715
+//line sql.y:2710
 		{
 			yyVAL.ReferenceAction = yyDollar[3].ReferenceAction
 		}
 	case 502:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2721
+//line sql.y:2716
 		{
 			yyVAL.ReferenceAction = Restrict
 		}
 	case 503:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2725
+//line sql.y:2720
 		{
 			yyVAL.ReferenceAction = Cascade
 		}
 	case 504:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2729
+//line sql.y:2724
 		{
 			yyVAL.ReferenceAction = NoAction
 		}
 	case 505:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2733
+//line sql.y:2728
 		{
 			yyVAL.ReferenceAction = SetDefault
 		}
 	case 506:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2737
+//line sql.y:2732
 		{
 			yyVAL.ReferenceAction = SetNull
 		}
 	case 507:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2742
+//line sql.y:2737
 		{
 			yyVAL.boolean = true
 		}
 	case 508:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2746
+//line sql.y:2741
 		{
 			yyVAL.boolean = true
 		}
 	case 509:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2750
+//line sql.y:2745
 		{
 			yyVAL.boolean = false
 		}
 	case 510:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2755
+//line sql.y:2750
 		{
 			yyVAL.str = ""
 		}
 	case 511:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2759
+//line sql.y:2754
 		{
 			yyVAL.str = " " + string(yyDollar[1].str)
 		}
 	case 512:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2763
+//line sql.y:2758
 		{
 			yyVAL.str = string(yyDollar[1].str) + ", " + string(yyDollar[3].str)
 		}
 	case 513:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2771
+//line sql.y:2766
 		{
 			yyVAL.str = yyDollar[1].str
 		}
 	case 514:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2775
+//line sql.y:2770
 		{
 			yyVAL.str = yyDollar[1].str + " " + yyDollar[2].str
 		}
 	case 515:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2779
+//line sql.y:2774
 		{
 			yyVAL.str = yyDollar[1].str + "=" + yyDollar[3].str
 		}
 	case 516:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2785
+//line sql.y:2780
 		{
 			yyVAL.str = yyDollar[1].colIdent.String()
 		}
 	case 517:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2789
+//line sql.y:2784
 		{
 			yyVAL.str = "'" + string(yyDollar[1].bytes) + "'"
 		}
 	case 518:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2793
+//line sql.y:2788
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 519:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2798
+//line sql.y:2793
 		{
 			yyVAL.str = ""
 		}
 	case 520:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2802
+//line sql.y:2797
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 521:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2807
+//line sql.y:2802
 		{
 			yyVAL.str = string("")
 		}
 	case 522:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2811
+//line sql.y:2806
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 525:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2821
+//line sql.y:2816
 		{
 			for i := 0; i < len(yyDollar[5].ddls); i++ {
 				if yyDollar[5].ddls[i].Action == RenameStr {
@@ -8883,25 +8877,25 @@ yydefault:
 		}
 	case 526:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2834
+//line sql.y:2829
 		{
 			yyVAL.ddls = []*DDL{yyDollar[1].ddl}
 		}
 	case 527:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2838
+//line sql.y:2833
 		{
 			yyVAL.ddls = append(yyVAL.ddls, yyDollar[3].ddl)
 		}
 	case 528:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2844
+//line sql.y:2839
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr}
 		}
 	case 529:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2848
+//line sql.y:2843
 		{
 			ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}}
 			ddl.TableSpec.AddColumn(yyDollar[4].columnDefinition)
@@ -8910,7 +8904,7 @@ yydefault:
 		}
 	case 530:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2855
+//line sql.y:2850
 		{
 			ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}, ColumnOrder: yyDollar[4].columnOrder}
 			ddl.TableSpec.AddColumn(yyDollar[3].columnDefinition)
@@ -8919,86 +8913,86 @@ yydefault:
 		}
 	case 531:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2862
+//line sql.y:2857
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr}
 		}
 	case 532:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2866
+//line sql.y:2861
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string(yyDollar[3].bytes))}
 		}
 	case 533:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2870
+//line sql.y:2865
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr}
 		}
 	case 534:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2874
+//line sql.y:2869
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string(yyDollar[3].bytes)), ToColumn: NewColIdent(string(yyDollar[5].bytes))}
 		}
 	case 535:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2878
+//line sql.y:2873
 		{
 			// Change this to a rename statement
 			yyVAL.ddl = &DDL{Action: RenameStr, ToTables: TableNames{yyDollar[3].tableName}}
 		}
 	case 536:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:2883
+//line sql.y:2878
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent(yyDollar[3].str), Using: yyDollar[4].colIdent, Columns: yyDollar[6].indexColumns, Options: yyDollar[8].indexOptions}}
 		}
 	case 537:
 		yyDollar = yyS[yypt-10 : yypt+1]
-//line sql.y:2887
+//line sql.y:2882
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent(yyDollar[5].str), Type: yyDollar[3].str, Using: yyDollar[6].colIdent, Columns: yyDollar[8].indexColumns, Options: yyDollar[10].indexOptions}}
 		}
 	case 538:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2891
+//line sql.y:2886
 		{
-			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[3].bytes)}}}}
+			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[3].bytes)}}}}
 		}
 	case 539:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2896
+//line sql.y:2891
 		{
-			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[3].bytes)}}}}
+			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[3].bytes)}}}}
 		}
 	case 540:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2901
+//line sql.y:2896
 		{
-			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[3].bytes), Details: &CheckConstraintDefinition{}}}}}
+			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[3].bytes), Details: &CheckConstraintDefinition{}}}}}
 		}
 	case 541:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2906
+//line sql.y:2901
 		{
-			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[3].bytes), Details: &CheckConstraintDefinition{}}}}}
+			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[3].bytes), Details: &CheckConstraintDefinition{}}}}}
 		}
 	case 542:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2911
+//line sql.y:2906
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, ToName: yyDollar[3].colIdent}}
 		}
 	case 543:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2915
+//line sql.y:2910
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: RenameStr, FromName: yyDollar[3].colIdent, ToName: yyDollar[5].colIdent}}
 		}
 	case 544:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2919
+//line sql.y:2914
 		{
 			ddl := &DDL{Action: AlterStr, ColumnAction: ModifyStr, TableSpec: &TableSpec{}, ColumnOrder: yyDollar[4].columnOrder}
 			ddl.TableSpec.AddColumn(yyDollar[3].columnDefinition)
@@ -9007,7 +9001,7 @@ yydefault:
 		}
 	case 545:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2926
+//line sql.y:2921
 		{
 			ddl := &DDL{Action: AlterStr, ColumnAction: ChangeStr, TableSpec: &TableSpec{}, Column: NewColIdent(string(yyDollar[3].bytes)), ColumnOrder: yyDollar[5].columnOrder}
 			ddl.TableSpec.AddColumn(yyDollar[4].columnDefinition)
@@ -9015,13 +9009,13 @@ yydefault:
 		}
 	case 546:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2932
+//line sql.y:2927
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, PartitionSpec: yyDollar[1].partSpec}
 		}
 	case 547:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2936
+//line sql.y:2931
 		{
 			ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
 			ddl.TableSpec.AddConstraint(yyDollar[2].constraintDefinition)
@@ -9029,7 +9023,7 @@ yydefault:
 		}
 	case 548:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2942
+//line sql.y:2937
 		{
 			ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
 			ddl.TableSpec.AddConstraint(yyDollar[2].constraintDefinition)
@@ -9037,37 +9031,37 @@ yydefault:
 		}
 	case 549:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2948
+//line sql.y:2943
 		{
-			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[4].bytes), Details: &ForeignKeyDefinition{}}}}}
+			yyVAL.ddl = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[4].bytes), Details: &ForeignKeyDefinition{}}}}}
 		}
 	case 550:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2953
+//line sql.y:2948
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: yyDollar[3].expr}}
 		}
 	case 551:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:2957
+//line sql.y:2952
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: SetStr, Column: yyDollar[3].colIdent, Value: yyDollar[6].expr}}
 		}
 	case 552:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:2961
+//line sql.y:2956
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: DropStr, Column: yyDollar[3].colIdent}}
 		}
 	case 553:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:2965
+//line sql.y:2960
 		{
 			yyVAL.ddl = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, Type: PrimaryStr}}
 		}
 	case 554:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:2969
+//line sql.y:2964
 		{
 			ddl := &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr}}
 			ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent(yyDollar[2].str), Type: PrimaryStr, Columns: yyDollar[6].indexColumns, Options: yyDollar[8].indexOptions}
@@ -9075,89 +9069,89 @@ yydefault:
 		}
 	case 555:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2976
+//line sql.y:2971
 		{
 			yyVAL.columnOrder = nil
 		}
 	case 556:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2980
+//line sql.y:2975
 		{
 			yyVAL.columnOrder = &ColumnOrder{First: true}
 		}
 	case 557:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:2984
+//line sql.y:2979
 		{
 			yyVAL.columnOrder = &ColumnOrder{AfterColumn: NewColIdent(string(yyDollar[2].bytes))}
 		}
 	case 558:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:2990
+//line sql.y:2985
 		{
 			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[3].tableName.ToViewName()}
 		}
 	case 559:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:2996
+//line sql.y:2991
 		{
 		}
 	case 560:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:2998
+//line sql.y:2993
 		{
 		}
 	case 563:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:3006
+//line sql.y:3001
 		{
 			yyVAL.partSpec = &PartitionSpec{Action: ReorganizeStr, Name: yyDollar[3].colIdent, Definitions: yyDollar[6].partDefs}
 		}
 	case 564:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3012
+//line sql.y:3007
 		{
 			yyVAL.partDefs = []*PartitionDefinition{yyDollar[1].partDef}
 		}
 	case 565:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3016
+//line sql.y:3011
 		{
 			yyVAL.partDefs = append(yyDollar[1].partDefs, yyDollar[3].partDef)
 		}
 	case 566:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:3022
+//line sql.y:3017
 		{
 			yyVAL.partDef = &PartitionDefinition{Name: yyDollar[2].colIdent, Limit: yyDollar[7].expr}
 		}
 	case 567:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:3026
+//line sql.y:3021
 		{
 			yyVAL.partDef = &PartitionDefinition{Name: yyDollar[2].colIdent, Maxvalue: true}
 		}
 	case 568:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3032
+//line sql.y:3027
 		{
 			yyVAL.statement = yyDollar[3].ddl
 		}
 	case 569:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3036
+//line sql.y:3031
 		{
 			yyVAL.statement = &RenameUser{Accounts: yyDollar[3].accountRenames}
 		}
 	case 570:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3042
+//line sql.y:3037
 		{
 			yyVAL.ddl = &DDL{Action: RenameStr, FromTables: TableNames{yyDollar[1].tableName}, ToTables: TableNames{yyDollar[3].tableName}}
 		}
 	case 571:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3046
+//line sql.y:3041
 		{
 			yyVAL.ddl = yyDollar[1].ddl
 			yyVAL.ddl.FromTables = append(yyVAL.ddl.FromTables, yyDollar[3].tableName)
@@ -9165,19 +9159,19 @@ yydefault:
 		}
 	case 572:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3054
+//line sql.y:3049
 		{
 			yyVAL.accountRenames = []AccountRename{{From: yyDollar[1].accountName, To: yyDollar[3].accountName}}
 		}
 	case 573:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3058
+//line sql.y:3053
 		{
 			yyVAL.accountRenames = append(yyDollar[1].accountRenames, AccountRename{From: yyDollar[3].accountName, To: yyDollar[5].accountName})
 		}
 	case 574:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3064
+//line sql.y:3059
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9187,13 +9181,13 @@ yydefault:
 		}
 	case 575:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3072
+//line sql.y:3067
 		{
 			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[5].tableName, IndexSpec: &IndexSpec{Action: DropStr, ToName: yyDollar[3].colIdent}}
 		}
 	case 576:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3076
+//line sql.y:3071
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9203,7 +9197,7 @@ yydefault:
 		}
 	case 577:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3084
+//line sql.y:3079
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9213,7 +9207,7 @@ yydefault:
 		}
 	case 578:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3092
+//line sql.y:3087
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9223,7 +9217,7 @@ yydefault:
 		}
 	case 579:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3100
+//line sql.y:3095
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9233,7 +9227,7 @@ yydefault:
 		}
 	case 580:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3108
+//line sql.y:3103
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9243,7 +9237,7 @@ yydefault:
 		}
 	case 581:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3116
+//line sql.y:3111
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9253,7 +9247,7 @@ yydefault:
 		}
 	case 582:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3124
+//line sql.y:3119
 		{
 			var exists bool
 			if yyDollar[3].byt != 0 {
@@ -9263,201 +9257,201 @@ yydefault:
 		}
 	case 583:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3133
+//line sql.y:3128
 		{
 
 		}
 	case 584:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3137
+//line sql.y:3132
 		{
 			yyVAL.ReferenceAction = Restrict
 		}
 	case 585:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3141
+//line sql.y:3136
 		{
 			yyVAL.ReferenceAction = Cascade
 		}
 	case 586:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3147
+//line sql.y:3142
 		{
 			yyVAL.statement = &DDL{Action: TruncateStr, Table: yyDollar[3].tableName}
 		}
 	case 587:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3151
+//line sql.y:3146
 		{
 			yyVAL.statement = &DDL{Action: TruncateStr, Table: yyDollar[2].tableName}
 		}
 	case 588:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3156
+//line sql.y:3151
 		{
 			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[3].tableName}
 		}
 	case 589:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3162
+//line sql.y:3157
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes)}
 		}
 	case 590:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3167
+//line sql.y:3162
 		{
 			yyVAL.statement = &Show{Type: CharsetStr, Filter: yyDollar[4].showFilter}
 		}
 	case 591:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3171
+//line sql.y:3166
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes), Filter: yyDollar[3].showFilter}
 		}
 	case 592:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3175
+//line sql.y:3170
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), IfNotExists: yyDollar[4].byt == 1, Database: string(yyDollar[5].bytes)}
 		}
 	case 593:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3179
+//line sql.y:3174
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), IfNotExists: yyDollar[4].byt == 1, Database: string(yyDollar[5].bytes)}
 		}
 	case 594:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3184
+//line sql.y:3179
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes)}
 		}
 	case 595:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3188
+//line sql.y:3183
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes)}
 		}
 	case 596:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3192
+//line sql.y:3187
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes)}
 		}
 	case 597:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3196
+//line sql.y:3191
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Table: yyDollar[4].tableName}
 		}
 	case 598:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3200
+//line sql.y:3195
 		{
 			yyVAL.statement = &Show{Type: CreateTriggerStr, Table: yyDollar[4].tableName}
 		}
 	case 599:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3204
+//line sql.y:3199
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Table: yyDollar[4].tableName}
 		}
 	case 600:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3208
+//line sql.y:3203
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes)}
 		}
 	case 601:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3212
+//line sql.y:3207
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes)}
 		}
 	case 602:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3216
+//line sql.y:3211
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes)}
 		}
 	case 603:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3220
+//line sql.y:3215
 		{
 			yyVAL.statement = &Show{Type: IndexStr, Table: yyDollar[4].tableName, Database: yyDollar[5].str, ShowIndexFilterOpt: yyDollar[6].expr}
 		}
 	case 604:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3224
+//line sql.y:3219
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes)}
 		}
 	case 605:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3228
+//line sql.y:3223
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Filter: yyDollar[4].showFilter}
 		}
 	case 606:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3232
+//line sql.y:3227
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Filter: yyDollar[4].showFilter}
 		}
 	case 607:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3236
+//line sql.y:3231
 		{
 			yyVAL.statement = &Show{Scope: yyDollar[2].str, Type: string(yyDollar[3].bytes)}
 		}
 	case 608:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3240
+//line sql.y:3235
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Database: yyDollar[4].str, Filter: yyDollar[5].showFilter}
 		}
 	case 609:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:3244
+//line sql.y:3239
 		{
 			showTablesOpt := &ShowTablesOpt{DbName: yyDollar[6].str, Filter: yyDollar[7].showFilter}
 			yyVAL.statement = &Show{Type: string(yyDollar[3].str), ShowTablesOpt: showTablesOpt, OnTable: yyDollar[5].tableName, Full: yyDollar[2].boolean}
 		}
 	case 610:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3249
+//line sql.y:3244
 		{
 			showTablesOpt := &ShowTablesOpt{DbName: yyDollar[4].str, Filter: yyDollar[6].showFilter, AsOf: yyDollar[5].expr}
 			yyVAL.statement = &Show{Type: string(yyDollar[3].bytes), ShowTablesOpt: showTablesOpt, Full: yyDollar[2].boolean}
 		}
 	case 611:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3254
+//line sql.y:3249
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[3].bytes), Full: yyDollar[2].boolean}
 		}
 	case 612:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3258
+//line sql.y:3253
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[3].bytes), ShowTablesOpt: &ShowTablesOpt{DbName: yyDollar[4].str, Filter: yyDollar[5].showFilter}, Full: yyDollar[2].boolean}
 		}
 	case 613:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3262
+//line sql.y:3257
 		{
 			yyVAL.statement = &Show{Scope: yyDollar[2].str, Type: string(yyDollar[3].bytes), Filter: yyDollar[4].showFilter}
 		}
 	case 614:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3266
+//line sql.y:3261
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes)}
 		}
 	case 615:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3270
+//line sql.y:3265
 		{
 			// Cannot dereference $4 directly, or else the parser stackcannot be pooled. See yyParsePooled
 			showCollationFilterOpt := yyDollar[4].expr
@@ -9465,7 +9459,7 @@ yydefault:
 		}
 	case 616:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3276
+//line sql.y:3271
 		{
 			// Cannot dereference $3 directly, or else the parser stackcannot be pooled. See yyParsePooled
 			cmp := yyDollar[3].expr.(*ComparisonExpr)
@@ -9475,416 +9469,416 @@ yydefault:
 		}
 	case 617:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3284
+//line sql.y:3279
 		{
 			yyVAL.statement = &ShowGrants{}
 		}
 	case 618:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3288
+//line sql.y:3283
 		{
 			an := yyDollar[4].accountName
 			yyVAL.statement = &ShowGrants{For: &an}
 		}
 	case 619:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3293
+//line sql.y:3288
 		{
 			yyVAL.statement = &ShowGrants{CurrentUser: true}
 		}
 	case 620:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3297
+//line sql.y:3292
 		{
 			an := yyDollar[4].accountName
 			yyVAL.statement = &ShowGrants{For: &an, Using: yyDollar[6].accountNames}
 		}
 	case 621:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3302
+//line sql.y:3297
 		{
 			yyVAL.statement = &ShowPrivileges{}
 		}
 	case 622:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3306
+//line sql.y:3301
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[6].bytes), CountStar: true}
 		}
 	case 623:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3310
+//line sql.y:3305
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[6].bytes), CountStar: true}
 		}
 	case 624:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3314
+//line sql.y:3309
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes), Limit: yyDollar[3].limit}
 		}
 	case 625:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3318
+//line sql.y:3313
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes), Limit: yyDollar[3].limit}
 		}
 	case 626:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3328
+//line sql.y:3323
 		{
 			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes)}
 		}
 	case 627:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3334
+//line sql.y:3329
 		{
 			yyVAL.expr = &ComparisonExpr{Operator: LikeStr, Right: yyDollar[2].expr, Escape: yyDollar[3].expr}
 		}
 	case 628:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3340
+//line sql.y:3335
 		{
 			yyVAL.boolean = false
 		}
 	case 629:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3344
+//line sql.y:3339
 		{
 			yyVAL.boolean = true
 		}
 	case 630:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3350
+//line sql.y:3345
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 631:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3354
+//line sql.y:3349
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 632:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3360
+//line sql.y:3355
 		{
 			yyVAL.str = ""
 		}
 	case 633:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3364
+//line sql.y:3359
 		{
 			yyVAL.str = yyDollar[2].tableIdent.v
 		}
 	case 634:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3368
+//line sql.y:3363
 		{
 			yyVAL.str = yyDollar[2].tableIdent.v
 		}
 	case 635:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3374
+//line sql.y:3369
 		{
 			yyVAL.showFilter = nil
 		}
 	case 636:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3378
+//line sql.y:3373
 		{
 			yyVAL.showFilter = &ShowFilter{Like: string(yyDollar[2].bytes)}
 		}
 	case 637:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3382
+//line sql.y:3377
 		{
 			yyVAL.showFilter = &ShowFilter{Filter: yyDollar[2].expr}
 		}
 	case 638:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3388
+//line sql.y:3383
 		{
 			yyVAL.str = ""
 		}
 	case 639:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3392
+//line sql.y:3387
 		{
 			yyVAL.str = SessionStr
 		}
 	case 640:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3396
+//line sql.y:3391
 		{
 			yyVAL.str = GlobalStr
 		}
 	case 641:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3402
+//line sql.y:3397
 		{
 			yyVAL.statement = &Use{DBName: yyDollar[2].tableIdent}
 		}
 	case 642:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3406
+//line sql.y:3401
 		{
 			yyVAL.statement = &Use{DBName: TableIdent{v: ""}}
 		}
 	case 643:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3412
+//line sql.y:3407
 		{
 			yyVAL.statement = &Begin{}
 		}
 	case 644:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3416
+//line sql.y:3411
 		{
 			yyVAL.statement = yyDollar[1].statement
 		}
 	case 645:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3422
+//line sql.y:3417
 		{
 			yyVAL.statement = &Begin{}
 		}
 	case 646:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3426
+//line sql.y:3421
 		{
 			yyVAL.statement = &Begin{TransactionCharacteristic: TxReadWrite}
 		}
 	case 647:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3430
+//line sql.y:3425
 		{
 			yyVAL.statement = &Begin{TransactionCharacteristic: TxReadOnly}
 		}
 	case 648:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3436
+//line sql.y:3431
 		{
 			yyVAL.statement = &Commit{}
 		}
 	case 649:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3442
+//line sql.y:3437
 		{
 			yyVAL.statement = &Rollback{}
 		}
 	case 650:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3448
+//line sql.y:3443
 		{
 			yyVAL.statement = &Savepoint{Identifier: string(yyDollar[2].bytes)}
 		}
 	case 651:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3454
+//line sql.y:3449
 		{
 			yyVAL.statement = &RollbackSavepoint{Identifier: string(yyDollar[3].bytes)}
 		}
 	case 652:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3458
+//line sql.y:3453
 		{
 			yyVAL.statement = &RollbackSavepoint{Identifier: string(yyDollar[4].bytes)}
 		}
 	case 653:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3462
+//line sql.y:3457
 		{
 			yyVAL.statement = &RollbackSavepoint{Identifier: string(yyDollar[4].bytes)}
 		}
 	case 654:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3466
+//line sql.y:3461
 		{
 			yyVAL.statement = &RollbackSavepoint{Identifier: string(yyDollar[5].bytes)}
 		}
 	case 655:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3472
+//line sql.y:3467
 		{
 			yyVAL.statement = &ReleaseSavepoint{Identifier: string(yyDollar[3].bytes)}
 		}
 	case 656:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3477
+//line sql.y:3472
 		{
 		}
 	case 657:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3478
+//line sql.y:3473
 		{
 		}
 	case 658:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3482
+//line sql.y:3477
 		{
 			yyVAL.statement = &Explain{ExplainFormat: yyDollar[2].str, Statement: yyDollar[3].statement}
 		}
 	case 659:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3486
+//line sql.y:3481
 		{
 			yyVAL.statement = &Explain{Analyze: true, ExplainFormat: TreeStr, Statement: yyDollar[3].selStmt}
 		}
 	case 660:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3492
+//line sql.y:3487
 		{
 			yyVAL.statement = yyDollar[1].selStmt
 		}
 	case 664:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3500
+//line sql.y:3495
 		{
 			yyVAL.str = ""
 		}
 	case 665:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3504
+//line sql.y:3499
 		{
 			yyVAL.str = string(yyDollar[3].bytes)
 		}
 	case 668:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3515
+//line sql.y:3510
 		{
 			yyVAL.statement = &Show{Type: "columns", OnTable: yyDollar[2].tableName}
 		}
 	case 669:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3519
+//line sql.y:3514
 		{
 			yyVAL.statement = &OtherRead{}
 		}
 	case 670:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3525
+//line sql.y:3520
 		{
 			yyVAL.statement = &OtherAdmin{}
 		}
 	case 671:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3529
+//line sql.y:3524
 		{
 			yyVAL.statement = &OtherAdmin{}
 		}
 	case 672:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3535
+//line sql.y:3530
 		{
 			yyVAL.statement = &DDL{Action: FlushStr}
 		}
 	case 673:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3539
+//line sql.y:3534
 		{
 			setAllowComments(yylex, true)
 		}
 	case 674:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3543
+//line sql.y:3538
 		{
 			yyVAL.bytes2 = yyDollar[2].bytes2
 			setAllowComments(yylex, false)
 		}
 	case 675:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3549
+//line sql.y:3544
 		{
 			yyVAL.bytes2 = nil
 		}
 	case 676:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3553
+//line sql.y:3548
 		{
 			yyVAL.bytes2 = append(yyDollar[1].bytes2, yyDollar[2].bytes)
 		}
 	case 677:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3559
+//line sql.y:3554
 		{
 			yyVAL.str = UnionStr
 		}
 	case 678:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3563
+//line sql.y:3558
 		{
 			yyVAL.str = UnionAllStr
 		}
 	case 679:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3567
+//line sql.y:3562
 		{
 			yyVAL.str = UnionDistinctStr
 		}
 	case 680:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3572
+//line sql.y:3567
 		{
 			yyVAL.byt = 0
 		}
 	case 681:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3576
+//line sql.y:3571
 		{
 			yyVAL.byt = 1
 		}
 	case 682:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3581
+//line sql.y:3576
 		{
 			yyVAL.str = ""
 		}
 	case 683:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3585
+//line sql.y:3580
 		{
 			yyVAL.str = SQLNoCacheStr
 		}
 	case 684:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3589
+//line sql.y:3584
 		{
 			yyVAL.str = SQLCacheStr
 		}
 	case 685:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3594
+//line sql.y:3589
 		{
 			yyVAL.str = ""
 		}
 	case 686:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3598
+//line sql.y:3593
 		{
 			yyVAL.str = ""
 		}
 	case 687:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3602
+//line sql.y:3597
 		{
 			yyVAL.str = DistinctStr
 		}
 	case 688:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3607
+//line sql.y:3602
 		{
 			yyVAL.str = ""
 		}
 	case 689:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3611
+//line sql.y:3606
 		{
 			yyVAL.str = StraightJoinHint
 		}
 	case 690:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3617
+//line sql.y:3612
 		{
 			if ae, ok := yyDollar[2].selectExpr.(*AliasedExpr); ok {
 				ae.StartParsePos = yyDollar[1].int
@@ -9894,7 +9888,7 @@ yydefault:
 		}
 	case 691:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3625
+//line sql.y:3620
 		{
 			if ae, ok := yyDollar[4].selectExpr.(*AliasedExpr); ok {
 				ae.StartParsePos = yyDollar[3].int
@@ -9904,103 +9898,103 @@ yydefault:
 		}
 	case 692:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3636
+//line sql.y:3631
 		{
 			yyVAL.selectExpr = &StarExpr{}
 		}
 	case 693:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3640
+//line sql.y:3635
 		{
 			yyVAL.selectExpr = &AliasedExpr{Expr: yyDollar[1].expr}
 		}
 	case 694:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3644
+//line sql.y:3639
 		{
 			yyVAL.selectExpr = &StarExpr{TableName: TableName{Name: yyDollar[1].tableIdent}}
 		}
 	case 695:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3648
+//line sql.y:3643
 		{
 			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 696:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3654
+//line sql.y:3649
 		{
 			yyVAL.selectExpr = &StarExpr{}
 		}
 	case 697:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3658
+//line sql.y:3653
 		{
 			yyVAL.selectExpr = &AliasedExpr{Expr: yyDollar[1].expr, As: yyDollar[2].colIdent}
 		}
 	case 698:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3662
+//line sql.y:3657
 		{
 			yyVAL.selectExpr = &StarExpr{TableName: TableName{Name: yyDollar[1].tableIdent}}
 		}
 	case 699:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:3666
+//line sql.y:3661
 		{
 			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 700:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3672
+//line sql.y:3667
 		{
 			yyVAL.over = &Over{WindowName: yyDollar[2].colIdent}
 		}
 	case 701:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3676
+//line sql.y:3671
 		{
 			yyVAL.over = &Over{OrderBy: yyDollar[3].orderBy}
 		}
 	case 702:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:3680
+//line sql.y:3675
 		{
 			yyVAL.over = &Over{PartitionBy: yyDollar[5].exprs, OrderBy: yyDollar[6].orderBy, Frame: yyDollar[7].frame}
 		}
 	case 703:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3686
+//line sql.y:3681
 		{
 			yyVAL.over = nil
 		}
 	case 704:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3690
+//line sql.y:3685
 		{
 			yyVAL.over = yyDollar[1].over
 		}
 	case 705:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3695
+//line sql.y:3690
 		{
 			yyVAL.frame = nil
 		}
 	case 706:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3699
+//line sql.y:3694
 		{
 			yyVAL.frame = &Frame{Unit: RowsUnit, Extent: yyDollar[2].frameExtent}
 		}
 	case 707:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3703
+//line sql.y:3698
 		{
 			yyVAL.frame = &Frame{Unit: RangeUnit, Extent: yyDollar[2].frameExtent}
 		}
 	case 708:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3710
+//line sql.y:3705
 		{
 			startBound := yyDollar[2].frameBound
 			endBound := yyDollar[4].frameBound
@@ -10025,7 +10019,7 @@ yydefault:
 		}
 	case 709:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3733
+//line sql.y:3728
 		{
 			startBound := yyDollar[1].frameBound
 			switch {
@@ -10040,25 +10034,25 @@ yydefault:
 		}
 	case 710:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3748
+//line sql.y:3743
 		{
 			yyVAL.frameBound = &FrameBound{Type: UnboundedPreceding}
 		}
 	case 711:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3752
+//line sql.y:3747
 		{
 			yyVAL.frameBound = &FrameBound{Type: UnboundedFollowing}
 		}
 	case 712:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3756
+//line sql.y:3751
 		{
 			yyVAL.frameBound = &FrameBound{Type: CurrentRow}
 		}
 	case 713:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3760
+//line sql.y:3755
 		{
 			yyVAL.frameBound = &FrameBound{
 				Expr: yyDollar[1].expr,
@@ -10067,7 +10061,7 @@ yydefault:
 		}
 	case 714:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3767
+//line sql.y:3762
 		{
 			yyVAL.frameBound = &FrameBound{
 				Expr: yyDollar[1].expr,
@@ -10076,79 +10070,79 @@ yydefault:
 		}
 	case 715:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3777
+//line sql.y:3772
 		{
 			yyVAL.expr = NewIntVal(yyDollar[1].bytes)
 		}
 	case 716:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3781
+//line sql.y:3776
 		{
 			yyVAL.expr = &IntervalExpr{Expr: yyDollar[2].expr, Unit: yyDollar[3].colIdent.String()}
 		}
 	case 717:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3786
+//line sql.y:3781
 		{
 			yyVAL.colIdent = ColIdent{}
 		}
 	case 718:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3790
+//line sql.y:3785
 		{
 			yyVAL.colIdent = yyDollar[1].colIdent
 		}
 	case 719:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3794
+//line sql.y:3789
 		{
 			yyVAL.colIdent = yyDollar[2].colIdent
 		}
 	case 720:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3800
+//line sql.y:3795
 		{
 			yyVAL.colIdent = NewColIdent(string(yyDollar[1].bytes))
 		}
 	case 721:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3804
+//line sql.y:3799
 		{
 			yyVAL.colIdent = NewColIdent(string(yyDollar[1].bytes))
 		}
 	case 722:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3808
+//line sql.y:3803
 		{
 			yyVAL.colIdent = NewColIdent(string(yyDollar[1].bytes))
 		}
 	case 723:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3812
+//line sql.y:3807
 		{
 			yyVAL.colIdent = NewColIdent(string(yyDollar[1].bytes))
 		}
 	case 724:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3818
+//line sql.y:3813
 		{
 			yyVAL.tableExprs = TableExprs{yyDollar[1].tableExpr}
 		}
 	case 725:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3822
+//line sql.y:3817
 		{
 			yyVAL.tableExprs = append(yyVAL.tableExprs, yyDollar[3].tableExpr)
 		}
 	case 728:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3832
+//line sql.y:3827
 		{
 			yyVAL.tableExpr = yyDollar[1].aliasedTableName
 		}
 	case 729:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3836
+//line sql.y:3831
 		{
 			switch n := yyDollar[1].simpleTableExpr.(type) {
 			case *Subquery:
@@ -10160,7 +10154,7 @@ yydefault:
 		}
 	case 730:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3846
+//line sql.y:3841
 		{
 			// missed alias for subquery
 			yylex.Error("Every derived table must have its own alias")
@@ -10168,38 +10162,38 @@ yydefault:
 		}
 	case 731:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3852
+//line sql.y:3847
 		{
 			yyVAL.tableExpr = &ParenTableExpr{Exprs: yyDollar[2].tableExprs}
 		}
 	case 732:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3858
+//line sql.y:3853
 		{
 			yyVAL.simpleTableExpr = &ValuesStatement{Rows: yyDollar[2].values}
 		}
 	case 733:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3864
+//line sql.y:3859
 		{
 			yyVAL.values = Values{yyDollar[2].valTuple}
 		}
 	case 734:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3868
+//line sql.y:3863
 		{
 			yyVAL.values = append(yyVAL.values, yyDollar[4].valTuple)
 		}
 	case 735:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3874
+//line sql.y:3869
 		{
 			yyVAL.aliasedTableName = yyDollar[2].aliasedTableName
 			yyVAL.aliasedTableName.Expr = yyDollar[1].tableName
 		}
 	case 736:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3879
+//line sql.y:3874
 		{
 			yyVAL.aliasedTableName = yyDollar[6].aliasedTableName
 			yyVAL.aliasedTableName.Expr = yyDollar[1].tableName
@@ -10207,223 +10201,223 @@ yydefault:
 		}
 	case 737:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3890
+//line sql.y:3885
 		{
 			yyVAL.aliasedTableName = &AliasedTableExpr{Hints: yyDollar[1].indexHints}
 		}
 	case 738:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3894
+//line sql.y:3889
 		{
 			yyVAL.aliasedTableName = &AliasedTableExpr{AsOf: &AsOf{Time: yyDollar[3].expr}, Hints: yyDollar[4].indexHints}
 		}
 	case 739:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:3898
+//line sql.y:3893
 		{
 			yyVAL.aliasedTableName = &AliasedTableExpr{AsOf: &AsOf{Time: yyDollar[3].expr}, As: yyDollar[5].tableIdent, Hints: yyDollar[6].indexHints}
 		}
 	case 740:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3902
+//line sql.y:3897
 		{
 			yyVAL.aliasedTableName = &AliasedTableExpr{As: yyDollar[2].tableIdent, Hints: yyDollar[3].indexHints}
 		}
 	case 741:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3906
+//line sql.y:3901
 		{
 			yyVAL.aliasedTableName = &AliasedTableExpr{As: yyDollar[1].tableIdent, Hints: yyDollar[2].indexHints}
 		}
 	case 742:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3917
+//line sql.y:3912
 		{
 			yyVAL.expr = nil
 		}
 	case 743:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3921
+//line sql.y:3916
 		{
 			yyVAL.expr = yyDollar[3].expr
 		}
 	case 744:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3926
+//line sql.y:3921
 		{
 			yyVAL.columns = nil
 		}
 	case 745:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3930
+//line sql.y:3925
 		{
 			yyVAL.columns = yyDollar[2].columns
 		}
 	case 746:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3936
+//line sql.y:3931
 		{
 			yyVAL.columns = Columns{yyDollar[1].colIdent}
 		}
 	case 747:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3940
+//line sql.y:3935
 		{
 			yyVAL.columns = append(yyVAL.columns, yyDollar[3].colIdent)
 		}
 	case 748:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3946
+//line sql.y:3941
 		{
 			yyVAL.partitions = Partitions{yyDollar[1].colIdent}
 		}
 	case 749:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3950
+//line sql.y:3945
 		{
 			yyVAL.partitions = append(yyVAL.partitions, yyDollar[3].colIdent)
 		}
 	case 750:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3963
+//line sql.y:3958
 		{
 			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].str, RightExpr: yyDollar[3].tableExpr, Condition: yyDollar[4].joinCondition}
 		}
 	case 751:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3967
+//line sql.y:3962
 		{
 			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].str, RightExpr: yyDollar[3].tableExpr, Condition: yyDollar[4].joinCondition}
 		}
 	case 752:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3971
+//line sql.y:3966
 		{
 			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].str, RightExpr: yyDollar[3].tableExpr, Condition: yyDollar[4].joinCondition}
 		}
 	case 753:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:3975
+//line sql.y:3970
 		{
 			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].str, RightExpr: yyDollar[3].tableExpr}
 		}
 	case 754:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3981
+//line sql.y:3976
 		{
 			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].expr}
 		}
 	case 755:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:3983
+//line sql.y:3978
 		{
 			yyVAL.joinCondition = JoinCondition{Using: yyDollar[3].columns}
 		}
 	case 756:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3987
+//line sql.y:3982
 		{
 			yyVAL.joinCondition = JoinCondition{}
 		}
 	case 757:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:3989
+//line sql.y:3984
 		{
 			yyVAL.joinCondition = yyDollar[1].joinCondition
 		}
 	case 758:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3993
+//line sql.y:3988
 		{
 			yyVAL.joinCondition = JoinCondition{}
 		}
 	case 759:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:3995
+//line sql.y:3990
 		{
 			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].expr}
 		}
 	case 760:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:3998
+//line sql.y:3993
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 761:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4000
+//line sql.y:3995
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 763:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4005
+//line sql.y:4000
 		{
 			yyVAL.tableIdent = NewTableIdent(string(yyDollar[1].bytes))
 		}
 	case 764:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4009
+//line sql.y:4004
 		{
 			yyVAL.tableIdent = NewTableIdent(string(yyDollar[1].bytes))
 		}
 	case 765:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4015
+//line sql.y:4010
 		{
 			yyVAL.str = JoinStr
 		}
 	case 766:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4019
+//line sql.y:4014
 		{
 			yyVAL.str = JoinStr
 		}
 	case 767:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4023
+//line sql.y:4018
 		{
 			yyVAL.str = JoinStr
 		}
 	case 768:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4029
+//line sql.y:4024
 		{
 			yyVAL.str = StraightJoinStr
 		}
 	case 769:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4035
+//line sql.y:4030
 		{
 			yyVAL.str = LeftJoinStr
 		}
 	case 770:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4039
+//line sql.y:4034
 		{
 			yyVAL.str = LeftJoinStr
 		}
 	case 771:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4043
+//line sql.y:4038
 		{
 			yyVAL.str = RightJoinStr
 		}
 	case 772:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4047
+//line sql.y:4042
 		{
 			yyVAL.str = RightJoinStr
 		}
 	case 773:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4053
+//line sql.y:4048
 		{
 			yyVAL.str = NaturalJoinStr
 		}
 	case 774:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4057
+//line sql.y:4052
 		{
 			if yyDollar[2].str == LeftJoinStr {
 				yyVAL.str = NaturalLeftJoinStr
@@ -10433,505 +10427,505 @@ yydefault:
 		}
 	case 775:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4067
+//line sql.y:4062
 		{
 			yyVAL.tableName = yyDollar[3].tableName
 		}
 	case 776:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4073
+//line sql.y:4068
 		{
 			yyVAL.tableName = yyDollar[2].tableName
 		}
 	case 777:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4077
+//line sql.y:4072
 		{
 			yyVAL.tableName = yyDollar[1].tableName
 		}
 	case 778:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4083
+//line sql.y:4078
 		{
 			yyVAL.tableName = TableName{Name: yyDollar[1].tableIdent}
 		}
 	case 779:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4087
+//line sql.y:4082
 		{
 			yyVAL.tableName = TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}
 		}
 	case 780:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4093
+//line sql.y:4088
 		{
 			yyVAL.tableName = TableName{Name: yyDollar[1].tableIdent}
 		}
 	case 781:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4098
+//line sql.y:4093
 		{
 			yyVAL.indexHints = nil
 		}
 	case 782:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4102
+//line sql.y:4097
 		{
 			yyVAL.indexHints = &IndexHints{Type: UseStr, Indexes: yyDollar[4].columns}
 		}
 	case 783:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4106
+//line sql.y:4101
 		{
 			yyVAL.indexHints = &IndexHints{Type: IgnoreStr, Indexes: yyDollar[4].columns}
 		}
 	case 784:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4110
+//line sql.y:4105
 		{
 			yyVAL.indexHints = &IndexHints{Type: ForceStr, Indexes: yyDollar[4].columns}
 		}
 	case 785:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4115
+//line sql.y:4110
 		{
 			yyVAL.expr = nil
 		}
 	case 786:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4119
+//line sql.y:4114
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 787:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4125
+//line sql.y:4120
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 788:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4129
+//line sql.y:4124
 		{
 			yyVAL.expr = &AndExpr{Left: yyDollar[1].expr, Right: yyDollar[3].expr}
 		}
 	case 789:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4133
+//line sql.y:4128
 		{
 			yyVAL.expr = &OrExpr{Left: yyDollar[1].expr, Right: yyDollar[3].expr}
 		}
 	case 790:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4137
+//line sql.y:4132
 		{
 			yyVAL.expr = &NotExpr{Expr: yyDollar[2].expr}
 		}
 	case 791:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4141
+//line sql.y:4136
 		{
 			yyVAL.expr = &IsExpr{Operator: yyDollar[3].str, Expr: yyDollar[1].expr}
 		}
 	case 792:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4145
+//line sql.y:4140
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 793:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4149
+//line sql.y:4144
 		{
 			yyVAL.expr = &Default{ColName: yyDollar[2].str}
 		}
 	case 794:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4155
+//line sql.y:4150
 		{
 			yyVAL.str = ""
 		}
 	case 795:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4159
+//line sql.y:4154
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 796:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4165
+//line sql.y:4160
 		{
 			yyVAL.boolVal = BoolVal(true)
 		}
 	case 797:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4169
+//line sql.y:4164
 		{
 			yyVAL.boolVal = BoolVal(false)
 		}
 	case 798:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4175
+//line sql.y:4170
 		{
 			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: yyDollar[2].str, Right: yyDollar[3].expr}
 		}
 	case 799:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4179
+//line sql.y:4174
 		{
 			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: InStr, Right: yyDollar[3].colTuple}
 		}
 	case 800:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4183
+//line sql.y:4178
 		{
 			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: NotInStr, Right: yyDollar[4].colTuple}
 		}
 	case 801:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4187
+//line sql.y:4182
 		{
 			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: LikeStr, Right: yyDollar[3].expr, Escape: yyDollar[4].expr}
 		}
 	case 802:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4191
+//line sql.y:4186
 		{
 			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: NotLikeStr, Right: yyDollar[4].expr, Escape: yyDollar[5].expr}
 		}
 	case 803:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4195
+//line sql.y:4190
 		{
 			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: RegexpStr, Right: yyDollar[3].expr}
 		}
 	case 804:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4199
+//line sql.y:4194
 		{
 			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: NotRegexpStr, Right: yyDollar[4].expr}
 		}
 	case 805:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4203
+//line sql.y:4198
 		{
 			yyVAL.expr = &RangeCond{Left: yyDollar[1].expr, Operator: BetweenStr, From: yyDollar[3].expr, To: yyDollar[5].expr}
 		}
 	case 806:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4207
+//line sql.y:4202
 		{
 			yyVAL.expr = &RangeCond{Left: yyDollar[1].expr, Operator: NotBetweenStr, From: yyDollar[4].expr, To: yyDollar[6].expr}
 		}
 	case 807:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4211
+//line sql.y:4206
 		{
 			yyVAL.expr = &ExistsExpr{Subquery: yyDollar[2].subquery}
 		}
 	case 808:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4217
+//line sql.y:4212
 		{
 			yyVAL.str = IsNullStr
 		}
 	case 809:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4221
+//line sql.y:4216
 		{
 			yyVAL.str = IsNotNullStr
 		}
 	case 810:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4225
+//line sql.y:4220
 		{
 			yyVAL.str = IsTrueStr
 		}
 	case 811:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4229
+//line sql.y:4224
 		{
 			yyVAL.str = IsNotTrueStr
 		}
 	case 812:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4233
+//line sql.y:4228
 		{
 			yyVAL.str = IsFalseStr
 		}
 	case 813:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4237
+//line sql.y:4232
 		{
 			yyVAL.str = IsNotFalseStr
 		}
 	case 814:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4243
+//line sql.y:4238
 		{
 			yyVAL.str = EqualStr
 		}
 	case 815:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4247
+//line sql.y:4242
 		{
 			yyVAL.str = LessThanStr
 		}
 	case 816:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4251
+//line sql.y:4246
 		{
 			yyVAL.str = GreaterThanStr
 		}
 	case 817:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4255
+//line sql.y:4250
 		{
 			yyVAL.str = LessEqualStr
 		}
 	case 818:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4259
+//line sql.y:4254
 		{
 			yyVAL.str = GreaterEqualStr
 		}
 	case 819:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4263
+//line sql.y:4258
 		{
 			yyVAL.str = NotEqualStr
 		}
 	case 820:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4267
+//line sql.y:4262
 		{
 			yyVAL.str = NullSafeEqualStr
 		}
 	case 821:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4272
+//line sql.y:4267
 		{
 			yyVAL.expr = nil
 		}
 	case 822:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4276
+//line sql.y:4271
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 823:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4282
+//line sql.y:4277
 		{
 			yyVAL.colTuple = yyDollar[1].valTuple
 		}
 	case 824:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4286
+//line sql.y:4281
 		{
 			yyVAL.colTuple = yyDollar[1].subquery
 		}
 	case 825:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4290
+//line sql.y:4285
 		{
 			yyVAL.colTuple = ListArg(yyDollar[1].bytes)
 		}
 	case 826:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4296
+//line sql.y:4291
 		{
 			yyVAL.subquery = &Subquery{Select: yyDollar[2].selStmt}
 		}
 	case 827:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4302
+//line sql.y:4297
 		{
 			yyVAL.simpleTableExpr = yyDollar[1].subquery
 		}
 	case 828:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4306
+//line sql.y:4301
 		{
 			yyVAL.simpleTableExpr = yyDollar[2].simpleTableExpr
 		}
 	case 829:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4312
+//line sql.y:4307
 		{
 			yyVAL.selectExprs = nil
 		}
 	case 831:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4319
+//line sql.y:4314
 		{
 			yyVAL.selectExprs = SelectExprs{yyDollar[1].selectExpr}
 		}
 	case 832:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4323
+//line sql.y:4318
 		{
 			yyVAL.selectExprs = append(yyDollar[1].selectExprs, yyDollar[3].selectExpr)
 		}
 	case 833:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4329
+//line sql.y:4324
 		{
 			yyVAL.exprs = Exprs{yyDollar[1].expr}
 		}
 	case 834:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4333
+//line sql.y:4328
 		{
 			yyVAL.exprs = append(yyDollar[1].exprs, yyDollar[3].expr)
 		}
 	case 835:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4339
+//line sql.y:4334
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 836:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4343
+//line sql.y:4338
 		{
 			yyVAL.expr = &ColName{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 837:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4347
+//line sql.y:4342
 		{
 			yyVAL.expr = yyDollar[1].boolVal
 		}
 	case 838:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4351
+//line sql.y:4346
 		{
 			yyVAL.expr = yyDollar[1].colName
 		}
 	case 839:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4355
+//line sql.y:4350
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 840:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4359
+//line sql.y:4354
 		{
 			yyVAL.expr = yyDollar[1].subquery
 		}
 	case 841:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4363
+//line sql.y:4358
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: BitAndStr, Right: yyDollar[3].expr}
 		}
 	case 842:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4367
+//line sql.y:4362
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: BitOrStr, Right: yyDollar[3].expr}
 		}
 	case 843:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4371
+//line sql.y:4366
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: BitXorStr, Right: yyDollar[3].expr}
 		}
 	case 844:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4375
+//line sql.y:4370
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: PlusStr, Right: yyDollar[3].expr}
 		}
 	case 845:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4379
+//line sql.y:4374
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: MinusStr, Right: yyDollar[3].expr}
 		}
 	case 846:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4383
+//line sql.y:4378
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: MultStr, Right: yyDollar[3].expr}
 		}
 	case 847:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4387
+//line sql.y:4382
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: DivStr, Right: yyDollar[3].expr}
 		}
 	case 848:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4391
+//line sql.y:4386
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: IntDivStr, Right: yyDollar[3].expr}
 		}
 	case 849:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4395
+//line sql.y:4390
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ModStr, Right: yyDollar[3].expr}
 		}
 	case 850:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4399
+//line sql.y:4394
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ModStr, Right: yyDollar[3].expr}
 		}
 	case 851:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4403
+//line sql.y:4398
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ShiftLeftStr, Right: yyDollar[3].expr}
 		}
 	case 852:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4407
+//line sql.y:4402
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ShiftRightStr, Right: yyDollar[3].expr}
 		}
 	case 853:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4411
+//line sql.y:4406
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].colName, Operator: JSONExtractOp, Right: yyDollar[3].expr}
 		}
 	case 854:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4415
+//line sql.y:4410
 		{
 			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].colName, Operator: JSONUnquoteExtractOp, Right: yyDollar[3].expr}
 		}
 	case 855:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4419
+//line sql.y:4414
 		{
 			yyVAL.expr = &CollateExpr{Expr: yyDollar[1].expr, Charset: yyDollar[3].str}
 		}
 	case 856:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4423
+//line sql.y:4418
 		{
 			yyVAL.expr = &UnaryExpr{Operator: BinaryStr, Expr: yyDollar[2].expr}
 		}
 	case 857:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4427
+//line sql.y:4422
 		{
 			yyVAL.expr = &UnaryExpr{Operator: UBinaryStr, Expr: yyDollar[2].expr}
 		}
 	case 858:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4431
+//line sql.y:4426
 		{
 			yyVAL.expr = &UnaryExpr{Operator: Utf8mb4Str, Expr: yyDollar[2].expr}
 		}
 	case 859:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4435
+//line sql.y:4430
 		{
 			if num, ok := yyDollar[2].expr.(*SQLVal); ok && num.Type == IntVal {
 				yyVAL.expr = num
@@ -10941,7 +10935,7 @@ yydefault:
 		}
 	case 860:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4443
+//line sql.y:4438
 		{
 			if num, ok := yyDollar[2].expr.(*SQLVal); ok && num.Type == IntVal {
 				// Handle double negative
@@ -10957,19 +10951,19 @@ yydefault:
 		}
 	case 861:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4457
+//line sql.y:4452
 		{
 			yyVAL.expr = &UnaryExpr{Operator: TildaStr, Expr: yyDollar[2].expr}
 		}
 	case 862:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4461
+//line sql.y:4456
 		{
 			yyVAL.expr = &UnaryExpr{Operator: BangStr, Expr: yyDollar[2].expr}
 		}
 	case 863:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4465
+//line sql.y:4460
 		{
 			// This rule prevents the usage of INTERVAL
 			// as a function. If support is needed for that,
@@ -10979,529 +10973,529 @@ yydefault:
 		}
 	case 870:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4485
+//line sql.y:4480
 		{
 			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: yyDollar[3].str == DistinctStr, Exprs: yyDollar[4].selectExprs}
 		}
 	case 871:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4489
+//line sql.y:4484
 		{
 			yyVAL.expr = &FuncExpr{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].colIdent, Exprs: yyDollar[5].selectExprs}
 		}
 	case 872:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4499
+//line sql.y:4494
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[4].selectExprs, Distinct: yyDollar[3].str == DistinctStr, Over: yyDollar[6].over}
 		}
 	case 873:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4503
+//line sql.y:4498
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[4].selectExprs, Distinct: yyDollar[3].str == DistinctStr, Over: yyDollar[6].over}
 		}
 	case 874:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4507
+//line sql.y:4502
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 875:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4511
+//line sql.y:4506
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 876:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4515
+//line sql.y:4510
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 877:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4519
+//line sql.y:4514
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[4].selectExprs, Distinct: yyDollar[3].str == DistinctStr, Over: yyDollar[6].over}
 		}
 	case 878:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4523
+//line sql.y:4518
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 879:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4527
+//line sql.y:4522
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 880:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4531
+//line sql.y:4526
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[4].selectExprs, Distinct: yyDollar[3].str == DistinctStr, Over: yyDollar[6].over}
 		}
 	case 881:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4535
+//line sql.y:4530
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 882:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4539
+//line sql.y:4534
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 883:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4543
+//line sql.y:4538
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 884:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4547
+//line sql.y:4542
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 885:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4551
+//line sql.y:4546
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[4].selectExprs, Distinct: yyDollar[3].str == DistinctStr, Over: yyDollar[6].over}
 		}
 	case 886:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4555
+//line sql.y:4550
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 887:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4559
+//line sql.y:4554
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 888:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4563
+//line sql.y:4558
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 889:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4572
+//line sql.y:4567
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Over: yyDollar[4].over}
 		}
 	case 890:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4576
+//line sql.y:4571
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Over: yyDollar[4].over}
 		}
 	case 891:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4580
+//line sql.y:4575
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: SelectExprs{yyDollar[3].selectExpr}, Over: yyDollar[5].over}
 		}
 	case 892:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4584
+//line sql.y:4579
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 893:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4588
+//line sql.y:4583
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: SelectExprs{yyDollar[3].selectExpr}, Over: yyDollar[5].over}
 		}
 	case 894:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4592
+//line sql.y:4587
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 895:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4596
+//line sql.y:4591
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs, Over: yyDollar[5].over}
 		}
 	case 896:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4600
+//line sql.y:4595
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Over: yyDollar[4].over}
 		}
 	case 897:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4604
+//line sql.y:4599
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Over: yyDollar[4].over}
 		}
 	case 898:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4608
+//line sql.y:4603
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Over: yyDollar[4].over}
 		}
 	case 899:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4612
+//line sql.y:4607
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Over: yyDollar[4].over}
 		}
 	case 900:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4623
+//line sql.y:4618
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 901:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4627
+//line sql.y:4622
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 902:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4631
+//line sql.y:4626
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 903:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4635
+//line sql.y:4630
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 904:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4639
+//line sql.y:4634
 		{
 			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].convertType}
 		}
 	case 905:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4643
+//line sql.y:4638
 		{
 			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].convertType}
 		}
 	case 906:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4647
+//line sql.y:4642
 		{
 			yyVAL.expr = &ConvertUsingExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].str}
 		}
 	case 907:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:4651
+//line sql.y:4646
 		{
 			yyVAL.expr = &SubstrExpr{Name: yyDollar[3].colName, From: yyDollar[5].expr, To: yyDollar[7].expr}
 		}
 	case 908:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:4655
+//line sql.y:4650
 		{
 			yyVAL.expr = &SubstrExpr{Name: yyDollar[3].colName, From: yyDollar[5].expr, To: yyDollar[7].expr}
 		}
 	case 909:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:4659
+//line sql.y:4654
 		{
 			yyVAL.expr = &SubstrExpr{StrVal: NewStrVal(yyDollar[3].bytes), From: yyDollar[5].expr, To: yyDollar[7].expr}
 		}
 	case 910:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:4663
+//line sql.y:4658
 		{
 			yyVAL.expr = &SubstrExpr{StrVal: NewStrVal(yyDollar[3].bytes), From: yyDollar[5].expr, To: yyDollar[7].expr}
 		}
 	case 911:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4667
+//line sql.y:4662
 		{
 			yyVAL.expr = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: yyDollar[3].expr, Dir: Both}
 		}
 	case 912:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:4671
+//line sql.y:4666
 		{
 			yyVAL.expr = &TrimExpr{Pattern: yyDollar[3].expr, Str: yyDollar[5].expr, Dir: Both}
 		}
 	case 913:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:4675
+//line sql.y:4670
 		{
 			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: Leading}
 		}
 	case 914:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:4679
+//line sql.y:4674
 		{
 			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: Trailing}
 		}
 	case 915:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:4683
+//line sql.y:4678
 		{
 			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: Both}
 		}
 	case 916:
 		yyDollar = yyS[yypt-9 : yypt+1]
-//line sql.y:4687
+//line sql.y:4682
 		{
 			yyVAL.expr = &MatchExpr{Columns: yyDollar[3].selectExprs, Expr: yyDollar[7].expr, Option: yyDollar[8].str}
 		}
 	case 917:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4691
+//line sql.y:4686
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 918:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:4695
+//line sql.y:4690
 		{
 			yyVAL.expr = &GroupConcatExpr{Distinct: yyDollar[3].str, Exprs: yyDollar[4].selectExprs, OrderBy: yyDollar[5].orderBy, Separator: yyDollar[6].str}
 		}
 	case 919:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4699
+//line sql.y:4694
 		{
 			yyVAL.expr = &CaseExpr{Expr: yyDollar[2].expr, Whens: yyDollar[3].whens, Else: yyDollar[4].expr}
 		}
 	case 920:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4703
+//line sql.y:4698
 		{
 			yyVAL.expr = &ValuesFuncExpr{Name: yyDollar[3].colName}
 		}
 	case 921:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4713
+//line sql.y:4708
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 922:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4717
+//line sql.y:4712
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 923:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4721
+//line sql.y:4716
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 924:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4726
+//line sql.y:4721
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 925:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4731
+//line sql.y:4726
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 926:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4736
+//line sql.y:4731
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 927:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4742
+//line sql.y:4737
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 928:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4747
+//line sql.y:4742
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 929:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4751
+//line sql.y:4746
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes))}
 		}
 	case 930:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4756
+//line sql.y:4751
 		{
 			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Fsp: yyDollar[2].expr}
 		}
 	case 931:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4760
+//line sql.y:4755
 		{
 			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Fsp: yyDollar[2].expr}
 		}
 	case 932:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4764
+//line sql.y:4759
 		{
 			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Fsp: yyDollar[2].expr}
 		}
 	case 933:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4769
+//line sql.y:4764
 		{
 			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Fsp: yyDollar[2].expr}
 		}
 	case 934:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4774
+//line sql.y:4769
 		{
 			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Fsp: yyDollar[2].expr}
 		}
 	case 935:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4779
+//line sql.y:4774
 		{
 			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Fsp: yyDollar[2].expr}
 		}
 	case 936:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:4783
+//line sql.y:4778
 		{
 			yyVAL.expr = &TimestampFuncExpr{Name: string("timestampadd"), Unit: yyDollar[3].colIdent.String(), Expr1: yyDollar[5].expr, Expr2: yyDollar[7].expr}
 		}
 	case 937:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line sql.y:4787
+//line sql.y:4782
 		{
 			yyVAL.expr = &TimestampFuncExpr{Name: string("timestampdiff"), Unit: yyDollar[3].colIdent.String(), Expr1: yyDollar[5].expr, Expr2: yyDollar[7].expr}
 		}
 	case 940:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4798
+//line sql.y:4793
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 941:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4808
+//line sql.y:4803
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 942:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4812
+//line sql.y:4807
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 943:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4816
+//line sql.y:4811
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 944:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4820
+//line sql.y:4815
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 945:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4824
+//line sql.y:4819
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 946:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4828
+//line sql.y:4823
 		{
 			yyVAL.expr = &FuncExpr{Name: NewColIdent(string(yyDollar[1].bytes)), Exprs: yyDollar[3].selectExprs}
 		}
 	case 947:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4834
+//line sql.y:4829
 		{
 			yyVAL.str = ""
 		}
 	case 948:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4838
+//line sql.y:4833
 		{
 			yyVAL.str = BooleanModeStr
 		}
 	case 949:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4842
+//line sql.y:4837
 		{
 			yyVAL.str = NaturalLanguageModeStr
 		}
 	case 950:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line sql.y:4846
+//line sql.y:4841
 		{
 			yyVAL.str = NaturalLanguageModeWithQueryExpansionStr
 		}
 	case 951:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4850
+//line sql.y:4845
 		{
 			yyVAL.str = QueryExpansionStr
 		}
 	case 952:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4856
+//line sql.y:4851
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 953:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4860
+//line sql.y:4855
 		{
 			yyVAL.str = string(yyDollar[1].bytes)
 		}
 	case 954:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4866
+//line sql.y:4861
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 955:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4870
+//line sql.y:4865
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal, Charset: yyDollar[3].str, Operator: CharacterSetStr}
 		}
 	case 956:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4874
+//line sql.y:4869
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal, Charset: string(yyDollar[3].bytes)}
 		}
 	case 957:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4878
+//line sql.y:4873
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes)}
 		}
 	case 958:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4882
+//line sql.y:4877
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 959:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4886
+//line sql.y:4881
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes)}
 			yyVAL.convertType.Length = yyDollar[2].LengthScaleOption.Length
@@ -11509,447 +11503,447 @@ yydefault:
 		}
 	case 960:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4892
+//line sql.y:4887
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes)}
 		}
 	case 961:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4896
+//line sql.y:4891
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 962:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4900
+//line sql.y:4895
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes)}
 		}
 	case 963:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4904
+//line sql.y:4899
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes)}
 		}
 	case 964:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4908
+//line sql.y:4903
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes), Length: yyDollar[2].sqlVal}
 		}
 	case 965:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4912
+//line sql.y:4907
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes)}
 		}
 	case 966:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4916
+//line sql.y:4911
 		{
 			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].bytes)}
 		}
 	case 967:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4921
+//line sql.y:4916
 		{
 			yyVAL.expr = nil
 		}
 	case 968:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4925
+//line sql.y:4920
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 969:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4930
+//line sql.y:4925
 		{
 			yyVAL.str = string("")
 		}
 	case 970:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4934
+//line sql.y:4929
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 971:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4940
+//line sql.y:4935
 		{
 			yyVAL.whens = []*When{yyDollar[1].when}
 		}
 	case 972:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4944
+//line sql.y:4939
 		{
 			yyVAL.whens = append(yyDollar[1].whens, yyDollar[2].when)
 		}
 	case 973:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:4950
+//line sql.y:4945
 		{
 			yyVAL.when = &When{Cond: yyDollar[2].expr, Val: yyDollar[4].expr}
 		}
 	case 974:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:4955
+//line sql.y:4950
 		{
 			yyVAL.expr = nil
 		}
 	case 975:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:4959
+//line sql.y:4954
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 976:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4965
+//line sql.y:4960
 		{
 			yyVAL.colName = &ColName{Name: yyDollar[1].colIdent}
 		}
 	case 977:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:4969
+//line sql.y:4964
 		{
 			yyVAL.colName = &ColName{Qualifier: TableName{Name: yyDollar[1].tableIdent}, Name: yyDollar[3].colIdent}
 		}
 	case 978:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:4973
+//line sql.y:4968
 		{
 			yyVAL.colName = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
 		}
 	case 979:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4979
+//line sql.y:4974
 		{
 			yyVAL.expr = NewStrVal(yyDollar[1].bytes)
 		}
 	case 980:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4983
+//line sql.y:4978
 		{
 			yyVAL.expr = NewHexVal(yyDollar[1].bytes)
 		}
 	case 981:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4987
+//line sql.y:4982
 		{
 			yyVAL.expr = NewBitVal(yyDollar[1].bytes)
 		}
 	case 982:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4991
+//line sql.y:4986
 		{
 			yyVAL.expr = NewIntVal(yyDollar[1].bytes)
 		}
 	case 983:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4995
+//line sql.y:4990
 		{
 			yyVAL.expr = NewFloatVal(yyDollar[1].bytes)
 		}
 	case 984:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:4999
+//line sql.y:4994
 		{
 			yyVAL.expr = NewHexNum(yyDollar[1].bytes)
 		}
 	case 985:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5003
+//line sql.y:4998
 		{
 			yyVAL.expr = NewValArg(yyDollar[1].bytes)
 		}
 	case 986:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5007
+//line sql.y:5002
 		{
 			yyVAL.expr = &NullVal{}
 		}
 	case 987:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5013
+//line sql.y:5008
 		{
 			yyVAL.expr = NewIntVal([]byte("1"))
 		}
 	case 988:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5017
+//line sql.y:5012
 		{
 			yyVAL.expr = NewIntVal(yyDollar[1].bytes)
 		}
 	case 989:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5021
+//line sql.y:5016
 		{
 			yyVAL.expr = NewValArg(yyDollar[1].bytes)
 		}
 	case 990:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5026
+//line sql.y:5021
 		{
 			yyVAL.exprs = nil
 		}
 	case 991:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5030
+//line sql.y:5025
 		{
 			yyVAL.exprs = yyDollar[3].exprs
 		}
 	case 992:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5036
+//line sql.y:5031
 		{
 			yyVAL.exprs = Exprs{yyDollar[1].expr}
 		}
 	case 993:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5040
+//line sql.y:5035
 		{
 			yyVAL.exprs = append(yyDollar[1].exprs, yyDollar[3].expr)
 		}
 	case 994:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5046
+//line sql.y:5041
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 995:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5051
+//line sql.y:5046
 		{
 			yyVAL.expr = nil
 		}
 	case 996:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5055
+//line sql.y:5050
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 997:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5061
+//line sql.y:5056
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 998:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5066
+//line sql.y:5061
 		{
 			yyVAL.orderBy = nil
 		}
 	case 999:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5070
+//line sql.y:5065
 		{
 			yyVAL.orderBy = yyDollar[3].orderBy
 		}
 	case 1000:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5076
+//line sql.y:5071
 		{
 			yyVAL.orderBy = OrderBy{yyDollar[1].order}
 		}
 	case 1001:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5080
+//line sql.y:5075
 		{
 			yyVAL.orderBy = append(yyDollar[1].orderBy, yyDollar[3].order)
 		}
 	case 1002:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5086
+//line sql.y:5081
 		{
 			yyVAL.order = &Order{Expr: yyDollar[1].expr, Direction: yyDollar[2].str}
 		}
 	case 1003:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5091
+//line sql.y:5086
 		{
 			yyVAL.str = AscScr
 		}
 	case 1004:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5095
+//line sql.y:5090
 		{
 			yyVAL.str = AscScr
 		}
 	case 1005:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5099
+//line sql.y:5094
 		{
 			yyVAL.str = DescScr
 		}
 	case 1006:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5104
+//line sql.y:5099
 		{
 			yyVAL.limit = nil
 		}
 	case 1007:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5108
+//line sql.y:5103
 		{
 			yyVAL.limit = &Limit{Rowcount: yyDollar[2].expr}
 		}
 	case 1008:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5112
+//line sql.y:5107
 		{
 			yyVAL.limit = &Limit{Offset: yyDollar[2].expr, Rowcount: yyDollar[4].expr}
 		}
 	case 1009:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5116
+//line sql.y:5111
 		{
 			yyVAL.limit = &Limit{Offset: yyDollar[4].expr, Rowcount: yyDollar[2].expr}
 		}
 	case 1010:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5122
+//line sql.y:5117
 		{
 			yyVAL.expr = NewIntVal(yyDollar[1].bytes)
 		}
 	case 1011:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5126
+//line sql.y:5121
 		{
 			yyVAL.expr = NewValArg(yyDollar[1].bytes)
 		}
 	case 1012:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5131
+//line sql.y:5126
 		{
 			yyVAL.str = ""
 		}
 	case 1013:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5135
+//line sql.y:5130
 		{
 			yyVAL.str = ForUpdateStr
 		}
 	case 1014:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5139
+//line sql.y:5134
 		{
 			yyVAL.str = ShareModeStr
 		}
 	case 1015:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5152
+//line sql.y:5147
 		{
 			yyVAL.ins = &Insert{Rows: yyDollar[2].values}
 		}
 	case 1016:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5156
+//line sql.y:5151
 		{
 			yyVAL.ins = &Insert{Columns: []ColIdent{}, Rows: yyDollar[4].values}
 		}
 	case 1017:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5160
+//line sql.y:5155
 		{
 			yyVAL.ins = &Insert{Rows: yyDollar[1].selStmt}
 		}
 	case 1018:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5164
+//line sql.y:5159
 		{
 			// Drop the redundant parenthesis.
 			yyVAL.ins = &Insert{Rows: yyDollar[2].selStmt}
 		}
 	case 1019:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:5169
+//line sql.y:5164
 		{
 			yyVAL.ins = &Insert{Columns: yyDollar[2].columns, Rows: yyDollar[5].values}
 		}
 	case 1020:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5173
+//line sql.y:5168
 		{
 			yyVAL.ins = &Insert{Columns: yyDollar[2].columns, Rows: yyDollar[4].selStmt}
 		}
 	case 1021:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line sql.y:5177
+//line sql.y:5172
 		{
 			// Drop the redundant parenthesis.
 			yyVAL.ins = &Insert{Columns: yyDollar[2].columns, Rows: yyDollar[5].selStmt}
 		}
 	case 1022:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5184
+//line sql.y:5179
 		{
 			yyVAL.columns = Columns{yyDollar[1].colIdent}
 		}
 	case 1023:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5188
+//line sql.y:5183
 		{
 			yyVAL.columns = Columns{yyDollar[3].colIdent}
 		}
 	case 1024:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5192
+//line sql.y:5187
 		{
 			yyVAL.columns = append(yyVAL.columns, yyDollar[3].colIdent)
 		}
 	case 1025:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:5196
+//line sql.y:5191
 		{
 			yyVAL.columns = append(yyVAL.columns, yyDollar[5].colIdent)
 		}
 	case 1026:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5201
+//line sql.y:5196
 		{
 			yyVAL.assignExprs = nil
 		}
 	case 1027:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line sql.y:5205
+//line sql.y:5200
 		{
 			yyVAL.assignExprs = yyDollar[5].assignExprs
 		}
 	case 1028:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5211
+//line sql.y:5206
 		{
 			yyVAL.values = Values{yyDollar[1].valTuple}
 		}
 	case 1029:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5215
+//line sql.y:5210
 		{
 			yyVAL.values = append(yyDollar[1].values, yyDollar[3].valTuple)
 		}
 	case 1030:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5221
+//line sql.y:5216
 		{
 			yyVAL.valTuple = yyDollar[1].valTuple
 		}
 	case 1031:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5225
+//line sql.y:5220
 		{
 			yyVAL.valTuple = ValTuple{}
 		}
 	case 1032:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5231
+//line sql.y:5226
 		{
 			yyVAL.valTuple = ValTuple(yyDollar[2].exprs)
 		}
 	case 1033:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5237
+//line sql.y:5232
 		{
 			if len(yyDollar[1].valTuple) == 1 {
 				yyVAL.expr = &ParenExpr{yyDollar[1].valTuple[0]}
@@ -11959,43 +11953,43 @@ yydefault:
 		}
 	case 1034:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5247
+//line sql.y:5242
 		{
 			yyVAL.assignExprs = AssignmentExprs{yyDollar[1].assignExpr}
 		}
 	case 1035:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5251
+//line sql.y:5246
 		{
 			yyVAL.assignExprs = append(yyDollar[1].assignExprs, yyDollar[3].assignExpr)
 		}
 	case 1036:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5257
+//line sql.y:5252
 		{
 			yyVAL.assignExpr = &AssignmentExpr{Name: yyDollar[1].colName, Expr: yyDollar[3].expr}
 		}
 	case 1037:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5260
+//line sql.y:5255
 		{
 			yyVAL.assignExpr = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string(yyDollar[1].bytes))}, Expr: yyDollar[3].expr}
 		}
 	case 1038:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5266
+//line sql.y:5261
 		{
 			yyVAL.setVarExprs = SetVarExprs{yyDollar[1].setVarExpr}
 		}
 	case 1039:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5270
+//line sql.y:5265
 		{
 			yyVAL.setVarExprs = append(yyDollar[1].setVarExprs, yyDollar[3].setVarExpr)
 		}
 	case 1040:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5276
+//line sql.y:5271
 		{
 			colName, scope, err := VarScopeForColName(yyDollar[1].setVarExpr.Name)
 			if err != nil {
@@ -12008,7 +12002,7 @@ yydefault:
 		}
 	case 1041:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5287
+//line sql.y:5282
 		{
 			_, scope, err := VarScopeForColName(yyDollar[2].setVarExpr.Name)
 			if err != nil {
@@ -12023,7 +12017,7 @@ yydefault:
 		}
 	case 1042:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5300
+//line sql.y:5295
 		{
 			_, scope, err := VarScopeForColName(yyDollar[2].setVarExpr.Name)
 			if err != nil {
@@ -12038,499 +12032,499 @@ yydefault:
 		}
 	case 1043:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5313
+//line sql.y:5308
 		{
 			yyVAL.setVarExpr = &SetVarExpr{Name: NewColName(string(yyDollar[1].bytes)), Expr: yyDollar[2].expr, Scope: SetScope_Session}
 		}
 	case 1044:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5319
+//line sql.y:5314
 		{
 			yyVAL.setScope = SetScope_Global
 		}
 	case 1045:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5323
+//line sql.y:5318
 		{
 			yyVAL.setScope = SetScope_Session
 		}
 	case 1046:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5329
+//line sql.y:5324
 		{
 			yyVAL.setScope = SetScope_Session
 		}
 	case 1047:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5333
+//line sql.y:5328
 		{
 			yyVAL.setScope = SetScope_Persist
 		}
 	case 1048:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5337
+//line sql.y:5332
 		{
 			yyVAL.setScope = SetScope_PersistOnly
 		}
 	case 1049:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5343
+//line sql.y:5338
 		{
 			yyVAL.setVarExpr = &SetVarExpr{Name: yyDollar[1].colName, Expr: NewStrVal(yyDollar[3].bytes), Scope: SetScope_None}
 		}
 	case 1050:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5347
+//line sql.y:5342
 		{
 			yyVAL.setVarExpr = &SetVarExpr{Name: yyDollar[1].colName, Expr: NewStrVal(yyDollar[3].bytes), Scope: SetScope_None}
 		}
 	case 1051:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5351
+//line sql.y:5346
 		{
 			yyVAL.setVarExpr = &SetVarExpr{Name: yyDollar[1].colName, Expr: yyDollar[3].expr, Scope: SetScope_None}
 		}
 	case 1053:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5358
+//line sql.y:5353
 		{
 			yyVAL.bytes = []byte("charset")
 		}
 	case 1055:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5365
+//line sql.y:5360
 		{
 			yyVAL.expr = NewStrVal([]byte(yyDollar[1].colIdent.String()))
 		}
 	case 1056:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5369
+//line sql.y:5364
 		{
 			yyVAL.expr = NewStrVal(yyDollar[1].bytes)
 		}
 	case 1057:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5373
+//line sql.y:5368
 		{
 			yyVAL.expr = &Default{}
 		}
 	case 1060:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5382
+//line sql.y:5377
 		{
 			yyVAL.byt = 0
 		}
 	case 1061:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5384
+//line sql.y:5379
 		{
 			yyVAL.byt = 1
 		}
 	case 1062:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5387
+//line sql.y:5382
 		{
 			yyVAL.byt = 0
 		}
 	case 1063:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5389
+//line sql.y:5384
 		{
 			yyVAL.byt = 1
 		}
 	case 1064:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5392
+//line sql.y:5387
 		{
 			yyVAL.byt = 0
 		}
 	case 1065:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5394
+//line sql.y:5389
 		{
 			yyVAL.byt = 1
 		}
 	case 1066:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5397
+//line sql.y:5392
 		{
 			yyVAL.str = ""
 		}
 	case 1067:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5399
+//line sql.y:5394
 		{
 			yyVAL.str = IgnoreStr
 		}
 	case 1068:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5402
+//line sql.y:5397
 		{
 			yyVAL.sqlVal = nil
 		}
 	case 1069:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5404
+//line sql.y:5399
 		{
 			yyVAL.sqlVal = NewIntVal(yyDollar[2].bytes)
 		}
 	case 1070:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5408
+//line sql.y:5403
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1071:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5410
+//line sql.y:5405
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1072:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5412
+//line sql.y:5407
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1073:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5414
+//line sql.y:5409
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1074:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5416
+//line sql.y:5411
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1075:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5418
+//line sql.y:5413
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1076:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5420
+//line sql.y:5415
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1077:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5422
+//line sql.y:5417
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1078:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5426
+//line sql.y:5421
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1079:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5428
+//line sql.y:5423
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1080:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5431
+//line sql.y:5426
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1081:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5433
+//line sql.y:5428
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1082:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5435
+//line sql.y:5430
 		{
 			yyVAL.empty = struct{}{}
 		}
 	case 1083:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5439
+//line sql.y:5434
 		{
 			yyVAL.str = UniqueStr
 		}
 	case 1084:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5441
+//line sql.y:5436
 		{
 			yyVAL.str = FulltextStr
 		}
 	case 1085:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5443
+//line sql.y:5438
 		{
 			yyVAL.str = SpatialStr
 		}
 	case 1086:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5446
+//line sql.y:5441
 		{
 			yyVAL.str = ""
 		}
 	case 1087:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5448
+//line sql.y:5443
 		{
 			yyVAL.str = yyDollar[1].str
 		}
 	case 1088:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5451
+//line sql.y:5446
 		{
 			yyVAL.colIdent = ColIdent{}
 		}
 	case 1089:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5453
+//line sql.y:5448
 		{
 			yyVAL.colIdent = yyDollar[2].colIdent
 		}
 	case 1090:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5457
+//line sql.y:5452
 		{
 			yyVAL.colIdent = NewColIdent(string(yyDollar[1].bytes))
 		}
 	case 1091:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5461
+//line sql.y:5456
 		{
 			yyVAL.colIdent = NewColIdent(string(yyDollar[1].bytes))
 		}
 	case 1092:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5467
+//line sql.y:5462
 		{
 			yyVAL.colIdents = []ColIdent{yyDollar[1].colIdent}
 		}
 	case 1093:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5471
+//line sql.y:5466
 		{
 			yyVAL.colIdents = append(yyVAL.colIdents, yyDollar[3].colIdent)
 		}
 	case 1095:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5478
+//line sql.y:5473
 		{
 			yyVAL.colIdent = NewColIdent(string(yyDollar[1].bytes))
 		}
 	case 1096:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5484
+//line sql.y:5479
 		{
 			yyVAL.tableIdent = NewTableIdent(string(yyDollar[1].bytes))
 		}
 	case 1097:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5488
+//line sql.y:5483
 		{
 			yyVAL.tableIdent = NewTableIdent(string(yyDollar[1].bytes))
 		}
 	case 1099:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5495
+//line sql.y:5490
 		{
 			yyVAL.tableIdent = NewTableIdent(string(yyDollar[1].bytes))
 		}
 	case 1100:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5500
+//line sql.y:5495
 		{
 			yyVAL.str = string("")
 		}
 	case 1101:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5502
+//line sql.y:5497
 		{
 			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 1102:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5505
+//line sql.y:5500
 		{
 			yyVAL.boolVal = BoolVal(false)
 		}
 	case 1103:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5507
+//line sql.y:5502
 		{
 			yyVAL.boolVal = BoolVal(true)
 		}
 	case 1104:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5510
+//line sql.y:5505
 		{
 			yyVAL.EnclosedBy = nil
 		}
 	case 1105:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5514
+//line sql.y:5509
 		{
 			yyVAL.EnclosedBy = &EnclosedBy{Optionally: yyDollar[1].boolVal, Delim: NewStrVal(yyDollar[4].bytes)}
 		}
 	case 1106:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5519
+//line sql.y:5514
 		{
 			yyVAL.boolVal = BoolVal(false)
 		}
 	case 1107:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5523
+//line sql.y:5518
 		{
 			yyVAL.boolVal = BoolVal(true)
 		}
 	case 1108:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5528
+//line sql.y:5523
 		{
 			yyVAL.sqlVal = nil
 		}
 	case 1109:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5532
+//line sql.y:5527
 		{
 			yyVAL.sqlVal = NewStrVal(yyDollar[3].bytes)
 		}
 	case 1110:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5537
+//line sql.y:5532
 		{
 			yyVAL.sqlVal = nil
 		}
 	case 1111:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5541
+//line sql.y:5536
 		{
 			yyVAL.sqlVal = NewStrVal(yyDollar[3].bytes)
 		}
 	case 1112:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5546
+//line sql.y:5541
 		{
 			yyVAL.Fields = nil
 		}
 	case 1113:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5550
+//line sql.y:5545
 		{
 			yyVAL.Fields = &Fields{TerminatedBy: yyDollar[2].sqlVal, EnclosedBy: yyDollar[3].EnclosedBy, EscapedBy: yyDollar[4].sqlVal}
 		}
 	case 1114:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5555
+//line sql.y:5550
 		{
 			yyVAL.Lines = nil
 		}
 	case 1115:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5559
+//line sql.y:5554
 		{
 			yyVAL.Lines = &Lines{StartingBy: yyDollar[2].sqlVal, TerminatedBy: yyDollar[3].sqlVal}
 		}
 	case 1116:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5564
+//line sql.y:5559
 		{
 			yyVAL.sqlVal = nil
 		}
 	case 1117:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5568
+//line sql.y:5563
 		{
 			yyVAL.sqlVal = NewStrVal(yyDollar[3].bytes)
 		}
 	case 1118:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5574
+//line sql.y:5569
 		{
 			yyVAL.statement = &LockTables{Tables: yyDollar[3].tableAndLockTypes}
 		}
 	case 1119:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5580
+//line sql.y:5575
 		{
 			yyVAL.tableAndLockTypes = TableAndLockTypes{yyDollar[1].tableAndLockType}
 		}
 	case 1120:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5584
+//line sql.y:5579
 		{
 			yyVAL.tableAndLockTypes = append(yyDollar[1].tableAndLockTypes, yyDollar[3].tableAndLockType)
 		}
 	case 1121:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5590
+//line sql.y:5585
 		{
 			yyVAL.tableAndLockType = &TableAndLockType{Table: &AliasedTableExpr{Expr: yyDollar[1].tableName}, Lock: yyDollar[2].lockType}
 		}
 	case 1122:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line sql.y:5594
+//line sql.y:5589
 		{
 			yyVAL.tableAndLockType = &TableAndLockType{Table: &AliasedTableExpr{Expr: yyDollar[1].tableName, As: yyDollar[3].tableIdent}, Lock: yyDollar[4].lockType}
 		}
 	case 1123:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5600
+//line sql.y:5595
 		{
 			yyVAL.lockType = LockRead
 		}
 	case 1124:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5604
+//line sql.y:5599
 		{
 			yyVAL.lockType = LockReadLocal
 		}
 	case 1125:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5608
+//line sql.y:5603
 		{
 			yyVAL.lockType = LockWrite
 		}
 	case 1126:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5612
+//line sql.y:5607
 		{
 			yyVAL.lockType = LockLowPriorityWrite
 		}
 	case 1127:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5618
+//line sql.y:5613
 		{
 			yyVAL.statement = &UnlockTables{}
 		}
 	case 1128:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line sql.y:5624
+//line sql.y:5619
 		{
 			yyVAL.statement = &Kill{Connection: true, ConnID: NewIntVal(yyDollar[2].bytes)}
 		}
 	case 1129:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5628
+//line sql.y:5623
 		{
 			yyVAL.statement = &Kill{ConnID: NewIntVal(yyDollar[3].bytes)}
 		}
 	case 1130:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line sql.y:5632
+//line sql.y:5627
 		{
 			yyVAL.statement = &Kill{Connection: true, ConnID: NewIntVal(yyDollar[3].bytes)}
 		}
 	case 1542:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6073
+//line sql.y:6068
 		{
 			if incNesting(yylex) {
 				yylex.Error("max nesting level reached")
@@ -12539,31 +12533,31 @@ yydefault:
 		}
 	case 1543:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6082
+//line sql.y:6077
 		{
 			decNesting(yylex)
 		}
 	case 1544:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:6087
+//line sql.y:6082
 		{
 			skipToEnd(yylex)
 		}
 	case 1545:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:6092
+//line sql.y:6087
 		{
 			skipToEnd(yylex)
 		}
 	case 1546:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6096
+//line sql.y:6091
 		{
 			skipToEnd(yylex)
 		}
 	case 1547:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6100
+//line sql.y:6095
 		{
 			skipToEnd(yylex)
 		}

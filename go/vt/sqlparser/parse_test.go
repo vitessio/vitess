@@ -1240,8 +1240,6 @@ var (
 			input:  "alter table a drop id",
 			output: "alter table a drop column id",
 		}, {
-			input: "create table a",
-		}, {
 			input:  "create table a (\n\t`a` int\n)",
 			output: "create table a (\n\ta int\n)",
 		}, {
@@ -1249,12 +1247,6 @@ var (
 		}, {
 			input:  "create table if not exists a (\n\t`a` int\n)",
 			output: "create table if not exists a (\n\ta int\n)",
-		}, {
-			input:  "create table a ignore me this is garbage",
-			output: "create table a",
-		}, {
-			input:  "create table a (a int, b char, c garbage)",
-			output: "create table a",
 		}, {
 			input: "alter table a rename column a to b",
 		}, {
@@ -2780,7 +2772,7 @@ func TestValidParallel(t *testing.T) {
 					tcase.output = tcase.input
 				}
 				tree, err := Parse(tcase.input)
-				require.NoError(t, err)
+				require.NoError(t, err, tcase.input)
 
 				assertTestcaseOutput(t, tcase, tree)
 
@@ -2882,7 +2874,7 @@ func TestInvalid(t *testing.T) {
 		err:   "invalid tls options",
 	}}
 	for _, tcase := range invalidDDL {
-		_, err := ParseStrictDDL(tcase.input)
+		_, err := Parse(tcase.input)
 		if err == nil {
 			t.Errorf("Parse invalid DDL(%q), got: nil, want: %s...", tcase.input, tcase.err)
 		}
@@ -3518,7 +3510,7 @@ func TestCreateTable(t *testing.T) {
 	}
 	for _, sql := range validSQL {
 		sql = strings.TrimSpace(sql)
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", sql, err)
 			continue
@@ -3531,14 +3523,9 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	sql := "create table t garbage"
-	_, err := Parse(sql)
-	if err != nil {
-		t.Errorf("input: %s, err: %v", sql, err)
-	}
-
-	tree, err := ParseStrictDDL(sql)
+	tree, err := Parse(sql)
 	if tree != nil || err == nil {
-		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		t.Errorf("Parse unexpectedly accepted input %s", sql)
 	}
 
 	testCases := []struct {
@@ -3807,7 +3794,7 @@ func TestCreateTable(t *testing.T) {
 	}
 	for _, tcase := range testCases {
 		t.Run(tcase.input, func(t *testing.T) {
-			tree, err := ParseStrictDDL(tcase.input)
+			tree, err := Parse(tcase.input)
 			if err != nil {
 				t.Errorf("input: %s, err: %v", tcase.input, err)
 				return
@@ -3866,7 +3853,7 @@ func TestCreateTable(t *testing.T) {
 			if _, ok := nonsupported[key]; ok {
 				t.Skipf("Keyword currently not supported as a column name: %s", key)
 			}
-			tree, err := ParseStrictDDL(input)
+			tree, err := Parse(input)
 			if err != nil {
 				t.Errorf("input: %s, err: %v", input, err)
 				return
@@ -4001,7 +3988,7 @@ func TestCreateTableLike(t *testing.T) {
 		},
 	}
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4030,7 +4017,7 @@ func TestCreateTableEscaped(t *testing.T) {
 			")",
 	}}
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4078,7 +4065,7 @@ func TestCreateTableSelect(t *testing.T) {
 	//			")engine=MyISAM SELECT * FROM core.my_big_table",
 	//},
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -4376,7 +4363,7 @@ var (
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := ParseStrictDDL(tcase.input)
+			_, err := Parse(tcase.input)
 			assert.Equal(t, tcase.output, err.Error())
 		})
 	}
@@ -4402,11 +4389,11 @@ func TestSkipToEnd(t *testing.T) {
 		// Partial DDL does not get reset here. But we allow the
 		// DDL only if there are no new tokens after skipping to end.
 		input:  "create table a bb cc; select * from t",
-		output: "extra characters encountered after end of DDL: 'select'",
+		output: "syntax error at position 18 near 'bb'",
 	}, {
 		// Test that we don't step at ';' inside strings.
 		input:  "create table a bb 'a;'; select * from t",
-		output: "extra characters encountered after end of DDL: 'select'",
+		output: "syntax error at position 18 near 'bb'",
 	}}
 	for _, tcase := range testcases {
 		_, err := Parse(tcase.input)
