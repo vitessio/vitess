@@ -66,10 +66,14 @@ var instanceWriteChan = make(chan bool, backendDBConcurrency)
 // InstancesByCountReplicas is a sortable type for Instance
 type InstancesByCountReplicas [](*Instance)
 
-func (this InstancesByCountReplicas) Len() int      { return len(this) }
-func (this InstancesByCountReplicas) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this InstancesByCountReplicas) Less(i, j int) bool {
-	return len(this[i].Replicas) < len(this[j].Replicas)
+func (instancesByCountReplicas InstancesByCountReplicas) Len() int {
+	return len(instancesByCountReplicas)
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Swap(i, j int) {
+	instancesByCountReplicas[i], instancesByCountReplicas[j] = instancesByCountReplicas[j], instancesByCountReplicas[i]
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
+	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
 }
 
 // Constant strings for Group Replication information
@@ -248,7 +252,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}()
 
 	var waitGroup sync.WaitGroup
-	var serverUuidWaitGroup sync.WaitGroup
+	var serverUUIDWaitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
 	readingStartTime := time.Now()
 	instance := NewInstance()
@@ -316,7 +320,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 		var mysqlHostname, mysqlReportHost string
 		err = db.QueryRow("select @@global.hostname, ifnull(@@global.report_host, ''), @@global.server_id, @@global.version, @@global.version_comment, @@global.read_only, @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates").Scan(
-			&mysqlHostname, &mysqlReportHost, &instance.ServerID, &instance.Version, &instance.VersionComment, &instance.ReadOnly, &instance.Binlog_format, &instance.LogBinEnabled, &instance.LogReplicationUpdatesEnabled)
+			&mysqlHostname, &mysqlReportHost, &instance.ServerID, &instance.Version, &instance.VersionComment, &instance.ReadOnly, &instance.BinlogFormat, &instance.LogBinEnabled, &instance.LogReplicationUpdatesEnabled)
 		if err != nil {
 			goto Cleanup
 		}
@@ -394,10 +398,10 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
 			waitGroup.Add(1)
-			serverUuidWaitGroup.Add(1)
+			serverUUIDWaitGroup.Add(1)
 			go func() {
 				defer waitGroup.Done()
-				defer serverUuidWaitGroup.Done()
+				defer serverUUIDWaitGroup.Done()
 				var primaryInfoRepositoryOnTable bool
 				// Stuff only supported on Oracle MySQL >= 5.6
 				// ...
@@ -510,7 +514,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// be populated to be able to find this instance's information in performance_schema.replication_group_members by
 	// comparing UUIDs. We could instead resolve the MEMBER_HOST and MEMBER_PORT columns into an InstanceKey and compare
 	// those instead, but this could require external calls for name resolving, whereas comparing UUIDs does not.
-	serverUuidWaitGroup.Wait()
+	serverUUIDWaitGroup.Wait()
 	if instance.IsOracleMySQL() && !instance.IsSmallerMajorVersionByString("8.0") {
 		err := PopulateGroupReplicationInformation(instance, db)
 		if err != nil {
@@ -858,7 +862,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		return log.Errore(err)
 	}
 
-	var replicationDepth uint = 0
+	var replicationDepth uint
 	var clusterName string
 	if primaryOrGroupPrimaryDataFound {
 		replicationDepth = primaryOrGroupPrimaryReplicationDepth + 1
@@ -896,11 +900,11 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 
 type byNamePort [](*InstanceKey)
 
-func (this byNamePort) Len() int      { return len(this) }
-func (this byNamePort) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this byNamePort) Less(i, j int) bool {
-	return (this[i].Hostname < this[j].Hostname) ||
-		(this[i].Hostname == this[j].Hostname && this[i].Port < this[j].Port)
+func (byName byNamePort) Len() int      { return len(byName) }
+func (byName byNamePort) Swap(i, j int) { byName[i], byName[j] = byName[j], byName[i] }
+func (byName byNamePort) Less(i, j int) bool {
+	return (byName[i].Hostname < byName[j].Hostname) ||
+		(byName[i].Hostname == byName[j].Hostname && byName[i].Port < byName[j].Port)
 }
 
 // BulkReadInstance returns a list of all instances from the database
@@ -964,7 +968,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.Version = m.GetString("version")
 	instance.VersionComment = m.GetString("version_comment")
 	instance.ReadOnly = m.GetBool("read_only")
-	instance.Binlog_format = m.GetString("binlog_format")
+	instance.BinlogFormat = m.GetString("binlog_format")
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
@@ -1036,7 +1040,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.InstanceAlias = m.GetString("instance_alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
 
-	instance.Replicas.ReadJson(replicasJSON)
+	instance.Replicas.ReadJSON(replicasJSON)
 	instance.applyFlavorName()
 
 	/* Read Group Replication variables below */
@@ -1046,7 +1050,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.ReplicationGroupMemberRole = m.GetString("replication_group_member_role")
 	instance.ReplicationGroupPrimaryInstanceKey = InstanceKey{Hostname: m.GetString("replication_group_primary_host"),
 		Port: m.GetInt("replication_group_primary_port")}
-	instance.ReplicationGroupMembers.ReadJson(m.GetString("replication_group_members"))
+	instance.ReplicationGroupMembers.ReadJSON(m.GetString("replication_group_members"))
 	//instance.ReplicationGroup = m.GetString("replication_group_")
 
 	// problems
@@ -1836,7 +1840,7 @@ func ForgetUnseenInstancesDifferentlyResolved() error {
 		keys.AddKey(key)
 		return nil
 	})
-	var rowsAffected int64 = 0
+	var rowsAffected int64
 	for _, key := range keys.GetInstanceKeys() {
 		sqlResult, err := db.ExecOrchestrator(`
 			delete from
@@ -1909,7 +1913,7 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 // ReadCountMySQLSnapshots is a utility method to return registered number of snapshots for a given list of hosts
 func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
 	res := make(map[string]int)
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.ServeAgentsHTTP {
 		return res, nil
 	}
 	query := fmt.Sprintf(`
@@ -2048,16 +2052,16 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 	return clusters, err
 }
 
-// Get a listing of KVPair for clusters primaries, for all clusters or for a specific cluster.
-func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error) {
+// Get a listing of KeyValuePair for clusters primaries, for all clusters or for a specific cluster.
+func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KeyValuePair), err error) {
 
 	clusterAliasMap := make(map[string]string)
-	if clustersInfo, err := ReadClustersInfo(clusterName); err != nil {
+	clustersInfo, err := ReadClustersInfo(clusterName)
+	if err != nil {
 		return kvPairs, err
-	} else {
-		for _, clusterInfo := range clustersInfo {
-			clusterAliasMap[clusterInfo.ClusterName] = clusterInfo.ClusterAlias
-		}
+	}
+	for _, clusterInfo := range clustersInfo {
+		clusterAliasMap[clusterInfo.ClusterName] = clusterInfo.ClusterAlias
 	}
 
 	primaries, err := ReadWriteableClustersPrimaries()
@@ -2219,11 +2223,11 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	}
 
 	var q bytes.Buffer
-	var ignore string = ""
+	var ignore string
 	if insertIgnore {
 		ignore = "ignore"
 	}
-	var valRow string = fmt.Sprintf("(%s)", strings.Join(values, ", "))
+	var valRow = fmt.Sprintf("(%s)", strings.Join(values, ", "))
 	var val bytes.Buffer
 	val.WriteString(valRow)
 	for i := 1; i < nrRows; i++ {
@@ -2231,7 +2235,7 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 		val.WriteString(valRow)
 	}
 
-	var col string = strings.Join(columns, ", ")
+	var col = strings.Join(columns, ", ")
 	var odku bytes.Buffer
 	odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", columns[0], columns[0]))
 	for _, c := range columns[1:] {
@@ -2340,7 +2344,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_group_primary_port",
 	}
 
-	var values []string = make([]string, len(columns))
+	var values = make([]string, len(columns))
 	for i := range columns {
 		values[i] = "?"
 	}
@@ -2367,7 +2371,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.VersionComment)
 		args = append(args, instance.IsBinlogServer())
 		args = append(args, instance.ReadOnly)
-		args = append(args, instance.Binlog_format)
+		args = append(args, instance.BinlogFormat)
 		args = append(args, instance.BinlogRowImage)
 		args = append(args, instance.LogBinEnabled)
 		args = append(args, instance.LogReplicationUpdatesEnabled)
@@ -2931,12 +2935,11 @@ func PopulateGroupReplicationInformation(instance *Instance, db *sql.DB) error {
 		_, grNotSupported := GroupReplicationNotSupportedErrors[err.(*mysql.MySQLError).Number]
 		if grNotSupported {
 			return nil // If GR is not supported by the instance, just exit
-		} else {
-			// If we got here, the query failed but not because the server does not support group replication. Let's
-			// log the error
-			return log.Error("There was an error trying to check group replication information for instance "+
-				"%+v: %+v", instance.Key, err)
 		}
+		// If we got here, the query failed but not because the server does not support group replication. Let's
+		// log the error
+		return log.Error("There was an error trying to check group replication information for instance "+
+			"%+v: %+v", instance.Key, err)
 	}
 	defer rows.Close()
 	foundGroupPrimary := false

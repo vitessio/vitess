@@ -34,7 +34,7 @@ type majorVersionsSortedByCount struct {
 	versions      []string
 }
 
-func NewMajorVersionsSortedByCount(versionsCount map[string]int) *majorVersionsSortedByCount {
+func newMajorVersionsSortedByCount(versionsCount map[string]int) *majorVersionsSortedByCount {
 	versions := []string{}
 	for v := range versionsCount {
 		versions = append(versions, v)
@@ -45,18 +45,20 @@ func NewMajorVersionsSortedByCount(versionsCount map[string]int) *majorVersionsS
 	}
 }
 
-func (this *majorVersionsSortedByCount) Len() int { return len(this.versions) }
-func (this *majorVersionsSortedByCount) Swap(i, j int) {
-	this.versions[i], this.versions[j] = this.versions[j], this.versions[i]
+func (majorVersionSorter *majorVersionsSortedByCount) Len() int {
+	return len(majorVersionSorter.versions)
 }
-func (this *majorVersionsSortedByCount) Less(i, j int) bool {
-	if this.versionsCount[this.versions[i]] == this.versionsCount[this.versions[j]] {
-		return this.versions[i] > this.versions[j]
+func (majorVersionSorter *majorVersionsSortedByCount) Swap(i, j int) {
+	majorVersionSorter.versions[i], majorVersionSorter.versions[j] = majorVersionSorter.versions[j], majorVersionSorter.versions[i]
+}
+func (majorVersionSorter *majorVersionsSortedByCount) Less(i, j int) bool {
+	if majorVersionSorter.versionsCount[majorVersionSorter.versions[i]] == majorVersionSorter.versionsCount[majorVersionSorter.versions[j]] {
+		return majorVersionSorter.versions[i] > majorVersionSorter.versions[j]
 	}
-	return this.versionsCount[this.versions[i]] < this.versionsCount[this.versions[j]]
+	return majorVersionSorter.versionsCount[majorVersionSorter.versions[i]] < majorVersionSorter.versionsCount[majorVersionSorter.versions[j]]
 }
-func (this *majorVersionsSortedByCount) First() string {
-	return this.versions[0]
+func (majorVersionSorter *majorVersionsSortedByCount) First() string {
+	return majorVersionSorter.versions[0]
 }
 
 // majorVersionsSortedByCount sorts (major) versions:
@@ -67,7 +69,7 @@ type binlogFormatSortedByCount struct {
 	formats      []string
 }
 
-func NewBinlogFormatSortedByCount(formatsCount map[string]int) *binlogFormatSortedByCount {
+func newBinlogFormatSortedByCount(formatsCount map[string]int) *binlogFormatSortedByCount {
 	formats := []string{}
 	for v := range formatsCount {
 		formats = append(formats, v)
@@ -78,18 +80,20 @@ func NewBinlogFormatSortedByCount(formatsCount map[string]int) *binlogFormatSort
 	}
 }
 
-func (this *binlogFormatSortedByCount) Len() int { return len(this.formats) }
-func (this *binlogFormatSortedByCount) Swap(i, j int) {
-	this.formats[i], this.formats[j] = this.formats[j], this.formats[i]
+func (binlogFormatSorter *binlogFormatSortedByCount) Len() int {
+	return len(binlogFormatSorter.formats)
 }
-func (this *binlogFormatSortedByCount) Less(i, j int) bool {
-	if this.formatsCount[this.formats[i]] == this.formatsCount[this.formats[j]] {
-		return IsSmallerBinlogFormat(this.formats[j], this.formats[i])
+func (binlogFormatSorter *binlogFormatSortedByCount) Swap(i, j int) {
+	binlogFormatSorter.formats[i], binlogFormatSorter.formats[j] = binlogFormatSorter.formats[j], binlogFormatSorter.formats[i]
+}
+func (binlogFormatSorter *binlogFormatSortedByCount) Less(i, j int) bool {
+	if binlogFormatSorter.formatsCount[binlogFormatSorter.formats[i]] == binlogFormatSorter.formatsCount[binlogFormatSorter.formats[j]] {
+		return IsSmallerBinlogFormat(binlogFormatSorter.formats[j], binlogFormatSorter.formats[i])
 	}
-	return this.formatsCount[this.formats[i]] < this.formatsCount[this.formats[j]]
+	return binlogFormatSorter.formatsCount[binlogFormatSorter.formats[i]] < binlogFormatSorter.formatsCount[binlogFormatSorter.formats[j]]
 }
-func (this *binlogFormatSortedByCount) First() string {
-	return this.formats[0]
+func (binlogFormatSorter *binlogFormatSortedByCount) First() string {
+	return binlogFormatSorter.formats[0]
 }
 
 // InstancesSorterByExec sorts instances by executed binlog coordinates
@@ -105,52 +109,52 @@ func NewInstancesSorterByExec(instances [](*Instance), dataCenter string) *Insta
 	}
 }
 
-func (this *InstancesSorterByExec) Len() int { return len(this.instances) }
-func (this *InstancesSorterByExec) Swap(i, j int) {
-	this.instances[i], this.instances[j] = this.instances[j], this.instances[i]
+func (instancesSorter *InstancesSorterByExec) Len() int { return len(instancesSorter.instances) }
+func (instancesSorter *InstancesSorterByExec) Swap(i, j int) {
+	instancesSorter.instances[i], instancesSorter.instances[j] = instancesSorter.instances[j], instancesSorter.instances[i]
 }
-func (this *InstancesSorterByExec) Less(i, j int) bool {
+func (instancesSorter *InstancesSorterByExec) Less(i, j int) bool {
 	// Returning "true" in this function means [i] is "smaller" than [j],
 	// which will lead to [j] be a better candidate for promotion
 
 	// Sh*t happens. We just might get nil while attempting to discover/recover
-	if this.instances[i] == nil {
+	if instancesSorter.instances[i] == nil {
 		return false
 	}
-	if this.instances[j] == nil {
+	if instancesSorter.instances[j] == nil {
 		return true
 	}
-	if this.instances[i].ExecBinlogCoordinates.Equals(&this.instances[j].ExecBinlogCoordinates) {
+	if instancesSorter.instances[i].ExecBinlogCoordinates.Equals(&instancesSorter.instances[j].ExecBinlogCoordinates) {
 		// Secondary sorting: "smaller" if not logging replica updates
-		if this.instances[j].LogReplicationUpdatesEnabled && !this.instances[i].LogReplicationUpdatesEnabled {
+		if instancesSorter.instances[j].LogReplicationUpdatesEnabled && !instancesSorter.instances[i].LogReplicationUpdatesEnabled {
 			return true
 		}
 		// Next sorting: "smaller" if of higher version (this will be reversed eventually)
 		// Idea is that given 5.6 a& 5.7 both of the exact position, we will want to promote
 		// the 5.6 on top of 5.7, as the other way around is invalid
-		if this.instances[j].IsSmallerMajorVersion(this.instances[i]) {
+		if instancesSorter.instances[j].IsSmallerMajorVersion(instancesSorter.instances[i]) {
 			return true
 		}
 		// Next sorting: "smaller" if of larger binlog-format (this will be reversed eventually)
 		// Idea is that given ROW & STATEMENT both of the exact position, we will want to promote
 		// the STATEMENT on top of ROW, as the other way around is invalid
-		if this.instances[j].IsSmallerBinlogFormat(this.instances[i]) {
+		if instancesSorter.instances[j].IsSmallerBinlogFormat(instancesSorter.instances[i]) {
 			return true
 		}
 		// Prefer local datacenter:
-		if this.instances[j].DataCenter == this.dataCenter && this.instances[i].DataCenter != this.dataCenter {
+		if instancesSorter.instances[j].DataCenter == instancesSorter.dataCenter && instancesSorter.instances[i].DataCenter != instancesSorter.dataCenter {
 			return true
 		}
 		// Prefer if not having errant GTID
-		if this.instances[j].GtidErrant == "" && this.instances[i].GtidErrant != "" {
+		if instancesSorter.instances[j].GtidErrant == "" && instancesSorter.instances[i].GtidErrant != "" {
 			return true
 		}
 		// Prefer candidates:
-		if this.instances[j].PromotionRule.BetterThan(this.instances[i].PromotionRule) {
+		if instancesSorter.instances[j].PromotionRule.BetterThan(instancesSorter.instances[i].PromotionRule) {
 			return true
 		}
 	}
-	return this.instances[i].ExecBinlogCoordinates.SmallerThan(&this.instances[j].ExecBinlogCoordinates)
+	return instancesSorter.instances[i].ExecBinlogCoordinates.SmallerThan(&instancesSorter.instances[j].ExecBinlogCoordinates)
 }
 
 // filterInstancesByPattern will filter given array of instances according to regular expression pattern
