@@ -48,6 +48,9 @@ var (
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
 	}, {
+		input:  "create table 3t2 (c1 bigint not null, c2 text, primary key(c1))",
+		output: "create table 3t2 (\n\tc1 bigint not null,\n\tc2 text,\n\tprimary key (c1)\n)",
+	}, {
 		input:  "select 1 from t1 where exists (select 1) = TRUE",
 		output: "select 1 from t1 where exists (select 1 from dual) = true",
 	}, {
