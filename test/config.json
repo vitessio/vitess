@@ -633,14 +633,14 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
-		"vtgate_upgrade_downgrade": {
+		"upgrade_downgrade_vtgate": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/upgrade_downgrade"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "30",
+			"Shard": "upgrade_downgrade_query_serving",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_aggregation": {
 			"File": "unused.go",
@@ -649,7 +649,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_foundrows": {
 			"File": "unused.go",
@@ -658,7 +658,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_informationschema": {
 			"File": "unused.go",
@@ -667,7 +667,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_normalize": {
 			"File": "unused.go",
@@ -676,7 +676,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_orderby": {
 			"File": "unused.go",
@@ -685,7 +685,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -694,7 +694,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -703,7 +703,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_buffer": {
 			"File": "unused.go",
