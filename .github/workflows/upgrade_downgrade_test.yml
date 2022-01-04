@@ -127,7 +127,7 @@ jobs:
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
 
-      # Checkout to this build's commit
+    # Checkout to this build's commit
     - name: Check out commit's code
       uses: actions/checkout@v2
 
