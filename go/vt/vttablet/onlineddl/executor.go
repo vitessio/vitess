@@ -255,28 +255,6 @@ func (e *Executor) initSchema(ctx context.Context) error {
 			return err
 		}
 	}
-
-	{
-		// init vreplication table
-
-		// We need to talk to tabletmanager's VREngine. But we're on TabletServer. While we live in the same
-		// process as VREngine, it is actually simpler to get hold of it via gRPC, just like wrangler does.
-		tmClient := tmclient.NewTabletManagerClient()
-		tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
-		if err != nil {
-			return err
-		}
-		// This makes sure vreplication DDLs are executed and _vreplication table is created
-		query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
-			sqltypes.StringBindVariable("-"),
-		)
-		if err != nil {
-			return err
-		}
-		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
-			return err
-		}
-	}
 	e.schemaInitialized = true
 	return nil
 }
