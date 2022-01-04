@@ -19,6 +19,7 @@ package vtgate
 import (
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2697,4 +2698,293 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	utils.MustMatch(t, wantWarnings, session.Warnings)
+}
+
+func TestGen4MultiColumnVindexEqual(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where cola = 1 and colb = 2"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColumnVindex",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola = :vtg1 and colb = :vtg2",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(1),
+				"vtg2": sqltypes.Int64BindVariable(2),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+
+	sbc1.Queries = nil
+
+	query = "select * from user_region where cola = 17984 and colb = 1"
+	_, err = executor.Execute(context.Background(),
+		"TestGen4MultiColumnVindex",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola = :vtg1 and colb = :vtg2",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(17984),
+				"vtg2": sqltypes.Int64BindVariable(1),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+	require.Nil(t, sbc1.Queries)
+}
+
+func TestGen4MultiColumnVindexIn(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where cola IN (1,17984) and colb IN (2,3,4)"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColumnVindex",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	bv1, _ := sqltypes.BuildBindVariable([]int64{1})
+	bv2, _ := sqltypes.BuildBindVariable([]int64{17984})
+	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
+	bvtg2, _ := sqltypes.BuildBindVariable([]int64{2, 3, 4})
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola in ::__vals0 and colb in ::__vals1",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": bv1,
+				"__vals1": bvtg2,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where cola in ::__vals0 and colb in ::__vals1",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": bv2,
+				"__vals1": bvtg2,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}
+
+func TestGen4MultiColMixedColComparision(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where colb = 2 and cola IN (1,17984)"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColMixedColComparision",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	bvtg1 := sqltypes.Int64BindVariable(2)
+	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
+	vals0sbc1, _ := sqltypes.BuildBindVariable([]int64{1})
+	vals0sbc2, _ := sqltypes.BuildBindVariable([]int64{17984})
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb = :vtg1 and cola in ::__vals0",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": vals0sbc1,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb = :vtg1 and cola in ::__vals0",
+			BindVariables: map[string]*querypb.BindVariable{
+				"__vals0": vals0sbc2,
+				"vtg1":    bvtg1,
+				"vtg2":    bvtg2,
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}
+
+func TestGen4MultiColBestVindexSel(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where colb = 2 and cola IN (1,17984) and cola = 1"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColBestVindexSel",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb = :vtg1 and cola in ::vtg2 and cola = :vtg3",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(2),
+				"vtg2": bvtg2,
+				"vtg3": sqltypes.Int64BindVariable(1),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+
+	// reset
+	sbc1.Queries = nil
+
+	query = "select * from user_region where colb in (10,20) and cola IN (1,17984) and cola = 1 and colb = 2"
+	_, err = executor.Execute(context.Background(),
+		"TestGen4MultiColBestVindexSel",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+
+	bvtg1, _ := sqltypes.BuildBindVariable([]int64{10, 20})
+	wantQueries = []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where colb in ::vtg1 and cola in ::vtg2 and cola = :vtg3 and colb = :vtg4",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": bvtg1,
+				"vtg2": bvtg2,
+				"vtg3": sqltypes.Int64BindVariable(1),
+				"vtg4": sqltypes.Int64BindVariable(2),
+			},
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	require.Nil(t, sbc2.Queries)
+}
+
+func TestGen4MultiColMultiEqual(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select * from user_region where (cola,colb) in ((17984,2),(17984,3))"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4MultiColMultiEqual",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql: "select * from user_region where (cola, colb) in ((:vtg1, :vtg2), (:vtg1, :vtg3))",
+			BindVariables: map[string]*querypb.BindVariable{
+				"vtg1": sqltypes.Int64BindVariable(17984),
+				"vtg2": sqltypes.Int64BindVariable(2),
+				"vtg3": sqltypes.Int64BindVariable(3),
+			},
+		},
+	}
+	require.Nil(t, sbc1.Queries)
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}
+
+func TestRegionRange(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+
+	*GatewayImplementation = tabletGatewayImplementation
+	*plannerVersion = "gen4"
+	defer func() {
+		*plannerVersion = "v3"
+	}()
+	cell := "regioncell"
+	ks := "TestExecutor"
+	hc := discovery.NewFakeHealthCheck(nil)
+	s := createSandbox(ks)
+	s.ShardSpec = "-20-20a0-"
+	s.VSchema = executorVSchema
+	serv := newSandboxForCells([]string{cell})
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-20a0", "20a0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+	executor := createExecutor(serv, cell, resolver)
+
+	tcases := []struct {
+		regionID          int
+		noOfShardsTouched int
+	}{{
+		regionID:          31,
+		noOfShardsTouched: 1,
+	}, {
+		regionID:          32,
+		noOfShardsTouched: 2,
+	}, {
+		regionID:          33,
+		noOfShardsTouched: 1,
+	}}
+	for _, tcase := range tcases {
+		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
+			sql := fmt.Sprintf("select * from user_region where cola = %d", tcase.regionID)
+			_, err := executor.Execute(
+				context.Background(),
+				"TestRegionRange",
+				NewAutocommitSession(&vtgatepb.Session{}),
+				sql,
+				nil)
+			require.NoError(t, err)
+			count := 0
+			for _, sbc := range conns {
+				count = count + len(sbc.Queries)
+				sbc.Queries = nil
+			}
+			require.Equal(t, tcase.noOfShardsTouched, count)
+		})
+	}
 }

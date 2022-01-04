@@ -59,7 +59,10 @@ type Insert struct {
 	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
 	// Insert.Values[i].Values[j] represents values for the j'th column of the given colVindex (j < len(colVindex[i].Columns)
 	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
-	VindexValues []sqltypes.PlanValue
+	VindexValues [][][]evalengine.Expr
+
+	// ColVindexes are the vindexes that will use the VindexValues
+	ColVindexes []*vindexes.ColumnVindex
 
 	// Table specifies the table for the insert.
 	Table *vindexes.Table
@@ -110,7 +113,7 @@ func NewSimpleInsert(opcode InsertOpcode, table *vindexes.Table, keyspace *vinde
 }
 
 // NewInsert creates a new Insert.
-func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues []sqltypes.PlanValue, table *vindexes.Table, prefix string, mid []string, suffix string) *Insert {
+func NewInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, vindexValues [][][]evalengine.Expr, table *vindexes.Table, prefix string, mid []string, suffix string) *Insert {
 	return &Insert{
 		Opcode:       opcode,
 		Keyspace:     keyspace,
@@ -128,10 +131,10 @@ type Generate struct {
 	Keyspace *vindexes.Keyspace
 	Query    string
 	// Values are the supplied values for the column, which
-	// will be stored as a list within the PlanValue. New
+	// will be stored as a list within the expression. New
 	// values will be generated based on how many were not
 	// supplied (NULL).
-	Values sqltypes.PlanValue
+	Values evalengine.Expr
 }
 
 // InsertOpcode is a number representing the opcode
@@ -303,12 +306,14 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// Scan input values to compute the number of values to generate, and
 	// keep track of where they should be filled.
-	resolved, err := ins.Generate.Values.ResolveList(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	resolved, err := env.Evaluate(ins.Generate.Values)
 	if err != nil {
 		return 0, err
 	}
 	count := int64(0)
-	for _, val := range resolved {
+	values := resolved.TupleValues()
+	for _, val := range values {
 		if shouldGenerate(val) {
 			count++
 		}
@@ -338,7 +343,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 
 	// Fill the holes where no value was supplied.
 	cur := insertID
-	for i, v := range resolved {
+	for i, v := range values {
 		if shouldGenerate(v) {
 			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.Int64BindVariable(cur)
 			cur++
@@ -365,14 +370,23 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// require inputs in that format.
 	vindexRowsValues := make([][][]sqltypes.Value, len(ins.VindexValues))
 	rowCount := 0
+	env := evalengine.EnvWithBindVars(bindVars)
+	colVindexes := ins.ColVindexes
+	if colVindexes == nil {
+		colVindexes = ins.Table.ColumnVindexes
+	}
 	for vIdx, vColValues := range ins.VindexValues {
-		if len(vColValues.Values) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
+		if len(vColValues) != len(colVindexes[vIdx].Columns) {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, colVindexes[vIdx].Columns)
 		}
-		for colIdx, colValues := range vColValues.Values {
-			rowsResolvedValues, err := colValues.ResolveList(bindVars)
-			if err != nil {
-				return nil, nil, err
+		for colIdx, colValues := range vColValues {
+			rowsResolvedValues := make([]sqltypes.Value, 0, len(colValues))
+			for _, colValue := range colValues {
+				result, err := env.Evaluate(colValue)
+				if err != nil {
+					return nil, nil, err
+				}
+				rowsResolvedValues = append(rowsResolvedValues, result.Value())
 			}
 			// This is the first iteration: allocate for transpose.
 			if colIdx == 0 {
@@ -398,16 +412,16 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
-	if len(vindexRowsValues) == 0 || len(ins.Table.ColumnVindexes) == 0 {
+	if len(vindexRowsValues) == 0 || len(colVindexes) == 0 {
 		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.Table.Name)
 	}
-	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
+	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], colVindexes[0])
 	if err != nil {
 		return nil, nil, err
 	}
 
-	for vIdx := 1; vIdx < len(ins.Table.ColumnVindexes); vIdx++ {
-		colVindex := ins.Table.ColumnVindexes[vIdx]
+	for vIdx := 1; vIdx < len(colVindexes); vIdx++ {
+		colVindex := colVindexes[vIdx]
 		var err error
 		if colVindex.Owned {
 			err = ins.processOwned(vcursor, vindexRowsValues[vIdx], colVindex, keyspaceIDs)
@@ -421,7 +435,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 
 	// Build 3-d bindvars. Skip rows with nil keyspace ids in case
 	// we're executing an insert ignore.
-	for vIdx, colVindex := range ins.Table.ColumnVindexes {
+	for vIdx, colVindex := range colVindexes {
 		for rowNum, rowColumnKeys := range vindexRowsValues[vIdx] {
 			if keyspaceIDs[rowNum] == nil {
 				// InsertShardedIgnore: skip the row.
@@ -547,47 +561,56 @@ func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.
 
 // processUnowned either reverse maps or validates the values for an unowned column.
 func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, ksids [][]byte) error {
-	reverseIndexes := []int{}
+	var reverseIndexes []int
 	var reverseKsids [][]byte
-	verifyIndexes := []int{}
+
+	var verifyIndexes []int
 	var verifyKeys [][]sqltypes.Value
 	var verifyKsids [][]byte
 
+	// Check if this VIndex is reversible or not.
+	reversibleVindex, isReversible := colVindex.Vindex.(vindexes.Reversible)
+
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
-		// Right now, we only validate against the first column of a colvindex.
+		// If we weren't able to determine a keyspace id from the primary VIndex, skip this row
 		if ksids[rowNum] == nil {
 			continue
 		}
-		// Perform reverse map only for non-multi-column vindexes.
-		_, isMulti := colVindex.Vindex.(vindexes.MultiColumn)
-		if rowColumnKeys[0].IsNull() && !isMulti {
-			reverseIndexes = append(reverseIndexes, rowNum)
-			reverseKsids = append(reverseKsids, ksids[rowNum])
+
+		if rowColumnKeys[0].IsNull() {
+			// If the value of the column is `NULL`, but this is a reversible VIndex,
+			// we will try to generate the value from the keyspace id generated by the primary VIndex.
+			if isReversible {
+				reverseIndexes = append(reverseIndexes, rowNum)
+				reverseKsids = append(reverseKsids, ksids[rowNum])
+			}
+
+			// Otherwise, don't do anything. Whether `NULL` is a valid value for this column will be
+			// handled by MySQL.
 		} else {
+			// If a value for this column was specified, the keyspace id values from the
+			// secondary VIndex need to be verified against the keyspace id from the primary VIndex
 			verifyIndexes = append(verifyIndexes, rowNum)
 			verifyKeys = append(verifyKeys, rowColumnKeys)
 			verifyKsids = append(verifyKsids, ksids[rowNum])
 		}
 	}
 
-	// For cases where a value was not supplied, we reverse map it
-	// from the keyspace id, if possible.
+	// Reverse map values for secondary VIndex columns from the primary VIndex's keyspace id.
 	if reverseKsids != nil {
-		reversible, ok := colVindex.Vindex.(vindexes.Reversible)
-		if !ok {
-			return fmt.Errorf("value must be supplied for column %v", colVindex.Columns)
-		}
-		reverseKeys, err := reversible.ReverseMap(vcursor, reverseKsids)
+		reverseKeys, err := reversibleVindex.ReverseMap(vcursor, reverseKsids)
 		if err != nil {
 			return err
 		}
+
 		for i, reverseKey := range reverseKeys {
 			// Fill the first column with the reverse-mapped value.
 			vindexColumnsKeys[reverseIndexes[i]][0] = reverseKey
 		}
 	}
 
-	if verifyKsids != nil {
+	// Verify that the keyspace ids generated by the primary and secondary VIndexes match
+	if verifyIndexes != nil {
 		// If values were supplied, we validate against keyspace id.
 		verified, err := vindexes.Verify(colVindex.Vindex, vcursor, verifyKeys, verifyKsids)
 		if err != nil {
@@ -602,19 +625,23 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 					mismatchVindexKeys = append(mismatchVindexKeys, vindexColumnsKeys[rowNum])
 					continue
 				}
-				// InsertShardedIgnore: skip the row.
+
+				// Skip the whole row if this is a `INSERT IGNORE` or `INSERT ... ON DUPLICATE KEY ...` statement
+				// but the keyspace ids didn't match.
 				ksids[verifyIndexes[i]] = nil
 			}
 		}
-		if len(mismatchVindexKeys) > 0 {
+
+		if mismatchVindexKeys != nil {
 			return fmt.Errorf("values %v for column %v does not map to keyspace ids", mismatchVindexKeys, colVindex.Columns)
 		}
 	}
+
 	return nil
 }
 
-//InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
-//to make sure they both produce the same names
+// InsertVarName returns a name for the bind var for this column. This method is used by the planner and engine,
+// to make sure they both produce the same names
 func InsertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
 }

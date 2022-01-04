@@ -175,7 +175,7 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 			if tablet.Type == topodatapb.TabletType_PRIMARY && opts.AlsoSetShardPrimary {
 				_, err := ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
 					if si.IsPrimaryServing && si.PrimaryAlias != nil {
-						msg := fmt.Sprintf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
+						msg := fmt.Sprintf("shard %v/%v already has a serving primary (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
 
 						if !opts.ForceSetShardPrimary {
 							return errors.New(msg)

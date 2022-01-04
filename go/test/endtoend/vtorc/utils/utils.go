@@ -136,6 +136,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
 		"-disable_active_reparents",
+		"-use_super_read_only=false",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets

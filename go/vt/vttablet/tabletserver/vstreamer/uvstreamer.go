@@ -98,6 +98,10 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 	}
 	send2 := func(evs []*binlogdatapb.VEvent) error {
 		vse.vstreamerEventsStreamed.Add(int64(len(evs)))
+		for _, ev := range evs {
+			ev.Keyspace = vse.keyspace
+			ev.Shard = vse.shard
+		}
 		return send(evs)
 	}
 	uvs := &uvstreamer{
@@ -464,17 +468,27 @@ func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 		return nil
 	}
 	gtidEvent := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_GTID,
-		Gtid: gtid,
+		Type:     binlogdatapb.VEventType_GTID,
+		Gtid:     gtid,
+		Keyspace: uvs.vse.keyspace,
+		Shard:    uvs.vse.shard,
 	}
 
 	var evs []*binlogdatapb.VEvent
 	if !isInTx {
-		evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_BEGIN})
+		evs = append(evs, &binlogdatapb.VEvent{
+			Type:     binlogdatapb.VEventType_BEGIN,
+			Keyspace: uvs.vse.keyspace,
+			Shard:    uvs.vse.shard,
+		})
 	}
 	evs = append(evs, gtidEvent)
 	if !isInTx {
-		evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
+		evs = append(evs, &binlogdatapb.VEvent{
+			Type:     binlogdatapb.VEventType_COMMIT,
+			Keyspace: uvs.vse.keyspace,
+			Shard:    uvs.vse.shard,
+		})
 	}
 	if err := uvs.send(evs); err != nil {
 		return err

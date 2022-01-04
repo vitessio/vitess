@@ -23,6 +23,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -122,8 +123,8 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
-// NewSemTable creates a new empty SemTable
-func NewSemTable() *SemTable {
+// EmptySemTable creates a new empty SemTable
+func EmptySemTable() *SemTable {
 	return &SemTable{
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
@@ -317,4 +318,16 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 	if found {
 		st.ExprTypes[dest] = srcType
 	}
+}
+
+var _ evalengine.ConverterLookup = (*SemTable)(nil)
+
+var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
+
+func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
+	return 0, columnNotSupportedErr
+}
+
+func (st *SemTable) CollationIDLookup(expr sqlparser.Expr) collations.ID {
+	return st.CollationFor(expr)
 }

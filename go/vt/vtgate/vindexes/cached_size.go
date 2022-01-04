@@ -107,7 +107,7 @@ func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(112)
 	}
 	// field Columns []vitess.io/vitess/go/vt/sqlparser.ColIdent
 	{

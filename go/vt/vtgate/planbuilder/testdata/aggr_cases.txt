@@ -34,27 +34,13 @@ Gen4 plan same as above
     "FieldQuery": "select count(*), col from `user` where 1 != 1",
     "Query": "select count(*), col from `user` where id = 1",
     "Table": "`user`",
-    "Values": 1,
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select count(*), col from user where id = 1",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select count(*), col from `user` where 1 != 1",
-    "Query": "select count(*), col from `user` where id = 1",
-    "Table": "`user`",
-    "Values": "INT64(1)",
-    "Vindex": "user_index"
-  }
-}
+Gen4 plan same as above
 
 # Aggregate detection (non-aggregate function)
 "select fun(1), col from user"
@@ -826,7 +812,9 @@ Gen4 error: unsupported: '*' expression in cross-shard query
     "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
     "Query": "select id, count(*) as c from `user` group by id having id = 1 and c = 10",
     "Table": "`user`",
-    "Values": 1,
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -843,7 +831,9 @@ Gen4 error: unsupported: '*' expression in cross-shard query
     "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
     "Query": "select id, count(*) as c from `user` where id = 1 group by id having c = 10",
     "Table": "`user`",
-    "Values": "INT64(1)",
+    "Values": [
+      "INT64(1)"
+    ],
     "Vindex": "user_index"
   }
 }
@@ -1904,7 +1894,7 @@ Gen4 plan same as above
   "Original": "select col, count(*) from user group by col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -1934,7 +1924,7 @@ Gen4 plan same as above
   "Original": "select col, count(*) from user group by col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -1975,27 +1965,13 @@ Gen4 plan same as above
     "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by a collate utf8_general_ci",
     "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by a collate utf8_general_ci",
     "Table": "`user`",
-    "Values": 5,
+    "Values": [
+      "INT64(5)"
+    ],
     "Vindex": "user_index"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select `user`.col1 as a from `user` where 1 != 1 group by a collate utf8_general_ci",
-    "Query": "select `user`.col1 as a from `user` where `user`.id = 5 group by a collate utf8_general_ci",
-    "Table": "`user`",
-    "Values": "INT64(5)",
-    "Vindex": "user_index"
-  }
-}
+Gen4 plan same as above
 
 # routing rules for aggregates
 "select id, count(*) from route2 group by id"
@@ -2668,7 +2644,7 @@ Gen4 plan same as above
   "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 2,
+    "Count": "INT64(2)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2691,7 +2667,7 @@ Gen4 plan same as above
   "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 2,
+    "Count": "INT64(2)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2746,7 +2722,9 @@ Gen4 plan same as above
         "FieldQuery": "select 1 from user_extra where 1 != 1",
         "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
         "Table": "user_extra",
-        "Values": "INT64(3)",
+        "Values": [
+          "INT64(3)"
+        ],
         "Vindex": "user_index"
       }
     ]

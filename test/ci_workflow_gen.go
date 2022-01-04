@@ -32,12 +32,15 @@ const (
 	unitTestTemplate  = "templates/unit_test.tpl"
 	unitTestDatabases = "mysql57, mariadb103, mysql80, mariadb102"
 
-	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
+	// An empty string will cause the default non platform specific template
+	// to be used.
+	clusterTestTemplateFormatStr = "templates/cluster_endtoend_test%s.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
 	unitTestSelfHostedDatabases   = ""
 	dockerFileTemplate            = "templates/dockerfile.tpl"
 	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
+	clusterTestDockerTemplate     = "templates/cluster_endtoend_test_docker.tpl"
 )
 
 var (
@@ -72,6 +75,7 @@ var (
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
+		"onlineddl_scheduler",
 		"onlineddl_revertible",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
@@ -98,13 +102,15 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
-		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",
-		"vreplication_v2",
 	}
 
 	clusterSelfHostedList = []string{}
+	clusterDockerList     = []string{
+		"vreplication_basic",
+		"vreplication_v2",
+	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
@@ -124,7 +130,7 @@ type unitTest struct {
 }
 
 type clusterTest struct {
-	Name, Shard                  string
+	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20                     bool
 }
@@ -155,7 +161,8 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
-	generateClusterWorkflows()
+	generateClusterWorkflows(clusterList, clusterTestTemplateFormatStr)
+	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
 	// tests that will use self-hosted runners
 	err := generateSelfHostedUnitTestWorkflows()
@@ -254,6 +261,7 @@ func generateSelfHostedClusterWorkflows() error {
 		if err != nil {
 			return err
 		}
+
 		filePath := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
 		err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
 		if err != nil {
@@ -263,8 +271,8 @@ func generateSelfHostedClusterWorkflows() error {
 	return nil
 }
 
-func generateClusterWorkflows() {
-	clusters := canonnizeList(clusterList)
+func generateClusterWorkflows(list []string, tpl string) {
+	clusters := canonnizeList(list)
 	for _, cluster := range clusters {
 		test := &clusterTest{
 			Name:  fmt.Sprintf("Cluster (%s)", cluster),
@@ -288,12 +296,19 @@ func generateClusterWorkflows() {
 		for _, ubuntu20Cluster := range ubuntu20Clusters {
 			if ubuntu20Cluster == cluster {
 				test.Ubuntu20 = true
+				test.Platform = "mysql80"
 				break
 			}
 		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
-		err := writeFileFromTemplate(clusterTestTemplate, path, test)
+		var tplPlatform string
+		template := tpl
+		if test.Platform != "" {
+			tplPlatform = "_" + test.Platform
+			template = fmt.Sprintf(tpl, tplPlatform)
+		}
+		err := writeFileFromTemplate(template, path, test)
 		if err != nil {
 			log.Print(err)
 		}

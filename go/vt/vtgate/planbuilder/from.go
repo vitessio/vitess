@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -261,8 +263,9 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		// for keyspace id.
 		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.NewBinary("binary", nil)
-		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
-		eroute.Value = sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}
+		eroute.Vindex = vindex
+		lit := evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})
+		eroute.Values = []evalengine.Expr{lit}
 	}
 	eroute.TableName = sqlparser.String(vschemaTable.Name)
 	rb.eroute = eroute

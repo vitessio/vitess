@@ -20,6 +20,9 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/require"
@@ -72,7 +75,7 @@ func TestUpdateEqual(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
 
@@ -85,9 +88,9 @@ func TestUpdateEqual(t *testing.T) {
 	})
 
 	// Failure case
-	upd.Values = []sqltypes.PlanValue{{Key: "aa"}}
+	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", collations.TypedCollation{})}
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `missing bind var aa`)
+	require.EqualError(t, err, `query arguments missing for aa`)
 }
 
 func TestUpdateScatter(t *testing.T) {
@@ -101,7 +104,7 @@ func TestUpdateScatter(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
 
@@ -124,7 +127,7 @@ func TestUpdateScatter(t *testing.T) {
 			},
 			Query:                "dummy_update",
 			Vindex:               vindex.(vindexes.SingleColumn),
-			Values:               []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values:               []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			MultiShardAutocommit: true,
 		},
 	}
@@ -154,7 +157,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
 
@@ -183,7 +186,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 			},
 			Query:  "dummy_update",
 			Vindex: vindex.(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
 
@@ -200,22 +203,22 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 			Keyspace:         ks.Keyspace,
 			Query:            "dummy_update",
 			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c1": {Value: sqltypes.NewInt64(1)},
-					"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]evalengine.Expr{
+					"c1": evalengine.NewLiteralInt(1),
+					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]evalengine.Expr{
+					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
 			},
@@ -346,15 +349,15 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c1": {Value: sqltypes.NewInt64(1)},
-					"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]evalengine.Expr{
+					"c1": evalengine.NewLiteralInt(1),
+					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]evalengine.Expr{
+					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
 			},
@@ -449,12 +452,10 @@ func TestUpdateIn(t *testing.T) {
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
 		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{
-			Values: []sqltypes.PlanValue{
-				{Value: sqltypes.NewInt64(1)},
-				{Value: sqltypes.NewInt64(2)},
-			}},
-		}},
+		Values: []evalengine.Expr{&evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+		}}},
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -474,12 +475,10 @@ func TestUpdateInStreamExecute(t *testing.T) {
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
 		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{
-			Values: []sqltypes.PlanValue{
-				{Value: sqltypes.NewInt64(1)},
-				{Value: sqltypes.NewInt64(2)},
-			}},
-		}},
+		Values: []evalengine.Expr{&evalengine.TupleExpr{
+			evalengine.NewLiteralInt(1),
+			evalengine.NewLiteralInt(2),
+		}}},
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -502,27 +501,25 @@ func TestUpdateInChangedVindex(t *testing.T) {
 			Keyspace: ks.Keyspace,
 			Query:    "dummy_update",
 			Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values: []sqltypes.PlanValue{{
-				Values: []sqltypes.PlanValue{
-					{Value: sqltypes.NewInt64(1)},
-					{Value: sqltypes.NewInt64(2)},
-				}},
-			},
+			Values: []evalengine.Expr{&evalengine.TupleExpr{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+			}},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c1": {Value: sqltypes.NewInt64(1)},
-					"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]evalengine.Expr{
+					"c1": evalengine.NewLiteralInt(1),
+					"c2": evalengine.NewLiteralInt(2),
 				},
 				Offset: 4,
 			},
 			"onecol": {
-				PvMap: map[string]sqltypes.PlanValue{
-					"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]evalengine.Expr{
+					"c3": evalengine.NewLiteralInt(3),
 				},
 				Offset: 5,
 			},

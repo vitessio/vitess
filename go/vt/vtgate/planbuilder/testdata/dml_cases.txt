@@ -139,7 +139,7 @@ Gen4 plan same as above
     "Query": "update `user` as route1 set a = 1 where id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -201,7 +201,7 @@ Gen4 plan same as above
     "Query": "update `user` set val = 1 where id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -225,7 +225,7 @@ Gen4 plan same as above
     "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -249,7 +249,7 @@ Gen4 plan same as above
     "Query": "update `user` set val = 1 where id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -273,7 +273,7 @@ Gen4 plan same as above
     "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -302,7 +302,7 @@ Gen4 plan same as above
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
     "Table": "user_metadata",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -337,7 +337,7 @@ Gen4 plan same as above
     "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
     "Table": "user_metadata",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -366,7 +366,7 @@ Gen4 plan same as above
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
     "Table": "user_metadata",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -390,7 +390,7 @@ Gen4 plan same as above
     "Query": "update `user` set val = 1 where id = id2 and id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -414,7 +414,7 @@ Gen4 plan same as above
     "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -440,7 +440,7 @@ Gen4 plan same as above
     "Query": "delete from `user` where id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -523,7 +523,7 @@ Gen4 plan same as above
     "Query": "delete from `user` as route1 where id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -566,7 +566,7 @@ Gen4 plan same as above
     "Query": "update music set val = 1 where id = 1",
     "Table": "music",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "music_user_map"
   }
@@ -630,7 +630,7 @@ Gen4 plan same as above
     "Query": "delete from music where id = 1",
     "Table": "music",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "music_user_map"
   }
@@ -654,7 +654,7 @@ Gen4 plan same as above
     "Query": "delete from music_extra where user_id = 1",
     "Table": "music_extra",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -1243,7 +1243,7 @@ Gen4 plan same as above
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
-"could not compute value for vindex or auto-inc column: expression is too complex 'id'"
+"could not compute value for vindex or auto-inc column: column access not supported here"
 Gen4 plan same as above
 
 # insert invalid table
@@ -1506,7 +1506,7 @@ Gen4 plan same as above
     "Query": "delete from multicolvin where kid = 1",
     "Table": "multicolvin",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "kid_index"
   }
@@ -1535,7 +1535,7 @@ Gen4 plan same as above
     "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
     "Table": "multicolvin",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "kid_index"
   }
@@ -1565,7 +1565,7 @@ Gen4 plan same as above
     "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
     "Table": "multicolvin",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "kid_index"
   }
@@ -1690,10 +1690,7 @@ Gen4 plan same as above
     "Query": "update user_extra set val = 1 where user_id in (1, 2)",
     "Table": "user_extra",
     "Values": [
-      [
-        1,
-        2
-      ]
+      "(INT64(1), INT64(2))"
     ],
     "Vindex": "user_index"
   }
@@ -1898,10 +1895,7 @@ Gen4 plan same as above
     "Query": "delete from user_extra where user_id in (1, 2)",
     "Table": "user_extra",
     "Values": [
-      [
-        1,
-        2
-      ]
+      "(INT64(1), INT64(2))"
     ],
     "Vindex": "user_index"
   }
@@ -1968,7 +1962,7 @@ Gen4 plan same as above
     "Query": "update `user` set `name` = null where id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -2017,11 +2011,7 @@ Gen4 plan same as above
     "Query": "update `user` set `name` = null where id in (1, 2, 3)",
     "Table": "user",
     "Values": [
-      [
-        1,
-        2,
-        3
-      ]
+      "(INT64(1), INT64(2), INT64(3))"
     ],
     "Vindex": "user_index"
   }
@@ -2097,11 +2087,7 @@ Gen4 plan same as above
     "Query": "delete from `user` where id in (1, 2, 3)",
     "Table": "user",
     "Values": [
-      [
-        1,
-        2,
-        3
-      ]
+      "(INT64(1), INT64(2), INT64(3))"
     ],
     "Vindex": "user_index"
   }
@@ -2171,7 +2157,7 @@ Gen4 plan same as above
     "Query": "delete from music where id = 1",
     "Table": "music",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "music_user_map"
   }
@@ -2242,7 +2228,7 @@ Gen4 plan same as above
     "Query": "update multicolvin set column_c = 2 where kid = 1",
     "Table": "multicolvin",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "kid_index"
   }
@@ -2271,7 +2257,7 @@ Gen4 plan same as above
     "Query": "update `user` set `name` = _binary 'abc' where id = 1",
     "Table": "user",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -2489,7 +2475,7 @@ Gen4 plan same as above
     "Query": "delete from t1 where c2 = 10 and c3 = 20",
     "Table": "t1",
     "Values": [
-      20
+      "INT64(20)"
     ],
     "Vindex": "lookup_t1_2"
   }
@@ -2518,7 +2504,7 @@ Gen4 plan same as above
     "Query": "update t1 set c2 = 1 where c2 = 10 and c3 = 20",
     "Table": "t1",
     "Values": [
-      20
+      "INT64(20)"
     ],
     "Vindex": "lookup_t1_2"
   }
@@ -2544,10 +2530,7 @@ Gen4 plan same as above
     "Query": "delete from t1 where c2 = 10 and c3 in (20, 21)",
     "Table": "t1",
     "Values": [
-      [
-        20,
-        21
-      ]
+      "(INT64(20), INT64(21))"
     ],
     "Vindex": "lookup_t1_2"
   }
@@ -2576,10 +2559,7 @@ Gen4 plan same as above
     "Query": "update t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
     "Table": "t1",
     "Values": [
-      [
-        20,
-        21
-      ]
+      "(INT64(20), INT64(21))"
     ],
     "Vindex": "lookup_t1_2"
   }

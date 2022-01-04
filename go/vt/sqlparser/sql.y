@@ -176,7 +176,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 %token LEX_ERROR
 %left <str> UNION
-%token <str> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
@@ -314,7 +314,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
+%type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <with> with_clause_opt with_clause
 %type <cte> common_table_expr
@@ -480,6 +480,7 @@ command:
     $$ = $1
   }
 | stream_statement
+| vstream_statement
 | insert_statement
 | update_statement
 | delete_statement
@@ -733,6 +734,12 @@ stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
+  }
+
+vstream_statement:
+  VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
+  {
+    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
   }
 
 // query_primary is an unparenthesized SELECT with no order by clause or beyond.

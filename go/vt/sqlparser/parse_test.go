@@ -2105,6 +2105,8 @@ var (
 	}, {
 		input: "stream /* comment */ * from t",
 	}, {
+		input: "vstream * from t",
+	}, {
 		input: "begin",
 	}, {
 		input:  "begin;",

@@ -35,13 +35,13 @@ func TestBinaryOpTypes(t *testing.T) {
 		l, r, e querypb.Type
 	}
 	type ops struct {
-		op        BinaryOp
+		op        ArithmeticOp
 		testcases []testcase
 	}
 
 	tests := []ops{
 		{
-			op: &Addition{},
+			op: &OpAddition{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Int64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Uint64},
@@ -54,7 +54,7 @@ func TestBinaryOpTypes(t *testing.T) {
 				{sqltypes.Float64, sqltypes.Float64, sqltypes.Float64},
 			},
 		}, {
-			op: &Subtraction{},
+			op: &OpSubstraction{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Int64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Uint64},
@@ -67,7 +67,7 @@ func TestBinaryOpTypes(t *testing.T) {
 				{sqltypes.Float64, sqltypes.Float64, sqltypes.Float64},
 			},
 		}, {
-			op: &Multiplication{},
+			op: &OpMultiplication{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Int64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Uint64},
@@ -80,7 +80,7 @@ func TestBinaryOpTypes(t *testing.T) {
 				{sqltypes.Float64, sqltypes.Float64, sqltypes.Float64},
 			},
 		}, {
-			op: &Division{},
+			op: &OpDivision{},
 			testcases: []testcase{
 				{sqltypes.Int64, sqltypes.Int64, sqltypes.Float64},
 				{sqltypes.Uint64, sqltypes.Int64, sqltypes.Float64},
@@ -99,7 +99,7 @@ func TestBinaryOpTypes(t *testing.T) {
 		for _, tc := range op.testcases {
 			name := fmt.Sprintf("%s %s %s", tc.l.String(), reflect.TypeOf(op.op).String(), tc.r.String())
 			t.Run(name, func(t *testing.T) {
-				result := op.op.Type(tc.l)
+				result := op.op.typeof(tc.l)
 				assert.Equal(t, tc.e, result)
 			})
 		}

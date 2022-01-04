@@ -340,11 +340,6 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				}
 			}
 			for ind, tablet := range tablets {
-				log.Infof("Creating vt_keyspace database for tablet %s", tablets[ind].Name)
-				if _, err := tablet.Vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name),
-					keyspace.Name, false); err != nil {
-					t.Fatalf("Unable to start create database vt_%s for tablet %v", keyspace.Name, tablet.Vttablet)
-				}
 				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())
@@ -352,8 +347,8 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
-		log.Infof("InitShardPrimary for %d", primaryTabletUID)
-		require.NoError(t, vc.VtctlClient.InitShardPrimary(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
+		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
+		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
 	return nil

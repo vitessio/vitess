@@ -146,7 +146,7 @@ Gen4 plan same as above
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: complex order by expression: a collate utf8_general_ci
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
@@ -215,7 +215,7 @@ Gen4 plan same as above
 
 # update with complex set clause
 "update music set id = id + 1 where id = 1"
-"unsupported: Only values are supported. Invalid update on column: id"
+"unsupported: Only values are supported. Invalid update on column: `id` with expr: [id + 1]"
 Gen4 plan same as above
 
 # update by primary keyspace id, changing one vindex column, limit without order clause
@@ -329,37 +329,37 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 "select keyspace_id from user_index where id = 1 and id = 2"
-"unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
 Gen4 plan same as above
 
 "select keyspace_id from user_index where func(id)"
-"unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
 Gen4 plan same as above
 
 "select keyspace_id from user_index where id > 1"
-"unsupported: where clause for vindex function must be of the form id = <val> (not equality)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
 Gen4 plan same as above
 
 "select keyspace_id from user_index where 1 = id"
-"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
 Gen4 plan same as above
 
 "select keyspace_id from user_index where keyspace_id = 1"
-"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
 Gen4 plan same as above
 
 "select keyspace_id from user_index where id = id+1"
-"unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
 Gen4 plan same as above
 
 # vindex func without where condition
 "select keyspace_id from user_index"
-"unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
 Gen4 plan same as above
 
 # vindex func in subquery without where
 "select id from user where exists(select keyspace_id from user_index)"
-"unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
 Gen4 plan same as above
 
 "select func(keyspace_id) from user_index where id = :id"
@@ -545,7 +545,9 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
     "FieldQuery": "select 1 from `user` where 1 != 1",
     "Query": "select 1 from `user` having count(id) = 10 and `name` = 'a'",
     "Table": "`user`",
-    "Values": "a",
+    "Values": [
+      "VARBINARY(\"a\")"
+    ],
     "Vindex": "name_user_map"
   }
 }
