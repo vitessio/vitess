@@ -49,7 +49,7 @@ var (
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
 	}, {
 		input:  "create table 3t2 (c1 bigint not null, c2 text, primary key(c1))",
-		output: "create table 3t2 (\n\tc1 bigint not null,\n\tc2 text,\n\tprimary key (c1)\n)",
+		output: "create table `3t2` (\n\tc1 bigint not null,\n\tc2 text,\n\tprimary key (c1)\n)",
 	}, {
 		input:  "select 1 from t1 where exists (select 1) = TRUE",
 		output: "select 1 from t1 where exists (select 1 from dual) = true",
@@ -3495,9 +3495,6 @@ var (
 	}{{
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
-	}, {
-		input:  "select 0xH from t",
-		output: "syntax error at position 10 near '0x'",
 	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",
