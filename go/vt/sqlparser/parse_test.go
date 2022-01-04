@@ -1118,24 +1118,6 @@ var (
 			input:  "alter table a drop foo",
 			output: "alter table a drop column foo",
 		}, {
-			input:  "alter table a disable foo",
-			output: "alter table a",
-		}, {
-			input:  "alter table a enable foo",
-			output: "alter table a",
-		}, {
-			input:  "alter table a order foo",
-			output: "alter table a",
-		}, {
-			input:  "alter table a default foo",
-			output: "alter table a",
-		}, {
-			input:  "alter table a discard foo",
-			output: "alter table a",
-		}, {
-			input:  "alter table a import foo",
-			output: "alter table a",
-		}, {
 			input:  "alter table a rename b",
 			output: "alter table a rename to b",
 		}, {
@@ -1153,32 +1135,8 @@ var (
 			input:  "alter table a rename key foo to bar",
 			output: "alter table a rename index foo to bar",
 		}, {
-			input:  "alter table e auto_increment = 20",
-			output: "alter table e",
-		}, {
-			input:  "alter table e auto_increment 20",
-			output: "alter table e",
-		}, {
-			input:  "alter table e auto_increment = 20.0",
-			output: "alter table e",
-		}, {
-			input:  "alter table e auto_increment 20.0",
-			output: "alter table e",
-		}, {
-			input:  "alter table e character set = 'ascii'",
-			output: "alter table e",
-		}, {
-			input:  "alter table e default character set = 'ascii'",
-			output: "alter table e",
-		}, {
-			input:  "alter table e comment = 'hello'",
-			output: "alter table e",
-		}, {
 			input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
 			output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
-		}, {
-			input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
-			output: "alter table a",
 		}, {
 			input:  "alter table a add column id int",
 			output: "alter table a add column (\n\tid int\n)",
@@ -1203,9 +1161,6 @@ var (
 			input: "alter table a drop primary key",
 		}, {
 			input: "alter table a drop column id",
-		}, {
-			input:  "alter table a drop partition p2712",
-			output: "alter table a",
 		}, {
 			input: "alter table a drop index idx",
 		}, {
@@ -1308,9 +1263,6 @@ var (
 			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
-			input:  "alter view a",
-			output: "alter table a",
-		}, {
 			input:  "rename table a to b",
 			output: "rename table a to b",
 		}, {
@@ -1347,18 +1299,6 @@ var (
 			input:  "analyze table a",
 			output: "alter table a",
 		}, {
-			input:  "flush tables",
-			output: "flush",
-		}, {
-			input:  "flush tables with read lock",
-			output: "flush",
-		}, {
-			input:  "show binary logs",
-			output: "show binary logs",
-		}, {
-			input:  "show binlog events",
-			output: "show binlog",
-		}, {
 			input:  "show character set",
 			output: "show charset",
 		}, {
@@ -1391,15 +1331,6 @@ var (
 		}, {
 			input: "show create schema if not exists d",
 		}, {
-			input:  "show create event e",
-			output: "show create event",
-		}, {
-			input:  "show create function f",
-			output: "show create function",
-		}, {
-			input:  "show create procedure p",
-			output: "show create procedure",
-		}, {
 			input:  "show create table t",
 			output: "show create table t",
 		}, {
@@ -1415,20 +1346,11 @@ var (
 			input:  "show schemas",
 			output: "show schemas",
 		}, {
-			input:  "show engine INNODB",
-			output: "show engine",
-		}, {
 			input:  "show engines",
 			output: "show engines",
 		}, {
-			input:  "show storage engines",
-			output: "show storage",
-		}, {
 			input:  "show errors",
 			output: "show errors",
-		}, {
-			input:  "show events",
-			output: "show events",
 		}, {
 			input: "show function status",
 		}, {
@@ -1472,12 +1394,6 @@ var (
 		}, {
 			input: "show index from tbl where Key_name = 'key'",
 		}, {
-			input:  "show master status",
-			output: "show master",
-		}, {
-			input:  "show open tables",
-			output: "show open",
-		}, {
 			input:  "show plugins",
 			output: "show plugins",
 		}, {
@@ -1492,21 +1408,6 @@ var (
 		}, {
 			input:  "show full processlist",
 			output: "show full processlist",
-		}, {
-			input:  "show profile cpu for query 1",
-			output: "show profile",
-		}, {
-			input:  "show profiles",
-			output: "show profiles",
-		}, {
-			input:  "show relaylog events",
-			output: "show relaylog",
-		}, {
-			input:  "show slave hosts",
-			output: "show slave",
-		}, {
-			input:  "show slave status",
-			output: "show slave",
 		}, {
 			input:  "show status",
 			output: "show status",
@@ -1651,12 +1552,6 @@ var (
 			input:  "select warnings from t",
 			output: "select `warnings` from t",
 		}, {
-			input:  "show foobar",
-			output: "show foobar",
-		}, {
-			input:  "show foobar like select * from table where syntax is 'ignored'",
-			output: "show foobar",
-		}, {
 			input:  "use db",
 			output: "use db",
 		}, {
@@ -1689,12 +1584,6 @@ var (
 		}, {
 			input:  "truncate foo",
 			output: "truncate table foo",
-		}, {
-			input:  "repair foo",
-			output: "otheradmin",
-		}, {
-			input:  "optimize foo",
-			output: "otheradmin",
 		}, {
 			input: "select /* EQ true */ 1 from t where a = true",
 		}, {
@@ -2893,16 +2782,6 @@ func TestCaseSensitivity(t *testing.T) {
 			input:  "create index b on A (ID)",
 			output: "alter table A add index b (ID)",
 		}, {
-			input:  "alter table A foo",
-			output: "alter table A",
-		}, {
-			input:  "alter table A convert",
-			output: "alter table A",
-		}, {
-			// View names get lower-cased.
-			input:  "alter view A foo",
-			output: "alter table a",
-		}, {
 			input: "alter table A rename to B",
 		}, {
 			input: "rename table A to B",
@@ -2957,9 +2836,6 @@ func TestCaseSensitivity(t *testing.T) {
 		}, {
 			input:  "create view A as select current_timestamp()",
 			output: "create view a as select current_timestamp() from dual",
-		}, {
-			input:  "alter view A",
-			output: "alter table a",
 		}, {
 			input:  "drop view A",
 			output: "drop view a",

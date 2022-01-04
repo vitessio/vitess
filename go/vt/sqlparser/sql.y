@@ -53,13 +53,6 @@ func yyOldPosition(yylex interface{}) int {
   return yylex.(*Tokenizer).OldPosition
 }
 
-// skipToEnd forces the lexer to end prematurely. Not all SQL statements
-// are supported by the Parser, thus calling skipToEnd will make the lexer
-// return EOF early.
-func skipToEnd(yylex interface{}) {
-  yylex.(*Tokenizer).SkipToEnd = true
-}
-
 %}
 
 %union {
@@ -300,7 +293,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> command
 %type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
-%type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
+%type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
@@ -318,10 +311,10 @@ func skipToEnd(yylex interface{}) {
 %type <declareHandlerAction> declare_handler_action
 %type <bytes> signal_condition_value
 %type <str> trigger_time trigger_event
-%type <statement> alter_statement alter_table_statement alter_view_statement
+%type <statement> alter_statement alter_table_statement
 %type <ddl> create_table_prefix rename_list alter_table_statement_part
 %type <ddls> alter_table_statement_list
-%type <statement> analyze_statement show_statement use_statement other_statement
+%type <statement> analyze_statement show_statement use_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes2> comment_opt comment_list
@@ -390,10 +383,8 @@ func skipToEnd(yylex interface{}) {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
-%type <empty> non_add_drop_or_rename_operation
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> definer_opt
-%type <empty> skip_to_end ddl_skip_to_end
 %type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <colIdents> reserved_sql_id_list
@@ -430,7 +421,6 @@ func skipToEnd(yylex interface{}) {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
-%type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
 %type <str> pk_name_opt constraint_symbol_opt infile_opt
 %type <exprs> call_param_list_opt
@@ -504,8 +494,6 @@ command:
 | rollback_statement
 | explain_statement
 | describe_statement
-| other_statement
-| flush_statement
 | signal_statement
 | resignal_statement
 | call_statement
@@ -833,7 +821,7 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $9 - 1, OrReplace: true}
   }
-| CREATE DATABASE not_exists_opt ID ddl_skip_to_end
+| CREATE DATABASE not_exists_opt ID
   {
     var ne bool
     if $3 != 0 {
@@ -841,7 +829,7 @@ create_statement:
     }
    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
   }
-| CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
+| CREATE SCHEMA not_exists_opt ID
   {
     var ne bool
     if $3 != 0 {
@@ -2809,7 +2797,6 @@ pk_name_opt:
 
 alter_statement:
   alter_table_statement
-| alter_view_statement
 
 alter_table_statement:
   ALTER ignore_opt TABLE table_name alter_table_statement_list
@@ -2835,11 +2822,7 @@ alter_table_statement_list:
   }
 
 alter_table_statement_part:
-  non_add_drop_or_rename_operation skip_to_end
-  {
-    $$ = &DDL{Action: AlterStr}
-  }
-| ADD column_opt '(' column_definition ')'
+  ADD column_opt '(' column_definition ')'
   {
     ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}}
     ddl.TableSpec.AddColumn($4)
@@ -2853,17 +2836,9 @@ alter_table_statement_part:
     ddl.Column = $3.Name
     $$ = ddl
   }
-| ADD ignored_alter_object_type skip_to_end
-  {
-    $$ = &DDL{Action: AlterStr}
-  }
 | DROP column_opt ID
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
-  }
-| DROP ignored_alter_object_type skip_to_end
-  {
-    $$ = &DDL{Action: AlterStr}
   }
 | RENAME COLUMN ID to_or_as ID
   {
@@ -2980,21 +2955,10 @@ column_order_opt:
     $$ = &ColumnOrder{AfterColumn: NewColIdent(string($2))}
   }
 
-alter_view_statement:
-  ALTER VIEW table_name ddl_skip_to_end
-  {
-    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
-  }
-
-
 column_opt:
   { }
 | COLUMN
   { }
-
-ignored_alter_object_type:
-  FOREIGN
-| PARTITION
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
@@ -3063,7 +3027,7 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
   }
-| DROP INDEX sql_id ON table_name ddl_skip_to_end
+| DROP INDEX sql_id ON table_name
   {
     $$ = &DDL{Action: AlterStr, Table: $5, IndexSpec: &IndexSpec{Action: DropStr, ToName: $3}}
   }
@@ -3153,7 +3117,7 @@ analyze_statement:
   }
 
 show_statement:
-  SHOW BINARY ID ddl_skip_to_end /* SHOW BINARY LOGS */
+  SHOW BINARY ID /* SHOW BINARY LOGS */
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
@@ -3166,26 +3130,13 @@ show_statement:
   {
     $$ = &Show{Type: string($2), Filter: $3}
   }
-| SHOW CREATE DATABASE not_exists_opt ID ddl_skip_to_end
+| SHOW CREATE DATABASE not_exists_opt ID
   {
     $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
   }
-| SHOW CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
+| SHOW CREATE SCHEMA not_exists_opt ID
   {
     $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
-  }
-/* Rule to handle SHOW CREATE EVENT, etc. */
-| SHOW CREATE ID ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
-  }
-| SHOW CREATE PROCEDURE ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
-  }
-| SHOW CREATE FUNCTION ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW CREATE TABLE table_name
   {
@@ -3199,11 +3150,11 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
   }
-| SHOW DATABASES ddl_skip_to_end
+| SHOW DATABASES
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW SCHEMAS ddl_skip_to_end
+| SHOW SCHEMAS
   {
     $$ = &Show{Type: string($2)}
   }
@@ -3227,7 +3178,7 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
   }
-| SHOW show_session_or_global STATUS ddl_skip_to_end
+| SHOW show_session_or_global STATUS
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
@@ -3312,16 +3263,6 @@ show_statement:
 | SHOW ERRORS limit_opt
   {
     $$ = &Show{Type: string($2), Limit: $3}
-  }
-/*
- * Catch-all for show statements without vitess keywords:
- *
- *  SHOW BINARY LOGS
- *  SHOW INVALID
- */
-| SHOW ID ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2)}
   }
 
 naked_like:
@@ -3510,26 +3451,7 @@ describe_statement:
   {
     $$ = &Show{Type: "columns", OnTable: $2}
   }
-| describe skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
 
-other_statement:
-  REPAIR skip_to_end
-  {
-    $$ = &OtherAdmin{}
-  }
-| OPTIMIZE skip_to_end
-  {
-    $$ = &OtherAdmin{}
-  }
-
-flush_statement:
-  FLUSH skip_to_end
-  {
-    $$ = &DDL{Action: FlushStr}
-  }
 comment_opt:
   {
     setAllowComments(yylex, true)
@@ -5398,24 +5320,6 @@ ignore_number_opt:
 | IGNORE INTEGRAL LINES
   { $$ = NewIntVal($2) }
 
-non_add_drop_or_rename_operation:
-  CHARACTER
-  { $$ = struct{}{} }
-| COMMENT_KEYWORD
-  { $$ = struct{}{} }
-| DEFAULT
-  { $$ = struct{}{} }
-| ORDER
-  { $$ = struct{}{} }
-| CONVERT
-  { $$ = struct{}{} }
-| PARTITION
-  { $$ = struct{}{} }
-| UNUSED
-  { $$ = struct{}{} }
-| ID
-  { $$ = struct{}{} }
-
 to_or_as:
   TO
   { $$ = struct{}{} }
@@ -6076,22 +5980,4 @@ closeb:
   ')'
   {
     decNesting(yylex)
-  }
-
-skip_to_end:
-{
-  skipToEnd(yylex)
-}
-
-ddl_skip_to_end:
-  {
-    skipToEnd(yylex)
-  }
-| openb
-  {
-    skipToEnd(yylex)
-  }
-| reserved_sql_id
-  {
-    skipToEnd(yylex)
   }
