@@ -633,15 +633,6 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
-		"upgrade_downgrade_vtgate": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/upgrade_downgrade"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "upgrade_downgrade_query_serving",
-			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
-		},
 		"vtgate_queries_aggregation": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/aggregation"],
@@ -649,7 +640,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": []
 		},
 		"vtgate_queries_foundrows": {
 			"File": "unused.go",
@@ -658,7 +649,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": []
 		},
 		"vtgate_queries_informationschema": {
 			"File": "unused.go",
@@ -667,7 +658,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": []
 		},
 		"vtgate_queries_normalize": {
 			"File": "unused.go",
@@ -676,7 +667,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": []
 		},
 		"vtgate_queries_orderby": {
 			"File": "unused.go",
@@ -730,7 +721,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_schematracker_loadkeyspace": {
 			"File": "unused.go",
@@ -757,7 +748,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_schematracker_unsharded": {
 			"File": "unused.go",
@@ -766,7 +757,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_mysql80": {
 			"File": "unused.go",
@@ -874,7 +865,7 @@
 			"Manual": false,
 			"Shard": "vtgate_vschema",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_readafterwrite": {
 			"File": "unused.go",
