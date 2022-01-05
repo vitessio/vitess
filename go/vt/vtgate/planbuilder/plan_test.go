@@ -170,6 +170,10 @@ func (m *multiColIndex) Verify(vcursor vindexes.VCursor, rowsColValues [][]sqlty
 	return []bool{}, nil
 }
 
+func (m *multiColIndex) PartialVindex() bool {
+	return true
+}
+
 func init() {
 	vindexes.Register("hash_test", newHashIndex)
 	vindexes.Register("lookup_test", newLookupIndex)

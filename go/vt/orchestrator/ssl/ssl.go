@@ -166,9 +166,8 @@ func ReadPEMData(pemFile string, pemPass []byte) ([]byte, error) {
 		pemData, err = x509.DecryptPEMBlock(pemBlock, pemPass) //nolint SA1019
 		if err != nil {
 			return pemData, err
-		} else {
-			log.Infof("Decrypted %v successfully", pemFile)
 		}
+		log.Infof("Decrypted %v successfully", pemFile)
 		// Shove the decrypted DER bytes into a new pem Block with blank headers
 		var newBlock pem.Block
 		newBlock.Type = pemBlock.Type

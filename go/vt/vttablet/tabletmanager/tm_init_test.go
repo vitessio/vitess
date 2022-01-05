@@ -654,18 +654,29 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 	err := tm.Start(tablet, 0)
 	require.NoError(t, err)
 
-	// Wait for SrvKeyspace to be rebuilt.
-	for i := 0; i < 9; i++ {
-		if _, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks"); err != nil {
-			if i == 9 {
-				require.NoError(t, err)
+	// Wait for SrvKeyspace to be rebuilt. We know that it has been built
+	// when isShardServing or tabletControls maps is non-empty.
+	timeout := time.After(1 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Logf("servingKeyspace not initialized for tablet uid - %d", uid)
+			return tm
+		default:
+			isNonEmpty := false
+			func() {
+				tm.tmState.mu.Lock()
+				defer tm.tmState.mu.Unlock()
+				if tm.tmState.isShardServing != nil || tm.tmState.tabletControls != nil {
+					isNonEmpty = true
+				}
+			}()
+			if isNonEmpty {
+				return tm
 			}
-			time.Sleep(10 * time.Millisecond)
-			continue
+			time.Sleep(100 * time.Millisecond)
 		}
-		break
 	}
-	return tm
 }
 
 func newTestTablet(t *testing.T, uid int, keyspace, shard string) *topodatapb.Tablet {

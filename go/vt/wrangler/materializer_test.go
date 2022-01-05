@@ -1762,7 +1762,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 			},
 		},
 		Cell:        "zone1",
-		TabletTypes: "master,primary,rdonly",
+		TabletTypes: "primary,rdonly",
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1779,7 +1779,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 				`rules:{match:\\"t2\\" filter:\\"select.*t3\\"} `+
 				`rules:{match:\\"t4\\"}`+
 				`}', `)+
-			`'', [0-9]*, [0-9]*, 'zone1', 'master,primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
+			`'', [0-9]*, [0-9]*, 'zone1', 'primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
 			`\)`+eol,
 		&sqltypes.Result{},
 	)
@@ -2276,7 +2276,7 @@ func TestMaterializerNoDDL(t *testing.T) {
 
 }
 
-func TestMaterializerNoSourceMaster(t *testing.T) {
+func TestMaterializerNoSourcePrimary(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
