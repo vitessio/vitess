@@ -60,7 +60,7 @@ const smMaterializeSpec = `{"workflow": "wf1", "source_keyspace": "ks1", "target
 
 const initDataQuery = `insert into ks1.tx(id, typ, val) values (1, 1, 'abc'), (2, 1, 'def'), (3, 2, 'def'), (4, 2, 'abc'), (5, 3, 'def'), (6, 3, 'abc')`
 
-// TestShardedMaterialize tests a materialize from a sharded (single shard) using comparison filters
+// testShardedMaterialize tests a materialize workflow for a sharded cluster (single shard) using comparison filters
 func testShardedMaterialize(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
@@ -98,7 +98,7 @@ func testShardedMaterialize(t *testing.T) {
 }
 
 /*
- * The following sections are related to TestMaterialize. TestMaterialize is intended to test some edge cases. Currently
+ * The following sections are related to testMaterialize, which is intended to test these edge cases:
  * it tests
  * - the case where the same column is referred to multiple times
  * - use of mysql functions in the filter
@@ -177,7 +177,6 @@ DETERMINISTIC
 RETURN id * length(val);
 `
 
-// TestMaterialize: details mentioned above
 func testMaterialize(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
@@ -228,6 +227,7 @@ func testMaterialize(t *testing.T) {
 	validateQuery(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
 }
 
+// TestMaterialize runs all the individual materialize tests defined above
 func TestMaterialize(t *testing.T) {
 	t.Run("Materialize", func(t *testing.T) {
 		testMaterialize(t)
