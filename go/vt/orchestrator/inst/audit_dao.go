@@ -137,7 +137,7 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
 	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		audit := Audit{}
-		audit.AuditId = m.GetInt64("audit_id")
+		audit.AuditID = m.GetInt64("audit_id")
 		audit.AuditTimestamp = m.GetString("audit_timestamp")
 		audit.AuditType = m.GetString("audit_type")
 		audit.AuditInstanceKey.Hostname = m.GetString("hostname")

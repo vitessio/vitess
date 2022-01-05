@@ -40,7 +40,7 @@ type consulStore struct {
 
 // NewConsulStore creates a new consul store. It is possible that the client for this store is nil,
 // which is the case if no consul config is provided.
-func NewConsulStore() KVStore {
+func NewConsulStore() KeyValueStore {
 	store := &consulStore{
 		kvCache: cache.New(cache.NoExpiration, cache.DefaultExpiration),
 	}
@@ -55,7 +55,7 @@ func NewConsulStore() KVStore {
 			}
 		}
 		// ConsulAclToken defaults to ""
-		consulConfig.Token = config.Config.ConsulAclToken
+		consulConfig.Token = config.Config.ConsulACLToken
 		if client, err := consulapi.NewClient(consulConfig); err != nil {
 			log.Errore(err)
 		} else {
@@ -88,7 +88,7 @@ func (cs *consulStore) GetKeyValue(key string) (value string, found bool, err er
 	return string(pair.Value), true, nil
 }
 
-func (cs *consulStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
+func (cs *consulStore) DistributePairs(kvPairs [](*KeyValuePair)) (err error) {
 	// This function is non re-entrant (it can only be running once at any point in time)
 	if atomic.CompareAndSwapInt64(&cs.distributionReentry, 0, 1) {
 		defer atomic.StoreInt64(&cs.distributionReentry, 0)
