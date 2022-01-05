@@ -250,19 +250,27 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	}
 
 	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
-
+	denyListUpdated := false
+	denyListRules, err := ts.getNewDenyList(ctx)
+	if err != nil {
+		log.Errorf("Error getting new denied list: %v", err)
+	}
+	if denyListRules != nil {
+		denyListUpdated = true
+	}
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
-	if reason != "" {
+	if reason != "" || (reason == "" && denyListUpdated) {
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
 		}
 	}
-
-	if err := ts.applyDenyList(ctx); err != nil {
-		log.Errorf("Cannot update denied tables rule: %v", err)
+	if denyListUpdated {
+		if err := ts.applyDenyList(ctx, denyListRules); err != nil {
+			log.Errorf("Cannot update denied tables rule: %v", err)
+		}
 	}
 
 	ts.tm.replManager.SetTabletType(ts.tablet.Type)
@@ -293,6 +301,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 
 	// Open TabletServer last so that it advertises serving after all other services are up.
 	if reason == "" {
+		log.Infof("Starting query service")
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
@@ -339,13 +348,13 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	return ""
 }
 
-func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
+func (ts *tmState) getNewDenyList(ctx context.Context) (*rules.Rules, error) {
 	denyListRules := rules.New()
 	deniedTables := ts.deniedTables[ts.tablet.Type]
 	if len(deniedTables) > 0 {
 		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), deniedTables)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Verify that at least one table matches the wildcards, so
@@ -360,10 +369,23 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 		}
 	}
 
+	currentDenyList, err := ts.tm.QueryServiceControl.GetQueryRules(denyListQueryList)
+	if err != nil {
+		return nil, err
+	}
+	isEqual := currentDenyList.Equal(denyListRules)
+	if isEqual {
+		return nil, nil
+	}
+	return denyListRules, nil
+}
+
+func (ts *tmState) applyDenyList(ctx context.Context, denyListRules *rules.Rules) (err error) {
 	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(denyListQueryList, denyListRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s: %s", denyListQueryList, loadRuleErr)
 	}
+	log.Infof("Loaded query rule set %s", denyListQueryList)
 	return nil
 }
 

@@ -288,6 +288,15 @@ func (tsv *TabletServer) UnRegisterQueryRuleSource(ruleSource string) {
 	tsv.qe.queryRuleSources.UnRegisterSource(ruleSource)
 }
 
+// GetQueryRules gets the query rules for a registered ruleSource.
+func (tsv *TabletServer) GetQueryRules(ruleSource string) (*rules.Rules, error) {
+	rules, err := tsv.qe.queryRuleSources.Get(ruleSource)
+	if err != nil {
+		return nil, err
+	}
+	return rules, nil
+}
+
 // SetQueryRules sets the query rules for a registered ruleSource.
 func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *rules.Rules) error {
 	err := tsv.qe.queryRuleSources.SetRules(ruleSource, qrs)

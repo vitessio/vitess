@@ -243,8 +243,8 @@ func (tqsc *Controller) SetQueryServiceEnabledForTests(enabled bool) {
 }
 
 // GetQueryRules allows a test to check what was set.
-func (tqsc *Controller) GetQueryRules(ruleSource string) *rules.Rules {
+func (tqsc *Controller) GetQueryRules(ruleSource string) (*rules.Rules, error) {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
-	return tqsc.queryRulesMap[ruleSource]
+	return tqsc.queryRulesMap[ruleSource], nil
 }
