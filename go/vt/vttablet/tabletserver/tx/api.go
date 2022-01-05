@@ -24,6 +24,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
@@ -130,6 +131,12 @@ func (p *Properties) String() string {
 		return ""
 	}
 
+	redactedQueries := make([]string, len(p.Queries))
+	for i, query := range p.Queries {
+		rq, _ := sqlparser.RedactSQLQuery(query)
+		redactedQueries[i] = rq
+	}
+
 	return fmt.Sprintf(
 		"'%v'\t'%v'\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		p.EffectiveCaller,
@@ -138,6 +145,6 @@ func (p *Properties) String() string {
 		p.EndTime.Format(time.StampMicro),
 		p.EndTime.Sub(p.StartTime).Seconds(),
 		p.Conclusion,
-		strings.Join(p.Queries, ";"),
+		strings.Join(redactedQueries, ";"),
 	)
 }
