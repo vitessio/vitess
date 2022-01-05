@@ -38,6 +38,9 @@ import {
     refreshState,
     runHealthCheck,
     deleteTablet,
+    reparentTablet,
+    startReplication,
+    stopReplication,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -121,13 +124,42 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
 
 /**
  * 
- * useDeleteTablet is a mutate hook that dletes a tablet by alias and optionally, cluster id.
+ * useDeleteTablet is a mutate hook that deletes a tablet by alias and optionally, cluster id.
  */
 export const useDeleteTablet = (params: Parameters<typeof deleteTablet>[0], options: UseMutationOptions) => {
     return useMutation(() => {
         return deleteTablet(params)
     }, options)
 }
+
+/**
+ * useReparentTablet reparents a tablet to the current primary in the shard. 
+ * This only works if the current replication position matches the last known reparent action.
+ */
+export const useReparentTablet = (params: Parameters<typeof reparentTablet>[0], options: UseMutationOptions) => {
+    return useMutation(() =>{
+        return reparentTablet(params)
+    }, options)
+}
+
+/**
+ * useStartReplication
+ */
+export const useStartReplication = (params: Parameters<typeof startReplication>[0], options: UseMutationOptions) => {
+    return useMutation(() => {
+        return startReplication(params)
+    }, options)
+}
+
+/**
+ * useStopReplication
+ */
+ export const useStopReplication = (params: Parameters<typeof stopReplication>[0], options: UseMutationOptions) => {
+    return useMutation(() => {
+        return stopReplication(params)
+    }, options)
+}
+
 /**
  * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
  */

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
-import { deleteTablet, reparentTablet, startReplication, stopReplication } from '../../../api/http';
+import { reparentTablet, startReplication, stopReplication } from '../../../api/http';
 import { useDeleteTablet } from '../../../hooks/api';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
@@ -219,7 +219,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                     <button
                         className="btn btn-secondary btn-danger mt-4"
                         disabled={typedAlias !== alias || deleteTabletMutation.isLoading}
-                        onClick={() => deleteTabletMutation.mutate}
+                        onClick={() => deleteTabletMutation.mutate()}
                     >
                         {deleteTabletMutation.isLoading ? 'Deleting...' : 'Delete'}
                     </button>
