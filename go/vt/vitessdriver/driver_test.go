@@ -224,7 +224,7 @@ func TestConfigurationToJSON(t *testing.T) {
 		Streaming:       true,
 		DefaultLocation: "Local",
 	}
-	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"DefaultLocation":"Local"}`
+	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"DefaultLocation":"Local","SessionToken":""}`
 
 	json, err := config.toJSON()
 	if err != nil {
