@@ -172,6 +172,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   jtColumnDefinition *JtColumnDefinition
   jtColumnList	[]*JtColumnDefinition
   jtOnResponse	*JtOnResponse
+  textLiterals Exprs
 }
 
 %token LEX_ERROR
@@ -189,7 +190,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <str> EXTRACT JSON_ARRAYAGG JSON_OBJECTAGG JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE
+%token <str> EXTRACT JSON_ARRAYAGG JSON_OBJECTAGG JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_MERGE_PATCH JSON_MERGE_PRESERVE
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
@@ -411,6 +412,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt json_utility_name
+%type <textLiterals> text_literals
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
@@ -4675,6 +4677,24 @@ UTC_DATE func_paren_opt
 | json_utility_name openb text_literal closeb
   {
     $$ = &JSONUtilityExpr{Name: $1, StringArg: $3}
+  }
+| JSON_MERGE_PRESERVE openb text_literals closeb
+  {
+    $$ = &JSONMergeFunction{Type: MergePreserve, Args: $3}
+  }
+| JSON_MERGE_PATCH openb text_literals closeb
+  {
+    $$ = &JSONMergeFunction{Type: MergePatch, Args: $3}
+  }
+
+text_literals:
+text_literals ',' text_literal
+  {
+    $$ = append($1, $3)
+  }
+| text_literal ',' text_literal
+  {
+    $$ = []Expr{$1, $3}
   }
 
 json_utility_name:

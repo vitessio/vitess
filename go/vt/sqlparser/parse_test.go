@@ -41,6 +41,38 @@ var (
 		output     string
 		partialDDL bool
 	}{{
+		input: "select json_merge_preserve('[1, 2]', '[true, false]') from dual",
+	}, {
+		input:  "select json_merge_preserve('{\"name\": \"x\"}', '{\"id\": 47}') from dual",
+		output: "select json_merge_preserve('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}') from dual",
+	}, {
+		input: "select json_merge_preserve('1', 'true') from dual",
+	}, {
+		input:  "select json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual",
+		output: "select json_merge_preserve('[1, 2]', '{\\\"id\\\": 47}') from dual",
+	}, {
+		input:  "select json_merge_preserve('{ \"a\": 1, \"b\": 2 }', '{ \"a\": 3, \"c\": 4 }') from dual",
+		output: "select json_merge_preserve('{ \\\"a\\\": 1, \\\"b\\\": 2 }', '{ \\\"a\\\": 3, \\\"c\\\": 4 }') from dual",
+	}, {
+		input:  "select json_merge_preserve('{ \"a\": 1, \"b\": 2 }', '{ \"a\": 3, \"c\": 4 }', '{ \"a\": 5, \"d\": 6 }') from dual",
+		output: "select json_merge_preserve('{ \\\"a\\\": 1, \\\"b\\\": 2 }', '{ \\\"a\\\": 3, \\\"c\\\": 4 }', '{ \\\"a\\\": 5, \\\"d\\\": 6 }') from dual",
+	}, {
+		input: "select json_merge_patch('[1, 2]', '[true, false]') from dual",
+	}, {
+		input:  "select json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}') from dual",
+		output: "select json_merge_patch('{\\\"name\\\": \\\"x\\\"}', '{\\\"id\\\": 47}') from dual",
+	}, {
+		input: "select json_merge_patch('1', 'true') from dual",
+	}, {
+		input:  "select json_merge_patch('[1, 2]', '{\"id\": 47}') from dual",
+		output: "select json_merge_patch('[1, 2]', '{\\\"id\\\": 47}') from dual",
+	}, {
+		input:  "select json_merge_patch('{ \"a\": 1, \"b\":2 }', '{ \"a\": 3, \"c\":4 }') from dual",
+		output: "select json_merge_patch('{ \\\"a\\\": 1, \\\"b\\\":2 }', '{ \\\"a\\\": 3, \\\"c\\\":4 }') from dual",
+	}, {
+		input:  "select json_merge_patch('{ \"a\": 1, \"b\":2 }','{ \"a\": 3, \"c\":4 }', '{ \"a\": 5, \"d\":6 }') from dual",
+		output: "select json_merge_patch('{ \\\"a\\\": 1, \\\"b\\\":2 }', '{ \\\"a\\\": 3, \\\"c\\\":4 }', '{ \\\"a\\\": 5, \\\"d\\\":6 }') from dual",
+	}, {
 		input:  "SELECT JSON_PRETTY('{\"a\":\"10\",\"b\":\"15\",\"x\":\"25\"}')",
 		output: "select JSON_PRETTY('{\\\"a\\\":\\\"10\\\",\\\"b\\\":\\\"15\\\",\\\"x\\\":\\\"25\\\"}') from dual",
 	}, {

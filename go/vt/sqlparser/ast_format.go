@@ -1928,3 +1928,12 @@ func (node *JSONUtilityExpr) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%v)", node.StringArg)
 	}
 }
+
+func (node *JSONMergeFunction) Format(buf *TrackedBuffer) {
+	if node.Type == MergePatch {
+		buf.astPrintf(node, "json_merge_patch(")
+	} else {
+		buf.astPrintf(node, "json_merge_preserve(")
+	}
+	buf.astPrintf(node, "%v)", node.Args)
+}

@@ -1532,6 +1532,9 @@ type JSONTableExpr struct {
 // JtOnResponseType describes whether the column has a default, null or error type
 type JtOnResponseType int
 
+// JSONMergeType describes whether the JSON merge is a patch or preserve
+type JSONMergeType int
+
 // JtColumnDefinition describes the structure of column definition in JSON_TABLE
 type JtColumnDefinition struct {
 	JtOrdinal    *JtOrdinalColDef
@@ -2023,6 +2026,11 @@ type (
 		Limit     *Limit
 	}
 
+	JSONMergeFunction struct {
+		Type JSONMergeType
+		Args Exprs
+	}
+
 	// ValuesFuncExpr represents a function call.
 	ValuesFuncExpr struct {
 		Name *ColName
@@ -2140,6 +2148,7 @@ func (*Default) iExpr()           {}
 func (*ExtractedSubquery) iExpr() {}
 func (*JSONAggregateExpr) iExpr() {}
 func (*JSONUtilityExpr) iExpr()   {}
+func (*JSONMergeFunction) iExpr() {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

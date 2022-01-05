@@ -464,6 +464,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfJSONAggregateExpr(a, b)
+	case *JSONMergeFunction:
+		b, ok := inB.(*JSONMergeFunction)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONMergeFunction(a, b)
 	case *JSONTableExpr:
 		b, ok := inB.(*JSONTableExpr)
 		if !ok {
@@ -1883,6 +1889,18 @@ func EqualsRefOfJSONAggregateExpr(a, b *JSONAggregateExpr) bool {
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
 		EqualsSliceOfRefOfColName(a.Columns, b.Columns)
+}
+
+// EqualsRefOfJSONMergeFunction does deep equals between the two objects.
+func EqualsRefOfJSONMergeFunction(a, b *JSONMergeFunction) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExprs(a.Args, b.Args)
 }
 
 // EqualsRefOfJSONTableExpr does deep equals between the two objects.
@@ -3425,6 +3443,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfJSONAggregateExpr(a, b)
+	case *JSONMergeFunction:
+		b, ok := inB.(*JSONMergeFunction)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJSONMergeFunction(a, b)
 	case *JSONUtilityExpr:
 		b, ok := inB.(*JSONUtilityExpr)
 		if !ok {

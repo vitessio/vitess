@@ -168,6 +168,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitIsolationLevel(in, f)
 	case *JSONAggregateExpr:
 		return VisitRefOfJSONAggregateExpr(in, f)
+	case *JSONMergeFunction:
+		return VisitRefOfJSONMergeFunction(in, f)
 	case *JSONTableExpr:
 		return VisitRefOfJSONTableExpr(in, f)
 	case *JSONUtilityExpr:
@@ -1347,6 +1349,18 @@ func VisitRefOfJSONAggregateExpr(in *JSONAggregateExpr, f Visit) error {
 		if err := VisitRefOfColName(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfJSONMergeFunction(in *JSONMergeFunction, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Args, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -2755,6 +2769,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIsExpr(in, f)
 	case *JSONAggregateExpr:
 		return VisitRefOfJSONAggregateExpr(in, f)
+	case *JSONMergeFunction:
+		return VisitRefOfJSONMergeFunction(in, f)
 	case *JSONUtilityExpr:
 		return VisitRefOfJSONUtilityExpr(in, f)
 	case ListArg:

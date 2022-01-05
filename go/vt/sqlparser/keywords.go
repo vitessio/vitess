@@ -315,6 +315,8 @@ var keywords = []keyword{
 	{"join", JOIN},
 	{"json", JSON},
 	{"json_arrayagg", JSON_ARRAYAGG},
+	{"json_merge_patch", JSON_MERGE_PATCH},
+	{"json_merge_preserve", JSON_MERGE_PRESERVE},
 	{"json_objectagg", JSON_OBJECTAGG},
 	{"json_pretty", JSON_PRETTY},
 	{"json_storage_size", JSON_STORAGE_SIZE},

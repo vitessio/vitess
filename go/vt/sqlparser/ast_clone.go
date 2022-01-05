@@ -169,6 +169,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return in
 	case *JSONAggregateExpr:
 		return CloneRefOfJSONAggregateExpr(in)
+	case *JSONMergeFunction:
+		return CloneRefOfJSONMergeFunction(in)
 	case *JSONTableExpr:
 		return CloneRefOfJSONTableExpr(in)
 	case *JSONUtilityExpr:
@@ -1092,6 +1094,16 @@ func CloneRefOfJSONAggregateExpr(n *JSONAggregateExpr) *JSONAggregateExpr {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	out.Columns = CloneSliceOfRefOfColName(n.Columns)
+	return &out
+}
+
+// CloneRefOfJSONMergeFunction creates a deep clone of the input.
+func CloneRefOfJSONMergeFunction(n *JSONMergeFunction) *JSONMergeFunction {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Args = CloneExprs(n.Args)
 	return &out
 }
 
@@ -2220,6 +2232,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIsExpr(in)
 	case *JSONAggregateExpr:
 		return CloneRefOfJSONAggregateExpr(in)
+	case *JSONMergeFunction:
+		return CloneRefOfJSONMergeFunction(in)
 	case *JSONUtilityExpr:
 		return CloneRefOfJSONUtilityExpr(in)
 	case ListArg:

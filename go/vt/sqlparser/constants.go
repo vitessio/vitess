@@ -609,3 +609,8 @@ const (
 	NullJSONType
 	DefaultJSONType
 )
+
+const (
+	MergePreserve JSONMergeType = iota
+	MergePatch
+)

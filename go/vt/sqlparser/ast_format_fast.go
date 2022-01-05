@@ -2527,3 +2527,13 @@ func (node *JSONUtilityExpr) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(')')
 	}
 }
+
+func (node *JSONMergeFunction) formatFast(buf *TrackedBuffer) {
+	if node.Type == MergePatch {
+		buf.WriteString("json_merge_patch(")
+	} else {
+		buf.WriteString("json_merge_preserve(")
+	}
+	node.Args.formatFast(buf)
+	buf.WriteByte(')')
+}

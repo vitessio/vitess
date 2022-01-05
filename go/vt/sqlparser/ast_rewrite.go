@@ -168,6 +168,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteIsolationLevel(parent, node, replacer)
 	case *JSONAggregateExpr:
 		return a.rewriteRefOfJSONAggregateExpr(parent, node, replacer)
+	case *JSONMergeFunction:
+		return a.rewriteRefOfJSONMergeFunction(parent, node, replacer)
 	case *JSONTableExpr:
 		return a.rewriteRefOfJSONTableExpr(parent, node, replacer)
 	case *JSONUtilityExpr:
@@ -2540,6 +2542,33 @@ func (a *application) rewriteRefOfJSONAggregateExpr(parent SQLNode, node *JSONAg
 		}(x)) {
 			return false
 		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfJSONMergeFunction(parent SQLNode, node *JSONMergeFunction, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
+		parent.(*JSONMergeFunction).Args = newNode.(Exprs)
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5486,6 +5515,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case *JSONAggregateExpr:
 		return a.rewriteRefOfJSONAggregateExpr(parent, node, replacer)
+	case *JSONMergeFunction:
+		return a.rewriteRefOfJSONMergeFunction(parent, node, replacer)
 	case *JSONUtilityExpr:
 		return a.rewriteRefOfJSONUtilityExpr(parent, node, replacer)
 	case ListArg:
