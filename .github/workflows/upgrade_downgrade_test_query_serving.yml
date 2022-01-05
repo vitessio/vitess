@@ -1,10 +1,10 @@
-name: Upgrade Downgrade Testing
+name: Upgrade Downgrade Testing Query Serving
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving')
   cancel-in-progress: true
 
 # This test ensures that our end-to-end tests work using Vitess components
