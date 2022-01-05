@@ -41,14 +41,14 @@ type DML struct {
 	Query string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.SingleColumn
+	Vindex vindexes.Vindex
 
 	// Values specifies the vindex values to use for routing.
 	// For now, only one value is specified.
 	Values []evalengine.Expr
 
 	// Keyspace Id Vindex
-	KsidVindex vindexes.SingleColumn
+	KsidVindex vindexes.Vindex
 
 	// Table specifies the table for the update.
 	Table *vindexes.Table

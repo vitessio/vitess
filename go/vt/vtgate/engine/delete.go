@@ -129,7 +129,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, err
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key.Value())
+	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex.(vindexes.SingleColumn), del.Keyspace, key.Value())
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex)
+	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex.(vindexes.SingleColumn))
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 
 	for _, row := range subQueryResults.Rows {
 		colnum := 1
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex.(vindexes.SingleColumn), row[0])
 		if err != nil {
 			return err
 		}

@@ -33,7 +33,7 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	if upd.With != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
 	}
-	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
+	dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 	if err != nil {
 		return nil, err
 	}
@@ -45,14 +45,14 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		return eupd, nil
 	}
 
-	cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidCol)
+	cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidVindex.Columns)
 	if err != nil {
 		return nil, err
 	}
 	eupd.ChangedVindexValues = cvv
 	eupd.OwnedVindexQuery = ovq
 	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.KsidVindex = ksidVindex
+		eupd.KsidVindex = ksidVindex.Vindex
 	}
 	return eupd, nil
 }
@@ -60,9 +60,9 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCol string) (map[string]*engine.VindexValues, string, error) {
+func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.ColIdent) (map[string]*engine.VindexValues, string, error) {
 	changedVindexes := make(map[string]*engine.VindexValues)
-	buf, offset := initialQuery(ksidCol, table)
+	buf, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
 		vindexValueMap := make(map[string]evalengine.Expr)
 		first := true
@@ -126,10 +126,17 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 	return changedVindexes, buf.String(), nil
 }
 
-func initialQuery(ksidCol string, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
+func initialQuery(ksidCols []sqlparser.ColIdent, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select %s", ksidCol)
-	offset := 1
+	offset := 0
+	for _, col := range ksidCols {
+		if offset == 0 {
+			buf.Myprintf("select %v", col)
+		} else {
+			buf.Myprintf(", %v", col)
+		}
+		offset++
+	}
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
 			buf.Myprintf(", %v", column)
