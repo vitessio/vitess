@@ -140,7 +140,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, err
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key.Value())
+	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex.(vindexes.SingleColumn), upd.Keyspace, key.Value())
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values[0], upd.Vindex)
+	rss, queries, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values[0], upd.Vindex.(vindexes.SingleColumn))
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	env := evalengine.EnvWithBindVars(bindVars)
 
 	for _, row := range subQueryResult.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex.(vindexes.SingleColumn), row[0])
 		if err != nil {
 			return err
 		}
