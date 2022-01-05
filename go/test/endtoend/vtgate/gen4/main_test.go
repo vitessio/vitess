@@ -67,6 +67,14 @@ create table region_tbl(
 	msg varchar(50),
 	primary key(uid)
 ) Engine=InnoDB;
+
+create table multicol_tbl(
+	cola bigint,
+	colb varbinary(50),
+	colc varchar(50),
+	msg varchar(50),
+	primary key(cola, colb, colc)
+) Engine=InnoDB;
 `
 	unshardedSchemaSQL = `create table u_a(
 	id bigint,
@@ -92,6 +100,14 @@ create table u_b(
 	  "type": "region_experimental",
 	  "params": {
 		"region_bytes": "1"
+	  }
+    },
+    "multicol_vdx": {
+	  "type": "multicol",
+	  "params": {
+		"column_count": "3",
+		"column_bytes": "1,3,4",
+		"column_vindex": "hash,binary,unicode_loose_xxhash"
 	  }
     }
   },
@@ -145,6 +161,14 @@ create table u_b(
 	    {
           "columns": ["rg","uid"],
 		  "name": "regional_vdx"
+		}
+      ]
+    },
+    "multicol_tbl": {
+	  "column_vindexes": [
+	    {
+          "columns": ["cola","colb","colc"],
+		  "name": "multicol_vdx"
 		}
       ]
 	}
