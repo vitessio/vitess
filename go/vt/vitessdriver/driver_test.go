@@ -667,7 +667,7 @@ func TestSessionToken(t *testing.T) {
 		SessionToken: sessionToken,
 	}
 
-	sameTx, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	sameTx, sameValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -682,8 +682,18 @@ func TestSessionToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = sameValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// enforce that Rollback can't be called on the distributed tx
-	noRollbackTx, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	noRollbackTx, noRollbackValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noRollbackValidationFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -694,7 +704,12 @@ func TestSessionToken(t *testing.T) {
 	}
 
 	// enforce that Commit can't be called on the distributed tx
-	noCommitTx, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	noCommitTx, noCommitValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noCommitValidationFunc()
 	if err != nil {
 		t.Fatal(err)
 	}
