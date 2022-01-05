@@ -6,10 +6,10 @@ type MinimalInstance struct {
 	ClusterName string
 }
 
-func (this *MinimalInstance) ToInstance() *Instance {
+func (minimalInstance *MinimalInstance) ToInstance() *Instance {
 	return &Instance{
-		Key:         this.Key,
-		SourceKey:   this.PrimaryKey,
-		ClusterName: this.ClusterName,
+		Key:         minimalInstance.Key,
+		SourceKey:   minimalInstance.PrimaryKey,
+		ClusterName: minimalInstance.ClusterName,
 	}
 }

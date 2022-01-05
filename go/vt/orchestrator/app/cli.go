@@ -206,7 +206,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey == nil {
 				log.Fatal("Cannot deduce destination:", destination)
 			}
-			replicas, _, err, errs := inst.RelocateReplicas(instanceKey, destinationKey, pattern)
+			replicas, _, errs, err := inst.RelocateReplicas(instanceKey, destinationKey, pattern)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -269,7 +269,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal("Cannot deduce instance:", instance)
 			}
 
-			movedReplicas, _, err, errs := inst.MoveUpReplicas(instanceKey, pattern)
+			movedReplicas, _, errs, err := inst.MoveUpReplicas(instanceKey, pattern)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -306,7 +306,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("repoint-replicas", "Classic file:pos relocation", `Repoint all replicas of given instance to replicate back from the instance. Use with care`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			repointedReplicas, err, errs := inst.RepointReplicasTo(instanceKey, pattern, destinationKey)
+			repointedReplicas, errs, err := inst.RepointReplicasTo(instanceKey, pattern, destinationKey)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -389,7 +389,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey == nil {
 				log.Fatal("Cannot deduce destination:", destination)
 			}
-			movedReplicas, _, err, errs := inst.MoveReplicasGTID(instanceKey, destinationKey, pattern)
+			movedReplicas, _, errs, err := inst.MoveReplicasGTID(instanceKey, destinationKey, pattern)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -1079,7 +1079,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if reason == "" {
 				log.Fatal("--reason option required")
 			}
-			var durationSeconds int = 0
+			var durationSeconds int
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {
@@ -1125,7 +1125,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if reason == "" {
 				log.Fatal("--reason option required")
 			}
-			var durationSeconds int = 0
+			var durationSeconds int
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {

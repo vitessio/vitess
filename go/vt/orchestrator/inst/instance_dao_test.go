@@ -40,7 +40,7 @@ func mkTestInstances() []*Instance {
 	for _, instance := range instances {
 		instance.Version = "5.6.7"
 		instance.VersionComment = "MySQL"
-		instance.Binlog_format = "STATEMENT"
+		instance.BinlogFormat = "STATEMENT"
 		instance.BinlogRowImage = "FULL"
 	}
 	return instances

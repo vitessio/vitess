@@ -16,7 +16,7 @@
 
 package attributes
 
-// HostAttributes presnts attributes submitted by a host
+// HostAttributes presents attributes submitted by a host
 type HostAttributes struct {
 	Hostname        string
 	AttributeName   string

@@ -140,6 +140,14 @@ var executorVSchema = `
 			"params": {
 				"region_bytes": "1"
 			}
+    	},
+		"multicol_vdx": {
+			"type": "multicol",
+			"params": {
+				"column_count": "3",
+				"column_bytes": "1,3,4",
+				"column_vindex": "hash,binary,unicode_loose_xxhash"
+			}
         }
 	},
 	"tables": {
@@ -318,6 +326,14 @@ var executorVSchema = `
 				{
 					"columns": ["cola","colb"],
 					"name": "regional_vdx"
+				}
+			]
+    	},
+		"multicoltbl": {
+			"column_vindexes": [
+				{
+					"columns": ["cola","colb","colc"],
+					"name": "multicol_vdx"
 				}
 			]
 		}

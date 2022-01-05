@@ -37,10 +37,10 @@ const Error3159 = "Error 3159:"
 const Error1045 = "Access denied for user"
 
 // Track if a TLS has already been configured for topology
-var topologyTLSConfigured bool = false
+var topologyTLSConfigured = false
 
 // Track if a TLS has already been configured for Orchestrator
-var orchestratorTLSConfigured bool = false
+var orchestratorTLSConfigured = false
 
 var requireTLSCache *cache.Cache = cache.New(time.Duration(config.Config.TLSCacheTTLFactor*config.Config.InstancePollSeconds)*time.Second, time.Second)
 
@@ -56,7 +56,7 @@ func init() {
 	metrics.Register("instance_tls.write_cache", writeInstanceTLSCacheCounter)
 }
 
-func requiresTLS(host string, port int, mysql_uri string) bool {
+func requiresTLS(host string, port int, uri string) bool {
 	cacheKey := fmt.Sprintf("%s:%d", host, port)
 
 	if value, found := requireTLSCache.Get(cacheKey); found {
@@ -65,7 +65,7 @@ func requiresTLS(host string, port int, mysql_uri string) bool {
 	}
 
 	required := false
-	db, _, _ := sqlutils.GetDB(mysql_uri)
+	db, _, _ := sqlutils.GetDB(uri)
 	if err := db.Ping(); err != nil && (strings.Contains(err.Error(), Error3159) || strings.Contains(err.Error(), Error1045)) {
 		required = true
 	}
