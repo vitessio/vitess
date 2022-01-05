@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
-import { reparentTablet, startReplication, stopReplication } from '../../../api/http';
-import { useDeleteTablet } from '../../../hooks/api';
+import { useDeleteTablet, useReparentTablet, useStartReplication, useStopReplication } from '../../../hooks/api';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
@@ -25,56 +24,23 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
 
     const deleteTabletMutation = useDeleteTablet({ alias, clusterID }, {
         onSuccess: () => { success(`Successfully deleted tablet ${alias}`); history.push('/tablets'); },
-        onError: (error, variables, context) => warn(`There was an error deleting tablet: ${error}`)
+        onError: (error) => warn(`There was an error deleting tablet: ${error}`)
     })
 
-    // ReparentTablet
-    const [reparentLoading, setReparentLoading] = useState(false);
-    const onReparentTablet = async () => {
-        setReparentLoading(true);
-        let result;
-        try {
-            result = await reparentTablet({ alias, clusterID });
-            if (result) {
-                success(`Successfully reparented tablet ${alias} under primary ${result.primary}`, { autoClose: 7000 });
-            }
-        } catch (e) {
-            warn(`There was an error reparenting tablet: ${e}`);
-        }
-        setReparentLoading(false);
-    };
+    const reparentTabletMutation = useReparentTablet({ alias, clusterID }, {
+        onSuccess: (result) => { success(`Successfully reparented tablet ${alias} under primary ${result.primary}`, { autoClose: 7000 }); },
+        onError: (error) => warn(`There was an error reparenting tablet: ${error}`)
+    })
 
-    // StartReplication
-    const [startReplicationLoading, setStartReplicationLoading] = useState(false);
-    const onStartReplication = async () => {
-        setStartReplicationLoading(true);
-        let result;
-        try {
-            result = await startReplication({ alias, clusterID });
-            if (result.status === 'ok') {
-                success(`Successfully started replication on tablet ${alias}.`, { autoClose: 7000 });
-            }
-        } catch (e) {
-            warn(`There was an error starting replication on tablet: ${e}`);
-        }
-        setStartReplicationLoading(false);
-    };
+    const startReplicationMutation = useStartReplication({ alias, clusterID }, {
+        onSuccess: () => { success(`Successfully started replication on tablet ${alias}.`, { autoClose: 7000 }) },
+        onError: (error) => warn(`There was an error starting replication on tablet: ${error}`)
+    })
 
-    // StopReplication
-    const [stopReplicationLoading, setStopReplicationLoading] = useState(false);
-    const onStopReplication = async () => {
-        setStopReplicationLoading(true);
-        let result;
-        try {
-            result = await stopReplication({ alias, clusterID });
-            if (result.status === 'ok') {
-                success(`Successfully stopped replication on tablet ${alias}.`, { autoClose: 7000 });
-            }
-        } catch (e) {
-            warn(`There was an error stopping replication on tablet: ${e}`);
-        }
-        setStopReplicationLoading(false);
-    };
+    const stopReplicationMutation = useStopReplication({ alias, clusterID }, {
+        onSuccess: () => success(`Successfully stopped replication on tablet ${alias}.`, { autoClose: 7000 }),
+        onError: (error) => warn(`There was an error stopping replication on tablet: ${error}`)
+    })
 
     return (
         <div className="pt-4">
@@ -105,9 +71,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             </p>
                         )}
                         <button
-                            onClick={onStartReplication}
+                            onClick={() => startReplicationMutation.mutate()}
                             className="btn btn-secondary mt-4"
-                            disabled={primary || startReplicationLoading}
+                            disabled={primary || startReplicationMutation.isLoading}
                         >
                             Start replication
                         </button>
@@ -136,9 +102,9 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             </p>
                         )}
                         <button
-                            onClick={onStopReplication}
+                            onClick={() => stopReplicationMutation.mutate()}
                             className="btn btn-secondary mt-4"
-                            disabled={primary || stopReplicationLoading}
+                            disabled={primary || stopReplicationMutation.isLoading}
                         >
                             Stop replication
                         </button>
@@ -173,8 +139,8 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                         )}
                         <button
                             className="btn btn-secondary mt-4"
-                            disabled={primary || reparentLoading}
-                            onClick={onReparentTablet}
+                            disabled={primary || reparentTabletMutation.isLoading}
+                            onClick={() => reparentTabletMutation.mutate()}
                         >
                             Reparent tablet
                         </button>

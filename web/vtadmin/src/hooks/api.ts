@@ -126,8 +126,8 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
  * 
  * useDeleteTablet is a mutate hook that deletes a tablet by alias and optionally, cluster id.
  */
-export const useDeleteTablet = (params: Parameters<typeof deleteTablet>[0], options: UseMutationOptions) => {
-    return useMutation(() => {
+export const useDeleteTablet = (params: Parameters<typeof deleteTablet>[0], options: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>) => {
+    return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>(() => {
         return deleteTablet(params)
     }, options)
 }
@@ -136,26 +136,26 @@ export const useDeleteTablet = (params: Parameters<typeof deleteTablet>[0], opti
  * useReparentTablet reparents a tablet to the current primary in the shard. 
  * This only works if the current replication position matches the last known reparent action.
  */
-export const useReparentTablet = (params: Parameters<typeof reparentTablet>[0], options: UseMutationOptions) => {
-    return useMutation(() =>{
+export const useReparentTablet = (params: Parameters<typeof reparentTablet>[0], options: UseMutationOptions<Awaited<ReturnType<typeof reparentTablet>>, Error>) => {
+    return useMutation<Awaited<ReturnType<typeof reparentTablet>>, Error>(() =>{
         return reparentTablet(params)
     }, options)
 }
 
 /**
- * useStartReplication
+ * useStartReplication starts replication on the specified tablet.
  */
-export const useStartReplication = (params: Parameters<typeof startReplication>[0], options: UseMutationOptions) => {
-    return useMutation(() => {
+export const useStartReplication = (params: Parameters<typeof startReplication>[0], options: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>) => {
+    return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>(() => {
         return startReplication(params)
     }, options)
 }
 
 /**
- * useStopReplication
+ * useStopReplication stops replication on the specified tablet.
  */
- export const useStopReplication = (params: Parameters<typeof stopReplication>[0], options: UseMutationOptions) => {
-    return useMutation(() => {
+ export const useStopReplication = (params: Parameters<typeof stopReplication>[0], options: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>) => {
+    return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>(() => {
         return stopReplication(params)
     }, options)
 }

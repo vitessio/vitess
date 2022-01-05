@@ -52,7 +52,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
         try {
             json = await response.json();
         } catch (error) {
-            throw new MalformedHttpResponseError(error.message, endpoint, json, response);
+            throw new MalformedHttpResponseError((error as Error).message, endpoint, json, response);
         }
 
         if (!('ok' in json)) {
@@ -72,7 +72,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
         // Instead, we catch errors and manually notify our error handling serivce(s),
         // and then rethrow the error for react-query to propagate the usual way.
         // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
-        errorHandler.notify(error);
+        errorHandler.notify(error as Error);
         throw error;
     }
 };
