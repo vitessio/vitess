@@ -34,6 +34,12 @@ func ReplicationThreadStateFromStatus(status string) ReplicationThreadState {
 	}
 	return ReplicationThreadStateOther
 }
-func (this *ReplicationThreadState) IsRunning() bool { return *this == ReplicationThreadStateRunning }
-func (this *ReplicationThreadState) IsStopped() bool { return *this == ReplicationThreadStateStopped }
-func (this *ReplicationThreadState) Exists() bool    { return *this != ReplicationThreadStateNoThread }
+func (replicationThreadState *ReplicationThreadState) IsRunning() bool {
+	return *replicationThreadState == ReplicationThreadStateRunning
+}
+func (replicationThreadState *ReplicationThreadState) IsStopped() bool {
+	return *replicationThreadState == ReplicationThreadStateStopped
+}
+func (replicationThreadState *ReplicationThreadState) Exists() bool {
+	return *replicationThreadState != ReplicationThreadStateNoThread
+}

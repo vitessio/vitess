@@ -531,11 +531,15 @@ func rollbackAtShutdown() {
 	// Close all open connections. If they're waiting for reads, this will cause
 	// them to error out, which will automatically rollback open transactions.
 	func() {
-		vtgateHandle.mu.Lock()
-		defer vtgateHandle.mu.Unlock()
-		for c := range vtgateHandle.connections {
-			log.Infof("Rolling back transactions associated with connection ID: %v", c.ConnectionID)
-			c.Close()
+		if vtgateHandle != nil {
+			vtgateHandle.mu.Lock()
+			defer vtgateHandle.mu.Unlock()
+			for c := range vtgateHandle.connections {
+				if c != nil {
+					log.Infof("Rolling back transactions associated with connection ID: %v", c.ConnectionID)
+					c.Close()
+				}
+			}
 		}
 	}()
 

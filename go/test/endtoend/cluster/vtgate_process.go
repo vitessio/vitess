@@ -55,6 +55,7 @@ type VtgateProcess struct {
 	MySQLAuthServerImpl   string
 	Directory             string
 	VerifyURL             string
+	VSchemaURL            string
 	SysVarSetEnabled      bool
 	PlannerVersion        planbuilder.PlannerVersion
 	//Extra Args to be set before starting the vtgate process
@@ -251,6 +252,7 @@ func VtgateProcessInstance(
 	}
 
 	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
+	vtgate.VSchemaURL = fmt.Sprintf("http://%s:%d/debug/vschema", hostname, port)
 
 	return vtgate
 }

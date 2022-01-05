@@ -157,8 +157,8 @@ func (applier *CommandApplier) ackRecovery(value []byte) interface{} {
 	if ack.Key.IsValid() {
 		_, err = AcknowledgeInstanceRecoveries(&ack.Key, ack.Owner, ack.Comment)
 	}
-	if ack.Id > 0 {
-		_, err = AcknowledgeRecovery(ack.Id, ack.Owner, ack.Comment)
+	if ack.ID > 0 {
+		_, err = AcknowledgeRecovery(ack.ID, ack.Owner, ack.Comment)
 	}
 	if ack.UID != "" {
 		_, err = AcknowledgeRecoveryByUID(ack.UID, ack.Owner, ack.Comment)
@@ -235,7 +235,7 @@ func (applier *CommandApplier) enableGlobalRecoveries(value []byte) interface{} 
 }
 
 func (applier *CommandApplier) putKeyValue(value []byte) interface{} {
-	kvPair := kv.KVPair{}
+	kvPair := kv.KeyValuePair{}
 	if err := json.Unmarshal(value, &kvPair); err != nil {
 		return log.Errore(err)
 	}

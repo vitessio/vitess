@@ -151,7 +151,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		// Catch the case where no where clause was specified. If so, the opcode
 		// won't be set.
 		if node.eVindexFunc.Opcode == engine.VindexNone {
-			return nil, nil, 0, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)")
+			return nil, nil, 0, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 		}
 		col, ok := expr.Expr.(*sqlparser.ColName)
 		if !ok {
