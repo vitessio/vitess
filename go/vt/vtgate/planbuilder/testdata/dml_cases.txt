@@ -2612,3 +2612,203 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# update with a multicol vindex
+"update multicol_tbl set x = 1 where cola = 1 and colb = 2"
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# update with a multicol vindex - reverse order
+"update multicol_tbl set x = 1 where colb = 2 and cola = 1"
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# update with a multicol vindex using an IN clause
+"update multicol_tbl set x = 1 where colb IN (1,2) and cola = 1"
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set x = 1 where colb IN (1,2) and cola = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "In",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "(INT64(1), INT64(2))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# update with a multicol vindex using an IN clause
+"update multicol_tbl set x = 1 where colb IN (1,2) and cola IN (3,4)"
+{
+  "QueryType": "UPDATE",
+  "Original": "update multicol_tbl set x = 1 where colb IN (1,2) and cola IN (3,4)",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "In",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update multicol_tbl set x = 1 where colb in (1, 2) and cola in (3, 4)",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(3), INT64(4))",
+      "(INT64(1), INT64(2))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# delete with a multicol vindex
+"delete from multicol_tbl where cola = 1 and colb = 2"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# delete with a multicol vindex - reverse order
+"delete from multicol_tbl where colb = 2 and cola = 1"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# delete with a multicol vindex using an IN clause
+"delete from multicol_tbl where colb IN (1,2) and cola = 1"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where colb IN (1,2) and cola = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "In",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from multicol_tbl where colb in (1, 2) and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "(INT64(1), INT64(2))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# delete with a multicol vindex using an IN clause
+"delete from multicol_tbl where colb IN (1,2) and cola IN (3,4)"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where colb IN (1,2) and cola IN (3,4)",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "In",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete from multicol_tbl where colb in (1, 2) and cola in (3, 4)",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(3), INT64(4))",
+      "(INT64(1), INT64(2))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
