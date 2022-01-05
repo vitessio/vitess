@@ -368,6 +368,8 @@ func TestSchemaChange(t *testing.T) {
 		// no migrations pending at this time
 		time.Sleep(10 * time.Second)
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, 0)
+		// Validate that invoking CANCEL ALL via vtctl works
+		onlineddl.CheckCancelAllMigrationsViaVtctl(t, &clusterInstance.VtctlclientProcess, keyspaceName)
 	})
 	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
 		for i := range shards {
@@ -386,6 +388,26 @@ func TestSchemaChange(t *testing.T) {
 		}
 		wg.Wait()
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
+	})
+	t.Run("cancel all migrations: some migrations to cancel via vtctl", func(t *testing.T) {
+		for i := range shards {
+			throttleApp(shards[i].Vttablets[0], throttlerAppName)
+			defer unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
+		}
+		// spawn n migrations; cancel them via cancel-all
+		var wg sync.WaitGroup
+		count := 4
+		for i := 0; i < count; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", providedUUID, "vtgate", "vrepl_col", false)
+			}()
+		}
+		wg.Wait()
+		// cancelling via vtctl does not return values. We CANCEL ALL via vtctl, then validate via VTGate that nothing remains to be cancelled.
+		onlineddl.CheckCancelAllMigrationsViaVtctl(t, &clusterInstance.VtctlclientProcess, keyspaceName)
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, 0)
 	})
 
 	// reparent shard -80 to replica
