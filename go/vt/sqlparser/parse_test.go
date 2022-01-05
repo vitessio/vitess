@@ -3594,13 +3594,21 @@ var (
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",
 		excludeMulti: true,
+	}, {
+		// This is a valid MySQL query but does not yet work with Vitess.
+		// The problem is that the tokenizer takes .3 as a single token which causes parsing error
+		// We should instead be using . as a separate token and then 3t2 as an identifier.
+		// This highlights another problem, the tokenization has to be aware of the context of parsing!
+		// Since in an alternate query like `select .3e3t`, we should use .3e3 as a single token FLOAT and then t as ID.
+		input:  "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
+		output: "syntax error at position 18 near '.3'",
 	}}
 )
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := Parse(tcase.input)
+			_, err := ParseStrictDDL(tcase.input)
 			require.Error(t, err, tcase.output)
 			require.Equal(t, err.Error(), tcase.output)
 		})
