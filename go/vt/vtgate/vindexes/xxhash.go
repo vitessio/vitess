@@ -28,6 +28,7 @@ import (
 
 var (
 	_ SingleColumn = (*XXHash)(nil)
+	_ Hashing      = (*XXHash)(nil)
 )
 
 // XXHash defines vindex that hashes any sql types to a KeyspaceId
@@ -37,7 +38,7 @@ type XXHash struct {
 }
 
 // NewXXHash creates a new XXHash.
-func NewXXHash(name string, m map[string]string) (Vindex, error) {
+func NewXXHash(name string, _ map[string]string) (Vindex, error) {
 	return &XXHash{name: name}, nil
 }
 
@@ -62,29 +63,37 @@ func (vind *XXHash) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *XXHash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
-	for i := range ids {
-		idBytes, err := ids[i].ToBytes()
+func (vind *XXHash) Map(_ VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	for _, id := range ids {
+		ksid, err := vind.Hash(id)
 		if err != nil {
-			return out, err
+			return nil, err
 		}
-		out[i] = key.DestinationKeyspaceID(vXXHash(idBytes))
+		out = append(out, key.DestinationKeyspaceID(ksid))
 	}
 	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
 func (vind *XXHash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		idBytes, err := ids[i].ToBytes()
+	out := make([]bool, 0, len(ids))
+	for i, id := range ids {
+		ksid, err := vind.Hash(id)
 		if err != nil {
 			return out, err
 		}
-		out[i] = bytes.Equal(vXXHash(idBytes), ksids[i])
+		out = append(out, bytes.Equal(ksid, ksids[i]))
 	}
 	return out, nil
+}
+
+func (vind *XXHash) Hash(id sqltypes.Value) ([]byte, error) {
+	idBytes, err := id.ToBytes()
+	if err != nil {
+		return nil, err
+	}
+	return vXXHash(idBytes), nil
 }
 
 func init() {

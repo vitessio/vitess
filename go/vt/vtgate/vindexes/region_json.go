@@ -101,6 +101,11 @@ func (rv *RegionJSON) IsUnique() bool {
 	return true
 }
 
+// NeedsVCursor satisfies the Vindex interface.
+func (rv *RegionJSON) NeedsVCursor() bool {
+	return false
+}
+
 // Map satisfies MultiColumn.
 func (rv *RegionJSON) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
@@ -149,7 +154,6 @@ func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	return result, nil
 }
 
-// NeedsVCursor satisfies the Vindex interface.
-func (rv *RegionJSON) NeedsVCursor() bool {
+func (rv *RegionJSON) PartialVindex() bool {
 	return false
 }

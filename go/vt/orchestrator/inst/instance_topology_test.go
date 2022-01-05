@@ -36,7 +36,7 @@ func generateTestInstances() (instances [](*Instance), instancesMap map[string](
 	instances = [](*Instance){&i710, &i720, &i730, &i810, &i820, &i830}
 	for _, instance := range instances {
 		instance.Version = "5.6.7"
-		instance.Binlog_format = "STATEMENT"
+		instance.BinlogFormat = "STATEMENT"
 	}
 	instancesMap = make(map[string](*Instance))
 	for _, instance := range instances {
@@ -72,10 +72,10 @@ func TestSortInstancesSameCoordinatesDifferingBinlogFormats(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	for _, instance := range instances {
 		instance.ExecBinlogCoordinates = instances[0].ExecBinlogCoordinates
-		instance.Binlog_format = "MIXED"
+		instance.BinlogFormat = "MIXED"
 	}
-	instancesMap[i810Key.StringCode()].Binlog_format = "STATEMENT"
-	instancesMap[i720Key.StringCode()].Binlog_format = "ROW"
+	instancesMap[i810Key.StringCode()].BinlogFormat = "STATEMENT"
+	instancesMap[i720Key.StringCode()].BinlogFormat = "ROW"
 	sortInstances(instances)
 	test.S(t).ExpectEquals(instances[0].Key, i810Key)
 	test.S(t).ExpectEquals(instances[5].Key, i720Key)
@@ -177,16 +177,16 @@ func TestGetPriorityBinlogFormatForCandidate(t *testing.T) {
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(priorityBinlogFormat, "STATEMENT")
 
-		instancesMap[i810Key.StringCode()].Binlog_format = "MIXED"
-		instancesMap[i720Key.StringCode()].Binlog_format = "ROW"
+		instancesMap[i810Key.StringCode()].BinlogFormat = "MIXED"
+		instancesMap[i720Key.StringCode()].BinlogFormat = "ROW"
 		priorityBinlogFormat, err = getPriorityBinlogFormatForCandidate(instances)
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(priorityBinlogFormat, "STATEMENT")
 
-		instancesMap[i710Key.StringCode()].Binlog_format = "ROW"
-		instancesMap[i720Key.StringCode()].Binlog_format = "ROW"
-		instancesMap[i730Key.StringCode()].Binlog_format = "ROW"
-		instancesMap[i830Key.StringCode()].Binlog_format = "ROW"
+		instancesMap[i710Key.StringCode()].BinlogFormat = "ROW"
+		instancesMap[i720Key.StringCode()].BinlogFormat = "ROW"
+		instancesMap[i730Key.StringCode()].BinlogFormat = "ROW"
+		instancesMap[i830Key.StringCode()].BinlogFormat = "ROW"
 		priorityBinlogFormat, err = getPriorityBinlogFormatForCandidate(instances)
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(priorityBinlogFormat, "ROW")
@@ -196,13 +196,13 @@ func TestGetPriorityBinlogFormatForCandidate(t *testing.T) {
 		for range rand.Perm(20) { // Just running many iterations to cover multiple possible map iteration ordering. Perm() is just used as an array generator here.
 			instances, _ := generateTestInstances()
 			for _, instance := range instances {
-				instance.Binlog_format = lowBinlogFormat
+				instance.BinlogFormat = lowBinlogFormat
 			}
 			test.S(t).ExpectEquals(len(instances), 6)
 			// Randomly populating different elements of the array/map
 			perm := rand.Perm(len(instances))[0 : len(instances)/2]
 			for _, i := range perm {
-				instances[i].Binlog_format = "ROW"
+				instances[i].BinlogFormat = "ROW"
 			}
 			// getPriorityBinlogFormatForCandidate uses map iteration
 			priorityBinlogFormat, err := getPriorityBinlogFormatForCandidate(instances)
@@ -392,9 +392,9 @@ func TestChooseCandidateReplicaLosesOneDueToBinlogFormat(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
-		instance.Binlog_format = "ROW"
+		instance.BinlogFormat = "ROW"
 	}
-	instancesMap[i730Key.StringCode()].Binlog_format = "STATEMENT"
+	instancesMap[i730Key.StringCode()].BinlogFormat = "STATEMENT"
 
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
@@ -410,9 +410,9 @@ func TestChooseCandidateReplicaPriorityBinlogFormatNoLoss(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
-		instance.Binlog_format = "MIXED"
+		instance.BinlogFormat = "MIXED"
 	}
-	instancesMap[i830Key.StringCode()].Binlog_format = "STATEMENT"
+	instancesMap[i830Key.StringCode()].BinlogFormat = "STATEMENT"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -426,7 +426,7 @@ func TestChooseCandidateReplicaPriorityBinlogFormatNoLoss(t *testing.T) {
 func TestChooseCandidateReplicaPriorityBinlogFormatLosesOne(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
-	instancesMap[i830Key.StringCode()].Binlog_format = "ROW"
+	instancesMap[i830Key.StringCode()].BinlogFormat = "ROW"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -440,8 +440,8 @@ func TestChooseCandidateReplicaPriorityBinlogFormatLosesOne(t *testing.T) {
 func TestChooseCandidateReplicaPriorityBinlogFormatLosesTwo(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
-	instancesMap[i830Key.StringCode()].Binlog_format = "ROW"
-	instancesMap[i820Key.StringCode()].Binlog_format = "ROW"
+	instancesMap[i830Key.StringCode()].BinlogFormat = "ROW"
+	instancesMap[i820Key.StringCode()].BinlogFormat = "ROW"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -455,10 +455,10 @@ func TestChooseCandidateReplicaPriorityBinlogFormatLosesTwo(t *testing.T) {
 func TestChooseCandidateReplicaPriorityBinlogFormatRowOverrides(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
-	instancesMap[i830Key.StringCode()].Binlog_format = "ROW"
-	instancesMap[i820Key.StringCode()].Binlog_format = "ROW"
-	instancesMap[i810Key.StringCode()].Binlog_format = "ROW"
-	instancesMap[i730Key.StringCode()].Binlog_format = "ROW"
+	instancesMap[i830Key.StringCode()].BinlogFormat = "ROW"
+	instancesMap[i820Key.StringCode()].BinlogFormat = "ROW"
+	instancesMap[i810Key.StringCode()].BinlogFormat = "ROW"
+	instancesMap[i730Key.StringCode()].BinlogFormat = "ROW"
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)

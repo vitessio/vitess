@@ -1518,7 +1518,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		// migration could have started by a different tablet. We need to actively verify if it is running
 		foundRunning, _, _ = e.isVReplMigrationRunning(ctx, onlineDDL.UUID)
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
-			return foundRunning, fmt.Errorf("Error cancelling migration, vreplication exec error: %+v", err)
+			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 	case schema.DDLStrategyPTOSC:
@@ -1549,7 +1549,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		// gh-ost migrations are easy to kill: just touch their specific panic flag files. We trust
 		// gh-ost to terminate. No need to KILL it. And there's no trigger cleanup.
 		if err := e.createGhostPanicFlagFile(onlineDDL.UUID); err != nil {
-			return foundRunning, fmt.Errorf("Error cancelling gh-ost migration, flag file error: %+v", err)
+			return foundRunning, fmt.Errorf("Error terminating gh-ost migration, flag file error: %+v", err)
 		}
 	}
 	return foundRunning, nil
@@ -1575,16 +1575,19 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
 		return emptyResult, nil
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
+		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
 			return nil, err
 		}
 		rowsAffected = 1
 	}
+	defer e.triggerNextCheckInterval()
 
 	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
 	defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
 
 	if migrationFound {
+		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
 		rowsAffected = 1
 	}
 	if err != nil {
@@ -1600,7 +1603,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 // cancelMigrations attempts to abort a list of migrations
 func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration) (err error) {
 	for _, migration := range cancellable {
-		log.Infof("cancelMigrations: cancelling %s", migration.uuid)
+		log.Infof("cancelMigrations: cancelling %s; reason: %s", migration.uuid, migration.message)
 		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message); err != nil {
 			return err
 		}
@@ -2017,6 +2020,10 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 // getCompletedMigrationByContextAndSQL chceks if there exists a completed migration with exact same
 // context and SQL as given migration. If so, it returns its UUID.
 func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onlineDDL *schema.OnlineDDL) (completedUUID string, err error) {
+	if onlineDDL.RequestContext == "" {
+		// only applies to migrations with an explicit context
+		return "", nil
+	}
 	query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsByContextAndSQL,
 		sqltypes.StringBindVariable(e.keyspace),
 		sqltypes.StringBindVariable(onlineDDL.RequestContext),
@@ -2041,6 +2048,7 @@ func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDD
 	if err != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 	}
+	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 	return err
 }
 
@@ -2065,7 +2073,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	// migration context and DDL as a previous one. We are only interested in our scenario in a duplicate
 	// whose predecessor is "complete". If this is the case, then we can mark our own migration as
 	// implicitly "complete", too.
-	if onlineDDL.RequestContext != "" {
+	{
 		completedUUID, err := e.getCompletedMigrationByContextAndSQL(ctx, onlineDDL)
 		if err != nil {
 			return err
@@ -2635,13 +2643,27 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		countRunnning++
 	}
 	{
-		// now, let's look at UUIDs we own and _think_ should be running, and see which of tham _isn't_ actually running...
+		// now, let's look at UUIDs we own and _think_ should be running, and see which of tham _isn't_ actually running or pending...
+		pendingUUIDS, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return countRunnning, cancellable, err
+		}
+		uuidsFoundPending := map[string]bool{}
+		for _, uuid := range pendingUUIDS {
+			uuidsFoundPending[uuid] = true
+		}
+
 		e.ownedRunningMigrations.Range(func(k, _ interface{}) bool {
 			uuid, ok := k.(string)
 			if !ok {
 				return true
 			}
-			if !uuidsFoundRunning[uuid] {
+			// due to race condition, it's possible that ownedRunningMigrations will list a migration
+			// that is _just about to run_ but is still, in fact, in `ready` state. This is fine.
+			// If we find such a migration, we do nothing. We're only looking for migrations we really
+			// don't have any information of.
+			if !uuidsFoundRunning[uuid] && !uuidsFoundPending[uuid] {
+				log.Infof("removing migration %s from ownedRunningMigrations because it's not running and not pending", uuid)
 				e.ownedRunningMigrations.Delete(uuid)
 			}
 			return true
@@ -3127,6 +3149,7 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if err != nil {
 		return nil, err
 	}
+	defer e.triggerNextCheckInterval()
 	return e.execQuery(ctx, query)
 }
 

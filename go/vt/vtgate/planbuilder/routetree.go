@@ -495,13 +495,16 @@ func (rp *routeTree) haveMatchingVindex(
 				// single column vindex - just add the option
 				routeOpcode := opcode(v.colVindex)
 				vindex := vfunc(v.colVindex)
+				if vindex == nil {
+					continue
+				}
 				v.options = append(v.options, &vindexOption{
 					values:      []evalengine.Expr{value},
 					valueExprs:  []sqlparser.Expr{valueExpr},
 					predicates:  []sqlparser.Expr{node},
 					opcode:      routeOpcode,
 					foundVindex: vindex,
-					cost:        costFor(vindex, routeOpcode),
+					cost:        costFor(v.colVindex, routeOpcode),
 					ready:       true,
 				})
 				newVindexFound = true
@@ -607,7 +610,7 @@ func (option *vindexOption) updateWithNewColumn(
 	routeOpcode := opcode(colVindex)
 	if option.opcode < routeOpcode {
 		option.opcode = routeOpcode
-		option.cost = costFor(option.foundVindex, routeOpcode)
+		option.cost = costFor(colVindex, routeOpcode)
 	}
 	return option.ready
 }
@@ -702,7 +705,7 @@ func justTheVindex(vindex *vindexes.ColumnVindex) vindexes.Vindex {
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
-	if vindex.Vindex.IsUnique() {
+	if vindex.IsUnique() {
 		return engine.SelectEqualUnique
 	}
 
@@ -710,18 +713,13 @@ func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
 }
 
 // costFor returns a cost struct to make route choices easier to compare
-func costFor(foundVindex vindexes.Vindex, opcode engine.RouteOpcode) cost {
+func costFor(foundVindex *vindexes.ColumnVindex, opcode engine.RouteOpcode) cost {
 	switch opcode {
 	// For these opcodes, we should not have a vindex, so we just return the opcode as the cost
 	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone, engine.SelectScatter:
 		return cost{
 			opCode: opcode,
 		}
-	}
-
-	// if we have a multiplier that is non-zero, we should have a vindex
-	if foundVindex == nil {
-		panic("expected a vindex")
 	}
 
 	return cost{
