@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,26 @@ func checkHealth(t *testing.T, url string) bool {
 		return false
 	}
 	return true
+}
+
+func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
+	done := false
+	ticker := time.NewTicker(10 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			if done {
+				return
+			}
+			qr := execVtgateQuery(t, conn, database, query)
+			require.NotNil(t, qr)
+			if want == fmt.Sprintf("%v", qr.Rows) {
+				done = true
+			}
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "query %s.%s did not execute in time", database, query)
+		}
+	}
 }
 
 func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
