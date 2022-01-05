@@ -631,25 +631,7 @@ Gen4 plan same as above
     "Vindex": "binary"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from pin_test",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from pin_test where 1 != 1",
-    "Query": "select * from pin_test",
-    "Table": "pin_test",
-    "Values": [
-      "VARBINARY(\"\\x80\")"
-    ],
-    "Vindex": "binary"
-  }
-}
+Gen4 plan same as above
 
 # select from dual on sharded keyspace
 "select @@session.auto_increment_increment from user.dual"
