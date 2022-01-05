@@ -25,13 +25,7 @@ const translateIntentColor = (intent: Intent) => {
     }
 };
 
-const Snackbar: React.FC<SnackbarProps> = ({
-    closeToast,
-    message,
-    icon,
-    intent = Intent.none,
-    ...props
-}) => {
+const Snackbar: React.FC<SnackbarProps> = ({ closeToast, message, icon, intent = Intent.none, ...props }) => {
     const intentColor = intent === Intent.none ? 'gray-900' : `${intent}`;
 
     return (

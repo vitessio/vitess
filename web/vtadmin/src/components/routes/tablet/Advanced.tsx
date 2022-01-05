@@ -22,25 +22,44 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
     const primary = isPrimary(tablet);
     const [typedAlias, setTypedAlias] = useState('');
 
-    const deleteTabletMutation = useDeleteTablet({ alias, clusterID }, {
-        onSuccess: () => { success(`Successfully deleted tablet ${alias}`); history.push('/tablets'); },
-        onError: (error) => warn(`There was an error deleting tablet: ${error}`)
-    })
+    const deleteTabletMutation = useDeleteTablet(
+        { alias, clusterID },
+        {
+            onSuccess: () => {
+                success(`Successfully deleted tablet ${alias}`);
+                history.push('/tablets');
+            },
+            onError: (error) => warn(`There was an error deleting tablet: ${error}`),
+        }
+    );
 
-    const reparentTabletMutation = useReparentTablet({ alias, clusterID }, {
-        onSuccess: (result) => { success(`Successfully reparented tablet ${alias} under primary ${result.primary}`, { autoClose: 7000 }); },
-        onError: (error) => warn(`There was an error reparenting tablet: ${error}`)
-    })
+    const reparentTabletMutation = useReparentTablet(
+        { alias, clusterID },
+        {
+            onSuccess: (result) => {
+                success(`Successfully reparented tablet ${alias} under primary ${result.primary}`, { autoClose: 7000 });
+            },
+            onError: (error) => warn(`There was an error reparenting tablet: ${error}`),
+        }
+    );
 
-    const startReplicationMutation = useStartReplication({ alias, clusterID }, {
-        onSuccess: () => { success(`Successfully started replication on tablet ${alias}.`, { autoClose: 7000 }) },
-        onError: (error) => warn(`There was an error starting replication on tablet: ${error}`)
-    })
+    const startReplicationMutation = useStartReplication(
+        { alias, clusterID },
+        {
+            onSuccess: () => {
+                success(`Successfully started replication on tablet ${alias}.`, { autoClose: 7000 });
+            },
+            onError: (error) => warn(`There was an error starting replication on tablet: ${error}`),
+        }
+    );
 
-    const stopReplicationMutation = useStopReplication({ alias, clusterID }, {
-        onSuccess: () => success(`Successfully stopped replication on tablet ${alias}.`, { autoClose: 7000 }),
-        onError: (error) => warn(`There was an error stopping replication on tablet: ${error}`)
-    })
+    const stopReplicationMutation = useStopReplication(
+        { alias, clusterID },
+        {
+            onSuccess: () => success(`Successfully stopped replication on tablet ${alias}.`, { autoClose: 7000 }),
+            onError: (error) => warn(`There was an error stopping replication on tablet: ${error}`),
+        }
+    );
 
     return (
         <div className="pt-4">
@@ -56,7 +75,11 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                 rel="noreferrer"
                                 className="text-gray-900 ml-1"
                             >
-                                <span className="text-sm font-semibold text-gray-900">Documentation</span><Icon icon={Icons.open} className="h-6 w-6 ml-1 inline-block text-gray-900 fill-current" />
+                                <span className="text-sm font-semibold text-gray-900">Documentation</span>
+                                <Icon
+                                    icon={Icons.open}
+                                    className="h-6 w-6 ml-1 inline-block text-gray-900 fill-current"
+                                />
                             </a>
                         </div>
                         <p className="text-base m-0">
@@ -87,7 +110,11 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                 rel="noreferrer"
                                 className="text-gray-900"
                             >
-                                <span className="text-sm font-semibold text-gray-900">Documentation</span> <Icon icon={Icons.open} className="ml-1 inline-block h-6 w-6 text-gray-900 fill-current" />
+                                <span className="text-sm font-semibold text-gray-900">Documentation</span>{' '}
+                                <Icon
+                                    icon={Icons.open}
+                                    className="ml-1 inline-block h-6 w-6 text-gray-900 fill-current"
+                                />
                             </a>
                         </div>
                         <p className="text-base m-0">
@@ -123,7 +150,11 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                 rel="noreferrer"
                                 className="text-gray-900 ml-1"
                             >
-                                <span className="text-sm font-semibold text-gray-900">Documentation</span><Icon icon={Icons.open} className="ml-1 h-6 w-6 inline-block text-gray-900 fill-current" />
+                                <span className="text-sm font-semibold text-gray-900">Documentation</span>
+                                <Icon
+                                    icon={Icons.open}
+                                    className="ml-1 h-6 w-6 inline-block text-gray-900 fill-current"
+                                />
                             </a>
                         </div>
                         <p className="text-base m-0">
@@ -158,7 +189,8 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                             rel="noreferrer"
                             className="text-gray-900 ml-1 inline-block"
                         >
-                            <span className="text-sm font-semibold text-gray-900">Documentation</span><Icon icon={Icons.open} className="ml-1 h-6 w-6 text-gray-900 fill-current inline" />
+                            <span className="text-sm font-semibold text-gray-900">Documentation</span>
+                            <Icon icon={Icons.open} className="ml-1 h-6 w-6 text-gray-900 fill-current inline" />
                         </a>
                     </div>
                     <p className="text-base mt-0">
@@ -191,7 +223,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                     </button>
                 </div>
             </div>
-        </div >
+        </div>
     );
 };
 
