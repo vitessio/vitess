@@ -99,7 +99,7 @@ func RunHealthCheck(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(result, err)
 }
 
-// StartReplication
+// StartReplication starts replication on the specified tablet.
 func StartReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 	result, err := api.server.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
@@ -110,7 +110,7 @@ func StartReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(result, err)
 }
 
-// StartReplication
+// StartReplication stops replication on the specified tablet.
 func StopReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 	result, err := api.server.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
