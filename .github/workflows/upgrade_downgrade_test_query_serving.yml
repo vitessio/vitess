@@ -23,10 +23,10 @@ jobs:
         uses: Dreamcodeio/pr-has-label-action@master
         id: check_label
         with:
-          label: Upgrade Downgrade
+          label: Skip Upgrade Downgrade
 
   get_latest_release:
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel == 'true')
+    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel == 'false')
     name: Get latest release
     runs-on: ubuntu-latest
     needs:
@@ -51,7 +51,7 @@ jobs:
           echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
 
   upgrade_downgrade_test:
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel == 'true')
+    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel == 'false')
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
     needs:
@@ -157,6 +157,7 @@ jobs:
       run: |
         source build.env
 
+        rm -f $PWD/bin/vtgate
         cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
         vtgate --version
 
@@ -174,6 +175,7 @@ jobs:
       run: |
         source build.env
 
+        rm -f $PWD/bin/vtgate $PWD/bin/vttablet
         cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         vtgate --version
