@@ -26,11 +26,11 @@ import (
 type internalKVStore struct {
 }
 
-func NewInternalKVStore() KVStore {
+func NewInternalKVStore() KeyValueStore {
 	return &internalKVStore{}
 }
 
-func (this *internalKVStore) PutKeyValue(key string, value string) (err error) {
+func (kvStore *internalKVStore) PutKeyValue(key string, value string) (err error) {
 	_, err = db.ExecOrchestrator(`
 		replace
 			into kv_store (
@@ -43,7 +43,7 @@ func (this *internalKVStore) PutKeyValue(key string, value string) (err error) {
 	return log.Errore(err)
 }
 
-func (this *internalKVStore) GetKeyValue(key string) (value string, found bool, err error) {
+func (kvStore *internalKVStore) GetKeyValue(key string) (value string, found bool, err error) {
 	query := `
 		select
 			store_value
@@ -62,6 +62,6 @@ func (this *internalKVStore) GetKeyValue(key string) (value string, found bool, 
 	return value, found, log.Errore(err)
 }
 
-func (this *internalKVStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
+func (kvStore *internalKVStore) DistributePairs(kvPairs [](*KeyValuePair)) (err error) {
 	return nil
 }

@@ -35,35 +35,35 @@ func NewPostponedFunctionsContainer() *PostponedFunctionsContainer {
 	return postponedFunctionsContainer
 }
 
-func (this *PostponedFunctionsContainer) AddPostponedFunction(postponedFunction func() error, description string) {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+func (postponedFuncsContainer *PostponedFunctionsContainer) AddPostponedFunction(postponedFunction func() error, description string) {
+	postponedFuncsContainer.mutex.Lock()
+	defer postponedFuncsContainer.mutex.Unlock()
 
-	this.descriptions = append(this.descriptions, description)
+	postponedFuncsContainer.descriptions = append(postponedFuncsContainer.descriptions, description)
 
-	this.waitGroup.Add(1)
+	postponedFuncsContainer.waitGroup.Add(1)
 	go func() {
-		defer this.waitGroup.Done()
+		defer postponedFuncsContainer.waitGroup.Done()
 		postponedFunction()
 	}()
 }
 
-func (this *PostponedFunctionsContainer) Wait() {
-	log.Debugf("PostponedFunctionsContainer: waiting on %+v postponed functions", this.Len())
-	this.waitGroup.Wait()
+func (postponedFuncsContainer *PostponedFunctionsContainer) Wait() {
+	log.Debugf("PostponedFunctionsContainer: waiting on %+v postponed functions", postponedFuncsContainer.Len())
+	postponedFuncsContainer.waitGroup.Wait()
 	log.Debugf("PostponedFunctionsContainer: done waiting")
 }
 
-func (this *PostponedFunctionsContainer) Len() int {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+func (postponedFuncsContainer *PostponedFunctionsContainer) Len() int {
+	postponedFuncsContainer.mutex.Lock()
+	defer postponedFuncsContainer.mutex.Unlock()
 
-	return len(this.descriptions)
+	return len(postponedFuncsContainer.descriptions)
 }
 
-func (this *PostponedFunctionsContainer) Descriptions() []string {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+func (postponedFuncsContainer *PostponedFunctionsContainer) Descriptions() []string {
+	postponedFuncsContainer.mutex.Lock()
+	defer postponedFuncsContainer.mutex.Unlock()
 
-	return this.descriptions
+	return postponedFuncsContainer.descriptions
 }

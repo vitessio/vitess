@@ -372,8 +372,6 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			ServerName:   serverName,
 		}
 
-		tlsConfig.BuildNameToCertificate()
-
 		dialer = zk.WithDialer(func(network, address string, timeout time.Duration) (net.Conn, error) {
 			d := net.Dialer{Timeout: timeout}
 

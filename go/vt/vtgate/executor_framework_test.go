@@ -23,6 +23,10 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
+	"vitess.io/vitess/go/vt/topo"
+
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"github.com/stretchr/testify/require"
@@ -135,6 +139,14 @@ var executorVSchema = `
 			"type": "region_experimental",
 			"params": {
 				"region_bytes": "1"
+			}
+    	},
+		"multicol_vdx": {
+			"type": "multicol",
+			"params": {
+				"column_count": "3",
+				"column_bytes": "1,3,4",
+				"column_vindex": "hash,binary,unicode_loose_xxhash"
 			}
         }
 	},
@@ -316,6 +328,14 @@ var executorVSchema = `
 					"name": "regional_vdx"
 				}
 			]
+    	},
+		"multicoltbl": {
+			"column_vindexes": [
+				{
+					"columns": ["cola","colb","colc"],
+					"name": "multicol_vdx"
+				}
+			]
 		}
 	}
 }
@@ -460,7 +480,7 @@ func createLegacyExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandb
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
-	*GatewayImplementation = GatewayImplementationDiscovery
+	*GatewayImplementation = tabletGatewayImplementation
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
@@ -478,8 +498,25 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	_ = hc.AddTestTablet(cell, "e0-", 1, "TestExecutor", "e0-", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	createSandbox(KsTestUnsharded)
+	_ = topo.NewShardInfo(KsTestUnsharded, "0", &topodatapb.Shard{}, nil)
+	if err := serv.topoServer.CreateKeyspace(ctx, KsTestUnsharded, &topodatapb.Keyspace{}); err != nil {
+		log.Errorf("CreateKeyspace() failed: %v", err)
+	}
+	if err := serv.topoServer.CreateShard(ctx, KsTestUnsharded, "0"); err != nil {
+		log.Errorf("CreateShard(0) failed: %v", err)
+	}
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-
+	tablet := topo.NewTablet(sbclookup.Tablet().Alias.Uid, cell, "0")
+	tablet.Type = topodatapb.TabletType_PRIMARY
+	tablet.Keyspace = KsTestUnsharded
+	tablet.Shard = "0"
+	serv.topoServer.UpdateShardFields(ctx, KsTestUnsharded, "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = tablet.Alias
+		return nil
+	})
+	if err := serv.topoServer.CreateTablet(ctx, tablet); err != nil {
+		log.Errorf("CreateShard(0) failed: %v", err)
+	}
 	// Ues the 'X' in the name to ensure it's not alphabetically first.
 	// Otherwise, it would become the default keyspace for the dual table.
 	bad := createSandbox("TestXBadSharding")

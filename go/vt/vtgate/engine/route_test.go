@@ -1409,6 +1409,43 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
+func TestSelectEqualMultiColumnVindex(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "20-"},
+		results:      []*sqltypes.Result{defaultSelectResult},
+	}
+	sel := NewRoute(
+		SelectEqual,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex
+	sel.Values = []evalengine.Expr{evalengine.NewLiteralInt(32)}
+
+	result, err := sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(32)]] Destinations:DestinationKeyRange(20-21)`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(32)]] Destinations:DestinationKeyRange(20-21)`,
+		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
 func TestSelectINMultiColumnVindex(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
