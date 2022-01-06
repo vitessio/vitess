@@ -85,7 +85,7 @@ func SimplifyStatement(
 		}
 
 		// ok, we seem to need this expression. let's see if we can find a simpler version
-		s := &Shrinker{Orig: cursor.expr}
+		s := &shrinker{orig: cursor.expr}
 		newExpr := s.Next()
 		for newExpr != nil {
 			cursor.replace(newExpr)
