@@ -387,6 +387,11 @@ message VEvent {
   int64 current_time = 20;
   // LastPK is the last PK for a table
   LastPKEvent last_p_k_event = 21;
+  // the source keyspace
+  string keyspace = 22;
+  // the source shard
+  string shard = 23;
+
 }
 
 message MinimalTable {

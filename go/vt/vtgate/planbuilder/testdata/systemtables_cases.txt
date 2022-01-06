@@ -924,7 +924,9 @@ Gen4 plan same as above
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where `user`.id = :x_id",
         "Table": "`user`",
-        "Values": ":x_id",
+        "Values": [
+          ":x_id"
+        ],
         "Vindex": "user_index"
       }
     ]
@@ -964,7 +966,9 @@ Gen4 plan same as above
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where `user`.id = :x_id",
         "Table": "`user`",
-        "Values": ":x_id",
+        "Values": [
+          ":x_id"
+        ],
         "Vindex": "user_index"
       }
     ]

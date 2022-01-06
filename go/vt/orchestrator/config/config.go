@@ -38,7 +38,7 @@ const (
 	DefaultStatusAPIEndpoint          = "/api/status"
 )
 
-var configurationLoaded chan bool = make(chan bool)
+var configurationLoaded = make(chan bool)
 
 const (
 	HealthPollSeconds                     = 1
@@ -51,7 +51,7 @@ const (
 	MaintenancePurgeDays                  = 7
 	MySQLTopologyMaxPoolConnections       = 3
 	MaintenanceExpireMinutes              = 10
-	AgentHttpTimeoutSeconds               = 60
+	AgentHTTPTimeoutSeconds               = 60
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
 	SelectTrueQuery                       = "select 1"
@@ -145,7 +145,7 @@ type Configuration struct {
 	RemoveTextFromHostnameDisplay               string   // Text to strip off the hostname on cluster/clusters pages
 	ReadOnly                                    bool
 	AuthenticationMethod                        string // Type of autherntication to use, if any. "" for none, "basic" for BasicAuth, "multi" for advanced BasicAuth, "proxy" for forwarded credentials via reverse proxy, "token" for token based access
-	OAuthClientId                               string
+	OAuthClientID                               string
 	OAuthClientSecret                           string
 	OAuthScopes                                 []string
 	HTTPAuthUser                                string            // Username for HTTP Basic authentication (blank disables authentication)
@@ -170,7 +170,7 @@ type Configuration struct {
 	SupportFuzzyPoolHostnames                   bool              // Should "submit-pool-instances" command be able to pass list of fuzzy instances (fuzzy means non-fqdn, but unique enough to recognize). Defaults 'true', implies more queries on backend db
 	InstancePoolExpiryMinutes                   uint              // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
 	PromotionIgnoreHostnameFilters              []string          // Orchestrator will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
-	ServeAgentsHttp                             bool              // Spawn another HTTP interface dedicated for orchestrator-agent
+	ServeAgentsHTTP                             bool              // Spawn another HTTP interface dedicated for orchestrator-agent
 	AgentsUseSSL                                bool              // When "true" orchestrator will listen on agents port with SSL as well as connect to agents via SSL
 	AgentsUseMutualTLS                          bool              // When "true" Use mutual TLS for the server to agent communication
 	AgentSSLSkipVerify                          bool              // When using SSL for the Agent, should we ignore SSL certification error
@@ -226,7 +226,7 @@ type Configuration struct {
 	DiscoveryIgnoreHostnameFilters              []string          // Regexp filters to apply to prevent discovering instances of any kind
 	ConsulAddress                               string            // Address where Consul HTTP api is found. Example: 127.0.0.1:8500
 	ConsulScheme                                string            // Scheme (http or https) for Consul
-	ConsulAclToken                              string            // ACL token used to write to Consul KV
+	ConsulACLToken                              string            // ACL token used to write to Consul KV
 	ConsulCrossDataCenterDistribution           bool              // should orchestrator automatically auto-deduce all consul DCs and write KVs in all DCs
 	ZkAddress                                   string            // UNSUPPERTED YET. Address where (single or multiple) ZooKeeper servers are found, in `srv1[:port1][,srv2[:port2]...]` format. Default port is 2181. Example: srv-a,srv-b:12181,srv-c
 	KVClusterPrimaryPrefix                      string            // Prefix to use for clusters' primary's entries in KV stores (internal, consul, ZK), default: "mysql/primary"
@@ -238,8 +238,8 @@ type Configuration struct {
 }
 
 // ToJSONString will marshal this configuration as JSON
-func (this *Configuration) ToJSONString() string {
-	b, _ := json.Marshal(this)
+func (config *Configuration) ToJSONString() string {
+	b, _ := json.Marshal(config)
 	return string(b)
 }
 
@@ -333,7 +333,7 @@ func newConfiguration() *Configuration {
 		SupportFuzzyPoolHostnames:                   true,
 		InstancePoolExpiryMinutes:                   60,
 		PromotionIgnoreHostnameFilters:              []string{},
-		ServeAgentsHttp:                             false,
+		ServeAgentsHTTP:                             false,
 		AgentsUseSSL:                                false,
 		AgentsUseMutualTLS:                          false,
 		AgentSSLValidOUs:                            []string{},
@@ -385,7 +385,7 @@ func newConfiguration() *Configuration {
 		DiscoveryIgnoreReplicaHostnameFilters:       []string{},
 		ConsulAddress:                               "",
 		ConsulScheme:                                "http",
-		ConsulAclToken:                              "",
+		ConsulACLToken:                              "",
 		ConsulCrossDataCenterDistribution:           false,
 		ZkAddress:                                   "",
 		KVClusterPrimaryPrefix:                      "mysql/primary",
@@ -397,100 +397,100 @@ func newConfiguration() *Configuration {
 	}
 }
 
-func (this *Configuration) postReadAdjustments() error {
-	if this.MySQLOrchestratorCredentialsConfigFile != "" {
+func (config *Configuration) postReadAdjustments() error {
+	if config.MySQLOrchestratorCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, this.MySQLOrchestratorCredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLOrchestratorCredentialsConfigFile)
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed orchestrator credentials from %s", this.MySQLOrchestratorCredentialsConfigFile)
-			this.MySQLOrchestratorUser = mySQLConfig.Client.User
-			this.MySQLOrchestratorPassword = mySQLConfig.Client.Password
+			log.Debugf("Parsed orchestrator credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
+			config.MySQLOrchestratorUser = mySQLConfig.Client.User
+			config.MySQLOrchestratorPassword = mySQLConfig.Client.Password
 		}
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(this.MySQLOrchestratorPassword)
+		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLOrchestratorPassword)
 		if len(submatch) > 1 {
-			this.MySQLOrchestratorPassword = os.Getenv(submatch[1])
+			config.MySQLOrchestratorPassword = os.Getenv(submatch[1])
 		}
 	}
-	if this.MySQLTopologyCredentialsConfigFile != "" {
+	if config.MySQLTopologyCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, this.MySQLTopologyCredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLTopologyCredentialsConfigFile)
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed topology credentials from %s", this.MySQLTopologyCredentialsConfigFile)
-			this.MySQLTopologyUser = mySQLConfig.Client.User
-			this.MySQLTopologyPassword = mySQLConfig.Client.Password
+			log.Debugf("Parsed topology credentials from %s", config.MySQLTopologyCredentialsConfigFile)
+			config.MySQLTopologyUser = mySQLConfig.Client.User
+			config.MySQLTopologyPassword = mySQLConfig.Client.Password
 		}
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(this.MySQLTopologyPassword)
+		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLTopologyPassword)
 		if len(submatch) > 1 {
-			this.MySQLTopologyPassword = os.Getenv(submatch[1])
+			config.MySQLTopologyPassword = os.Getenv(submatch[1])
 		}
 	}
 
-	if this.RecoveryPeriodBlockSeconds == 0 && this.RecoveryPeriodBlockMinutes > 0 {
+	if config.RecoveryPeriodBlockSeconds == 0 && config.RecoveryPeriodBlockMinutes > 0 {
 		// RecoveryPeriodBlockSeconds is a newer addition that overrides RecoveryPeriodBlockMinutes
 		// The code does not consider RecoveryPeriodBlockMinutes anymore, but RecoveryPeriodBlockMinutes
 		// still supported in config file for backwards compatibility
-		this.RecoveryPeriodBlockSeconds = this.RecoveryPeriodBlockMinutes * 60
+		config.RecoveryPeriodBlockSeconds = config.RecoveryPeriodBlockMinutes * 60
 	}
 
-	if this.FailPrimaryPromotionIfSQLThreadNotUpToDate && this.DelayPrimaryPromotionIfSQLThreadNotUpToDate {
+	if config.FailPrimaryPromotionIfSQLThreadNotUpToDate && config.DelayPrimaryPromotionIfSQLThreadNotUpToDate {
 		return fmt.Errorf("Cannot have both FailPrimaryPromotionIfSQLThreadNotUpToDate and DelayPrimaryPromotionIfSQLThreadNotUpToDate enabled")
 	}
-	if this.FailPrimaryPromotionOnLagMinutes > 0 && this.ReplicationLagQuery == "" {
+	if config.FailPrimaryPromotionOnLagMinutes > 0 && config.ReplicationLagQuery == "" {
 		return fmt.Errorf("nonzero FailPrimaryPromotionOnLagMinutes requires ReplicationLagQuery to be set")
 	}
 
-	if this.URLPrefix != "" {
+	if config.URLPrefix != "" {
 		// Ensure the prefix starts with "/" and has no trailing one.
-		this.URLPrefix = strings.TrimLeft(this.URLPrefix, "/")
-		this.URLPrefix = strings.TrimRight(this.URLPrefix, "/")
-		this.URLPrefix = "/" + this.URLPrefix
+		config.URLPrefix = strings.TrimLeft(config.URLPrefix, "/")
+		config.URLPrefix = strings.TrimRight(config.URLPrefix, "/")
+		config.URLPrefix = "/" + config.URLPrefix
 	}
 
-	if this.IsSQLite() && this.SQLite3DataFile == "" {
+	if config.IsSQLite() && config.SQLite3DataFile == "" {
 		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite3")
 	}
-	if this.RaftEnabled && this.RaftDataDir == "" {
+	if config.RaftEnabled && config.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be defined since raft is enabled (RaftEnabled)")
 	}
-	if this.RaftEnabled && this.RaftBind == "" {
+	if config.RaftEnabled && config.RaftBind == "" {
 		return fmt.Errorf("RaftBind must be defined since raft is enabled (RaftEnabled)")
 	}
-	if this.RaftAdvertise == "" {
-		this.RaftAdvertise = this.RaftBind
+	if config.RaftAdvertise == "" {
+		config.RaftAdvertise = config.RaftBind
 	}
-	if this.KVClusterPrimaryPrefix != "/" {
+	if config.KVClusterPrimaryPrefix != "/" {
 		// "/" remains "/"
 		// "prefix" turns to "prefix/"
 		// "some/prefix///" turns to "some/prefix/"
-		this.KVClusterPrimaryPrefix = strings.TrimRight(this.KVClusterPrimaryPrefix, "/")
-		this.KVClusterPrimaryPrefix = fmt.Sprintf("%s/", this.KVClusterPrimaryPrefix)
+		config.KVClusterPrimaryPrefix = strings.TrimRight(config.KVClusterPrimaryPrefix, "/")
+		config.KVClusterPrimaryPrefix = fmt.Sprintf("%s/", config.KVClusterPrimaryPrefix)
 	}
-	if this.HTTPAdvertise != "" {
-		u, err := url.Parse(this.HTTPAdvertise)
+	if config.HTTPAdvertise != "" {
+		u, err := url.Parse(config.HTTPAdvertise)
 		if err != nil {
-			return fmt.Errorf("Failed parsing HTTPAdvertise %s: %s", this.HTTPAdvertise, err.Error())
+			return fmt.Errorf("Failed parsing HTTPAdvertise %s: %s", config.HTTPAdvertise, err.Error())
 		}
 		if u.Scheme == "" {
 			return fmt.Errorf("If specified, HTTPAdvertise must include scheme (http:// or https://)")
@@ -504,19 +504,19 @@ func (this *Configuration) postReadAdjustments() error {
 		if u.Path != "" {
 			return fmt.Errorf("If specified, HTTPAdvertise must not specify a path")
 		}
-		if this.InstanceWriteBufferSize <= 0 {
-			this.BufferInstanceWrites = false
+		if config.InstanceWriteBufferSize <= 0 {
+			config.BufferInstanceWrites = false
 		}
 	}
 	return nil
 }
 
-func (this *Configuration) IsSQLite() bool {
-	return strings.Contains(this.BackendDB, "sqlite")
+func (config *Configuration) IsSQLite() bool {
+	return strings.Contains(config.BackendDB, "sqlite")
 }
 
-func (this *Configuration) IsMySQL() bool {
-	return this.BackendDB == "mysql" || this.BackendDB == ""
+func (config *Configuration) IsMySQL() bool {
+	return config.BackendDB == "mysql" || config.BackendDB == ""
 }
 
 // read reads configuration from given file, or silently skips if the file does not exist.

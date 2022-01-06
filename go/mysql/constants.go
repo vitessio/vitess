@@ -333,6 +333,9 @@ const (
 // The below are in sorted order by value, grouped by vterror code they should be bucketed into.
 // See above reference for more information on each code.
 const (
+	// Vitess specific errors, (100-999)
+	ERNotReplica = 100
+
 	// unknown
 	ERUnknownError = 1105
 

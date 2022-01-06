@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
@@ -254,4 +255,135 @@ func TestHashJoin(t *testing.T) {
 	utils.Exec(t, conn, `set workload = olap`)
 	defer utils.Exec(t, conn, `set workload = oltp`)
 	utils.AssertMatches(t, conn, `select /*vt+ ALLOW_HASH_JOIN */ t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
+}
+
+func TestMultiColumnVindex(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.ExecAllowError(t, conn, `delete from user_region`)
+	utils.Exec(t, conn, `insert into user_region(id, cola, colb) values (1, 1, 2),(2, 30, 40),(3, 500, 600),(4, 30, 40),(5, 10000, 30000),(6, 422333, 40),(7, 30, 60)`)
+
+	for _, workload := range []string{"olap", "oltp"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf(`set workload = %s`, workload))
+			utils.AssertMatches(t, conn, `select id from user_region where cola = 1 and colb = 2`, `[[INT64(1)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb = 40 order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb in (40,60) order by id`, `[[INT64(2)] [INT64(4)] [INT64(6)] [INT64(7)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 422333`, `[[INT64(6)]]`)
+			utils.AssertMatches(t, conn, `select id from user_region where cola in (30,422333) and colb in (40,60) and cola = 30 and colb = 60`, `[[INT64(7)]]`)
+		})
+	}
+}
+
+func TestFanoutVindex(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcases := []struct {
+		regionID int
+		exp      string
+	}{{
+		regionID: 24,
+		exp:      `[[INT64(24) INT64(1) VARCHAR("shard--19a0")]]`,
+	}, {
+		regionID: 25,
+		exp:      `[[INT64(25) INT64(2) VARCHAR("shard--19a0")] [INT64(25) INT64(7) VARCHAR("shard-19a0-20")]]`,
+	}, {
+		regionID: 31,
+		exp:      `[[INT64(31) INT64(8) VARCHAR("shard-19a0-20")]]`,
+	}, {
+		regionID: 32,
+		exp:      `[[INT64(32) INT64(14) VARCHAR("shard-20-20c0")] [INT64(32) INT64(19) VARCHAR("shard-20c0-")]]`,
+	}, {
+		regionID: 33,
+		exp:      `[[INT64(33) INT64(20) VARCHAR("shard-20c0-")]]`,
+	}}
+
+	defer utils.ExecAllowError(t, conn, `delete from region_tbl`)
+	uid := 1
+	// insert data in all shards to know where the query fan-out
+	for _, s := range shardedKsShards {
+		utils.Exec(t, conn, fmt.Sprintf("use `%s:%s`", shardedKs, s))
+		for _, tcase := range tcases {
+			utils.Exec(t, conn, fmt.Sprintf("insert into region_tbl(rg,uid,msg) values(%d,%d,'shard-%s')", tcase.regionID, uid, s))
+			uid++
+		}
+	}
+
+	newConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer newConn.Close()
+
+	for _, workload := range []string{"olap", "oltp"} {
+		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
+		for _, tcase := range tcases {
+			t.Run(workload+strconv.Itoa(tcase.regionID), func(t *testing.T) {
+				sql := fmt.Sprintf("select rg, uid, msg from region_tbl where rg = %d order by uid", tcase.regionID)
+				assert.Equal(t, tcase.exp, fmt.Sprintf("%v", utils.Exec(t, newConn, sql).Rows))
+			})
+		}
+	}
+}
+
+func TestSubShardVindex(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcases := []struct {
+		regionID int
+		exp      string
+	}{{
+		regionID: 140,
+		exp:      `[[INT64(140) VARBINARY("1") VARCHAR("1") VARCHAR("shard--19a0")]]`,
+	}, {
+		regionID: 412,
+		exp:      `[[INT64(412) VARBINARY("2") VARCHAR("2") VARCHAR("shard--19a0")] [INT64(412) VARBINARY("9") VARCHAR("9") VARCHAR("shard-19a0-20")]]`,
+	}, {
+		regionID: 24,
+		exp:      `[[INT64(24) VARBINARY("10") VARCHAR("10") VARCHAR("shard-19a0-20")]]`,
+	}, {
+		regionID: 116,
+		exp:      `[[INT64(116) VARBINARY("11") VARCHAR("11") VARCHAR("shard-19a0-20")]]`,
+	}, {
+		regionID: 239,
+		exp:      `[[INT64(239) VARBINARY("12") VARCHAR("12") VARCHAR("shard-19a0-20")]]`,
+	}, {
+		regionID: 89,
+		exp:      `[[INT64(89) VARBINARY("20") VARCHAR("20") VARCHAR("shard-20-20c0")] [INT64(89) VARBINARY("27") VARCHAR("27") VARCHAR("shard-20c0-")]]`,
+	}, {
+		regionID: 109,
+		exp:      `[[INT64(109) VARBINARY("28") VARCHAR("28") VARCHAR("shard-20c0-")]]`,
+	}}
+
+	defer utils.ExecAllowError(t, conn, `delete from multicol_tbl`)
+	uid := 1
+	// insert data in all shards to know where the query fan-out
+	for _, s := range shardedKsShards {
+		utils.Exec(t, conn, fmt.Sprintf("use `%s:%s`", shardedKs, s))
+		for _, tcase := range tcases {
+			utils.Exec(t, conn, fmt.Sprintf("insert into multicol_tbl(cola,colb,colc,msg) values(%d,_binary '%d','%d','shard-%s')", tcase.regionID, uid, uid, s))
+			uid++
+		}
+	}
+
+	newConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer newConn.Close()
+
+	for _, workload := range []string{"olap", "oltp"} {
+		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
+		for _, tcase := range tcases {
+			t.Run(workload+strconv.Itoa(tcase.regionID), func(t *testing.T) {
+				sql := fmt.Sprintf("select cola, colb, colc, msg from multicol_tbl where cola = %d order by cola,msg", tcase.regionID)
+				assert.Equal(t, tcase.exp, fmt.Sprintf("%v", utils.Exec(t, newConn, sql).Rows))
+			})
+		}
+	}
 }

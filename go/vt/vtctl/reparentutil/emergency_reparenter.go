@@ -177,7 +177,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	statusMap, primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, erp.logger)
+	statusMap, primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -294,7 +294,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
 ) error {
-	errCh := make(chan error)
+	errCh := make(chan concurrency.Error)
 	defer close(errCh)
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
@@ -307,13 +307,13 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		// maps: (1) the StopReplicationStatus of any replicas that actually
 		// stopped replication; and (2) the PrimaryStatus of anything that
 		// returned ErrNotReplica, which is a tablet that is either the current
-		// primary or is stuck thinking it is a MASTER but is not in actuality.
+		// primary or is stuck thinking it is a PRIMARY but is not in actuality.
 		//
 		// If we have a tablet in the validCandidates map that does not appear
 		// in the statusMap, then we have either (a) the current primary, which
 		// is not replicating, so it is not applying relay logs; or (b) a tablet
-		// that is stuck thinking it is MASTER but is not in actuality. In that
-		// second case - (b) - we will most likely find that the stuck MASTER
+		// that is stuck thinking it is PRIMARY but is not in actuality. In that
+		// second case - (b) - we will most likely find that the stuck PRIMARY
 		// does not have a winning position, and fail the ERS. If, on the other
 		// hand, it does have a winning position, we are trusting the operator
 		// to know what they are doing by emergency-reparenting onto that
@@ -328,7 +328,11 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 
 		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
 			var err error
-			defer func() { errCh <- err }()
+			defer func() {
+				errCh <- concurrency.Error{
+					Err: err,
+				}
+			}()
 			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
 		}(candidate, status)
 

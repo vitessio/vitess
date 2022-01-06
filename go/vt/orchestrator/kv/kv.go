@@ -21,28 +21,28 @@ import (
 	"sync"
 )
 
-type KVPair struct {
+type KeyValuePair struct {
 	Key   string
 	Value string
 }
 
-func NewKVPair(key string, value string) *KVPair {
-	return &KVPair{Key: key, Value: value}
+func NewKVPair(key string, value string) *KeyValuePair {
+	return &KeyValuePair{Key: key, Value: value}
 }
 
-func (this *KVPair) String() string {
-	return fmt.Sprintf("%s:%s", this.Key, this.Value)
+func (kvPair *KeyValuePair) String() string {
+	return fmt.Sprintf("%s:%s", kvPair.Key, kvPair.Value)
 }
 
-type KVStore interface {
+type KeyValueStore interface {
 	PutKeyValue(key string, value string) (err error)
 	GetKeyValue(key string) (value string, found bool, err error)
-	DistributePairs(kvPairs [](*KVPair)) (err error)
+	DistributePairs(kvPairs [](*KeyValuePair)) (err error)
 }
 
 var kvMutex sync.Mutex
 var kvInitOnce sync.Once
-var kvStores = []KVStore{}
+var kvStores []KeyValueStore
 
 // InitKVStores initializes the KV stores (duh), once in the lifetime of this app.
 // Configuration reload does not affect a running instance.
@@ -51,7 +51,7 @@ func InitKVStores() {
 	defer kvMutex.Unlock()
 
 	kvInitOnce.Do(func() {
-		kvStores = []KVStore{
+		kvStores = []KeyValueStore{
 			NewInternalKVStore(),
 			NewConsulStore(),
 			NewZkStore(),
@@ -59,7 +59,7 @@ func InitKVStores() {
 	})
 }
 
-func getKVStores() (stores []KVStore) {
+func getKVStores() (stores []KeyValueStore) {
 	kvMutex.Lock()
 	defer kvMutex.Unlock()
 
@@ -84,14 +84,14 @@ func PutValue(key string, value string) (err error) {
 	return nil
 }
 
-func PutKVPair(kvPair *KVPair) (err error) {
+func PutKVPair(kvPair *KeyValuePair) (err error) {
 	if kvPair == nil {
 		return nil
 	}
 	return PutValue(kvPair.Key, kvPair.Value)
 }
 
-func DistributePairs(kvPairs [](*KVPair)) (err error) {
+func DistributePairs(kvPairs [](*KeyValuePair)) (err error) {
 	for _, store := range getKVStores() {
 		if err := store.DistributePairs(kvPairs); err != nil {
 			return err

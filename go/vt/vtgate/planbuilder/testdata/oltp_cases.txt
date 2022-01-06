@@ -13,27 +13,13 @@
     "FieldQuery": "select c from sbtest34 where 1 != 1",
     "Query": "select c from sbtest34 where id = 15",
     "Table": "sbtest34",
-    "Values": 15,
+    "Values": [
+      "INT64(15)"
+    ],
     "Vindex": "hash"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT c FROM sbtest34 WHERE id=15",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": true
-    },
-    "FieldQuery": "select c from sbtest34 where 1 != 1",
-    "Query": "select c from sbtest34 where id = 15",
-    "Table": "sbtest34",
-    "Values": "INT64(15)",
-    "Vindex": "hash"
-  }
-}
+Gen4 plan same as above
 
 # OLTP simple range select
 "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10"

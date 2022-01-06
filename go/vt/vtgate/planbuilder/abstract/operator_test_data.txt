@@ -310,7 +310,7 @@ SubQuery: {
 select id from user_index where id = :id
 Vindex: {
 	Name: user_index
-	Value: id
+	Value: :id
 }
 
 select ui.id from user_index as ui join user as u where ui.id = 1 and ui.id = u.id

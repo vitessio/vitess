@@ -1548,7 +1548,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 	case mysql.ERNotSupportedYet:
 		errCode = vtrpcpb.Code_UNIMPLEMENTED
 	case mysql.ERDiskFull, mysql.EROutOfMemory, mysql.EROutOfSortMemory, mysql.ERConCount, mysql.EROutOfResources, mysql.ERRecordFileFull, mysql.ERHostIsBlocked,
-		mysql.ERCantCreateThread, mysql.ERTooManyDelayedThreads, mysql.ERNetPacketTooLarge, mysql.ERTooManyUserConnections, mysql.ERLockTableFull, mysql.ERUserLimitReached, mysql.ERVitessMaxRowsExceeded:
+		mysql.ERCantCreateThread, mysql.ERTooManyDelayedThreads, mysql.ERNetPacketTooLarge, mysql.ERTooManyUserConnections, mysql.ERLockTableFull, mysql.ERUserLimitReached:
 		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
@@ -1569,7 +1569,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		errCode = vtrpcpb.Code_CLUSTER_EVENT
 	case mysql.ERTableExists, mysql.ERDupEntry, mysql.ERFileExists, mysql.ERUDFExists:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock:
+	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock, mysql.ERVitessMaxRowsExceeded:
 		// For ERLockDeadlock, a deadlock rolls back the transaction.
 		errCode = vtrpcpb.Code_ABORTED
 	case mysql.ERUnknownComError, mysql.ERBadNullError, mysql.ERBadDb, mysql.ERBadTable, mysql.ERNonUniq, mysql.ERWrongFieldWithGroup, mysql.ERWrongGroupField,

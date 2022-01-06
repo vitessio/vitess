@@ -641,7 +641,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplySchema",
 				method: commandApplySchema,
-				params: "[-allow_long_unavailability] [-wait_replicas_timeout=10s] [-ddl_strategy=<ddl_strategy>] [-request_context=<unique-request-context>] [-skip_preflight] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
+				params: "[-allow_long_unavailability] [-wait_replicas_timeout=10s] [-ddl_strategy=<ddl_strategy>] [-uuid_list=<comma_separated_uuids>] [-request_context=<unique-request-context>] [-skip_preflight] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
 				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -request_context allows the user to specify a custom request context for online DDL migrations. If -skip_preflight, SQL goes directly to shards without going through sanity checks.",
 			},
 			{
@@ -952,7 +952,7 @@ func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.Ta
 func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dbNameOverride := subFlags.String("db_name_override", "", "Overrides the name of the database that the vttablet uses")
 	allowUpdate := subFlags.Bool("allow_update", false, "Use this flag to force initialization if a tablet with the same name already exists. Use with caution.")
-	allowPrimaryOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution.")
+	allowPrimaryOverride := subFlags.Bool("allow_master_override", false, "Use this flag to force initialization if a tablet is created as primary, and a primary for the keyspace/shard already exists. Use with caution.")
 	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
 	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
 	mysqlHost := subFlags.String("mysql_host", "", "The mysql host for the mysql server")
@@ -1666,17 +1666,6 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	deniedTablesStr := subFlags.String("denied_tables", "", "Specifies a comma-separated list of tables to add to the denylist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
 
-	// DEPRECATION START: remove after 12.0
-	blacklistedTablesStr := subFlags.String("blacklisted_tables", "", "Specifies a comma-separated list of tables to add to the denylist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
-
-	if *deniedTablesStr != "" && *blacklistedTablesStr != "" {
-		return fmt.Errorf("cannot specify both denied_tables and blacklisted_tables")
-	}
-	if *deniedTablesStr == "" && *blacklistedTablesStr != "" {
-		*deniedTablesStr = *blacklistedTablesStr
-	}
-	// DEPRECATION ends
-
 	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits.")
 	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes. This flag requires 'denied_tables' and 'remove' to be unset, otherwise it's ignored.")
 	if err := subFlags.Parse(args); err != nil {
@@ -2312,6 +2301,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout. -timeout is only supported for SwitchTraffic and ReverseTraffic.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication (default true). -reverse_replication is only supported for SwitchTraffic.")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up).  -keep_data is only supported for Complete and Cancel.")
+	keepRoutingRules := subFlags.Bool("keep_routing_rules", false, "Do not remove the routing rules for the source keyspace.  -keep_routing_rules is only supported for Complete and Cancel.")
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
@@ -2477,6 +2467,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
 		vrwp.KeepData = *keepData
+		vrwp.KeepRoutingRules = *keepRoutingRules
 	}
 	vrwp.WorkflowType = workflowType
 	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
@@ -2834,7 +2825,7 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	_, _, _ = dryRun, keyspace, workflowName
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, *dryRun)
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, false, *dryRun)
 	if err != nil {
 		return err
 	}
@@ -3232,6 +3223,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
+	uuidList := subFlags.String("uuid_list", "", "Optional: comma delimited explicit UUIDs for migration. If given, must match number of DDL changes")
 	requestContext := subFlags.String("request_context", "", "For Only DDL, optionally supply a custom unique string used as context for the migration(s) in this command. By default a unique context is auto-generated by Vitess")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	skipPreflight := subFlags.Bool("skip_preflight", false, "Skip pre-apply schema checks, and directly forward schema change query to shards")
@@ -3262,6 +3254,9 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		executor.SkipPreflight()
 	}
 	if err := executor.SetDDLStrategy(*ddlStrategy); err != nil {
+		return err
+	}
+	if err := executor.SetUUIDList(*uuidList); err != nil {
 		return err
 	}
 

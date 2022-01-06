@@ -100,10 +100,10 @@ func TestMain(m *testing.M) {
 			Name: keyspaceName,
 		}
 
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspaceLegacy(*keyspace, 2, true); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspaceLegacy(*keyspace, []string{"1"}, 1, false); err != nil {
 			return 1, err
 		}
 

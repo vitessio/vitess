@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -45,7 +46,7 @@ func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, 
 	case *concatenateTree:
 		return transformConcatenatePlan(ctx, n)
 	case *vindexTree:
-		return transformVindexTree(n)
+		return transformVindexTree(ctx, n)
 	case *correlatedSubqueryTree:
 		return transformCorrelatedSubquery(ctx, n)
 	}
@@ -76,10 +77,15 @@ func pushDistinct(plan logicalPlan) {
 	}
 }
 
-func transformVindexTree(n *vindexTree) (logicalPlan, error) {
+func transformVindexTree(ctx *planningContext, n *vindexTree) (logicalPlan, error) {
 	single, ok := n.vindex.(vindexes.SingleColumn)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
+	}
+
+	expr, err := evalengine.Convert(n.value, ctx.semTable)
+	if err != nil {
+		return nil, err
 	}
 	plan := &vindexFunc{
 		order:         1,
@@ -88,7 +94,7 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 		eVindexFunc: &engine.VindexFunc{
 			Opcode: n.opCode,
 			Vindex: single,
-			Value:  n.value,
+			Value:  expr,
 		},
 	}
 
@@ -376,7 +382,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	}
 
 	if n.selected != nil {
-		for _, predicate := range n.selected.predicates {
+		_, isMultiColumn := n.selected.foundVindex.(vindexes.MultiColumn)
+		for idx, predicate := range n.selected.predicates {
 			switch predicate := predicate.(type) {
 			case *sqlparser.ComparisonExpr:
 				if predicate.Operator == sqlparser.InOp {
@@ -387,6 +394,10 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 							if extractedSubquery != nil {
 								extractedSubquery.SetArgName(engine.ListVarName)
 							}
+						}
+						if isMultiColumn {
+							predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
+							continue
 						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
 					}
@@ -427,15 +438,11 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 		where = &sqlparser.Where{Expr: predicates, Type: sqlparser.WhereClause}
 	}
 
-	var singleColumn vindexes.SingleColumn
-	var value engine.RouteValue
+	var vindex vindexes.Vindex
+	var values []evalengine.Expr
 	if n.selectedVindex() != nil {
-		vdx, ok := n.selected.foundVindex.(vindexes.SingleColumn)
-		if !ok || len(n.selected.values) != 1 {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
-		}
-		singleColumn = vdx
-		value = &evalengine.RouteValue{Expr: n.selected.values[0]}
+		vindex = n.selected.foundVindex
+		values = n.selected.values
 	}
 
 	var expressions sqlparser.SelectExprs
@@ -471,8 +478,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 			Opcode:              n.routeOpCode,
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            n.keyspace,
-			Vindex:              singleColumn,
-			Value:               value,
+			Vindex:              vindex,
+			Values:              values,
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},

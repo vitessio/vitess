@@ -40,7 +40,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
 	var ksidVindex vindexes.SingleColumn
 	var ksidCol string
 	for _, index := range table.Ordered {
-		if !index.Vindex.IsUnique() {
+		if !index.IsUnique() {
 			continue
 		}
 		single, ok := index.Vindex.(vindexes.SingleColumn)
@@ -98,7 +98,7 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (evalengine.Expr, sql
 		default:
 			continue
 		}
-		expr, err := evalengine.Convert(comparison.Right, &noColumnLookup{semTable: semantics.EmptySemTable()})
+		expr, err := evalengine.Convert(comparison.Right, semantics.EmptySemTable())
 		if err != nil {
 			continue
 		}

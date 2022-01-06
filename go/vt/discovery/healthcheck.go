@@ -275,7 +275,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
 	cells := strings.Split(cellsToWatch, ",")
-	if len(cells) == 0 {
+	if cellsToWatch == "" {
 		cells = append(cells, localCell)
 	}
 	for _, c := range cells {
@@ -306,7 +306,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 
 	// start the topo watches here
 	for _, tw := range hc.topoWatchers {
-		go tw.Start()
+		tw.Start()
 	}
 
 	return hc

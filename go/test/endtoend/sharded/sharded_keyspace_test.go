@@ -109,18 +109,18 @@ func TestShardedKeyspace(t *testing.T) {
 
 	shard1Primary := shard1.Vttablets[0]
 	shard2Primary := shard2.Vttablets[0]
+	err := clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
+	require.Nil(t, err)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard2.Name, cell, shard2Primary.TabletUID)
+	require.Nil(t, err)
 
 	// apply the schema on the first shard through vtctl, so all tablets
 	// are the same.
-	_, err := shard1Primary.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
-	require.Nil(t, err)
-	_, err = shard1.Vttablets[1].VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
+	//apply the schema on the second shard.
+	_, err = shard1Primary.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
 	require.Nil(t, err)
 
-	//apply the schema on the second shard.
 	_, err = shard2Primary.VttabletProcess.QueryTablet(sqlSchemaReverse, keyspaceName, true)
-	require.Nil(t, err)
-	_, err = shard2.Vttablets[1].VttabletProcess.QueryTablet(sqlSchemaReverse, keyspaceName, true)
 	require.Nil(t, err)
 
 	if err = clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema); err != nil {
@@ -133,11 +133,6 @@ func TestShardedKeyspace(t *testing.T) {
 		shard1.Vttablets[1].Alias,
 		shard2Primary.Alias,
 		shard2.Vttablets[1].Alias)
-
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
-	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard2.Name, cell, shard2Primary.TabletUID)
-	require.Nil(t, err)
 
 	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard1Primary.Alias)
 	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard2Primary.Alias)
@@ -249,11 +244,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		}
 
 		for _, tablet := range shard.Vttablets {
-			if _, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
-				log.Error(err.Error())
-				return
-			}
-
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err := tablet.VttabletProcess.Setup(); err != nil {

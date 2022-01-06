@@ -150,7 +150,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "1"
+  "NextCount": "INT64(1)"
 }
 
 # sequence with number
@@ -164,7 +164,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "10"
+  "NextCount": "INT64(10)"
 }
 
 
@@ -179,7 +179,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "\":a\""
+  "NextCount": ":a"
 }
 
 # squence with bad value

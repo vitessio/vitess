@@ -79,6 +79,20 @@ export namespace vtadmin {
         public deleteShards(request: vtadmin.IDeleteShardsRequest): Promise<vtctldata.DeleteShardsResponse>;
 
         /**
+         * Calls DeleteTablet.
+         * @param request DeleteTabletRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and DeleteTabletResponse
+         */
+        public deleteTablet(request: vtadmin.IDeleteTabletRequest, callback: vtadmin.VTAdmin.DeleteTabletCallback): void;
+
+        /**
+         * Calls DeleteTablet.
+         * @param request DeleteTabletRequest message or plain object
+         * @returns Promise
+         */
+        public deleteTablet(request: vtadmin.IDeleteTabletRequest): Promise<vtadmin.DeleteTabletResponse>;
+
+        /**
          * Calls FindSchema.
          * @param request FindSchemaRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and Schema
@@ -345,6 +359,76 @@ export namespace vtadmin {
         public pingTablet(request: vtadmin.IPingTabletRequest): Promise<vtadmin.PingTabletResponse>;
 
         /**
+         * Calls RefreshState.
+         * @param request RefreshStateRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RefreshStateResponse
+         */
+        public refreshState(request: vtadmin.IRefreshStateRequest, callback: vtadmin.VTAdmin.RefreshStateCallback): void;
+
+        /**
+         * Calls RefreshState.
+         * @param request RefreshStateRequest message or plain object
+         * @returns Promise
+         */
+        public refreshState(request: vtadmin.IRefreshStateRequest): Promise<vtadmin.RefreshStateResponse>;
+
+        /**
+         * Calls ReparentTablet.
+         * @param request ReparentTabletRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ReparentTabletResponse
+         */
+        public reparentTablet(request: vtadmin.IReparentTabletRequest, callback: vtadmin.VTAdmin.ReparentTabletCallback): void;
+
+        /**
+         * Calls ReparentTablet.
+         * @param request ReparentTabletRequest message or plain object
+         * @returns Promise
+         */
+        public reparentTablet(request: vtadmin.IReparentTabletRequest): Promise<vtadmin.ReparentTabletResponse>;
+
+        /**
+         * Calls RunHealthCheck.
+         * @param request RunHealthCheckRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RunHealthCheckResponse
+         */
+        public runHealthCheck(request: vtadmin.IRunHealthCheckRequest, callback: vtadmin.VTAdmin.RunHealthCheckCallback): void;
+
+        /**
+         * Calls RunHealthCheck.
+         * @param request RunHealthCheckRequest message or plain object
+         * @returns Promise
+         */
+        public runHealthCheck(request: vtadmin.IRunHealthCheckRequest): Promise<vtadmin.RunHealthCheckResponse>;
+
+        /**
+         * Calls StartReplication.
+         * @param request StartReplicationRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and StartReplicationResponse
+         */
+        public startReplication(request: vtadmin.IStartReplicationRequest, callback: vtadmin.VTAdmin.StartReplicationCallback): void;
+
+        /**
+         * Calls StartReplication.
+         * @param request StartReplicationRequest message or plain object
+         * @returns Promise
+         */
+        public startReplication(request: vtadmin.IStartReplicationRequest): Promise<vtadmin.StartReplicationResponse>;
+
+        /**
+         * Calls StopReplication.
+         * @param request StopReplicationRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and StopReplicationResponse
+         */
+        public stopReplication(request: vtadmin.IStopReplicationRequest, callback: vtadmin.VTAdmin.StopReplicationCallback): void;
+
+        /**
+         * Calls StopReplication.
+         * @param request StopReplicationRequest message or plain object
+         * @returns Promise
+         */
+        public stopReplication(request: vtadmin.IStopReplicationRequest): Promise<vtadmin.StopReplicationResponse>;
+
+        /**
          * Calls VTExplain.
          * @param request VTExplainRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VTExplainResponse
@@ -388,6 +472,13 @@ export namespace vtadmin {
          * @param [response] DeleteShardsResponse
          */
         type DeleteShardsCallback = (error: (Error|null), response?: vtctldata.DeleteShardsResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#deleteTablet}.
+         * @param error Error, if any
+         * @param [response] DeleteTabletResponse
+         */
+        type DeleteTabletCallback = (error: (Error|null), response?: vtadmin.DeleteTabletResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
@@ -521,6 +612,41 @@ export namespace vtadmin {
          * @param [response] PingTabletResponse
          */
         type PingTabletCallback = (error: (Error|null), response?: vtadmin.PingTabletResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#refreshState}.
+         * @param error Error, if any
+         * @param [response] RefreshStateResponse
+         */
+        type RefreshStateCallback = (error: (Error|null), response?: vtadmin.RefreshStateResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#reparentTablet}.
+         * @param error Error, if any
+         * @param [response] ReparentTabletResponse
+         */
+        type ReparentTabletCallback = (error: (Error|null), response?: vtadmin.ReparentTabletResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#runHealthCheck}.
+         * @param error Error, if any
+         * @param [response] RunHealthCheckResponse
+         */
+        type RunHealthCheckCallback = (error: (Error|null), response?: vtadmin.RunHealthCheckResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#startReplication}.
+         * @param error Error, if any
+         * @param [response] StartReplicationResponse
+         */
+        type StartReplicationCallback = (error: (Error|null), response?: vtadmin.StartReplicationResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#stopReplication}.
+         * @param error Error, if any
+         * @param [response] StopReplicationResponse
+         */
+        type StopReplicationCallback = (error: (Error|null), response?: vtadmin.StopReplicationResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
@@ -2452,6 +2578,192 @@ export namespace vtadmin {
 
         /**
          * Converts this DeleteShardsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteTabletRequest. */
+    interface IDeleteTabletRequest {
+
+        /** DeleteTabletRequest alias */
+        alias?: (string|null);
+
+        /** DeleteTabletRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a DeleteTabletRequest. */
+    class DeleteTabletRequest implements IDeleteTabletRequest {
+
+        /**
+         * Constructs a new DeleteTabletRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IDeleteTabletRequest);
+
+        /** DeleteTabletRequest alias. */
+        public alias: string;
+
+        /** DeleteTabletRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new DeleteTabletRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteTabletRequest instance
+         */
+        public static create(properties?: vtadmin.IDeleteTabletRequest): vtadmin.DeleteTabletRequest;
+
+        /**
+         * Encodes the specified DeleteTabletRequest message. Does not implicitly {@link vtadmin.DeleteTabletRequest.verify|verify} messages.
+         * @param message DeleteTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IDeleteTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteTabletRequest message, length delimited. Does not implicitly {@link vtadmin.DeleteTabletRequest.verify|verify} messages.
+         * @param message DeleteTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IDeleteTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteTabletRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.DeleteTabletRequest;
+
+        /**
+         * Decodes a DeleteTabletRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.DeleteTabletRequest;
+
+        /**
+         * Verifies a DeleteTabletRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteTabletRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteTabletRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.DeleteTabletRequest;
+
+        /**
+         * Creates a plain object from a DeleteTabletRequest message. Also converts values to other types if specified.
+         * @param message DeleteTabletRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.DeleteTabletRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteTabletRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteTabletResponse. */
+    interface IDeleteTabletResponse {
+
+        /** DeleteTabletResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a DeleteTabletResponse. */
+    class DeleteTabletResponse implements IDeleteTabletResponse {
+
+        /**
+         * Constructs a new DeleteTabletResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IDeleteTabletResponse);
+
+        /** DeleteTabletResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new DeleteTabletResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteTabletResponse instance
+         */
+        public static create(properties?: vtadmin.IDeleteTabletResponse): vtadmin.DeleteTabletResponse;
+
+        /**
+         * Encodes the specified DeleteTabletResponse message. Does not implicitly {@link vtadmin.DeleteTabletResponse.verify|verify} messages.
+         * @param message DeleteTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IDeleteTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteTabletResponse message, length delimited. Does not implicitly {@link vtadmin.DeleteTabletResponse.verify|verify} messages.
+         * @param message DeleteTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IDeleteTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteTabletResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.DeleteTabletResponse;
+
+        /**
+         * Decodes a DeleteTabletResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.DeleteTabletResponse;
+
+        /**
+         * Verifies a DeleteTabletResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteTabletResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteTabletResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.DeleteTabletResponse;
+
+        /**
+         * Creates a plain object from a DeleteTabletResponse message. Also converts values to other types if specified.
+         * @param message DeleteTabletResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.DeleteTabletResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteTabletResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -5470,6 +5782,948 @@ export namespace vtadmin {
 
         /**
          * Converts this PingTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RefreshStateRequest. */
+    interface IRefreshStateRequest {
+
+        /** RefreshStateRequest alias */
+        alias?: (string|null);
+
+        /** RefreshStateRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a RefreshStateRequest. */
+    class RefreshStateRequest implements IRefreshStateRequest {
+
+        /**
+         * Constructs a new RefreshStateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRefreshStateRequest);
+
+        /** RefreshStateRequest alias. */
+        public alias: string;
+
+        /** RefreshStateRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new RefreshStateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RefreshStateRequest instance
+         */
+        public static create(properties?: vtadmin.IRefreshStateRequest): vtadmin.RefreshStateRequest;
+
+        /**
+         * Encodes the specified RefreshStateRequest message. Does not implicitly {@link vtadmin.RefreshStateRequest.verify|verify} messages.
+         * @param message RefreshStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRefreshStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RefreshStateRequest message, length delimited. Does not implicitly {@link vtadmin.RefreshStateRequest.verify|verify} messages.
+         * @param message RefreshStateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRefreshStateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RefreshStateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RefreshStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RefreshStateRequest;
+
+        /**
+         * Decodes a RefreshStateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RefreshStateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RefreshStateRequest;
+
+        /**
+         * Verifies a RefreshStateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RefreshStateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RefreshStateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RefreshStateRequest;
+
+        /**
+         * Creates a plain object from a RefreshStateRequest message. Also converts values to other types if specified.
+         * @param message RefreshStateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RefreshStateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RefreshStateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RefreshStateResponse. */
+    interface IRefreshStateResponse {
+
+        /** RefreshStateResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a RefreshStateResponse. */
+    class RefreshStateResponse implements IRefreshStateResponse {
+
+        /**
+         * Constructs a new RefreshStateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRefreshStateResponse);
+
+        /** RefreshStateResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new RefreshStateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RefreshStateResponse instance
+         */
+        public static create(properties?: vtadmin.IRefreshStateResponse): vtadmin.RefreshStateResponse;
+
+        /**
+         * Encodes the specified RefreshStateResponse message. Does not implicitly {@link vtadmin.RefreshStateResponse.verify|verify} messages.
+         * @param message RefreshStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRefreshStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RefreshStateResponse message, length delimited. Does not implicitly {@link vtadmin.RefreshStateResponse.verify|verify} messages.
+         * @param message RefreshStateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRefreshStateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RefreshStateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RefreshStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RefreshStateResponse;
+
+        /**
+         * Decodes a RefreshStateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RefreshStateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RefreshStateResponse;
+
+        /**
+         * Verifies a RefreshStateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RefreshStateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RefreshStateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RefreshStateResponse;
+
+        /**
+         * Creates a plain object from a RefreshStateResponse message. Also converts values to other types if specified.
+         * @param message RefreshStateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RefreshStateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RefreshStateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReparentTabletRequest. */
+    interface IReparentTabletRequest {
+
+        /** ReparentTabletRequest alias */
+        alias?: (string|null);
+
+        /** ReparentTabletRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a ReparentTabletRequest. */
+    class ReparentTabletRequest implements IReparentTabletRequest {
+
+        /**
+         * Constructs a new ReparentTabletRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IReparentTabletRequest);
+
+        /** ReparentTabletRequest alias. */
+        public alias: string;
+
+        /** ReparentTabletRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new ReparentTabletRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReparentTabletRequest instance
+         */
+        public static create(properties?: vtadmin.IReparentTabletRequest): vtadmin.ReparentTabletRequest;
+
+        /**
+         * Encodes the specified ReparentTabletRequest message. Does not implicitly {@link vtadmin.ReparentTabletRequest.verify|verify} messages.
+         * @param message ReparentTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IReparentTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReparentTabletRequest message, length delimited. Does not implicitly {@link vtadmin.ReparentTabletRequest.verify|verify} messages.
+         * @param message ReparentTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IReparentTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReparentTabletRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReparentTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReparentTabletRequest;
+
+        /**
+         * Decodes a ReparentTabletRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReparentTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReparentTabletRequest;
+
+        /**
+         * Verifies a ReparentTabletRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReparentTabletRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReparentTabletRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ReparentTabletRequest;
+
+        /**
+         * Creates a plain object from a ReparentTabletRequest message. Also converts values to other types if specified.
+         * @param message ReparentTabletRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ReparentTabletRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReparentTabletRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReparentTabletResponse. */
+    interface IReparentTabletResponse {
+
+        /** ReparentTabletResponse keyspace */
+        keyspace?: (string|null);
+
+        /** ReparentTabletResponse shard */
+        shard?: (string|null);
+
+        /** ReparentTabletResponse primary */
+        primary?: (string|null);
+    }
+
+    /** Represents a ReparentTabletResponse. */
+    class ReparentTabletResponse implements IReparentTabletResponse {
+
+        /**
+         * Constructs a new ReparentTabletResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IReparentTabletResponse);
+
+        /** ReparentTabletResponse keyspace. */
+        public keyspace: string;
+
+        /** ReparentTabletResponse shard. */
+        public shard: string;
+
+        /** ReparentTabletResponse primary. */
+        public primary: string;
+
+        /**
+         * Creates a new ReparentTabletResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReparentTabletResponse instance
+         */
+        public static create(properties?: vtadmin.IReparentTabletResponse): vtadmin.ReparentTabletResponse;
+
+        /**
+         * Encodes the specified ReparentTabletResponse message. Does not implicitly {@link vtadmin.ReparentTabletResponse.verify|verify} messages.
+         * @param message ReparentTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IReparentTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReparentTabletResponse message, length delimited. Does not implicitly {@link vtadmin.ReparentTabletResponse.verify|verify} messages.
+         * @param message ReparentTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IReparentTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReparentTabletResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReparentTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ReparentTabletResponse;
+
+        /**
+         * Decodes a ReparentTabletResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReparentTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ReparentTabletResponse;
+
+        /**
+         * Verifies a ReparentTabletResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReparentTabletResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReparentTabletResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ReparentTabletResponse;
+
+        /**
+         * Creates a plain object from a ReparentTabletResponse message. Also converts values to other types if specified.
+         * @param message ReparentTabletResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ReparentTabletResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReparentTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RunHealthCheckRequest. */
+    interface IRunHealthCheckRequest {
+
+        /** RunHealthCheckRequest alias */
+        alias?: (string|null);
+
+        /** RunHealthCheckRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a RunHealthCheckRequest. */
+    class RunHealthCheckRequest implements IRunHealthCheckRequest {
+
+        /**
+         * Constructs a new RunHealthCheckRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRunHealthCheckRequest);
+
+        /** RunHealthCheckRequest alias. */
+        public alias: string;
+
+        /** RunHealthCheckRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new RunHealthCheckRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RunHealthCheckRequest instance
+         */
+        public static create(properties?: vtadmin.IRunHealthCheckRequest): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Encodes the specified RunHealthCheckRequest message. Does not implicitly {@link vtadmin.RunHealthCheckRequest.verify|verify} messages.
+         * @param message RunHealthCheckRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRunHealthCheckRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RunHealthCheckRequest message, length delimited. Does not implicitly {@link vtadmin.RunHealthCheckRequest.verify|verify} messages.
+         * @param message RunHealthCheckRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRunHealthCheckRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RunHealthCheckRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RunHealthCheckRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Decodes a RunHealthCheckRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RunHealthCheckRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Verifies a RunHealthCheckRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RunHealthCheckRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RunHealthCheckRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RunHealthCheckRequest;
+
+        /**
+         * Creates a plain object from a RunHealthCheckRequest message. Also converts values to other types if specified.
+         * @param message RunHealthCheckRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RunHealthCheckRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RunHealthCheckRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RunHealthCheckResponse. */
+    interface IRunHealthCheckResponse {
+
+        /** RunHealthCheckResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a RunHealthCheckResponse. */
+    class RunHealthCheckResponse implements IRunHealthCheckResponse {
+
+        /**
+         * Constructs a new RunHealthCheckResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IRunHealthCheckResponse);
+
+        /** RunHealthCheckResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new RunHealthCheckResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RunHealthCheckResponse instance
+         */
+        public static create(properties?: vtadmin.IRunHealthCheckResponse): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Encodes the specified RunHealthCheckResponse message. Does not implicitly {@link vtadmin.RunHealthCheckResponse.verify|verify} messages.
+         * @param message RunHealthCheckResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IRunHealthCheckResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RunHealthCheckResponse message, length delimited. Does not implicitly {@link vtadmin.RunHealthCheckResponse.verify|verify} messages.
+         * @param message RunHealthCheckResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IRunHealthCheckResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RunHealthCheckResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RunHealthCheckResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Decodes a RunHealthCheckResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RunHealthCheckResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Verifies a RunHealthCheckResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RunHealthCheckResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RunHealthCheckResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.RunHealthCheckResponse;
+
+        /**
+         * Creates a plain object from a RunHealthCheckResponse message. Also converts values to other types if specified.
+         * @param message RunHealthCheckResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.RunHealthCheckResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RunHealthCheckResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a StartReplicationRequest. */
+    interface IStartReplicationRequest {
+
+        /** StartReplicationRequest alias */
+        alias?: (string|null);
+
+        /** StartReplicationRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a StartReplicationRequest. */
+    class StartReplicationRequest implements IStartReplicationRequest {
+
+        /**
+         * Constructs a new StartReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IStartReplicationRequest);
+
+        /** StartReplicationRequest alias. */
+        public alias: string;
+
+        /** StartReplicationRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new StartReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StartReplicationRequest instance
+         */
+        public static create(properties?: vtadmin.IStartReplicationRequest): vtadmin.StartReplicationRequest;
+
+        /**
+         * Encodes the specified StartReplicationRequest message. Does not implicitly {@link vtadmin.StartReplicationRequest.verify|verify} messages.
+         * @param message StartReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IStartReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StartReplicationRequest message, length delimited. Does not implicitly {@link vtadmin.StartReplicationRequest.verify|verify} messages.
+         * @param message StartReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IStartReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StartReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.StartReplicationRequest;
+
+        /**
+         * Decodes a StartReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.StartReplicationRequest;
+
+        /**
+         * Verifies a StartReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StartReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StartReplicationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.StartReplicationRequest;
+
+        /**
+         * Creates a plain object from a StartReplicationRequest message. Also converts values to other types if specified.
+         * @param message StartReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.StartReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StartReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a StartReplicationResponse. */
+    interface IStartReplicationResponse {
+
+        /** StartReplicationResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a StartReplicationResponse. */
+    class StartReplicationResponse implements IStartReplicationResponse {
+
+        /**
+         * Constructs a new StartReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IStartReplicationResponse);
+
+        /** StartReplicationResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new StartReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StartReplicationResponse instance
+         */
+        public static create(properties?: vtadmin.IStartReplicationResponse): vtadmin.StartReplicationResponse;
+
+        /**
+         * Encodes the specified StartReplicationResponse message. Does not implicitly {@link vtadmin.StartReplicationResponse.verify|verify} messages.
+         * @param message StartReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IStartReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StartReplicationResponse message, length delimited. Does not implicitly {@link vtadmin.StartReplicationResponse.verify|verify} messages.
+         * @param message StartReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IStartReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StartReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.StartReplicationResponse;
+
+        /**
+         * Decodes a StartReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.StartReplicationResponse;
+
+        /**
+         * Verifies a StartReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StartReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StartReplicationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.StartReplicationResponse;
+
+        /**
+         * Creates a plain object from a StartReplicationResponse message. Also converts values to other types if specified.
+         * @param message StartReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.StartReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StartReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a StopReplicationRequest. */
+    interface IStopReplicationRequest {
+
+        /** StopReplicationRequest alias */
+        alias?: (string|null);
+
+        /** StopReplicationRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a StopReplicationRequest. */
+    class StopReplicationRequest implements IStopReplicationRequest {
+
+        /**
+         * Constructs a new StopReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IStopReplicationRequest);
+
+        /** StopReplicationRequest alias. */
+        public alias: string;
+
+        /** StopReplicationRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new StopReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StopReplicationRequest instance
+         */
+        public static create(properties?: vtadmin.IStopReplicationRequest): vtadmin.StopReplicationRequest;
+
+        /**
+         * Encodes the specified StopReplicationRequest message. Does not implicitly {@link vtadmin.StopReplicationRequest.verify|verify} messages.
+         * @param message StopReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IStopReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StopReplicationRequest message, length delimited. Does not implicitly {@link vtadmin.StopReplicationRequest.verify|verify} messages.
+         * @param message StopReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IStopReplicationRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StopReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StopReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.StopReplicationRequest;
+
+        /**
+         * Decodes a StopReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StopReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.StopReplicationRequest;
+
+        /**
+         * Verifies a StopReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StopReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StopReplicationRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.StopReplicationRequest;
+
+        /**
+         * Creates a plain object from a StopReplicationRequest message. Also converts values to other types if specified.
+         * @param message StopReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.StopReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StopReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a StopReplicationResponse. */
+    interface IStopReplicationResponse {
+
+        /** StopReplicationResponse status */
+        status?: (string|null);
+    }
+
+    /** Represents a StopReplicationResponse. */
+    class StopReplicationResponse implements IStopReplicationResponse {
+
+        /**
+         * Constructs a new StopReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IStopReplicationResponse);
+
+        /** StopReplicationResponse status. */
+        public status: string;
+
+        /**
+         * Creates a new StopReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StopReplicationResponse instance
+         */
+        public static create(properties?: vtadmin.IStopReplicationResponse): vtadmin.StopReplicationResponse;
+
+        /**
+         * Encodes the specified StopReplicationResponse message. Does not implicitly {@link vtadmin.StopReplicationResponse.verify|verify} messages.
+         * @param message StopReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IStopReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StopReplicationResponse message, length delimited. Does not implicitly {@link vtadmin.StopReplicationResponse.verify|verify} messages.
+         * @param message StopReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IStopReplicationResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StopReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StopReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.StopReplicationResponse;
+
+        /**
+         * Decodes a StopReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StopReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.StopReplicationResponse;
+
+        /**
+         * Verifies a StopReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StopReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StopReplicationResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.StopReplicationResponse;
+
+        /**
+         * Creates a plain object from a StopReplicationResponse message. Also converts values to other types if specified.
+         * @param message StopReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.StopReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StopReplicationResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

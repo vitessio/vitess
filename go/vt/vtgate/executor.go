@@ -1724,12 +1724,24 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: shardGtids,
 	}
+	ts, err := e.serv.GetTopoServer()
+	if err != nil {
+		return err
+	}
+
+	vsm := newVStreamManager(e.resolver.resolver, e.serv, e.cell)
 	vs := &vstream{
-		vgtid:      vgtid,
-		tabletType: topodatapb.TabletType_PRIMARY,
-		filter:     filter,
-		send:       callback,
-		rss:        rss,
+		vgtid:              vgtid,
+		tabletType:         topodatapb.TabletType_PRIMARY,
+		filter:             filter,
+		send:               callback,
+		resolver:           e.resolver.resolver,
+		journaler:          make(map[int64]*journalEvent),
+		skewTimeoutSeconds: maxSkewTimeoutSeconds,
+		timestamps:         make(map[string]int64),
+		vsm:                vsm,
+		eventCh:            make(chan []*binlogdatapb.VEvent),
+		ts:                 ts,
 	}
 	_ = vs.stream(ctx)
 	return nil

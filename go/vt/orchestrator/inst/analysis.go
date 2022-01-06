@@ -70,7 +70,7 @@ const (
 	AllIntermediatePrimaryReplicasNotReplicating             AnalysisCode = "AllIntermediatePrimaryReplicasNotReplicating"
 	FirstTierReplicaFailingToConnectToPrimary                AnalysisCode = "FirstTierReplicaFailingToConnectToPrimary"
 	BinlogServerFailingToConnectToPrimary                    AnalysisCode = "BinlogServerFailingToConnectToPrimary"
-	PlannedReparentShard                                     AnalysisCode = "PlannedReparentShard"
+	GraceFulPrimaryTakeover                                  AnalysisCode = "GracefulPrimaryTakeover"
 )
 
 const (
@@ -197,39 +197,40 @@ type ReplicationAnalysisChangelog struct {
 	Changelog           []string
 }
 
-func (this *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
+func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
 		ReplicationAnalysis
 	}{}
-	i.ReplicationAnalysis = *this
+	i.ReplicationAnalysis = *replicationAnalysis
 
 	return json.Marshal(i)
 }
 
 // ReadReplicaHostsFromString parses and reads replica keys from comma delimited string
-func (this *ReplicationAnalysis) ReadReplicaHostsFromString(replicaHostsString string) error {
-	this.Replicas = *NewInstanceKeyMap()
-	return this.Replicas.ReadCommaDelimitedList(replicaHostsString)
+func (replicationAnalysis *ReplicationAnalysis) ReadReplicaHostsFromString(replicaHostsString string) error {
+	replicationAnalysis.Replicas = *NewInstanceKeyMap()
+	return replicationAnalysis.Replicas.ReadCommaDelimitedList(replicaHostsString)
 }
 
 // AnalysisString returns a human friendly description of all analysis issues
-func (this *ReplicationAnalysis) AnalysisString() string {
+func (replicationAnalysis *ReplicationAnalysis) AnalysisString() string {
 	result := []string{}
-	if this.Analysis != NoProblem {
-		result = append(result, string(this.Analysis))
+	if replicationAnalysis.Analysis != NoProblem {
+		result = append(result, string(replicationAnalysis.Analysis))
 	}
-	for _, structureAnalysis := range this.StructureAnalysis {
+	for _, structureAnalysis := range replicationAnalysis.StructureAnalysis {
 		result = append(result, string(structureAnalysis))
 	}
 	return strings.Join(result, ", ")
 }
 
 // Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)
-func (this *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
-	if this.IsCoPrimary {
+func (replicationAnalysis *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
+	if replicationAnalysis.IsCoPrimary {
 		return AnalysisInstanceTypeCoPrimary
 	}
-	if this.IsPrimary {
+
+	if replicationAnalysis.IsPrimary {
 		return AnalysisInstanceTypePrimary
 	}
 	return AnalysisInstanceTypeIntermediatePrimary
