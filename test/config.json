@@ -438,7 +438,7 @@
 			"Manual": false,
 			"Shard": "14",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_reparent"]
 		},
 		"plannedreparent": {
 			"File": "unused.go",
@@ -447,7 +447,7 @@
 			"Manual": false,
 			"Shard": "14",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_reparent"]
 		},
 		"resharding": {
 			"File": "unused.go",
