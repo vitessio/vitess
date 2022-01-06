@@ -502,9 +502,21 @@ exponent:
 	}
 
 exit:
-	// A letter cannot immediately follow a number.
 	if isLetter(tkn.cur()) {
-		return LEX_ERROR, tkn.buf[start:tkn.Pos]
+		// A letter cannot immediately follow a float number.
+		if token == FLOAT {
+			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+		}
+		// A letter seen after a few numbers means that we should parse this
+		// as an identifier and not a number.
+		for {
+			ch := tkn.cur()
+			if !isLetter(ch) && !isDigit(ch) {
+				break
+			}
+			tkn.skip(1)
+		}
+		return ID, tkn.buf[start:tkn.Pos]
 	}
 
 	return token, tkn.buf[start:tkn.Pos]
