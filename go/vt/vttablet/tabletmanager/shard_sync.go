@@ -114,10 +114,10 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			}
 			if shouldDemote {
 				// Someone updated the PrimaryTermStartTime while we still think we're primary.
-				// This means that we should abort our term, since someone else must have claimed primaryship
+				// This means that we should end our term, since someone else must have claimed primaryship
 				// and wrote to the shard record
 				if err := tm.endPrimaryTerm(ctx, primaryAlias); err != nil {
-					log.Errorf("Failed to abort primary term: %v", err)
+					log.Errorf("Failed to end primary term: %v", err)
 					// Start retry timer and go back to sleep.
 					retryChan = time.After(*shardSyncRetryDelay)
 					continue

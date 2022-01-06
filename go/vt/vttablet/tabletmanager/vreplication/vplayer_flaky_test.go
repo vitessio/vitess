@@ -482,7 +482,7 @@ func TestPlayerFilters(t *testing.T) {
 		"create table src5(id1 int, id2 int, val varbinary(128), primary key(id1))",
 		fmt.Sprintf("create table %s.dst5(id1 int, val varbinary(128), primary key(id1))", vrepldb),
 		"create table srcCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))",
-		fmt.Sprintf("create table %s.dstCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))", vrepldb),
+		fmt.Sprintf("create table %s.dstCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, val2 varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -527,7 +527,7 @@ func TestPlayerFilters(t *testing.T) {
 			Filter: "select id1, val from src5 where val = 'abc'",
 		}, {
 			Match:  "dstCharset",
-			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val from srcCharset",
+			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val2 from srcCharset",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -778,12 +778,12 @@ func TestPlayerFilters(t *testing.T) {
 		input: "insert into srcCharset values (1,'木元')",
 		output: []string{
 			"begin",
-			"insert into dstCharset(id1,val) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"insert into dstCharset(id1,val,val2) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'),concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
 			"/update _vt.vreplication set pos=",
 			"commit",
 		},
 		table: "dstCharset",
-		data:  [][]string{{"1", "木abcxyz"}},
+		data:  [][]string{{"1", "木abcxyz", "木abcxyz"}},
 	}}
 
 	for _, tcase := range testcases {

@@ -109,11 +109,8 @@ func resolveMultiValueShards(
 	val evalengine.Expr,
 	vindex vindexes.SingleColumn,
 ) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-	env := &evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-
-	keys, err := val.Evaluate(env)
+	env := evalengine.EnvWithBindVars(bindVars)
+	keys, err := env.Evaluate(val)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -22,6 +22,10 @@ set -x
 go get github.com/AdaLogics/go-fuzz-headers
 go mod vendor
 
+# Disable logging for mysql conn
+# This affects the mysql fuzzers
+sed -i '/log.Errorf/c\\/\/log.Errorf' $SRC/vitess/go/mysql/conn.go
+
 mv ./go/vt/vttablet/tabletmanager/vreplication/framework_test.go \
    ./go/vt/vttablet/tabletmanager/vreplication/framework_fuzz.go
 
@@ -40,6 +44,21 @@ mv ./go/vt/vtgate/planbuilder/plan_test.go \
 # tabletserver fuzzer
 mv ./go/vt/vttablet/tabletserver/testutils_test.go \
    ./go/vt/vttablet/tabletserver/testutils_fuzz.go
+
+# autogenerate and build api_marshal_fuzzer:
+cd $SRC/vitess/go/vt
+grep -r ') Unmarshal' .>>/tmp/marshal_targets.txt
+cd $SRC/vitess/go/test/fuzzing/autogenerate
+go run convert_grep_to_fuzzer.go
+mv api_marshal_fuzzer.go $SRC/vitess/go/test/fuzzing/
+compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzAPIMarshal api_marshal_fuzzer
+
+# collation fuzzer
+mv ./go/mysql/collations/uca_test.go \
+   ./go/mysql/collations/uca_test_fuzz.go
+
+compile_go_fuzzer vitess.io/vitess/go/mysql/collations FuzzCollations fuzz_collations
+
 
 compile_go_fuzzer vitess.io/vitess/go/vt/vtgate/planbuilder FuzzTestBuilder fuzz_test_builder gofuzz
 compile_go_fuzzer vitess.io/vitess/go/vt/vtgate/vindexes FuzzVindex fuzz_vindex
@@ -60,6 +79,7 @@ compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzSplitStatementToPieces fu
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzTabletManager_ExecuteFetchAsDba fuzz_tablet_manager_execute_fetch_as_dba
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzUnmarshalJSON fuzz_tabletserver_rules_unmarshal_json
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzLoadTable fuzz_load_table
+
 
 compile_go_fuzzer vitess.io/vitess/go/mysql FuzzWritePacket write_packet_fuzzer
 compile_go_fuzzer vitess.io/vitess/go/mysql FuzzHandleNextCommand handle_next_command_fuzzer

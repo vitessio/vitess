@@ -26,6 +26,7 @@ import (
 
 var (
 	_ SingleColumn = (*UnicodeLooseMD5)(nil)
+	_ Hashing      = (*UnicodeLooseMD5)(nil)
 )
 
 // UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
@@ -64,13 +65,13 @@ func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
 
 // Verify returns true if ids maps to ksids.
 func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		data, err := unicodeHash(vMD5Hash, ids[i])
+	out := make([]bool, 0, len(ids))
+	for i, id := range ids {
+		data, err := vind.Hash(id)
 		if err != nil {
 			return nil, fmt.Errorf("UnicodeLooseMD5.Verify: %v", err)
 		}
-		out[i] = bytes.Equal(data, ksids[i])
+		out = append(out, bytes.Equal(data, ksids[i]))
 	}
 	return out, nil
 }
@@ -79,13 +80,17 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
-		data, err := unicodeHash(vMD5Hash, id)
+		data, err := vind.Hash(id)
 		if err != nil {
 			return nil, fmt.Errorf("UnicodeLooseMD5.Map: %v", err)
 		}
 		out = append(out, key.DestinationKeyspaceID(data))
 	}
 	return out, nil
+}
+
+func (vind *UnicodeLooseMD5) Hash(id sqltypes.Value) ([]byte, error) {
+	return unicodeHash(vMD5Hash, id)
 }
 
 func init() {

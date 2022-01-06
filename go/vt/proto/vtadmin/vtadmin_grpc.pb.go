@@ -27,6 +27,8 @@ type VTAdminClient interface {
 	DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.DeleteKeyspaceResponse, error)
 	// DeleteShard deletes one or more shards in the given cluster and keyspace.
 	DeleteShards(ctx context.Context, in *DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error)
+	// DeleteTablet deletes a tablet from the topology
+	DeleteTablet(ctx context.Context, in *DeleteTabletRequest, opts ...grpc.CallOption) (*DeleteTabletResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -59,8 +61,6 @@ type VTAdminClient interface {
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
-	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
-	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
@@ -75,6 +75,18 @@ type VTAdminClient interface {
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
+	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
+	// RefreshState reloads the tablet record on the specified tablet.
+	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
+	// ReparentTablet
+	ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error)
+	// RunHealthCheck runs a health check on the tablet
+	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
+	// StartReplication will run the underlying database command to start replication on a tablet
+	StartReplication(ctx context.Context, in *StartReplicationRequest, opts ...grpc.CallOption) (*StartReplicationResponse, error)
+	// StopReplication will run th underlying database command to stop replication on a tablet
+	StopReplication(ctx context.Context, in *StopReplicationRequest, opts ...grpc.CallOption) (*StopReplicationResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
 }
@@ -117,6 +129,15 @@ func (c *vTAdminClient) DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRe
 func (c *vTAdminClient) DeleteShards(ctx context.Context, in *DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error) {
 	out := new(vtctldata.DeleteShardsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/DeleteShards", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) DeleteTablet(ctx context.Context, in *DeleteTabletRequest, opts ...grpc.CallOption) (*DeleteTabletResponse, error) {
+	out := new(DeleteTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/DeleteTablet", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -231,15 +252,6 @@ func (c *vTAdminClient) GetTablet(ctx context.Context, in *GetTabletRequest, opt
 	return out, nil
 }
 
-func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error) {
-	out := new(PingTabletResponse)
-	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PingTablet", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vTAdminClient) GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error) {
 	out := new(GetTabletsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTablets", in, out, opts...)
@@ -294,6 +306,60 @@ func (c *vTAdminClient) GetWorkflows(ctx context.Context, in *GetWorkflowsReques
 	return out, nil
 }
 
+func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error) {
+	out := new(PingTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PingTablet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error) {
+	out := new(RefreshStateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RefreshState", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error) {
+	out := new(ReparentTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReparentTablet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error) {
+	out := new(RunHealthCheckResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RunHealthCheck", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) StartReplication(ctx context.Context, in *StartReplicationRequest, opts ...grpc.CallOption) (*StartReplicationResponse, error) {
+	out := new(StartReplicationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StartReplication", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) StopReplication(ctx context.Context, in *StopReplicationRequest, opts ...grpc.CallOption) (*StopReplicationResponse, error) {
+	out := new(StopReplicationResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StopReplication", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
 	out := new(VTExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
@@ -315,6 +381,8 @@ type VTAdminServer interface {
 	DeleteKeyspace(context.Context, *DeleteKeyspaceRequest) (*vtctldata.DeleteKeyspaceResponse, error)
 	// DeleteShard deletes one or more shards in the given cluster and keyspace.
 	DeleteShards(context.Context, *DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error)
+	// DeleteTablet deletes a tablet from the topology
+	DeleteTablet(context.Context, *DeleteTabletRequest) (*DeleteTabletResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -347,8 +415,6 @@ type VTAdminServer interface {
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
-	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
-	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
@@ -363,6 +429,18 @@ type VTAdminServer interface {
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
+	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
+	// RefreshState reloads the tablet record on the specified tablet.
+	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
+	// ReparentTablet
+	ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error)
+	// RunHealthCheck runs a health check on the tablet
+	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
+	// StartReplication will run the underlying database command to start replication on a tablet
+	StartReplication(context.Context, *StartReplicationRequest) (*StartReplicationResponse, error)
+	// StopReplication will run th underlying database command to stop replication on a tablet
+	StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
 	mustEmbedUnimplementedVTAdminServer()
@@ -383,6 +461,9 @@ func (UnimplementedVTAdminServer) DeleteKeyspace(context.Context, *DeleteKeyspac
 }
 func (UnimplementedVTAdminServer) DeleteShards(context.Context, *DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteShards not implemented")
+}
+func (UnimplementedVTAdminServer) DeleteTablet(context.Context, *DeleteTabletRequest) (*DeleteTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTablet not implemented")
 }
 func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest) (*Schema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindSchema not implemented")
@@ -420,9 +501,6 @@ func (UnimplementedVTAdminServer) GetSrvVSchemas(context.Context, *GetSrvVSchema
 func (UnimplementedVTAdminServer) GetTablet(context.Context, *GetTabletRequest) (*Tablet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablet not implemented")
 }
-func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
-}
 func (UnimplementedVTAdminServer) GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
 }
@@ -440,6 +518,24 @@ func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowReque
 }
 func (UnimplementedVTAdminServer) GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
+}
+func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
+}
+func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshState not implemented")
+}
+func (UnimplementedVTAdminServer) ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVTAdminServer) StartReplication(context.Context, *StartReplicationRequest) (*StartReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartReplication not implemented")
+}
+func (UnimplementedVTAdminServer) StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopReplication not implemented")
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
@@ -525,6 +621,24 @@ func _VTAdmin_DeleteShards_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).DeleteShards(ctx, req.(*DeleteShardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_DeleteTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).DeleteTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/DeleteTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).DeleteTablet(ctx, req.(*DeleteTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -745,24 +859,6 @@ func _VTAdmin_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingTabletRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VTAdminServer).PingTablet(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtadmin.VTAdmin/PingTablet",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VTAdminServer).PingTablet(ctx, req.(*PingTabletRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetTabletsRequest)
 	if err := dec(in); err != nil {
@@ -871,6 +967,114 @@ func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).PingTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/PingTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).PingTablet(ctx, req.(*PingTabletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RefreshState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RefreshState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RefreshState(ctx, req.(*RefreshStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReparentTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReparentTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReparentTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReparentTablet(ctx, req.(*ReparentTabletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunHealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RunHealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RunHealthCheck",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RunHealthCheck(ctx, req.(*RunHealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_StartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StartReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StartReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StartReplication(ctx, req.(*StartReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_StopReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).StopReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/StopReplication",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).StopReplication(ctx, req.(*StopReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
@@ -911,6 +1115,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteShards",
 			Handler:    _VTAdmin_DeleteShards_Handler,
+		},
+		{
+			MethodName: "DeleteTablet",
+			Handler:    _VTAdmin_DeleteTablet_Handler,
 		},
 		{
 			MethodName: "FindSchema",
@@ -961,10 +1169,6 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetTablet_Handler,
 		},
 		{
-			MethodName: "PingTablet",
-			Handler:    _VTAdmin_PingTablet_Handler,
-		},
-		{
 			MethodName: "GetTablets",
 			Handler:    _VTAdmin_GetTablets_Handler,
 		},
@@ -987,6 +1191,30 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWorkflows",
 			Handler:    _VTAdmin_GetWorkflows_Handler,
+		},
+		{
+			MethodName: "PingTablet",
+			Handler:    _VTAdmin_PingTablet_Handler,
+		},
+		{
+			MethodName: "RefreshState",
+			Handler:    _VTAdmin_RefreshState_Handler,
+		},
+		{
+			MethodName: "ReparentTablet",
+			Handler:    _VTAdmin_ReparentTablet_Handler,
+		},
+		{
+			MethodName: "RunHealthCheck",
+			Handler:    _VTAdmin_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "StartReplication",
+			Handler:    _VTAdmin_StartReplication_Handler,
+		},
+		{
+			MethodName: "StopReplication",
+			Handler:    _VTAdmin_StopReplication_Handler,
 		},
 		{
 			MethodName: "VTExplain",

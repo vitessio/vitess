@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,7 +40,7 @@ import (
 
 var (
 	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
-	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
+	setSuperReadOnly = flag.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
 )
 
 // ReplicationStatus returns the replication status
@@ -250,7 +251,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 	defer tm.unlock()
 
 	// Initializing as primary implies undoing any previous "do not replicate".
-	tm.replManager.setReplicationStopped(false)
+	tm.replManager.reset()
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
@@ -258,6 +259,10 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return "", err
 	}
+
+	// Execute ALTER statement on reparent_journal table and ignore errors
+	cmds = mysqlctl.AlterReparentJournal()
+	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition()
@@ -289,7 +294,15 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 		return err
 	}
 	cmds := mysqlctl.CreateReparentJournal()
-	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos))
+	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return err
+	}
+
+	// Execute ALTER statement on reparent_journal table and ignore errors
+	cmds = mysqlctl.AlterReparentJournal()
+	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+
+	cmds = []string{mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)}
 
 	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
@@ -431,7 +444,11 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if *setSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			return nil, err
+			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+				log.Warningf("server does not know about super_read_only, continuing anyway...")
+			} else {
+				return nil, err
+			}
 		}
 	} else {
 		if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {

@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -105,28 +104,6 @@ func (rb *routeGen4) prepareTheAST() {
 		}
 		return true, nil
 	}, rb.Select)
-}
-
-// procureValues procures and converts the input into
-// the expected types for rb.Values.
-func (rb *routeGen4) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
-	switch val := val.(type) {
-	case sqlparser.ValTuple:
-		pv := sqltypes.PlanValue{}
-		for _, val := range val {
-			v, err := rb.procureValues(plan, jt, val)
-			if err != nil {
-				return pv, err
-			}
-			pv.Values = append(pv.Values, v)
-		}
-		return pv, nil
-	case *sqlparser.ColName:
-		joinVar := jt.Procure(plan, val, rb.Order())
-		return sqltypes.PlanValue{Key: joinVar}, nil
-	default:
-		return sqlparser.NewPlanValue(val)
-	}
 }
 
 func (rb *routeGen4) isLocal(col *sqlparser.ColName) bool {

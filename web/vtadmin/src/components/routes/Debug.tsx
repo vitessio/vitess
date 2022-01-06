@@ -1,16 +1,18 @@
 import * as React from 'react';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Theme, useTheme } from '../../hooks/useTheme';
-import { Button } from '../Button';
 import { Icon, Icons } from '../Icon';
 import { Select } from '../inputs/Select';
+import { Intent } from '../intent';
 import { ContentContainer } from '../layout/ContentContainer';
+import { warn, danger, success, info } from '../Snackbar';
 import { Tab } from '../tabs/Tab';
 import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
 import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
 
+/* eslint-disable jsx-a11y/anchor-is-valid */
 export const Debug = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
@@ -259,97 +261,105 @@ export const Debug = () => {
                                 size="large"
                                 placeholder="Button-adjacent"
                             />
-                            <Button size="large">Primary</Button>
-                            <Button secondary size="large">
+                            <button className="btn btn-lg" type="button">
+                                Primary
+                            </button>
+                            <button className="btn btn-lg btn-secondary" type="button">
                                 Secondary
-                            </Button>
+                            </button>
                         </div>
                         <div className={style.inputRow}>
                             <TextInput iconLeft={Icons.search} iconRight={Icons.delete} placeholder="Button-adjacent" />
-                            <Button>Primary</Button>
-                            <Button secondary>Secondary</Button>
+                            <button className="btn" type="button">
+                                Primary
+                            </button>
+                            <button className="btn btn-secondary" type="button">
+                                Secondary
+                            </button>
                         </div>
                     </div>
                 </section>
 
                 <section>
                     <h3 className="mt-12 mb-8">Buttons</h3>
-                    <div className={style.buttonContainer}>
-                        {/* Large */}
-                        <Button size="large">Button</Button>
-                        <Button secondary size="large">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} size="large">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} secondary size="large">
-                            Button
-                        </Button>
-                        <Button disabled size="large">
-                            Button
-                        </Button>
-                        <Button disabled secondary size="large">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} size="large">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} secondary size="large">
-                            Button
-                        </Button>
 
-                        {/* Medium */}
-                        <Button size="medium">Button</Button>
-                        <Button secondary size="medium">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} size="medium">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} secondary size="medium">
-                            Button
-                        </Button>
-                        <Button disabled size="medium">
-                            Button
-                        </Button>
-                        <Button disabled secondary size="medium">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} size="medium">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} secondary size="medium">
-                            Button
-                        </Button>
+                    {['btn-lg', '', 'btn-sm'].map((s, idx) => {
+                        return (
+                            <div className="my-16">
+                                {['', 'btn-danger', 'btn-warning', 'btn-success'].map((v) => {
+                                    return (
+                                        <div className="flex gap-4 my-6" key={`${idx}-${v}`}>
+                                            <button className={`btn ${s} ${v}`}>Button</button>
+                                            <a className={`btn ${s} ${v}`} href="#">
+                                                Link
+                                            </a>
 
-                        {/* Small */}
-                        <Button size="small">Button</Button>
-                        <Button secondary size="small">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} size="small">
-                            Button
-                        </Button>
-                        <Button icon={Icons.circleAdd} secondary size="small">
-                            Button
-                        </Button>
-                        <Button disabled size="small">
-                            Button
-                        </Button>
-                        <Button disabled secondary size="small">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} size="small">
-                            Button
-                        </Button>
-                        <Button disabled icon={Icons.circleAdd} secondary size="small">
-                            Button
-                        </Button>
-                    </div>
+                                            <button className={`btn ${s} ${v} btn-secondary`}>Button</button>
+                                            <a className={`btn ${s} ${v} btn-secondary`} href="#">
+                                                Link
+                                            </a>
+
+                                            <button className={`btn ${s} ${v} btn-secondary`}>
+                                                <Icon icon={Icons.circleAdd} />
+                                                Button
+                                            </button>
+                                            <a className={`btn ${s} ${v} btn-secondary`} href="#">
+                                                <Icon icon={Icons.circleAdd} />
+                                                Link
+                                            </a>
+
+                                            <button className={`btn ${s} ${v}`} disabled>
+                                                Button
+                                            </button>
+                                            <button className={`btn ${s} ${v} btn-secondary`} disabled>
+                                                <Icon icon={Icons.circleAdd} />
+                                                Button
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+                </section>
+                <section>
+                    <Snackbars />
                 </section>
             </div>
         </ContentContainer>
+    );
+};
+
+const Snackbars: React.FC = () => {
+    const intents = Object.keys(Intent);
+    return (
+        <div>
+            <h3 className="mt-12 mb-8">Snackbars</h3>
+
+            {intents.map((i) => {
+                const onClick = () => {
+                    switch (i) {
+                        case 'danger':
+                            danger('This is a danger snackbar.');
+                            break;
+                        case 'success':
+                            success('This is a success snackbar.');
+                            break;
+                        case 'none':
+                            info('This is an info snackbar.');
+                            break;
+                        case 'warning':
+                            warn('This is a warn snackbar with a very very very very very very very long message.');
+                            break;
+                    }
+                };
+                return (
+                    <button onClick={onClick} className={`btn btn-secondary mr-2`} key={i}>
+                        {i}
+                    </button>
+                );
+            })}
+        </div>
     );
 };
 

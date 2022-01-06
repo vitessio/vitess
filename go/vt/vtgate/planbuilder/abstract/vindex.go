@@ -17,7 +17,6 @@ limitations under the License.
 package abstract
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,7 +31,7 @@ type (
 		OpCode engine.VindexOpcode
 		Table  VindexTable
 		Vindex vindexes.Vindex
-		Value  sqltypes.PlanValue
+		Value  sqlparser.Expr
 	}
 
 	// VindexTable contains information about the vindex table we want to query
@@ -52,7 +51,7 @@ func (v *Vindex) TableID() semantics.TableSet {
 	return v.Table.TableID
 }
 
-const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val>"
+const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // PushPredicate implements the Operator interface
 func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
@@ -71,7 +70,7 @@ func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not a comparison)")
 		}
-		if comparison.Operator != sqlparser.EqualOp {
+		if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not equality)")
 		}
 		colname, ok := comparison.Left.(*sqlparser.ColName)
@@ -83,11 +82,12 @@ func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable
 		}
 
 		// check RHS
-		if !sqlparser.IsValue(comparison.Right) {
+		var err error
+		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
+			v.Value = comparison.Right
+		} else {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (rhs is not a value)")
 		}
-		var err error
-		v.Value, err = sqlparser.NewPlanValue(comparison.Right)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+": %v", err)
 		}
@@ -105,7 +105,7 @@ func (v *Vindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 // CheckValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)")
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 	}
 
 	return nil

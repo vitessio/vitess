@@ -558,6 +558,10 @@ func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value
 	return vc.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
 }
 
+func (vc *vcursorImpl) ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
+	return vc.resolver.ResolveDestinationsMultiCol(vc.ctx, keyspace, vc.tabletType, ids, destinations)
+}
+
 func (vc *vcursorImpl) Session() engine.SessionActions {
 	return vc
 }

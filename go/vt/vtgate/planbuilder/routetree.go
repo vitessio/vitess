@@ -17,14 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
-	"strings"
-
-	"vitess.io/vitess/go/mysql/collations"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -81,8 +76,10 @@ type (
 
 	// vindexOption stores the information needed to know if we have all the information needed to use a vindex
 	vindexOption struct {
-		ready       bool
-		values      []evalengine.Expr
+		ready  bool
+		values []evalengine.Expr
+		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
+		colsSeen    map[string]interface{}
 		valueExprs  []sqlparser.Expr
 		predicates  []sqlparser.Expr
 		opcode      engine.RouteOpcode
@@ -456,7 +453,7 @@ func (rp *routeTree) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) 
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, _ := evalengine.Convert(expr, &noColumnLookup{semTable: ctx.semTable})
+		pv, _ := evalengine.Convert(expr, ctx.semTable)
 		if pv != nil {
 			return pv
 		}
@@ -464,24 +461,6 @@ func (rp *routeTree) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) 
 
 	return nil
 }
-
-type noColumnLookup struct {
-	semTable *semantics.SemTable
-}
-
-var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
-
-// ColumnLookup implements the ConverterLookup interface
-func (lookup *noColumnLookup) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, columnNotSupportedErr
-}
-
-// CollationIDLookup implements the ConverterLookup interface
-func (lookup *noColumnLookup) CollationIDLookup(expr sqlparser.Expr) collations.ID {
-	return lookup.semTable.CollationFor(expr)
-}
-
-var _ evalengine.ConverterLookup = (*noColumnLookup)(nil)
 
 func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range rp.vindexPreds {
@@ -509,29 +488,131 @@ func (rp *routeTree) haveMatchingVindex(
 		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
-		// Ignore MultiColumn vindexes for finding matching Vindex.
-		if _, isSingleCol := v.colVindex.Vindex.(vindexes.SingleColumn); !isSingleCol {
-			continue
-		}
+		switch v.colVindex.Vindex.(type) {
+		case vindexes.SingleColumn:
+			col := v.colVindex.Columns[0]
+			if column.Name.Equal(col) {
+				// single column vindex - just add the option
+				routeOpcode := opcode(v.colVindex)
+				vindex := vfunc(v.colVindex)
+				if vindex == nil {
+					continue
+				}
+				v.options = append(v.options, &vindexOption{
+					values:      []evalengine.Expr{value},
+					valueExprs:  []sqlparser.Expr{valueExpr},
+					predicates:  []sqlparser.Expr{node},
+					opcode:      routeOpcode,
+					foundVindex: vindex,
+					cost:        costFor(v.colVindex, routeOpcode),
+					ready:       true,
+				})
+				newVindexFound = true
+			}
+		case vindexes.MultiColumn:
+			colLoweredName := ""
+			indexOfCol := -1
+			for idx, col := range v.colVindex.Columns {
+				if column.Name.Equal(col) {
+					colLoweredName = column.Name.Lowered()
+					indexOfCol = idx
+					break
+				}
+			}
+			if colLoweredName == "" {
+				break
+			}
 
-		col := v.colVindex.Columns[0]
-		if column.Name.Equal(col) {
-			// single column vindex - just add the option
-			routeOpcode := opcode(v.colVindex)
-			vindex := vfunc(v.colVindex)
-			v.options = append(v.options, &vindexOption{
-				values:      []evalengine.Expr{value},
-				valueExprs:  []sqlparser.Expr{valueExpr},
-				predicates:  []sqlparser.Expr{node},
-				opcode:      routeOpcode,
-				foundVindex: vindex,
-				cost:        costFor(vindex, routeOpcode),
-				ready:       true,
-			})
-			newVindexFound = true
+			var newOption []*vindexOption
+			for _, op := range v.options {
+				if op.ready {
+					continue
+				}
+				_, isPresent := op.colsSeen[colLoweredName]
+				if isPresent {
+					continue
+				}
+				option := copyOption(op)
+				optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
+				if optionReady {
+					newVindexFound = true
+				}
+				newOption = append(newOption, option)
+			}
+			v.options = append(v.options, newOption...)
+
+			// multi column vindex - just always add as new option for furince we do not have one already
+			option := createOption(v.colVindex, vfunc)
+			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.colVindex, opcode)
+			if optionReady {
+				newVindexFound = true
+			}
+			v.options = append(v.options, option)
 		}
 	}
 	return newVindexFound
+}
+
+func createOption(
+	colVindex *vindexes.ColumnVindex,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+) *vindexOption {
+	values := make([]evalengine.Expr, len(colVindex.Columns))
+	predicates := make([]sqlparser.Expr, len(colVindex.Columns))
+	vindex := vfunc(colVindex)
+
+	return &vindexOption{
+		values:      values,
+		predicates:  predicates,
+		colsSeen:    map[string]interface{}{},
+		foundVindex: vindex,
+	}
+}
+
+func copyOption(orig *vindexOption) *vindexOption {
+	colsSeen := make(map[string]interface{}, len(orig.colsSeen))
+	valueExprs := make([]sqlparser.Expr, len(orig.valueExprs))
+	values := make([]evalengine.Expr, len(orig.values))
+	predicates := make([]sqlparser.Expr, len(orig.predicates))
+
+	copy(values, orig.values)
+	copy(valueExprs, orig.valueExprs)
+	copy(predicates, orig.predicates)
+	for k, v := range orig.colsSeen {
+		colsSeen[k] = v
+	}
+	vo := &vindexOption{
+		values:      values,
+		colsSeen:    colsSeen,
+		valueExprs:  valueExprs,
+		predicates:  predicates,
+		opcode:      orig.opcode,
+		foundVindex: orig.foundVindex,
+		cost:        orig.cost,
+	}
+	return vo
+}
+
+func (option *vindexOption) updateWithNewColumn(
+	colLoweredName string,
+	valueExpr sqlparser.Expr,
+	indexOfCol int,
+	value evalengine.Expr,
+	node sqlparser.Expr,
+	colVindex *vindexes.ColumnVindex,
+	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
+) bool {
+	option.colsSeen[colLoweredName] = true
+	option.valueExprs = append(option.valueExprs, valueExpr)
+	option.values[indexOfCol] = value
+	option.predicates[indexOfCol] = node
+	option.ready = len(option.colsSeen) == len(colVindex.Columns)
+	routeOpcode := opcode(colVindex)
+	if option.opcode < routeOpcode {
+		option.opcode = routeOpcode
+		option.cost = costFor(colVindex, routeOpcode)
+	}
+	return option.ready
 }
 
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
@@ -624,42 +705,21 @@ func justTheVindex(vindex *vindexes.ColumnVindex) vindexes.Vindex {
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
-	if vindex.Vindex.IsUnique() {
+	if vindex.IsUnique() {
 		return engine.SelectEqualUnique
 	}
 
 	return engine.SelectEqual
 }
 
-// makePlanValue transforms a sqlparser.Expr into a sqltypes.PlanValue.
-// If the expression is too complex e.g: not an argument/literal/tuple/null/unary, then
-// the method will not fail, instead it will exit with nil values.
-func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	value, err := sqlparser.NewPlanValue(n)
-	if err != nil {
-		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
-		if strings.Contains(err.Error(), "expression is too complex") {
-			return nil, nil
-		}
-		// something else went wrong, return the error
-		return nil, err
-	}
-	return &value, nil
-}
-
 // costFor returns a cost struct to make route choices easier to compare
-func costFor(foundVindex vindexes.Vindex, opcode engine.RouteOpcode) cost {
+func costFor(foundVindex *vindexes.ColumnVindex, opcode engine.RouteOpcode) cost {
 	switch opcode {
 	// For these opcodes, we should not have a vindex, so we just return the opcode as the cost
 	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone, engine.SelectScatter:
 		return cost{
 			opCode: opcode,
 		}
-	}
-
-	// if we have a multiplier that is non-zero, we should have a vindex
-	if foundVindex == nil {
-		panic("expected a vindex")
 	}
 
 	return cost{

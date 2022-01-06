@@ -49,7 +49,7 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 		`
 	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
 		maintenance := Maintenance{}
-		maintenance.MaintenanceId = m.GetUint("database_instance_maintenance_id")
+		maintenance.MaintenanceID = m.GetUint("database_instance_maintenance_id")
 		maintenance.Key.Hostname = m.GetString("hostname")
 		maintenance.Key.Port = m.GetInt("port")
 		maintenance.BeginTimestamp = m.GetString("begin_timestamp")
@@ -71,7 +71,7 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 
 // BeginBoundedMaintenance will make new maintenance entry for given instanceKey.
 func BeginBoundedMaintenance(instanceKey *InstanceKey, owner string, reason string, durationSeconds uint, explicitlyBounded bool) (int64, error) {
-	var maintenanceToken int64 = 0
+	var maintenanceToken int64
 	if durationSeconds == 0 {
 		durationSeconds = config.MaintenanceExpireMinutes * 60
 	}

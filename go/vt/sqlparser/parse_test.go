@@ -48,6 +48,9 @@ var (
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
 	}, {
+		input:  "create table 3t2 (c1 bigint not null, c2 text, primary key(c1))",
+		output: "create table `3t2` (\n\tc1 bigint not null,\n\tc2 text,\n\tprimary key (c1)\n)",
+	}, {
 		input:  "select 1 from t1 where exists (select 1) = TRUE",
 		output: "select 1 from t1 where exists (select 1 from dual) = true",
 	}, {
@@ -2060,6 +2063,8 @@ var (
 	}, {
 		input: "stream /* comment */ * from t",
 	}, {
+		input: "vstream * from t",
+	}, {
 		input: "begin",
 	}, {
 		input:  "begin;",
@@ -3491,9 +3496,6 @@ var (
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {
-		input:  "select 0xH from t",
-		output: "syntax error at position 10 near '0x'",
-	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",
 	}, {
@@ -3592,13 +3594,22 @@ var (
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",
 		excludeMulti: true,
+	}, {
+		// This is a valid MySQL query but does not yet work with Vitess.
+		// The problem is that the tokenizer takes .3 as a single token which causes parsing error
+		// We should instead be using . as a separate token and then 3t2 as an identifier.
+		// This highlights another problem, the tokenization has to be aware of the context of parsing!
+		// Since in an alternate query like `select .3e3t`, we should use .3e3 as a single token FLOAT and then t as ID.
+		input:        "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
+		output:       "syntax error at position 18 near '.3'",
+		excludeMulti: true,
 	}}
 )
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := Parse(tcase.input)
+			_, err := ParseStrictDDL(tcase.input)
 			require.Error(t, err, tcase.output)
 			require.Equal(t, err.Error(), tcase.output)
 		})
