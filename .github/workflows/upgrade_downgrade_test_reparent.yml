@@ -157,7 +157,7 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtctl
+        rm -f $PWD/bin/vtctl $PWD/bin/vtctld $PWD/bin/vtctlclient $PWD/bin/vtctldclient
         cp /tmp/vitess-build-other/bin/vtctl $PWD/bin/vtctl
         cp /tmp/vitess-build-other/bin/vtctld $PWD/bin/vtctld
         cp /tmp/vitess-build-other/bin/vtctlclient $PWD/bin/vtctlclient
@@ -178,7 +178,7 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtctl $PWD/bin/vttablet
+        rm -f $PWD/bin/vtctl $PWD/bin/vttablet $PWD/bin/vtctld $PWD/bin/vtctlclient $PWD/bin/vtctldclient
         cp /tmp/vitess-build-current/bin/vtctl $PWD/bin/vtctl
         cp /tmp/vitess-build-current/bin/vtctld $PWD/bin/vtctld
         cp /tmp/vitess-build-current/bin/vtctlclient $PWD/bin/vtctlclient
