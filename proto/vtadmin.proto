@@ -40,6 +40,8 @@ service VTAdmin {
     rpc DeleteKeyspace(DeleteKeyspaceRequest) returns (vtctldata.DeleteKeyspaceResponse) {};
     // DeleteShard deletes one or more shards in the given cluster and keyspace.
     rpc DeleteShards(DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
+    // DeleteTablet deletes a tablet from the topology
+    rpc DeleteTablet(DeleteTabletRequest) returns (DeleteTabletResponse) {};
     // FindSchema returns a single Schema that matches the provided table name
     // across all specified clusters IDs. Not specifying a set of cluster IDs
     // causes the search to span all configured clusters.
@@ -90,8 +92,14 @@ service VTAdmin {
     rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
     // RefreshState reloads the tablet record on the specified tablet.
     rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
+    // ReparentTablet 
+    rpc ReparentTablet(ReparentTabletRequest) returns (ReparentTabletResponse) {};
     // RunHealthCheck runs a health check on the tablet
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
+    // StartReplication will run the underlying database command to start replication on a tablet
+    rpc StartReplication(StartReplicationRequest) returns (StartReplicationResponse) {};
+    // StopReplication will run th underlying database command to stop replication on a tablet
+    rpc StopReplication(StopReplicationRequest) returns (StopReplicationResponse) {};
     // VTExplain provides information on how Vitess plans to execute a particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
@@ -237,6 +245,15 @@ message DeleteKeyspaceRequest {
 message DeleteShardsRequest {
     string cluster_id = 1;
     vtctldata.DeleteShardsRequest options = 2;
+}
+
+message DeleteTabletRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message DeleteTabletResponse {
+    string status = 1;
 }
 
 message FindSchemaRequest {
@@ -439,12 +456,41 @@ message RefreshStateResponse {
     string status = 1;
 }
 
+message ReparentTabletRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message ReparentTabletResponse {
+    string keyspace = 1;
+    string shard = 2;
+    string primary = 3;
+}
+
 message RunHealthCheckRequest {
     string alias = 1;
     repeated string cluster_ids = 2;
 }
 
 message RunHealthCheckResponse {
+    string status = 1;
+}
+
+message StartReplicationRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message StartReplicationResponse {
+    string status = 1;
+}
+
+message StopReplicationRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message StopReplicationResponse {
     string status = 1;
 }
 

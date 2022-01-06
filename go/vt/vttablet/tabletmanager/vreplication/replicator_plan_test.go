@@ -327,7 +327,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
-					Filter: "select a, b, c from t1",
+					Filter: "select a, a, b, c from t1",
 				}},
 			},
 			TargetTables: []string{"t1"},
@@ -348,7 +348,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 			VStreamFilter: &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
-					Filter: "select a, b, c, pk1, pk2 from t1",
+					Filter: "select a, a, b, c, pk1, pk2 from t1",
 				}},
 			},
 			TargetTables: []string{"t1"},

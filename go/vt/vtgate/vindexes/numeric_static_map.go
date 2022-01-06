@@ -32,6 +32,7 @@ import (
 
 var (
 	_ SingleColumn = (*NumericStaticMap)(nil)
+	_ Hashing      = (*NumericStaticMap)(nil)
 )
 
 // NumericLookupTable stores the mapping of keys.
@@ -88,19 +89,13 @@ func (vind *NumericStaticMap) NeedsVCursor() bool {
 
 // Verify returns true if ids and ksids match.
 func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		var keybytes [8]byte
-		num, err := evalengine.ToUint64(ids[i])
+	out := make([]bool, 0, len(ids))
+	for i, id := range ids {
+		ksid, err := vind.Hash(id)
 		if err != nil {
 			return nil, err
 		}
-		lookupNum, ok := vind.lookup[num]
-		if ok {
-			num = lookupNum
-		}
-		binary.BigEndian.PutUint64(keybytes[:], num)
-		out[i] = bytes.Equal(keybytes[:], ksids[i])
+		out = append(out, bytes.Equal(ksid, ksids[i]))
 	}
 	return out, nil
 }
@@ -109,20 +104,28 @@ func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]
 func (vind *NumericStaticMap) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
-		num, err := evalengine.ToUint64(id)
+		ksid, err := vind.Hash(id)
 		if err != nil {
 			out = append(out, key.DestinationNone{})
 			continue
 		}
-		lookupNum, ok := vind.lookup[num]
-		if ok {
-			num = lookupNum
-		}
-		var keybytes [8]byte
-		binary.BigEndian.PutUint64(keybytes[:], num)
-		out = append(out, key.DestinationKeyspaceID(keybytes[:]))
+		out = append(out, key.DestinationKeyspaceID(ksid))
 	}
 	return out, nil
+}
+
+func (vind *NumericStaticMap) Hash(id sqltypes.Value) ([]byte, error) {
+	num, err := evalengine.ToUint64(id)
+	if err != nil {
+		return nil, err
+	}
+	lookupNum, ok := vind.lookup[num]
+	if ok {
+		num = lookupNum
+	}
+	var keybytes [8]byte
+	binary.BigEndian.PutUint64(keybytes[:], num)
+	return keybytes[:], nil
 }
 
 func loadNumericLookupTable(path string) (NumericLookupTable, error) {

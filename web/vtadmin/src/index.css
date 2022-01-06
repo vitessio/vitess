@@ -216,3 +216,19 @@ table tbody td {
 table tbody td[rowSpan] {
     border-right: solid 1px var(--tableBorderColor);
 }
+
+.Toastify__toast {
+    padding: 0 !important;
+    min-height: auto !important;
+    background: none !important;
+}
+
+.Toastify__toast-body {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.Toastify__toast-theme--light,
+.Toastify__toast-theme--dark {
+    background: none !important;
+}

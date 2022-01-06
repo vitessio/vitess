@@ -52,7 +52,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
         try {
             json = await response.json();
         } catch (error) {
-            throw new MalformedHttpResponseError(error.message, endpoint, json, response);
+            throw new MalformedHttpResponseError((error as Error).message, endpoint, json, response);
         }
 
         if (!('ok' in json)) {
@@ -72,7 +72,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
         // Instead, we catch errors and manually notify our error handling serivce(s),
         // and then rethrow the error for react-query to propagate the usual way.
         // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
-        errorHandler.notify(error);
+        errorHandler.notify(error as Error);
         throw error;
     }
 };
@@ -225,6 +225,34 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
     return pb.Tablet.create(result);
 };
 
+export interface DeleteTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: 'delete' });
+
+    const err = pb.DeleteTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.DeleteTabletResponse.create(result);
+};
+
+export interface ReparentTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const reparentTablet = async ({ clusterID, alias }: ReparentTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
+
+    const err = pb.ReparentTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.ReparentTabletResponse.create(result);
+};
+
 export interface PingTabletParams {
     clusterID?: string;
     alias: string;
@@ -262,6 +290,32 @@ export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams)
     if (err) throw Error(err);
 
     return pb.RunHealthCheckResponse.create(result);
+};
+
+export interface StartReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const startReplication = async ({ clusterID, alias }: StartReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/start_replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StartReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StartReplicationResponse.create(result);
+};
+
+export interface StopReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const stopReplication = async ({ clusterID, alias }: StopReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/stop_replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StopReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StopReplicationResponse.create(result);
 };
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;

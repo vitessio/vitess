@@ -39,7 +39,7 @@ func normalizeKey(key string) (normalizedKey string) {
 	return normalizedKey
 }
 
-func NewZkStore() KVStore {
+func NewZkStore() KeyValueStore {
 	store := &zkStore{}
 
 	if config.Config.ZkAddress != "" {
@@ -53,29 +53,29 @@ func NewZkStore() KVStore {
 	return store
 }
 
-func (this *zkStore) PutKeyValue(key string, value string) (err error) {
-	if this.zook == nil {
+func (zk *zkStore) PutKeyValue(key string, value string) (err error) {
+	if zk.zook == nil {
 		return nil
 	}
 
-	if _, err = this.zook.Set(normalizeKey(key), []byte(value)); err == zkconstants.ErrNoNode {
+	if _, err = zk.zook.Set(normalizeKey(key), []byte(value)); err == zkconstants.ErrNoNode {
 		aclstr := ""
-		_, err = this.zook.Create(normalizeKey(key), []byte(value), aclstr, true)
+		_, err = zk.zook.Create(normalizeKey(key), []byte(value), aclstr, true)
 	}
 	return err
 }
 
-func (this *zkStore) GetKeyValue(key string) (value string, found bool, err error) {
-	if this.zook == nil {
+func (zk *zkStore) GetKeyValue(key string) (value string, found bool, err error) {
+	if zk.zook == nil {
 		return value, false, nil
 	}
-	result, err := this.zook.Get(normalizeKey(key))
+	result, err := zk.zook.Get(normalizeKey(key))
 	if err != nil {
 		return value, false, err
 	}
 	return string(result), true, nil
 }
 
-func (this *zkStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
+func (zk *zkStore) DistributePairs(kvPairs [](*KeyValuePair)) (err error) {
 	return nil
 }

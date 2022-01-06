@@ -402,7 +402,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 		return false
 	}
 	for _, vindex := range vschemaTable.ColumnVindexes {
-		if len(vindex.Columns) > 1 || !vindex.Vindex.IsUnique() {
+		if len(vindex.Columns) > 1 || !vindex.IsUnique() {
 			return false
 		}
 		if col.Name.Equal(vindex.Columns[0]) {
@@ -889,13 +889,13 @@ func createRoutePlan(ctx *planningContext, table *abstract.QueryTable, solves se
 	return plan, nil
 }
 
-func findColumnVindex(ctx *planningContext, a *routeTree, exp sqlparser.Expr) vindexes.SingleColumn {
+func findColumnVindex(ctx *planningContext, a *routeTree, exp sqlparser.Expr) *vindexes.ColumnVindex {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
 	}
 
-	var singCol vindexes.SingleColumn
+	var colVindex *vindexes.ColumnVindex
 
 	// for each equality expression that exp has with other column name, we check if it
 	// can be solved by any table in our routeTree a. If an equality expression can be solved,
@@ -914,21 +914,21 @@ func findColumnVindex(ctx *planningContext, a *routeTree, exp sqlparser.Expr) vi
 			}
 			if leftDep.IsSolvedBy(rb.qtable.TableID) {
 				for _, vindex := range rb.vtable.ColumnVindexes {
-					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+					_, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {
-						singCol = sC
+						colVindex = vindex
 						return false, io.EOF
 					}
 				}
 			}
 			return false, nil
 		})
-		if singCol != nil {
-			return singCol
+		if colVindex != nil {
+			return colVindex
 		}
 	}
 
-	return singCol
+	return colVindex
 }
 
 func canMergeOnFilter(ctx *planningContext, a, b *routeTree, predicate sqlparser.Expr) bool {
@@ -954,7 +954,7 @@ func canMergeOnFilter(ctx *planningContext, a, b *routeTree, predicate sqlparser
 	if rVindex == nil {
 		return false
 	}
-	return rVindex == lVindex
+	return rVindex.Vindex == lVindex.Vindex
 }
 
 func canMergeOnFilters(ctx *planningContext, a, b *routeTree, joinPredicates []sqlparser.Expr) bool {

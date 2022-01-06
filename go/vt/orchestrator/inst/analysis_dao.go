@@ -308,7 +308,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		) AS count_distinct_logging_major_versions
 	FROM
 		vitess_tablet
-		LEFT JOIN database_instance primary_instance ON (
+		JOIN database_instance primary_instance ON (
 			vitess_tablet.hostname = primary_instance.hostname
 			AND vitess_tablet.port = primary_instance.port
 		)

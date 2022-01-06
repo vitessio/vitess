@@ -26,6 +26,7 @@ import (
 
 var (
 	_ SingleColumn = (*BinaryMD5)(nil)
+	_ Hashing      = (*BinaryMD5)(nil)
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.
@@ -60,28 +61,36 @@ func (vind *BinaryMD5) NeedsVCursor() bool {
 
 // Verify returns true if ids maps to ksids.
 func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		idBytes, err := ids[i].ToBytes()
+	out := make([]bool, 0, len(ids))
+	for i, id := range ids {
+		ksid, err := vind.Hash(id)
 		if err != nil {
-			return out, err
+			return nil, err
 		}
-		out[i] = bytes.Equal(vMD5Hash(idBytes), ksids[i])
+		out = append(out, bytes.Equal(ksid, ksids[i]))
 	}
 	return out, nil
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *BinaryMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
-	for i, id := range ids {
-		idBytes, err := id.ToBytes()
+func (vind *BinaryMD5) Map(_ VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	for _, id := range ids {
+		ksid, err := vind.Hash(id)
 		if err != nil {
 			return out, err
 		}
-		out[i] = key.DestinationKeyspaceID(vMD5Hash(idBytes))
+		out = append(out, key.DestinationKeyspaceID(ksid))
 	}
 	return out, nil
+}
+
+func (vind *BinaryMD5) Hash(id sqltypes.Value) ([]byte, error) {
+	idBytes, err := id.ToBytes()
+	if err != nil {
+		return nil, err
+	}
+	return vMD5Hash(idBytes), nil
 }
 
 func vMD5Hash(source []byte) []byte {

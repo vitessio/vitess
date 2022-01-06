@@ -71,7 +71,6 @@ func (v *VStream) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return err
 	}
-
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  v.TableName,
@@ -101,19 +100,7 @@ func (v *VStream) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb
 				result.Fields = lastFields
 				eventFields := lastFields[1:]
 				for _, change := range ev.RowEvent.RowChanges {
-					op := ""
-					var vals []sqltypes.Value
-					if change.After != nil && change.Before == nil {
-						op = "+"
-						vals = sqltypes.MakeRowTrusted(eventFields, change.After)
-					} else if change.After != nil && change.Before != nil {
-						op = "*"
-						vals = sqltypes.MakeRowTrusted(eventFields, change.After)
-					} else {
-						op = "-"
-						vals = sqltypes.MakeRowTrusted(eventFields, change.Before)
-					}
-					newVals := append([]sqltypes.Value{sqltypes.NewVarChar(op)}, vals...)
+					newVals := addRowChangeIndicatorColumn(change, eventFields)
 					result.Rows = append(result.Rows, newVals)
 					numRows++
 					if totalRows+numRows >= v.Limit {
@@ -125,12 +112,12 @@ func (v *VStream) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		}
 		if numRows > 0 {
 			err := callback(result)
-			totalRows += numRows
-			numRows = 0
 			if err != nil {
 				return err
 			}
-			if totalRows >= v.Limit {
+			totalRows += numRows
+			numRows = 0
+			if v.Limit > 0 && totalRows >= v.Limit {
 				return io.EOF
 			}
 		}
@@ -138,6 +125,31 @@ func (v *VStream) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	}
 
 	return vcursor.VStream(rss, filter, v.Position, send)
+}
+
+// for demo purposes we prefix the row with a column with a single char +/*/- to indicate why the row changed
+// + => insert, - => delete, * => update. This will be removed/improved as we iterate over this functionality
+const (
+	RowChangeInsert string = "+"
+	RowChangeDelete string = "-"
+	RowChangeUpdate string = "*"
+)
+
+func addRowChangeIndicatorColumn(change *binlogdatapb.RowChange, eventFields []*querypb.Field) []sqltypes.Value {
+	op := ""
+	var vals []sqltypes.Value
+	if change.After != nil && change.Before == nil {
+		op = RowChangeInsert
+		vals = sqltypes.MakeRowTrusted(eventFields, change.After)
+	} else if change.After != nil && change.Before != nil {
+		op = RowChangeUpdate
+		vals = sqltypes.MakeRowTrusted(eventFields, change.After)
+	} else {
+		op = RowChangeDelete
+		vals = sqltypes.MakeRowTrusted(eventFields, change.Before)
+	}
+	newVals := append([]sqltypes.Value{sqltypes.NewVarChar(op)}, vals...)
+	return newVals
 }
 
 // GetFields implements the Primitive interface
