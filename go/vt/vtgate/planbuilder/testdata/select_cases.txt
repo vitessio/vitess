@@ -2253,6 +2253,7 @@ Gen4++
     "Table": "`user`, dual"
   }
 }
+Gen4++
 
 # Table named "dual" with a qualifier joined on user should not be merged
 "select 42, user.id from main.dual, user"
