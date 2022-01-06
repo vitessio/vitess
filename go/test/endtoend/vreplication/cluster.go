@@ -27,6 +27,7 @@ var (
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
 	extraVTGateArgs       = []string{"-tablet_refresh_interval", "10ms"}
+	extraVtctldArgs       = []string{"-remote_operation_timeout", "600s", "-topo_etcd_lease_ttl", "120"}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -170,7 +171,7 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	vc.Vtctld = vtctld
 	require.NotNil(t, vc.Vtctld)
 	// use first cell as `-cell`
-	vc.Vtctld.Setup(cellNames[0])
+	vc.Vtctld.Setup(cellNames[0], extraVtctldArgs...)
 
 	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	require.NotNil(t, vc.Vtctl)

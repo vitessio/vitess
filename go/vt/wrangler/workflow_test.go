@@ -568,6 +568,8 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 	tme.tmeDB.AddQuery("drop table vt_ks2.t1", noResult)
 	tme.tmeDB.AddQuery("drop table vt_ks2.t2", noResult)
 	tme.tmeDB.AddQuery("update _vt.vreplication set message='Picked source tablet: cell:\"cell1\" uid:10 ' where id=1", noResult)
+	tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", noResult)
+	tme.tmeDB.AddQuery("unlock tables", noResult)
 	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
 	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
 
