@@ -3,7 +3,9 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Theme, useTheme } from '../../hooks/useTheme';
 import { Icon, Icons } from '../Icon';
 import { Select } from '../inputs/Select';
+import { Intent } from '../intent';
 import { ContentContainer } from '../layout/ContentContainer';
+import { warn, danger, success, info } from '../Snackbar';
 import { Tab } from '../tabs/Tab';
 import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
@@ -320,8 +322,44 @@ export const Debug = () => {
                         );
                     })}
                 </section>
+                <section>
+                    <Snackbars />
+                </section>
             </div>
         </ContentContainer>
+    );
+};
+
+const Snackbars: React.FC = () => {
+    const intents = Object.keys(Intent);
+    return (
+        <div>
+            <h3 className="mt-12 mb-8">Snackbars</h3>
+
+            {intents.map((i) => {
+                const onClick = () => {
+                    switch (i) {
+                        case 'danger':
+                            danger('This is a danger snackbar.');
+                            break;
+                        case 'success':
+                            success('This is a success snackbar.');
+                            break;
+                        case 'none':
+                            info('This is an info snackbar.');
+                            break;
+                        case 'warning':
+                            warn('This is a warn snackbar with a very very very very very very very long message.');
+                            break;
+                    }
+                };
+                return (
+                    <button onClick={onClick} className={`btn btn-secondary mr-2`} key={i}>
+                        {i}
+                    </button>
+                );
+            })}
+        </div>
     );
 };
 
