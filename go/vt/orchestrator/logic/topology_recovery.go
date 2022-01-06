@@ -1655,7 +1655,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	}
 	clusterPrimary := clusterPrimaries[0]
 
-	analysisEntry, err := forceAnalysisEntry(clusterName, inst.PlannedReparentShard, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
+	analysisEntry, err := forceAnalysisEntry(clusterName, inst.GraceFulPrimaryTakeover, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -1731,14 +1731,14 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 	if promotedReplica != nil {
 		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
 		AuditTopologyRecovery(topologyRecovery, message)
-		inst.AuditOperation("graceful-primary-takeover", &analysisEntry.AnalyzedInstanceKey, message)
+		inst.AuditOperation(string(analysisEntry.Analysis), &analysisEntry.AnalyzedInstanceKey, message)
 	}
 	// And this is the end; whether successful or not, we're done.
 	resolveRecovery(topologyRecovery, promotedReplica)
 	// Now, see whether we are successful or not. From this point there's no going back.
 	if promotedReplica != nil {
 		// Success!
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("GracefulPrimaryTakeover: successfully promoted %+v", promotedReplica.Key))
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.Key))
 
 		kvPairs := inst.GetClusterPrimaryKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
@@ -1754,7 +1754,7 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 		func() error {
 			before := analysisEntry.AnalyzedInstanceKey.StringCode()
 			after := promotedReplica.Key.StringCode()
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- GracefulPrimaryTakeover: updating cluster_alias: %v -> %v", before, after))
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- %+v: updating cluster_alias: %v -> %v", analysisEntry.Analysis, before, after))
 			//~~~inst.ReplaceClusterName(before, after)
 			if alias := analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
 				inst.SetClusterAlias(promotedReplica.Key.StringCode(), alias)
@@ -1769,92 +1769,52 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 }
 
 // electNewPrimary elects a new primary while none were present before.
-// TODO(sougou): this should be mreged with recoverDeadPrimary
 func electNewPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
-	if topologyRecovery == nil {
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, true /*failIfClusterInActiveRecovery*/)
+	if topologyRecovery == nil || err != nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, will elect a new primary: %v", analysisEntry.Analysis, analysisEntry.SuggestedClusterAlias)
 
-	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
-			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
-		return false, topologyRecovery, err
-	}
-	defer unlock(&err)
-
-	// TODO(sougou): check if another Orc succeeded before fixing anything.
-
-	replicas, err := inst.ReadClusterAliasInstances(analysisEntry.SuggestedClusterAlias)
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
-	// TODO(sougou): this is not reliable, because of the timeout.
-	replicas = inst.StopReplicasNicely(replicas, time.Duration(config.Config.InstanceBulkOperationsWaitTimeoutSeconds)*time.Second)
-	if len(replicas) == 0 {
-		return false, topologyRecovery, fmt.Errorf("no instances in cluster %v", analysisEntry.SuggestedClusterAlias)
-	}
+	AuditTopologyRecovery(topologyRecovery, "starting PlannedReparentShard for electing new primary.")
 
-	// Find an initial candidate
-	var candidate *inst.Instance
-	for _, replica := range replicas {
-		// TODO(sougou): this needs to do more. see inst.chooseCandidateReplica
-		if !inst.IsBannedFromBeingCandidateReplica(replica) {
-			candidate = replica
-			break
+	ev, err := reparentutil.NewPlannedReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+		level := event.GetLevel()
+		value := event.GetValue()
+		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
+		switch level {
+		case logutilpb.Level_WARNING:
+			log.Warningf("PRS - %s", value)
+		case logutilpb.Level_ERROR:
+			log.Errorf("PRS - %s", value)
 		}
-	}
-	if candidate == nil {
-		err := fmt.Errorf("no candidate qualifies to be a primary")
-		AuditTopologyRecovery(topologyRecovery, err.Error())
-		return true, topologyRecovery, err
-	}
+		AuditTopologyRecovery(topologyRecovery, value)
+	})).ReparentShard(context.Background(),
+		analyzedTablet.Keyspace,
+		analyzedTablet.Shard,
+		reparentutil.PlannedReparentOptions{
+			WaitReplicasTimeout: time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+		},
+	)
 
-	// Compare the current candidate with the rest to see if other instances can be
-	// moved under. If not, see if the other intance can become a candidate instead.
-	for _, replica := range replicas {
-		if replica == candidate {
-			continue
-		}
-		if err := inst.CheckMoveViaGTID(replica, candidate); err != nil {
-			if err := inst.CheckMoveViaGTID(candidate, replica); err != nil {
-				return false, topologyRecovery, fmt.Errorf("instances are not compatible: %+v %+v: %v", candidate, replica, err)
-			}
-			// Make sure the new candidate meets the requirements.
-			if !inst.IsBannedFromBeingCandidateReplica(replica) {
-				candidate = replica
-			}
-		}
+	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
+	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
+	// PrimaryHasPrimary analysis which runs ERS
+	RefreshTablets(true /* forceRefresh */)
+	var promotedReplica *inst.Instance
+	if ev.NewPrimary != nil {
+		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
+			Hostname: ev.NewPrimary.MysqlHostname,
+			Port:     int(ev.NewPrimary.MysqlPort),
+		})
 	}
-
-	if _, err := inst.ChangeTabletType(candidate.Key, topodatapb.TabletType_PRIMARY); err != nil {
-		return true, topologyRecovery, err
-	}
-	// TODO(sougou): parallelize
-	for _, replica := range replicas {
-		if replica.Key == candidate.Key {
-			continue
-		}
-		if _, err := inst.MoveBelowGTID(&replica.Key, &candidate.Key); err != nil {
-			return false, topologyRecovery, err
-		}
-	}
-	count := inst.SemiSyncAckers(candidate.Key)
-	err = inst.SetSemiSyncPrimary(&candidate.Key, count > 0)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
-	if err != nil {
-		return false, topologyRecovery, err
-	}
-	_, err = inst.SetReadOnly(&candidate.Key, false)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewPrimary: set read-only false: success=%t", (err == nil)))
-	if err != nil {
-		return false, topologyRecovery, err
-	}
-	return true, topologyRecovery, nil
+	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
+	return true, topologyRecovery, err
 }
 
 // fixClusterAndPrimary performs a traditional vitess PlannedReparentShard.

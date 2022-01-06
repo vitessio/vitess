@@ -18,9 +18,12 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/test/utils"
 
@@ -646,9 +649,8 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 		},
 		{
 			// this doesn't cause an actual error from ChooseNewPrimary, because
-			// the only way to do that is to set AvoidPrimaryAlias == nil, and
-			// that gets checked in preflightChecks before calling
-			// ChooseNewPrimary for other reasons. however we do check that we
+			// there is no way to do that other than something going horribly wrong
+			// in go runtime, however we do check that we
 			// get a non-nil result from ChooseNewPrimary in preflightChecks and
 			// bail out if we don't, so we're forcing that case here.
 			name: "cannot choose new primary-elect",
@@ -730,11 +732,21 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "shard has no current primary and new primary not provided",
+			name: "shard has no current primary and new primary not provided - initialisation test",
 			ev: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
 					PrimaryAlias: nil,
 				}, nil),
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": { // most advanced position
+						Error: mysql.ErrNotReplica,
+					},
+				},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -743,17 +755,25 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 							Cell: "zone1",
 							Uid:  100,
 						},
+						Type: topodatapb.TabletType_REPLICA,
 					},
 				},
 			},
 			opts:           &PlannedReparentOptions{},
-			expectedIsNoop: true,
+			expectedIsNoop: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
 					PrimaryAlias: nil,
 				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
 			},
-			shouldErr: true,
+			shouldErr: false,
 		},
 	}
 
@@ -2770,6 +2790,80 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				},
 			},
 
+			shouldErr: false,
+			expectedEvent: &events.Reparent{
+				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, nil),
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+		},
+		{
+			name: "shard initialization with no new primary provided",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "reparent journal position",
+						Error:  nil,
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Error: mysql.ErrNotReplica,
+					},
+					"zone1-0000000100": {
+						Error: fmt.Errorf("not providing replication status, so that 200 wins"),
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil, // called during reparentTablets to make this tablet a replica of newPrimary
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				// Shard has no current primary in the beginning.
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+
+			ev:        &events.Reparent{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			opts:      PlannedReparentOptions{},
 			shouldErr: false,
 			expectedEvent: &events.Reparent{
 				ShardInfo: *topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
