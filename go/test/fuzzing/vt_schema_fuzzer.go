@@ -74,8 +74,12 @@ func FuzzNewOnlineDDLs(data []byte) int {
 	if err != nil {
 		return 0
 	}
+	providedUUID, err := f.GetString()
+	if err != nil {
+		return 0
+	}
 
-	onlineDDLs, err := schema.NewOnlineDDLs(keyspace, sql, ddlStmt, ddlStrategySetting, requestContext)
+	onlineDDLs, err := schema.NewOnlineDDLs(keyspace, sql, ddlStmt, ddlStrategySetting, requestContext, providedUUID)
 	if err != nil {
 		return 0
 	}

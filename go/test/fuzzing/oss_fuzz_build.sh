@@ -45,6 +45,10 @@ mv ./go/vt/vtgate/planbuilder/plan_test.go \
 mv ./go/vt/vttablet/tabletserver/testutils_test.go \
    ./go/vt/vttablet/tabletserver/testutils_fuzz.go
 
+# collation fuzzer
+mv ./go/mysql/collations/uca_test.go \
+   ./go/mysql/collations/uca_test_fuzz.go
+
 # autogenerate and build api_marshal_fuzzer:
 cd $SRC/vitess/go/vt
 grep -r ') Unmarshal' .>>/tmp/marshal_targets.txt
@@ -53,13 +57,8 @@ go run convert_grep_to_fuzzer.go
 mv api_marshal_fuzzer.go $SRC/vitess/go/test/fuzzing/
 compile_go_fuzzer vitess.io/vitess/go/test/fuzzing FuzzAPIMarshal api_marshal_fuzzer
 
-# collation fuzzer
-mv ./go/mysql/collations/uca_test.go \
-   ./go/mysql/collations/uca_test_fuzz.go
 
 compile_go_fuzzer vitess.io/vitess/go/mysql/collations FuzzCollations fuzz_collations
-
-
 compile_go_fuzzer vitess.io/vitess/go/vt/vtgate/planbuilder FuzzTestBuilder fuzz_test_builder gofuzz
 compile_go_fuzzer vitess.io/vitess/go/vt/vtgate/vindexes FuzzVindex fuzz_vindex
 compile_go_fuzzer vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication FuzzEngine fuzz_replication_engine
@@ -90,10 +89,10 @@ compile_go_fuzzer vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer Fuzz vs
 compile_go_fuzzer vitess.io/vitess/go/vt/vttablet/tabletserver FuzzGetPlan fuzz_get_plan
 
 # Several test utils are needed from suite_test.go:
-mv ./go/vt/vtgate/grpcvtgateconn/suite_test.go \
-   ./go/vt/vtgate/grpcvtgateconn/suite_test_fuzz.go
-mv ./go/vt/vtgate/grpcvtgateconn/fuzz_flaky_test.go \
-   ./go/vt/vtgate/grpcvtgateconn/fuzz.go
+mv $SRC/vitess/go/vt/vtgate/grpcvtgateconn/suite_test.go \
+   $SRC/vitess/go/vt/vtgate/grpcvtgateconn/suite_test_fuzz.go
+mv $SRC/vitess/go/vt/vtgate/grpcvtgateconn/fuzz_flaky_test.go \
+   $SRC/vitess/go/vt/vtgate/grpcvtgateconn/fuzz.go
 compile_go_fuzzer vitess.io/vitess/go/vt/vtgate/grpcvtgateconn Fuzz grpc_vtgate_fuzzer
 
 compile_go_fuzzer vitess.io/vitess/go/vt/vtgate/planbuilder/abstract FuzzAnalyse fuzz_analyse gofuzz
