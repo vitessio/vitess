@@ -44,6 +44,7 @@ export { ReactComponent as KeyV } from './keyV.svg';
 export { ReactComponent as Keyboard } from './keyboard.svg';
 export { ReactComponent as Link } from './link.svg';
 export { ReactComponent as Menu } from './menu.svg';
+export { ReactComponent as Open } from './open.svg';
 export { ReactComponent as PageFirst } from './pageFirst.svg';
 export { ReactComponent as PageLast } from './pageLast.svg';
 export { ReactComponent as Pause } from './pause.svg';

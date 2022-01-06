@@ -124,7 +124,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 			signal := func() {
 				signalNb++
 			}
-			kUpdate := updateController{
+			updateCont := updateController{
 				update:       update,
 				signal:       signal,
 				consumeDelay: 5 * time.Millisecond,
@@ -159,13 +159,13 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 				if test.delay > 0 {
 					time.Sleep(test.delay)
 				}
-				kUpdate.add(d)
+				updateCont.add(d)
 			}
 
 			for {
-				kUpdate.mu.Lock()
-				done := kUpdate.queue == nil
-				kUpdate.mu.Unlock()
+				updateCont.mu.Lock()
+				done := updateCont.queue == nil
+				updateCont.mu.Unlock()
 				if done {
 					break
 				}

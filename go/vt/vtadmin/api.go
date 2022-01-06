@@ -168,10 +168,14 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
-	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
+	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet").Methods("GET")
+	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.DeleteTablet)).Name("API.DeleteTablet").Methods("DELETE", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -897,6 +901,70 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	return api.getTabletForAction(ctx, span, rbac.GetAction, req.Alias, req.ClusterIds)
 }
 
+func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletRequest) (*vtadminpb.DeleteTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.DeleteTablet")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.DeleteAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
+		TabletAliases: []*topodatapb.TabletAlias{
+			tablet.Tablet.Alias,
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error deleting tablet: %w", err)
+	}
+
+	return &vtadminpb.DeleteTabletResponse{Status: "ok"}, nil
+}
+
+func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTabletRequest) (*vtadminpb.ReparentTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ReparentTablet")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	r, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{
+		Tablet: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error reparenting tablet: %w", err)
+	}
+
+	return &vtadminpb.ReparentTabletResponse{Keyspace: r.Keyspace, Primary: r.Primary.String(), Shard: r.Shard}, nil
+}
+
 // PingTablet is part of the vtadminpb.VTAdminServer interface.
 func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthCheckRequest) (*vtadminpb.RunHealthCheckResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.RunHealthCheck")
@@ -959,6 +1027,70 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	}
 
 	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
+}
+
+// StartReplication starts replication on the specified tablet.
+func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplicationRequest) (*vtadminpb.StartReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.StartReplication")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.StartReplication(ctx, &vtctldatapb.StartReplicationRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error starting replication: %w", err)
+	}
+
+	return &vtadminpb.StartReplicationResponse{Status: "ok"}, nil
+}
+
+// StopReplication stops replication on the specified tablet.
+func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicationRequest) (*vtadminpb.StopReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.StopReplication")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.StopReplication(ctx, &vtctldatapb.StopReplicationRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error stopping replication: %w", err)
+	}
+
+	return &vtadminpb.StopReplicationResponse{Status: "ok"}, nil
 }
 
 // GetTablets is part of the vtadminpb.VTAdminServer interface.

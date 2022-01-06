@@ -84,9 +84,14 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	// We must clear out any previous schema before loading it here as this is called
+	// whenever a shard's primary tablet starts and sends the initial signal. Without
+	// clearing out the previous schema we can end up with duplicate entries when the
+	// tablet is simply restarted or potentially when we elect a new primary.
+	t.clearKeyspaceTables(target.Keyspace)
 	t.updateTables(target.Keyspace, res)
 	t.tracked[target.Keyspace].setLoaded(true)
-	log.Infof("finished loading schema for keyspace %s. Found %d tables", target.Keyspace, len(res.Rows))
+	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(res.Rows))
 	return nil
 }
 
@@ -130,7 +135,7 @@ func (t *Tracker) newUpdateController() *updateController {
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
-		log.Warningf("Unable to add keyspace to tracker: %v", err)
+		log.Warningf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err)
 		return err
 	}
 	return nil
@@ -254,4 +259,13 @@ func (tm *tableMap) delete(ks, tbl string) {
 		return
 	}
 	delete(m, tbl)
+}
+
+// This empties out any previous schema for for all tables in a keyspace.
+// You should call this before initializing/loading a keyspace of the same
+// name in the cache.
+func (t *Tracker) clearKeyspaceTables(ks string) {
+	if t.tables != nil && t.tables.m != nil {
+		delete(t.tables.m, ks)
+	}
 }

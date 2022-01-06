@@ -487,3 +487,21 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	}
 	return tablets
 }
+
+func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string) *cluster.VttabletProcess {
+	for _, cell := range vc.Cells {
+		keyspace := cell.Keyspaces[ksName]
+		for _, shard := range keyspace.Shards {
+			if shard.Name != shardName {
+				continue
+			}
+			for _, tablet := range shard.Tablets {
+				if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, "primary") {
+					return tablet.Vttablet
+				}
+			}
+		}
+	}
+	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
+	return nil
+}

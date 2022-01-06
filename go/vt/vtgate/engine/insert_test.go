@@ -701,6 +701,12 @@ func TestInsertShardedGeo(t *testing.T) {
 		[]string{" mid1", " mid2"},
 		" suffix",
 	)
+	for _, colVindex := range ks.Tables["t1"].ColumnVindexes {
+		if colVindex.IgnoreInDML() {
+			continue
+		}
+		ins.ColVindexes = append(ins.ColVindexes, colVindex)
+	}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}
@@ -1403,7 +1409,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 	})
 }
 
-func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
+func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 	invschema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"sharded": {
@@ -1463,5 +1469,5 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 
 	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `value must be supplied for column [c3]`)
+	require.NoError(t, err)
 }
