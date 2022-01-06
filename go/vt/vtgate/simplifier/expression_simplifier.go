@@ -52,7 +52,7 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) (smallestKnown sqlparser.Expr)
 		for idx, node := range nodes {
 			// simplify each element and create a new expression with the node replaced by the simplification
 			// this means that we not only need the node, but also a way to replace the node
-			s := &Shrinker{Orig: node}
+			s := &shrinker{orig: node}
 			expr := s.Next()
 			for expr != nil {
 				replace(expr, idx)
@@ -114,12 +114,16 @@ func depth(e sqlparser.Expr) (depth int) {
 	return
 }
 
-type Shrinker struct {
-	Orig  sqlparser.Expr
+type shrinker struct {
+	orig  sqlparser.Expr
 	queue []sqlparser.Expr
 }
 
-func (s *Shrinker) Next() sqlparser.Expr {
+func (s *shrinker) Next() sqlparser.Expr {
+	// first we check if there is already something in the queue.
+	// note that we are doing a nil check and not a length check here.
+	// once something has been added to the queue, we are no longer
+	// going to add expressions to the queue
 	if s.queue != nil {
 		if len(s.queue) == 0 {
 			return nil
@@ -129,7 +133,16 @@ func (s *Shrinker) Next() sqlparser.Expr {
 		return nxt
 	}
 
-	switch e := s.Orig.(type) {
+	// we have yet to fill the queue. let's try that next
+	added := s.fillQueue()
+	if added {
+		return s.Next()
+	}
+	return nil
+}
+
+func (s *shrinker) fillQueue() bool {
+	switch e := s.orig.(type) {
 	case *sqlparser.ComparisonExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
 	case *sqlparser.BinaryExpr:
@@ -142,7 +155,7 @@ func (s *Shrinker) Next() sqlparser.Expr {
 				s.queue = append(s.queue, &sqlparser.Literal{Type: sqlparser.StrVal, Val: e.Val[:half]})
 				s.queue = append(s.queue, &sqlparser.Literal{Type: sqlparser.StrVal, Val: e.Val[half:]})
 			} else {
-				return nil
+				return false
 			}
 		case sqlparser.IntVal:
 			num, err := strconv.ParseInt(e.Val, 0, 64)
@@ -151,7 +164,7 @@ func (s *Shrinker) Next() sqlparser.Expr {
 			}
 			if num == 0 {
 				// can't simplify this more
-				return nil
+				return false
 			}
 
 			// we'll simplify by halving the current value and decreasing it by one
@@ -166,7 +179,7 @@ func (s *Shrinker) Next() sqlparser.Expr {
 				s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", oneLess)))
 			}
 		default:
-			panic(fmt.Sprintf("unhandled type %v", e.Type))
+			panic(fmt.Sprintf("unhandled literal type %v", e.Type))
 		}
 	case sqlparser.ValTuple:
 		// first we'll try the individual elements first
@@ -177,8 +190,6 @@ func (s *Shrinker) Next() sqlparser.Expr {
 		for i := range e {
 			s.queue = append(s.queue, append(e[:i], e[i+1:]...))
 		}
-	case *sqlparser.NullVal:
-		return nil
 	case *sqlparser.FuncExpr:
 		for _, ae := range e.Exprs {
 			expr, ok := ae.(*sqlparser.AliasedExpr)
@@ -188,13 +199,11 @@ func (s *Shrinker) Next() sqlparser.Expr {
 			s.queue = append(s.queue, expr.Expr)
 		}
 		if s.queue == nil {
-			return nil
+			return false
 		}
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
 		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
-	default:
-		return nil
 	}
-	return s.Next()
+	return false
 }
