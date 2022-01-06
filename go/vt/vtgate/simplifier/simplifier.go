@@ -131,6 +131,9 @@ func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectSt
 // but also all expressions and predicates that depend on the table
 func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet, inner *semantics.SemTable) bool {
 	simplified := false
+	shouldKeepExpr := func(expr sqlparser.Expr) bool {
+		return !inner.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr)
+	}
 	sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.JoinTableExpr:
@@ -187,7 +190,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 					newExprs = append(newExprs, ae)
 					continue
 				}
-				if !inner.RecursiveDeps(expr.Expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr.Expr) {
+				if shouldKeepExpr(expr.Expr) {
 					newExprs = append(newExprs, ae)
 				}
 			}
@@ -195,7 +198,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		case sqlparser.GroupBy:
 			var newExprs sqlparser.GroupBy
 			for _, expr := range node {
-				if !inner.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr) {
+				if shouldKeepExpr(expr) {
 					newExprs = append(newExprs, expr)
 				}
 			}
@@ -203,7 +206,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 		case sqlparser.OrderBy:
 			var newExprs sqlparser.OrderBy
 			for _, expr := range node {
-				if !inner.RecursiveDeps(expr.Expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr.Expr) {
+				if shouldKeepExpr(expr.Expr) {
 					newExprs = append(newExprs, expr)
 				}
 			}
