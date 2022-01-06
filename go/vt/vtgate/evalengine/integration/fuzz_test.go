@@ -27,7 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/simplifier"
+
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -173,6 +178,9 @@ func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
 	return eval, evaluated, err
 }
 
+const syntaxErr = `You have an error in your SQL syntax; (errno 1064) (sqlstate 42000) during query: SQL`
+const localSyntaxErr = `You have an error in your SQL syntax;`
+
 func TestGenerateFuzzCases(t *testing.T) {
 	if *fuzzMaxFailures <= 0 {
 		t.Skipf("skipping fuzz test generation")
@@ -201,55 +209,72 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
-nextCase:
-	for len(golden) < *fuzzMaxFailures {
-		query := "SELECT " + gen.expr()
+	bothReturnSameResult := func(expr sqlparser.Expr) comparisonResult {
+		query := "SELECT " + sqlparser.String(expr)
 
 		eval, evaluated, localErr := safeEvaluate(query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
-		if localErr != nil {
-			if remoteErr == nil {
-				t.Errorf("local query %q failed: %v (eval=%v); mysql response: %s", query, localErr, evaluated, remote.Rows[0][0].String())
-				goto failed
-			}
-			if !errorsMatch(remoteErr, localErr) {
-				t.Errorf("mismatch in errors for %q: local=%q (eval=%v), remote=%q", query, localErr.Error(), evaluated, remoteErr.Error())
-				goto failed
-			}
-			continue
+		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {
+			localErr = fmt.Errorf(localSyntaxErr)
 		}
 
-		if remoteErr != nil {
-			for _, ke := range knownErrors {
-				if ke.MatchString(remoteErr.Error()) {
-					continue nextCase
-				}
+		if remoteErr != nil && strings.Contains(remoteErr.Error(), "You have an error in your SQL syntax") {
+			remoteErr = fmt.Errorf(syntaxErr)
+		}
+
+		res := comparisonResult{
+			localErr:  localErr,
+			remoteErr: remoteErr,
+			evaluated: evaluated,
+		}
+
+		if evaluated {
+			res.localVal = eval.Value().String()
+		}
+
+		if remoteErr == nil {
+			res.remoteVal = remote.Rows[0][0].String()
+		}
+
+		return res
+	}
+
+	for len(golden) < *fuzzMaxFailures {
+		query := "SELECT " + gen.expr()
+		stmt, err := sqlparser.Parse(query)
+		require.NoError(t, err)
+		t.Run(query, func(t *testing.T) {
+			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+
+			resultCmp := bothReturnSameResult(astExpr)
+			diff := resultCmp.diff()
+			if diff == "" {
+				return
 			}
-			t.Errorf("remote query %q failed: %v, local=%s", query, remoteErr.Error(), eval.Value().String())
-			goto failed
-		}
 
-		if eval.Value().String() != remote.Rows[0][0].String() {
-			t.Errorf("mismatch for query %q: local=%v, remote=%v", query, eval.Value().String(), remote.Rows[0][0].String())
-			goto failed
-		}
+			log.Infof("found inconsistency - will try to simplify: %s", query)
 
-		// OK -- all match
-		continue
-
-	failed:
-		if remoteErr != nil {
-			golden = append(golden, evaltest{
-				Query: query,
-				Error: remoteErr.Error(),
+			astExpr = simplifier.SimplifyExpr(astExpr, func(expr sqlparser.Expr) bool {
+				return bothReturnSameResult(expr).diff() == diff
 			})
-		} else {
-			golden = append(golden, evaltest{
-				Query: query,
-				Value: remote.Rows[0][0].String(),
-			})
-		}
+
+			query = "SELECT " + sqlparser.String(astExpr)
+
+			log.Infof("simplified to: %s", query)
+			t.Errorf("%s", diff)
+			if resultCmp.remoteErr != nil {
+				golden = append(golden, evaltest{
+					Query: query,
+					Error: resultCmp.remoteErr.Error(),
+				})
+			} else {
+				golden = append(golden, evaltest{
+					Query: query,
+					Value: resultCmp.remoteVal,
+				})
+			}
+		})
 	}
 
 	out, err := os.Create(fmt.Sprintf("testdata/mysql_golden_%d.json", time.Now().Unix()))
@@ -261,4 +286,37 @@ nextCase:
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	enc.Encode(golden)
+}
+
+type comparisonResult struct {
+	localErr, remoteErr error
+	localVal, remoteVal string
+	evaluated           bool
+}
+
+func (cr comparisonResult) diff() string {
+	if cr.localErr != nil {
+		if cr.remoteErr == nil {
+			return fmt.Sprintf("%v (eval=%v); mysql response: %s", cr.localErr, cr.evaluated, cr.remoteVal)
+		}
+		if !errorsMatch(cr.remoteErr, cr.localErr) {
+			return fmt.Sprintf("mismatch in errors: eval=%s; mysql response: %s", cr.localErr.Error(), cr.remoteErr.Error())
+		}
+		return ""
+	}
+
+	if cr.remoteErr != nil {
+		for _, ke := range knownErrors {
+			if ke.MatchString(cr.remoteErr.Error()) {
+				return ""
+			}
+		}
+		return fmt.Sprintf("%v (eval=%v); mysql failed with: %s", cr.localVal, cr.evaluated, cr.remoteErr.Error())
+	}
+
+	if cr.localVal != cr.remoteVal {
+		return fmt.Sprintf("different results:%s (eval=%v); mysql response: %s", cr.localVal, cr.evaluated, cr.remoteVal)
+	}
+
+	return ""
 }
