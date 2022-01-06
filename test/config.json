@@ -676,7 +676,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -685,7 +685,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -694,7 +694,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_buffer": {
 			"File": "unused.go",
@@ -721,7 +721,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_schematracker_loadkeyspace": {
 			"File": "unused.go",
@@ -748,7 +748,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_schematracker_unsharded": {
 			"File": "unused.go",
@@ -757,7 +757,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_mysql80": {
 			"File": "unused.go",
@@ -865,7 +865,7 @@
 			"Manual": false,
 			"Shard": "vtgate_vschema",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving"]
 		},
 		"vtgate_readafterwrite": {
 			"File": "unused.go",
