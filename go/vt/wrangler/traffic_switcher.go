@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/discovery"
 
 	"vitess.io/vitess/go/json2"
@@ -58,9 +59,14 @@ const (
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
 
+// tableLockAction specifies if you want to lock or unlock tables
+type tableLockAction int
+
 const (
 	allowWrites = accessType(iota)
 	disallowWrites
+	tableLockRequest = tableLockAction(0)
+	tableLockRelease = tableLockAction(1)
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -129,6 +135,37 @@ func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource
 			}
 		}(source)
 	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (ts *trafficSwitcher) ExecQueryOnAllPrimarySources(ctx context.Context, query string) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	type doneRecorder struct {
+		record map[string]bool
+		mu     sync.Mutex
+	}
+	done := doneRecorder{record: make(map[string]bool)}
+
+	for _, source := range ts.sources {
+		wg.Add(1)
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+			done.mu.Lock()
+			defer done.mu.Unlock()
+			alias := tablet.Alias.String()
+
+			if !done.record[alias] {
+				if _, err := ts.wr.ExecuteFetchAsDba(ctx, tablet.Alias, query, 0, false, false); err != nil {
+					log.Infof("error locking tables on source tablet %v: %v. Query used: %s", tablet, err, query)
+					allErrors.RecordError(err)
+				}
+				done.record[alias] = true
+			}
+		}(source.GetPrimary().Tablet)
+	}
+
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
 }
@@ -963,7 +1000,9 @@ func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist boo
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.changeTableSourceWrites(ctx, disallowWrites)
+		if err = ts.changeTableSourceWrites(ctx, disallowWrites); err == nil {
+			err = ts.manageTableLocksSourceWrites(ctx, tableLockRequest)
+		}
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
@@ -993,6 +1032,24 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 		return err
 	})
+}
+
+func (ts *trafficSwitcher) manageTableLocksSourceWrites(ctx context.Context, action tableLockAction) error {
+	ts.Logger().Infof("Locking tables on source keyspace %v, tables: %v", ts.TargetKeyspaceName(), ts.Tables())
+	var query string
+	switch action {
+	case tableLockRequest:
+		sb := strings.Builder{}
+		sb.WriteString("LOCK TABLES ")
+		for _, table := range ts.Tables() {
+			sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(table)))
+		}
+		// trim extra trailing comma
+		query = sb.String()[:sb.Len()-1]
+	case tableLockRelease:
+		query = "UNLOCK TABLES"
+	}
+	return ts.ExecQueryOnAllPrimarySources(ctx, query)
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
@@ -1033,7 +1090,9 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		err = ts.changeTableSourceWrites(ctx, allowWrites)
+		if err = ts.changeTableSourceWrites(ctx, allowWrites); err == nil {
+			ts.manageTableLocksSourceWrites(ctx, tableLockRelease)
+		}
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
