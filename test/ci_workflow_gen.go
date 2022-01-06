@@ -50,7 +50,6 @@ var (
 		"11",
 		"12",
 		"13",
-		"14",
 		"15",
 		"16",
 		"17",
@@ -81,7 +80,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtorc",
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
@@ -106,8 +104,11 @@ var (
 		"vreplication_cellalias",
 	}
 
-	clusterSelfHostedList = []string{}
-	clusterDockerList     = []string{
+	clusterSelfHostedList = []string{
+		"14",
+		"vtorc",
+	}
+	clusterDockerList = []string{
 		"vreplication_basic",
 		"vreplication_v2",
 	}
