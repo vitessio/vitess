@@ -240,7 +240,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 		return res
 	}
 
-	for i := 0; i < 1000; i++ {
+	for len(golden) < *fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 		stmt, err := sqlparser.Parse(query)
 		require.NoError(t, err)
