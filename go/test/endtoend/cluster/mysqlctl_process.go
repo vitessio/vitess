@@ -140,6 +140,7 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
+		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
 	if *isCoverage {
