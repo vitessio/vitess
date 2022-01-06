@@ -1859,6 +1859,7 @@ Gen4++
     "Table": "`user`, ref"
   }
 }
+Gen4++
 
 # reference table self-join
 "select r1.col from ref r1 join ref"
@@ -1892,6 +1893,7 @@ Gen4++
     "Table": "ref"
   }
 }
+Gen4++
 
 # reference table can merge with other opcodes left to right.
 "select ref.col from ref join user"
@@ -1925,6 +1927,7 @@ Gen4++
     "Table": "`user`, ref"
   }
 }
+Gen4++
 
 # reference table can merge with other opcodes left to right and vindex value is in the plan.
 # This tests that route.Merge also copies the condition to the LHS.

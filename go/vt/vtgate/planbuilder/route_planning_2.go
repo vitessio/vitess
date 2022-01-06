@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"io"
 
 	"vitess.io/vitess/go/vt/log"
@@ -435,12 +436,12 @@ func tryMergeOp(ctx *planningContext, a, b abstract.PhysicalOperator, joinPredic
 
 	sameKeyspace := aRoute.keyspace == bRoute.keyspace
 
-	// if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
-	//	tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
-	//	if tree != nil || err != nil {
-	//		return tree, err
-	//	}
-	// }
+	if sameKeyspace || (isDualTableOp(aRoute) || isDualTableOp(bRoute)) {
+		tree, err := tryMergeReferenceTableOp(aRoute, bRoute, merger)
+		if tree != nil || err != nil {
+			return tree, err
+		}
+	}
 
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
@@ -480,6 +481,77 @@ func tryMergeOp(ctx *planningContext, a, b abstract.PhysicalOperator, joinPredic
 		return r, nil
 	}
 	return nil, nil
+}
+
+func isDualTableOp(route *routeOp) bool {
+	sources := leaves(route)
+	if len(sources) > 1 {
+		return false
+	}
+	src, ok := sources[0].(*tableOp)
+	if !ok {
+		return false
+	}
+	return src.vtable.Name.String() == "dual" && src.qtable.Table.Qualifier.IsEmpty()
+}
+
+func leaves(op abstract.Operator) (sources []abstract.Operator) {
+	switch op := op.(type) {
+	// these are the leaves
+	case *abstract.QueryGraph, *abstract.Vindex, *tableOp:
+		return []abstract.Operator{op}
+
+		// logical
+	case *abstract.Concatenate:
+		for _, source := range op.Sources {
+			sources = append(sources, leaves(source)...)
+		}
+		return
+	case *abstract.Derived:
+		return []abstract.Operator{op.Inner}
+	case *abstract.Join:
+		return []abstract.Operator{op.LHS, op.RHS}
+	case *abstract.SubQuery:
+		sources = []abstract.Operator{op.Outer}
+		for _, inner := range op.Inner {
+			sources = append(sources, inner.Inner)
+		}
+		return
+		// physical
+	case *applyJoin:
+		return []abstract.Operator{op.LHS, op.RHS}
+	case *filterOp:
+		return []abstract.Operator{op.source}
+	case *routeOp:
+		return []abstract.Operator{op.source}
+	}
+
+	panic(fmt.Sprintf("leaves unknown type: %T", op))
+}
+
+func tryMergeReferenceTableOp(aRoute, bRoute *routeOp, merger mergeOpFunc) (*routeOp, error) {
+	// if either side is a reference table, we can just merge it and use the opcode of the other side
+	var opCode engine.RouteOpcode
+	var selected *vindexOption
+
+	switch {
+	case aRoute.routeOpCode == engine.SelectReference:
+		selected = bRoute.selected
+		opCode = bRoute.routeOpCode
+	case bRoute.routeOpCode == engine.SelectReference:
+		selected = aRoute.selected
+		opCode = aRoute.routeOpCode
+	default:
+		return nil, nil
+	}
+
+	r, err := merger(aRoute, bRoute)
+	if err != nil {
+		return nil, err
+	}
+	r.routeOpCode = opCode
+	r.selected = selected
+	return r, nil
 }
 
 func (r *routeOp) selectedVindex() vindexes.Vindex {
@@ -673,7 +745,7 @@ func (u *unionOp) TableID() semantics.TableSet {
 	return ts
 }
 
-func (u *unionOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (u *unionOp) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
