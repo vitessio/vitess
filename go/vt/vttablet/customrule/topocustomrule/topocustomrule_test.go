@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -52,7 +54,8 @@ var customRule2 = `
 func waitForValue(t *testing.T, qsc *tabletservermock.Controller, expected *rules.Rules) {
 	start := time.Now()
 	for {
-		val := qsc.GetQueryRules(topoCustomRuleSource)
+		val, err := qsc.GetQueryRules(topoCustomRuleSource)
+		require.NoError(t, err)
 		if val != nil {
 			if val.Equal(expected) {
 				return

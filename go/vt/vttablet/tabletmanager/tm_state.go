@@ -261,7 +261,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
-	if reason != "" || (reason == "" && denyListUpdated) {
+	if reason != "" || (ts.tm.QueryServiceControl.IsServing() && reason == "" && denyListUpdated) {
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
@@ -372,6 +372,9 @@ func (ts *tmState) getNewDenyList(ctx context.Context) (*rules.Rules, error) {
 	currentDenyList, err := ts.tm.QueryServiceControl.GetQueryRules(denyListQueryList)
 	if err != nil {
 		return nil, err
+	}
+	if currentDenyList == nil {
+		return denyListRules, nil
 	}
 	isEqual := currentDenyList.Equal(denyListRules)
 	if isEqual {
