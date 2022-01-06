@@ -119,7 +119,7 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
 		}},
-		{"raise error when there is not enough members", 0, "vtgr repair: unsafe to bootstrap group", []data{
+		{"raise error when there are not enough members", 0, "vtgr repair: unsafe to bootstrap group", []data{
 			{testHost, testPort0, "", true, []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
@@ -355,7 +355,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"no error on two unreachable mysql with allowUnhealthyNodeOnReboot", "", testPort2, 1, []data{
+		{"no error on two unreachable mysqls with allowUnhealthyNodeOnReboot", "", testPort2, 1, []data{
 			{"", 0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-11"), topodatapb.TabletType_REPLICA},

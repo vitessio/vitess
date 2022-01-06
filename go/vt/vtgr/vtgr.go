@@ -193,7 +193,7 @@ func (vtgr *VTGR) GetCurrentShardStatuses() []controller.ShardStatus {
 	return result
 }
 
-// OverrideRebootstrapGroupSize force override the group size used in safety check for rebootstrap
+// OverrideRebootstrapGroupSize forces an override the group size used in safety check for rebootstrap
 func (vtgr *VTGR) OverrideRebootstrapGroupSize(groupSize int) error {
 	errorRecord := concurrency.AllErrorRecorder{}
 	for _, shard := range vtgr.Shards {
