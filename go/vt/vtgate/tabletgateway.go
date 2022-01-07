@@ -46,6 +46,7 @@ const (
 )
 
 func init() {
+	*GatewayImplementation = tabletGatewayImplementation
 	RegisterGatewayCreator(tabletGatewayImplementation, createTabletGateway)
 }
 
