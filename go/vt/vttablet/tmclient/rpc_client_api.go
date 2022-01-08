@@ -91,6 +91,8 @@ type TabletManagerClient interface {
 
 	LockTables(ctx context.Context, tablet *topodatapb.Tablet) error
 
+	LockSpecificTables(ctx context.Context, tablet *topodatapb.Tablet, tableNames []string) error
+
 	UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error)

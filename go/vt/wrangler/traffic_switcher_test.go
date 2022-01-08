@@ -345,8 +345,11 @@ func TestTableMigrateMainflow(t *testing.T) {
 	cancelMigration()
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
@@ -867,9 +870,13 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 	require.Error(t, err, "Workflow has not completed, cannot DropSources")
 
 	tme.dbSourceClients[0].addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
@@ -1091,8 +1098,11 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	deleteTargetVReplication()
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, true)
@@ -1181,8 +1191,11 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSourceClients[1].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
@@ -1247,8 +1260,11 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
@@ -1329,8 +1345,11 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
@@ -1396,8 +1415,11 @@ func TestTableMigrateCancel(t *testing.T) {
 	cancelMigration()
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, false)
@@ -1460,8 +1482,11 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	cancelMigration()
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, true)
@@ -1563,8 +1588,11 @@ func TestTableMigrateNoReverse(t *testing.T) {
 	deleteTargetVReplication()
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
@@ -1609,8 +1637,11 @@ func TestMigrateFrozen(t *testing.T) {
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
@@ -1986,8 +2017,11 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	cancelMigration()
 
 	switchWrites := func() {
+		tme.tmeDB.AddQuery("use `vt_ks1`", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("set autocommit=0", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 		tme.tmeDB.AddQuery("unlock tables", &sqltypes.Result{})
+		tme.tmeDB.AddQuery("commit", &sqltypes.Result{})
 	}
 	switchWrites()
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
