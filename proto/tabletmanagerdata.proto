@@ -221,7 +221,14 @@ message ApplySchemaResponse {
 message LockTablesRequest {
 }
 
+message LockSpecificTablesRequest {
+  repeated string table_names = 1;
+}
+
 message LockTablesResponse {
+}
+
+message LockSpecificTablesResponse {
 }
 
 message UnlockTablesRequest {

@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/discovery"
 
 	"vitess.io/vitess/go/json2"
@@ -68,6 +67,7 @@ const (
 	disallowWrites
 	tableLockAcquire = tableLockAction(iota)
 	tableLockRelease
+	tableLockCheck
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -136,43 +136,6 @@ func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource
 			}
 		}(source)
 	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
-func (ts *trafficSwitcher) ExecQueryOnAllPrimarySources(ctx context.Context, query string) error {
-	if ts.Sources() == nil || len(ts.Sources()) == 0 {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "workflow %s has no source shards in the %s keyspace", ts.WorkflowName(), ts.SourceKeyspaceName())
-	}
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	type doneRecorder struct {
-		record map[*topodatapb.TabletAlias]bool
-		mu     sync.Mutex
-	}
-	done := doneRecorder{record: make(map[*topodatapb.TabletAlias]bool)}
-
-	for _, source := range ts.Sources() {
-		if source.GetPrimary() == nil {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "source shard %v does not have a primary tablet", source.GetShard())
-		}
-		wg.Add(1)
-		go func(tablet *topodatapb.Tablet) {
-			defer wg.Done()
-			done.mu.Lock()
-			defer done.mu.Unlock()
-			alias := tablet.GetAlias()
-
-			if !done.record[alias] {
-				if _, err := ts.wr.ExecuteFetchAsDba(ctx, alias, query, 0, false, false); err != nil {
-					ts.Logger().Warningf("Error locking tables on source tablet %v: %v", tablet, err)
-					allErrors.RecordError(err)
-				}
-				done.record[alias] = true
-			}
-		}(source.GetPrimary().Tablet)
-	}
-
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
 }
@@ -525,6 +488,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			sw.cancelMigration(ctx, sm)
 			return 0, sw.logs(), nil
 		}
+
 		ts.Logger().Infof("Stopping streams")
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
@@ -537,11 +501,26 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
+
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
 			ts.Logger().Errorf("stopSourceWrites failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
+		}
+
+		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+			ts.Logger().Infof("Locking source tables")
+			if err := ts.manageTableLocksOnSources(ctx, tableLockAcquire); err != nil {
+				ts.Logger().Errorf("Failed to lock tables on sources: %v", err)
+				sw.cancelMigration(ctx, sm)
+				return 0, nil, err
+			}
+			defer func() {
+				if err := ts.manageTableLocksOnSources(ctx, tableLockRelease); err != nil {
+					ts.Logger().Warningf("Error releasing table locks on sources: %v", err)
+				}
+			}()
 		}
 
 		ts.Logger().Infof("Waiting for streams to catchup")
@@ -1007,14 +986,7 @@ func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist boo
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		if err = ts.changeTableSourceWrites(ctx, disallowWrites); err == nil {
-			err = ts.manageTableLocksOnSources(ctx, tableLockAcquire)
-			defer func() {
-				if err := ts.manageTableLocksOnSources(ctx, tableLockRelease); err != nil {
-					ts.Logger().Warningf("error releasing table locks on source keyspace %v: %v", ts.SourceKeyspaceName(), err)
-				}
-			}()
-		}
+		err = ts.changeTableSourceWrites(ctx, disallowWrites)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
@@ -1047,24 +1019,53 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 }
 
 func (ts *trafficSwitcher) manageTableLocksOnSources(ctx context.Context, action tableLockAction) error {
-	ts.Logger().Infof("Locking the following tables on source keyspace %v: %v", ts.SourceKeyspaceName(), ts.Tables())
+	logStrf := "Performing locking action %s on the following tables on source keyspace " +
+		fmt.Sprintf("%v: %v", ts.SourceKeyspaceName(), ts.Tables())
 	if ts.Tables() == nil || len(ts.Tables()) == 0 {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "no tables found in the source keyspace %v associated with the %s workflow", ts.SourceKeyspaceName(), ts.WorkflowName())
 	}
-	var query string
 	switch action {
 	case tableLockAcquire:
-		sb := strings.Builder{}
-		sb.WriteString("lock tables ")
-		for _, table := range ts.Tables() {
-			sb.WriteString(fmt.Sprintf("%s read,", sqlescape.EscapeID(table)))
-		}
-		// trim extra trailing comma
-		query = sb.String()[:sb.Len()-1]
+		ts.Logger().Infof(logStrf, "ACQUIRE")
+		return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+			var err error
+			primary := source.GetPrimary()
+			if primary == nil {
+				return vterrors.Errorf(vtrpc.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
+			}
+			tablet := primary.Tablet
+			if err = ts.TabletManagerClient().LockSpecificTables(ctx, tablet, ts.Tables()); err != nil {
+				ts.Logger().Warningf("Error locking tables %v on source tablet %v: %v", ts.Tables(), tablet, err)
+			}
+			return err
+		})
 	case tableLockRelease:
-		query = "unlock tables"
+		ts.Logger().Infof(logStrf, "RELEASE")
+		return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+			var err error
+			primary := source.GetPrimary()
+			if primary == nil {
+				return vterrors.Errorf(vtrpc.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
+			}
+			tablet := primary.Tablet
+			if err = ts.TabletManagerClient().UnlockTables(ctx, tablet); err != nil {
+				ts.Logger().Warningf("Error unlocking tables on source tablet %v: %v", tablet, err)
+			}
+			return err
+		})
+	case tableLockCheck:
+		ts.Logger().Infof(logStrf, "CHECK")
+		// This will return an error if we still hold the table locks:
+		// ERROR 1100 (HY000): Table 'vreplication' was not locked with LOCK TABLES
+		//query = "select 1 from _vt.vreplication"
+		// If it doesn't return an error then we've somehow lost our session and the
+		// locks along with it
+		//expectError = true
+	default:
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown lock action %v", action)
 	}
-	return ts.ExecQueryOnAllPrimarySources(ctx, query)
+
+	return nil
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
@@ -1106,11 +1107,9 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.Str
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, allowWrites)
-		defer func() {
-			if err := ts.manageTableLocksOnSources(ctx, tableLockRelease); err != nil {
-				ts.Logger().Warningf("Error releasing table locks on source keyspace %v: %v", ts.SourceKeyspaceName(), err)
-			}
-		}()
+		// This will err if the tables are not locked and we're doing this here as an extra precaution
+		// The table locks should be released from the SwitchWrites defer
+		_ = ts.manageTableLocksOnSources(ctx, tableLockRelease)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}

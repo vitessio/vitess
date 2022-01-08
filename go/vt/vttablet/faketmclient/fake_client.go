@@ -98,6 +98,11 @@ func (client *FakeTabletManagerClient) LockTables(ctx context.Context, tablet *t
 	return nil
 }
 
+// LockSpecificTables is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) LockSpecificTables(ctx context.Context, tablet *topodatapb.Tablet, tableNames []string) error {
+	return nil
+}
+
 // UnlockTables is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil

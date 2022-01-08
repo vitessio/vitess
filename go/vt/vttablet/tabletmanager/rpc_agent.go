@@ -68,6 +68,8 @@ type RPCTM interface {
 
 	LockTables(ctx context.Context) error
 
+	LockSpecificTables(ctx context.Context, tableNames []string) error
+
 	UnlockTables(ctx context.Context) error
 
 	ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error)
