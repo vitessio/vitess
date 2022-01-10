@@ -404,19 +404,6 @@ func (client *Client) LockTables(ctx context.Context, tablet *topodatapb.Tablet)
 	return err
 }
 
-// LockSpecificTables is part of the tmclient.TabletManagerClient interface.
-// LOCK TABLES tb1 READ, tbl2 READ... is used.
-func (client *Client) LockSpecificTables(ctx context.Context, tablet *topodatapb.Tablet, tableNames []string) error {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return err
-	}
-	defer closer.Close()
-
-	_, err = c.LockSpecificTables(ctx, &tabletmanagerdatapb.LockSpecificTablesRequest{TableNames: tableNames})
-	return err
-}
-
 // UnlockTables is part of the tmclient.TabletManagerClient interface.
 func (client *Client) UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)

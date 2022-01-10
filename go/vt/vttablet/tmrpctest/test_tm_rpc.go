@@ -57,10 +57,6 @@ func (fra *fakeRPCTM) LockTables(ctx context.Context) error {
 	panic("implement me")
 }
 
-func (fra *fakeRPCTM) LockSpecificTables(ctx context.Context, tableNames []string) error {
-	panic("implement me")
-}
-
 func (fra *fakeRPCTM) UnlockTables(ctx context.Context) error {
 	panic("implement me")
 }

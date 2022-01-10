@@ -188,14 +188,6 @@ func (s *server) LockTables(ctx context.Context, req *tabletmanagerdatapb.LockTa
 	return &tabletmanagerdatapb.LockTablesResponse{}, nil
 }
 
-func (s *server) LockSpecificTables(ctx context.Context, req *tabletmanagerdatapb.LockSpecificTablesRequest) (*tabletmanagerdatapb.LockSpecificTablesResponse, error) {
-	err := s.tm.LockSpecificTables(ctx, req.TableNames)
-	if err != nil {
-		return nil, err
-	}
-	return &tabletmanagerdatapb.LockSpecificTablesResponse{}, nil
-}
-
 func (s *server) UnlockTables(ctx context.Context, req *tabletmanagerdatapb.UnlockTablesRequest) (*tabletmanagerdatapb.UnlockTablesResponse, error) {
 	err := s.tm.UnlockTables(ctx)
 	if err != nil {

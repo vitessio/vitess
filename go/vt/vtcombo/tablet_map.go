@@ -763,10 +763,6 @@ func (itmc *internalTabletManagerClient) LockTables(ctx context.Context, tablet 
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) LockSpecificTables(ctx context.Context, tablet *topodatapb.Tablet, tableNames []string) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

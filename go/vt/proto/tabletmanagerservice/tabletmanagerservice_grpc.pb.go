@@ -40,7 +40,6 @@ type TabletManagerClient interface {
 	PreflightSchema(ctx context.Context, in *tabletmanagerdata.PreflightSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error)
 	LockTables(ctx context.Context, in *tabletmanagerdata.LockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockTablesResponse, error)
-	LockSpecificTables(ctx context.Context, in *tabletmanagerdata.LockSpecificTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockSpecificTablesResponse, error)
 	UnlockTables(ctx context.Context, in *tabletmanagerdata.UnlockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(ctx context.Context, in *tabletmanagerdata.ExecuteQueryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteQueryResponse, error)
 	ExecuteFetchAsDba(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
@@ -249,15 +248,6 @@ func (c *tabletManagerClient) ApplySchema(ctx context.Context, in *tabletmanager
 func (c *tabletManagerClient) LockTables(ctx context.Context, in *tabletmanagerdata.LockTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockTablesResponse, error) {
 	out := new(tabletmanagerdata.LockTablesResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/LockTables", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *tabletManagerClient) LockSpecificTables(ctx context.Context, in *tabletmanagerdata.LockSpecificTablesRequest, opts ...grpc.CallOption) (*tabletmanagerdata.LockSpecificTablesResponse, error) {
-	out := new(tabletmanagerdata.LockSpecificTablesResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/LockSpecificTables", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -659,7 +649,6 @@ type TabletManagerServer interface {
 	PreflightSchema(context.Context, *tabletmanagerdata.PreflightSchemaRequest) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error)
 	LockTables(context.Context, *tabletmanagerdata.LockTablesRequest) (*tabletmanagerdata.LockTablesResponse, error)
-	LockSpecificTables(context.Context, *tabletmanagerdata.LockSpecificTablesRequest) (*tabletmanagerdata.LockSpecificTablesResponse, error)
 	UnlockTables(context.Context, *tabletmanagerdata.UnlockTablesRequest) (*tabletmanagerdata.UnlockTablesResponse, error)
 	ExecuteQuery(context.Context, *tabletmanagerdata.ExecuteQueryRequest) (*tabletmanagerdata.ExecuteQueryResponse, error)
 	ExecuteFetchAsDba(context.Context, *tabletmanagerdata.ExecuteFetchAsDbaRequest) (*tabletmanagerdata.ExecuteFetchAsDbaResponse, error)
@@ -780,9 +769,6 @@ func (UnimplementedTabletManagerServer) ApplySchema(context.Context, *tabletmana
 }
 func (UnimplementedTabletManagerServer) LockTables(context.Context, *tabletmanagerdata.LockTablesRequest) (*tabletmanagerdata.LockTablesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LockTables not implemented")
-}
-func (UnimplementedTabletManagerServer) LockSpecificTables(context.Context, *tabletmanagerdata.LockSpecificTablesRequest) (*tabletmanagerdata.LockSpecificTablesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method LockSpecificTables not implemented")
 }
 func (UnimplementedTabletManagerServer) UnlockTables(context.Context, *tabletmanagerdata.UnlockTablesRequest) (*tabletmanagerdata.UnlockTablesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnlockTables not implemented")
@@ -1171,24 +1157,6 @@ func _TabletManager_LockTables_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).LockTables(ctx, req.(*tabletmanagerdata.LockTablesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TabletManager_LockSpecificTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.LockSpecificTablesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).LockSpecificTables(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/LockSpecificTables",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).LockSpecificTables(ctx, req.(*tabletmanagerdata.LockSpecificTablesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1913,10 +1881,6 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LockTables",
 			Handler:    _TabletManager_LockTables_Handler,
-		},
-		{
-			MethodName: "LockSpecificTables",
-			Handler:    _TabletManager_LockSpecificTables_Handler,
 		},
 		{
 			MethodName: "UnlockTables",
