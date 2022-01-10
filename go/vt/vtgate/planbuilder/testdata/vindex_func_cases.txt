@@ -27,6 +27,7 @@
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # vindex func select *
 "select * from user_index where id = :id"
@@ -57,6 +58,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # vindex func read with id repeated
 "select id, keyspace_id, id from user_index where id = :id"
@@ -80,6 +82,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ambiguous vindex reference
 "select id, keyspace_id, id from hash_dup where id = :id"
@@ -109,6 +112,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # You can even join with a vindexFunc primitive
 "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id"
@@ -182,6 +186,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Join vindexFunc on RHS
 "select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id"
@@ -255,6 +260,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Join with vindexFunc on a column of it, already present in select list
 "select user_index.id, user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id"
