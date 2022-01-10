@@ -142,7 +142,7 @@ func NewGRShard(
 		ts:                        ts,
 		dbAgent:                   dbAgent,
 		unlock:                    nil,
-		sqlGroup:                  NewSQLGroup(config.GroupSize, true, keyspace, shard),
+		sqlGroup:                  NewSQLGroup(config.BootstrapGroupSize, true, keyspace, shard),
 		minNumReplicas:            config.MinNumReplica,
 		disableReadOnlyProtection: config.DisableReadOnlyProtection,
 		localDbPort:               localDbPort,
@@ -328,6 +328,15 @@ func (shard *GRShard) GetCurrentShardStatuses() ShardStatus {
 	status := *collector.status
 	shard.Unlock()
 	return status
+}
+
+// OverrideRebootstrapGroupSize force override the group expectedBootstrapSize used in safety check for rebootstrap
+func (shard *GRShard) OverrideRebootstrapGroupSize(groupSize int) error {
+	shard.Lock()
+	defer shard.Unlock()
+	shard.logger.Infof("Override rebootstrap group size=%v", groupSize)
+	shard.sqlGroup.rebootstrapSize = groupSize
+	return nil
 }
 
 // GetUnlock returns the unlock function for the shard for testing
