@@ -205,5 +205,5 @@ func (s *shrinker) fillQueue() bool {
 		// we can try to replace the column with a literal value
 		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
 	}
-	return false
+	return true
 }
