@@ -27,66 +27,66 @@ describe('Tablets', () => {
             // work as expected + requires all property keys to be defined.
             expected: { [k: string]: unknown }[];
         }[] = [
-            {
-                name: 'empty tablets',
-                filter: null,
-                tablets: null,
-                expected: [],
-            },
-            {
-                name: 'sort by primary first, then other tablet types alphabetically',
-                filter: null,
-                tablets: [
-                    pb.Tablet.create({
-                        tablet: {
-                            alias: {
-                                cell: 'cell1',
-                                uid: 4,
+                {
+                    name: 'empty tablets',
+                    filter: null,
+                    tablets: null,
+                    expected: [],
+                },
+                {
+                    name: 'sort by primary first, then other tablet types alphabetically',
+                    filter: null,
+                    tablets: [
+                        pb.Tablet.create({
+                            tablet: {
+                                alias: {
+                                    cell: 'cell1',
+                                    uid: 4,
+                                },
+                                type: topodata.TabletType.BACKUP,
                             },
-                            type: topodata.TabletType.BACKUP,
-                        },
-                    }),
-                    pb.Tablet.create({
-                        tablet: {
-                            alias: {
-                                cell: 'cell1',
-                                uid: 2,
+                        }),
+                        pb.Tablet.create({
+                            tablet: {
+                                alias: {
+                                    cell: 'cell1',
+                                    uid: 2,
+                                },
+                                type: topodata.TabletType.REPLICA,
                             },
-                            type: topodata.TabletType.REPLICA,
-                        },
-                    }),
-                    pb.Tablet.create({
-                        tablet: {
-                            alias: {
-                                cell: 'cell1',
-                                uid: 3,
+                        }),
+                        pb.Tablet.create({
+                            tablet: {
+                                alias: {
+                                    cell: 'cell1',
+                                    uid: 3,
+                                },
+                                type: topodata.TabletType.PRIMARY,
                             },
-                            type: topodata.TabletType.PRIMARY,
-                        },
-                    }),
-                    pb.Tablet.create({
-                        tablet: {
-                            alias: {
-                                cell: 'cell1',
-                                uid: 1,
+                        }),
+                        pb.Tablet.create({
+                            tablet: {
+                                alias: {
+                                    cell: 'cell1',
+                                    uid: 1,
+                                },
+                                type: topodata.TabletType.REPLICA,
                             },
-                            type: topodata.TabletType.REPLICA,
-                        },
-                    }),
-                ],
-                expected: [
-                    { alias: 'cell1-3', type: 'PRIMARY' },
-                    { alias: 'cell1-4', type: 'BACKUP' },
-                    { alias: 'cell1-1', type: 'REPLICA' },
-                    { alias: 'cell1-2', type: 'REPLICA' },
-                ],
-            },
-        ];
+                        }),
+                    ],
+                    expected: [
+                        { alias: 'cell1-3', type: 'PRIMARY' },
+                        { alias: 'cell1-4', type: 'BACKUP' },
+                        { alias: 'cell1-1', type: 'REPLICA' },
+                        { alias: 'cell1-2', type: 'REPLICA' },
+                    ],
+                },
+            ];
 
         test.each(tests.map(Object.values))(
             '%s',
             (name: string, filter: string, tablets: pb.Tablet[], expected: { [k: string]: unknown }[]) => {
-                const result = formatRows(tablets, filter);
+                const result = formatRows(tablets, [], filter);
                 expect(result).toMatchObject(expected);
             }
         );
