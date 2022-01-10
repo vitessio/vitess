@@ -51,43 +51,32 @@ limit 123 offset 456
 `
 	ast, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	ch := make(chan expressionCursor)
-	findExpressions(ast.(sqlparser.SelectStatement), ch)
-	for cursor := range ch {
-		exploreExpression(cursor, ast)
-	}
-}
-
-func exploreExpression(cursor expressionCursor, ast sqlparser.Statement) {
-	defer cursor.wg.Done()
-	fmt.Printf(">> found expression: %s\n", sqlparser.String(cursor.expr))
-	cursor.replace(sqlparser.NewIntLiteral("1"))
-	fmt.Printf("remove: %s\n", sqlparser.String(ast))
-	cursor.restore()
-	fmt.Printf("restore: %s\n", sqlparser.String(ast))
-	cursor.remove()
-	fmt.Printf("replace it with literal: %s\n", sqlparser.String(ast))
-	cursor.restore()
-	fmt.Printf("restore: %s\n", sqlparser.String(ast))
+	visitAllExpressionsInAST(ast.(sqlparser.SelectStatement), func(cursor expressionCursor) bool {
+		fmt.Printf(">> found expression: %s\n", sqlparser.String(cursor.expr))
+		cursor.replace(sqlparser.NewIntLiteral("1"))
+		fmt.Printf("remove: %s\n", sqlparser.String(ast))
+		cursor.restore()
+		fmt.Printf("restore: %s\n", sqlparser.String(ast))
+		cursor.remove()
+		fmt.Printf("replace it with literal: %s\n", sqlparser.String(ast))
+		cursor.restore()
+		fmt.Printf("restore: %s\n", sqlparser.String(ast))
+		return true
+	})
 }
 
 func TestAbortExpressionCursor(t *testing.T) {
 	query := "select user.id, count(*), unsharded.name from user join unsharded on 13 = 14 where unsharded.id = 42 and name = 'foo' and user.id = unsharded.id"
 	ast, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	ch := make(chan expressionCursor)
-	findExpressions(ast.(sqlparser.SelectStatement), ch)
-	for cursor := range ch {
+	visitAllExpressionsInAST(ast.(sqlparser.SelectStatement), func(cursor expressionCursor) bool {
 		fmt.Println(sqlparser.String(cursor.expr))
 		cursor.replace(sqlparser.NewIntLiteral("1"))
 		fmt.Println(sqlparser.String(ast))
 		cursor.replace(cursor.expr)
-		if _, ok := cursor.expr.(*sqlparser.FuncExpr); ok {
-			cursor.abort()
-			break
-		}
-		cursor.wg.Done()
-	}
+		_, isFunc := cursor.expr.(*sqlparser.FuncExpr)
+		return !isFunc
+	})
 }
 
 func TestSimplifyEvalEngineExpr(t *testing.T) {
