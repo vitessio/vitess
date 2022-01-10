@@ -17,7 +17,13 @@ import { rest } from 'msw';
 import { setupServer } from 'msw/node';
 
 import * as api from './http';
-import { HttpFetchError, HttpResponseNotOkError, HTTP_RESPONSE_NOT_OK_ERROR, MalformedHttpResponseError, MALFORMED_HTTP_RESPONSE_ERROR } from '../errors/errorTypes';
+import {
+    HttpFetchError,
+    HttpResponseNotOkError,
+    HTTP_RESPONSE_NOT_OK_ERROR,
+    MalformedHttpResponseError,
+    MALFORMED_HTTP_RESPONSE_ERROR,
+} from '../errors/errorTypes';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpErrorResponse } from './responseTypes';
 
@@ -113,7 +119,7 @@ describe('api/http', () => {
             try {
                 await api.fetchTablets();
             } catch (error) {
-                let e: HttpResponseNotOkError = error as HttpResponseNotOkError
+                let e: HttpResponseNotOkError = error as HttpResponseNotOkError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(HTTP_RESPONSE_NOT_OK_ERROR);
                 expect(e.message).toEqual('[status 500] /api/tablets: oh_no something went wrong');
@@ -138,7 +144,7 @@ describe('api/http', () => {
             try {
                 await api.vtfetch(endpoint);
             } catch (error) {
-                let e: MalformedHttpResponseError = error as MalformedHttpResponseError
+                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 expect(e.message).toEqual('[status 504] /api/tablets: Unexpected token < in JSON at position 0');
@@ -158,7 +164,7 @@ describe('api/http', () => {
             try {
                 await api.vtfetch(endpoint);
             } catch (error) {
-                let e: MalformedHttpResponseError = error as MalformedHttpResponseError
+                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 /* eslint-enable jest/no-conditional-expect */
@@ -212,7 +218,7 @@ describe('api/http', () => {
                 try {
                     await api.vtfetch(endpoint);
                 } catch (error) {
-                    let e: HttpFetchError = error as HttpFetchError
+                    let e: HttpFetchError = error as HttpFetchError;
                     /* eslint-disable jest/no-conditional-expect */
                     expect(e.message).toEqual(
                         'Invalid fetch credentials property: nope. Must be undefined or one of omit, same-origin, include'
@@ -243,7 +249,7 @@ describe('api/http', () => {
                     transform: (e) => null, // doesn't matter
                 });
             } catch (error) {
-                let e: HttpFetchError = error as HttpFetchError
+                let e: HttpFetchError = error as HttpFetchError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.message).toMatch('expected entities to be an array, got null');
 
