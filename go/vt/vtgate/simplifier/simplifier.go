@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// SimplifyStatement simplifies the AST of a query. It basically iteratevely prunes leaves of the AST, as long as the pruning
+// SimplifyStatement simplifies the AST of a query. It basically iteratively prunes leaves of the AST, as long as the pruning
 // continues to return true from the `test` function.
 func SimplifyStatement(
 	in sqlparser.SelectStatement,
@@ -33,15 +33,9 @@ func SimplifyStatement(
 	si semantics.SchemaInformation,
 	testF func(sqlparser.SelectStatement) bool,
 ) sqlparser.SelectStatement {
-	var semTable *semantics.SemTable
-	var err error
-	{
-		// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
-		clone := sqlparser.CloneSelectStatement(in)
-		semTable, err = semantics.Analyze(clone, currentDB, si)
-		if err != nil {
-			return nil
-		}
+	tables, err := getTables(in, currentDB, si)
+	if err != nil {
+		panic(err)
 	}
 
 	test := func(s sqlparser.SelectStatement) bool {
@@ -49,15 +43,15 @@ func SimplifyStatement(
 		return testF(sqlparser.CloneSelectStatement(s))
 	}
 
-	// we start by removing one table at a time, and see if we still have an interesting plan
-	for idx := range semTable.Tables {
+	// we start by removing one table at a time, and see if we still have an interesting plan0
+	for idx, tbl := range tables {
 		clone := sqlparser.CloneSelectStatement(in)
 		if err != nil {
 			panic(err) // this should never happen
 		}
 		searchedTS := semantics.SingleTableSet(idx)
-		simplified := removeTable(clone, searchedTS, semTable)
-		name, _ := semTable.Tables[idx].Name()
+		simplified := removeTable(clone, searchedTS, currentDB, si)
+		name, _ := tbl.Name()
 		if simplified && test(clone) {
 			log.Errorf("removed table %s", sqlparser.String(name))
 			return SimplifyStatement(clone, currentDB, si, testF)
@@ -105,6 +99,16 @@ func SimplifyStatement(
 	return in
 }
 
+func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation) ([]semantics.TableInfo, error) {
+	// Since our semantic analysis changes the AST, we clone it first, so we have a pristine AST to play with
+	clone := sqlparser.CloneSelectStatement(in)
+	semTable, err := semantics.Analyze(clone, currentDB, si)
+	if err != nil {
+		return nil, err
+	}
+	return semTable.Tables, nil
+}
+
 func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) bool {
 	simplified := false
 	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
@@ -129,24 +133,29 @@ func simplifyStarExpr(in sqlparser.SelectStatement, test func(sqlparser.SelectSt
 
 // removeTable removes the table with the given index from the select statement, which includes the FROM clause
 // but also all expressions and predicates that depend on the table
-func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet, inner *semantics.SemTable) bool {
+func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet, db string, si semantics.SchemaInformation) bool {
+	semTable, err := semantics.Analyze(clone, db, si)
+	if err != nil {
+		panic(err)
+	}
+
 	simplified := true
 	shouldKeepExpr := func(expr sqlparser.Expr) bool {
-		return !inner.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr)
+		return !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) || sqlparser.ContainsAggregation(expr)
 	}
 	sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.JoinTableExpr:
 			lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
 			if ok {
-				ts := inner.TableSetFor(lft)
+				ts := semTable.TableSetFor(lft)
 				if searchedTS.Equals(ts) {
 					cursor.Replace(node.RightExpr)
 				}
 			}
 			rgt, ok := node.RightExpr.(*sqlparser.AliasedTableExpr)
 			if ok {
-				ts := inner.TableSetFor(rgt)
+				ts := semTable.TableSetFor(rgt)
 				if searchedTS.Equals(ts) {
 					cursor.Replace(node.LeftExpr)
 				}
@@ -162,7 +171,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 			for i, tbl := range node.From {
 				lft, ok := tbl.(*sqlparser.AliasedTableExpr)
 				if ok {
-					ts := inner.TableSetFor(lft)
+					ts := semTable.TableSetFor(lft)
 					if searchedTS.Equals(ts) {
 						node.From = append(node.From[:i], node.From[i+1:]...)
 						return true
@@ -173,7 +182,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 			exprs := sqlparser.SplitAndExpression(nil, node.Expr)
 			var newPredicate sqlparser.Expr
 			for _, expr := range exprs {
-				if !inner.RecursiveDeps(expr).IsOverlapping(searchedTS) {
+				if !semTable.RecursiveDeps(expr).IsOverlapping(searchedTS) {
 					newPredicate = sqlparser.AndExpressions(newPredicate, expr)
 				}
 			}

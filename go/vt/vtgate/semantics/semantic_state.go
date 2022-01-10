@@ -135,7 +135,7 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if sqlparser.EqualsRefOfAliasedTableExpr(t, t2.getExpr()) {
+		if t == t2.getExpr() {
 			return SingleTableSet(idx)
 		}
 	}
