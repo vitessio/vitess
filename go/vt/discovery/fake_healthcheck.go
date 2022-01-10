@@ -35,10 +35,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var (
-	currentTabletUID sync2.AtomicInt32
-)
-
 // This file contains the definitions for a FakeHealthCheck class to
 // simulate a HealthCheck module. Note it is not in a sub-package because
 // otherwise it couldn't be used in this package's tests because of
@@ -55,9 +51,9 @@ func NewFakeHealthCheck(ch chan *TabletHealth) *FakeHealthCheck {
 // FakeHealthCheck implements discovery.HealthCheck.
 type FakeHealthCheck struct {
 	// mu protects the items map
-	mu    sync.RWMutex
-	items map[string]*fhcItem
-
+	mu               sync.RWMutex
+	items            map[string]*fhcItem
+	currentTabletUID sync2.AtomicInt32
 	// channel to return on subscribe. Pass nil if no subscribe should not return a channel
 	ch chan *TabletHealth
 }
@@ -259,8 +255,8 @@ func (fhc *FakeHealthCheck) Reset() {
 // For flexibility the connection is created via a connFactory callback
 func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, connFactory func(*topodatapb.Tablet) queryservice.QueryService) queryservice.QueryService {
 	// tabletUID must be unique
-	currentTabletUID.Add(1)
-	uid := currentTabletUID.Get()
+	fhc.currentTabletUID.Add(1)
+	uid := fhc.currentTabletUID.Get()
 	t := topo.NewTablet(uint32(uid), cell, host)
 	t.Keyspace = keyspace
 	t.Shard = shard

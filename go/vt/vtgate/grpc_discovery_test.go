@@ -62,9 +62,9 @@ func TestGRPCDiscovery(t *testing.T) {
 
 	// VTGate: create the discovery healthcheck, and the gateway.
 	// Wait for the right tablets to be present.
-	hc := discovery.NewLegacyHealthCheck(10*time.Second, 2*time.Minute)
+	hc := discovery.NewHealthCheck(context.Background(), 10*time.Second, 2*time.Minute, ts, cell, cell)
 	rs := srvtopo.NewResilientServer(ts, "TestGRPCDiscovery")
-	dg := NewDiscoveryGateway(context.Background(), hc, rs, cell, 2)
+	dg := NewTabletGateway(context.Background(), hc, rs, cell)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias:    tabletconntest.TestAlias,
 		Keyspace: tabletconntest.TestTarget.Keyspace,
@@ -74,7 +74,7 @@ func TestGRPCDiscovery(t *testing.T) {
 		PortMap: map[string]int32{
 			"grpc": int32(port),
 		},
-	}, "test_tablet")
+	})
 	err = WaitForTablets(dg, []topodatapb.TabletType{tabletconntest.TestTarget.TabletType})
 	if err != nil {
 		t.Fatalf("WaitForTablets failed: %v", err)
