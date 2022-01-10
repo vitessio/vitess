@@ -58,7 +58,6 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 			j.LeftJoin = false
 			return j.RHS.PushPredicate(expr, semTable)
 		}
-		// TODO - we should do this on the vtgate level once we have a Filter primitive
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
 	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
 		j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)

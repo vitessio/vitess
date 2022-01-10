@@ -81,7 +81,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 		ExprTypes:        a.typer.exprTypes,
 		Tables:           a.tables.Tables,
 		selectScope:      a.scoper.rScope,
-		ProjectionErr:    a.projErr,
+		ShardedError:     a.projErr,
 		Warning:          a.warning,
 		Comments:         statement.GetComments(),
 		SubqueryMap:      a.binder.subqueryMap,
