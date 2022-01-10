@@ -29,32 +29,32 @@ describe('useWorkflows', () => {
         response: pb.GetWorkflowsResponse | undefined;
         expected: pb.Workflow[] | undefined;
     }[] = [
-            {
-                name: 'returns a flat list of workflows',
-                response: pb.GetWorkflowsResponse.create({
-                    workflows_by_cluster: {
-                        east: {
-                            workflows: [
-                                {
-                                    workflow: { name: 'one-goes-east' },
-                                },
-                            ],
-                        },
-                        west: {
-                            workflows: [
-                                {
-                                    workflow: { name: 'one-goes-west' },
-                                },
-                            ],
-                        },
+        {
+            name: 'returns a flat list of workflows',
+            response: pb.GetWorkflowsResponse.create({
+                workflows_by_cluster: {
+                    east: {
+                        workflows: [
+                            {
+                                workflow: { name: 'one-goes-east' },
+                            },
+                        ],
                     },
-                }),
-                expected: [
-                    pb.Workflow.create({ workflow: { name: 'one-goes-east' } }),
-                    pb.Workflow.create({ workflow: { name: 'one-goes-west' } }),
-                ],
-            },
-        ];
+                    west: {
+                        workflows: [
+                            {
+                                workflow: { name: 'one-goes-west' },
+                            },
+                        ],
+                    },
+                },
+            }),
+            expected: [
+                pb.Workflow.create({ workflow: { name: 'one-goes-east' } }),
+                pb.Workflow.create({ workflow: { name: 'one-goes-west' } }),
+            ],
+        },
+    ];
 
     const queryClient = new QueryClient();
     const wrapper: React.FunctionComponent = ({ children }) => (
