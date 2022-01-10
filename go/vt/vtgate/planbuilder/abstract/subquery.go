@@ -26,7 +26,7 @@ import (
 // SubQuery stores the information about subquery
 type SubQuery struct {
 	Inner []*SubQueryInner
-	Outer Operator
+	Outer LogicalOperator
 }
 
 var _ LogicalOperator = (*SubQuery)(nil)
@@ -38,7 +38,7 @@ type SubQueryInner struct {
 	// Inner is the Operator inside the parenthesis of the subquery.
 	// i.e: select (select 1 union select 1), the Inner here would be
 	// of type Concatenate since we have a Union.
-	Inner Operator
+	Inner LogicalOperator
 
 	// ExtractedSubquery contains all information we need about this subquery
 	ExtractedSubquery *sqlparser.ExtractedSubquery

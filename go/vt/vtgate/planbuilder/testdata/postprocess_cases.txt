@@ -654,6 +654,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
@@ -981,6 +982,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # ORDER BY RAND()
 "select col from user order by RAND()"
@@ -1136,6 +1138,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Order by, '*' expression
 "select * from user where id = 5 order by col"
@@ -1678,6 +1681,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # limit on reference table
 "select col from ref limit 1"
@@ -2282,3 +2286,4 @@ Gen4++
     "Table": "unsharded"
   }
 }
+Gen4++

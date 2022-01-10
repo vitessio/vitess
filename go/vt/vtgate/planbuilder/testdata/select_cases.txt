@@ -970,6 +970,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Case preservation
 "select user.Col, user_extra.Id from user join user_extra"
@@ -1330,6 +1331,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # sub-expression subquery in select
 "select a, 1+(select col from user) from unsharded"
@@ -1404,6 +1406,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # select * from derived table expands specific columns
 "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t"
@@ -1563,6 +1566,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
 {
@@ -2108,6 +2112,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Add two tables with the same column in a join
 "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded"
@@ -2419,6 +2424,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 "select t.a from (select (select col from user limit 1) as a from user join user_extra) t"
 {
@@ -2562,6 +2568,7 @@ Gen4++
 "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra"
 "unsupported: cross-shard correlated subquery"
 Gen4 plan same as above
+Gen4++
 
 # plan test for a natural character set string
 "select N'string' from dual"
@@ -2668,6 +2675,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # correlated subquery in exists clause with an order by
 "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col"
@@ -2713,6 +2721,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # correlated subquery having dependencies on two tables
 "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)"
@@ -2773,6 +2782,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # correlated subquery using a column twice
 "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)"
@@ -2813,6 +2823,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # correlated subquery part of an OR clause
 "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)"

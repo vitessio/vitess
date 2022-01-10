@@ -284,6 +284,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # create view with subquery in unsharded keyspace with UNION clause
 "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id limit 5"

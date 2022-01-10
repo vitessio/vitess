@@ -2798,6 +2798,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Column and Literal equality filter on scatter aggregates
 "select count(*) a from user having a = 10"
