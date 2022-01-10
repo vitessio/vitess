@@ -43,19 +43,8 @@ func SimplifyStatement(
 		return testF(sqlparser.CloneSelectStatement(s))
 	}
 
-	// we start by removing one table at a time, and see if we still have an interesting plan0
-	for idx, tbl := range tables {
-		clone := sqlparser.CloneSelectStatement(in)
-		if err != nil {
-			panic(err) // this should never happen
-		}
-		searchedTS := semantics.SingleTableSet(idx)
-		simplified := removeTable(clone, searchedTS, currentDB, si)
-		name, _ := tbl.Name()
-		if simplified && test(clone) {
-			log.Errorf("removed table %s", sqlparser.String(name))
-			return SimplifyStatement(clone, currentDB, si, testF)
-		}
+	if success := tryRemoveTable(tables, in, currentDB, si, testF); success != nil {
+		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
 	// now let's try to simplify * expressions
@@ -97,6 +86,22 @@ func SimplifyStatement(
 	}
 
 	return in
+}
+
+func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
+	// we start by removing one table at a time, and see if we still have an interesting plan
+	for idx, tbl := range tables {
+		clone := sqlparser.CloneSelectStatement(in)
+		searchedTS := semantics.SingleTableSet(idx)
+		simplified := removeTable(clone, searchedTS, currentDB, si)
+		name, _ := tbl.Name()
+		if simplified && test(clone) {
+			log.Errorf("removed table %s", sqlparser.String(name))
+			return clone
+		}
+	}
+
+	return nil
 }
 
 func getTables(in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation) ([]semantics.TableInfo, error) {
