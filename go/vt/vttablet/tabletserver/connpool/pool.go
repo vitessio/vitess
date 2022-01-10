@@ -59,6 +59,7 @@ type Pool struct {
 	idleTimeout        time.Duration
 	waiterCap          int64
 	waiterCount        sync2.AtomicInt64
+	waiterQueueFull    sync2.AtomicInt64
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
 }
@@ -90,6 +91,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
 	env.Exporter().NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	env.Exporter().NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
+	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Get)
 	return cp
 }
 
@@ -160,6 +162,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 		waiterCount := cp.waiterCount.Add(1)
 		defer cp.waiterCount.Add(-1)
 		if waiterCount > cp.waiterCap {
+			cp.waiterQueueFull.Add(1)
 			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "pool %s waiter count exceeded", cp.name)
 		}
 	}
