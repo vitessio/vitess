@@ -270,6 +270,9 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 			shard.logger.Warningf("Error during stop group replication on %v: %v", instance.instanceKey.Hostname, err)
 		}
 	})
+	// We don't check allowPartialUnhealthyNodes here because we don't record unreachableError here
+	// hence if errorRecorder has error, it indicates the mysqld is still reachable but there is nothing
+	// else went wrong.
 	if errorRecorder.HasErrors() {
 		shard.logger.Errorf("Failed to stop group replication %v", errorRecorder.Error())
 		return errorRecorder.Error()
@@ -282,7 +285,7 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 		return err
 	}
 	shard.refreshSQLGroup()
-	if !shard.sqlGroup.IsSafeToBootstrap() {
+	if !shard.sqlGroup.IsSafeToRebootstrap() {
 		return errors.New("unsafe to bootstrap group")
 	}
 	if *abortRebootstrap {
@@ -299,6 +302,16 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 		return errors.New("trying to rebootstrap without uuid")
 	}
 	return shard.dbAgent.RebootstrapGroupLocked(candidate.instanceKey, uuid)
+}
+
+// allowPartialUnhealthyNodes returns true if rebootstrapSize is set to non-zero
+// and the error we get is less than (total_num_tablet - rebootstrapSize)
+func (shard *GRShard) allowPartialUnhealthyNodes(errorRecorder *concurrency.AllErrorRecorder) bool {
+	if shard.sqlGroup.rebootstrapSize != 0 && len(shard.instances)-shard.sqlGroup.rebootstrapSize >= len(errorRecorder.GetErrors()) {
+		shard.logger.Warningf("Allow unhealthy nodes during the reboot group_size=%v, rebootstrap_config=%v, error=%v", shard.sqlGroup.expectedBootstrapSize, shard.sqlGroup.rebootstrapSize, len(errorRecorder.GetErrors()))
+		return true
+	}
+	return false
 }
 
 func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *concurrency.AllErrorRecorder, error) {
@@ -359,7 +372,7 @@ func (shard *GRShard) findRebootstrapCandidate(ctx context.Context) (*grInstance
 	}
 	err = errorRecorder.Error()
 	// We cannot tolerate any error from mysql during a rebootstrap.
-	if err != nil {
+	if err != nil && !shard.allowPartialUnhealthyNodes(errorRecorder) {
 		shard.logger.Errorf("Failed to fetch all GTID with forAllInstances for rebootstrap: %v", err)
 		return nil, err
 	}
