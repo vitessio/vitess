@@ -48,7 +48,7 @@ func (fp *fallbackPlanner) plan(query string) func(sqlparser.Statement, *sqlpars
 	backupF := fp.fallback(query)
 
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
-		res, err := primaryF(stmt, reservedVars, vschema)
+		res, err := primaryF(sqlparser.CloneStatement(stmt), reservedVars, vschema)
 		if err != nil {
 			return backupF(stmt, reservedVars, vschema)
 		}
