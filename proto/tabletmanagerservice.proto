@@ -70,8 +70,6 @@ service TabletManager {
 
   rpc LockTables(tabletmanagerdata.LockTablesRequest) returns (tabletmanagerdata.LockTablesResponse) {};
 
-  rpc LockSpecificTables(tabletmanagerdata.LockSpecificTablesRequest) returns (tabletmanagerdata.LockSpecificTablesResponse) {};
-
   rpc UnlockTables(tabletmanagerdata.UnlockTablesRequest) returns (tabletmanagerdata.UnlockTablesResponse) {};
 
   rpc ExecuteQuery(tabletmanagerdata.ExecuteQueryRequest) returns (tabletmanagerdata.ExecuteQueryResponse) {};

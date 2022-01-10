@@ -91,80 +91,6 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 	return nil
 }
 
-// LockSpecificTables will lock all specific tables with read locks.
-// LOCK TABLES tb1 READ, tbl2 READ... is used.
-// This will block until all open/running transactions complete or timeout.
-func (tm *TabletManager) LockSpecificTables(ctx context.Context, tableNames []string) error {
-	// get a connection
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
-	if len(tableNames) == 0 {
-		return errors.New("no tables specified to lock")
-	}
-
-	if tm._lockTablesConnection != nil {
-		// tables are already locked, bail out
-		return errors.New("tables already locked on this tablet")
-	}
-
-	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
-	if err != nil {
-		return err
-	}
-	// We successfully opened a connection. If we return for any reason before
-	// storing this connection in the TabletManager object, we need to close it
-	// to avoid leaking it.
-	defer func() {
-		if tm._lockTablesConnection != conn {
-			conn.Close()
-		}
-	}()
-
-	if _, err = conn.ExecuteFetch("USE "+sqlescape.EscapeID(tm.DBConfigs.DBName), 0, false); err != nil {
-		return err
-	}
-
-	// Doing this in an implicit multi-statement transaction is needed for the desired
-	// behavior with InnoDB tables. It ensures that InnoDB maintains an internal table
-	// lock on each table until we explicitly release them. See:
-	//   https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html#lock-tables-and-transactions
-	if _, err = conn.ExecuteFetch("SET autocommit=0", 0, false); err != nil {
-		return err
-	}
-
-	sb := strings.Builder{}
-	sb.WriteString("LOCK TABLES ")
-	for _, tableName := range tableNames {
-		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
-	}
-	// trim extra trailing comma
-	lockStmt := sb.String()[:sb.Len()-1]
-	if _, err := conn.ExecuteFetch(lockStmt, 0, false); err != nil {
-		return err
-	}
-	log.Infof("[%v] Tables %v locked", conn.ConnectionID, tableNames)
-
-	tm._lockTablesConnection = conn
-	tm._lockTablesTimer = time.AfterFunc(*lockTablesTimeout, func() {
-		// Here we'll sleep until the timeout time has elapsed.
-		// If the table locks have not been released yet, we'll release them here
-		tm.mutex.Lock()
-		defer tm.mutex.Unlock()
-
-		// We need the mutex locked before we check this field
-		if tm._lockTablesConnection == conn {
-			log.Errorf("Timing out lock request out after %s, releasing the locks", *lockTablesTimeout)
-			err = tm.unlockTablesHoldingMutex()
-			if err != nil {
-				log.Errorf("failed to unlock tables: %v", err)
-			}
-		}
-	})
-
-	return nil
-}
-
 func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection) error {
 	log.Warningf("failed to lock tables with FTWRL - falling back to LOCK TABLES")
 
@@ -187,6 +113,14 @@ func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection
 	lockStatement := fmt.Sprintf("LOCK TABLES %v", strings.Join(tableNames, ", "))
 	_, err := conn.ExecuteFetch("USE "+sqlescape.EscapeID(tm.DBConfigs.DBName), 0, false)
 	if err != nil {
+		return err
+	}
+
+	// Doing this in an implicit multi-statement transaction is needed for the desired
+	// behavior with InnoDB tables. It ensures that InnoDB maintains an internal table
+	// lock on each table until we explicitly release them. See:
+	//   https://dev.mysql.com/doc/refman/8.0/en/lock-tables.html#lock-tables-and-transactions
+	if _, err = conn.ExecuteFetch("SET autocommit=0", 0, false); err != nil {
 		return err
 	}
 

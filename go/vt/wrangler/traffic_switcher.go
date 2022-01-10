@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/discovery"
 
 	"vitess.io/vitess/go/json2"
@@ -59,15 +60,9 @@ const (
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
 
-// tableLockAction specifies if you want to lock or unlock tables
-type tableLockAction int
-
 const (
 	allowWrites = accessType(iota)
 	disallowWrites
-	tableLockAcquire = tableLockAction(iota)
-	tableLockRelease
-	tableLockCheck
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -510,17 +505,20 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		}
 
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-			ts.Logger().Infof("Locking source tables")
-			if err := ts.manageTableLocksOnSources(ctx, tableLockAcquire); err != nil {
-				ts.Logger().Errorf("Failed to lock tables on sources: %v", err)
-				sw.cancelMigration(ctx, sm)
-				return 0, nil, err
-			}
-			defer func() {
-				if err := ts.manageTableLocksOnSources(ctx, tableLockRelease); err != nil {
-					ts.Logger().Warningf("Error releasing table locks on sources: %v", err)
+			lockTablesCount := 2
+			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCount)
+			// Doing this twice with a pause in-between to catch any writes that may have raced in between
+			// the tablet's deny list check and the first mysqld side table lock.
+			for cnt := 1; cnt <= lockTablesCount; cnt++ {
+				if err := ts.executeLockTablesOnSource(ctx); err != nil {
+					ts.Logger().Errorf("Failed to execute LOCK TABLES (attempt %d of %d) on sources: %v", cnt, lockTablesCount, err)
+					sw.cancelMigration(ctx, sm)
+					return 0, nil, err
 				}
-			}()
+				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
+				// and thus the locks released.
+				time.Sleep(1 * time.Second)
+			}
 		}
 
 		ts.Logger().Infof("Waiting for streams to catchup")
@@ -1018,54 +1016,36 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 	})
 }
 
-func (ts *trafficSwitcher) manageTableLocksOnSources(ctx context.Context, action tableLockAction) error {
-	logStrf := "Performing locking action %s on the following tables on source keyspace " +
-		fmt.Sprintf("%v: %v", ts.SourceKeyspaceName(), ts.Tables())
+// executeLockTablesOnSource executes a LOCK TABLES tb1 READ, tbl2 READ,... statement on each
+// source shard's primary tablet using a non-pooled connection as the DBA user. The connection
+// is closed when the LOCK TABLES statement returns, so we immediately release the LOCKs.
+func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error {
+	ts.Logger().Infof("Locking (and then immediately unlocking) the following tables on source keyspace %v: %v", ts.SourceKeyspaceName(), ts.Tables())
 	if ts.Tables() == nil || len(ts.Tables()) == 0 {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "no tables found in the source keyspace %v associated with the %s workflow", ts.SourceKeyspaceName(), ts.WorkflowName())
 	}
-	switch action {
-	case tableLockAcquire:
-		ts.Logger().Infof(logStrf, "ACQUIRE")
-		return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-			var err error
-			primary := source.GetPrimary()
-			if primary == nil {
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
-			}
-			tablet := primary.Tablet
-			if err = ts.TabletManagerClient().LockSpecificTables(ctx, tablet, ts.Tables()); err != nil {
-				ts.Logger().Warningf("Error locking tables %v on source tablet %v: %v", ts.Tables(), tablet, err)
-			}
-			return err
-		})
-	case tableLockRelease:
-		ts.Logger().Infof(logStrf, "RELEASE")
-		return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-			var err error
-			primary := source.GetPrimary()
-			if primary == nil {
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
-			}
-			tablet := primary.Tablet
-			if err = ts.TabletManagerClient().UnlockTables(ctx, tablet); err != nil {
-				ts.Logger().Warningf("Error unlocking tables on source tablet %v: %v", tablet, err)
-			}
-			return err
-		})
-	case tableLockCheck:
-		ts.Logger().Infof(logStrf, "CHECK")
-		// This will return an error if we still hold the table locks:
-		// ERROR 1100 (HY000): Table 'vreplication' was not locked with LOCK TABLES
-		//query = "select 1 from _vt.vreplication"
-		// If it doesn't return an error then we've somehow lost our session and the
-		// locks along with it
-		//expectError = true
-	default:
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown lock action %v", action)
-	}
 
-	return nil
+	sb := strings.Builder{}
+	sb.WriteString("LOCK TABLES ")
+	for _, tableName := range ts.Tables() {
+		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
+	}
+	// trim extra trailing comma
+	lockStmt := sb.String()[:sb.Len()-1]
+
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		primary := source.GetPrimary()
+		if primary == nil {
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
+		}
+		tablet := primary.Tablet
+		_, err := ts.wr.ExecuteFetchAsDba(ctx, tablet.Alias, lockStmt, 1, false, true)
+		if err != nil {
+			ts.Logger().Errorf("Error executing %s on source tablet %v: %v", lockStmt, tablet, err)
+			return err
+		}
+		return err
+	})
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
@@ -1107,9 +1087,6 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.Str
 	var err error
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, allowWrites)
-		// This will err if the tables are not locked and we're doing this here as an extra precaution
-		// The table locks should be released from the SwitchWrites defer
-		_ = ts.manageTableLocksOnSources(ctx, tableLockRelease)
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
