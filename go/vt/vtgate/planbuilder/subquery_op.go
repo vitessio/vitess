@@ -38,7 +38,7 @@ type subQueryOp struct {
 }
 
 func (s *subQueryOp) TableID() semantics.TableSet {
-	panic("implement me")
+	return s.Inner.TableID().Merge(s.Outer.TableID())
 }
 
 func (s *subQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
@@ -49,20 +49,23 @@ func (s *subQueryOp) CheckValid() error {
 	panic("implement me")
 }
 
-func (s *subQueryOp) IPhysical() {
-	panic("implement me")
-}
+func (s *subQueryOp) IPhysical() {}
 
 func (s *subQueryOp) Cost() int {
-	panic("implement me")
+	return s.Inner.Cost() + s.Outer.Cost()
 }
 
 func (s *subQueryOp) Clone() abstract.PhysicalOperator {
-	panic("implement me")
+	result := &subQueryOp{
+		Outer:     s.Outer.Clone(),
+		Inner:     s.Inner.Clone(),
+		Extracted: s.Extracted,
+	}
+	return result
 }
 
 func (c *correlatedSubQueryOp) TableID() semantics.TableSet {
-	panic("implement me")
+	return c.Inner.TableID().Merge(c.Outer.TableID())
 }
 
 func (c *correlatedSubQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
@@ -73,16 +76,19 @@ func (c *correlatedSubQueryOp) CheckValid() error {
 	panic("implement me")
 }
 
-func (c *correlatedSubQueryOp) IPhysical() {
-	panic("implement me")
-}
+func (c *correlatedSubQueryOp) IPhysical() {}
 
 func (c *correlatedSubQueryOp) Cost() int {
-	panic("implement me")
+	return c.Inner.Cost() + c.Outer.Cost()
 }
 
 func (c *correlatedSubQueryOp) Clone() abstract.PhysicalOperator {
-	panic("implement me")
+	result := &correlatedSubQueryOp{
+		Outer:     c.Outer.Clone(),
+		Inner:     c.Inner.Clone(),
+		Extracted: c.Extracted,
+	}
+	return result
 }
 
 type subQueryInner struct {
