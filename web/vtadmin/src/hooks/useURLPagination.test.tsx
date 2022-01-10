@@ -32,49 +32,49 @@ describe('useURLPagination', () => {
         // callback args must be consistent between tests.)
         redirectParams: To | null;
     }[] = [
-            {
-                name: 'returns pagination parameters in the URL',
-                url: '/test?page=1&foo=bar',
-                opts: { totalPages: 10 },
-                expected: { page: 1 },
-                redirectParams: null,
-            },
-            {
-                name: 'assumes an undefined page parameter is the first page',
-                url: '/test?foo=bar',
-                opts: { totalPages: 10 },
-                expected: { page: 1 },
-                redirectParams: null,
-            },
-            {
-                name: 'redirects to the first page if current page > total pages',
-                url: '/test?page=100&foo=bar',
-                opts: { totalPages: 10 },
-                expected: { page: 1 },
-                redirectParams: { search: '?foo=bar&page=1' },
-            },
-            {
-                name: 'redirects to the first page if current page is a negative number',
-                url: '/test?page=-123&foo=bar',
-                opts: { totalPages: 10 },
-                expected: { page: 1 },
-                redirectParams: { search: '?foo=bar&page=1' },
-            },
-            {
-                name: 'redirects to the first page if current page is not a number',
-                url: '/test?page=abc&foo=bar',
-                opts: { totalPages: 10 },
-                expected: { page: 1 },
-                redirectParams: { search: '?foo=bar&page=1' },
-            },
-            {
-                name: 'does not redirect if totalPages is 0',
-                url: '/test?page=100&foo=bar',
-                opts: { totalPages: 0 },
-                expected: { page: 100 },
-                redirectParams: null,
-            },
-        ];
+        {
+            name: 'returns pagination parameters in the URL',
+            url: '/test?page=1&foo=bar',
+            opts: { totalPages: 10 },
+            expected: { page: 1 },
+            redirectParams: null,
+        },
+        {
+            name: 'assumes an undefined page parameter is the first page',
+            url: '/test?foo=bar',
+            opts: { totalPages: 10 },
+            expected: { page: 1 },
+            redirectParams: null,
+        },
+        {
+            name: 'redirects to the first page if current page > total pages',
+            url: '/test?page=100&foo=bar',
+            opts: { totalPages: 10 },
+            expected: { page: 1 },
+            redirectParams: { search: '?foo=bar&page=1' },
+        },
+        {
+            name: 'redirects to the first page if current page is a negative number',
+            url: '/test?page=-123&foo=bar',
+            opts: { totalPages: 10 },
+            expected: { page: 1 },
+            redirectParams: { search: '?foo=bar&page=1' },
+        },
+        {
+            name: 'redirects to the first page if current page is not a number',
+            url: '/test?page=abc&foo=bar',
+            opts: { totalPages: 10 },
+            expected: { page: 1 },
+            redirectParams: { search: '?foo=bar&page=1' },
+        },
+        {
+            name: 'does not redirect if totalPages is 0',
+            url: '/test?page=100&foo=bar',
+            opts: { totalPages: 0 },
+            expected: { page: 100 },
+            redirectParams: null,
+        },
+    ];
 
     test.concurrent.each(tests.map(Object.values))(
         '%s',
