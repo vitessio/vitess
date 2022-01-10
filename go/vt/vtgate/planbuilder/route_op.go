@@ -220,13 +220,16 @@ func (r *routeOp) haveMatchingVindex(
 			// single column vindex - just add the option
 			routeOpcode := opcode(v.colVindex)
 			vindex := vfunc(v.colVindex)
+			if vindex == nil {
+				continue
+			}
 			v.options = append(v.options, &vindexOption{
 				values:      []evalengine.Expr{value},
 				valueExprs:  []sqlparser.Expr{valueExpr},
 				predicates:  []sqlparser.Expr{node},
 				opcode:      routeOpcode,
 				foundVindex: vindex,
-				cost:        costFor(vindex, routeOpcode),
+				cost:        costFor(v.colVindex, routeOpcode),
 				ready:       true,
 			})
 			newVindexFound = true
