@@ -290,7 +290,8 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 	// semaphore "down" is done by inserting a value to the channel. Up to maxConcurrency is for free
 	// semaphore "up" is done by extracting a vlue from the channel (guaranteed to succeed if you inserted a value prior)
 	semaphore := make(chan bool, *vreplicationCopyPhaseMaxConcurrency)
-
+	fastForwardDone := false
+	var fastForwardMu sync.Mutex
 	err = vc.vr.sourceVStreamer.VStreamRowsParallel(ctx, tables, queries, lastpkpbs, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// this function could be called concurrently by parallel_rowstreamer
 		// wait for semaphore (limiting max concurrency) or for cancelled context.
@@ -322,9 +323,16 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
-			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
-				return err
+			fastForwardMu.Lock()
+			if !fastForwardDone {
+				if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
+					fastForwardMu.Unlock()
+					return err
+				}
+				fastForwardDone = true
 			}
+			fastForwardMu.Unlock()
+
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tc.initialPlan.SendRule.Match,
 			}
@@ -365,6 +373,7 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 			vc.vr.stats.QueryTimings.Record("copy", start)
 			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))
 			vc.vr.stats.QueryCount.Add("copy", 1)
+			log.Infof("applyBulkInsert: inserted %d records for table %s", qr.RowsAffected, tc.tableName)
 			return qr, err
 		})
 		if err != nil {
@@ -421,6 +430,7 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 			return err
 		}
 	}
+	log.Infof("Copy of tables finished: %+v", tableNames)
 	tcMutex.RUnlock()
 	return nil
 }

@@ -105,7 +105,7 @@ func (b *BenchmarkService) VStreamRows(ctx context.Context, target *querypb.Targ
 	panic("should not be called")
 }
 
-func (b *BenchmarkService) VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (b *BenchmarkService) VStreamRowsParallel(ctx context.Context, target *querypb.Target, tables, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	panic("should not be called")
 }
 
