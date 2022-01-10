@@ -73,8 +73,12 @@ func TestVStreamSkew(t *testing.T) {
 		{numEventsPerShard: 4, shard0idx: 1, shard1idx: 0, expectedDelays: 0},
 	}
 	previousDelays := int64(0)
-	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
-		"Number of events that had to wait because the skew across shards was too high")
+	if vstreamSkewDelayCount == nil {
+		// HACK: without a mutex we are not guaranteed that this will avoid the panic caused by a race
+		// between this initialization and the one in vtgate.go
+		vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
+			"Number of events that had to wait because the skew across shards was too high")
+	}
 
 	cell := "aa"
 	for idx, tcase := range tcases {
