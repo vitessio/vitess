@@ -58,8 +58,7 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 			j.LeftJoin = false
 			return j.RHS.PushPredicate(expr, semTable)
 		}
-		semTable.ProjectionErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
-		return nil
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
 	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
 		j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
 		return nil

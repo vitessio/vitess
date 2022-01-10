@@ -237,8 +237,8 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 	case *sqlparser.Union:
 		var err error
 		rb, isRoute := plan.(*routeGen4)
-		if !isRoute && ctx.semTable.ProjectionErr != nil {
-			return nil, ctx.semTable.ProjectionErr
+		if !isRoute && ctx.semTable.ShardedError != nil {
+			return nil, ctx.semTable.ShardedError
 		}
 		if isRoute && rb.isSingleShard() {
 			err = planSingleShardRoutePlan(node, rb)
