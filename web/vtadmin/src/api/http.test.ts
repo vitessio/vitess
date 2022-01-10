@@ -25,7 +25,6 @@ import {
     MALFORMED_HTTP_RESPONSE_ERROR,
 } from '../errors/errorTypes';
 import * as errorHandler from '../errors/errorHandler';
-import { HttpErrorResponse } from './responseTypes';
 
 jest.mock('../errors/errorHandler');
 
