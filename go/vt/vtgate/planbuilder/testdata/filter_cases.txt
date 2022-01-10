@@ -4087,3 +4087,22 @@ Gen4 plan same as above
     "Vindex": "multicolIdx"
   }
 }
+
+# left join with where clause - should be handled by gen4 but still isn't
+"select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where 1 != 1",
+    "Query": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
+    "Table": "unsharded_a, unsharded_b"
+  }
+}
+Gen4 error: unsupported: cross-shard left join and where clause
