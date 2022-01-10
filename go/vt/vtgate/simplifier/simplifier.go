@@ -17,9 +17,6 @@ limitations under the License.
 package simplifier
 
 import (
-	"sync"
-
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -43,6 +40,8 @@ func SimplifyStatement(
 		return testF(sqlparser.CloneSelectStatement(s))
 	}
 
+	// first we try to simplify the query by removing any table.
+	// If we can remove a table and all uses of it, that's a good start
 	if success := tryRemoveTable(tables, in, currentDB, si, testF); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
@@ -52,17 +51,22 @@ func SimplifyStatement(
 		return SimplifyStatement(in, currentDB, si, testF)
 	}
 
-	// if we get here, we couldn't find a simpler query by just removing one table,
 	// we try to remove select expressions next
-	ch := make(chan expressionCursor)
-	findExpressions(in, ch)
-	for cursor := range ch {
+	if success := trySimplifyExpressions(in, test); success != nil {
+		return SimplifyStatement(in, currentDB, si, testF)
+	}
+	return in
+}
+
+func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
+	simplified := false
+	visitAllExpressionsInAST(in, func(cursor expressionCursor) bool {
 		// first - let's try to remove the expression
 		if cursor.remove() {
 			if test(in) {
 				log.Errorf("removed expression: %s", sqlparser.String(cursor.expr))
-				cursor.abort()
-				return SimplifyStatement(in, currentDB, si, testF)
+				simplified = true
+				return false
 			}
 			cursor.restore()
 		}
@@ -74,18 +78,23 @@ func SimplifyStatement(
 			cursor.replace(newExpr)
 			if test(in) {
 				log.Errorf("simplified expression: %s -> %s", sqlparser.String(cursor.expr), sqlparser.String(newExpr))
-				cursor.abort()
-				return SimplifyStatement(in, currentDB, si, testF)
+				simplified = true
+				return false
 			}
 			newExpr = s.Next()
 		}
+
 		// if we get here, we failed to simplify this expression,
 		// so we put back in the original expression
 		cursor.restore()
-		cursor.wg.Done()
+		return true
+	})
+
+	if simplified {
+		return in
 	}
 
-	return in
+	return nil
 }
 
 func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
@@ -234,216 +243,196 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 }
 
 type expressionCursor struct {
-	expr        sqlparser.Expr
-	replace     func(replaceWith sqlparser.Expr)
-	remove      func() bool
-	restore     func()
-	wg          *sync.WaitGroup
-	abortMarker *sync2.AtomicBool
+	expr    sqlparser.Expr
+	replace func(replaceWith sqlparser.Expr)
+	remove  func() bool
+	restore func()
 }
 
-func (i expressionCursor) abort() {
-	i.abortMarker.Set(true)
-}
-
-func newCursorItem(
-	ch chan<- expressionCursor,
-	expr sqlparser.Expr,
-	abort *sync2.AtomicBool,
-	replace func(replaceWith sqlparser.Expr),
-	remove func() bool,
-	restore func(),
-) {
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	ch <- expressionCursor{
-		expr:        expr,
-		replace:     replace,
-		remove:      remove,
-		restore:     restore,
-		wg:          wg,
-		abortMarker: abort,
+func newExprCursor(expr sqlparser.Expr, replace func(replaceWith sqlparser.Expr), remove func() bool, restore func()) expressionCursor {
+	return expressionCursor{
+		expr:    expr,
+		replace: replace,
+		remove:  remove,
+		restore: restore,
 	}
-	wg.Wait()
 }
 
-func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor) {
-	abort := &sync2.AtomicBool{}
-	go func() {
-		sqlparser.Rewrite(clone, func(cursor *sqlparser.Cursor) bool {
-			switch node := cursor.Node().(type) {
-			case sqlparser.SelectExprs:
-				_, isSel := cursor.Parent().(*sqlparser.Select)
-				if !isSel {
-					return true
-				}
-				for idx := 0; idx < len(node); idx++ {
-					ae := node[idx]
-					expr, ok := ae.(*sqlparser.AliasedExpr)
-					if !ok {
-						continue
-					}
-					removed := false
-					original := sqlparser.CloneExpr(expr.Expr)
-					newCursorItem(
-						ch, expr.Expr, abort,
-						/*replace*/ func(replaceWith sqlparser.Expr) {
-							if removed {
-								panic("cant replace after remove without restore")
-							}
-							expr.Expr = replaceWith
-						},
-						/*remove*/ func() bool {
-							if removed {
-								panic("can't remove twice, silly")
-							}
-							if len(node) == 1 {
-								// can't remove the last expressions - we'd end up with an empty SELECT clause
-								return false
-							}
-							withoutElement := append(node[:idx], node[idx+1:]...)
-							cursor.Replace(withoutElement)
-							node = withoutElement
-							removed = true
-							return true
-						},
-						/*restore*/ func() {
-							if removed {
-								front := make(sqlparser.SelectExprs, idx)
-								copy(front, node[:idx])
-								back := make(sqlparser.SelectExprs, len(node)-idx)
-								copy(back, node[idx:])
-								frontWithRestoredExpr := append(front, ae)
-								node = append(frontWithRestoredExpr, back...)
-								cursor.Replace(node)
-								removed = false
-								return
-							}
-							expr.Expr = original
-						},
-					)
-					if abort.Get() {
-						close(ch)
-						return false
-					}
-				}
-			case *sqlparser.Where:
-				exprs := sqlparser.SplitAndExpression(nil, node.Expr)
-				set := func(input []sqlparser.Expr) {
-					node.Expr = sqlparser.AndExpressions(input...)
-					exprs = input
-				}
-				if !visitExpressions(exprs, set, ch, abort) {
-					return false
-				}
-
-			case *sqlparser.JoinCondition:
-				join, ok := cursor.Parent().(*sqlparser.JoinTableExpr)
-				if !ok {
-					return true
-				}
-				if join.Join != sqlparser.NormalJoinType || node.Using != nil {
-					return false
-				}
-				exprs := sqlparser.SplitAndExpression(nil, node.On)
-				set := func(input []sqlparser.Expr) {
-					node.On = sqlparser.AndExpressions(input...)
-					exprs = input
-				}
-				if !visitExpressions(exprs, set, ch, abort) {
-					return false
-				}
-			case sqlparser.GroupBy:
-				set := func(input []sqlparser.Expr) {
-					node = input
-					cursor.Replace(node)
-				}
-				if !visitExpressions(node, set, ch, abort) {
-					return false
-				}
-			case sqlparser.OrderBy:
-				for idx := 0; idx < len(node); idx++ {
-					order := node[idx]
-					removed := false
-					original := sqlparser.CloneExpr(order.Expr)
-					newCursorItem(
-						ch, order.Expr, abort,
-						/*replace*/ func(replaceWith sqlparser.Expr) {
-							if removed {
-								panic("cant replace after remove without restore")
-							}
-							order.Expr = replaceWith
-						},
-						/*remove*/ func() bool {
-							if removed {
-								panic("can't remove twice, silly")
-							}
-							withoutElement := append(node[:idx], node[idx+1:]...)
-							if len(withoutElement) == 0 {
-								var nilVal sqlparser.OrderBy // this is used to create a typed nil value
-								cursor.Replace(nilVal)
-							} else {
-								cursor.Replace(withoutElement)
-							}
-							node = withoutElement
-							removed = true
-							return true
-						},
-						/*restore*/ func() {
-							if removed {
-								front := make(sqlparser.OrderBy, idx)
-								copy(front, node[:idx])
-								back := make(sqlparser.OrderBy, len(node)-idx)
-								copy(back, node[idx:])
-								frontWithRestoredExpr := append(front, order)
-								node = append(frontWithRestoredExpr, back...)
-								cursor.Replace(node)
-								removed = false
-								return
-							}
-							order.Expr = original
-						},
-					)
-					if abort.Get() {
-						close(ch)
-						return false
-					}
-				}
-			case *sqlparser.Limit:
-				if node.Offset != nil {
-					original := node.Offset
-					newCursorItem(ch, node.Offset, abort,
-						/*replace*/ func(replaceWith sqlparser.Expr) {
-							node.Offset = replaceWith
-						},
-						/*remove*/ func() bool {
-							node.Offset = nil
-							return true
-						},
-						/*restore*/ func() {
-							node.Offset = original
-						})
-				}
-				if node.Rowcount != nil {
-					original := node.Rowcount
-					newCursorItem(ch, node.Rowcount, abort,
-						/*replace*/ func(replaceWith sqlparser.Expr) {
-							node.Rowcount = replaceWith
-						},
-						/*remove*/ func() bool {
-							// removing Rowcount is an invalid op
-							return false
-						},
-						/*restore*/ func() {
-							node.Rowcount = original
-						})
-				}
-
-			}
+// visitAllExpressionsInAST will walk the AST and visit all expressions
+// This cursor has a few extra capabilities that the normal sqlparser.Rewrite does not have,
+// such as visiting and being able to change individual expressions in a AND tree
+func visitAllExpressionsInAST(clone sqlparser.SelectStatement, visit func(expressionCursor) bool) {
+	abort := false
+	post := func(*sqlparser.Cursor) bool {
+		return !abort
+	}
+	pre := func(cursor *sqlparser.Cursor) bool {
+		if abort {
 			return true
-		}, nil)
-		close(ch)
-	}()
+		}
+		switch node := cursor.Node().(type) {
+		case sqlparser.SelectExprs:
+			_, isSel := cursor.Parent().(*sqlparser.Select)
+			if !isSel {
+				return true
+			}
+			for idx := 0; idx < len(node); idx++ {
+				ae := node[idx]
+				expr, ok := ae.(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				removed := false
+				original := sqlparser.CloneExpr(expr.Expr)
+				item := newExprCursor(
+					expr.Expr,
+					/*replace*/ func(replaceWith sqlparser.Expr) {
+						if removed {
+							panic("cant replace after remove without restore")
+						}
+						expr.Expr = replaceWith
+					},
+					/*remove*/ func() bool {
+						if removed {
+							panic("can't remove twice, silly")
+						}
+						if len(node) == 1 {
+							// can't remove the last expressions - we'd end up with an empty SELECT clause
+							return false
+						}
+						withoutElement := append(node[:idx], node[idx+1:]...)
+						cursor.Replace(withoutElement)
+						node = withoutElement
+						removed = true
+						return true
+					},
+					/*restore*/ func() {
+						if removed {
+							front := make(sqlparser.SelectExprs, idx)
+							copy(front, node[:idx])
+							back := make(sqlparser.SelectExprs, len(node)-idx)
+							copy(back, node[idx:])
+							frontWithRestoredExpr := append(front, ae)
+							node = append(frontWithRestoredExpr, back...)
+							cursor.Replace(node)
+							removed = false
+							return
+						}
+						expr.Expr = original
+					},
+				)
+				abort = !visit(item)
+			}
+		case *sqlparser.Where:
+			exprs := sqlparser.SplitAndExpression(nil, node.Expr)
+			set := func(input []sqlparser.Expr) {
+				node.Expr = sqlparser.AndExpressions(input...)
+				exprs = input
+			}
+			abort = !visitExpressions(exprs, set, visit)
+		case *sqlparser.JoinCondition:
+			join, ok := cursor.Parent().(*sqlparser.JoinTableExpr)
+			if !ok {
+				return true
+			}
+			if join.Join != sqlparser.NormalJoinType || node.Using != nil {
+				return false
+			}
+			exprs := sqlparser.SplitAndExpression(nil, node.On)
+			set := func(input []sqlparser.Expr) {
+				node.On = sqlparser.AndExpressions(input...)
+				exprs = input
+			}
+			abort = !visitExpressions(exprs, set, visit)
+		case sqlparser.GroupBy:
+			set := func(input []sqlparser.Expr) {
+				node = input
+				cursor.Replace(node)
+			}
+			abort = !visitExpressions(node, set, visit)
+		case sqlparser.OrderBy:
+			for idx := 0; idx < len(node); idx++ {
+				order := node[idx]
+				removed := false
+				original := sqlparser.CloneExpr(order.Expr)
+				item := newExprCursor(
+					order.Expr,
+					/*replace*/ func(replaceWith sqlparser.Expr) {
+						if removed {
+							panic("cant replace after remove without restore")
+						}
+						order.Expr = replaceWith
+					},
+					/*remove*/ func() bool {
+						if removed {
+							panic("can't remove twice, silly")
+						}
+						withoutElement := append(node[:idx], node[idx+1:]...)
+						if len(withoutElement) == 0 {
+							var nilVal sqlparser.OrderBy // this is used to create a typed nil value
+							cursor.Replace(nilVal)
+						} else {
+							cursor.Replace(withoutElement)
+						}
+						node = withoutElement
+						removed = true
+						return true
+					},
+					/*restore*/ func() {
+						if removed {
+							front := make(sqlparser.OrderBy, idx)
+							copy(front, node[:idx])
+							back := make(sqlparser.OrderBy, len(node)-idx)
+							copy(back, node[idx:])
+							frontWithRestoredExpr := append(front, order)
+							node = append(frontWithRestoredExpr, back...)
+							cursor.Replace(node)
+							removed = false
+							return
+						}
+						order.Expr = original
+					},
+				)
+				abort = visit(item)
+				if abort {
+					break
+				}
+			}
+		case *sqlparser.Limit:
+			if node.Offset != nil {
+				original := node.Offset
+				cursor := newExprCursor(node.Offset,
+					/*replace*/ func(replaceWith sqlparser.Expr) {
+						node.Offset = replaceWith
+					},
+					/*remove*/ func() bool {
+						node.Offset = nil
+						return true
+					},
+					/*restore*/ func() {
+						node.Offset = original
+					})
+				abort = visit(cursor)
+			}
+			if !abort && node.Rowcount != nil {
+				original := node.Rowcount
+				cursor := newExprCursor(node.Rowcount,
+					/*replace*/ func(replaceWith sqlparser.Expr) {
+						node.Rowcount = replaceWith
+					},
+					/*remove*/ func() bool {
+						// removing Rowcount is an invalid op
+						return false
+					},
+					/*restore*/ func() {
+						node.Rowcount = original
+					})
+				abort = visit(cursor)
+			}
+		}
+		return true
+	}
+	sqlparser.Rewrite(clone, pre, post)
 }
 
 // visitExpressions allows the cursor to visit all expressions in a slice,
@@ -451,13 +440,12 @@ func findExpressions(clone sqlparser.SelectStatement, ch chan<- expressionCursor
 func visitExpressions(
 	exprs []sqlparser.Expr,
 	set func(input []sqlparser.Expr),
-	ch chan<- expressionCursor,
-	abort *sync2.AtomicBool,
+	visit func(expressionCursor) bool,
 ) bool {
 	for idx := 0; idx < len(exprs); idx++ {
 		expr := exprs[idx]
 		removed := false
-		newCursorItem(ch, expr, abort,
+		item := newExprCursor(expr,
 			func(replaceWith sqlparser.Expr) {
 				if removed {
 					panic("cant replace after remove without restore")
@@ -489,7 +477,7 @@ func visitExpressions(
 				exprs[idx] = expr
 				set(exprs)
 			})
-		if abort.Get() {
+		if !visit(item) {
 			return false
 		}
 	}
