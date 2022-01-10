@@ -72,8 +72,8 @@ func createPhysicalOperator(ctx *planningContext, opTree abstract.LogicalOperato
 	//	}, nil
 	// case *abstract.SubQuery:
 	//	return optimizeSubQuery(ctx, op)
-	// case *abstract.Vindex:
-	//	return createVindexTree(ctx, op)
+	case *abstract.Vindex:
+		return optimizeVindexOp(ctx, op)
 	case *abstract.Concatenate:
 		return optimizeUnionOp(ctx, op)
 	default:
@@ -773,3 +773,48 @@ func (u *unionOp) Clone() abstract.PhysicalOperator {
 }
 
 var _ abstract.PhysicalOperator = (*unionOp)(nil)
+
+type vindexOp struct {
+	opCode  engine.VindexOpcode
+	table   vindexTable
+	vindex  vindexes.Vindex
+	solved  semantics.TableSet
+	columns []*sqlparser.ColName
+	value   sqlparser.Expr
+}
+
+func (v *vindexOp) TableID() semantics.TableSet {
+	return v.solved
+}
+
+func (v *vindexOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	return nil
+}
+
+func (v *vindexOp) CheckValid() error {
+	return nil
+}
+
+func (v *vindexOp) IPhysical() {}
+
+func (v *vindexOp) Cost() int {
+	return int(engine.SelectEqualUnique)
+}
+
+func (v *vindexOp) Clone() abstract.PhysicalOperator {
+	clone := *v
+	return &clone
+}
+
+var _ abstract.PhysicalOperator = (*vindexOp)(nil)
+
+func optimizeVindexOp(ctx *planningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
+	solves := ctx.semTable.TableSetFor(op.Table.Alias)
+	return &vindexOp{
+		opCode: op.OpCode,
+		table:  vindexTable{table: op.Table},
+		vindex: op.Vindex,
+		solved: solves,
+		value:  op.Value,
+	}, nil
+}
