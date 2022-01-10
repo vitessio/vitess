@@ -1838,6 +1838,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # cross-shard subquery in EXISTS clause.
 "select id from user where exists (select col from user)"
@@ -2643,6 +2644,7 @@ Gen4 plan same as above
 "select id from user where id in (select col from unsharded where col = user.id)"
 "unsupported: cross-shard correlated subquery"
 Gen4 plan same as above
+Gen4++
 
 # correlated subquery with same keyspace
 "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
@@ -3399,6 +3401,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # should use colb_colc_map as first column of the vindex is present in predicate
 "select * from multicolvin where column_b = 1"

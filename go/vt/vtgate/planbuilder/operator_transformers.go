@@ -44,6 +44,10 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 		return transformUnionOpPlan(ctx, op)
 	case *vindexOp:
 		return transformVindexOpPlan(ctx, op)
+	case *subQueryOp:
+		return transformSubQueryOpPlan(ctx, op)
+	case *correlatedSubQueryOp:
+		return transformCorrelatedSubQueryOpPlan(ctx, op)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformOpToLogicalPlan)", op)
@@ -299,37 +303,4 @@ func getCollationsForOp(ctx *planningContext, n *unionOp) []collations.ID {
 		colls = append(colls, typ)
 	}
 	return colls
-}
-
-func transformVindexOpPlan(ctx *planningContext, op *vindexOp) (logicalPlan, error) {
-	single, ok := op.vindex.(vindexes.SingleColumn)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
-	}
-
-	expr, err := evalengine.Convert(op.value, ctx.semTable)
-	if err != nil {
-		return nil, err
-	}
-	plan := &vindexFunc{
-		order:         1,
-		tableID:       op.solved,
-		resultColumns: nil,
-		eVindexFunc: &engine.VindexFunc{
-			Opcode: op.opCode,
-			Vindex: single,
-			Value:  expr,
-		},
-	}
-
-	for _, col := range op.columns {
-		_, err := plan.SupplyProjection(&sqlparser.AliasedExpr{
-			Expr: col,
-			As:   sqlparser.ColIdent{},
-		}, false)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return plan, nil
 }

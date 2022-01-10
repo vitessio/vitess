@@ -3088,6 +3088,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # IN subquery in ON clause, single route
 "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col in (select col from user)"
@@ -3163,6 +3164,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # subquery in ON clause, with join primitives
 "select unsharded.col from unsharded join user on user.col in (select col from user)"
@@ -3222,6 +3224,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # subquery in ON clause, with left join primitives
 # The subquery is not pulled all the way out.
@@ -3470,6 +3473,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # keyspace-qualified queries
 "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2"

@@ -17,8 +17,11 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -89,4 +92,37 @@ outer:
 		v.columns = append(v.columns, newCol)
 	}
 	return idxs, nil
+}
+
+func transformVindexOpPlan(ctx *planningContext, op *vindexOp) (logicalPlan, error) {
+	single, ok := op.vindex.(vindexes.SingleColumn)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
+	}
+
+	expr, err := evalengine.Convert(op.value, ctx.semTable)
+	if err != nil {
+		return nil, err
+	}
+	plan := &vindexFunc{
+		order:         1,
+		tableID:       op.solved,
+		resultColumns: nil,
+		eVindexFunc: &engine.VindexFunc{
+			Opcode: op.opCode,
+			Vindex: single,
+			Value:  expr,
+		},
+	}
+
+	for _, col := range op.columns {
+		_, err := plan.SupplyProjection(&sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.ColIdent{},
+		}, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }

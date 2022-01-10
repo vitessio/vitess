@@ -70,8 +70,8 @@ func createPhysicalOperator(ctx *planningContext, opTree abstract.LogicalOperato
 	//		alias:         op.Alias,
 	//		columnAliases: op.ColumnAliases,
 	//	}, nil
-	// case *abstract.SubQuery:
-	//	return optimizeSubQuery(ctx, op)
+	case *abstract.SubQuery:
+		return optimizeSubQueryOp(ctx, op)
 	case *abstract.Vindex:
 		return optimizeVindexOp(ctx, op)
 	case *abstract.Concatenate:

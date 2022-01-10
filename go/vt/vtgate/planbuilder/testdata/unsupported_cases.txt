@@ -2,6 +2,7 @@
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: '*' expression in cross-shard query"
 Gen4 plan same as above
+Gen4++
 
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
@@ -161,6 +162,7 @@ Gen4++
 "select id from user group by id, (select id from user_extra)"
 "unsupported: subqueries disallowed in GROUP or ORDER BY"
 Gen4 error: unsupported: subqueries disallowed in GROUP BY
+Gen4++
 
 # Order by uses cross-shard expression
 "select id from user order by id+1"
@@ -507,6 +509,7 @@ Gen4++
 "create view user.view_a as select a, (select col from user) from unsharded"
 "Complex select queries are not supported in create or alter view statements"
 Gen4 plan same as above
+Gen4++
 
 # create view with sql_calc_found_rows with limit
 "create view user.view_a as select sql_calc_found_rows * from music limit 100"
@@ -599,6 +602,7 @@ Gen4++
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
 Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4++
 
 # aggregation filtering by having on a route with no group by
 "select 1 from user having count(id) = 10"
