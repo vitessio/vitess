@@ -38,7 +38,7 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 		}
 		op.source = newSrc
 		return op, err
-	case *applyJoin:
+	case *physical.ApplyJoin:
 		deps := ctx.semTable.RecursiveDeps(expr)
 		switch {
 		case deps.IsSolvedBy(op.LHS.TableID()):
@@ -86,26 +86,26 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 			}
 			op.LHS = out
 			for i, idx := range idxs {
-				op.vars[bvName[i]] = idx
+				op.Vars[bvName[i]] = idx
 			}
 			newSrc, err := PushPredicate(ctx, predicate, op.RHS)
 			if err != nil {
 				return nil, err
 			}
 			op.RHS = newSrc
-			op.predicate = sqlparser.AndExpressions(op.predicate, expr)
+			op.Predicate = sqlparser.AndExpressions(op.Predicate, expr)
 			return op, err
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 	case *physical.TableOp:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return &filterOp{
-			source:     op,
-			predicates: []sqlparser.Expr{expr},
+		return &physical.FilterOp{
+			Source:     op,
+			Predicates: []sqlparser.Expr{expr},
 		}, nil
-	case *filterOp:
-		op.predicates = append(op.predicates, expr)
+	case *physical.FilterOp:
+		op.Predicates = append(op.Predicates, expr)
 		return op, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
@@ -118,7 +118,7 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 		retOp, offsets, err := PushOutputColumns(ctx, op.source, columns...)
 		op.source = retOp
 		return op, offsets, err
-	case *applyJoin:
+	case *physical.ApplyJoin:
 		var toTheLeft []bool
 		var lhs, rhs []*sqlparser.ColName
 		for _, col := range columns {
@@ -145,12 +145,12 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 		outputColumns := make([]int, len(toTheLeft))
 		var l, r int
 		for i, isLeft := range toTheLeft {
-			outputColumns[i] = len(op.columns)
+			outputColumns[i] = len(op.Columns)
 			if isLeft {
-				op.columns = append(op.columns, -lhsOffset[l]-1)
+				op.Columns = append(op.Columns, -lhsOffset[l]-1)
 				l++
 			} else {
-				op.columns = append(op.columns, rhsOffset[r]+1)
+				op.Columns = append(op.Columns, rhsOffset[r]+1)
 				r++
 			}
 		}
@@ -163,8 +163,8 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 			offsets = append(offsets, i)
 		}
 		return op, offsets, nil
-	case *filterOp:
-		return PushOutputColumns(ctx, op.source, columns...)
+	case *physical.FilterOp:
+		return PushOutputColumns(ctx, op.Source, columns...)
 	case *vindexOp:
 		idx, err := op.pushOutputColumns(columns)
 		return op, idx, err

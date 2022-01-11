@@ -22,91 +22,15 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
-
-type correlatedSubQueryOp struct {
-	Outer, Inner abstract.PhysicalOperator
-	Extracted    *sqlparser.ExtractedSubquery
-	// arguments that need to be copied from the uter to inner
-	Vars map[string]int
-}
-
-type subQueryOp struct {
-	Outer, Inner abstract.PhysicalOperator
-	Extracted    *sqlparser.ExtractedSubquery
-}
-
-func (s *subQueryOp) TableID() semantics.TableSet {
-	return s.Inner.TableID().Merge(s.Outer.TableID())
-}
-
-func (s *subQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
-func (s *subQueryOp) CheckValid() error {
-	panic("implement me")
-}
-
-func (s *subQueryOp) IPhysical() {}
-
-func (s *subQueryOp) Cost() int {
-	return s.Inner.Cost() + s.Outer.Cost()
-}
-
-func (s *subQueryOp) Clone() abstract.PhysicalOperator {
-	result := &subQueryOp{
-		Outer:     s.Outer.Clone(),
-		Inner:     s.Inner.Clone(),
-		Extracted: s.Extracted,
-	}
-	return result
-}
-
-func (c *correlatedSubQueryOp) TableID() semantics.TableSet {
-	return c.Inner.TableID().Merge(c.Outer.TableID())
-}
-
-func (c *correlatedSubQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
-func (c *correlatedSubQueryOp) CheckValid() error {
-	panic("implement me")
-}
-
-func (c *correlatedSubQueryOp) IPhysical() {}
-
-func (c *correlatedSubQueryOp) Cost() int {
-	return c.Inner.Cost() + c.Outer.Cost()
-}
-
-func (c *correlatedSubQueryOp) Clone() abstract.PhysicalOperator {
-	result := &correlatedSubQueryOp{
-		Outer:     c.Outer.Clone(),
-		Inner:     c.Inner.Clone(),
-		Extracted: c.Extracted,
-	}
-	return result
-}
-
-type subQueryInner struct {
-	Inner abstract.LogicalOperator
-
-	// ExtractedSubquery contains all information we need about this subquery
-	ExtractedSubquery *sqlparser.ExtractedSubquery
-}
-
-var _ abstract.PhysicalOperator = (*subQueryOp)(nil)
-var _ abstract.PhysicalOperator = (*correlatedSubQueryOp)(nil)
 
 func optimizeSubQueryOp(ctx *planningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
 	outerOp, err := createPhysicalOperator(ctx, op.Outer)
 	if err != nil {
 		return nil, err
 	}
-	var unmerged []*subQueryOp
+	var unmerged []*physical.SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
 	for _, inner := range op.Inner {
@@ -120,7 +44,7 @@ func optimizeSubQueryOp(ctx *planningContext, op *abstract.SubQuery) (abstract.P
 			return mergeSubQueryOp(ctx, a, b, inner)
 		}
 
-		newInner := &subQueryInner{
+		newInner := &physical.SubQueryInner{
 			Inner:             inner.Inner,
 			ExtractedSubquery: inner.ExtractedSubquery,
 		}
@@ -136,7 +60,7 @@ func optimizeSubQueryOp(ctx *planningContext, op *abstract.SubQuery) (abstract.P
 
 		if len(preds) == 0 {
 			// uncorrelated queries
-			sq := &subQueryOp{
+			sq := &physical.SubQueryOp{
 				Extracted: inner.ExtractedSubquery,
 				Inner:     innerOp,
 			}
@@ -205,7 +129,7 @@ func mergeSubQueryOp(ctx *planningContext, outer *routeOp, inner *routeOp, subq 
 func tryMergeSubQueryOp(
 	ctx *planningContext,
 	outer, subq abstract.PhysicalOperator,
-	subQueryInner *subQueryInner,
+	subQueryInner *physical.SubQueryInner,
 	joinPredicates []sqlparser.Expr,
 	merger mergeOpFunc,
 ) (abstract.PhysicalOperator, error) {
@@ -218,10 +142,10 @@ func tryMergeSubQueryOp(
 			return nil, err
 		}
 		return merged, err
-	case *applyJoin:
+	case *physical.ApplyJoin:
 		// Trying to merge the subquery with the left-hand or right-hand side of the join
 
-		if outerOp.leftJoin {
+		if outerOp.LeftJoin {
 			return nil, nil
 		}
 		newMergefunc := func(a, b *routeOp) (*routeOp, error) {
@@ -272,8 +196,8 @@ func tryMergeSubQueryOp(
 func rewriteColumnsInSubqueryOpForApplyJoin(
 	ctx *planningContext,
 	innerOp abstract.PhysicalOperator,
-	outerTree *applyJoin,
-	subQueryInner *subQueryInner,
+	outerTree *physical.ApplyJoin,
+	subQueryInner *physical.SubQueryInner,
 ) (abstract.PhysicalOperator, error) {
 	resultInnerOp := innerOp
 	var rewriteError error
@@ -288,7 +212,7 @@ func rewriteColumnsInSubqueryOpForApplyJoin(
 				bindVar := ctx.reservedVars.ReserveColName(node)
 				cursor.Replace(sqlparser.NewArgument(bindVar))
 				// check whether the bindVariable already exists in the joinVars of the other tree
-				_, alreadyExists := outerTree.vars[bindVar]
+				_, alreadyExists := outerTree.Vars[bindVar]
 				if alreadyExists {
 					return false
 				}
@@ -299,7 +223,7 @@ func rewriteColumnsInSubqueryOpForApplyJoin(
 					return false
 				}
 				columnIndex := columnIndexes[0]
-				outerTree.vars[bindVar] = columnIndex
+				outerTree.Vars[bindVar] = columnIndex
 				resultInnerOp = newInnerOp
 				return false
 			}
@@ -326,7 +250,7 @@ func createCorrelatedSubqueryOp(
 	extractedSubquery *sqlparser.ExtractedSubquery,
 ) (
 	abstract.PhysicalOperator,
-	*correlatedSubQueryOp,
+	*physical.CorrelatedSubQueryOp,
 	error,
 ) {
 	// TODO: add remove predicate to the physical operator
@@ -383,7 +307,7 @@ func createCorrelatedSubqueryOp(
 			return nil, nil, err
 		}
 	}
-	return resultOuterOp, &correlatedSubQueryOp{
+	return resultOuterOp, &physical.CorrelatedSubQueryOp{
 		Outer:     outerOp,
 		Inner:     innerOp,
 		Extracted: extractedSubquery,
@@ -391,7 +315,7 @@ func createCorrelatedSubqueryOp(
 	}, nil
 }
 
-func transformSubQueryOpPlan(ctx *planningContext, op *subQueryOp) (logicalPlan, error) {
+func transformSubQueryOpPlan(ctx *planningContext, op *physical.SubQueryOp) (logicalPlan, error) {
 	innerPlan, err := transformOpToLogicalPlan(ctx, op.Inner)
 	if err != nil {
 		return nil, err
@@ -417,7 +341,7 @@ func transformSubQueryOpPlan(ctx *planningContext, op *subQueryOp) (logicalPlan,
 	return plan, err
 }
 
-func transformCorrelatedSubQueryOpPlan(ctx *planningContext, op *correlatedSubQueryOp) (logicalPlan, error) {
+func transformCorrelatedSubQueryOpPlan(ctx *planningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
 	outer, err := transformOpToLogicalPlan(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -429,7 +353,7 @@ func transformCorrelatedSubQueryOpPlan(ctx *planningContext, op *correlatedSubQu
 	return newSemiJoin(outer, inner, op.Vars), nil
 }
 
-func mergeSubQueryOpPlan(ctx *planningContext, inner, outer logicalPlan, n *subQueryOp) logicalPlan {
+func mergeSubQueryOpPlan(ctx *planningContext, inner, outer logicalPlan, n *physical.SubQueryOp) logicalPlan {
 	iroute, ok := inner.(*routeGen4)
 	if !ok {
 		return nil
