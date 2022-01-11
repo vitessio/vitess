@@ -1,6 +1,6 @@
 module.exports = {
     style: {
-        postcss: {
+        postcssOptions: {
             plugins: [
                 require('tailwindcss'),
                 // Required for tailwindcss
