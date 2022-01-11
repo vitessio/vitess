@@ -1453,6 +1453,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # duplicate columns not allowed in derived table
 "select * from (select user.id, user_extra.id from user join user_extra) as t"
@@ -1546,6 +1547,7 @@ Gen4++
     "Table": "unsharded"
   }
 }
+Gen4++
 
 # unsharded union in subquery
 "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)"
@@ -1999,6 +2001,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # sql_calc_found_rows in sub queries
 "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)"
@@ -2563,6 +2566,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra"
 "unsupported: cross-shard correlated subquery"
@@ -2871,3 +2875,4 @@ Gen4 error: exists sub-queries are only supported with AND clause
   }
 }
 Gen4 plan same as above
+Gen4++

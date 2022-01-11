@@ -52,6 +52,8 @@ func transformOpToLogicalPlan(ctx *context.PlanningContext, op abstract.Physical
 		return transformSubQueryOpPlan(ctx, op)
 	case *physical.CorrelatedSubQueryOp:
 		return transformCorrelatedSubQueryOpPlan(ctx, op)
+	case *physical.Derived:
+		return transformDerivedOpToPlan(ctx, op)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformOpToLogicalPlan)", op)
@@ -306,4 +308,50 @@ func getCollationsForOp(ctx *context.PlanningContext, n *physical.UnionOp) []col
 		colls = append(colls, typ)
 	}
 	return colls
+}
+
+func transformDerivedOpToPlan(ctx *context.PlanningContext, op *physical.Derived) (logicalPlan, error) {
+	// transforming the inner part of the derived table into a logical plan
+	// so that we can do horizon planning on the inner. If the logical plan
+	// we've produced is a Route, we set its Select.From field to be an aliased
+	// expression containing our derived table's inner select and the derived
+	// table's alias.
+
+	plan, err := transformOpToLogicalPlan(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err = planHorizon(ctx, plan, op.Query)
+	if err != nil {
+		return nil, err
+	}
+
+	rb, isRoute := plan.(*routeGen4)
+	if !isRoute {
+		return &simpleProjection{
+			logicalPlanCommon: newBuilderCommon(plan),
+			eSimpleProj: &engine.SimpleProjection{
+				Cols: op.ColumnsOffset,
+			},
+		}, nil
+	}
+	innerSelect := rb.Select
+	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
+	tblExpr := &sqlparser.AliasedTableExpr{
+		Expr:    derivedTable,
+		As:      sqlparser.NewTableIdent(op.Alias),
+		Columns: op.ColumnAliases,
+	}
+	selectExprs := sqlparser.SelectExprs{}
+	for _, colName := range op.Columns {
+		selectExprs = append(selectExprs, &sqlparser.AliasedExpr{
+			Expr: colName,
+		})
+	}
+	rb.Select = &sqlparser.Select{
+		From:        []sqlparser.TableExpr{tblExpr},
+		SelectExprs: selectExprs,
+	}
+	return plan, nil
 }

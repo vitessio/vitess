@@ -62,17 +62,17 @@ func CreatePhysicalOperator(ctx *context.PlanningContext, opTree abstract.Logica
 			return nil, err
 		}
 		return mergeOrJoinOp(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
-	// case *abstract.Derived:
-	//	treeInner, err := optimizeQuery(ctx, op.Inner)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	return &derivedTree{
-	//		query:         op.Sel,
-	//		inner:         treeInner,
-	//		alias:         op.Alias,
-	//		columnAliases: op.ColumnAliases,
-	//	}, nil
+	case *abstract.Derived:
+		opInner, err := CreatePhysicalOperator(ctx, op.Inner)
+		if err != nil {
+			return nil, err
+		}
+		return &Derived{
+			Source:        opInner,
+			Query:         op.Sel,
+			Alias:         op.Alias,
+			ColumnAliases: op.ColumnAliases,
+		}, nil
 	case *abstract.SubQuery:
 		return optimizeSubQueryOp(ctx, op)
 	case *abstract.Vindex:

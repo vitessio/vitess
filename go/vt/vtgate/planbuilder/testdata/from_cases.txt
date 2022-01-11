@@ -2032,6 +2032,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # derived table with join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id"
@@ -2266,6 +2267,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # derived table missing columns
 "select t.id from (select id from user) as t join user_extra on t.id = user_extra.user_id where t.col = 42"
@@ -2327,6 +2329,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # routing rules for derived table where the constraint is in the outer query
 "select id from (select id+col as foo from route1) as t where foo = 5"
@@ -2413,6 +2416,7 @@ Gen4++
     "Table": "`user`"
   }
 }
+Gen4++
 
 # recursive derived table lookups
 "select id from (select id from (select id from user) as u) as t where id = 5"
@@ -2454,6 +2458,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # merge derived tables with single-shard routes
 "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e"
@@ -2801,6 +2806,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # Join with cross-shard derived table on rhs
 "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t"
@@ -2866,6 +2872,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Join with cross-shard derived table on rhs - push down join predicate to derived table
 "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id"
@@ -3654,6 +3661,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # database call in ON clause.
 # The on clause is weird because the substitution must even for root expressions.
@@ -4267,6 +4275,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # select star from derived table on expandable and unsharded table
 "select u.* from (select * from unsharded) u"
@@ -4286,6 +4295,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # filtering on a cross-shard derived table
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"
@@ -4336,6 +4346,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # expression on a cross-shard derived table
 "select id+1 from (select user.id, user.col from user join user_extra) as t"
@@ -4382,6 +4393,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # derived table with aliased columns and outer predicate pushed in derived table
 "select u.a from (select id as b, name from user) u(a, n) where u.n = 1"
@@ -4405,6 +4417,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
+Gen4++
 
 # derived table with aliased columns predicate in both the outer and inner
 "select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1"
@@ -4428,6 +4441,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
+Gen4++
 
 # derived table with aliased columns and a join that requires pushProjection
 "select i+1 from (select user.id from user join user_extra) t(i)"
@@ -4474,6 +4488,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # two subqueries with different Select and OpCode
 "select id from user where id in (select id from user_extra) and col = (select user_id from user_extra limit 1)"

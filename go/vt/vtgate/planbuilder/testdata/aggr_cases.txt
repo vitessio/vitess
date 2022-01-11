@@ -562,6 +562,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # group by a unique vindex should use a simple route
 "select id, count(*) from user group by id"
@@ -943,6 +944,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # scatter aggregate with non-aggregate expressions.
 "select id, count(*) from user"

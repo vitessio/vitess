@@ -38,6 +38,7 @@ Gen4++
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
 "unsupported: memory sort: complex order by expression: rand()"
 Gen4 error: unsupported: in scatter query: complex order by expression: rand()
+Gen4++
 
 # natural join
 "select * from user natural join user_extra"
@@ -521,6 +522,7 @@ Gen4++
 "create view user.view_a as select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
 "Complex select queries are not supported in create or alter view statements"
 Gen4 plan same as above
+Gen4++
 
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
@@ -669,6 +671,7 @@ Gen4++
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
 "unsupported: cross-shard correlated subquery"
 Gen4 plan same as above
+Gen4++
 
 # Gen4 does a rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.
 "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2"
@@ -694,6 +697,7 @@ Gen4++
     "Table": "`user`"
   }
 }
+Gen4++
 
 # unsupported with clause in delete statement
 "with x as (select * from user) delete from x"
@@ -747,6 +751,7 @@ Gen4++
 "select sum(col) from (select col from user union all select col from unsharded) t"
 "unsupported: cross-shard query with aggregates"
 Gen4 error: unsupported: aggregation on unions
+Gen4++
 
 # systable union query in derived table with constraint on outside (without star projection)
 "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'"
