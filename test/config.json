@@ -438,7 +438,7 @@
 			"Manual": false,
 			"Shard": "14",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_reparent"]
 		},
 		"plannedreparent": {
 			"File": "unused.go",
@@ -447,7 +447,16 @@
 			"Manual": false,
 			"Shard": "14",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_reparent"]
+		},
+		"newfeatures": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/newfeaturetest"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "14",
+			"RetryMax": 1,
+			"Tags": [""]
 		},
 		"resharding": {
 			"File": "unused.go",
