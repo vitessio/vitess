@@ -26,7 +26,7 @@ import (
 )
 
 func (hp *horizonPlanning) planHorizonOp(ctx *context.PlanningContext, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
-	_, isRoute := op.(*routeOp)
+	_, isRoute := op.(*physical.RouteOp)
 	if !isRoute && ctx.SemTable.ShardedError != nil {
 		return nil, ctx.SemTable.ShardedError
 	}
@@ -79,9 +79,9 @@ func pushProjectionsOp(ctx *context.PlanningContext, phyOp abstract.PhysicalOper
 // pushProjection pushes a projection to the plan.
 func pushProjectionOp(ctx *context.PlanningContext, expr *sqlparser.AliasedExpr, phyOp abstract.PhysicalOperator, inner, reuseCol, hasAggregation bool) (op abstract.PhysicalOperator, offset int, added bool, err error) {
 	switch node := phyOp.(type) {
-	case *routeOp:
-		op, offset, added, err := pushProjectionOp(ctx, expr, node.source, inner, reuseCol, hasAggregation)
-		node.source = op
+	case *physical.RouteOp:
+		op, offset, added, err := pushProjectionOp(ctx, expr, node.Source, inner, reuseCol, hasAggregation)
+		node.Source = op
 		return node, offset, added, err
 	case *physical.TableOp:
 		colName, isColName := expr.Expr.(*sqlparser.ColName)

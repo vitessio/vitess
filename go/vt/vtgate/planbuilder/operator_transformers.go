@@ -40,7 +40,7 @@ import (
 
 func transformOpToLogicalPlan(ctx *context.PlanningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
 	switch op := op.(type) {
-	case *routeOp:
+	case *physical.RouteOp:
 		return transformRouteOpPlan(ctx, op)
 	case *physical.ApplyJoin:
 		return transformApplyJoinOpPlan(ctx, op)
@@ -105,23 +105,23 @@ func transformApplyJoinOpPlan(ctx *context.PlanningContext, n *physical.ApplyJoi
 	}, nil
 }
 
-func transformRouteOpPlan(ctx *context.PlanningContext, op *routeOp) (*routeGen4, error) {
+func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.RouteOp) (*routeGen4, error) {
 	tableNames := getAllTableNames(op)
 
 	var singleColumn vindexes.SingleColumn
 	var value evalengine.Expr
-	if op.selectedVindex() != nil {
-		vdx, ok := op.selected.foundVindex.(vindexes.SingleColumn)
-		if !ok || len(op.selected.values) != 1 {
+	if op.SelectedVindex() != nil {
+		vdx, ok := op.Selected.FoundVindex.(vindexes.SingleColumn)
+		if !ok || len(op.Selected.Values) != 1 {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
 		}
 		singleColumn = vdx
-		value = op.selected.values[0]
+		value = op.Selected.Values[0]
 	}
 
 	var condition sqlparser.Expr
-	if op.selected != nil && len(op.selected.valueExprs) > 0 {
-		condition = op.selected.valueExprs[0]
+	if op.Selected != nil && len(op.Selected.ValueExprs) > 0 {
+		condition = op.Selected.ValueExprs[0]
 	}
 
 	var values []evalengine.Expr
@@ -130,22 +130,22 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *routeOp) (*routeGen4
 	}
 	return &routeGen4{
 		eroute: &engine.Route{
-			Opcode:              op.routeOpCode,
+			Opcode:              op.RouteOpCode,
 			TableName:           strings.Join(tableNames, ", "),
-			Keyspace:            op.keyspace,
+			Keyspace:            op.Keyspace,
 			Vindex:              singleColumn,
 			Values:              values,
 			SysTableTableName:   op.SysTableTableName,
 			SysTableTableSchema: op.SysTableTableSchema,
 		},
-		Select:    toSQL(ctx, op.source),
+		Select:    toSQL(ctx, op.Source),
 		tables:    op.TableID(),
 		condition: condition,
 	}, nil
 
 }
 
-func getAllTableNames(op *routeOp) []string {
+func getAllTableNames(op *physical.RouteOp) []string {
 	tableNameMap := map[string]interface{}{}
 	_ = visitOperators(op, func(op abstract.Operator) (bool, error) {
 		tbl, isTbl := op.(*physical.TableOp)

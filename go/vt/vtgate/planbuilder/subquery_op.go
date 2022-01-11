@@ -41,7 +41,7 @@ func optimizeSubQueryOp(ctx *context.PlanningContext, op *abstract.SubQuery) (ab
 		}
 
 		preds := inner.Inner.UnsolvedPredicates(ctx.SemTable)
-		merger := func(a, b *routeOp) (*routeOp, error) {
+		merger := func(a, b *physical.RouteOp) (*physical.RouteOp, error) {
 			return mergeSubQueryOp(ctx, a, b, inner)
 		}
 
@@ -97,7 +97,7 @@ func optimizeSubQueryOp(ctx *context.PlanningContext, op *abstract.SubQuery) (ab
 	return outerOp, nil
 }
 
-func mergeSubQueryOp(ctx *context.PlanningContext, outer *routeOp, inner *routeOp, subq *abstract.SubQueryInner) (*routeOp, error) {
+func mergeSubQueryOp(ctx *context.PlanningContext, outer *physical.RouteOp, inner *physical.RouteOp, subq *abstract.SubQueryInner) (*physical.RouteOp, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
 
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
@@ -137,7 +137,7 @@ func tryMergeSubQueryOp(
 	var merged abstract.PhysicalOperator
 	var err error
 	switch outerOp := outer.(type) {
-	case *routeOp:
+	case *physical.RouteOp:
 		merged, err = tryMergeOp(ctx, outerOp, subq, joinPredicates, merger)
 		if err != nil {
 			return nil, err
@@ -149,7 +149,7 @@ func tryMergeSubQueryOp(
 		if outerOp.LeftJoin {
 			return nil, nil
 		}
-		newMergefunc := func(a, b *routeOp) (*routeOp, error) {
+		newMergefunc := func(a, b *physical.RouteOp) (*physical.RouteOp, error) {
 			rt, err := merger(a, b)
 			if err != nil {
 				return nil, err
@@ -166,7 +166,7 @@ func tryMergeSubQueryOp(
 			return outerOp, nil
 		}
 
-		newMergefunc = func(a, b *routeOp) (*routeOp, error) {
+		newMergefunc = func(a, b *physical.RouteOp) (*physical.RouteOp, error) {
 			rt, err := merger(a, b)
 			if err != nil {
 				return nil, err

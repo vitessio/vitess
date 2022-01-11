@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -219,8 +220,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 }
 
 func trySingleShard(ctx *context.PlanningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (logicalPlan, error) {
-	ro, isRoute := op.(*routeOp)
-	if isRoute && ro.isSingleShard() {
+	ro, isRoute := op.(*physical.RouteOp)
+	if isRoute && ro.IsSingleShard() {
 		plan, err := transformRouteOpPlan(ctx, ro)
 		if err != nil {
 			return nil, err
