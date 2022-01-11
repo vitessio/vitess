@@ -149,7 +149,7 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtctl $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         vtctl --version
         vttablet --version
