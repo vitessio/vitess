@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
 
 func (hp *horizonPlanning) planHorizonOp(ctx *planningContext, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
@@ -81,7 +82,7 @@ func pushProjectionOp(ctx *planningContext, expr *sqlparser.AliasedExpr, phyOp a
 		op, offset, added, err := pushProjectionOp(ctx, expr, node.source, inner, reuseCol, hasAggregation)
 		node.source = op
 		return node, offset, added, err
-	case *tableOp:
+	case *physical.TableOp:
 		colName, isColName := expr.Expr.(*sqlparser.ColName)
 		if isColName && expr.As.IsEmpty() {
 			op, offsets, err := PushOutputColumns(ctx, node, colName)

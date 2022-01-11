@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -144,13 +146,13 @@ func transformRouteOpPlan(ctx *planningContext, op *routeOp) (*routeGen4, error)
 func getAllTableNames(op *routeOp) []string {
 	tableNameMap := map[string]interface{}{}
 	_ = visitOperators(op, func(op abstract.Operator) (bool, error) {
-		tbl, isTbl := op.(*tableOp)
+		tbl, isTbl := op.(*physical.TableOp)
 		var name string
 		if isTbl {
-			if tbl.qtable.IsInfSchema {
-				name = sqlparser.String(tbl.qtable.Table)
+			if tbl.QTable.IsInfSchema {
+				name = sqlparser.String(tbl.QTable.Table)
 			} else {
-				name = sqlparser.String(tbl.qtable.Table.Name)
+				name = sqlparser.String(tbl.QTable.Table.Name)
 			}
 			tableNameMap[name] = nil
 		}
