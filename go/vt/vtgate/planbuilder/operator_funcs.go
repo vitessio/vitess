@@ -165,8 +165,8 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 		return op, offsets, nil
 	case *physical.FilterOp:
 		return PushOutputColumns(ctx, op.Source, columns...)
-	case *vindexOp:
-		idx, err := op.pushOutputColumns(columns)
+	case *physical.VindexOp:
+		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err
 	default:
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
