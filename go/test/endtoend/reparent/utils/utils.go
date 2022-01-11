@@ -597,3 +597,13 @@ func CheckDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, 
 	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
 	assert.Equal(t, want, got)
 }
+
+// SetReplicationSourceFailed returns true if the given output from PRS had failed because the given tablet was
+// unable to setReplicationSource. Since some tests are used in upgrade-downgrade testing, we need this function to
+// work with different versions of vtctl.
+func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
+	if strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablet.Alias)) {
+		return true
+	}
+	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetMaster", tablet.Alias))
+}
