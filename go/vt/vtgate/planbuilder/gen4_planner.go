@@ -159,9 +159,27 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 			return nil, err
 		}
 
-		plan, err = transformOpToLogicalPlan(ctx, physical)
+		sel := selStmt.(*sqlparser.Select)
+		hp := horizonPlanning{
+			sel: sel,
+		}
+
+		plan, err = trySingleShard(ctx, physical, selStmt)
 		if err != nil {
-			return nil, err
+			return plan, err
+		}
+
+		if plan == nil {
+			// we are not dealing with a single route plan
+			horizon, err := hp.planHorizonOp(ctx, physical)
+			if err != nil {
+				return nil, err
+			}
+
+			plan, err = transformOpToLogicalPlan(ctx, horizon)
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		queryTree, err := optimizeQuery(ctx, logical)
@@ -173,11 +191,11 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		if err != nil {
 			return nil, err
 		}
-	}
 
-	plan, err = planHorizon(ctx, plan, selStmt)
-	if err != nil {
-		return nil, err
+		plan, err = planHorizon(ctx, plan, selStmt)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sel, isSel := selStmt.(*sqlparser.Select)
@@ -197,6 +215,23 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	}
 
 	return plan, nil
+}
+
+func trySingleShard(ctx *planningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+	ro, isRoute := op.(*routeOp)
+	if isRoute && ro.isSingleShard() {
+		plan, err := transformRouteOpPlan(ctx, ro)
+		if err != nil {
+			return nil, err
+		}
+		err = planSingleShardRoutePlan(stmt, plan)
+		if err != nil {
+			return nil, err
+		}
+		return plan, nil
+	}
+
+	return nil, nil
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {

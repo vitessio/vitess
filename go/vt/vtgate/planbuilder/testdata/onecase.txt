@@ -1,1 +1,20 @@
 # Add your test case here for debugging and run go test -run=One.
+# Aggregate on unsharded
+"select count(*), col from unsharded"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*), col from unsharded",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select count(*), col from unsharded where 1 != 1",
+    "Query": "select count(*), col from unsharded",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
+Gen4++
