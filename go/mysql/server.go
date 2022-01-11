@@ -94,6 +94,10 @@ type Handler interface {
 	// In particular, ServerStatusAutocommit might be set.
 	NewConnection(c *Conn)
 
+	// ConnectionReady is called after the connection handshake, but
+	// before we begin to process commands.
+	ConnectionReady(c *Conn)
+
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
@@ -469,6 +473,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
+
+	// Tell our handler that we're finished handshake and are ready to
+	// process commands.
+	l.handler.ConnectionReady(c)
 
 	for {
 		kontinue := c.handleNextCommand(l.handler)
