@@ -212,6 +212,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # union operations in derived table, without star expression (FROM)¡
 "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t"
@@ -231,6 +232,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # union all between two scatter selects, with order by
 "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)"

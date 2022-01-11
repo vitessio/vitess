@@ -370,6 +370,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # order by on a cross-shard query. Note: this happens only when an order by column is from the second table
 "select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
