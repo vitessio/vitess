@@ -280,10 +280,10 @@ func findBestJoinOp(
 				if verboseLogging {
 					log.Warningf("New Best Plan - %v and cost - %d", plan.TableID(), plan.Cost())
 					switch node := plan.(type) {
-					case *applyJoin:
+					case *physical.ApplyJoin:
 						log.Warningf("Join Plan - lhs - %v, rhs - %v", node.LHS.TableID(), node.RHS.TableID())
 					case *routeOp:
-						joinOp := node.source.(*applyJoin)
+						joinOp := node.source.(*physical.ApplyJoin)
 						log.Warningf("Route Plan - lhs - %v, rhs - %v", joinOp.LHS.TableID(), joinOp.RHS.TableID())
 					}
 				}
@@ -323,11 +323,11 @@ func mergeOrJoinOp(ctx *planningContext, lhs, rhs abstract.PhysicalOperator, joi
 		return newPlan, nil
 	}
 
-	var tree abstract.PhysicalOperator = &applyJoin{
+	var tree abstract.PhysicalOperator = &physical.ApplyJoin{
 		LHS:      lhs.Clone(),
 		RHS:      rhs.Clone(),
-		vars:     map[string]int{},
-		leftJoin: !inner,
+		Vars:     map[string]int{},
+		LeftJoin: !inner,
 	}
 	for _, predicate := range joinPredicates {
 		var err error
@@ -356,11 +356,11 @@ func createRouteOperatorForJoin(ctx *planningContext, aRoute, bRoute *routeOp, j
 		vindexPreds:         append(aRoute.vindexPreds, bRoute.vindexPreds...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
-		source: &applyJoin{
+		source: &physical.ApplyJoin{
 			LHS:      aRoute.source,
 			RHS:      bRoute.source,
-			vars:     map[string]int{},
-			leftJoin: !inner,
+			Vars:     map[string]int{},
+			LeftJoin: !inner,
 		},
 	}
 
@@ -520,10 +520,10 @@ func leaves(op abstract.Operator) (sources []abstract.Operator) {
 		}
 		return
 		// physical
-	case *applyJoin:
+	case *physical.ApplyJoin:
 		return []abstract.Operator{op.LHS, op.RHS}
-	case *filterOp:
-		return []abstract.Operator{op.source}
+	case *physical.FilterOp:
+		return []abstract.Operator{op.Source}
 	case *routeOp:
 		return []abstract.Operator{op.source}
 	}
@@ -667,7 +667,7 @@ func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 		if err != nil {
 			return err
 		}
-	case *applyJoin:
+	case *physical.ApplyJoin:
 		err := visitOperators(op.LHS, f)
 		if err != nil {
 			return err
@@ -676,8 +676,8 @@ func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 		if err != nil {
 			return err
 		}
-	case *filterOp:
-		err := visitOperators(op.source, f)
+	case *physical.FilterOp:
+		err := visitOperators(op.Source, f)
 		if err != nil {
 			return err
 		}

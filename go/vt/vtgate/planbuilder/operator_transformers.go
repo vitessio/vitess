@@ -40,22 +40,22 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 	switch op := op.(type) {
 	case *routeOp:
 		return transformRouteOpPlan(ctx, op)
-	case *applyJoin:
+	case *physical.ApplyJoin:
 		return transformApplyJoinOpPlan(ctx, op)
 	case *unionOp:
 		return transformUnionOpPlan(ctx, op)
 	case *vindexOp:
 		return transformVindexOpPlan(ctx, op)
-	case *subQueryOp:
+	case *physical.SubQueryOp:
 		return transformSubQueryOpPlan(ctx, op)
-	case *correlatedSubQueryOp:
+	case *physical.CorrelatedSubQueryOp:
 		return transformCorrelatedSubQueryOpPlan(ctx, op)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformOpToLogicalPlan)", op)
 }
 
-func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, error) {
+func transformApplyJoinOpPlan(ctx *planningContext, n *physical.ApplyJoin) (logicalPlan, error) {
 	// TODO systay we should move the decision of which join to use to the greedy algorithm,
 	// and thus represented as a queryTree
 	// canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
@@ -72,7 +72,7 @@ func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, 
 		return nil, err
 	}
 	opCode := engine.InnerJoin
-	if n.leftJoin {
+	if n.LeftJoin {
 		opCode = engine.LeftJoin
 	}
 
@@ -96,10 +96,10 @@ func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, 
 	return &joinGen4{
 		Left:      lhs,
 		Right:     rhs,
-		Cols:      n.columns,
-		Vars:      n.vars,
+		Cols:      n.Columns,
+		Vars:      n.Vars,
 		Opcode:    opCode,
-		Predicate: n.predicate,
+		Predicate: n.Predicate,
 	}, nil
 }
 

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package physical
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -22,41 +22,43 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type applyJoin struct {
+type ApplyJoin struct {
 	LHS, RHS abstract.PhysicalOperator
-	// columns stores the column indexes of the columns coming from the left and right side
+
+	// Columns stores the column indexes of the columns coming from the left and right side
 	// negative value comes from LHS and positive from RHS
-	columns []int
-	// arguments that need to be copied from the LHS/RHS
-	vars map[string]int
+	Columns []int
 
-	leftJoin bool
+	// Vars are the arguments that need to be copied from the LHS to the RHS
+	Vars map[string]int
 
-	predicate sqlparser.Expr
+	LeftJoin bool
+
+	Predicate sqlparser.Expr
 }
 
-var _ abstract.PhysicalOperator = (*applyJoin)(nil)
+var _ abstract.PhysicalOperator = (*ApplyJoin)(nil)
 
 // IPhysical implements the PhysicalOperator interface
-func (a *applyJoin) IPhysical() {}
+func (a *ApplyJoin) IPhysical() {}
 
 // TableID implements the PhysicalOperator interface
-func (a *applyJoin) TableID() semantics.TableSet {
+func (a *ApplyJoin) TableID() semantics.TableSet {
 	return a.LHS.TableID().Merge(a.RHS.TableID())
 }
 
 // PushPredicate implements the PhysicalOperator interface
-func (a *applyJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (a *ApplyJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	panic("unimplemented")
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (a *applyJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (a *ApplyJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (a *applyJoin) CheckValid() error {
+func (a *ApplyJoin) CheckValid() error {
 	err := a.LHS.CheckValid()
 	if err != nil {
 		return err
@@ -65,27 +67,27 @@ func (a *applyJoin) CheckValid() error {
 }
 
 // Compact implements the PhysicalOperator interface
-func (a *applyJoin) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (a *ApplyJoin) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return a, nil
 }
 
 // Cost implements the PhysicalOperator interface
-func (a *applyJoin) Cost() int {
+func (a *ApplyJoin) Cost() int {
 	return a.LHS.Cost() + a.RHS.Cost()
 }
 
 // Clone implements the PhysicalOperator interface
-func (a *applyJoin) Clone() abstract.PhysicalOperator {
+func (a *ApplyJoin) Clone() abstract.PhysicalOperator {
 	varsClone := map[string]int{}
-	for key, value := range a.vars {
+	for key, value := range a.Vars {
 		varsClone[key] = value
 	}
-	columnsClone := make([]int, len(a.columns))
-	copy(columnsClone, a.columns)
-	return &applyJoin{
+	columnsClone := make([]int, len(a.Columns))
+	copy(columnsClone, a.Columns)
+	return &ApplyJoin{
 		LHS:     a.LHS.Clone(),
 		RHS:     a.RHS.Clone(),
-		columns: columnsClone,
-		vars:    varsClone,
+		Columns: columnsClone,
+		Vars:    varsClone,
 	}
 }

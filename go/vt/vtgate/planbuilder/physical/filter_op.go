@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package physical
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -22,54 +22,54 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type filterOp struct {
-	source     abstract.PhysicalOperator
-	predicates []sqlparser.Expr
+type FilterOp struct {
+	Source     abstract.PhysicalOperator
+	Predicates []sqlparser.Expr
 }
 
-var _ abstract.PhysicalOperator = (*filterOp)(nil)
+var _ abstract.PhysicalOperator = (*FilterOp)(nil)
 
 // IPhysical implements the PhysicalOperator interface
-func (f *filterOp) IPhysical() {}
+func (f *FilterOp) IPhysical() {}
 
 // TableID implements the PhysicalOperator interface
-func (f *filterOp) TableID() semantics.TableSet {
-	return f.source.TableID()
+func (f *FilterOp) TableID() semantics.TableSet {
+	return f.Source.TableID()
 }
 
 // PushPredicate implements the PhysicalOperator interface
-func (f *filterOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (f *FilterOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	panic("unimplemented")
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (f *filterOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (f *FilterOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (f *filterOp) CheckValid() error {
-	return f.source.CheckValid()
+func (f *FilterOp) CheckValid() error {
+	return f.Source.CheckValid()
 }
 
 // Compact implements the PhysicalOperator interface
-func (f *filterOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (f *FilterOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return f, nil
 }
 
 // Cost implements the PhysicalOperator interface
-func (f *filterOp) Cost() int {
-	return f.source.Cost()
+func (f *FilterOp) Cost() int {
+	return f.Source.Cost()
 }
 
 // Clone implements the PhysicalOperator interface
-func (f *filterOp) Clone() abstract.PhysicalOperator {
+func (f *FilterOp) Clone() abstract.PhysicalOperator {
 	var predicatesClone []sqlparser.Expr
-	for _, predicate := range f.predicates {
+	for _, predicate := range f.Predicates {
 		predicatesClone = append(predicatesClone, sqlparser.CloneExpr(predicate))
 	}
-	return &filterOp{
-		source:     f.source.Clone(),
-		predicates: predicatesClone,
+	return &FilterOp{
+		Source:     f.Source.Clone(),
+		Predicates: predicatesClone,
 	}
 }

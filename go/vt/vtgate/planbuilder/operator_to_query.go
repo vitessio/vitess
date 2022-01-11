@@ -46,24 +46,24 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		for _, name := range op.Columns {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
 		}
-	case *applyJoin:
+	case *physical.ApplyJoin:
 		buildQuery(op.LHS, qb)
 		// If we are going to add the predicate used in join here
 		// We should not add the predicate's copy of when it was split into
 		// two parts. To avoid this, we use the skipPredicates map.
-		for _, expr := range qb.ctx.joinPredicates[op.predicate] {
+		for _, expr := range qb.ctx.joinPredicates[op.Predicate] {
 			qb.ctx.skipPredicates[expr] = nil
 		}
 		qbR := &queryBuilder{ctx: qb.ctx}
 		buildQuery(op.RHS, qbR)
-		if op.leftJoin {
-			qb.joinOuterWith(qbR, op.predicate)
+		if op.LeftJoin {
+			qb.joinOuterWith(qbR, op.Predicate)
 		} else {
-			qb.joinInnerWith(qbR, op.predicate)
+			qb.joinInnerWith(qbR, op.Predicate)
 		}
-	case *filterOp:
-		buildQuery(op.source, qb)
-		for _, pred := range op.predicates {
+	case *physical.FilterOp:
+		buildQuery(op.Source, qb)
+		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
 		}
 
@@ -101,7 +101,7 @@ func (qb *queryBuilder) addTable(tableName, alias string, tableID semantics.Tabl
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	if _, toBeSkipped := qb.ctx.skipPredicates[expr]; toBeSkipped {
-		// This is a predicate that was added to the RHS of an applyJoin.
+		// This is a predicate that was added to the RHS of an ApplyJoin.
 		// The original predicate will be added, so we don't have to add this here
 		return
 	}
