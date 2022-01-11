@@ -449,7 +449,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		replicaMutex               sync.Mutex
 	)
 
-	replCtx, replCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	replCtx, replCancel := context.WithTimeout(context.Background(), opts.WaitReplicasTimeout)
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
