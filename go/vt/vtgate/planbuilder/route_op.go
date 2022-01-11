@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -91,7 +92,7 @@ func (r *routeOp) Clone() abstract.PhysicalOperator {
 	return &cloneRoute
 }
 
-func (r *routeOp) updateRoutingLogic(ctx *planningContext, expr sqlparser.Expr) error {
+func (r *routeOp) updateRoutingLogic(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	if r.canImprove() {
 		newVindexFound, err := r.searchForNewVindexes(ctx, expr)
 		if err != nil {
@@ -106,7 +107,7 @@ func (r *routeOp) updateRoutingLogic(ctx *planningContext, expr sqlparser.Expr) 
 	return nil
 }
 
-func (r *routeOp) searchForNewVindexes(ctx *planningContext, predicate sqlparser.Expr) (bool, error) {
+func (r *routeOp) searchForNewVindexes(ctx *context.PlanningContext, predicate sqlparser.Expr) (bool, error) {
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.ComparisonExpr:
@@ -119,7 +120,7 @@ func (r *routeOp) searchForNewVindexes(ctx *planningContext, predicate sqlparser
 	return newVindexFound, nil
 }
 
-func (r *routeOp) planComparison(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
+func (r *routeOp) planComparison(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
 	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
@@ -136,7 +137,7 @@ func (r *routeOp) planComparison(ctx *planningContext, node *sqlparser.Compariso
 	return false, false, nil
 }
 
-func (r *routeOp) planEqualOp(ctx *planningContext, node *sqlparser.ComparisonExpr) bool {
+func (r *routeOp) planEqualOp(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
 	vdValue := other
@@ -161,10 +162,10 @@ func (r *routeOp) planEqualOp(ctx *planningContext, node *sqlparser.ComparisonEx
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
-func (r *routeOp) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) evalengine.Expr {
-	for _, expr := range ctx.semTable.GetExprAndEqualities(n) {
+func (r *routeOp) makeEvalEngineExpr(ctx *context.PlanningContext, n sqlparser.Expr) evalengine.Expr {
+	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
-			extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
+			extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
 			if extractedSubquery == nil {
 				continue
 			}
@@ -175,7 +176,7 @@ func (r *routeOp) makeEvalEngineExpr(ctx *planningContext, n sqlparser.Expr) eva
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, _ := evalengine.Convert(expr, ctx.semTable)
+		pv, _ := evalengine.Convert(expr, ctx.SemTable)
 		if pv != nil {
 			return pv
 		}
@@ -196,7 +197,7 @@ func (r *routeOp) hasVindex(column *sqlparser.ColName) bool {
 }
 
 func (r *routeOp) haveMatchingVindex(
-	ctx *planningContext,
+	ctx *context.PlanningContext,
 	node sqlparser.Expr,
 	valueExpr sqlparser.Expr,
 	column *sqlparser.ColName,
@@ -207,7 +208,7 @@ func (r *routeOp) haveMatchingVindex(
 	newVindexFound := false
 	for _, v := range r.vindexPreds {
 		// check that the
-		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
+		if !ctx.SemTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
 		// Ignore MultiColumn vindexes for finding matching Vindex.

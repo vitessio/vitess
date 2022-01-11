@@ -20,10 +20,10 @@ import (
 	"errors"
 	"sort"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -32,48 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-// ContextVSchema defines the interface for this package to fetch
-// info about tables.
-type ContextVSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
-	DefaultKeyspace() (*vindexes.Keyspace, error)
-	TargetString() string
-	Destination() key.Destination
-	TabletType() topodatapb.TabletType
-	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
-	AnyKeyspace() (*vindexes.Keyspace, error)
-	FirstSortedKeyspace() (*vindexes.Keyspace, error)
-	SysVarSetEnabled() bool
-	KeyspaceExists(keyspace string) bool
-	AllKeyspace() ([]*vindexes.Keyspace, error)
-	GetSemTable() *semantics.SemTable
-	Planner() PlannerVersion
-	SetPlannerVersion(pv PlannerVersion)
-	ConnCollation() collations.ID
-
-	// ErrorIfShardedF will return an error if the keyspace is sharded,
-	// and produce a warning if the vtgate if configured to do so
-	ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...interface{}) error
-
-	// WarnUnshardedOnly is used when a feature is only supported in unsharded mode.
-	// This will let the user know that they are using something
-	// that could become a problem if they move to a sharded keyspace
-	WarnUnshardedOnly(format string, params ...interface{})
-
-	// PlannerWarning records warning created during planning.
-	PlannerWarning(message string)
-
-	// ForeignKeyMode returns the foreign_key flag value
-	ForeignKeyMode() string
-}
-
-// PlannerVersion is an alias here to make the code more readable
-type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
 
 const (
 	// V3 is also the default planner
@@ -91,7 +51,7 @@ const (
 )
 
 var (
-	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
+	plannerVersions = []context.PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
 )
 
 type truncater interface {
@@ -100,7 +60,7 @@ type truncater interface {
 
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
-func TestBuilder(query string, vschema ContextVSchema, keyspace string) (*engine.Plan, error) {
+func TestBuilder(query string, vschema context.VSchema, keyspace string) (*engine.Plan, error) {
 	stmt, reserved, err := sqlparser.Parse2(query)
 	if err != nil {
 		return nil, err
@@ -118,7 +78,7 @@ func TestBuilder(query string, vschema ContextVSchema, keyspace string) (*engine
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, enableOnlineDDL, enableDirectDDL bool) (*engine.Plan, error) {
 	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
@@ -132,7 +92,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema ContextVSchema, v3planner selectPlanner) (selectPlanner, error) {
+func getConfiguredPlanner(vschema context.VSchema, v3planner selectPlanner) (selectPlanner, error) {
 	switch vschema.Planner() {
 	case Gen4CompareV3:
 		return gen4CompareV3Planner, nil
@@ -150,16 +110,16 @@ func getConfiguredPlanner(vschema ContextVSchema, v3planner selectPlanner) (sele
 	}
 }
 
-func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
+func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema context.VSchema) (engine.Primitive, error)) (engine.Primitive, error) {
 	if vschema.Destination() != nil {
 		return buildPlanForBypass(stmt, reservedVars, vschema)
 	}
 	return f(stmt, reservedVars, vschema)
 }
 
-type selectPlanner func(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error)
+type selectPlanner func(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, context.VSchema) (engine.Primitive, error)
 
-func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
+func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan)
@@ -225,7 +185,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 }
 
-func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema context.VSchema) (engine.Primitive, error) {
 	dbDDLstmt := stmt.(sqlparser.DBDDLStatement)
 	ksName := dbDDLstmt.GetDatabaseName()
 	if ksName == "" {
@@ -263,7 +223,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
 }
 
-func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
+func buildLoadPlan(query string, vschema context.VSchema) (engine.Primitive, error) {
 	keyspace, err := vschema.DefaultKeyspace()
 	if err != nil {
 		return nil, err
@@ -286,7 +246,7 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 	}, nil
 }
 
-func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema ContextVSchema) (engine.Primitive, error) {
+func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema context.VSchema) (engine.Primitive, error) {
 	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
 	if err != nil {
 		return nil, err
@@ -297,14 +257,14 @@ func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema ContextVSchema) (
 	}, nil
 }
 
-func buildFlushPlan(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+func buildFlushPlan(stmt *sqlparser.Flush, vschema context.VSchema) (engine.Primitive, error) {
 	if len(stmt.TableNames) == 0 {
 		return buildFlushOptions(stmt, vschema)
 	}
 	return buildFlushTables(stmt, vschema)
 }
 
-func buildFlushOptions(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+func buildFlushOptions(stmt *sqlparser.Flush, vschema context.VSchema) (engine.Primitive, error) {
 	dest, keyspace, _, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
@@ -321,7 +281,7 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Pr
 	}, nil
 }
 
-func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+func buildFlushTables(stmt *sqlparser.Flush, vschema context.VSchema) (engine.Primitive, error) {
 	type sendDest struct {
 		ks   *vindexes.Keyspace
 		dest key.Destination

@@ -20,6 +20,8 @@ import (
 	"io"
 	"sort"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -38,48 +40,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-type planningContext struct {
-	reservedVars *sqlparser.ReservedVars
-	semTable     *semantics.SemTable
-	vschema      ContextVSchema
-
-	// here we add all predicates that were created because of a join condition
-	// e.g. [FROM tblA JOIN tblB ON a.colA = b.colB] will be rewritten to [FROM tblB WHERE :a_colA = b.colB],
-	// if we assume that tblB is on the RHS of the join. This last predicate in the WHERE clause is added to the
-	// map below
-	joinPredicates map[sqlparser.Expr][]sqlparser.Expr
-	skipPredicates map[sqlparser.Expr]interface{}
-}
-
-func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
-	ctx := &planningContext{
-		reservedVars:   reservedVars,
-		semTable:       semTable,
-		vschema:        vschema,
-		joinPredicates: map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates: map[sqlparser.Expr]interface{}{},
-	}
-	return ctx
-}
-
-func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
-	ext, ok := e.(*sqlparser.Subquery)
-	if !ok {
-		return false
-	}
-	for _, extractedSubq := range c.semTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(extractedSubq.Subquery, ext) {
-			return true
-		}
-	}
-	return false
-}
-
-func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, error) {
+func optimizeQuery(ctx *context.PlanningContext, opTree abstract.Operator) (queryTree, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
-		case ctx.vschema.Planner() == Gen4Left2Right:
+		case ctx.VSchema.Planner() == Gen4Left2Right:
 			return leftToRightSolve(ctx, op)
 		default:
 			return greedySolve(ctx, op)
@@ -116,7 +81,7 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 	}
 }
 
-func optimizeUnion(ctx *planningContext, op *abstract.Concatenate) (queryTree, error) {
+func optimizeUnion(ctx *context.PlanningContext, op *abstract.Concatenate) (queryTree, error) {
 	var sources []queryTree
 	for _, source := range op.Sources {
 		qt, err := optimizeQuery(ctx, source)
@@ -137,8 +102,8 @@ func optimizeUnion(ctx *planningContext, op *abstract.Concatenate) (queryTree, e
 	return tree, nil
 }
 
-func createVindexTree(ctx *planningContext, op *abstract.Vindex) (*vindexTree, error) {
-	solves := ctx.semTable.TableSetFor(op.Table.Alias)
+func createVindexTree(ctx *context.PlanningContext, op *abstract.Vindex) (*vindexTree, error) {
+	solves := ctx.SemTable.TableSetFor(op.Table.Alias)
 	plan := &vindexTree{
 		opCode: op.OpCode,
 		solved: solves,
@@ -149,7 +114,7 @@ func createVindexTree(ctx *planningContext, op *abstract.Vindex) (*vindexTree, e
 	return plan, nil
 }
 
-func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, error) {
+func optimizeSubQuery(ctx *context.PlanningContext, op *abstract.SubQuery) (queryTree, error) {
 	outerTree, err := optimizeQuery(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -163,7 +128,7 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 			return nil, err
 		}
 
-		preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
+		preds := inner.Inner.UnsolvedPredicates(ctx.SemTable)
 		merger := func(a, b *routeTree) (*routeTree, error) {
 			return mergeSubQuery(ctx, a, b, inner)
 		}
@@ -216,7 +181,7 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 	return outerTree, nil
 }
 
-func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree queryTree, preds []sqlparser.Expr, extractedSubquery *sqlparser.ExtractedSubquery) (*correlatedSubqueryTree, error) {
+func createCorrelatedSubqueryTree(ctx *context.PlanningContext, innerTree, outerTree queryTree, preds []sqlparser.Expr, extractedSubquery *sqlparser.ExtractedSubquery) (*correlatedSubqueryTree, error) {
 	err := outerTree.removePredicate(ctx, extractedSubquery)
 	if err != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
@@ -229,25 +194,25 @@ func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree que
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
-				if ctx.semTable.RecursiveDeps(node).IsSolvedBy(outerTree.tableID()) {
+				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(outerTree.tableID()) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
 					for colName, bindVar := range bindVars {
-						if node.Name.Equal(colName.Name) && ctx.semTable.RecursiveDeps(node).Equals(ctx.semTable.RecursiveDeps(colName)) {
+						if node.Name.Equal(colName.Name) && ctx.SemTable.RecursiveDeps(node).Equals(ctx.SemTable.RecursiveDeps(colName)) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))
 							return false
 						}
 					}
 
 					// get the bindVariable for that column name and replace it in the predicate
-					bindVar := ctx.reservedVars.ReserveColName(node)
+					bindVar := ctx.ReservedVars.ReserveColName(node)
 					cursor.Replace(sqlparser.NewArgument(bindVar))
 					// store it in the map for future comparisons
 					bindVars[node] = bindVar
 
 					// if it does not exist, then push this as an output column in the outerTree and add it to the joinVars
-					columnIndexes, err := outerTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.semTable)
+					columnIndexes, err := outerTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.SemTable)
 					if err != nil {
 						rewriteError = err
 						return false
@@ -275,7 +240,7 @@ func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree que
 	}, nil
 }
 
-func tryMergeSubQuery(ctx *planningContext, outer, subq queryTree, subQueryInner *abstract.SubQueryInner, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
+func tryMergeSubQuery(ctx *context.PlanningContext, outer, subq queryTree, subQueryInner *abstract.SubQueryInner, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
 	var merged queryTree
 	var err error
 	switch outerTree := outer.(type) {
@@ -332,7 +297,7 @@ func tryMergeSubQuery(ctx *planningContext, outer, subq queryTree, subQueryInner
 // from that side.
 // outerTree is the joinTree within whose children the subquery lives in
 // the child of joinTree which does not contain the subquery is the otherTree
-func rewriteColumnsInSubqueryForJoin(ctx *planningContext, otherTree queryTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner) error {
+func rewriteColumnsInSubqueryForJoin(ctx *context.PlanningContext, otherTree queryTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner) error {
 	var rewriteError error
 	// go over the entire expression in the subquery
 	sqlparser.Rewrite(subQueryInner.ExtractedSubquery.Original, func(cursor *sqlparser.Cursor) bool {
@@ -340,9 +305,9 @@ func rewriteColumnsInSubqueryForJoin(ctx *planningContext, otherTree queryTree, 
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
 			// check whether the column name belongs to the other side of the join tree
-			if ctx.semTable.RecursiveDeps(node).IsSolvedBy(otherTree.tableID()) {
+			if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(otherTree.tableID()) {
 				// get the bindVariable for that column name and replace it in the subquery
-				bindVar := ctx.reservedVars.ReserveColName(node)
+				bindVar := ctx.ReservedVars.ReserveColName(node)
 				cursor.Replace(sqlparser.NewArgument(bindVar))
 				// check whether the bindVariable already exists in the joinVars of the other tree
 				_, alreadyExists := outerTree.vars[bindVar]
@@ -350,7 +315,7 @@ func rewriteColumnsInSubqueryForJoin(ctx *planningContext, otherTree queryTree, 
 					return false
 				}
 				// if it does not exist, then push this as an output column there and add it to the joinVars
-				columnIndexes, err := otherTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.semTable)
+				columnIndexes, err := otherTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.SemTable)
 				if err != nil {
 					rewriteError = err
 					return false
@@ -364,18 +329,18 @@ func rewriteColumnsInSubqueryForJoin(ctx *planningContext, otherTree queryTree, 
 	}, nil)
 
 	// update the dependencies for the subquery by removing the dependencies from the otherTree
-	tableSet := ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
+	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
 	tableSet.RemoveInPlace(otherTree.tableID())
-	ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
-	tableSet = ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
 	tableSet.RemoveInPlace(otherTree.tableID())
-	ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 
 	// return any error while rewriting
 	return rewriteError
 }
 
-func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
+func mergeSubQuery(ctx *context.PlanningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
 
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
@@ -384,7 +349,7 @@ func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, sub
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch n := node.(type) {
 		case *sqlparser.AliasedTableExpr:
-			outer.solved.MergeInPlace(ctx.semTable.TableSetFor(n))
+			outer.solved.MergeInPlace(ctx.SemTable.TableSetFor(n))
 		}
 		return true, nil
 	}, subq.ExtractedSubquery.Subquery)
@@ -403,7 +368,7 @@ func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, sub
 	return outer, nil
 }
 
-func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
+func exprHasUniqueVindex(vschema context.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
 	col, isCol := expr.(*sqlparser.ColName)
 	if !isCol {
 		return false
@@ -493,7 +458,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	return nil
 }
 
-func pushJoinPredicate(ctx *planningContext, exprs []sqlparser.Expr, tree queryTree) (queryTree, error) {
+func pushJoinPredicate(ctx *context.PlanningContext, exprs []sqlparser.Expr, tree queryTree) (queryTree, error) {
 	if len(exprs) == 0 {
 		return tree, nil
 	}
@@ -512,7 +477,7 @@ func pushJoinPredicate(ctx *planningContext, exprs []sqlparser.Expr, tree queryT
 	}
 }
 
-func pushJoinPredicateOnRoute(ctx *planningContext, exprs []sqlparser.Expr, node *routeTree) (queryTree, error) {
+func pushJoinPredicateOnRoute(ctx *context.PlanningContext, exprs []sqlparser.Expr, node *routeTree) (queryTree, error) {
 	plan := node.clone().(*routeTree)
 	err := plan.addPredicate(ctx, exprs...)
 	if err != nil {
@@ -521,12 +486,12 @@ func pushJoinPredicateOnRoute(ctx *planningContext, exprs []sqlparser.Expr, node
 	return plan, nil
 }
 
-func pushJoinPredicateOnDerived(ctx *planningContext, exprs []sqlparser.Expr, node *derivedTree) (queryTree, error) {
+func pushJoinPredicateOnDerived(ctx *context.PlanningContext, exprs []sqlparser.Expr, node *derivedTree) (queryTree, error) {
 	plan := node.clone().(*derivedTree)
 
 	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
 	for _, expr := range exprs {
-		tblInfo, err := ctx.semTable.TableInfoForExpr(expr)
+		tblInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 		if err != nil {
 			return nil, err
 		}
@@ -546,7 +511,7 @@ func pushJoinPredicateOnDerived(ctx *planningContext, exprs []sqlparser.Expr, no
 	return plan, nil
 }
 
-func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node *joinTree) (queryTree, error) {
+func pushJoinPredicateOnJoin(ctx *context.PlanningContext, exprs []sqlparser.Expr, node *joinTree) (queryTree, error) {
 	node = node.clone().(*joinTree)
 
 	var rhsPreds []sqlparser.Expr
@@ -559,7 +524,7 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 		// side of the join tree, then we push the predicate there and do not break it into parts.
 		// In case a predicate has no dependencies, then it is pushed to both sides so that we can filter
 		// rows as early as possible making join cheaper on the vtgate level.
-		depsForExpr := ctx.semTable.RecursiveDeps(expr)
+		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
 		singleSideDeps := false
 		if depsForExpr.IsSolvedBy(node.lhs.tableID()) {
 			lhsPreds = append(lhsPreds, expr)
@@ -584,7 +549,7 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	}
 
 	if lhsColumns != nil && lhsVarsName != nil {
-		idxs, err := node.pushOutputColumns(lhsColumns, ctx.semTable)
+		idxs, err := node.pushOutputColumns(lhsColumns, ctx.SemTable)
 		if err != nil {
 			return nil, err
 		}
@@ -613,7 +578,7 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 }
 
 func breakExpressionInLHSandRHS(
-	ctx *planningContext,
+	ctx *context.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
 ) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
@@ -621,7 +586,7 @@ func breakExpressionInLHSandRHS(
 	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			deps := ctx.semTable.RecursiveDeps(node)
+			deps := ctx.SemTable.RecursiveDeps(node)
 			if deps.NumberOfTables() == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
@@ -634,7 +599,7 @@ func breakExpressionInLHSandRHS(
 				arg := sqlparser.NewArgument(bvName)
 				// we are replacing one of the sides of the comparison with an argument,
 				// but we don't want to lose the type information we have, so we copy it over
-				ctx.semTable.CopyExprInfo(node, arg)
+				ctx.SemTable.CopyExprInfo(node, arg)
 				cursor.Replace(arg)
 			}
 		}
@@ -643,11 +608,11 @@ func breakExpressionInLHSandRHS(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ctx.joinPredicates[expr] = append(ctx.joinPredicates[expr], rewrittenExpr)
+	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
 	return
 }
 
-func mergeOrJoin(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr, inner bool) (queryTree, error) {
+func mergeOrJoin(ctx *context.PlanningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr, inner bool) (queryTree, error) {
 	newTabletSet := lhs.tableID().Merge(rhs.tableID())
 
 	merger := func(a, b *routeTree) (*routeTree, error) {
@@ -679,7 +644,7 @@ type (
 	and removes the two inputs to this cheapest plan and instead adds the join.
 	As an optimization, it first only considers joining tables that have predicates defined between them
 */
-func greedySolve(ctx *planningContext, qg *abstract.QueryGraph) (queryTree, error) {
+func greedySolve(ctx *context.PlanningContext, qg *abstract.QueryGraph) (queryTree, error) {
 	joinTrees, err := seedPlanList(ctx, qg)
 	planCache := cacheMap{}
 	if err != nil {
@@ -693,7 +658,7 @@ func greedySolve(ctx *planningContext, qg *abstract.QueryGraph) (queryTree, erro
 	return tree, nil
 }
 
-func mergeJoinTrees(ctx *planningContext, qg *abstract.QueryGraph, joinTrees []queryTree, planCache cacheMap, crossJoinsOK bool) (queryTree, error) {
+func mergeJoinTrees(ctx *context.PlanningContext, qg *abstract.QueryGraph, joinTrees []queryTree, planCache cacheMap, crossJoinsOK bool) (queryTree, error) {
 	if len(joinTrees) == 0 {
 		return nil, nil
 	}
@@ -723,7 +688,7 @@ func mergeJoinTrees(ctx *planningContext, qg *abstract.QueryGraph, joinTrees []q
 	return joinTrees[0], nil
 }
 
-func (cm cacheMap) getJoinTreeFor(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr) (queryTree, error) {
+func (cm cacheMap) getJoinTreeFor(ctx *context.PlanningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr) (queryTree, error) {
 	solves := tableSetPair{left: lhs.tableID(), right: rhs.tableID()}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
@@ -739,7 +704,7 @@ func (cm cacheMap) getJoinTreeFor(ctx *planningContext, lhs, rhs queryTree, join
 }
 
 func findBestJoinTree(
-	ctx *planningContext,
+	ctx *context.PlanningContext,
 	qg *abstract.QueryGraph,
 	plans []queryTree,
 	planCache cacheMap,
@@ -781,7 +746,7 @@ func findBestJoinTree(
 	return bestPlan, lIdx, rIdx, nil
 }
 
-func leftToRightSolve(ctx *planningContext, qg *abstract.QueryGraph) (queryTree, error) {
+func leftToRightSolve(ctx *context.PlanningContext, qg *abstract.QueryGraph) (queryTree, error) {
 	plans, err := seedPlanList(ctx, qg)
 	if err != nil {
 		return nil, err
@@ -804,12 +769,12 @@ func leftToRightSolve(ctx *planningContext, qg *abstract.QueryGraph) (queryTree,
 }
 
 // seedPlanList returns a routeTree for each table in the qg
-func seedPlanList(ctx *planningContext, qg *abstract.QueryGraph) ([]queryTree, error) {
+func seedPlanList(ctx *context.PlanningContext, qg *abstract.QueryGraph) ([]queryTree, error) {
 	plans := make([]queryTree, len(qg.Tables))
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.Tables {
-		solves := ctx.semTable.TableSetFor(table.Alias)
+		solves := ctx.SemTable.TableSetFor(table.Alias)
 		plan, err := createRoutePlan(ctx, table, solves)
 		if err != nil {
 			return nil, err
@@ -826,9 +791,9 @@ func removeAt(plans []queryTree, idx int) []queryTree {
 	return append(plans[:idx], plans[idx+1:]...)
 }
 
-func createRoutePlan(ctx *planningContext, table *abstract.QueryTable, solves semantics.TableSet) (*routeTree, error) {
+func createRoutePlan(ctx *context.PlanningContext, table *abstract.QueryTable, solves semantics.TableSet) (*routeTree, error) {
 	if table.IsInfSchema {
-		ks, err := ctx.vschema.AnyKeyspace()
+		ks, err := ctx.VSchema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
@@ -845,14 +810,14 @@ func createRoutePlan(ctx *planningContext, table *abstract.QueryTable, solves se
 			}},
 			predicates: table.Predicates,
 		}
-		err = rp.findSysInfoRoutingPredicatesGen4(ctx.reservedVars)
+		err = rp.findSysInfoRoutingPredicatesGen4(ctx.ReservedVars)
 		if err != nil {
 			return nil, err
 		}
 
 		return rp, nil
 	}
-	vschemaTable, _, _, _, _, err := ctx.vschema.FindTableOrVindex(table.Table)
+	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(table.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -919,7 +884,7 @@ func createRoutePlan(ctx *planningContext, table *abstract.QueryTable, solves se
 	return plan, nil
 }
 
-func findColumnVindex(ctx *planningContext, a *routeTree, exp sqlparser.Expr) *vindexes.ColumnVindex {
+func findColumnVindex(ctx *context.PlanningContext, a *routeTree, exp sqlparser.Expr) *vindexes.ColumnVindex {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
@@ -931,12 +896,12 @@ func findColumnVindex(ctx *planningContext, a *routeTree, exp sqlparser.Expr) *v
 	// can be solved by any table in our routeTree a. If an equality expression can be solved,
 	// we check if the equality expression and our table share the same vindex, if they do:
 	// the method will return the associated vindexes.SingleColumn.
-	for _, expr := range ctx.semTable.GetExprAndEqualities(exp) {
+	for _, expr := range ctx.SemTable.GetExprAndEqualities(exp) {
 		col, isCol := expr.(*sqlparser.ColName)
 		if !isCol {
 			continue
 		}
-		leftDep := ctx.semTable.RecursiveDeps(expr)
+		leftDep := ctx.SemTable.RecursiveDeps(expr)
 		_ = visitRelations(a.tables, func(rel relation) (bool, error) {
 			rb, isRoute := rel.(*routeTable)
 			if !isRoute {
@@ -961,7 +926,7 @@ func findColumnVindex(ctx *planningContext, a *routeTree, exp sqlparser.Expr) *v
 	return colVindex
 }
 
-func canMergeOnFilter(ctx *planningContext, a, b *routeTree, predicate sqlparser.Expr) bool {
+func canMergeOnFilter(ctx *context.PlanningContext, a, b *routeTree, predicate sqlparser.Expr) bool {
 	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -987,7 +952,7 @@ func canMergeOnFilter(ctx *planningContext, a, b *routeTree, predicate sqlparser
 	return rVindex.Vindex == lVindex.Vindex
 }
 
-func canMergeOnFilters(ctx *planningContext, a, b *routeTree, joinPredicates []sqlparser.Expr) bool {
+func canMergeOnFilters(ctx *context.PlanningContext, a, b *routeTree, joinPredicates []sqlparser.Expr) bool {
 	for _, predicate := range joinPredicates {
 		for _, expr := range sqlparser.SplitAndExpression(nil, predicate) {
 			if canMergeOnFilter(ctx, a, b, expr) {
@@ -1000,7 +965,7 @@ func canMergeOnFilters(ctx *planningContext, a, b *routeTree, joinPredicates []s
 
 type mergeFunc func(a, b *routeTree) (*routeTree, error)
 
-func canMergeUnionPlans(ctx *planningContext, a, b *routeGen4) bool {
+func canMergeUnionPlans(ctx *context.PlanningContext, a, b *routeGen4) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -1027,7 +992,7 @@ func canMergeUnionPlans(ctx *planningContext, a, b *routeGen4) bool {
 	return false
 }
 
-func canMergeSubqueryPlans(ctx *planningContext, a, b *routeGen4) bool {
+func canMergeSubqueryPlans(ctx *context.PlanningContext, a, b *routeGen4) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -1081,7 +1046,7 @@ func canSelectDBAMerge(a, b *routeGen4) bool {
 		(len(b.eroute.SysTableTableSchema) == 0 && len(b.eroute.SysTableTableName) == 0)
 }
 
-func tryMerge(ctx *planningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
+func tryMerge(ctx *context.PlanningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
 	aRoute, bRoute := queryTreesToRoutes(a.clone(), b.clone())
 	if aRoute == nil || bRoute == nil {
 		return nil, nil
@@ -1272,12 +1237,12 @@ func findTables(deps semantics.TableSet, tables parenTables) (relation, relation
 	return nil, nil, tables
 }
 
-func createRoutePlanForOuter(ctx *planningContext, aRoute, bRoute *routeTree, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routeTree {
+func createRoutePlanForOuter(ctx *context.PlanningContext, aRoute, bRoute *routeTree, newTabletSet semantics.TableSet, joinPredicates []sqlparser.Expr) *routeTree {
 	// create relation slice with all tables
 	tables := bRoute.tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
-		deps := ctx.semTable.RecursiveDeps(predicate)
+		deps := ctx.SemTable.RecursiveDeps(predicate)
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
@@ -1310,12 +1275,12 @@ func createRoutePlanForOuter(ctx *planningContext, aRoute, bRoute *routeTree, ne
 	}
 }
 
-func gen4ValuesEqual(ctx *planningContext, a, b []sqlparser.Expr) bool {
+func gen4ValuesEqual(ctx *context.PlanningContext, a, b []sqlparser.Expr) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
-	// TODO: check semTable's columnEqualities for better plan
+	// TODO: check SemTable's columnEqualities for better plan
 
 	for i, aExpr := range a {
 		bExpr := b[i]
@@ -1326,7 +1291,7 @@ func gen4ValuesEqual(ctx *planningContext, a, b []sqlparser.Expr) bool {
 	return true
 }
 
-func gen4ValEqual(ctx *planningContext, a, b sqlparser.Expr) bool {
+func gen4ValEqual(ctx *context.PlanningContext, a, b sqlparser.Expr) bool {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
@@ -1334,7 +1299,7 @@ func gen4ValEqual(ctx *planningContext, a, b sqlparser.Expr) bool {
 				return false
 			}
 
-			return ctx.semTable.DirectDeps(a) == ctx.semTable.DirectDeps(b)
+			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
 		}
 	case sqlparser.Argument:
 		b, ok := b.(sqlparser.Argument)

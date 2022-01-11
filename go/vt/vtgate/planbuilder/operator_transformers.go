@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -36,7 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
+func transformOpToLogicalPlan(ctx *context.PlanningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *routeOp:
 		return transformRouteOpPlan(ctx, op)
@@ -55,7 +57,7 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformOpToLogicalPlan)", op)
 }
 
-func transformApplyJoinOpPlan(ctx *planningContext, n *physical.ApplyJoin) (logicalPlan, error) {
+func transformApplyJoinOpPlan(ctx *context.PlanningContext, n *physical.ApplyJoin) (logicalPlan, error) {
 	// TODO systay we should move the decision of which join to use to the greedy algorithm,
 	// and thus represented as a queryTree
 	// canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
@@ -103,7 +105,7 @@ func transformApplyJoinOpPlan(ctx *planningContext, n *physical.ApplyJoin) (logi
 	}, nil
 }
 
-func transformRouteOpPlan(ctx *planningContext, op *routeOp) (*routeGen4, error) {
+func transformRouteOpPlan(ctx *context.PlanningContext, op *routeOp) (*routeGen4, error) {
 	tableNames := getAllTableNames(op)
 
 	var singleColumn vindexes.SingleColumn
@@ -166,7 +168,7 @@ func getAllTableNames(op *routeOp) []string {
 	return tableNames
 }
 
-func transformUnionOpPlan(ctx *planningContext, op *physical.UnionOp) (logicalPlan, error) {
+func transformUnionOpPlan(ctx *context.PlanningContext, op *physical.UnionOp) (logicalPlan, error) {
 	var sources []logicalPlan
 	var err error
 	if op.Distinct {
@@ -204,7 +206,7 @@ func transformUnionOpPlan(ctx *planningContext, op *physical.UnionOp) (logicalPl
 
 }
 
-func transformAndMergeOp(ctx *planningContext, op *physical.UnionOp) (sources []logicalPlan, err error) {
+func transformAndMergeOp(ctx *context.PlanningContext, op *physical.UnionOp) (sources []logicalPlan, err error) {
 	for i, source := range op.Sources {
 		// first we go over all the operator inputs and turn them into logical plans,
 		// including horizon planning
@@ -250,7 +252,7 @@ func transformAndMergeOp(ctx *planningContext, op *physical.UnionOp) (sources []
 	return sources, nil
 }
 
-func transformAndMergeInOrderOp(ctx *planningContext, op *physical.UnionOp) (sources []logicalPlan, err error) {
+func transformAndMergeInOrderOp(ctx *context.PlanningContext, op *physical.UnionOp) (sources []logicalPlan, err error) {
 	// We go over all the input operators and turn them into logical plans
 	for i, source := range op.Sources {
 		plan, err := createLogicalPlanOp(ctx, source, op.SelectStmts[i])
@@ -276,7 +278,7 @@ func transformAndMergeInOrderOp(ctx *planningContext, op *physical.UnionOp) (sou
 	return sources, nil
 }
 
-func createLogicalPlanOp(ctx *planningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlanOp(ctx *context.PlanningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformOpToLogicalPlan(ctx, source)
 	if err != nil {
 		return nil, err
@@ -293,14 +295,14 @@ func createLogicalPlanOp(ctx *planningContext, source abstract.PhysicalOperator,
 	return plan, nil
 }
 
-func getCollationsForOp(ctx *planningContext, n *physical.UnionOp) []collations.ID {
+func getCollationsForOp(ctx *context.PlanningContext, n *physical.UnionOp) []collations.ID {
 	var colls []collations.ID
 	for _, expr := range n.SelectStmts[0].SelectExprs {
 		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil
 		}
-		typ := ctx.semTable.CollationFor(aliasedE.Expr)
+		typ := ctx.SemTable.CollationFor(aliasedE.Expr)
 		colls = append(colls, typ)
 	}
 	return colls

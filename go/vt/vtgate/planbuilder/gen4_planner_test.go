@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
 	"github.com/stretchr/testify/require"
@@ -275,7 +277,7 @@ func TestOptimizeQuery(t *testing.T) {
 			require.NoError(t, err)
 			err = queryRewrite(semTable, reservedVars, selStmt)
 			require.NoError(t, err)
-			ctx := newPlanningContext(reservedVars, semTable, vschema)
+			ctx := context.NewPlanningContext(reservedVars, semTable, vschema)
 			opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 			require.NoError(t, err)
 			err = opTree.CheckValid()

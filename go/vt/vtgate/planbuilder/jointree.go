@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -107,15 +108,15 @@ func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 	return outputColumns, nil
 }
 
-func (jp *joinTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (jp *joinTree) pushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	isPushed := false
-	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.lhs.tableID()) {
+	if ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(jp.lhs.tableID()) {
 		if err := jp.lhs.pushPredicate(ctx, expr); err != nil {
 			return err
 		}
 		isPushed = true
 	}
-	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
+	if ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
 		if err := jp.rhs.pushPredicate(ctx, expr); err != nil {
 			return err
 		}
@@ -127,15 +128,15 @@ func (jp *joinTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) err
 	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "add '%s' predicate not supported on cross-shard join query", sqlparser.String(expr))
 }
 
-func (jp *joinTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (jp *joinTree) removePredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	isRemoved := false
-	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.lhs.tableID()) {
+	if ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(jp.lhs.tableID()) {
 		if err := jp.lhs.removePredicate(ctx, expr); err != nil {
 			return err
 		}
 		isRemoved = true
 	}
-	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
+	if ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
 		if err := jp.rhs.removePredicate(ctx, expr); err != nil {
 			return err
 		}

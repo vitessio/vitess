@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -65,10 +66,10 @@ outer:
 	return idxs, nil
 }
 
-func (v *vindexTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (v *vindexTree) pushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add '%s' predicate not supported on vindex trees", sqlparser.String(expr))
 }
 
-func (v *vindexTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (v *vindexTree) removePredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "remove '%s' predicate not supported on vindex trees", sqlparser.String(expr))
 }

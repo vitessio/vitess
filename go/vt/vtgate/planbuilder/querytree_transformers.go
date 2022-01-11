@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -33,7 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *context.PlanningContext, tree queryTree) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routeTree:
 		return transformRoutePlan(ctx, n)
@@ -54,7 +56,7 @@ func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
 }
 
-func transformCorrelatedSubquery(ctx *planningContext, tree *correlatedSubqueryTree) (logicalPlan, error) {
+func transformCorrelatedSubquery(ctx *context.PlanningContext, tree *correlatedSubqueryTree) (logicalPlan, error) {
 	outer, err := transformToLogicalPlan(ctx, tree.outer)
 	if err != nil {
 		return nil, err
@@ -77,13 +79,13 @@ func pushDistinct(plan logicalPlan) {
 	}
 }
 
-func transformVindexTree(ctx *planningContext, n *vindexTree) (logicalPlan, error) {
+func transformVindexTree(ctx *context.PlanningContext, n *vindexTree) (logicalPlan, error) {
 	single, ok := n.vindex.(vindexes.SingleColumn)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
 	}
 
-	expr, err := evalengine.Convert(n.value, ctx.semTable)
+	expr, err := evalengine.Convert(n.value, ctx.SemTable)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +112,7 @@ func transformVindexTree(ctx *planningContext, n *vindexTree) (logicalPlan, erro
 	return plan, nil
 }
 
-func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, error) {
+func transformSubqueryTree(ctx *context.PlanningContext, n *subqueryTree) (logicalPlan, error) {
 	innerPlan, err := transformToLogicalPlan(ctx, n.inner)
 	if err != nil {
 		return nil, err
@@ -136,7 +138,7 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 	return plan, err
 }
 
-func mergeSubQueryPlan(ctx *planningContext, inner, outer logicalPlan, n *subqueryTree) logicalPlan {
+func mergeSubQueryPlan(ctx *context.PlanningContext, inner, outer logicalPlan, n *subqueryTree) logicalPlan {
 	iroute, ok := inner.(*routeGen4)
 	if !ok {
 		return nil
@@ -168,7 +170,7 @@ func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
 	return a
 }
 
-func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, error) {
+func transformDerivedPlan(ctx *context.PlanningContext, n *derivedTree) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased
@@ -213,7 +215,7 @@ func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, er
 	return plan, nil
 }
 
-func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logicalPlan, error) {
+func transformConcatenatePlan(ctx *context.PlanningContext, n *concatenateTree) (logicalPlan, error) {
 	var sources []logicalPlan
 	var err error
 	if n.distinct {
@@ -253,20 +255,20 @@ func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logical
 	return result, nil
 }
 
-func getCollationsFor(ctx *planningContext, n *concatenateTree) []collations.ID {
+func getCollationsFor(ctx *context.PlanningContext, n *concatenateTree) []collations.ID {
 	var colls []collations.ID
 	for _, expr := range n.selectStmts[0].SelectExprs {
 		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil
 		}
-		typ := ctx.semTable.CollationFor(aliasedE.Expr)
+		typ := ctx.SemTable.CollationFor(aliasedE.Expr)
 		colls = append(colls, typ)
 	}
 	return colls
 }
 
-func transformAndMergeInOrder(ctx *planningContext, n *concatenateTree) (sources []logicalPlan, err error) {
+func transformAndMergeInOrder(ctx *context.PlanningContext, n *concatenateTree) (sources []logicalPlan, err error) {
 	for i, source := range n.sources {
 		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
 		if err != nil {
@@ -287,7 +289,7 @@ func transformAndMergeInOrder(ctx *planningContext, n *concatenateTree) (sources
 	return sources, nil
 }
 
-func transformAndMerge(ctx *planningContext, n *concatenateTree) ([]logicalPlan, error) {
+func transformAndMerge(ctx *context.PlanningContext, n *concatenateTree) ([]logicalPlan, error) {
 	var sources []logicalPlan
 	for i, source := range n.sources {
 		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
@@ -331,7 +333,7 @@ func transformAndMerge(ctx *planningContext, n *concatenateTree) ([]logicalPlan,
 	return sources, nil
 }
 
-func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logicalPlan) logicalPlan {
+func mergeUnionLogicalPlans(ctx *context.PlanningContext, left logicalPlan, right logicalPlan) logicalPlan {
 	lroute, ok := left.(*routeGen4)
 	if !ok {
 		return nil
@@ -348,7 +350,7 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 	return nil
 }
 
-func createLogicalPlan(ctx *planningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlan(ctx *context.PlanningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformToLogicalPlan(ctx, source)
 	if err != nil {
 		return nil, err
@@ -365,7 +367,7 @@ func createLogicalPlan(ctx *planningContext, source queryTree, selStmt *sqlparse
 	return plan, nil
 }
 
-func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) {
+func transformRoutePlan(ctx *context.PlanningContext, n *routeTree) (*routeGen4, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -390,7 +392,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 					switch predicate.Left.(type) {
 					case *sqlparser.ColName:
 						if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
-							extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
+							extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
 							if extractedSubquery != nil {
 								extractedSubquery.SetArgName(engine.ListVarName)
 							}
@@ -463,7 +465,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 		SelectExprs: expressions,
 		From:        tablesForSelect,
 		Where:       where,
-		Comments:    ctx.semTable.Comments,
+		Comments:    ctx.SemTable.Comments,
 	}
 
 	replaceSubQuery(ctx, sel)
@@ -489,7 +491,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*routeGen4, error) 
 	}, nil
 }
 
-func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
+func transformJoinPlan(ctx *context.PlanningContext, n *joinTree) (logicalPlan, error) {
 	// TODO systay we should move the decision of which join to use to the greedy algorithm,
 	// and thus represented as a queryTree
 	canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
@@ -542,10 +544,10 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 // join predicate living in the right-hand side.
 // Hash joins are only supporting equality join predicates, which is why the join predicate
 // has to be an EqualOp.
-func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs joinColumnInfo, err error) {
+func canHashJoin(ctx *context.PlanningContext, n *joinTree) (canHash bool, lhs, rhs joinColumnInfo, err error) {
 	if len(n.predicatesToRemoveFromHashJoin) != 1 ||
 		n.leftJoin ||
-		!sqlparser.ExtractCommentDirectives(ctx.semTable.Comments).IsSet(sqlparser.DirectiveAllowHashJoin) {
+		!sqlparser.ExtractCommentDirectives(ctx.SemTable.Comments).IsSet(sqlparser.DirectiveAllowHashJoin) {
 		return
 	}
 	cmp, isCmp := n.predicatesToRemoveFromHashJoin[0].(*sqlparser.ComparisonExpr)
@@ -576,11 +578,11 @@ func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs join
 	}
 	lhs.offset = lhsKey
 
-	colType, found := ctx.semTable.ExprTypes[col]
+	colType, found := ctx.SemTable.ExprTypes[col]
 	if !found {
 		return
 	}
-	argType, found := ctx.semTable.ExprTypes[arg]
+	argType, found := ctx.SemTable.ExprTypes[arg]
 	if !found {
 		return
 	}
@@ -599,7 +601,7 @@ func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs join
 		rhs.typ = colType
 	}
 
-	columns, err := n.rhs.pushOutputColumns([]*sqlparser.ColName{col}, ctx.semTable)
+	columns, err := n.rhs.pushOutputColumns([]*sqlparser.ColName{col}, ctx.SemTable)
 	if err != nil {
 		return false, lhs, rhs, nil
 	}
@@ -706,8 +708,8 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func replaceSubQuery(ctx *planningContext, sel sqlparser.SelectStatement) {
-	extractedSubqueries := ctx.semTable.GetSubqueryNeedingRewrite()
+func replaceSubQuery(ctx *context.PlanningContext, sel sqlparser.SelectStatement) {
+	extractedSubqueries := ctx.SemTable.GetSubqueryNeedingRewrite()
 	if len(extractedSubqueries) == 0 {
 		return
 	}

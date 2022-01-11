@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 )
 
 type (
@@ -33,7 +34,7 @@ type (
 	}
 
 	simpleConverterLookup struct {
-		ctx  *planningContext
+		ctx  *context.PlanningContext
 		plan logicalPlan
 	}
 )
@@ -53,11 +54,11 @@ func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error
 }
 
 func (s *simpleConverterLookup) CollationIDLookup(expr sqlparser.Expr) collations.ID {
-	return s.ctx.semTable.CollationFor(expr)
+	return s.ctx.SemTable.CollationFor(expr)
 }
 
 // newFilter builds a new filter.
-func newFilter(ctx *planningContext, plan logicalPlan, expr sqlparser.Expr) (*filter, error) {
+func newFilter(ctx *context.PlanningContext, plan logicalPlan, expr sqlparser.Expr) (*filter, error) {
 	scl := &simpleConverterLookup{
 		ctx:  ctx,
 		plan: plan,
