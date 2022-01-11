@@ -41,7 +41,11 @@ func toSQL(ctx *context.PlanningContext, op abstract.PhysicalOperator) sqlparser
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *physical.Table:
-		qb.addTable(op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID())
+		s := op.QTable.Table.Qualifier.String()
+		if s != "information_schema" {
+			s = ""
+		}
+		qb.addTable(s, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID())
 		for _, pred := range op.QTable.Predicates {
 			qb.addPredicate(pred)
 		}
@@ -68,13 +72,6 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
 		}
-
-	// case *project:
-	// 	buildQuery(op.src, qb)
-	// 	qb.project(op.projections)
-	// case *vectorAggr:
-	// 	buildQuery(op.src, qb)
-	// 	qb.vectorGroupBy(op.groupBy, op.aggrF)
 	default:
 		panic(fmt.Sprintf("%T", op))
 	}
@@ -84,13 +81,17 @@ func (qb *queryBuilder) produce() {
 	sort.Sort(qb)
 }
 
-func (qb *queryBuilder) addTable(tableName, alias string, tableID semantics.TableSet) {
+func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet) {
 	if qb.sel == nil {
 		qb.sel = &sqlparser.Select{}
 	}
 	sel := qb.sel.(*sqlparser.Select)
+	tableExpr := sqlparser.TableName{
+		Name:      sqlparser.NewTableIdent(tableName),
+		Qualifier: sqlparser.NewTableIdent(db),
+	}
 	sel.From = append(sel.From, &sqlparser.AliasedTableExpr{
-		Expr:       sqlparser.TableName{Name: sqlparser.NewTableIdent(tableName)},
+		Expr:       tableExpr,
 		Partitions: nil,
 		As:         sqlparser.NewTableIdent(alias),
 		Hints:      nil,
@@ -212,25 +213,6 @@ func (qb *queryBuilder) hasTable(tableName string) bool {
 		}
 	}
 	return false
-}
-
-func (qb *queryBuilder) convertToDerivedTable() string {
-	sel := &sqlparser.Select{
-		From: []sqlparser.TableExpr{
-			&sqlparser.AliasedTableExpr{
-				Expr: &sqlparser.DerivedTable{
-					Select: qb.sel,
-				},
-				// TODO: use number generators for dt1
-				As: sqlparser.NewTableIdent("dt1"),
-				// TODO: also alias the column names to avoid collision with other tables
-			},
-		},
-		SelectExprs: sqlparser.SelectExprs{&sqlparser.StarExpr{}},
-	}
-	qb.sel = sel
-
-	return "dt1"
 }
 
 type queryBuilder struct {

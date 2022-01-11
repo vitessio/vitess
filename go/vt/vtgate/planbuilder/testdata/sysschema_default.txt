@@ -72,6 +72,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # system schema query as a derived table
 "SELECT * from (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1) x"
@@ -107,3 +108,4 @@ Gen4 plan same as above
     "Table": "information_schema.schemata"
   }
 }
+Gen4++
