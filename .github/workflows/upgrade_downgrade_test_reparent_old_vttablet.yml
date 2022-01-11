@@ -1,10 +1,10 @@
-name: Upgrade Downgrade Testing Reparent
+name: Upgrade Downgrade Testing Reparent Old VTTablet
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Reparent Old VTTablet')
   cancel-in-progress: true
 
 # This test ensures that our end-to-end tests work using Vitess components
@@ -144,46 +144,12 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
-    # Running a test with vtctl and vttablet using version n
-    - name: Run reparent tests (vtctl=N, vttablet=N)
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
-
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_reparent
-
-    # Swap the binaries in the bin. Use vtctl version n-1 and keep vttablet at version n
-    - name: Use last release's Vtctl
-      run: |
-        source build.env
-
-        rm -f $PWD/bin/vtctl $PWD/bin/vtctld $PWD/bin/vtctlclient $PWD/bin/vtctldclient
-        cp /tmp/vitess-build-other/bin/vtctl $PWD/bin/vtctl
-        cp /tmp/vitess-build-other/bin/vtctld $PWD/bin/vtctld
-        cp /tmp/vitess-build-other/bin/vtctlclient $PWD/bin/vtctlclient
-        cp /tmp/vitess-build-other/bin/vtctldclient $PWD/bin/vtctldclient
-        vtctl --version
-
-    # Running a test with vtctl at version n-1 and vttablet at version n
-    - name: Run reparent tests (vtctl=N-1, vttablet=N)
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
-
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_reparent
-
-    # Swap the binaries again. This time, vtctl will be at version n, and vttablet will be at version n-1
+    # Swap the binaries. Use vtctl version n and keep vttablet at version n-1
     - name: Use current version Vtctl, and other version VTTablet
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtctl $PWD/bin/vttablet $PWD/bin/vtctld $PWD/bin/vtctlclient $PWD/bin/vtctldclient
-        cp /tmp/vitess-build-current/bin/vtctl $PWD/bin/vtctl
-        cp /tmp/vitess-build-current/bin/vtctld $PWD/bin/vtctld
-        cp /tmp/vitess-build-current/bin/vtctlclient $PWD/bin/vtctlclient
-        cp /tmp/vitess-build-current/bin/vtctldclient $PWD/bin/vtctldclient
+        rm -f $PWD/bin/vtctl $PWD/bin/vttablet
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         vtctl --version
         vttablet --version
