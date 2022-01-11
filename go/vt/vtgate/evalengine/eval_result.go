@@ -32,16 +32,37 @@ import (
 )
 
 type (
+	// EvalResult is a lazily computed result of an evaluation
 	EvalResult struct {
+		// expr is the expression that will be eventually evaluated to fill the other fields.
+		// If expr is set, it means that this EvalResult has not been evaluated yet, and the
+		// remaining fields are not valid. Once the evaluation engine calls EvalResult.resolve(),
+		// the other fields will be set based on the evaluation result of expr and expr will be
+		// set to nil, to mark this result as fully resolved.
 		expr Expr
-		env  *ExpressionEnv
-
-		typ3       querypb.Type
-		collation4 collations.TypedCollation
-		numval3    uint64
-		bytes3     []byte
-		tuple3     *[]EvalResult
-		decimal3   *decimalResult
+		// env is the ExpressionEnv in which the expr is being evaluated
+		env *ExpressionEnv
+		// type_ is the SQL type of this result.
+		// Must not be accessed directly: call EvalResult.typeof() instead.
+		// For most expression types, this is known ahead of time and calling typeof() does not require
+		// an evaluation, so the type of an expression can be known without evaluating it.
+		type_ querypb.Type
+		// collation_ is the collation of this result. It may be uninitialized.
+		// Must not be accessed directly: call EvalResult.collation() instead.
+		collation_ collations.TypedCollation
+		// numeric_ is the numeric value of this result. It may be uninitialized.
+		// Must not be accessed directly: call one of the numeric getters for EvalResult instead.
+		numeric_ uint64
+		// bytes_ is the raw byte value this result. It may be uninitialized.
+		// Must not be accessed directly: call EvalResult.bytes() instead.
+		bytes_ []byte
+		// tuple_ is the list of all results contained in this result, if the result is a tuple.
+		// It may be uninitialized.
+		// Must not be accessed directly: call EvalResult.tuple() instead.
+		tuple_ *[]EvalResult
+		// decimal_ is the numeric decimal for this result. It may be uninitialized.
+		// Must not be accessed directly: call EvalResult.decimal() instead.
+		decimal_ *decimalResult
 	}
 
 	decimalResult struct {
@@ -50,21 +71,26 @@ type (
 	}
 )
 
+// init initializes this EvalResult with the given expr. The actual value of this result will be
+// calculated lazily when required, and will be the output of evaluating the expr.
 func (er *EvalResult) init(env *ExpressionEnv, expr Expr) {
 	er.expr = expr
 	er.env = env
-	er.typ3 = expr.typeof(env)
+	er.type_ = expr.typeof(env)
 }
 
 const typecheckEval = false
 
+// resolve computes the final value of this EvalResult by evaluating the expr embedded in it.
+// This function should not be called directly: it will be called by the evaluation engine
+// lazily when it needs to know the value of this result and not earlier.
 func (er *EvalResult) resolve() {
 	if er.expr != nil {
 		if typecheckEval {
-			before := er.typ3
+			before := er.type_
 			er.expr.eval(er.env, er)
-			if er.typ3 != before {
-				panic(fmt.Sprintf("did not pre-compute the right type: %v before evaluation, %v after", before.String(), er.typ3.String()))
+			if er.type_ != before {
+				panic(fmt.Sprintf("did not pre-compute the right type: %v before evaluation, %v after", before.String(), er.type_.String()))
 			}
 		} else {
 			er.expr.eval(er.env, er)
@@ -74,50 +100,50 @@ func (er *EvalResult) resolve() {
 }
 
 func (er *EvalResult) typeof() querypb.Type {
-	if er.typ3 < 0 {
+	if er.type_ < 0 {
 		er.resolve()
 	}
-	return er.typ3
+	return er.type_
 }
 
 func (er *EvalResult) collation() collations.TypedCollation {
 	er.resolve()
-	return er.collation4
+	return er.collation_
 }
 
 func (er *EvalResult) float64() float64 {
 	er.resolve()
-	return math.Float64frombits(er.numval3)
+	return math.Float64frombits(er.numeric_)
 }
 
 func (er *EvalResult) uint64() uint64 {
 	er.resolve()
-	return er.numval3
+	return er.numeric_
 }
 
 func (er *EvalResult) int64() int64 {
 	er.resolve()
-	return int64(er.numval3)
+	return int64(er.numeric_)
 }
 
 func (er *EvalResult) decimal() *decimalResult {
 	er.resolve()
-	return er.decimal3
+	return er.decimal_
 }
 
 func (er *EvalResult) tuple() []EvalResult {
 	er.resolve()
-	return *er.tuple3
+	return *er.tuple_
 }
 
 func (er *EvalResult) bytes() []byte {
 	er.resolve()
-	return er.bytes3
+	return er.bytes_
 }
 
 func (er *EvalResult) string() string {
 	er.resolve()
-	return hack.String(er.bytes3)
+	return hack.String(er.bytes_)
 }
 
 func (er *EvalResult) value() sqltypes.Value {
@@ -129,23 +155,23 @@ func (er *EvalResult) null() bool {
 }
 
 func (er *EvalResult) setNull() {
-	er.typ3 = sqltypes.Null
-	er.collation4 = collationNull
+	er.type_ = sqltypes.Null
+	er.collation_ = collationNull
 }
 
 var mysql8 = true
 
 func (er *EvalResult) setBool(b bool) {
-	er.collation4 = collationNumeric
+	er.collation_ = collationNumeric
 	if mysql8 {
-		er.typ3 = sqltypes.Uint64
+		er.type_ = sqltypes.Uint64
 	} else {
-		er.typ3 = sqltypes.Int64
+		er.type_ = sqltypes.Int64
 	}
 	if b {
-		er.numval3 = 1
+		er.numeric_ = 1
 	} else {
-		er.numval3 = 0
+		er.numeric_ = 0
 	}
 }
 
@@ -158,52 +184,52 @@ func (er *EvalResult) setBoolean(b boolean) {
 }
 
 func (er *EvalResult) setRaw(typ querypb.Type, raw []byte, coll collations.TypedCollation) {
-	er.typ3 = typ
-	er.bytes3 = raw
-	er.collation4 = coll
+	er.type_ = typ
+	er.bytes_ = raw
+	er.collation_ = coll
 }
 
 func (er *EvalResult) setInt64(i int64) {
-	er.typ3 = sqltypes.Int64
-	er.numval3 = uint64(i)
-	er.collation4 = collationNumeric
+	er.type_ = sqltypes.Int64
+	er.numeric_ = uint64(i)
+	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setUint64(u uint64) {
-	er.typ3 = sqltypes.Uint64
-	er.numval3 = u
-	er.collation4 = collationNumeric
+	er.type_ = sqltypes.Uint64
+	er.numeric_ = u
+	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setFloat(f float64) {
-	er.typ3 = sqltypes.Float64
-	er.numval3 = math.Float64bits(f)
-	er.collation4 = collationNumeric
+	er.type_ = sqltypes.Float64
+	er.numeric_ = math.Float64bits(f)
+	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setDecimal(dec *decimalResult) {
-	er.typ3 = sqltypes.Decimal
-	er.decimal3 = dec
-	er.collation4 = collationNumeric
+	er.type_ = sqltypes.Decimal
+	er.decimal_ = dec
+	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setTuple(t []EvalResult) {
-	er.typ3 = querypb.Type_TUPLE
-	er.tuple3 = &t
-	er.collation4 = collations.TypedCollation{}
+	er.type_ = querypb.Type_TUPLE
+	er.tuple_ = &t
+	er.collation_ = collations.TypedCollation{}
 }
 
 func (er *EvalResult) replaceBytes(b []byte, collation collations.TypedCollation) {
-	er.bytes3 = b
-	er.collation4 = collation
+	er.bytes_ = b
+	er.collation_ = collation
 }
 
 func (er *EvalResult) replaceCollationID(collation collations.ID) {
-	er.collation4.Collation = collation
+	er.collation_.Collation = collation
 }
 
 func (er *EvalResult) replaceCollation(collation collations.TypedCollation) {
-	er.collation4 = collation
+	er.collation_ = collation
 }
 
 func (er *EvalResult) setValue(v sqltypes.Value) error {
@@ -276,7 +302,7 @@ func (er *EvalResult) Value() sqltypes.Value {
 	if er.expr != nil {
 		panic("did not resolve EvalResult after evaluation")
 	}
-	return er.toSQLValue(er.typ3)
+	return er.toSQLValue(er.type_)
 }
 
 // TupleValues allows for retrieval of the value we expose for public consumption
@@ -284,11 +310,11 @@ func (er *EvalResult) TupleValues() []sqltypes.Value {
 	if er.expr != nil {
 		panic("did not resolve EvalResult after evaluation")
 	}
-	if er.tuple3 == nil {
+	if er.tuple_ == nil {
 		return nil
 	}
 
-	values := *er.tuple3
+	values := *er.tuple_
 	result := make([]sqltypes.Value, 0, len(values))
 	for _, val := range values {
 		result = append(result, val.value())
@@ -298,11 +324,11 @@ func (er *EvalResult) TupleValues() []sqltypes.Value {
 
 // debugString prints the entire EvalResult in a debug format
 func (er *EvalResult) debugString() string {
-	return fmt.Sprintf("(%s) 0x%08x %s", querypb.Type_name[int32(er.typ3)], er.numval3, er.bytes3)
+	return fmt.Sprintf("(%s) 0x%08x %s", querypb.Type_name[int32(er.type_)], er.numeric_, er.bytes_)
 }
 
-//ToBooleanStrict is used when the casting to a boolean has to be minimally forgiving,
-//such as when assigning to a system variable that is expected to be a boolean
+// ToBooleanStrict is used when the casting to a boolean has to be minimally forgiving,
+// such as when assigning to a system variable that is expected to be a boolean
 func (er *EvalResult) ToBooleanStrict() (bool, error) {
 	if er.expr != nil {
 		panic("did not resolve EvalResult after evaluation")
@@ -319,7 +345,7 @@ func (er *EvalResult) ToBooleanStrict() (bool, error) {
 		}
 	}
 
-	switch er.typ3 {
+	switch er.type_ {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 		return intToBool(er.uint64())
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
@@ -344,7 +370,7 @@ func (er *EvalResult) textual() bool {
 }
 
 func (er *EvalResult) nonzero() boolean {
-	switch er.typ3 {
+	switch er.type_ {
 	case sqltypes.Null:
 		return boolNULL
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64, sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
