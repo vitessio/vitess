@@ -70,7 +70,7 @@ func (f *formatter) formatBinary(left Expr, op string, right Expr, depth int) {
 
 func (l *Literal) format(w *formatter, depth int) {
 	w.Indent(depth)
-	switch l.Val.typ {
+	switch l.Val.typeof() {
 	case querypb.Type_TUPLE:
 		w.WriteByte('(')
 		for i, val := range l.Val.TupleValues() {
