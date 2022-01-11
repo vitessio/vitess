@@ -400,6 +400,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
@@ -475,6 +476,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"

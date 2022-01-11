@@ -124,31 +124,9 @@ func seedOperatorList(ctx *context.PlanningContext, qg *abstract.QueryGraph) ([]
 }
 
 func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTable, solves semantics.TableSet) (*Route, error) {
-	// if table.IsInfSchema {
-	//	ks, err := ctx.vschema.AnyKeyspace()
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	rp := &routeTree{
-	//		RouteOpCode: engine.SelectDBA,
-	//		solved:      solves,
-	//		keyspace:    ks,
-	//		tables: []relation{&routeTable{
-	//			qtable: table,
-	//			vtable: &vindexes.Table{
-	//				Name:     table.Table.Name,
-	//				Keyspace: ks,
-	//			},
-	//		}},
-	//		predicates: table.Predicates,
-	//	}
-	//	err = rp.findSysInfoRoutingPredicatesGen4(ctx.ReservedVars)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	return rp, nil
-	// }
+	if table.IsInfSchema {
+		return createInfSchemaRoute(ctx, table)
+	}
 	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(table.Table)
 	if err != nil {
 		return nil, err
@@ -215,6 +193,52 @@ func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTabl
 	}
 
 	return plan, nil
+}
+
+func createInfSchemaRoute(ctx *context.PlanningContext, table *abstract.QueryTable) (*Route, error) {
+	ks, err := ctx.VSchema.AnyKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	var src abstract.PhysicalOperator
+	src = &Table{
+		QTable: table,
+		VTable: &vindexes.Table{
+			Name:     table.Table.Name,
+			Keyspace: ks,
+		},
+	}
+	if len(table.Predicates) > 0 {
+		src = &Filter{
+			Source:     src,
+			Predicates: table.Predicates,
+		}
+	}
+	r := &Route{
+		RouteOpCode: engine.SelectDBA,
+		Source:      src,
+		Keyspace:    ks,
+	}
+	for _, pred := range table.Predicates {
+		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, ctx.ReservedVars)
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			// we didn't find a predicate to use for routing, continue to look for next predicate
+			continue
+		}
+
+		if isTableSchema {
+			r.SysTableTableSchema = append(r.SysTableTableSchema, out)
+		} else {
+			if r.SysTableTableName == nil {
+				r.SysTableTableName = map[string]evalengine.Expr{}
+			}
+			r.SysTableTableName[bvName] = out
+		}
+	}
+	return r, nil
 }
 
 func mergeRouteOps(ctx *context.PlanningContext, qg *abstract.QueryGraph, physicalOps []abstract.PhysicalOperator, planCache opCacheMap, crossJoinsOK bool) (abstract.PhysicalOperator, error) {

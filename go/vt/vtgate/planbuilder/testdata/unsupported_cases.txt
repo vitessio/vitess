@@ -654,6 +654,7 @@ Gen4++
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
 "unsupported: '*' expression in cross-shard query"
 Gen4 plan same as above
+Gen4++
 
 # outer and inner subquery route reference the same "uu.id" name
 # but they refer to different things. The first reference is to the outermost query,

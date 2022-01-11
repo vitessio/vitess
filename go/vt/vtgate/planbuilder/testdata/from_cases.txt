@@ -2538,6 +2538,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # join of normal table with information_schema
 "select unsharded.foo from unsharded join information_schema.a"
@@ -2576,6 +2577,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # wire-up on join with cross-shard derived table
 "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id"
