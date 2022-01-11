@@ -68,19 +68,9 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 
 // typeof implements the Expr interface
 func (b *ArithmeticExpr) typeof(env *ExpressionEnv) querypb.Type {
-	/*
-		ltype, err := b.Left.typeof(env)
-		if err != nil {
-			return 0, err
-		}
-		rtype, err := b.Right.typeof(env)
-		if err != nil {
-			return 0, err
-		}
-		typ := mergeNumericalTypes(ltype, rtype)
-		return b.Op.typeof(typ), nil
-	*/
-	// TODO: make this less aggressive
+	// TODO: this is returning an unknown type for this arithmetic expression;
+	// for some cases, it may be possible to calculate the resulting type
+	// of the expression ahead of time, making the evaluation lazier.
 	return -1
 }
 

@@ -139,20 +139,20 @@ func (cached *EvalResult) CachedSize(alloc bool) int64 {
 	}
 	// field env *vitess.io/vitess/go/vt/vtgate/evalengine.ExpressionEnv
 	size += cached.env.CachedSize(true)
-	// field bytes3 []byte
+	// field bytes_ []byte
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.bytes3)))
+		size += hack.RuntimeAllocSize(int64(cap(cached.bytes_)))
 	}
-	// field tuple3 *[]vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
-	if cached.tuple3 != nil {
+	// field tuple_ *[]vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
+	if cached.tuple_ != nil {
 		size += int64(24)
-		size += hack.RuntimeAllocSize(int64(cap(*cached.tuple3)) * int64(80))
-		for _, elem := range *cached.tuple3 {
+		size += hack.RuntimeAllocSize(int64(cap(*cached.tuple_)) * int64(80))
+		for _, elem := range *cached.tuple_ {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field decimal3 *vitess.io/vitess/go/vt/vtgate/evalengine.decimalResult
-	size += cached.decimal3.CachedSize(true)
+	// field decimal_ *vitess.io/vitess/go/vt/vtgate/evalengine.decimalResult
+	size += cached.decimal_.CachedSize(true)
 	return size
 }
 

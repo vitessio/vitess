@@ -333,10 +333,10 @@ func mergeCollations(left, right *EvalResult) error {
 		return err
 	}
 	if coerceLeft != nil {
-		left.bytes3, _ = coerceLeft(nil, left.bytes())
+		left.bytes_, _ = coerceLeft(nil, left.bytes())
 	}
 	if coerceRight != nil {
-		right.bytes3, _ = coerceRight(nil, right.bytes())
+		right.bytes_, _ = coerceRight(nil, right.bytes())
 	}
 	left.replaceCollation(tc)
 	right.replaceCollation(tc)
