@@ -34,16 +34,12 @@ var collationNumeric = collations.TypedCollation{
 	Repertoire:   collations.RepertoireASCII,
 }
 
-func (c *CollateExpr) eval(env *ExpressionEnv) (EvalResult, error) {
-	res, err := c.Inner.eval(env)
-	if err != nil {
-		return EvalResult{}, err
+func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
+	out.init(env, c.Inner)
+	if err := collations.Local().EnsureCollate(out.collation().Collation, c.TypedCollation.Collation); err != nil {
+		throwEvalError(vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error()))
 	}
-	if err := collations.Local().EnsureCollate(res.collation.Collation, c.TypedCollation.Collation); err != nil {
-		return EvalResult{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
-	}
-	res.collation = c.TypedCollation
-	return res, nil
+	out.replaceCollation(c.TypedCollation)
 }
 
 func (c *CollateExpr) collation() collations.TypedCollation {
@@ -56,7 +52,7 @@ func (t TupleExpr) collation() collations.TypedCollation {
 }
 
 func (l *Literal) collation() collations.TypedCollation {
-	return l.Val.collation
+	return l.Val.collation()
 }
 
 func (bv *BindVariable) collation() collations.TypedCollation {

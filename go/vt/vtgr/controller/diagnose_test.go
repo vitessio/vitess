@@ -92,7 +92,7 @@ func TestShardIsHealthy(t *testing.T) {
 		}).
 		AnyTimes()
 	tmc.EXPECT().Ping(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	cfg := &config.VTGRConfig{BootstrapGroupSize: 3, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 	shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 	shard.refreshTabletsInShardLocked(ctx)
 	diagnose, _ := shard.Diagnose(ctx)
@@ -226,7 +226,7 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 				Return(tablets, nil)
 
 			ctx := context.Background()
-			cfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			shard.refreshTabletsInShardLocked(ctx)
 			diagnose, err := shard.Diagnose(ctx)
@@ -242,8 +242,8 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 }
 
 func TestMysqlIssueDiagnoses(t *testing.T) {
-	cfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	disableProtectionCfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, DisableReadOnlyProtection: true, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	cfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	disableProtectionCfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, DisableReadOnlyProtection: true, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 	*heartbeatThreshold = 10
 	defer func() {
 		*heartbeatThreshold = math.MaxInt64
@@ -658,7 +658,7 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 }
 
 func TestDiagnoseWithInactive(t *testing.T) {
-	cfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	cfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 	type data struct {
 		alias      string
 		groupName  string

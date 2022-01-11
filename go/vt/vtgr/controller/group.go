@@ -39,10 +39,13 @@ var (
 
 // SQLGroup contains views from all the nodes within the shard
 type SQLGroup struct {
-	views              []*db.GroupView
-	resolvedView       *ResolvedView
-	logger             *log.Logger
-	size               int
+	views                 []*db.GroupView
+	resolvedView          *ResolvedView
+	logger                *log.Logger
+	expectedBootstrapSize int
+	// rebootstrapSize is init to 0
+	// when it is not 0, we allow some nodes to be unhealthy during a rebootstrap
+	rebootstrapSize    int
 	singlePrimary      bool
 	heartbeatThreshold int
 	statsTags          []string
@@ -52,11 +55,12 @@ type SQLGroup struct {
 // NewSQLGroup creates a new SQLGroup
 func NewSQLGroup(size int, singlePrimary bool, keyspace, shard string) *SQLGroup {
 	return &SQLGroup{
-		size:               size,
-		singlePrimary:      singlePrimary,
-		statsTags:          []string{keyspace, shard},
-		logger:             log.NewVTGRLogger(keyspace, shard),
-		heartbeatThreshold: *heartbeatThreshold,
+		expectedBootstrapSize: size,
+		rebootstrapSize:       0,
+		singlePrimary:         singlePrimary,
+		statsTags:             []string{keyspace, shard},
+		logger:                log.NewVTGRLogger(keyspace, shard),
+		heartbeatThreshold:    *heartbeatThreshold,
 	}
 }
 
@@ -176,10 +180,25 @@ func (group *SQLGroup) IsSafeToBootstrap() bool {
 	defer group.Unlock()
 	// for bootstrap we require group at least has quorum number of views
 	// this is to make sure we don't bootstrap a group improperly
-	if len(group.views) < group.size {
-		group.logger.Errorf("[sql_group] cannot bootstrap because we only have %v views | expected %v", len(group.views), group.size)
+	if len(group.views) < group.expectedBootstrapSize {
+		group.logger.Errorf("[sql_group] cannot bootstrap because we only have %v views | expected %v", len(group.views), group.expectedBootstrapSize)
 		return false
 	}
+	return group.isSafeToRebootstrapLocked()
+}
+
+// IsSafeToRebootstrap checks if it is safe to rebootstrap a group
+// It does not check group size as IsSafeToBootstrap, since when we
+// reach here it means VTGR already checked there were group expectedBootstrapSize
+// number of nodes in topo server, therefore we just rebootstrap
+// as long as we can reach all the nodes in topo server
+func (group *SQLGroup) IsSafeToRebootstrap() bool {
+	group.Lock()
+	defer group.Unlock()
+	return group.isSafeToRebootstrapLocked()
+}
+
+func (group *SQLGroup) isSafeToRebootstrapLocked() bool {
 	// we think it is safe to bootstrap a group if all the views don't have a primary host
 	host, port, _ := group.getPrimaryLocked()
 	if host != "" || port != 0 {
@@ -413,8 +432,4 @@ func (group *SQLGroup) ToString() string {
 		}
 	}
 	return sb.String()
-}
-
-func (group *SQLGroup) quorum() int {
-	return group.size/2 + 1
 }

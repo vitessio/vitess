@@ -124,47 +124,32 @@ func (left boolean) xor(right boolean) boolean {
 	}
 }
 
-func (b boolean) evalResult() EvalResult {
-	if b == boolNULL {
-		return resultNull
-	}
-	return evalResultBool(b == boolTrue)
+func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
+	var inner EvalResult
+	inner.init(env, n.Inner)
+	out.setBoolean(inner.nonzero().not())
 }
 
-func (n *NotExpr) eval(env *ExpressionEnv) (EvalResult, error) {
-	res, err := n.Inner.eval(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return res.nonzero().not().evalResult(), nil
-}
-
-func (n *NotExpr) typeof(*ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_UINT64, nil
+func (n *NotExpr) typeof(*ExpressionEnv) querypb.Type {
+	return querypb.Type_UINT64
 }
 
 func (n *NotExpr) collation() collations.TypedCollation {
 	return collationNumeric
 }
 
-func (l *LogicalExpr) eval(env *ExpressionEnv) (EvalResult, error) {
-	lVal, err := l.Left.eval(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := l.Right.eval(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if lVal.typ == querypb.Type_TUPLE || rVal.typ == querypb.Type_TUPLE {
+func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
+	var left, right EvalResult
+	left.init(env, l.Left)
+	right.init(env, l.Right)
+	if left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
 		panic("did not typecheck tuples")
-		// return EvalResult{}, cardinalityError(1)
 	}
-	return l.op(lVal.nonzero(), rVal.nonzero()).evalResult(), nil
+	out.setBoolean(l.op(left.nonzero(), right.nonzero()))
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_UINT64, nil
+func (l *LogicalExpr) typeof(env *ExpressionEnv) querypb.Type {
+	return querypb.Type_UINT64
 }
 
 func (n *LogicalExpr) collation() collations.TypedCollation {
