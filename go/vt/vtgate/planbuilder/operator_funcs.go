@@ -79,7 +79,7 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 			if err != nil {
 				return nil, err
 			}
-			out, idxs, err := PushOutputColumns(ctx, op.LHS, cols)
+			out, idxs, err := PushOutputColumns(ctx, op.LHS, cols...)
 			if err != nil {
 				return nil, err
 			}
@@ -111,10 +111,10 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 	}
 }
 
-func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, columns []*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
+func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *routeOp:
-		retOp, offsets, err := PushOutputColumns(ctx, op.source, columns)
+		retOp, offsets, err := PushOutputColumns(ctx, op.source, columns...)
 		op.source = retOp
 		return op, offsets, err
 	case *applyJoin:
@@ -130,12 +130,12 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 				toTheLeft = append(toTheLeft, false)
 			}
 		}
-		out, lhsOffset, err := PushOutputColumns(ctx, op.LHS, lhs)
+		out, lhsOffset, err := PushOutputColumns(ctx, op.LHS, lhs...)
 		if err != nil {
 			return nil, nil, err
 		}
 		op.LHS = out
-		out, rhsOffset, err := PushOutputColumns(ctx, op.RHS, rhs)
+		out, rhsOffset, err := PushOutputColumns(ctx, op.RHS, rhs...)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -163,7 +163,7 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 		}
 		return op, offsets, nil
 	case *filterOp:
-		return PushOutputColumns(ctx, op.source, columns)
+		return PushOutputColumns(ctx, op.source, columns...)
 	case *vindexOp:
 		idx, err := op.pushOutputColumns(columns)
 		return op, idx, err
