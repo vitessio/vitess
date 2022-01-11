@@ -48,7 +48,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -63,6 +63,11 @@ type accessType int
 const (
 	allowWrites = accessType(iota)
 	disallowWrites
+
+	// number of LOCK TABLES cycles to perform on the sources during SwitchWrites
+	lockTablesCycles = 2
+	// time to wait between LOCK TABLES cycles on the sources during SwitchWrites
+	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -505,19 +510,18 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		}
 
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-			lockTablesCount := 2
-			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCount)
+			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCycles)
 			// Doing this twice with a pause in-between to catch any writes that may have raced in between
 			// the tablet's deny list check and the first mysqld side table lock.
-			for cnt := 1; cnt <= lockTablesCount; cnt++ {
+			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
 				if err := ts.executeLockTablesOnSource(ctx); err != nil {
-					ts.Logger().Errorf("Failed to execute LOCK TABLES (attempt %d of %d) on sources: %v", cnt, lockTablesCount, err)
+					ts.Logger().Errorf("Failed to execute LOCK TABLES (attempt %d of %d) on sources: %v", cnt, lockTablesCycles, err)
 					sw.cancelMigration(ctx, sm)
 					return 0, nil, err
 				}
 				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
 				// and thus the locks released.
-				time.Sleep(1 * time.Second)
+				time.Sleep(lockTablesCycleDelay)
 			}
 		}
 
@@ -1021,8 +1025,8 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 // is closed when the LOCK TABLES statement returns, so we immediately release the LOCKs.
 func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error {
 	ts.Logger().Infof("Locking (and then immediately unlocking) the following tables on source keyspace %v: %v", ts.SourceKeyspaceName(), ts.Tables())
-	if ts.Tables() == nil || len(ts.Tables()) == 0 {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "no tables found in the source keyspace %v associated with the %s workflow", ts.SourceKeyspaceName(), ts.WorkflowName())
+	if len(ts.Tables()) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no tables found in the source keyspace %v associated with the %s workflow", ts.SourceKeyspaceName(), ts.WorkflowName())
 	}
 
 	sb := strings.Builder{}
@@ -1036,7 +1040,7 @@ func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error 
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		primary := source.GetPrimary()
 		if primary == nil {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
 		}
 		tablet := primary.Tablet
 		_, err := ts.wr.ExecuteFetchAsDba(ctx, tablet.Alias, lockStmt, 1, false, true)

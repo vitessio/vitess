@@ -392,7 +392,6 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // LockTables is part of the tmclient.TabletManagerClient interface.
-// FLUSH TABLES WITH READ LOCK is used.
 func (client *Client) LockTables(ctx context.Context, tablet *topodatapb.Tablet) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
