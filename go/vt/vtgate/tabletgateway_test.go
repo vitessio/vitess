@@ -194,8 +194,9 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 		Shard:      shard,
 		TabletType: tabletType,
 	}
+	ts := &fakeTopoServer{}
 	hc := discovery.NewFakeHealthCheck(nil)
-	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
+	tg := NewTabletGateway(context.Background(), hc, ts, "cell")
 
 	// no tablet
 	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
