@@ -6,10 +6,10 @@ This patch is providing an update regarding the Apache Log4j security vulnerabil
 
 ## Known Issues
 
-- A critical vulnerability [CVE-2021-44228](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44228) in the Apache Log4j logging library was disclosed on Dec 9.
-  The project provided release `2.15.0` with a patch that mitigates the impact of this CVE. It was quickly found that the initial patch was insufficient, and an additional CVE
-  [CVE-2021-45046](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-45046) followed.
-  This has been fixed in release `2.16.0`. This release, `v12.0.1`, contains the initial patch by upgrading Log4j to `2.15.0`, we encourage you to use `v12.0.2` instead, which contains the latest patch for the vulnerability.
+* A critical vulnerability CVE-2021-44228 in the Apache Log4j logging library was disclosed on Dec 9 2021.
+  The project provided release `2.15.0` with a patch that mitigates the impact of this CVE. It was quickly found that the initial patch was insufficient, and additional CVEs
+  CVE-2021-45046 and CVE-2021-44832 followed.
+  These have been fixed in release `2.17.1`. This release of Vitess, `v12.0.1`, uses a version of Log4j below `2.17.1`, for this reason, we encourage you to use version `v12.0.3` instead, to benefit from the vulnerability patches.
 
 ------------
 ## Changelog
@@ -26,7 +26,7 @@ This patch is providing an update regarding the Apache Log4j security vulnerabil
 * Take MySQL Column Type Into Account in VStreamer #9355
 #### Cluster management
 * Restoring 'vtctl VExec' command #9227
-    * This change restores vtctl VExec functionality. It was removed based on the assumption the only uses for this command were for Online DDL command. This was wrong, and VExec is also used as a wrapper around VReplication.
+  * This change restores vtctl VExec functionality. It was removed based on the assumption the only uses for this command were for Online DDL command. This was wrong, and VExec is also used as a wrapper around VReplication.
 
 ### CI/Build
 #### Build/CI
