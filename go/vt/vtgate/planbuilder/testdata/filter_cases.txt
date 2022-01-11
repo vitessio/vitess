@@ -3312,6 +3312,7 @@ Gen4++
 "select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)"
 "unsupported: cross-shard left join and where clause"
 Gen4 plan same as above
+Gen4++
 
 #subquery on other table
 "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')"
@@ -4149,3 +4150,4 @@ Gen4++
   }
 }
 Gen4 error: unsupported: cross-shard left join and where clause
+Gen4++
