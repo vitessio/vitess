@@ -3631,3 +3631,79 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		})
 	}
 }
+
+// TestParentContextCancelled tests that even if the parent context of reparentReplicas cancels, we should not cancel the context of
+// SetReplicationSource since there could be tablets that are running it even after ERS completes.
+func TestParentContextCancelled(t *testing.T) {
+	// Setup ERS options with a very high wait replicas timeout
+	emergencyReparentOps := EmergencyReparentOptions{IgnoreReplicas: sets.NewString("zone1-0000000404"), WaitReplicasTimeout: time.Minute}
+	// Make the replica tablet return its results after 3 seconds
+	tmc := &testutil.TabletManagerClient{
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000100": {
+				Error: nil,
+			},
+		},
+		SetReplicationSourceResults: map[string]error{
+			"zone1-0000000101": nil,
+		},
+		SetReplicationSourceDelays: map[string]time.Duration{
+			"zone1-0000000101": 3 * time.Second,
+		},
+	}
+	newPrimaryTabletAlias := "zone1-0000000100"
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Hostname: "primary-elect",
+			},
+		},
+		"zone1-0000000101": {
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			Before: &replicationdatapb.Status{
+				IoThreadRunning:  true,
+				SqlThreadRunning: true,
+			},
+		},
+	}
+	keyspace := "testkeyspace"
+	shard := "-"
+	ts := memorytopo.NewServer("zone1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	logger := logutil.NewMemoryLogger()
+	ev := &events.Reparent{}
+
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: keyspace,
+		Name:     shard,
+	})
+
+	erp := NewEmergencyReparenter(ts, tmc, logger)
+	// Cancel the parent context after 1 second. Even though the parent context is cancelled, the command should still succeed
+	// We should not be cancelling the context of the RPC call to SetReplicationSource since some tablets may keep on running this even after
+	// ERS returns
+	go func() {
+		time.Sleep(time.Second)
+		cancel()
+	}()
+	_, err := erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, false, false)
+	require.NoError(t, err)
+}
