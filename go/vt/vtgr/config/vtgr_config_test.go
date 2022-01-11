@@ -32,6 +32,6 @@ func TestReadConfig(t *testing.T) {
 	assert.Equal(t, false, config.DisableReadOnlyProtection)
 	assert.Equal(t, 600, config.BootstrapWaitTimeSeconds)
 	// Make sure the config is load correctly
-	assert.Equal(t, 3, config.GroupSize)
+	assert.Equal(t, 3, config.BootstrapGroupSize)
 	assert.Equal(t, 5, config.BackoffErrorWaitTimeSeconds)
 }

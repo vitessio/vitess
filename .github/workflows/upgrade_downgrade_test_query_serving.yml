@@ -19,7 +19,8 @@ jobs:
       hasLabel: ${{ steps.check_label.outputs.hasLabel }}
 
     steps:
-      - name: Check Label
+      - name: Check Label for PR
+        if: github.event_name == 'pull_request'
         uses: Dreamcodeio/pr-has-label-action@master
         id: check_label
         with:

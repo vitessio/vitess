@@ -28,10 +28,11 @@ import (
 )
 
 type testPlanner struct {
-	panic  interface{}
-	err    error
-	res    engine.Primitive
-	called bool
+	panic       interface{}
+	err         error
+	res         engine.Primitive
+	messWithAST func(sqlparser.Statement)
+	called      bool
 }
 
 var _ selectPlanner = (*testPlanner)(nil).plan
@@ -41,6 +42,9 @@ func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, *sqlparser.Reser
 		tp.called = true
 		if tp.panic != nil {
 			panic(tp.panic)
+		}
+		if tp.messWithAST != nil {
+			tp.messWithAST(statement)
 		}
 		return tp.res, tp.err
 	}
@@ -77,4 +81,28 @@ func TestFallbackPlanner(t *testing.T) {
 	_, _ = fb.plan("query")(stmt, nil, vschema)
 	assert.True(t, a.called)
 	assert.True(t, b.called)
+}
+
+func TestFallbackClonesBeforePlanning(t *testing.T) {
+	a := &testPlanner{
+		messWithAST: func(statement sqlparser.Statement) {
+			sel := statement.(*sqlparser.Select)
+			sel.SelectExprs = nil
+		},
+	}
+	b := &testPlanner{}
+	fb := &fallbackPlanner{
+		primary:  a.plan,
+		fallback: b.plan,
+	}
+
+	stmt := &sqlparser.Select{
+		SelectExprs: sqlparser.SelectExprs{&sqlparser.StarExpr{}},
+	}
+	var vschema ContextVSchema
+
+	// first planner succeeds
+	_, _ = fb.plan("query")(stmt, nil, vschema)
+
+	assert.NotNilf(t, stmt.SelectExprs, "should not have changed")
 }

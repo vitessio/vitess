@@ -119,6 +119,11 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, topodatapb.TabletType_REPLICA},
 		}},
+		{"raise error when there are not enough members", 0, "vtgr repair: unsafe to bootstrap group", []data{
+			{testHost, testPort0, "", true, []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+		}},
 	}
 	tablets := make(map[string]*topo.TabletInfo)
 	for _, tt := range testcases {
@@ -198,7 +203,7 @@ func TestRepairShardHasNoGroup(t *testing.T) {
 				Ping(gomock.Any(), gomock.Any()).
 				Return(nil).
 				AnyTimes()
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			shard.UpdateTabletsInShardWithLock(ctx)
 			_, err := shard.Repair(ctx, DiagnoseTypeShardHasNoGroup)
@@ -226,9 +231,10 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 		name                  string
 		errorMsg              string
 		expectedCandidatePort int
+		rebootstrapSize       int
 		inputs                []data
 	}{
-		{"shard has inactive group", "", testPort0, []data{
+		{"shard has inactive group", "", testPort0, 0, []data{
 			{testHost, testPort0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -239,7 +245,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"shard has inactive group and partial group name", "", testPort0, []data{
+		{"shard has inactive group and partial group name", "", testPort0, 0, []data{
 			{testHost, testPort0, "", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -250,7 +256,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"unreachable rebootstrap candidate", "vtgr repair: test_cell-0000017000 is unreachable", 0, []data{
+		{"unreachable rebootstrap candidate", "vtgr repair: test_cell-0000017000 is unreachable", 0, 0, []data{
 			{testHost, testPort0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, false, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -261,7 +267,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"inactive shard with empty gtid", "", testPort0, []data{
+		{"inactive shard with empty gtid", "", testPort0, 0, []data{
 			{testHost, testPort0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -272,7 +278,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet("", ""), topodatapb.TabletType_REPLICA},
 		}},
-		{"shard has more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0, []data{ // vtgr raises error
+		{"shard has more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0, 0, []data{ // vtgr raises error
 			{testHost, testPort0, "group1", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
@@ -283,7 +289,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"shard has inconsistent gtids", "vtgr repair: found more than one failover candidates by GTID set for ks/0", 0, []data{ // vtgr raises error
+		{"shard has inconsistent gtids", "vtgr repair: found more than one failover candidates by GTID set for ks/0", 0, 0, []data{ // vtgr raises error
 			{testHost, testPort0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet("264a8230-67d2-11eb-acdd-0a8d91f24125", "1-9"), topodatapb.TabletType_REPLICA},
@@ -294,7 +300,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"error on one unreachable mysql", "invalid mysql instance key", 0, []data{
+		{"error on one unreachable mysql", "invalid mysql instance key", 0, 0, []data{
 			{"", 0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-11"), topodatapb.TabletType_REPLICA},
@@ -305,7 +311,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"error on one unreachable tablet", "vtgr repair: test_cell-0000017000 is unreachable", 0, []data{
+		{"error on one unreachable tablet", "vtgr repair: test_cell-0000017000 is unreachable", 0, 0, []data{
 			{testHost, testPort0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, false, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -316,7 +322,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"shard has active member", "", 0, []data{ // vtgr sees an active node it should not try to bootstrap
+		{"shard has active member", "", 0, 0, []data{ // vtgr sees an active node it should not try to bootstrap
 			{testHost, testPort0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -327,7 +333,7 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
-		{"shard has active member but more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0, []data{ // split brain should overweight active member diagnose
+		{"shard has active member but more than one group", "vtgr repair: fail to refreshSQLGroup: group has split brain", 0, 0, []data{ // split brain should overweight active member diagnose
 			{testHost, testPort0, "group1", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
@@ -337,6 +343,33 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			{testHost, testPort2, "group2", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
+		{"error on two unreachable mysql", "invalid mysql instance key", 0, 0, []data{
+			{"", 0, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-11"), topodatapb.TabletType_REPLICA},
+			{"", 0, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
+			{testHost, testPort2, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
+		{"no error on two unreachable mysqls with allowUnhealthyNodeOnReboot", "", testPort2, 1, []data{
+			{"", 0, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-11"), topodatapb.TabletType_REPLICA},
+			{"", 0, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
+			{testHost, testPort2, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
+		{"shard with fewer than configured members can still rebootstrap", "", testPort0, 0, []data{
+			{testHost, testPort0, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
 		}},
 	}
 	tablets := make(map[string]*topo.TabletInfo)
@@ -459,8 +492,11 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 					}).
 					AnyTimes()
 			}
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
+			if tt.rebootstrapSize != 0 {
+				shard.OverrideRebootstrapGroupSize(tt.rebootstrapSize)
+			}
 			_, err := shard.Repair(ctx, DiagnoseTypeShardHasInactiveGroup)
 			if tt.errorMsg == "" {
 				assert.NoError(t, err)
@@ -646,7 +682,7 @@ func TestRepairWrongPrimaryTablet(t *testing.T) {
 					Return(nil).
 					Times(expectedCalls)
 			}
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			_, err := shard.Repair(ctx, DiagnoseTypeWrongPrimaryTablet)
 			if tt.errorMsg == "" {
@@ -787,7 +823,7 @@ func TestRepairUnconnectedReplica(t *testing.T) {
 					}).
 					AnyTimes()
 			}
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			_, err := shard.Repair(ctx, DiagnoseTypeUnconnectedReplica)
 			if tt.errorMsg == "" {
@@ -912,7 +948,7 @@ func TestRepairUnreachablePrimary(t *testing.T) {
 					}).
 					AnyTimes()
 			}
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			_, err := shard.Repair(ctx, DiagnoseTypeUnreachablePrimary)
 			if tt.errorMsg == "" {
@@ -938,7 +974,7 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 		expectedCandidatePort int
 		inputs                []data
 	}{
-		{"fix insufficient group size", "", testPort0, []data{
+		{"fix insufficient group expectedBootstrapSize", "", testPort0, []data{
 			{alias0, false, []db.TestGroupState{
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
 				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "RECOVERING", MemberRole: "SECONDARY"},
@@ -1011,7 +1047,7 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 					}).
 					AnyTimes()
 			}
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			_, err := shard.Repair(ctx, DiagnoseTypeInsufficientGroupSize)
 			if tt.errorMsg == "" {
@@ -1128,7 +1164,7 @@ func TestRepairReadOnlyShard(t *testing.T) {
 					}).
 					AnyTimes()
 			}
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			_, err := shard.Repair(ctx, DiagnoseTypeReadOnlyShard)
 			if tt.errorMsg == "" {
@@ -1298,7 +1334,7 @@ func TestRepairBackoffError(t *testing.T) {
 					}).
 					AnyTimes()
 			}
-			cfg := &config.VTGRConfig{GroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+			cfg := &config.VTGRConfig{BootstrapGroupSize: repairGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			shard.lastDiagnoseResult = tt.diagnose
 			_, err := shard.Repair(ctx, tt.diagnose)
