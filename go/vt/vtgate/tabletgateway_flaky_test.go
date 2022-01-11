@@ -37,7 +37,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
 		buffer.SetBufferingModeInTestingEnv(false)
-		*bufferImplementation = defaultBufferImplementation
+		*bufferImplementation = "healthcheck"
 	}()
 
 	keyspace := "ks1"
@@ -120,7 +120,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
 		buffer.SetBufferingModeInTestingEnv(false)
-		*bufferImplementation = defaultBufferImplementation
+		*bufferImplementation = "healthcheck"
 	}()
 
 	keyspace := "ks1"
