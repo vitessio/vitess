@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
 
 // PushPredicate is used to push predicates
@@ -96,7 +97,7 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 			return op, err
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
-	case *tableOp:
+	case *physical.TableOp:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
 		return &filterOp{
@@ -154,11 +155,11 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 			}
 		}
 		return op, outputColumns, nil
-	case *tableOp:
-		before := len(op.columns)
-		op.columns = append(op.columns, columns...)
+	case *physical.TableOp:
+		before := len(op.Columns)
+		op.Columns = append(op.Columns, columns...)
 		var offsets []int
-		for i := before; i < len(op.columns); i++ {
+		for i := before; i < len(op.Columns); i++ {
 			offsets = append(offsets, i)
 		}
 		return op, offsets, nil

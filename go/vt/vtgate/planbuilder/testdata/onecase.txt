@@ -1,19 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-"select user_id as APA from user"
-{
-  "QueryType": "SELECT",
-  "Original": "select user_id as APA from user",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select user_id as APA from `user` where 1 != 1",
-    "Query": "select user_id as APA from `user`",
-    "Table": "`user`"
-  }
-}
-Gen4 plan same as above
-Gen4++

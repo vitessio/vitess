@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -166,9 +168,9 @@ func createRouteOperator(ctx *planningContext, table *abstract.QueryTable, solve
 		}
 	}
 	plan := &routeOp{
-		source: &tableOp{
-			qtable: table,
-			vtable: vschemaTable,
+		source: &physical.TableOp{
+			QTable: table,
+			VTable: vschemaTable,
 		},
 		keyspace: vschemaTable.Keyspace,
 	}
@@ -488,17 +490,17 @@ func isDualTableOp(route *routeOp) bool {
 	if len(sources) > 1 {
 		return false
 	}
-	src, ok := sources[0].(*tableOp)
+	src, ok := sources[0].(*physical.TableOp)
 	if !ok {
 		return false
 	}
-	return src.vtable.Name.String() == "dual" && src.qtable.Table.Qualifier.IsEmpty()
+	return src.VTable.Name.String() == "dual" && src.QTable.Table.Qualifier.IsEmpty()
 }
 
 func leaves(op abstract.Operator) (sources []abstract.Operator) {
 	switch op := op.(type) {
 	// these are the leaves
-	case *abstract.QueryGraph, *abstract.Vindex, *tableOp:
+	case *abstract.QueryGraph, *abstract.Vindex, *physical.TableOp:
 		return []abstract.Operator{op}
 
 		// logical
@@ -613,12 +615,12 @@ func findColumnVindexOnOps(ctx *planningContext, a *routeOp, exp sqlparser.Expr)
 		leftDep := ctx.semTable.RecursiveDeps(expr)
 
 		_ = visitOperators(a, func(rel abstract.Operator) (bool, error) {
-			to, isTableOp := rel.(*tableOp)
+			to, isTableOp := rel.(*physical.TableOp)
 			if !isTableOp {
 				return true, nil
 			}
-			if leftDep.IsSolvedBy(to.qtable.ID) {
-				for _, vindex := range to.vtable.ColumnVindexes {
+			if leftDep.IsSolvedBy(to.QTable.ID) {
+				for _, vindex := range to.VTable.ColumnVindexes {
 					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {
 						singCol = sC
@@ -658,7 +660,7 @@ func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 	}
 
 	switch op := op.(type) {
-	case *tableOp, *abstract.QueryGraph, *abstract.Vindex:
+	case *physical.TableOp, *abstract.QueryGraph, *abstract.Vindex:
 		// leaf - no children to visit
 	case *routeOp:
 		err := visitOperators(op.source, f)

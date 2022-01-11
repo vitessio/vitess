@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -36,12 +38,12 @@ func toSQL(ctx *planningContext, op abstract.PhysicalOperator) sqlparser.SelectS
 
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
-	case *tableOp:
-		qb.addTable(op.qtable.Table.Name.String(), op.qtable.Alias.As.String(), op.TableID())
-		for _, pred := range op.qtable.Predicates {
+	case *physical.TableOp:
+		qb.addTable(op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID())
+		for _, pred := range op.QTable.Predicates {
 			qb.addPredicate(pred)
 		}
-		for _, name := range op.columns {
+		for _, name := range op.Columns {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
 		}
 	case *applyJoin:

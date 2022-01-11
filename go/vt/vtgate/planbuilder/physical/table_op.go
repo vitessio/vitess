@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package physical
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -25,56 +25,56 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type tableOp struct {
-	qtable  *abstract.QueryTable
-	vtable  *vindexes.Table
-	columns []*sqlparser.ColName
+type TableOp struct {
+	QTable  *abstract.QueryTable
+	VTable  *vindexes.Table
+	Columns []*sqlparser.ColName
 }
 
-var _ abstract.PhysicalOperator = (*tableOp)(nil)
+var _ abstract.PhysicalOperator = (*TableOp)(nil)
 
 // IPhysical implements the PhysicalOperator interface
-func (to *tableOp) IPhysical() {}
+func (to *TableOp) IPhysical() {}
 
 // Cost implements the PhysicalOperator interface
-func (to *tableOp) Cost() int {
+func (to *TableOp) Cost() int {
 	return 0
 }
 
 // Clone implements the PhysicalOperator interface
-func (to *tableOp) Clone() abstract.PhysicalOperator {
+func (to *TableOp) Clone() abstract.PhysicalOperator {
 	var columns []*sqlparser.ColName
-	for _, name := range to.columns {
+	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
 	}
-	return &tableOp{
-		qtable:  to.qtable,
-		vtable:  to.vtable,
-		columns: columns,
+	return &TableOp{
+		QTable:  to.QTable,
+		VTable:  to.VTable,
+		Columns: columns,
 	}
 }
 
 // TableID implements the PhysicalOperator interface
-func (to *tableOp) TableID() semantics.TableSet {
-	return to.qtable.ID
+func (to *TableOp) TableID() semantics.TableSet {
+	return to.QTable.ID
 }
 
 // PushPredicate implements the PhysicalOperator interface
-func (to *tableOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push predicates into a tableOp. It is meant to be immutable")
+func (to *TableOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push predicates into a TableOp. It is meant to be immutable")
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (to *tableOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (to *TableOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (to *tableOp) CheckValid() error {
+func (to *TableOp) CheckValid() error {
 	return nil
 }
 
 // Compact implements the PhysicalOperator interface
-func (to *tableOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (to *TableOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return to, nil
 }
