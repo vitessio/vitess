@@ -14,17 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package physical
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
-
-	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -38,13 +35,15 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var verboseLogging = false
-
 type (
+	tableSetPair struct {
+		left, right semantics.TableSet
+	}
+
 	opCacheMap map[tableSetPair]abstract.PhysicalOperator
 )
 
-func createPhysicalOperator(ctx *context.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
+func CreatePhysicalOperator(ctx *context.PlanningContext, opTree abstract.LogicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
@@ -54,11 +53,11 @@ func createPhysicalOperator(ctx *context.PlanningContext, opTree abstract.Logica
 			return greedySolve2(ctx, op)
 		}
 	case *abstract.Join:
-		opInner, err := createPhysicalOperator(ctx, op.LHS)
+		opInner, err := CreatePhysicalOperator(ctx, op.LHS)
 		if err != nil {
 			return nil, err
 		}
-		opOuter, err := createPhysicalOperator(ctx, op.RHS)
+		opOuter, err := CreatePhysicalOperator(ctx, op.RHS)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +123,7 @@ func seedOperatorList(ctx *context.PlanningContext, qg *abstract.QueryGraph) ([]
 	return plans, nil
 }
 
-func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTable, solves semantics.TableSet) (*physical.RouteOp, error) {
+func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTable, solves semantics.TableSet) (*RouteOp, error) {
 	// if table.IsInfSchema {
 	//	ks, err := ctx.vschema.AnyKeyspace()
 	//	if err != nil {
@@ -169,8 +168,8 @@ func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTabl
 			table.Alias.As = sqlparser.NewTableIdent(name.String())
 		}
 	}
-	plan := &physical.RouteOp{
-		Source: &physical.TableOp{
+	plan := &RouteOp{
+		Source: &TableOp{
 			QTable: table,
 			VTable: vschemaTable,
 		},
@@ -178,7 +177,7 @@ func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTabl
 	}
 
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
-		plan.VindexPreds = append(plan.VindexPreds, &physical.VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})
+		plan.VindexPreds = append(plan.VindexPreds, &VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})
 	}
 
 	switch {
@@ -194,14 +193,14 @@ func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTabl
 		// for keyspace id.
 		plan.RouteOpCode = engine.SelectEqualUnique
 		vindex, _ := vindexes.NewBinary("binary", nil)
-		plan.Selected = &physical.VindexOption{
+		plan.Selected = &VindexOption{
 			Ready:       true,
 			Values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
 			ValueExprs:  nil,
 			Predicates:  nil,
 			OpCode:      engine.SelectEqualUnique,
 			FoundVindex: vindex,
-			Cost: physical.Cost{
+			Cost: Cost{
 				OpCode: engine.SelectEqualUnique,
 			},
 		}
@@ -279,16 +278,6 @@ func findBestJoinOp(
 				return nil, 0, 0, err
 			}
 			if bestPlan == nil || plan.Cost() < bestPlan.Cost() {
-				if verboseLogging {
-					log.Warningf("New Best Plan - %v and cost - %d", plan.TableID(), plan.Cost())
-					switch node := plan.(type) {
-					case *physical.ApplyJoin:
-						log.Warningf("Join Plan - lhs - %v, rhs - %v", node.LHS.TableID(), node.RHS.TableID())
-					case *physical.RouteOp:
-						joinOp := node.Source.(*physical.ApplyJoin)
-						log.Warningf("Route Plan - lhs - %v, rhs - %v", joinOp.LHS.TableID(), joinOp.RHS.TableID())
-					}
-				}
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
 				lIdx = i
@@ -316,7 +305,7 @@ func getJoinOpFor(ctx *context.PlanningContext, cm opCacheMap, lhs, rhs abstract
 
 func mergeOrJoinOp(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
-	merger := func(a, b *physical.RouteOp) (*physical.RouteOp, error) {
+	merger := func(a, b *RouteOp) (*RouteOp, error) {
 		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
 	}
 
@@ -325,7 +314,7 @@ func mergeOrJoinOp(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOpera
 		return newPlan, nil
 	}
 
-	var tree abstract.PhysicalOperator = &physical.ApplyJoin{
+	var tree abstract.PhysicalOperator = &ApplyJoin{
 		LHS:      lhs.Clone(),
 		RHS:      rhs.Clone(),
 		Vars:     map[string]int{},
@@ -341,7 +330,7 @@ func mergeOrJoinOp(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOpera
 	return tree, nil
 }
 
-func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *physical.RouteOp, joinPredicates []sqlparser.Expr, inner bool) (*physical.RouteOp, error) {
+func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *RouteOp, joinPredicates []sqlparser.Expr, inner bool) (*RouteOp, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -352,13 +341,13 @@ func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *ph
 		}
 	}
 
-	r := &physical.RouteOp{
+	r := &RouteOp{
 		RouteOpCode:         aRoute.RouteOpCode,
 		Keyspace:            aRoute.Keyspace,
 		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
-		Source: &physical.ApplyJoin{
+		Source: &ApplyJoin{
 			LHS:      aRoute.Source,
 			RHS:      bRoute.Source,
 			Vars:     map[string]int{},
@@ -371,7 +360,7 @@ func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *ph
 		if err != nil {
 			return nil, err
 		}
-		route, ok := op.(*physical.RouteOp)
+		route, ok := op.(*RouteOp)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] did not expect type to change when pushing predicates")
 		}
@@ -385,10 +374,10 @@ func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *ph
 	return r, nil
 }
 
-type mergeOpFunc func(a, b *physical.RouteOp) (*physical.RouteOp, error)
+type mergeOpFunc func(a, b *RouteOp) (*RouteOp, error)
 
-func makeRouteOp(j abstract.PhysicalOperator) *physical.RouteOp {
-	rb, ok := j.(*physical.RouteOp)
+func makeRouteOp(j abstract.PhysicalOperator) *RouteOp {
+	rb, ok := j.(*RouteOp)
 	if ok {
 		return rb
 	}
@@ -420,7 +409,7 @@ func makeRouteOp(j abstract.PhysicalOperator) *physical.RouteOp {
 	// return inner
 }
 
-func operatorsToRoutes(a, b abstract.PhysicalOperator) (*physical.RouteOp, *physical.RouteOp) {
+func operatorsToRoutes(a, b abstract.PhysicalOperator) (*RouteOp, *RouteOp) {
 	aRoute := makeRouteOp(a)
 	if aRoute == nil {
 		return nil, nil
@@ -487,12 +476,12 @@ func tryMergeOp(ctx *context.PlanningContext, a, b abstract.PhysicalOperator, jo
 	return nil, nil
 }
 
-func isDualTableOp(route *physical.RouteOp) bool {
+func isDualTableOp(route *RouteOp) bool {
 	sources := leaves(route)
 	if len(sources) > 1 {
 		return false
 	}
-	src, ok := sources[0].(*physical.TableOp)
+	src, ok := sources[0].(*TableOp)
 	if !ok {
 		return false
 	}
@@ -502,7 +491,7 @@ func isDualTableOp(route *physical.RouteOp) bool {
 func leaves(op abstract.Operator) (sources []abstract.Operator) {
 	switch op := op.(type) {
 	// these are the leaves
-	case *abstract.QueryGraph, *abstract.Vindex, *physical.TableOp:
+	case *abstract.QueryGraph, *abstract.Vindex, *TableOp:
 		return []abstract.Operator{op}
 
 		// logical
@@ -522,21 +511,21 @@ func leaves(op abstract.Operator) (sources []abstract.Operator) {
 		}
 		return
 		// physical
-	case *physical.ApplyJoin:
+	case *ApplyJoin:
 		return []abstract.Operator{op.LHS, op.RHS}
-	case *physical.FilterOp:
+	case *FilterOp:
 		return []abstract.Operator{op.Source}
-	case *physical.RouteOp:
+	case *RouteOp:
 		return []abstract.Operator{op.Source}
 	}
 
 	panic(fmt.Sprintf("leaves unknown type: %T", op))
 }
 
-func tryMergeReferenceTableOp(aRoute, bRoute *physical.RouteOp, merger mergeOpFunc) (*physical.RouteOp, error) {
+func tryMergeReferenceTableOp(aRoute, bRoute *RouteOp, merger mergeOpFunc) (*RouteOp, error) {
 	// if either side is a reference table, we can just merge it and use the opcode of the other side
 	var opCode engine.RouteOpcode
-	var selected *physical.VindexOption
+	var selected *VindexOption
 
 	switch {
 	case aRoute.RouteOpCode == engine.SelectReference:
@@ -558,7 +547,7 @@ func tryMergeReferenceTableOp(aRoute, bRoute *physical.RouteOp, merger mergeOpFu
 	return r, nil
 }
 
-func canMergeOpsOnFilter(ctx *context.PlanningContext, a, b *physical.RouteOp, predicate sqlparser.Expr) bool {
+func canMergeOpsOnFilter(ctx *context.PlanningContext, a, b *RouteOp, predicate sqlparser.Expr) bool {
 	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -584,7 +573,7 @@ func canMergeOpsOnFilter(ctx *context.PlanningContext, a, b *physical.RouteOp, p
 	return rVindex == lVindex
 }
 
-func findColumnVindexOnOps(ctx *context.PlanningContext, a *physical.RouteOp, exp sqlparser.Expr) vindexes.SingleColumn {
+func findColumnVindexOnOps(ctx *context.PlanningContext, a *RouteOp, exp sqlparser.Expr) vindexes.SingleColumn {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
@@ -603,8 +592,8 @@ func findColumnVindexOnOps(ctx *context.PlanningContext, a *physical.RouteOp, ex
 		}
 		leftDep := ctx.SemTable.RecursiveDeps(expr)
 
-		_ = visitOperators(a, func(rel abstract.Operator) (bool, error) {
-			to, isTableOp := rel.(*physical.TableOp)
+		_ = VisitOperators(a, func(rel abstract.Operator) (bool, error) {
+			to, isTableOp := rel.(*TableOp)
 			if !isTableOp {
 				return true, nil
 			}
@@ -627,7 +616,7 @@ func findColumnVindexOnOps(ctx *context.PlanningContext, a *physical.RouteOp, ex
 	return singCol
 }
 
-func canMergeOpsOnFilters(ctx *context.PlanningContext, a, b *physical.RouteOp, joinPredicates []sqlparser.Expr) bool {
+func canMergeOpsOnFilters(ctx *context.PlanningContext, a, b *RouteOp, joinPredicates []sqlparser.Expr) bool {
 	for _, predicate := range joinPredicates {
 		for _, expr := range sqlparser.SplitAndExpression(nil, predicate) {
 			if canMergeOpsOnFilter(ctx, a, b, expr) {
@@ -638,8 +627,8 @@ func canMergeOpsOnFilters(ctx *context.PlanningContext, a, b *physical.RouteOp, 
 	return false
 }
 
-// visitOperators visits all the operators.
-func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, error)) error {
+// VisitOperators visits all the operators.
+func VisitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, error)) error {
 	kontinue, err := f(op)
 	if err != nil {
 		return err
@@ -649,55 +638,55 @@ func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 	}
 
 	switch op := op.(type) {
-	case *physical.TableOp, *abstract.QueryGraph, *abstract.Vindex:
+	case *TableOp, *abstract.QueryGraph, *abstract.Vindex:
 		// leaf - no children to visit
-	case *physical.RouteOp:
-		err := visitOperators(op.Source, f)
+	case *RouteOp:
+		err := VisitOperators(op.Source, f)
 		if err != nil {
 			return err
 		}
-	case *physical.ApplyJoin:
-		err := visitOperators(op.LHS, f)
+	case *ApplyJoin:
+		err := VisitOperators(op.LHS, f)
 		if err != nil {
 			return err
 		}
-		err = visitOperators(op.RHS, f)
+		err = VisitOperators(op.RHS, f)
 		if err != nil {
 			return err
 		}
-	case *physical.FilterOp:
-		err := visitOperators(op.Source, f)
+	case *FilterOp:
+		err := VisitOperators(op.Source, f)
 		if err != nil {
 			return err
 		}
 	case *abstract.Concatenate:
 		for _, source := range op.Sources {
-			err := visitOperators(source, f)
+			err := VisitOperators(source, f)
 			if err != nil {
 				return err
 			}
 		}
 	case *abstract.Derived:
-		err := visitOperators(op.Inner, f)
+		err := VisitOperators(op.Inner, f)
 		if err != nil {
 			return err
 		}
 	case *abstract.Join:
-		err := visitOperators(op.LHS, f)
+		err := VisitOperators(op.LHS, f)
 		if err != nil {
 			return err
 		}
-		err = visitOperators(op.RHS, f)
+		err = VisitOperators(op.RHS, f)
 		if err != nil {
 			return err
 		}
 	case *abstract.SubQuery:
-		err := visitOperators(op.Outer, f)
+		err := VisitOperators(op.Outer, f)
 		if err != nil {
 			return err
 		}
 		for _, source := range op.Inner {
-			err := visitOperators(source.Inner, f)
+			err := VisitOperators(source.Inner, f)
 			if err != nil {
 				return err
 			}
@@ -712,12 +701,86 @@ func optimizeUnionOp(ctx *context.PlanningContext, op *abstract.Concatenate) (ab
 	var sources []abstract.PhysicalOperator
 
 	for _, source := range op.Sources {
-		qt, err := createPhysicalOperator(ctx, source)
+		qt, err := CreatePhysicalOperator(ctx, source)
 		if err != nil {
 			return nil, err
 		}
 
 		sources = append(sources, qt)
 	}
-	return &physical.UnionOp{Sources: sources, SelectStmts: op.SelectStmts, Distinct: op.Distinct}, nil
+	return &UnionOp{Sources: sources, SelectStmts: op.SelectStmts, Distinct: op.Distinct}, nil
+}
+
+func gen4ValuesEqual(ctx *context.PlanningContext, a, b []sqlparser.Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	// TODO: check SemTable's columnEqualities for better plan
+
+	for i, aExpr := range a {
+		bExpr := b[i]
+		if !gen4ValEqual(ctx, aExpr, bExpr) {
+			return false
+		}
+	}
+	return true
+}
+
+func gen4ValEqual(ctx *context.PlanningContext, a, b sqlparser.Expr) bool {
+	switch a := a.(type) {
+	case *sqlparser.ColName:
+		if b, ok := b.(*sqlparser.ColName); ok {
+			if !a.Name.Equal(b.Name) {
+				return false
+			}
+
+			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
+		}
+	case sqlparser.Argument:
+		b, ok := b.(sqlparser.Argument)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *sqlparser.Literal:
+		b, ok := b.(*sqlparser.Literal)
+		if !ok {
+			return false
+		}
+		switch a.Type {
+		case sqlparser.StrVal:
+			switch b.Type {
+			case sqlparser.StrVal:
+				return a.Val == b.Val
+			case sqlparser.HexVal:
+				return hexEqual(b, a)
+			}
+		case sqlparser.HexVal:
+			return hexEqual(a, b)
+		case sqlparser.IntVal:
+			if b.Type == (sqlparser.IntVal) {
+				return a.Val == b.Val
+			}
+		}
+	}
+	return false
+}
+
+func hexEqual(a, b *sqlparser.Literal) bool {
+	v, err := a.HexDecode()
+	if err != nil {
+		return false
+	}
+	switch b.Type {
+	case sqlparser.StrVal:
+		return bytes.Equal(v, b.Bytes())
+	case sqlparser.HexVal:
+		v2, err := b.HexDecode()
+		if err != nil {
+			return false
+		}
+		return bytes.Equal(v, v2)
+	}
+	return false
 }

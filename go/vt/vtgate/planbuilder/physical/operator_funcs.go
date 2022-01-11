@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package physical
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -22,13 +22,13 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // PushPredicate is used to push predicates
 func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
-	case *physical.RouteOp:
+	case *RouteOp:
 		err := op.UpdateRoutingLogic(ctx, expr)
 		if err != nil {
 			return nil, err
@@ -39,7 +39,7 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 		}
 		op.Source = newSrc
 		return op, err
-	case *physical.ApplyJoin:
+	case *ApplyJoin:
 		deps := ctx.SemTable.RecursiveDeps(expr)
 		switch {
 		case deps.IsSolvedBy(op.LHS.TableID()):
@@ -98,14 +98,14 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 			return op, err
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
-	case *physical.TableOp:
+	case *TableOp:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return &physical.FilterOp{
+		return &FilterOp{
 			Source:     op,
 			Predicates: []sqlparser.Expr{expr},
 		}, nil
-	case *physical.FilterOp:
+	case *FilterOp:
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
 	default:
@@ -115,11 +115,11 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 
 func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
-	case *physical.RouteOp:
+	case *RouteOp:
 		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
 		op.Source = retOp
 		return op, offsets, err
-	case *physical.ApplyJoin:
+	case *ApplyJoin:
 		var toTheLeft []bool
 		var lhs, rhs []*sqlparser.ColName
 		for _, col := range columns {
@@ -156,7 +156,7 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 			}
 		}
 		return op, outputColumns, nil
-	case *physical.TableOp:
+	case *TableOp:
 		before := len(op.Columns)
 		op.Columns = append(op.Columns, columns...)
 		var offsets []int
@@ -164,12 +164,47 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 			offsets = append(offsets, i)
 		}
 		return op, offsets, nil
-	case *physical.FilterOp:
+	case *FilterOp:
 		return PushOutputColumns(ctx, op.Source, columns...)
-	case *physical.VindexOp:
+	case *VindexOp:
 		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err
 	default:
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
 	}
+}
+
+func breakExpressionInLHSandRHS(
+	ctx *context.PlanningContext,
+	expr sqlparser.Expr,
+	lhs semantics.TableSet,
+) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
+	rewrittenExpr = sqlparser.CloneExpr(expr)
+	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			deps := ctx.SemTable.RecursiveDeps(node)
+			if deps.NumberOfTables() == 0 {
+				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
+				return false
+			}
+			if deps.IsSolvedBy(lhs) {
+				node.Qualifier.Qualifier = sqlparser.NewTableIdent("")
+				columns = append(columns, node)
+				bvName := node.CompliantName()
+				bvNames = append(bvNames, bvName)
+				arg := sqlparser.NewArgument(bvName)
+				// we are replacing one of the sides of the comparison with an argument,
+				// but we don't want to lose the type information we have, so we copy it over
+				ctx.SemTable.CopyExprInfo(node, arg)
+				cursor.Replace(arg)
+			}
+		}
+		return true
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
+	return
 }

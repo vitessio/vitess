@@ -147,7 +147,7 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.RouteOp) (*
 
 func getAllTableNames(op *physical.RouteOp) []string {
 	tableNameMap := map[string]interface{}{}
-	_ = visitOperators(op, func(op abstract.Operator) (bool, error) {
+	_ = physical.VisitOperators(op, func(op abstract.Operator) (bool, error) {
 		tbl, isTbl := op.(*physical.TableOp)
 		var name string
 		if isTbl {

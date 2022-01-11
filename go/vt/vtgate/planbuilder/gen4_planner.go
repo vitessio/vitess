@@ -156,7 +156,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 
 	var plan logicalPlan
 	if runGen4New {
-		physical, err := createPhysicalOperator(ctx, logical)
+		physOp, err := physical.CreatePhysicalOperator(ctx, logical)
 		if err != nil {
 			return nil, err
 		}
@@ -166,14 +166,14 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 			sel: sel,
 		}
 
-		plan, err = trySingleShard(ctx, physical, selStmt)
+		plan, err = trySingleShard(ctx, physOp, selStmt)
 		if err != nil {
 			return plan, err
 		}
 
 		if plan == nil {
 			// we are not dealing with a single route plan
-			horizon, err := hp.planHorizonOp(ctx, physical)
+			horizon, err := hp.planHorizonOp(ctx, physOp)
 			if err != nil {
 				return nil, err
 			}

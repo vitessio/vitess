@@ -86,7 +86,7 @@ func pushProjectionOp(ctx *context.PlanningContext, expr *sqlparser.AliasedExpr,
 	case *physical.TableOp:
 		colName, isColName := expr.Expr.(*sqlparser.ColName)
 		if isColName && expr.As.IsEmpty() {
-			op, offsets, err := PushOutputColumns(ctx, node, colName)
+			op, offsets, err := physical.PushOutputColumns(ctx, node, colName)
 			if err != nil {
 				return nil, 0, false, err
 			}

@@ -22,8 +22,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -727,15 +725,6 @@ func findBestJoinTree(
 				return nil, 0, 0, err
 			}
 			if bestPlan == nil || plan.cost() < bestPlan.cost() {
-				if verboseLogging {
-					log.Warningf("New Best Plan - %v and cost - %d", plan.tableID(), plan.cost())
-					switch node := plan.(type) {
-					case *joinTree:
-						log.Warningf("Join Plan - lhs - %v, rhs - %v", node.lhs.tableID(), node.rhs.tableID())
-					case *routeTree:
-						log.Warningf("Route Plan - %v", node.tables.tableNames())
-					}
-				}
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
 				lIdx = i
