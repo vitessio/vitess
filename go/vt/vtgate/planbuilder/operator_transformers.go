@@ -102,7 +102,6 @@ func transformApplyJoinOpPlan(ctx *planningContext, n *applyJoin) (logicalPlan, 
 }
 
 func transformRouteOpPlan(ctx *planningContext, op *routeOp) (*routeGen4, error) {
-
 	tableNames := getAllTableNames(op)
 
 	var singleColumn vindexes.SingleColumn

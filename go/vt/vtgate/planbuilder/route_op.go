@@ -268,3 +268,11 @@ func (r *routeOp) CheckValid() error {
 func (r *routeOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return r, nil
 }
+
+func (r *routeOp) isSingleShard() bool {
+	switch r.routeOpCode {
+	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
+		return true
+	}
+	return false
+}

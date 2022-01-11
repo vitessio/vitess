@@ -40,9 +40,6 @@ type horizonPlanning struct {
 
 func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
 	rb, isRoute := plan.(*routeGen4)
-	if !isRoute && ctx.semTable.ShardedError != nil {
-		return nil, ctx.semTable.ShardedError
-	}
 
 	if isRoute && rb.isSingleShard() {
 		err := planSingleShardRoutePlan(hp.sel, rb)
@@ -50,6 +47,11 @@ func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (
 			return nil, err
 		}
 		return plan, nil
+	}
+
+	if ctx.semTable.ShardedError != nil {
+		// If we got here, we don't have a single shard plan
+		return nil, ctx.semTable.ShardedError
 	}
 
 	qp, err := abstract.CreateQPFromSelect(hp.sel, ctx.semTable)
