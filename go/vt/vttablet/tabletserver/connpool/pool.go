@@ -242,9 +242,7 @@ func (cp *Pool) StatsJSON() string {
 	if closingBraceIndex == -1 { // unexpected...
 		return res
 	}
-	res = res[:closingBraceIndex]
-	res += fmt.Sprintf(`, "WaiterQueueFull": %v}`, cp.waiterQueueFull.Get())
-	return res
+	return fmt.Sprintf(`%s, "WaiterQueueFull": %v}`, res[:closingBraceIndex], cp.waiterQueueFull.Get())
 }
 
 // Capacity returns the pool capacity.
