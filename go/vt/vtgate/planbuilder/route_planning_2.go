@@ -124,14 +124,14 @@ func seedOperatorList(ctx *context.PlanningContext, qg *abstract.QueryGraph) ([]
 	return plans, nil
 }
 
-func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTable, solves semantics.TableSet) (*routeOp, error) {
+func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTable, solves semantics.TableSet) (*physical.RouteOp, error) {
 	// if table.IsInfSchema {
 	//	ks, err := ctx.vschema.AnyKeyspace()
 	//	if err != nil {
 	//		return nil, err
 	//	}
 	//	rp := &routeTree{
-	//		routeOpCode: engine.SelectDBA,
+	//		RouteOpCode: engine.SelectDBA,
 	//		solved:      solves,
 	//		keyspace:    ks,
 	//		tables: []relation{&routeTable{
@@ -169,47 +169,47 @@ func createRouteOperator(ctx *context.PlanningContext, table *abstract.QueryTabl
 			table.Alias.As = sqlparser.NewTableIdent(name.String())
 		}
 	}
-	plan := &routeOp{
-		source: &physical.TableOp{
+	plan := &physical.RouteOp{
+		Source: &physical.TableOp{
 			QTable: table,
 			VTable: vschemaTable,
 		},
-		keyspace: vschemaTable.Keyspace,
+		Keyspace: vschemaTable.Keyspace,
 	}
 
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
-		plan.vindexPreds = append(plan.vindexPreds, &vindexPlusPredicates{colVindex: columnVindex, tableID: solves})
+		plan.VindexPreds = append(plan.VindexPreds, &physical.VindexPlusPredicates{ColVindex: columnVindex, TableID: solves})
 	}
 
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
-		plan.routeOpCode = engine.SelectNext
+		plan.RouteOpCode = engine.SelectNext
 	case vschemaTable.Type == vindexes.TypeReference:
-		plan.routeOpCode = engine.SelectReference
+		plan.RouteOpCode = engine.SelectReference
 	case !vschemaTable.Keyspace.Sharded:
-		plan.routeOpCode = engine.SelectUnsharded
+		plan.RouteOpCode = engine.SelectUnsharded
 	case vschemaTable.Pinned != nil:
 		// Pinned tables have their keyspace ids already assigned.
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
-		plan.routeOpCode = engine.SelectEqualUnique
+		plan.RouteOpCode = engine.SelectEqualUnique
 		vindex, _ := vindexes.NewBinary("binary", nil)
-		plan.selected = &vindexOption{
-			ready:       true,
-			values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
-			valueExprs:  nil,
-			predicates:  nil,
-			opcode:      engine.SelectEqualUnique,
-			foundVindex: vindex,
-			cost: cost{
-				opCode: engine.SelectEqualUnique,
+		plan.Selected = &physical.VindexOption{
+			Ready:       true,
+			Values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
+			ValueExprs:  nil,
+			Predicates:  nil,
+			OpCode:      engine.SelectEqualUnique,
+			FoundVindex: vindex,
+			Cost: physical.Cost{
+				OpCode: engine.SelectEqualUnique,
 			},
 		}
 	default:
-		plan.routeOpCode = engine.SelectScatter
+		plan.RouteOpCode = engine.SelectScatter
 	}
 	for _, predicate := range table.Predicates {
-		err = plan.updateRoutingLogic(ctx, predicate)
+		err = plan.UpdateRoutingLogic(ctx, predicate)
 		if err != nil {
 			return nil, err
 		}
@@ -284,8 +284,8 @@ func findBestJoinOp(
 					switch node := plan.(type) {
 					case *physical.ApplyJoin:
 						log.Warningf("Join Plan - lhs - %v, rhs - %v", node.LHS.TableID(), node.RHS.TableID())
-					case *routeOp:
-						joinOp := node.source.(*physical.ApplyJoin)
+					case *physical.RouteOp:
+						joinOp := node.Source.(*physical.ApplyJoin)
 						log.Warningf("Route Plan - lhs - %v, rhs - %v", joinOp.LHS.TableID(), joinOp.RHS.TableID())
 					}
 				}
@@ -316,7 +316,7 @@ func getJoinOpFor(ctx *context.PlanningContext, cm opCacheMap, lhs, rhs abstract
 
 func mergeOrJoinOp(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
-	merger := func(a, b *routeOp) (*routeOp, error) {
+	merger := func(a, b *physical.RouteOp) (*physical.RouteOp, error) {
 		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
 	}
 
@@ -341,7 +341,7 @@ func mergeOrJoinOp(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOpera
 	return tree, nil
 }
 
-func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *routeOp, joinPredicates []sqlparser.Expr, inner bool) (*routeOp, error) {
+func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *physical.RouteOp, joinPredicates []sqlparser.Expr, inner bool) (*physical.RouteOp, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -352,15 +352,15 @@ func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *ro
 		}
 	}
 
-	r := &routeOp{
-		routeOpCode:         aRoute.routeOpCode,
-		keyspace:            aRoute.keyspace,
-		vindexPreds:         append(aRoute.vindexPreds, bRoute.vindexPreds...),
+	r := &physical.RouteOp{
+		RouteOpCode:         aRoute.RouteOpCode,
+		Keyspace:            aRoute.Keyspace,
+		VindexPreds:         append(aRoute.VindexPreds, bRoute.VindexPreds...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
-		source: &physical.ApplyJoin{
-			LHS:      aRoute.source,
-			RHS:      bRoute.source,
+		Source: &physical.ApplyJoin{
+			LHS:      aRoute.Source,
+			RHS:      bRoute.Source,
 			Vars:     map[string]int{},
 			LeftJoin: !inner,
 		},
@@ -371,24 +371,24 @@ func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *ro
 		if err != nil {
 			return nil, err
 		}
-		route, ok := op.(*routeOp)
+		route, ok := op.(*physical.RouteOp)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] did not expect type to change when pushing predicates")
 		}
 		r = route
 	}
 
-	if aRoute.selectedVindex() == bRoute.selectedVindex() {
-		r.selected = aRoute.selected
+	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
+		r.Selected = aRoute.Selected
 	}
 
 	return r, nil
 }
 
-type mergeOpFunc func(a, b *routeOp) (*routeOp, error)
+type mergeOpFunc func(a, b *physical.RouteOp) (*physical.RouteOp, error)
 
-func makeRouteOp(j abstract.PhysicalOperator) *routeOp {
-	rb, ok := j.(*routeOp)
+func makeRouteOp(j abstract.PhysicalOperator) *physical.RouteOp {
+	rb, ok := j.(*physical.RouteOp)
 	if ok {
 		return rb
 	}
@@ -420,7 +420,7 @@ func makeRouteOp(j abstract.PhysicalOperator) *routeOp {
 	// return inner
 }
 
-func operatorsToRoutes(a, b abstract.PhysicalOperator) (*routeOp, *routeOp) {
+func operatorsToRoutes(a, b abstract.PhysicalOperator) (*physical.RouteOp, *physical.RouteOp) {
 	aRoute := makeRouteOp(a)
 	if aRoute == nil {
 		return nil, nil
@@ -438,7 +438,7 @@ func tryMergeOp(ctx *context.PlanningContext, a, b abstract.PhysicalOperator, jo
 		return nil, nil
 	}
 
-	sameKeyspace := aRoute.keyspace == bRoute.keyspace
+	sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
 
 	if sameKeyspace || (isDualTableOp(aRoute) || isDualTableOp(bRoute)) {
 		tree, err := tryMergeReferenceTableOp(aRoute, bRoute, merger)
@@ -447,16 +447,16 @@ func tryMergeOp(ctx *context.PlanningContext, a, b abstract.PhysicalOperator, jo
 		}
 	}
 
-	switch aRoute.routeOpCode {
+	switch aRoute.RouteOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
-		if aRoute.routeOpCode == bRoute.routeOpCode {
+		if aRoute.RouteOpCode == bRoute.RouteOpCode {
 			return merger(aRoute, bRoute)
 		}
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
-		if bRoute.routeOpCode == engine.SelectEqualUnique {
-			if aRoute.selectedVindex() == bRoute.selectedVindex() &&
-				gen4ValuesEqual(ctx, aRoute.vindexExpressions(), bRoute.vindexExpressions()) {
+		if bRoute.RouteOpCode == engine.SelectEqualUnique {
+			if aRoute.SelectedVindex() == bRoute.SelectedVindex() &&
+				gen4ValuesEqual(ctx, aRoute.VindexExpressions(), bRoute.VindexExpressions()) {
 				return merger(aRoute, bRoute)
 			}
 			return nil, nil
@@ -481,13 +481,13 @@ func tryMergeOp(ctx *context.PlanningContext, a, b abstract.PhysicalOperator, jo
 		if err != nil {
 			return nil, err
 		}
-		r.pickBestAvailableVindex()
+		r.PickBestAvailableVindex()
 		return r, nil
 	}
 	return nil, nil
 }
 
-func isDualTableOp(route *routeOp) bool {
+func isDualTableOp(route *physical.RouteOp) bool {
 	sources := leaves(route)
 	if len(sources) > 1 {
 		return false
@@ -526,25 +526,25 @@ func leaves(op abstract.Operator) (sources []abstract.Operator) {
 		return []abstract.Operator{op.LHS, op.RHS}
 	case *physical.FilterOp:
 		return []abstract.Operator{op.Source}
-	case *routeOp:
-		return []abstract.Operator{op.source}
+	case *physical.RouteOp:
+		return []abstract.Operator{op.Source}
 	}
 
 	panic(fmt.Sprintf("leaves unknown type: %T", op))
 }
 
-func tryMergeReferenceTableOp(aRoute, bRoute *routeOp, merger mergeOpFunc) (*routeOp, error) {
+func tryMergeReferenceTableOp(aRoute, bRoute *physical.RouteOp, merger mergeOpFunc) (*physical.RouteOp, error) {
 	// if either side is a reference table, we can just merge it and use the opcode of the other side
 	var opCode engine.RouteOpcode
-	var selected *vindexOption
+	var selected *physical.VindexOption
 
 	switch {
-	case aRoute.routeOpCode == engine.SelectReference:
-		selected = bRoute.selected
-		opCode = bRoute.routeOpCode
-	case bRoute.routeOpCode == engine.SelectReference:
-		selected = aRoute.selected
-		opCode = aRoute.routeOpCode
+	case aRoute.RouteOpCode == engine.SelectReference:
+		selected = bRoute.Selected
+		opCode = bRoute.RouteOpCode
+	case bRoute.RouteOpCode == engine.SelectReference:
+		selected = aRoute.Selected
+		opCode = aRoute.RouteOpCode
 	default:
 		return nil, nil
 	}
@@ -553,25 +553,12 @@ func tryMergeReferenceTableOp(aRoute, bRoute *routeOp, merger mergeOpFunc) (*rou
 	if err != nil {
 		return nil, err
 	}
-	r.routeOpCode = opCode
-	r.selected = selected
+	r.RouteOpCode = opCode
+	r.Selected = selected
 	return r, nil
 }
 
-func (r *routeOp) selectedVindex() vindexes.Vindex {
-	if r.selected == nil {
-		return nil
-	}
-	return r.selected.foundVindex
-}
-func (r *routeOp) vindexExpressions() []sqlparser.Expr {
-	if r.selected == nil {
-		return nil
-	}
-	return r.selected.valueExprs
-}
-
-func canMergeOpsOnFilter(ctx *context.PlanningContext, a, b *routeOp, predicate sqlparser.Expr) bool {
+func canMergeOpsOnFilter(ctx *context.PlanningContext, a, b *physical.RouteOp, predicate sqlparser.Expr) bool {
 	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -597,7 +584,7 @@ func canMergeOpsOnFilter(ctx *context.PlanningContext, a, b *routeOp, predicate 
 	return rVindex == lVindex
 }
 
-func findColumnVindexOnOps(ctx *context.PlanningContext, a *routeOp, exp sqlparser.Expr) vindexes.SingleColumn {
+func findColumnVindexOnOps(ctx *context.PlanningContext, a *physical.RouteOp, exp sqlparser.Expr) vindexes.SingleColumn {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
@@ -640,7 +627,7 @@ func findColumnVindexOnOps(ctx *context.PlanningContext, a *routeOp, exp sqlpars
 	return singCol
 }
 
-func canMergeOpsOnFilters(ctx *context.PlanningContext, a, b *routeOp, joinPredicates []sqlparser.Expr) bool {
+func canMergeOpsOnFilters(ctx *context.PlanningContext, a, b *physical.RouteOp, joinPredicates []sqlparser.Expr) bool {
 	for _, predicate := range joinPredicates {
 		for _, expr := range sqlparser.SplitAndExpression(nil, predicate) {
 			if canMergeOpsOnFilter(ctx, a, b, expr) {
@@ -664,8 +651,8 @@ func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 	switch op := op.(type) {
 	case *physical.TableOp, *abstract.QueryGraph, *abstract.Vindex:
 		// leaf - no children to visit
-	case *routeOp:
-		err := visitOperators(op.source, f)
+	case *physical.RouteOp:
+		err := visitOperators(op.Source, f)
 		if err != nil {
 			return err
 		}

@@ -28,16 +28,16 @@ import (
 // PushPredicate is used to push predicates
 func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
-	case *routeOp:
-		err := op.updateRoutingLogic(ctx, expr)
+	case *physical.RouteOp:
+		err := op.UpdateRoutingLogic(ctx, expr)
 		if err != nil {
 			return nil, err
 		}
-		newSrc, err := PushPredicate(ctx, expr, op.source)
+		newSrc, err := PushPredicate(ctx, expr, op.Source)
 		if err != nil {
 			return nil, err
 		}
-		op.source = newSrc
+		op.Source = newSrc
 		return op, err
 	case *physical.ApplyJoin:
 		deps := ctx.SemTable.RecursiveDeps(expr)
@@ -115,9 +115,9 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 
 func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
-	case *routeOp:
-		retOp, offsets, err := PushOutputColumns(ctx, op.source, columns...)
-		op.source = retOp
+	case *physical.RouteOp:
+		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
+		op.Source = retOp
 		return op, offsets, err
 	case *physical.ApplyJoin:
 		var toTheLeft []bool

@@ -61,7 +61,7 @@ func (to *TableOp) TableID() semantics.TableSet {
 
 // PushPredicate implements the PhysicalOperator interface
 func (to *TableOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push predicates into a TableOp. It is meant to be immutable")
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a TableOp. It is meant to be immutable")
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
