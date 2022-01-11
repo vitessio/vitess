@@ -166,13 +166,10 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 	case *sqlparser.Union:
 		op, err = createOperatorFromUnion(node, semTable)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 	}
 
-	if err != nil {
-		return nil, err
-	}
-	return op, nil // TODO - we should compact
+	return // TODO - we should compact
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
