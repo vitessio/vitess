@@ -16,7 +16,22 @@ limitations under the License.
 
 package buffer
 
+import "time"
+
 // SetBufferingModeInTestingEnv should only be used from testing code to change the flag (enable_buffer) default value
 func SetBufferingModeInTestingEnv(enabled bool) {
-	*bufferEnabled = enabled
+	if enabled {
+		// the integration tests for buffering where designed based on these constant values
+		*bufferEnabled = true
+		*bufferWindow = 10 * time.Second
+		*bufferSize = 1000
+		*bufferMaxFailoverDuration = 20 * time.Second
+		*bufferMinTimeBetweenFailovers = 1 * time.Minute
+	} else {
+		*bufferEnabled = false
+		*bufferWindow = defaultBufferWindow
+		*bufferSize = defaultBufferSize
+		*bufferMaxFailoverDuration = defaultBufferMaxFailoverDuration
+		*bufferMinTimeBetweenFailovers = defaultBufferMinTimeBetweenFailovers
+	}
 }
