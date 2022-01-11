@@ -5,6 +5,13 @@ This release complies with VEP-3 which removes the upgrade order requirement. Co
 * Online DDL [cannot be used](https://github.com/vitessio/vitess/pull/7873#issuecomment-822798180) if you are using the keyspace filtering feature of VTGate
 * VReplication errors when a fixed-length binary column is used as the sharding key #8080
 
+* A critical vulnerability [CVE-2021-44228](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44228) in the Apache Log4j logging library was disclosed on Dec 9 2021.
+  The project provided release `2.15.0` with a patch that mitigates the impact of this CVE. It was quickly found that the initial patch was insufficient, and additional CVEs
+  [CVE-2021-45046](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-45046) and [CVE-2021-44832](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44832) followed.
+  These have been fixed in release `2.17.1`. This release of Vitess, `v10.0.0`, uses a version of Log4j below `2.17.1`, for this reason, we encourage you to use version `v10.0.5` instead, to benefit from the vulnerability patches.
+
+* An issue where the value of the `-force` flag is used instead of `-keep_data` flag's value in v2 vreplication workflows (#9174) is known to be present in this release. A workaround is available in the description of issue #9174.
+
 ## Bugs Fixed
 
 ### VTGate / MySQL compatibility
