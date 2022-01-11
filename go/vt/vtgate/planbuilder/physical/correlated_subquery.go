@@ -22,28 +22,44 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type CorrelatedSubQueryOp struct {
-	Outer, Inner abstract.PhysicalOperator
-	Extracted    *sqlparser.ExtractedSubquery
-	// arguments that need to be copied from the uter to inner
-	Vars map[string]int
-}
+type (
+	CorrelatedSubQueryOp struct {
+		Outer, Inner abstract.PhysicalOperator
+		Extracted    *sqlparser.ExtractedSubquery
+		// arguments that need to be copied from the outer to inner
+		Vars map[string]int
+	}
 
-type SubQueryOp struct {
-	Outer, Inner abstract.PhysicalOperator
-	Extracted    *sqlparser.ExtractedSubquery
-}
+	SubQueryOp struct {
+		Outer, Inner abstract.PhysicalOperator
+		Extracted    *sqlparser.ExtractedSubquery
+	}
+
+	SubQueryInner struct {
+		Inner abstract.LogicalOperator
+
+		// ExtractedSubquery contains all information we need about this subquery
+		ExtractedSubquery *sqlparser.ExtractedSubquery
+	}
+)
+
+var _ abstract.PhysicalOperator = (*SubQueryOp)(nil)
+var _ abstract.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
 
 func (s *SubQueryOp) TableID() semantics.TableSet {
 	return s.Inner.TableID().Merge(s.Outer.TableID())
 }
 
 func (s *SubQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+	return append(s.Outer.UnsolvedPredicates(semTable), s.Inner.UnsolvedPredicates(semTable)...)
 }
 
 func (s *SubQueryOp) CheckValid() error {
-	panic("implement me")
+	err := s.Inner.CheckValid()
+	if err != nil {
+		return err
+	}
+	return s.Outer.CheckValid()
 }
 
 func (s *SubQueryOp) IPhysical() {}
@@ -66,11 +82,15 @@ func (c *CorrelatedSubQueryOp) TableID() semantics.TableSet {
 }
 
 func (c *CorrelatedSubQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+	return append(c.Outer.UnsolvedPredicates(semTable), c.Inner.UnsolvedPredicates(semTable)...)
 }
 
 func (c *CorrelatedSubQueryOp) CheckValid() error {
-	panic("implement me")
+	err := c.Inner.CheckValid()
+	if err != nil {
+		return err
+	}
+	return c.Outer.CheckValid()
 }
 
 func (c *CorrelatedSubQueryOp) IPhysical() {}
@@ -87,13 +107,3 @@ func (c *CorrelatedSubQueryOp) Clone() abstract.PhysicalOperator {
 	}
 	return result
 }
-
-type SubQueryInner struct {
-	Inner abstract.LogicalOperator
-
-	// ExtractedSubquery contains all information we need about this subquery
-	ExtractedSubquery *sqlparser.ExtractedSubquery
-}
-
-var _ abstract.PhysicalOperator = (*SubQueryOp)(nil)
-var _ abstract.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)

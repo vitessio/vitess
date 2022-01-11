@@ -28,7 +28,7 @@ import (
 // PushPredicate is used to push predicates
 func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
-	case *RouteOp:
+	case *Route:
 		err := op.UpdateRoutingLogic(ctx, expr)
 		if err != nil {
 			return nil, err
@@ -98,14 +98,14 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 			return op, err
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
-	case *TableOp:
+	case *Table:
 		// We do not add the predicate to op.qtable because that is an immutable struct that should not be
 		// changed by physical operators.
-		return &FilterOp{
+		return &Filter{
 			Source:     op,
 			Predicates: []sqlparser.Expr{expr},
 		}, nil
-	case *FilterOp:
+	case *Filter:
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
 	default:
@@ -115,7 +115,7 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 
 func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
-	case *RouteOp:
+	case *Route:
 		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
 		op.Source = retOp
 		return op, offsets, err
@@ -156,7 +156,7 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 			}
 		}
 		return op, outputColumns, nil
-	case *TableOp:
+	case *Table:
 		before := len(op.Columns)
 		op.Columns = append(op.Columns, columns...)
 		var offsets []int
@@ -164,9 +164,9 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 			offsets = append(offsets, i)
 		}
 		return op, offsets, nil
-	case *FilterOp:
+	case *Filter:
 		return PushOutputColumns(ctx, op.Source, columns...)
-	case *VindexOp:
+	case *Vindex:
 		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err
 	default:

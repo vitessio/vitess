@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type VindexOp struct {
+type Vindex struct {
 	OpCode  engine.VindexOpcode
 	Table   abstract.VindexTable
 	Vindex  vindexes.Vindex
@@ -35,37 +35,37 @@ type VindexOp struct {
 }
 
 // TableID implements the Operator interface
-func (v *VindexOp) TableID() semantics.TableSet {
+func (v *Vindex) TableID() semantics.TableSet {
 	return v.Solved
 }
 
 // UnsolvedPredicates implements the Operator interface
-func (v *VindexOp) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
+func (v *Vindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	return nil
 }
 
 // CheckValid implements the Operator interface
-func (v *VindexOp) CheckValid() error {
+func (v *Vindex) CheckValid() error {
 	return nil
 }
 
 // IPhysical implements the PhysicalOperator interface
-func (v *VindexOp) IPhysical() {}
+func (v *Vindex) IPhysical() {}
 
 // Cost implements the PhysicalOperator interface
-func (v *VindexOp) Cost() int {
+func (v *Vindex) Cost() int {
 	return int(engine.SelectEqualUnique)
 }
 
 // Clone implements the PhysicalOperator interface
-func (v *VindexOp) Clone() abstract.PhysicalOperator {
+func (v *Vindex) Clone() abstract.PhysicalOperator {
 	clone := *v
 	return &clone
 }
 
-var _ abstract.PhysicalOperator = (*VindexOp)(nil)
+var _ abstract.PhysicalOperator = (*Vindex)(nil)
 
-func (v *VindexOp) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
+func (v *Vindex) PushOutputColumns(columns []*sqlparser.ColName) ([]int, error) {
 	idxs := make([]int, len(columns))
 outer:
 	for i, newCol := range columns {
@@ -83,7 +83,7 @@ outer:
 
 func optimizeVindexOp(ctx *context.PlanningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
 	solves := ctx.SemTable.TableSetFor(op.Table.Alias)
-	return &VindexOp{
+	return &Vindex{
 		OpCode: op.OpCode,
 		Table:  op.Table,
 		Vindex: op.Vindex,

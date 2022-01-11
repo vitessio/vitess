@@ -25,29 +25,29 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type TableOp struct {
+type Table struct {
 	QTable  *abstract.QueryTable
 	VTable  *vindexes.Table
 	Columns []*sqlparser.ColName
 }
 
-var _ abstract.PhysicalOperator = (*TableOp)(nil)
+var _ abstract.PhysicalOperator = (*Table)(nil)
 
 // IPhysical implements the PhysicalOperator interface
-func (to *TableOp) IPhysical() {}
+func (to *Table) IPhysical() {}
 
 // Cost implements the PhysicalOperator interface
-func (to *TableOp) Cost() int {
+func (to *Table) Cost() int {
 	return 0
 }
 
 // Clone implements the PhysicalOperator interface
-func (to *TableOp) Clone() abstract.PhysicalOperator {
+func (to *Table) Clone() abstract.PhysicalOperator {
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
 	}
-	return &TableOp{
+	return &Table{
 		QTable:  to.QTable,
 		VTable:  to.VTable,
 		Columns: columns,
@@ -55,26 +55,26 @@ func (to *TableOp) Clone() abstract.PhysicalOperator {
 }
 
 // TableID implements the PhysicalOperator interface
-func (to *TableOp) TableID() semantics.TableSet {
+func (to *Table) TableID() semantics.TableSet {
 	return to.QTable.ID
 }
 
 // PushPredicate implements the PhysicalOperator interface
-func (to *TableOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a TableOp. It is meant to be immutable")
+func (to *Table) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we should not push Predicates into a Table. It is meant to be immutable")
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (to *TableOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (to *Table) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (to *TableOp) CheckValid() error {
+func (to *Table) CheckValid() error {
 	return nil
 }
 
 // Compact implements the PhysicalOperator interface
-func (to *TableOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (to *Table) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return to, nil
 }

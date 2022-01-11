@@ -22,6 +22,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+// ApplyJoin is a nested loop join - for each row on the LHS,
+// we'll execute the plan on the RHS, feeding data from left to right
 type ApplyJoin struct {
 	LHS, RHS abstract.PhysicalOperator
 
@@ -32,6 +34,7 @@ type ApplyJoin struct {
 	// Vars are the arguments that need to be copied from the LHS to the RHS
 	Vars map[string]int
 
+	// LeftJoin will be true in the case of an outer join
 	LeftJoin bool
 
 	Predicate sqlparser.Expr
@@ -45,11 +48,6 @@ func (a *ApplyJoin) IPhysical() {}
 // TableID implements the PhysicalOperator interface
 func (a *ApplyJoin) TableID() semantics.TableSet {
 	return a.LHS.TableID().Merge(a.RHS.TableID())
-}
-
-// PushPredicate implements the PhysicalOperator interface
-func (a *ApplyJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	panic("unimplemented")
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
