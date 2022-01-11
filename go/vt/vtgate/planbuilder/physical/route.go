@@ -27,7 +27,7 @@ import (
 )
 
 type (
-	RouteOp struct {
+	Route struct {
 		Source abstract.PhysicalOperator
 
 		RouteOpCode engine.RouteOpcode
@@ -75,18 +75,18 @@ type (
 	}
 )
 
-var _ abstract.PhysicalOperator = (*RouteOp)(nil)
+var _ abstract.PhysicalOperator = (*Route)(nil)
 
 // IPhysical implements the PhysicalOperator interface
-func (*RouteOp) IPhysical() {}
+func (*Route) IPhysical() {}
 
 // TableID implements the Operator interface
-func (r *RouteOp) TableID() semantics.TableSet {
+func (r *Route) TableID() semantics.TableSet {
 	return r.Source.TableID()
 }
 
 // Cost implements the Operator interface
-func (r *RouteOp) Cost() int {
+func (r *Route) Cost() int {
 	switch r.RouteOpCode {
 	case // these op codes will never be compared with each other - they are assigned by a rule and not a comparison
 		engine.SelectDBA,
@@ -111,7 +111,7 @@ func (r *RouteOp) Cost() int {
 }
 
 // Clone implements the PhysicalOperator interface
-func (r *RouteOp) Clone() abstract.PhysicalOperator {
+func (r *Route) Clone() abstract.PhysicalOperator {
 	cloneRoute := *r
 	cloneRoute.Source = r.Source.Clone()
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
@@ -123,7 +123,7 @@ func (r *RouteOp) Clone() abstract.PhysicalOperator {
 	return &cloneRoute
 }
 
-func (r *RouteOp) UpdateRoutingLogic(ctx *context.PlanningContext, expr sqlparser.Expr) error {
+func (r *Route) UpdateRoutingLogic(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	if r.canImprove() {
 		newVindexFound, err := r.searchForNewVindexes(ctx, expr)
 		if err != nil {
@@ -138,7 +138,7 @@ func (r *RouteOp) UpdateRoutingLogic(ctx *context.PlanningContext, expr sqlparse
 	return nil
 }
 
-func (r *RouteOp) searchForNewVindexes(ctx *context.PlanningContext, predicate sqlparser.Expr) (bool, error) {
+func (r *Route) searchForNewVindexes(ctx *context.PlanningContext, predicate sqlparser.Expr) (bool, error) {
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.ComparisonExpr:
@@ -151,7 +151,7 @@ func (r *RouteOp) searchForNewVindexes(ctx *context.PlanningContext, predicate s
 	return newVindexFound, nil
 }
 
-func (r *RouteOp) planComparison(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
+func (r *Route) planComparison(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
 	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
@@ -168,7 +168,7 @@ func (r *RouteOp) planComparison(ctx *context.PlanningContext, node *sqlparser.C
 	return false, false, nil
 }
 
-func (r *RouteOp) planEqualOp(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) bool {
+func (r *Route) planEqualOp(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
 	vdValue := other
@@ -193,7 +193,7 @@ func (r *RouteOp) planEqualOp(ctx *context.PlanningContext, node *sqlparser.Comp
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
-func (r *RouteOp) makeEvalEngineExpr(ctx *context.PlanningContext, n sqlparser.Expr) evalengine.Expr {
+func (r *Route) makeEvalEngineExpr(ctx *context.PlanningContext, n sqlparser.Expr) evalengine.Expr {
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
 			extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
@@ -216,7 +216,7 @@ func (r *RouteOp) makeEvalEngineExpr(ctx *context.PlanningContext, n sqlparser.E
 	return nil
 }
 
-func (r *RouteOp) hasVindex(column *sqlparser.ColName) bool {
+func (r *Route) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range r.VindexPreds {
 		for _, col := range v.ColVindex.Columns {
 			if column.Name.Equal(col) {
@@ -227,7 +227,7 @@ func (r *RouteOp) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
-func (r *RouteOp) haveMatchingVindex(
+func (r *Route) haveMatchingVindex(
 	ctx *context.PlanningContext,
 	node sqlparser.Expr,
 	valueExpr sqlparser.Expr,
@@ -271,7 +271,7 @@ func (r *RouteOp) haveMatchingVindex(
 }
 
 // PickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
-func (r *RouteOp) PickBestAvailableVindex() {
+func (r *Route) PickBestAvailableVindex() {
 	for _, v := range r.VindexPreds {
 		option := v.bestOption()
 		if option != nil && (r.Selected == nil || less(option.Cost, r.Selected.Cost)) {
@@ -282,26 +282,26 @@ func (r *RouteOp) PickBestAvailableVindex() {
 }
 
 // canImprove returns true if additional predicates could help improving this plan
-func (r *RouteOp) canImprove() bool {
+func (r *Route) canImprove() bool {
 	return r.RouteOpCode != engine.SelectNone
 }
 
 // UnsolvedPredicates implements the Operator interface
-func (r *RouteOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (r *Route) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return r.Source.UnsolvedPredicates(semTable)
 }
 
 // CheckValid implements the Operator interface
-func (r *RouteOp) CheckValid() error {
+func (r *Route) CheckValid() error {
 	return r.Source.CheckValid()
 }
 
 // Compact implements the Operator interface
-func (r *RouteOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (r *Route) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return r, nil
 }
 
-func (r *RouteOp) IsSingleShard() bool {
+func (r *Route) IsSingleShard() bool {
 	switch r.RouteOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
 		return true
@@ -309,14 +309,14 @@ func (r *RouteOp) IsSingleShard() bool {
 	return false
 }
 
-func (r *RouteOp) SelectedVindex() vindexes.Vindex {
+func (r *Route) SelectedVindex() vindexes.Vindex {
 	if r.Selected == nil {
 		return nil
 	}
 	return r.Selected.FoundVindex
 }
 
-func (r *RouteOp) VindexExpressions() []sqlparser.Expr {
+func (r *Route) VindexExpressions() []sqlparser.Expr {
 	if r.Selected == nil {
 		return nil
 	}

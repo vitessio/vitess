@@ -22,53 +22,53 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type FilterOp struct {
+type Filter struct {
 	Source     abstract.PhysicalOperator
 	Predicates []sqlparser.Expr
 }
 
-var _ abstract.PhysicalOperator = (*FilterOp)(nil)
+var _ abstract.PhysicalOperator = (*Filter)(nil)
 
 // IPhysical implements the PhysicalOperator interface
-func (f *FilterOp) IPhysical() {}
+func (f *Filter) IPhysical() {}
 
 // TableID implements the PhysicalOperator interface
-func (f *FilterOp) TableID() semantics.TableSet {
+func (f *Filter) TableID() semantics.TableSet {
 	return f.Source.TableID()
 }
 
 // PushPredicate implements the PhysicalOperator interface
-func (f *FilterOp) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (f *Filter) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	panic("unimplemented")
 }
 
 // UnsolvedPredicates implements the PhysicalOperator interface
-func (f *FilterOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (f *Filter) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
 // CheckValid implements the PhysicalOperator interface
-func (f *FilterOp) CheckValid() error {
+func (f *Filter) CheckValid() error {
 	return f.Source.CheckValid()
 }
 
 // Compact implements the PhysicalOperator interface
-func (f *FilterOp) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
+func (f *Filter) Compact(semTable *semantics.SemTable) (abstract.Operator, error) {
 	return f, nil
 }
 
 // Cost implements the PhysicalOperator interface
-func (f *FilterOp) Cost() int {
+func (f *Filter) Cost() int {
 	return f.Source.Cost()
 }
 
 // Clone implements the PhysicalOperator interface
-func (f *FilterOp) Clone() abstract.PhysicalOperator {
+func (f *Filter) Clone() abstract.PhysicalOperator {
 	var predicatesClone []sqlparser.Expr
 	for _, predicate := range f.Predicates {
 		predicatesClone = append(predicatesClone, sqlparser.CloneExpr(predicate))
 	}
-	return &FilterOp{
+	return &Filter{
 		Source:     f.Source.Clone(),
 		Predicates: predicatesClone,
 	}

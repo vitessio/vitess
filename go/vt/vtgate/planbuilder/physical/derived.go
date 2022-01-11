@@ -29,7 +29,7 @@ type Derived struct {
 	Alias         string
 	ColumnAliases sqlparser.Columns
 
-	// columns needed to feed other plans
+	// Columns needed to feed other plans
 	Columns       []*sqlparser.ColName
 	ColumnsOffset []int
 }

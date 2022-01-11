@@ -40,13 +40,13 @@ import (
 
 func transformOpToLogicalPlan(ctx *context.PlanningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
 	switch op := op.(type) {
-	case *physical.RouteOp:
+	case *physical.Route:
 		return transformRouteOpPlan(ctx, op)
 	case *physical.ApplyJoin:
 		return transformApplyJoinOpPlan(ctx, op)
 	case *physical.UnionOp:
 		return transformUnionOpPlan(ctx, op)
-	case *physical.VindexOp:
+	case *physical.Vindex:
 		return transformVindexOpPlan(ctx, op)
 	case *physical.SubQueryOp:
 		return transformSubQueryOpPlan(ctx, op)
@@ -107,7 +107,7 @@ func transformApplyJoinOpPlan(ctx *context.PlanningContext, n *physical.ApplyJoi
 	}, nil
 }
 
-func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.RouteOp) (*routeGen4, error) {
+func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*routeGen4, error) {
 	tableNames := getAllTableNames(op)
 
 	var singleColumn vindexes.SingleColumn
@@ -147,10 +147,10 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.RouteOp) (*
 
 }
 
-func getAllTableNames(op *physical.RouteOp) []string {
+func getAllTableNames(op *physical.Route) []string {
 	tableNameMap := map[string]interface{}{}
 	_ = physical.VisitOperators(op, func(op abstract.Operator) (bool, error) {
-		tbl, isTbl := op.(*physical.TableOp)
+		tbl, isTbl := op.(*physical.Table)
 		var name string
 		if isTbl {
 			if tbl.QTable.IsInfSchema {

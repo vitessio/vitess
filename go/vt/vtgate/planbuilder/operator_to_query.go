@@ -40,7 +40,7 @@ func toSQL(ctx *context.PlanningContext, op abstract.PhysicalOperator) sqlparser
 
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
-	case *physical.TableOp:
+	case *physical.Table:
 		qb.addTable(op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID())
 		for _, pred := range op.QTable.Predicates {
 			qb.addPredicate(pred)
@@ -63,7 +63,7 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		} else {
 			qb.joinInnerWith(qbR, op.Predicate)
 		}
-	case *physical.FilterOp:
+	case *physical.Filter:
 		buildQuery(op.Source, qb)
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
