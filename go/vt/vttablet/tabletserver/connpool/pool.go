@@ -17,7 +17,9 @@ limitations under the License.
 package connpool
 
 import (
+	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -235,7 +237,14 @@ func (cp *Pool) StatsJSON() string {
 	if p == nil {
 		return "{}"
 	}
-	return p.StatsJSON()
+	res := p.StatsJSON()
+	closingBraceIndex := strings.LastIndex(res, "}")
+	if closingBraceIndex == -1 { // unexpected...
+		return res
+	}
+	res = res[:closingBraceIndex]
+	res += fmt.Sprintf(`, "WaiterQueueFull": %v}`, cp.waiterQueueFull.Get())
+	return res
 }
 
 // Capacity returns the pool capacity.
