@@ -42,9 +42,9 @@ func transformOpToLogicalPlan(ctx *planningContext, op abstract.PhysicalOperator
 		return transformRouteOpPlan(ctx, op)
 	case *physical.ApplyJoin:
 		return transformApplyJoinOpPlan(ctx, op)
-	case *unionOp:
+	case *physical.UnionOp:
 		return transformUnionOpPlan(ctx, op)
-	case *vindexOp:
+	case *physical.VindexOp:
 		return transformVindexOpPlan(ctx, op)
 	case *physical.SubQueryOp:
 		return transformSubQueryOpPlan(ctx, op)
@@ -85,7 +85,7 @@ func transformApplyJoinOpPlan(ctx *planningContext, n *physical.ApplyJoin) (logi
 	//		Left:           lhs,
 	//		Right:          rhs,
 	//		Cols:           n.columns,
-	//		Opcode:         opCode,
+	//		Opcode:         OpCode,
 	//		LHSKey:         lhsInfo.offset,
 	//		RHSKey:         rhsInfo.offset,
 	//		Predicate:      sqlparser.AndExpressions(n.predicates...),
@@ -166,10 +166,10 @@ func getAllTableNames(op *routeOp) []string {
 	return tableNames
 }
 
-func transformUnionOpPlan(ctx *planningContext, op *unionOp) (logicalPlan, error) {
+func transformUnionOpPlan(ctx *planningContext, op *physical.UnionOp) (logicalPlan, error) {
 	var sources []logicalPlan
 	var err error
-	if op.distinct {
+	if op.Distinct {
 		sources, err = transformAndMergeOp(ctx, op)
 		if err != nil {
 			return nil, err
@@ -197,18 +197,18 @@ func transformUnionOpPlan(ctx *planningContext, op *unionOp) (logicalPlan, error
 	} else {
 		result = &concatenateGen4{sources: sources}
 	}
-	if op.distinct {
+	if op.Distinct {
 		return newDistinct(result, getCollationsForOp(ctx, op)), nil
 	}
 	return result, nil
 
 }
 
-func transformAndMergeOp(ctx *planningContext, op *unionOp) (sources []logicalPlan, err error) {
-	for i, source := range op.sources {
+func transformAndMergeOp(ctx *planningContext, op *physical.UnionOp) (sources []logicalPlan, err error) {
+	for i, source := range op.Sources {
 		// first we go over all the operator inputs and turn them into logical plans,
 		// including horizon planning
-		plan, err := createLogicalPlanOp(ctx, source, op.selectStmts[i])
+		plan, err := createLogicalPlanOp(ctx, source, op.SelectStmts[i])
 		if err != nil {
 			return nil, err
 		}
@@ -250,10 +250,10 @@ func transformAndMergeOp(ctx *planningContext, op *unionOp) (sources []logicalPl
 	return sources, nil
 }
 
-func transformAndMergeInOrderOp(ctx *planningContext, op *unionOp) (sources []logicalPlan, err error) {
+func transformAndMergeInOrderOp(ctx *planningContext, op *physical.UnionOp) (sources []logicalPlan, err error) {
 	// We go over all the input operators and turn them into logical plans
-	for i, source := range op.sources {
-		plan, err := createLogicalPlanOp(ctx, source, op.selectStmts[i])
+	for i, source := range op.Sources {
+		plan, err := createLogicalPlanOp(ctx, source, op.SelectStmts[i])
 		if err != nil {
 			return nil, err
 		}
@@ -293,9 +293,9 @@ func createLogicalPlanOp(ctx *planningContext, source abstract.PhysicalOperator,
 	return plan, nil
 }
 
-func getCollationsForOp(ctx *planningContext, n *unionOp) []collations.ID {
+func getCollationsForOp(ctx *planningContext, n *physical.UnionOp) []collations.ID {
 	var colls []collations.ID
-	for _, expr := range n.selectStmts[0].SelectExprs {
+	for _, expr := range n.SelectStmts[0].SelectExprs {
 		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil

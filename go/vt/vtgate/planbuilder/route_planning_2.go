@@ -730,48 +730,5 @@ func optimizeUnionOp(ctx *planningContext, op *abstract.Concatenate) (abstract.P
 
 		sources = append(sources, qt)
 	}
-	return &unionOp{sources: sources, selectStmts: op.SelectStmts, distinct: op.Distinct}, nil
+	return &physical.UnionOp{Sources: sources, SelectStmts: op.SelectStmts, Distinct: op.Distinct}, nil
 }
-
-type unionOp struct {
-	sources     []abstract.PhysicalOperator
-	selectStmts []*sqlparser.Select
-	distinct    bool
-}
-
-func (u *unionOp) TableID() semantics.TableSet {
-	ts := semantics.EmptyTableSet()
-	for _, source := range u.sources {
-		ts.MergeInPlace(source.TableID())
-	}
-	return ts
-}
-
-func (u *unionOp) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
-}
-
-func (u *unionOp) CheckValid() error {
-	return nil
-}
-
-func (u *unionOp) IPhysical() {}
-
-func (u *unionOp) Cost() int {
-	cost := 0
-	for _, source := range u.sources {
-		cost += source.Cost()
-	}
-	return cost
-}
-
-func (u *unionOp) Clone() abstract.PhysicalOperator {
-	newOp := &unionOp{distinct: u.distinct}
-	newOp.sources = make([]abstract.PhysicalOperator, 0, len(u.sources))
-	for _, source := range u.sources {
-		newOp.sources = append(newOp.sources, source.Clone())
-	}
-	return newOp
-}
-
-var _ abstract.PhysicalOperator = (*unionOp)(nil)
