@@ -23,12 +23,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func optimizeVindexOp(ctx *planningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
-	solves := ctx.semTable.TableSetFor(op.Table.Alias)
+func optimizeVindexOp(ctx *context.PlanningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
+	solves := ctx.SemTable.TableSetFor(op.Table.Alias)
 	return &physical.VindexOp{
 		OpCode: op.OpCode,
 		Table:  op.Table,
@@ -38,13 +39,13 @@ func optimizeVindexOp(ctx *planningContext, op *abstract.Vindex) (abstract.Physi
 	}, nil
 }
 
-func transformVindexOpPlan(ctx *planningContext, op *physical.VindexOp) (logicalPlan, error) {
+func transformVindexOpPlan(ctx *context.PlanningContext, op *physical.VindexOp) (logicalPlan, error) {
 	single, ok := op.Vindex.(vindexes.SingleColumn)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
 	}
 
-	expr, err := evalengine.Convert(op.Value, ctx.semTable)
+	expr, err := evalengine.Convert(op.Value, ctx.SemTable)
 	if err != nil {
 		return nil, err
 	}

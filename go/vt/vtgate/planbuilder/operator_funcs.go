@@ -21,11 +21,12 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
 
 // PushPredicate is used to push predicates
-func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
+func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *routeOp:
 		err := op.updateRoutingLogic(ctx, expr)
@@ -39,7 +40,7 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 		op.source = newSrc
 		return op, err
 	case *physical.ApplyJoin:
-		deps := ctx.semTable.RecursiveDeps(expr)
+		deps := ctx.SemTable.RecursiveDeps(expr)
 		switch {
 		case deps.IsSolvedBy(op.LHS.TableID()):
 			newSrc, err := PushPredicate(ctx, expr, op.LHS)
@@ -60,8 +61,8 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 			// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
 			// where tbl is on the rhs of the left outer join
 			// if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-			//	sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
-			//	sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID()) {
+			//	sqlparser.IsColName(cmp.Left) && SemTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
+			//	sqlparser.IsColName(cmp.Right) && SemTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID()) {
 			//	// When the predicate we are pushing is using information from an outer table, we can
 			//	// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
 			//	// the predicate will not return true if the table columns are null.
@@ -71,7 +72,7 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 			//
 			//	// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
 			//	j.LeftJoin = false
-			//	return j.RHS.PushPredicate(expr, semTable)
+			//	return j.RHS.PushPredicate(expr, SemTable)
 			// }
 			// // TODO - we should do this on the vtgate level once we have a Filter primitive
 			// return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
@@ -112,7 +113,7 @@ func PushPredicate(ctx *planningContext, expr sqlparser.Expr, op abstract.Physic
 	}
 }
 
-func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
+func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *routeOp:
 		retOp, offsets, err := PushOutputColumns(ctx, op.source, columns...)
@@ -123,7 +124,7 @@ func PushOutputColumns(ctx *planningContext, op abstract.PhysicalOperator, colum
 		var lhs, rhs []*sqlparser.ColName
 		for _, col := range columns {
 			col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-			if ctx.semTable.RecursiveDeps(col).IsSolvedBy(op.LHS.TableID()) {
+			if ctx.SemTable.RecursiveDeps(col).IsSolvedBy(op.LHS.TableID()) {
 				lhs = append(lhs, col)
 				toTheLeft = append(toTheLeft, true)
 			} else {

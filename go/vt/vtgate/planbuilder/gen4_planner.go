@@ -22,14 +22,15 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ selectPlanner = gen4Planner
 var runGen4New = true
 
-func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, context.VSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema) (engine.Primitive, error) {
 		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
@@ -80,7 +81,7 @@ func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars
 	}
 }
 
-func gen4planSQLCalcFoundRows(vschema ContextVSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
+func gen4planSQLCalcFoundRows(vschema context.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -103,7 +104,7 @@ func gen4planSQLCalcFoundRows(vschema ContextVSchema, sel *sqlparser.Select, que
 	return plan.Primitive(), nil
 }
 
-func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema context.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
 	plan, err := newBuildSelectPlan(sel, reservedVars, vschema)
 	if err != nil {
 		return nil, nil, err
@@ -125,7 +126,7 @@ func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparse
 	return nil
 }
 
-func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
+func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema) (logicalPlan, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -142,7 +143,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	ctx := newPlanningContext(reservedVars, semTable, vschema)
+	ctx := context.NewPlanningContext(reservedVars, semTable, vschema)
 	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
@@ -217,7 +218,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func trySingleShard(ctx *planningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+func trySingleShard(ctx *context.PlanningContext, op abstract.PhysicalOperator, stmt sqlparser.SelectStatement) (logicalPlan, error) {
 	ro, isRoute := op.(*routeOp)
 	if isRoute && ro.isSingleShard() {
 		plan, err := transformRouteOpPlan(ctx, ro)
@@ -257,7 +258,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
+func planHorizon(ctx *context.PlanningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
 	switch node := in.(type) {
 	case *sqlparser.Select:
 		hp := horizonPlanning{
@@ -277,8 +278,8 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 	case *sqlparser.Union:
 		var err error
 		rb, isRoute := plan.(*routeGen4)
-		if !isRoute && ctx.semTable.ShardedError != nil {
-			return nil, ctx.semTable.ShardedError
+		if !isRoute && ctx.SemTable.ShardedError != nil {
+			return nil, ctx.SemTable.ShardedError
 		}
 		if isRoute && rb.isSingleShard() {
 			err = planSingleShardRoutePlan(node, rb)
@@ -298,8 +299,8 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 
 }
 
-func planOrderByOnUnion(ctx *planningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := abstract.CreateQPFromUnion(union, ctx.semTable)
+func planOrderByOnUnion(ctx *context.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
+	qp, err := abstract.CreateQPFromUnion(union, ctx.SemTable)
 	if err != nil {
 		return nil, err
 	}

@@ -21,16 +21,17 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
 
-func (hp *horizonPlanning) planHorizonOp(ctx *planningContext, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
+func (hp *horizonPlanning) planHorizonOp(ctx *context.PlanningContext, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	_, isRoute := op.(*routeOp)
-	if !isRoute && ctx.semTable.ShardedError != nil {
-		return nil, ctx.semTable.ShardedError
+	if !isRoute && ctx.SemTable.ShardedError != nil {
+		return nil, ctx.SemTable.ShardedError
 	}
 
-	qp, err := abstract.CreateQPFromSelect(hp.sel, ctx.semTable)
+	qp, err := abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +63,7 @@ func (hp *horizonPlanning) planHorizonOp(ctx *planningContext, op abstract.Physi
 	return op, nil
 }
 
-func pushProjectionsOp(ctx *planningContext, phyOp abstract.PhysicalOperator, selectExprs []abstract.SelectExpr) (abstract.PhysicalOperator, error) {
+func pushProjectionsOp(ctx *context.PlanningContext, phyOp abstract.PhysicalOperator, selectExprs []abstract.SelectExpr) (abstract.PhysicalOperator, error) {
 	for _, e := range selectExprs {
 		aliasExpr, err := e.GetAliasedExpr()
 		if err != nil {
@@ -76,7 +77,7 @@ func pushProjectionsOp(ctx *planningContext, phyOp abstract.PhysicalOperator, se
 }
 
 // pushProjection pushes a projection to the plan.
-func pushProjectionOp(ctx *planningContext, expr *sqlparser.AliasedExpr, phyOp abstract.PhysicalOperator, inner, reuseCol, hasAggregation bool) (op abstract.PhysicalOperator, offset int, added bool, err error) {
+func pushProjectionOp(ctx *context.PlanningContext, expr *sqlparser.AliasedExpr, phyOp abstract.PhysicalOperator, inner, reuseCol, hasAggregation bool) (op abstract.PhysicalOperator, offset int, added bool, err error) {
 	switch node := phyOp.(type) {
 	case *routeOp:
 		op, offset, added, err := pushProjectionOp(ctx, expr, node.source, inner, reuseCol, hasAggregation)

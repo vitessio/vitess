@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -74,12 +75,12 @@ func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, semTable *se
 	return d.columnsOffset, nil
 }
 
-func (d *derivedTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (d *derivedTree) pushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add '%s' predicate not supported on derived trees", sqlparser.String(expr))
 }
 
-func (d *derivedTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	tableInfo, err := ctx.semTable.TableInfoForExpr(expr)
+func (d *derivedTree) removePredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
+	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		return err
 	}

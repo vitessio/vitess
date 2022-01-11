@@ -22,10 +22,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
 
-func optimizeSubQueryOp(ctx *planningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
+func optimizeSubQueryOp(ctx *context.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
 	outerOp, err := createPhysicalOperator(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -39,7 +40,7 @@ func optimizeSubQueryOp(ctx *planningContext, op *abstract.SubQuery) (abstract.P
 			return nil, err
 		}
 
-		preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
+		preds := inner.Inner.UnsolvedPredicates(ctx.SemTable)
 		merger := func(a, b *routeOp) (*routeOp, error) {
 			return mergeSubQueryOp(ctx, a, b, inner)
 		}
@@ -96,7 +97,7 @@ func optimizeSubQueryOp(ctx *planningContext, op *abstract.SubQuery) (abstract.P
 	return outerOp, nil
 }
 
-func mergeSubQueryOp(ctx *planningContext, outer *routeOp, inner *routeOp, subq *abstract.SubQueryInner) (*routeOp, error) {
+func mergeSubQueryOp(ctx *context.PlanningContext, outer *routeOp, inner *routeOp, subq *abstract.SubQueryInner) (*routeOp, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
 
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
@@ -106,7 +107,7 @@ func mergeSubQueryOp(ctx *planningContext, outer *routeOp, inner *routeOp, subq 
 		switch n := node.(type) {
 		case *sqlparser.AliasedTableExpr:
 			ts := outer.TableID()
-			ts.MergeInPlace(ctx.semTable.TableSetFor(n))
+			ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
 		}
 		return true, nil
 	}, subq.ExtractedSubquery.Subquery)
@@ -127,7 +128,7 @@ func mergeSubQueryOp(ctx *planningContext, outer *routeOp, inner *routeOp, subq 
 }
 
 func tryMergeSubQueryOp(
-	ctx *planningContext,
+	ctx *context.PlanningContext,
 	outer, subq abstract.PhysicalOperator,
 	subQueryInner *physical.SubQueryInner,
 	joinPredicates []sqlparser.Expr,
@@ -194,7 +195,7 @@ func tryMergeSubQueryOp(
 // outerTree is the joinTree within whose children the subquery lives in
 // the child of joinTree which does not contain the subquery is the otherTree
 func rewriteColumnsInSubqueryOpForApplyJoin(
-	ctx *planningContext,
+	ctx *context.PlanningContext,
 	innerOp abstract.PhysicalOperator,
 	outerTree *physical.ApplyJoin,
 	subQueryInner *physical.SubQueryInner,
@@ -207,9 +208,9 @@ func rewriteColumnsInSubqueryOpForApplyJoin(
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
 			// check whether the column name belongs to the other side of the join tree
-			if ctx.semTable.RecursiveDeps(node).IsSolvedBy(resultInnerOp.TableID()) {
+			if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(resultInnerOp.TableID()) {
 				// get the bindVariable for that column name and replace it in the subquery
-				bindVar := ctx.reservedVars.ReserveColName(node)
+				bindVar := ctx.ReservedVars.ReserveColName(node)
 				cursor.Replace(sqlparser.NewArgument(bindVar))
 				// check whether the bindVariable already exists in the joinVars of the other tree
 				_, alreadyExists := outerTree.Vars[bindVar]
@@ -232,19 +233,19 @@ func rewriteColumnsInSubqueryOpForApplyJoin(
 	}, nil)
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
-	tableSet := ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
+	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
 	tableSet.RemoveInPlace(resultInnerOp.TableID())
-	ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
-	tableSet = ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
 	tableSet.RemoveInPlace(resultInnerOp.TableID())
-	ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 
 	// return any error while rewriting
 	return resultInnerOp, rewriteError
 }
 
 func createCorrelatedSubqueryOp(
-	ctx *planningContext,
+	ctx *context.PlanningContext,
 	innerOp, outerOp abstract.PhysicalOperator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,
@@ -267,19 +268,19 @@ func createCorrelatedSubqueryOp(
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
-				if ctx.semTable.RecursiveDeps(node).IsSolvedBy(resultOuterOp.TableID()) {
+				if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(resultOuterOp.TableID()) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
 					for colName, bindVar := range bindVars {
-						if node.Name.Equal(colName.Name) && ctx.semTable.RecursiveDeps(node).Equals(ctx.semTable.RecursiveDeps(colName)) {
+						if node.Name.Equal(colName.Name) && ctx.SemTable.RecursiveDeps(node).Equals(ctx.SemTable.RecursiveDeps(colName)) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))
 							return false
 						}
 					}
 
 					// get the bindVariable for that column name and replace it in the predicate
-					bindVar := ctx.reservedVars.ReserveColName(node)
+					bindVar := ctx.ReservedVars.ReserveColName(node)
 					cursor.Replace(sqlparser.NewArgument(bindVar))
 					// store it in the map for future comparisons
 					bindVars[node] = bindVar
@@ -315,7 +316,7 @@ func createCorrelatedSubqueryOp(
 	}, nil
 }
 
-func transformSubQueryOpPlan(ctx *planningContext, op *physical.SubQueryOp) (logicalPlan, error) {
+func transformSubQueryOpPlan(ctx *context.PlanningContext, op *physical.SubQueryOp) (logicalPlan, error) {
 	innerPlan, err := transformOpToLogicalPlan(ctx, op.Inner)
 	if err != nil {
 		return nil, err
@@ -341,7 +342,7 @@ func transformSubQueryOpPlan(ctx *planningContext, op *physical.SubQueryOp) (log
 	return plan, err
 }
 
-func transformCorrelatedSubQueryOpPlan(ctx *planningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
+func transformCorrelatedSubQueryOpPlan(ctx *context.PlanningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
 	outer, err := transformOpToLogicalPlan(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -353,7 +354,7 @@ func transformCorrelatedSubQueryOpPlan(ctx *planningContext, op *physical.Correl
 	return newSemiJoin(outer, inner, op.Vars), nil
 }
 
-func mergeSubQueryOpPlan(ctx *planningContext, inner, outer logicalPlan, n *physical.SubQueryOp) logicalPlan {
+func mergeSubQueryOpPlan(ctx *context.PlanningContext, inner, outer logicalPlan, n *physical.SubQueryOp) logicalPlan {
 	iroute, ok := inner.(*routeGen4)
 	if !ok {
 		return nil

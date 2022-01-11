@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -29,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 )
 
-func toSQL(ctx *planningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
+func toSQL(ctx *context.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
 	q.produce()
@@ -50,9 +52,9 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		buildQuery(op.LHS, qb)
 		// If we are going to add the predicate used in join here
 		// We should not add the predicate's copy of when it was split into
-		// two parts. To avoid this, we use the skipPredicates map.
-		for _, expr := range qb.ctx.joinPredicates[op.Predicate] {
-			qb.ctx.skipPredicates[expr] = nil
+		// two parts. To avoid this, we use the SkipPredicates map.
+		for _, expr := range qb.ctx.JoinPredicates[op.Predicate] {
+			qb.ctx.SkipPredicates[expr] = nil
 		}
 		qbR := &queryBuilder{ctx: qb.ctx}
 		buildQuery(op.RHS, qbR)
@@ -100,7 +102,7 @@ func (qb *queryBuilder) addTable(tableName, alias string, tableID semantics.Tabl
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	if _, toBeSkipped := qb.ctx.skipPredicates[expr]; toBeSkipped {
+	if _, toBeSkipped := qb.ctx.SkipPredicates[expr]; toBeSkipped {
 		// This is a predicate that was added to the RHS of an ApplyJoin.
 		// The original predicate will be added, so we don't have to add this here
 		return
@@ -232,7 +234,7 @@ func (qb *queryBuilder) convertToDerivedTable() string {
 }
 
 type queryBuilder struct {
-	ctx            *planningContext
+	ctx            *context.PlanningContext
 	sel            sqlparser.SelectStatement
 	tableIDsInFrom []semantics.TableSet
 	tableNames     []string

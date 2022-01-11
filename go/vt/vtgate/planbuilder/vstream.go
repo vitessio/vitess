@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -30,7 +32,7 @@ import (
 
 const defaultLimit = 100
 
-func buildVStreamPlan(stmt *sqlparser.VStream, vschema ContextVSchema) (engine.Primitive, error) {
+func buildVStreamPlan(stmt *sqlparser.VStream, vschema context.VSchema) (engine.Primitive, error) {
 	table, _, destTabletType, dest, err := vschema.FindTable(stmt.Table)
 	if err != nil {
 		return nil, err

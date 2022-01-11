@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -63,10 +64,10 @@ func (c *concatenateTree) pushOutputColumns(columns []*sqlparser.ColName, semTab
 	return nil, vterrors.New(vtrpc.Code_INTERNAL, "pushOutputColumns should not be called on this struct")
 }
 
-func (c *concatenateTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (c *concatenateTree) pushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpc.Code_INTERNAL, "add '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
 }
 
-func (c *concatenateTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (c *concatenateTree) removePredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpc.Code_INTERNAL, "remove '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
 }
