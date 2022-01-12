@@ -35,7 +35,7 @@ import (
 // TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported
 // It will try to minimize the query to make it easier to understand and work with the bug.
 func TestSimplifyBuggyQuery(t *testing.T) {
-	query := "select lower(unsharded.first_name)+lower(unsharded.last_name), user.id, user.name, count(*) from user join user_extra on user.id = user_extra.id join unsharded where unsharded.foo > 42 and user.region = 'TX' and user_extra.something = 'other' order by user.age"
+	query := "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)"
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
 		version: Gen4,
