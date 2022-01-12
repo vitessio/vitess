@@ -31,6 +31,10 @@ func (cached *eightbitWildcard) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(32)
 	}
+	// field sort *[256]byte
+	if cached.sort != nil {
+		size += hack.RuntimeAllocSize(int64(cap(*cached.sort)))
+	}
 	// field pattern []int16
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.pattern)) * int64(2))
