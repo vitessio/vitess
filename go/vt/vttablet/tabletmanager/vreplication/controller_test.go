@@ -17,12 +17,11 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -58,7 +57,6 @@ func TestControllerKeyRange(t *testing.T) {
 	resetBinlogClient()
 	wantTablet := addTablet(100)
 	defer deleteTablet(wantTablet)
-
 	params := map[string]string{
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,

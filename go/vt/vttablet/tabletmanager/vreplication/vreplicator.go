@@ -168,6 +168,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy()
+	if err := vr.allowZeroDates(); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -186,7 +190,6 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if settings.State == binlogplayer.BlpStopped {
 			return nil
 		}
-
 		switch {
 		case numTablesToCopy != 0:
 			if err := vr.clearFKCheck(); err != nil {
@@ -406,6 +409,15 @@ func (vr *vreplicator) resetFKCheckAfterCopy() error {
 	return err
 }
 
+func (vr *vreplicator) allowZeroDates() error {
+	allowZeroDatesSQL := "set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '');"
+
+	_, err := vr.dbClient.Execute(allowZeroDatesSQL)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 func (vr *vreplicator) clearFKCheck() error {
 	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
 	return err
