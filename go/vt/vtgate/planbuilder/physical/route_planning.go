@@ -50,7 +50,7 @@ func CreatePhysicalOperator(ctx *context.PlanningContext, opTree abstract.Logica
 		// case ctx.vschema.Planner() == Gen4Left2Right:
 		//	return leftToRightSolve(ctx, op)
 		default:
-			return greedySolve2(ctx, op)
+			return greedySolve(ctx, op)
 		}
 	case *abstract.Join:
 		opInner, err := CreatePhysicalOperator(ctx, op.LHS)
@@ -90,7 +90,7 @@ func CreatePhysicalOperator(ctx *context.PlanningContext, opTree abstract.Logica
 	and removes the two inputs to this cheapest plan and instead adds the join.
 	As an optimization, it first only considers joining tables that have predicates defined between them
 */
-func greedySolve2(ctx *context.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+func greedySolve(ctx *context.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
 	routeOps, err := seedOperatorList(ctx, qg)
 	planCache := opCacheMap{}
 	if err != nil {
@@ -115,9 +115,12 @@ func seedOperatorList(ctx *context.PlanningContext, qg *abstract.QueryGraph) ([]
 		if err != nil {
 			return nil, err
 		}
-		// if qg.NoDeps != nil {
-		//	plan.predicates = append(plan.predicates, sqlparser.SplitAndExpression(nil, qg.NoDeps)...)
-		// }
+		if qg.NoDeps != nil {
+			plan.Source = &Filter{
+				Source:     plan.Source,
+				Predicates: []sqlparser.Expr{qg.NoDeps},
+			}
+		}
 		plans[i] = plan
 	}
 	return plans, nil
@@ -200,19 +203,12 @@ func createInfSchemaRoute(ctx *context.PlanningContext, table *abstract.QueryTab
 	if err != nil {
 		return nil, err
 	}
-	var src abstract.PhysicalOperator
-	src = &Table{
+	var src abstract.PhysicalOperator = &Table{
 		QTable: table,
 		VTable: &vindexes.Table{
 			Name:     table.Table.Name,
 			Keyspace: ks,
 		},
-	}
-	if len(table.Predicates) > 0 {
-		src = &Filter{
-			Source:     src,
-			Predicates: table.Predicates,
-		}
 	}
 	r := &Route{
 		RouteOpCode: engine.SelectDBA,

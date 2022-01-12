@@ -181,6 +181,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # HAVING uses subquery
 "select id from user having id in (select col from user)"

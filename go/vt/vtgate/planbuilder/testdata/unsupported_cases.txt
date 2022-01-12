@@ -80,6 +80,7 @@ Gen4++
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
 "unsupported: cross-shard left join and column expressions"
 Gen4 plan same as above
+Gen4++
 
 # left join where clauses #2
 "select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.col, 4) = 5"
