@@ -225,29 +225,43 @@ func RemovePredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstr
 		op.Source = newSrc
 		return op, err
 	case *ApplyJoin:
+		isRemoved := false
 		deps := ctx.SemTable.RecursiveDeps(expr)
-		switch {
-		case deps.IsSolvedBy(op.LHS.TableID()):
+		if deps.IsSolvedBy(op.LHS.TableID()) {
 			newSrc, err := RemovePredicate(ctx, expr, op.LHS)
 			if err != nil {
 				return nil, err
 			}
 			op.LHS = newSrc
-			return op, err
-		case deps.IsSolvedBy(op.RHS.TableID()):
+			isRemoved = true
+		}
+
+		if deps.IsSolvedBy(op.RHS.TableID()) {
 			newSrc, err := RemovePredicate(ctx, expr, op.RHS)
 			if err != nil {
 				return nil, err
 			}
 			op.RHS = newSrc
-			return op, err
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not happen - tried to remove predicate that depends on both sides")
+			isRemoved = true
 		}
+
+		var keep []sqlparser.Expr
+		for _, e := range sqlparser.SplitAndExpression(nil, op.Predicate) {
+			if !sqlparser.EqualsExpr(expr, e) {
+				keep = append(keep, e)
+				isRemoved = true
+			}
+		}
+		op.Predicate = sqlparser.AndExpressions(keep...)
+
+		if !isRemoved {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr))
+		}
+		return op, nil
 	case *Filter:
 		idx := -1
 		for i, predicate := range op.Predicates {
-			if predicate == expr {
+			if sqlparser.EqualsExpr(predicate, expr) {
 				idx = i
 			}
 		}
