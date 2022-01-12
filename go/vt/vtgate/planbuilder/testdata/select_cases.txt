@@ -2833,6 +2833,7 @@ Gen4++
 "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)"
 "unsupported: cross-shard correlated subquery"
 Gen4 error: exists sub-queries are only supported with AND clause
+Gen4++
 
 # union as a derived table
 "select found from (select id as found from user union all (select id from unsharded)) as t"

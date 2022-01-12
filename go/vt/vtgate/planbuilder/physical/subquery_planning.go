@@ -53,7 +53,7 @@ func optimizeSubQueryOp(ctx *context.PlanningContext, op *abstract.SubQuery) (ab
 		}
 
 		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
-			_, correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outerOp, preds, inner.ExtractedSubquery)
+			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outerOp, preds, inner.ExtractedSubquery)
 			if err != nil {
 				return nil, err
 			}
@@ -232,18 +232,13 @@ func createCorrelatedSubqueryOp(
 	innerOp, outerOp abstract.PhysicalOperator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,
-) (
-	abstract.PhysicalOperator,
-	*CorrelatedSubQueryOp,
-	error,
-) {
-	// TODO: add remove predicate to the physical operator
-	// err := outerOp.removePredicate(ctx, extractedSubquery)
-	// if err != nil {
-	// 	return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
-	// }
+) (*CorrelatedSubQueryOp, error) {
+	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
+	if err != nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
+	}
 
-	resultOuterOp := outerOp
+	resultOuterOp := newOuter
 	vars := map[string]int{}
 	bindVars := map[*sqlparser.ColName]string{}
 	for _, pred := range preds {
@@ -283,16 +278,16 @@ func createCorrelatedSubqueryOp(
 			return true
 		}, nil)
 		if rewriteError != nil {
-			return nil, nil, rewriteError
+			return nil, rewriteError
 		}
 		var err error
 		innerOp, err = PushPredicate(ctx, pred, innerOp)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
-	return resultOuterOp, &CorrelatedSubQueryOp{
-		Outer:     outerOp,
+	return &CorrelatedSubQueryOp{
+		Outer:     resultOuterOp,
 		Inner:     innerOp,
 		Extracted: extractedSubquery,
 		Vars:      vars,

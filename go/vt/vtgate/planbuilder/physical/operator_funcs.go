@@ -189,6 +189,65 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 	}
 }
 
+func RemovePredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
+	switch op := op.(type) {
+	case *Route:
+		newSrc, err := RemovePredicate(ctx, expr, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		op.Source = newSrc
+		return op, err
+	case *ApplyJoin:
+		deps := ctx.SemTable.RecursiveDeps(expr)
+		switch {
+		case deps.IsSolvedBy(op.LHS.TableID()):
+			newSrc, err := RemovePredicate(ctx, expr, op.LHS)
+			if err != nil {
+				return nil, err
+			}
+			op.LHS = newSrc
+			return op, err
+		case deps.IsSolvedBy(op.RHS.TableID()):
+			newSrc, err := RemovePredicate(ctx, expr, op.RHS)
+			if err != nil {
+				return nil, err
+			}
+			op.RHS = newSrc
+			return op, err
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not happen - tried to remove predicate that depends on both sides")
+		}
+	case *Filter:
+		idx := -1
+		for i, predicate := range op.Predicates {
+			if predicate == expr {
+				idx = i
+			}
+		}
+		if idx == -1 {
+			// the predicate is not here. let's remove it from our source
+			newSrc, err := RemovePredicate(ctx, expr, op.Source)
+			if err != nil {
+				return nil, err
+			}
+			op.Source = newSrc
+			return op, nil
+		}
+		if len(op.Predicates) == 1 {
+			// no predicates left on this operator, so we just remove it
+			return op.Source, nil
+		}
+
+		// remove the predicate from this filter
+		op.Predicates = append(op.Predicates[:idx], op.Predicates[idx+1:]...)
+		return op, nil
+
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not happen - tried to remove predicate from table op")
+	}
+}
+
 func breakExpressionInLHSandRHS(
 	ctx *context.PlanningContext,
 	expr sqlparser.Expr,
