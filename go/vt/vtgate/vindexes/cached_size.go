@@ -107,7 +107,7 @@ func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(112)
 	}
 	// field Columns []vitess.io/vitess/go/vt/sqlparser.ColIdent
 	{
@@ -256,6 +256,47 @@ func (cached *LookupUnique) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field lkp vitess.io/vitess/go/vt/vtgate/vindexes.lookupInternal
 	size += cached.lkp.CachedSize(false)
+	return size
+}
+
+//go:nocheckptr
+func (cached *MultiCol) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field name string
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field columnVdx map[int]vitess.io/vitess/go/vt/vtgate/vindexes.Hashing
+	if cached.columnVdx != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.columnVdx)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
+		if len(cached.columnVdx) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
+		}
+		for _, v := range cached.columnVdx {
+			if cc, ok := v.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field columnBytes map[int]int
+	if cached.columnBytes != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.columnBytes)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 144))
+		if len(cached.columnBytes) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
+		}
+	}
 	return size
 }
 func (cached *Null) CachedSize(alloc bool) int64 {
