@@ -67,6 +67,19 @@ func CreatePhysicalOperator(ctx *context.PlanningContext, opTree abstract.Logica
 		if err != nil {
 			return nil, err
 		}
+
+		route, ok := opInner.(*Route)
+		if ok {
+			// if we have a derived table built on top of a route,
+			// it is safe to push down the derived table under the route
+			route.Source = &Derived{
+				Source:        route.Source,
+				Query:         op.Sel,
+				Alias:         op.Alias,
+				ColumnAliases: op.ColumnAliases,
+			}
+			return route, nil
+		}
 		return &Derived{
 			Source:        opInner,
 			Query:         op.Sel,
@@ -464,8 +477,11 @@ func tryMergeOp(ctx *context.PlanningContext, a, b abstract.PhysicalOperator, jo
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
 		if bRoute.RouteOpCode == engine.SelectEqualUnique {
-			if aRoute.SelectedVindex() == bRoute.SelectedVindex() &&
-				gen4ValuesEqual(ctx, aRoute.VindexExpressions(), bRoute.VindexExpressions()) {
+			aVdx := aRoute.SelectedVindex()
+			bVdx := bRoute.SelectedVindex()
+			aExpr := aRoute.VindexExpressions()
+			bExpr := bRoute.VindexExpressions()
+			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
 				return merger(aRoute, bRoute)
 			}
 			return nil, nil
@@ -612,7 +628,7 @@ func findColumnVindexOnOps(ctx *context.PlanningContext, a *Route, exp sqlparser
 		}
 		leftDep := ctx.SemTable.RecursiveDeps(expr)
 
-		_ = VisitOperators(a, func(rel abstract.Operator) (bool, error) {
+		_ = VisitOperators(a, func(rel abstract.PhysicalOperator) (bool, error) {
 			to, isTableOp := rel.(*Table)
 			if !isTableOp {
 				return true, nil
@@ -648,7 +664,7 @@ func canMergeOpsOnFilters(ctx *context.PlanningContext, a, b *Route, joinPredica
 }
 
 // VisitOperators visits all the operators.
-func VisitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, error)) error {
+func VisitOperators(op abstract.PhysicalOperator, f func(tbl abstract.PhysicalOperator) (bool, error)) error {
 	kontinue, err := f(op)
 	if err != nil {
 		return err
@@ -658,7 +674,7 @@ func VisitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 	}
 
 	switch op := op.(type) {
-	case *Table, *abstract.QueryGraph, *abstract.Vindex:
+	case *Table, *Vindex:
 		// leaf - no children to visit
 	case *Route:
 		err := VisitOperators(op.Source, f)
@@ -679,34 +695,32 @@ func VisitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, e
 		if err != nil {
 			return err
 		}
-	case *abstract.Concatenate:
-		for _, source := range op.Sources {
-			err := VisitOperators(source, f)
-			if err != nil {
-				return err
-			}
-		}
-	case *abstract.Derived:
-		err := VisitOperators(op.Inner, f)
-		if err != nil {
-			return err
-		}
-	case *abstract.Join:
-		err := VisitOperators(op.LHS, f)
-		if err != nil {
-			return err
-		}
-		err = VisitOperators(op.RHS, f)
-		if err != nil {
-			return err
-		}
-	case *abstract.SubQuery:
+	case *CorrelatedSubQueryOp:
 		err := VisitOperators(op.Outer, f)
 		if err != nil {
 			return err
 		}
-		for _, source := range op.Inner {
-			err := VisitOperators(source.Inner, f)
+		err = VisitOperators(op.Inner, f)
+		if err != nil {
+			return err
+		}
+	case *SubQueryOp:
+		err := VisitOperators(op.Outer, f)
+		if err != nil {
+			return err
+		}
+		err = VisitOperators(op.Inner, f)
+		if err != nil {
+			return err
+		}
+	case *Derived:
+		err := VisitOperators(op.Source, f)
+		if err != nil {
+			return err
+		}
+	case *Union:
+		for _, source := range op.Sources {
+			err := VisitOperators(source, f)
 			if err != nil {
 				return err
 			}
@@ -728,7 +742,7 @@ func optimizeUnionOp(ctx *context.PlanningContext, op *abstract.Concatenate) (ab
 
 		sources = append(sources, qt)
 	}
-	return &UnionOp{Sources: sources, SelectStmts: op.SelectStmts, Distinct: op.Distinct}, nil
+	return &Union{Sources: sources, SelectStmts: op.SelectStmts, Distinct: op.Distinct}, nil
 }
 
 func gen4ValuesEqual(ctx *context.PlanningContext, a, b []sqlparser.Expr) bool {

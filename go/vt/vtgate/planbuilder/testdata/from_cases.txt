@@ -1971,6 +1971,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # routing rules for join, unsharded route wins if we can't find a merged route
 "select route2.col from route2 join user_extra"
@@ -2075,6 +2076,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # derived table with join, and aliased references
 "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
@@ -2116,6 +2118,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # derived table with join, duplicate columns
 "select t.id from (select user.id, id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id"
@@ -2245,6 +2248,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # routing rules for derived table
 "select id from (select id, col from route1 where id = 5) as t"
@@ -2501,6 +2505,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # join of information_schema with normal table
 "select unsharded.foo from information_schema.a join unsharded"

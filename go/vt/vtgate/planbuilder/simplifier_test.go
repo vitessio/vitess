@@ -42,20 +42,35 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	}
 	stmt, reserved, err := sqlparser.Parse2(query)
 	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
-	vschema.currentDb()
-
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	ast := rewritten.AST
-	_, err = BuildFromStmt(query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
-	require.Error(t, err)
-	fmt.Println(err.Error())
 
 	simplified := simplifier.SimplifyStatement(
-		ast.(sqlparser.SelectStatement),
+		stmt.(sqlparser.SelectStatement),
 		vschema.currentDb(),
 		vschema,
-		keepSameError(query, reservedVars, vschema, rewritten.BindVarNeeds, err),
+		keepSameError(query, reservedVars, vschema, rewritten.BindVarNeeds),
+	)
+
+	fmt.Println(sqlparser.String(simplified))
+}
+
+func TestQueryWithNewPlanner(t *testing.T) {
+	query := "select lower(unsharded.first_name)+lower(unsharded.last_name), user.id, user.name, count(*) from user join user_extra on user.id = user_extra.id join unsharded where unsharded.foo > 42 and user.region = 'TX' and user_extra.something = 'other' order by user.age"
+	vschema := &vschemaWrapper{
+		v:       loadSchema(t, "schema_test.json", true),
+		version: Gen4,
+	}
+	stmt, reserved, err := sqlparser.Parse2(query)
+	require.NoError(t, err)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+
+	simplified := simplifier.SimplifyStatement(
+		stmt.(sqlparser.SelectStatement),
+		vschema.currentDb(),
+		vschema,
+		keepDifferentPlansBetweenGen4AndGen4Plusplus(query, reservedVars, vschema, rewritten.BindVarNeeds),
 	)
 
 	fmt.Println(sqlparser.String(simplified))
@@ -87,14 +102,12 @@ func TestUnsupportedFile(t *testing.T) {
 			reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 			ast := rewritten.AST
 			origQuery := sqlparser.String(ast)
-			_, err = BuildFromStmt(origQuery, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
-
 			stmt, _, _ = sqlparser.Parse2(tcase.input)
 			simplified := simplifier.SimplifyStatement(
 				stmt.(sqlparser.SelectStatement),
 				vschema.currentDb(),
 				vschema,
-				keepSameError(tcase.input, reservedVars, vschema, rewritten.BindVarNeeds, err),
+				keepSameError(tcase.input, reservedVars, vschema, rewritten.BindVarNeeds),
 			)
 
 			if simplified == nil {
@@ -109,7 +122,17 @@ func TestUnsupportedFile(t *testing.T) {
 	}
 }
 
-func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemaWrapper, needs *sqlparser.BindVarNeeds, expected error) func(statement sqlparser.SelectStatement) bool {
+func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
+	stmt, _, err := sqlparser.Parse2(query)
+	if err != nil {
+		panic(err)
+	}
+	rewritten, _ := sqlparser.RewriteAST(stmt, vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+	ast := rewritten.AST
+	_, expected := BuildFromStmt(query, ast, reservedVars, vschema, rewritten.BindVarNeeds, true, true)
+	if expected == nil {
+		panic("query does not fail to plan")
+	}
 	return func(statement sqlparser.SelectStatement) bool {
 		_, myErr := BuildFromStmt(query, statement, reservedVars, vschema, needs, true, true)
 		if myErr == nil {
@@ -121,4 +144,33 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 		}
 		return vterrors.ErrState(myErr) == state
 	}
+}
+
+func keepDifferentPlansBetweenGen4AndGen4Plusplus(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
+	cmp := func(statement sqlparser.SelectStatement) bool {
+		runGen4New = false
+		plan, myErr := BuildFromStmt(query, sqlparser.CloneStatement(statement), reservedVars, vschema, needs, true, true)
+		if myErr != nil {
+			return false
+		}
+		oldPlanner := getPlanOrErrorOutput(myErr, plan)
+		runGen4New = true
+		plan2, myErr := BuildFromStmt(query, sqlparser.CloneStatement(statement), reservedVars, vschema, needs, true, true)
+		if myErr != nil {
+			return false
+		}
+		newPlanner := getPlanOrErrorOutput(myErr, plan2)
+		return newPlanner != oldPlanner
+	}
+
+	stmt, _, err := sqlparser.Parse2(query)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if !cmp(stmt.(sqlparser.SelectStatement)) {
+		panic("already the same plan")
+	}
+
+	return cmp
 }
