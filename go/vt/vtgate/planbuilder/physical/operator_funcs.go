@@ -184,6 +184,32 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 	case *Vindex:
 		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err
+	case *Derived:
+		var noQualifierNames []*sqlparser.ColName
+		if len(columns) == 0 {
+			return op, nil, nil
+		}
+		for _, col := range columns {
+			i, err := op.findOutputColumn(col)
+			if err != nil {
+				return nil, nil, err
+			}
+			if i > -1 {
+				op.ColumnsOffset = append(op.ColumnsOffset, i)
+				continue
+			}
+			op.ColumnsOffset = append(op.ColumnsOffset, i)
+			op.Columns = append(op.Columns, col)
+			noQualifierNames = append(noQualifierNames, sqlparser.NewColName(col.Name.String()))
+		}
+		if len(noQualifierNames) > 0 {
+			_, _, err := PushOutputColumns(ctx, op.Source, noQualifierNames...)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		return op, op.ColumnsOffset, nil
+
 	default:
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
 	}

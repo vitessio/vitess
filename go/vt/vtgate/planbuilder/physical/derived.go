@@ -17,7 +17,9 @@ limitations under the License.
 package physical
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -71,4 +73,40 @@ func (d *Derived) Clone() abstract.PhysicalOperator {
 	clone.ColumnsOffset = make([]int, 0, len(d.ColumnsOffset))
 	copy(clone.ColumnsOffset, d.ColumnsOffset)
 	return &clone
+}
+
+// findOutputColumn returns the index on which the given name is found in the slice of
+// *sqlparser.SelectExprs of the derivedTree. The *sqlparser.SelectExpr must be of type
+// *sqlparser.AliasedExpr and match the given name.
+// If name is not present but the query's select expressions contain a *sqlparser.StarExpr
+// the function will return no error and an index equal to -1.
+// If name is not present and the query does not have a *sqlparser.StarExpr, the function
+// will return an unknown column error.
+func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
+	hasStar := false
+	for j, exp := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
+		switch exp := exp.(type) {
+		case *sqlparser.AliasedExpr:
+			if !exp.As.IsEmpty() && exp.As.Equal(name.Name) {
+				return j, nil
+			}
+			if exp.As.IsEmpty() {
+				col, ok := exp.Expr.(*sqlparser.ColName)
+				if !ok {
+					return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "complex expression needs column alias: %s", sqlparser.String(exp))
+				}
+				if name.Name.Equal(col.Name) {
+					return j, nil
+				}
+			}
+		case *sqlparser.StarExpr:
+			hasStar = true
+		}
+	}
+
+	// we have found a star but no matching *sqlparser.AliasedExpr, thus we return -1 with no error.
+	if hasStar {
+		return -1, nil
+	}
+	return 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", name.Name.String())
 }

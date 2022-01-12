@@ -1048,6 +1048,7 @@ Gen4++
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
+Gen4++
 
 "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t"
 "unsupported: cross-shard query with aggregates"

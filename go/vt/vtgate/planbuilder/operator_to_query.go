@@ -72,6 +72,14 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		for _, pred := range op.Predicates {
 			qb.addPredicate(pred)
 		}
+	case *physical.Derived:
+		buildQuery(op.Source, qb)
+		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
+		qb.sel = nil
+		sel.SelectExprs = sqlparser.GetFirstSelect(op.Query).SelectExprs
+		qb.addTableExpr("", op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
+			Select: sel,
+		})
 	default:
 		panic(fmt.Sprintf("%T", op))
 	}
@@ -82,16 +90,20 @@ func (qb *queryBuilder) produce() {
 }
 
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet) {
-	if qb.sel == nil {
-		qb.sel = &sqlparser.Select{}
-	}
-	sel := qb.sel.(*sqlparser.Select)
 	tableExpr := sqlparser.TableName{
 		Name:      sqlparser.NewTableIdent(tableName),
 		Qualifier: sqlparser.NewTableIdent(db),
 	}
+	qb.addTableExpr(db, tableName, alias, tableID, tableExpr)
+}
+
+func (qb *queryBuilder) addTableExpr(db, tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr) {
+	if qb.sel == nil {
+		qb.sel = &sqlparser.Select{}
+	}
+	sel := qb.sel.(*sqlparser.Select)
 	sel.From = append(sel.From, &sqlparser.AliasedTableExpr{
-		Expr:       tableExpr,
+		Expr:       tblExpr,
 		Partitions: nil,
 		As:         sqlparser.NewTableIdent(alias),
 		Hints:      nil,

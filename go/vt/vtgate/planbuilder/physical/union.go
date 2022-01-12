@@ -22,15 +22,15 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type UnionOp struct {
+type Union struct {
 	Sources     []abstract.PhysicalOperator
 	SelectStmts []*sqlparser.Select
 	Distinct    bool
 }
 
-var _ abstract.PhysicalOperator = (*UnionOp)(nil)
+var _ abstract.PhysicalOperator = (*Union)(nil)
 
-func (u *UnionOp) TableID() semantics.TableSet {
+func (u *Union) TableID() semantics.TableSet {
 	ts := semantics.EmptyTableSet()
 	for _, source := range u.Sources {
 		ts.MergeInPlace(source.TableID())
@@ -38,17 +38,17 @@ func (u *UnionOp) TableID() semantics.TableSet {
 	return ts
 }
 
-func (u *UnionOp) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
+func (u *Union) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
-func (u *UnionOp) CheckValid() error {
+func (u *Union) CheckValid() error {
 	return nil
 }
 
-func (u *UnionOp) IPhysical() {}
+func (u *Union) IPhysical() {}
 
-func (u *UnionOp) Cost() int {
+func (u *Union) Cost() int {
 	cost := 0
 	for _, source := range u.Sources {
 		cost += source.Cost()
@@ -56,8 +56,8 @@ func (u *UnionOp) Cost() int {
 	return cost
 }
 
-func (u *UnionOp) Clone() abstract.PhysicalOperator {
-	newOp := &UnionOp{Distinct: u.Distinct}
+func (u *Union) Clone() abstract.PhysicalOperator {
+	newOp := &Union{Distinct: u.Distinct}
 	newOp.Sources = make([]abstract.PhysicalOperator, 0, len(u.Sources))
 	for _, source := range u.Sources {
 		newOp.Sources = append(newOp.Sources, source.Clone())
