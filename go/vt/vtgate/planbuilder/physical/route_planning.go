@@ -67,19 +67,6 @@ func CreatePhysicalOperator(ctx *context.PlanningContext, opTree abstract.Logica
 		if err != nil {
 			return nil, err
 		}
-
-		route, ok := opInner.(*Route)
-		if ok {
-			// if we have a derived table built on top of a route,
-			// it is safe to push down the derived table under the route
-			route.Source = &Derived{
-				Source:        route.Source,
-				Query:         op.Sel,
-				Alias:         op.Alias,
-				ColumnAliases: op.ColumnAliases,
-			}
-			return route, nil
-		}
 		return &Derived{
 			Source:        opInner,
 			Query:         op.Sel,
@@ -409,37 +396,29 @@ func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *Ro
 
 type mergeOpFunc func(a, b *Route) (*Route, error)
 
+// makeRouteOp return the input as a Route.
+// if the input is a Derived operator and has a Route as its source,
+// we push the Derived inside the Route and return it.
 func makeRouteOp(j abstract.PhysicalOperator) *Route {
-	rb, ok := j.(*Route)
+	route, ok := j.(*Route)
 	if ok {
-		return rb
+		return route
 	}
 
-	return nil
+	derived, ok := j.(*Derived)
+	if !ok {
+		return nil
+	}
+	dp := derived.Clone().(*Derived)
 
-	// x, ok := j.(*derivedTree)
-	// if !ok {
-	//	return nil
-	// }
-	// dp := x.Clone().(*derivedTree)
-	//
-	// inner := makeRouteOp(dp.inner)
-	// if inner == nil {
-	//	return nil
-	// }
+	route = makeRouteOp(dp.Source)
+	if route == nil {
+		return nil
+	}
 
-	// dt := &derivedTable{
-	//	tables:     inner.tables,
-	//	query:      dp.query,
-	//	predicates: inner.predicates,
-	//	leftJoins:  inner.leftJoins,
-	//	alias:      dp.alias,
-	// }
-
-	// inner.tables = parenTables{dt}
-	// inner.predicates = nil
-	// inner.leftJoins = nil
-	// return inner
+	derived.Source = route.Source
+	route.Source = derived
+	return route
 }
 
 func operatorsToRoutes(a, b abstract.PhysicalOperator) (*Route, *Route) {
