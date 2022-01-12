@@ -17,6 +17,7 @@ limitations under the License.
 package physical
 
 import (
+	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -50,32 +51,43 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 			op.LHS = newSrc
 			return op, err
 		case deps.IsSolvedBy(op.RHS.TableID()):
-			// if !j.LeftJoin {
-			newSrc, err := PushPredicate(ctx, expr, op.RHS)
-			if err != nil {
-				return nil, err
+			if !op.LeftJoin {
+				newSrc, err := PushPredicate(ctx, expr, op.RHS)
+				if err != nil {
+					return nil, err
+				}
+				op.RHS = newSrc
+				return op, err
 			}
-			op.RHS = newSrc
-			return op, err
-			// }
+
 			// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
 			// where tbl is on the rhs of the left outer join
-			// if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-			//	sqlparser.IsColName(cmp.Left) && SemTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
-			//	sqlparser.IsColName(cmp.Right) && SemTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID()) {
-			//	// When the predicate we are pushing is using information from an outer table, we can
-			//	// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
-			//	// the predicate will not return true if the table columns are null.
-			//	// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
-			//	// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
-			//	// side did not match, we might as well turn the join into an inner join.
-			//
-			//	// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
-			//	j.LeftJoin = false
-			//	return j.RHS.PushPredicate(expr, SemTable)
-			// }
-			// // TODO - we should do this on the vtgate level once we have a Filter primitive
-			// return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
+			if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
+				(sqlparser.IsColName(cmp.Left) && ctx.SemTable.RecursiveDeps(cmp.Left).IsSolvedBy(op.RHS.TableID()) ||
+					sqlparser.IsColName(cmp.Right) && ctx.SemTable.RecursiveDeps(cmp.Right).IsSolvedBy(op.RHS.TableID())) {
+				// When the predicate we are pushing is using information from an outer table, we can
+				// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
+				// the predicate will not return true if the table columns are null.
+				// Since an outer join is an inner join with the addition of all the rows from the left-hand side that
+				// matched no rows on the right-hand, if we are later going to remove all the rows where the right-hand
+				// side did not match, we might as well turn the join into an inner join.
+
+				// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
+				op.LeftJoin = false
+				newSrc, err := PushPredicate(ctx, expr, op.RHS)
+				if err != nil {
+					return nil, err
+				}
+				op.RHS = newSrc
+				return op, err
+			}
+
+			// finally, if we can't turn the outer join into an inner,
+			// we need to filter after the join has been evaluated
+			return &Filter{
+				Source:     op,
+				Predicates: []sqlparser.Expr{expr},
+			}, nil
 		case deps.IsSolvedBy(op.TableID()):
 			bvName, cols, predicate, err := breakExpressionInLHSandRHS(ctx, expr, op.LHS.TableID())
 			if err != nil {
@@ -106,6 +118,7 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 			Predicates: []sqlparser.Expr{expr},
 		}, nil
 	case *Filter:
+		log.Errorf("here %s", sqlparser.String(expr))
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
 	default:
@@ -165,7 +178,9 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 		}
 		return op, offsets, nil
 	case *Filter:
-		return PushOutputColumns(ctx, op.Source, columns...)
+		newSrc, ints, err := PushOutputColumns(ctx, op.Source, columns...)
+		op.Source = newSrc
+		return op, ints, err
 	case *Vindex:
 		idx, err := op.PushOutputColumns(columns)
 		return op, idx, err

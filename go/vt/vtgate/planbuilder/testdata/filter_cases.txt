@@ -473,6 +473,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table complex in clause
 "select id from user where name in (col, 'bb')"
@@ -1033,6 +1034,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Route with multiple route constraints, SelectIN is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2)"
@@ -1913,6 +1915,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # cross-shard subquery as expression
 "select id from user where id = (select col from user)"
@@ -2206,6 +2209,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Select with equals null
 "select id from music where id = null"
@@ -2853,6 +2857,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # The outer and first inner are SelectEqualUnique with same Vindex value, the second inner has different Vindex value
 "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)"

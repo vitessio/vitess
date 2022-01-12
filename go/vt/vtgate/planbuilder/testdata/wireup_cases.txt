@@ -279,6 +279,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # wire-up join with join, going left, then right
 "select u1.id from user u1 join user u2 join user u3 where u3.col = u2.col"
@@ -394,6 +395,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # wire-up join with join, reuse existing result from a lower join
 "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"

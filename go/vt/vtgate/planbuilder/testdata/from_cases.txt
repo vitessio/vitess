@@ -814,6 +814,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Three-way left join, right-associated
 "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col"
@@ -3023,6 +3024,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # subquery in ON clause as sub-expression
 "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)"
@@ -3698,6 +3700,7 @@ Gen4++
     "Table": "unsharded"
   }
 }
+Gen4++
 
 # last_insert_id for dual
 "select last_insert_id()"
