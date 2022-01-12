@@ -27,10 +27,9 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/tools/goimports"
-
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/tools/common"
+	"vitess.io/vitess/go/tools/goimports"
 
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
@@ -324,6 +323,36 @@ func mallocsize(sizeStmt *jen.Statement) func(*jen.Statement) {
 	}
 }
 
+func (sizegen *sizegen) sizeStmtForArray(stmt []jen.Code, fieldName *jen.Statement, elemT types.Type) ([]jen.Code, codeFlag) {
+	var flag codeFlag
+
+	switch sizegen.sizes.Sizeof(elemT) {
+	case 0:
+		return nil, 0
+
+	case 1:
+		stmt = append(stmt, jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)))))
+
+	default:
+		var nested jen.Code
+		nested, flag = sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
+
+		stmt = append(stmt,
+			jen.Id("size").
+				Op("+=").
+				Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)).
+					Op("*").
+					Lit(sizegen.sizes.Sizeof(elemT))),
+				))
+
+		if nested != nil {
+			stmt = append(stmt, jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(nested))
+		}
+	}
+
+	return stmt, flag
+}
+
 func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Type, alloc bool) (jen.Code, codeFlag) {
 	if sizegen.sizes.Sizeof(field) == 0 {
 		return nil, 0
@@ -331,8 +360,6 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 
 	switch node := field.(type) {
 	case *types.Slice:
-		elemT := node.Elem()
-		elemSize := sizegen.sizes.Sizeof(elemT)
 		var cond *jen.Statement
 		var stmt []jen.Code
 		var flag codeFlag
@@ -343,34 +370,29 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 			stmt = append(stmt, jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(8*3)))
 		}
 
-		switch elemSize {
-		case 0:
-			return nil, 0
-
-		case 1:
-			stmt = append(stmt, jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)))))
-
-		default:
-			var nested jen.Code
-			nested, flag = sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
-
-			stmt = append(stmt,
-				jen.Id("size").
-					Op("+=").
-					Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)).
-						Op("*").
-						Lit(sizegen.sizes.Sizeof(elemT))),
-					))
-
-			if nested != nil {
-				stmt = append(stmt, jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(nested))
-			}
-		}
-
+		stmt, flag = sizegen.sizeStmtForArray(stmt, fieldName, node.Elem())
 		if cond != nil {
 			return cond.Block(stmt...), flag
 		}
 		return jen.Block(stmt...), flag
+
+	case *types.Array:
+		if alloc {
+			cond := jen.If(fieldName.Clone().Op("!=").Nil())
+			fieldName = jen.Op("*").Add(fieldName)
+
+			stmt, flag := sizegen.sizeStmtForArray(nil, fieldName, node.Elem())
+			return cond.Block(stmt...), flag
+		}
+
+		elemT := node.Elem()
+		if sizegen.sizes.Sizeof(elemT) > 1 {
+			nested, flag := sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
+			if nested != nil {
+				return jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(nested), flag
+			}
+		}
+		return nil, 0
 
 	case *types.Map:
 		keySize, keyFlag := sizegen.sizeStmtForType(jen.Id("k"), node.Key(), false)
