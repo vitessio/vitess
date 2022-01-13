@@ -736,9 +736,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
-		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
-		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
-		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+		insertQuery1 := "insert into customer(cid, name, meta) values(1001, 'tempCustomer1', '{\"a\": 1629849600, \"b\": 930701976723823}')"
+
+		matchInsertQuery0 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
+		matchInsertQuery1 := "insert into customer(cid, `name`, meta) values (:vtg1, :vtg2, :vtg3)"
+		validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1)
 
 		// confirm that the backticking of table names in the routing rules works
 		tbls := []string{"Lead", "Lead-1"}
@@ -800,12 +802,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.Contains(t, output, "'customer.bmd5'")
 
 			insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
-			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery0))
 			// both inserts go into 80-, this tests the edge-case where a stream (-80) has no relevant new events after the previous switch
 			insertQuery1 = "insert into customer(cid, name) values(1003, 'tempCustomer6')"
-			require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1))
+			require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery0))
 			insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
-			require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
+			require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery0))
 
 			waitForNoWorkflowLag(t, vc, targetKs, workflow)
 

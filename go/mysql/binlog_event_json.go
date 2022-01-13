@@ -23,7 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"github.com/spyzhov/ajson"
+	"github.com/rohit-nayak-ps/ajson"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -153,7 +153,7 @@ func (jh *BinlogJSON) register(typ jsonDataType, Plugin jsonPlugin) {
 func (jh *BinlogJSON) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	Plugin := jh.plugins[typ]
 	if Plugin == nil {
-		return nil, fmt.Errorf("Plugin not found for type %d", typ)
+		return nil, fmt.Errorf("plugin not found for type %d", typ)
 	}
 	return Plugin.getNode(typ, data, pos)
 }
@@ -316,59 +316,157 @@ type intPlugin struct {
 
 var _ jsonPlugin = (*intPlugin)(nil)
 
-func (ih intPlugin) getVal(typ jsonDataType, data []byte, pos int) (value float64) {
+func (ipl intPlugin) getVal(typ jsonDataType, data []byte, pos int) (value int64) {
 	var val uint64
-	var val2 float64
-	size := ih.sizes[typ]
+	var val2 int64
+	size := ipl.sizes[typ]
 	for i := 0; i < size; i++ {
 		val = val + uint64(data[pos+i])<<(8*i)
 	}
 	switch typ {
 	case jsonInt16:
-		val2 = float64(int16(val))
-	case jsonUint16:
-		val2 = float64(uint16(val))
+		val2 = int64(int16(val))
 	case jsonInt32:
-		val2 = float64(int32(val))
-	case jsonUint32:
-		val2 = float64(uint32(val))
+		val2 = int64(int32(val))
 	case jsonInt64:
-		val2 = float64(int64(val))
+		val2 = int64(val)
+	}
+	return val2
+}
+
+func (ipl intPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+	val := ipl.getVal(typ, data, pos)
+	node = ajson.IntegerNode("", val)
+	return node, nil
+}
+
+func newIntPlugin() *intPlugin {
+	ipl := &intPlugin{
+		info: &jsonPluginInfo{
+			name:  "Int",
+			types: []jsonDataType{jsonInt64, jsonInt32, jsonInt16},
+		},
+		sizes: make(map[jsonDataType]int),
+	}
+	ipl.sizes = map[jsonDataType]int{
+		jsonInt64: 8,
+		jsonInt32: 4,
+		jsonInt16: 2,
+	}
+	for _, typ := range ipl.info.types {
+		binlogJSON.register(typ, ipl)
+	}
+	return ipl
+}
+
+//endregion
+
+//region uint plugin
+
+func init() {
+	newUintPlugin()
+}
+
+type uintPlugin struct {
+	info  *jsonPluginInfo
+	sizes map[jsonDataType]int
+}
+
+var _ jsonPlugin = (*uintPlugin)(nil)
+
+func (upl uintPlugin) getVal(typ jsonDataType, data []byte, pos int) (value uint64) {
+	var val uint64
+	var val2 uint64
+	size := upl.sizes[typ]
+	for i := 0; i < size; i++ {
+		val = val + uint64(data[pos+i])<<(8*i)
+	}
+	switch typ {
+	case jsonUint16:
+		val2 = uint64(uint16(val))
+	case jsonUint32:
+		val2 = uint64(uint32(val))
 	case jsonUint64:
-		val2 = float64(val)
+		val2 = val
+	}
+	return val2
+}
+
+func (upl uintPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+	val := upl.getVal(typ, data, pos)
+	node = ajson.UnsignedIntegerNode("", val)
+	return node, nil
+}
+
+func newUintPlugin() *uintPlugin {
+	upl := &uintPlugin{
+		info: &jsonPluginInfo{
+			name:  "Uint",
+			types: []jsonDataType{jsonUint16, jsonUint32, jsonUint64},
+		},
+		sizes: make(map[jsonDataType]int),
+	}
+	upl.sizes = map[jsonDataType]int{
+		jsonUint64: 8,
+		jsonUint32: 4,
+		jsonUint16: 2,
+	}
+	for _, typ := range upl.info.types {
+		binlogJSON.register(typ, upl)
+	}
+	return upl
+}
+
+//endregion
+
+//region float plugin
+
+func init() {
+	newFloatPlugin()
+}
+
+type floatPlugin struct {
+	info  *jsonPluginInfo
+	sizes map[jsonDataType]int
+}
+
+var _ jsonPlugin = (*floatPlugin)(nil)
+
+func (flp floatPlugin) getVal(typ jsonDataType, data []byte, pos int) (value float64) {
+	var val uint64
+	var val2 float64
+	size := flp.sizes[typ]
+	for i := 0; i < size; i++ {
+		val = val + uint64(data[pos+i])<<(8*i)
+	}
+	switch typ {
 	case jsonDouble:
 		val2 = math.Float64frombits(val)
 	}
 	return val2
 }
 
-func (ih intPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
-	val := ih.getVal(typ, data, pos)
+func (flp floatPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+	val := flp.getVal(typ, data, pos)
 	node = ajson.NumericNode("", val)
 	return node, nil
 }
 
-func newIntPlugin() *intPlugin {
-	ih := &intPlugin{
+func newFloatPlugin() *floatPlugin {
+	fp := &floatPlugin{
 		info: &jsonPluginInfo{
-			name:  "Int",
-			types: []jsonDataType{jsonInt64, jsonInt32, jsonInt16, jsonUint16, jsonUint32, jsonUint64, jsonDouble},
+			name:  "Float",
+			types: []jsonDataType{jsonDouble},
 		},
 		sizes: make(map[jsonDataType]int),
 	}
-	ih.sizes = map[jsonDataType]int{
-		jsonUint64: 8,
-		jsonInt64:  8,
-		jsonUint32: 4,
-		jsonInt32:  4,
-		jsonUint16: 2,
-		jsonInt16:  2,
+	fp.sizes = map[jsonDataType]int{
 		jsonDouble: 8,
 	}
-	for _, typ := range ih.info.types {
-		binlogJSON.register(typ, ih)
+	for _, typ := range fp.info.types {
+		binlogJSON.register(typ, fp)
 	}
-	return ih
+	return fp
 }
 
 //endregion
@@ -385,7 +483,7 @@ type literalPlugin struct {
 
 var _ jsonPlugin = (*literalPlugin)(nil)
 
-func (lh literalPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+func (lpl literalPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	val := jsonDataLiteral(data[pos])
 	switch val {
 	case jsonNullLiteral:
@@ -401,14 +499,14 @@ func (lh literalPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *a
 }
 
 func newLiteralPlugin() *literalPlugin {
-	lh := &literalPlugin{
+	lpl := &literalPlugin{
 		info: &jsonPluginInfo{
 			name:  "Literal",
 			types: []jsonDataType{jsonLiteral},
 		},
 	}
-	binlogJSON.register(jsonLiteral, lh)
-	return lh
+	binlogJSON.register(jsonLiteral, lpl)
+	return lpl
 }
 
 //endregion
@@ -427,7 +525,7 @@ var _ jsonPlugin = (*opaquePlugin)(nil)
 
 // other types are stored as catch-all opaque types: documentation on these is scarce.
 // we currently know about (and support) date/time/datetime/decimal.
-func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+func (opl opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	dataType := data[pos]
 	start := 3       // account for length of stored value
 	end := start + 8 // all currently supported opaque data types are 8 bytes in size
@@ -484,14 +582,14 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 }
 
 func newOpaquePlugin() *opaquePlugin {
-	oh := &opaquePlugin{
+	opl := &opaquePlugin{
 		info: &jsonPluginInfo{
 			name:  "Opaque",
 			types: []jsonDataType{jsonOpaque},
 		},
 	}
-	binlogJSON.register(jsonOpaque, oh)
-	return oh
+	binlogJSON.register(jsonOpaque, opl)
+	return opl
 }
 
 //endregion
@@ -508,7 +606,7 @@ type stringPlugin struct {
 
 var _ jsonPlugin = (*stringPlugin)(nil)
 
-func (sh stringPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+func (spl stringPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	size, pos := readVariableLength(data, pos)
 	node = ajson.StringNode("", string(data[pos:pos+size]))
 
@@ -516,14 +614,14 @@ func (sh stringPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 }
 
 func newStringPlugin() *stringPlugin {
-	sh := &stringPlugin{
+	spl := &stringPlugin{
 		info: &jsonPluginInfo{
 			name:  "String",
 			types: []jsonDataType{jsonString},
 		},
 	}
-	binlogJSON.register(jsonString, sh)
-	return sh
+	binlogJSON.register(jsonString, spl)
+	return spl
 }
 
 //endregion
@@ -542,7 +640,7 @@ var _ jsonPlugin = (*arrayPlugin)(nil)
 
 // arrays are stored thus:
 // | type_identifier(one of [2,3]) | elem count | obj size | list of offsets+lengths of values | actual values |
-func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+func (apl arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	jlog("JSON Array %s, len %d", jsonDataTypeToString(uint(typ)), len(data))
 	var nodes []*ajson.Node
 	var elem *ajson.Node
@@ -565,15 +663,15 @@ func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajs
 }
 
 func newArrayPlugin() *arrayPlugin {
-	ah := &arrayPlugin{
+	apl := &arrayPlugin{
 		info: &jsonPluginInfo{
 			name:  "Array",
 			types: []jsonDataType{jsonSmallArray, jsonLargeArray},
 		},
 	}
-	binlogJSON.register(jsonSmallArray, ah)
-	binlogJSON.register(jsonLargeArray, ah)
-	return ah
+	binlogJSON.register(jsonSmallArray, apl)
+	binlogJSON.register(jsonLargeArray, apl)
+	return apl
 }
 
 //endregion
@@ -592,7 +690,7 @@ var _ jsonPlugin = (*objectPlugin)(nil)
 
 // objects are stored thus:
 // | type_identifier(0/1) | elem count | obj size | list of offsets+lengths of keys | list of offsets+lengths of values | actual keys | actual values |
-func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
+func (opl objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, err error) {
 	jlog("JSON Type is %s, len %d", jsonDataTypeToString(uint(typ)), len(data))
 
 	// "large" decides number of bytes used to specify element count and total object size: 4 bytes for large, 2 for small
@@ -640,15 +738,15 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 }
 
 func newObjectPlugin() *objectPlugin {
-	oh := &objectPlugin{
+	opl := &objectPlugin{
 		info: &jsonPluginInfo{
 			name:  "Object",
 			types: []jsonDataType{jsonSmallObject, jsonLargeObject},
 		},
 	}
-	binlogJSON.register(jsonSmallObject, oh)
-	binlogJSON.register(jsonLargeObject, oh)
-	return oh
+	binlogJSON.register(jsonSmallObject, opl)
+	binlogJSON.register(jsonLargeObject, opl)
+	return opl
 }
 
 //endregion

@@ -27,13 +27,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spyzhov/ajson"
+	"vitess.io/vitess/go/mysql"
+
+	"github.com/rohit-nayak-ps/ajson"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
@@ -1512,21 +1515,21 @@ func TestPlayerTypes(t *testing.T) {
 	}}
 	if enableJSONColumnTesting {
 		testcases = append(testcases, testcase{
-			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}', '{\"foo\":\"bar\"}')",
+			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','1629849600','{\"a\":[42,-1,3.1415,-128,127,-9223372036854775808,9223372036854775807,18446744073709551615]}', '{\"foo\":\"bar\"}')",
 			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1," +
-				"convert(null using utf8mb4)," + "convert('{}' using utf8mb4)," + "convert('123' using utf8mb4)," +
-				"convert('{\\\"a\\\":[42,100]}' using utf8mb4)," + "convert('{\\\"foo\\\":\\\"bar\\\"}' using utf8mb4))",
+				"convert(null using utf8mb4)," + "convert('{}' using utf8mb4)," + "convert('1629849600' using utf8mb4)," +
+				"convert('{\\\"a\\\":[42,-1,3.1415,-128,127,-9223372036854775808,9223372036854775807,18446744073709551615]}' using utf8mb4)," + "convert('{\\\"foo\\\":\\\"bar\\\"}' using utf8mb4))",
 			table: "vitess_json",
 			data: [][]string{
-				{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+				{"1", "", "{}", "1629849600", `{"a": [42, -1, 3.1415, -128, 127, -9223372036854775808, 9223372036854775807, 18446744073709551615]}`, `{"foo": "bar"}`},
 			},
 		})
 		testcases = append(testcases, testcase{
-			input:  "update vitess_json set val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
-			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('123' using utf8mb4), val4=convert('{\\\"a\\\":[98,123]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
+			input:  "update vitess_json set val4 = '{\"a\": [-9223372036854775808, -2147483648]}', val5 = convert(x'7b7d' using utf8mb4)",
+			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('1629849600' using utf8mb4), val4=convert('{\\\"a\\\":[-9223372036854775808,-2147483648]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
 			table:  "vitess_json",
 			data: [][]string{
-				{"1", "", "{}", "123", `{"a": [98, 123]}`, `{}`},
+				{"1", "", "{}", "1629849600", `{"a": [-9223372036854775808, -2147483648]}`, `{}`},
 			},
 		})
 	}
