@@ -202,19 +202,21 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 		return op, idx, err
 	case *Derived:
 		var noQualifierNames []*sqlparser.ColName
+		var offsets []int
 		if len(columns) == 0 {
 			return op, nil, nil
 		}
-		for _, col := range columns {
+		for _, col := range columns { ///select 1 from (select * from user join user_extra) t join unsharded on t.id = unsharded.apa
 			i, err := op.findOutputColumn(col)
 			if err != nil {
 				return nil, nil, err
 			}
 			if i > -1 {
-				op.ColumnsOffset = append(op.ColumnsOffset, i)
+				offsets = append(offsets, i)
+				op.ColumnsOffset = addToIntSlice(op.ColumnsOffset, i)
 				continue
 			}
-			op.ColumnsOffset = append(op.ColumnsOffset, i)
+			op.ColumnsOffset = addToIntSlice(op.ColumnsOffset, i)
 			op.Columns = append(op.Columns, col)
 			noQualifierNames = append(noQualifierNames, sqlparser.NewColName(col.Name.String()))
 		}
@@ -224,11 +226,20 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 				return nil, nil, err
 			}
 		}
-		return op, op.ColumnsOffset, nil
+		return op, offsets, nil
 
 	default:
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push output columns into %T", op)
 	}
+}
+
+func addToIntSlice(columnOffset []int, valToAdd int) []int {
+	for _, val := range columnOffset {
+		if val == valToAdd {
+			return columnOffset
+		}
+	}
+	return append(columnOffset, valToAdd)
 }
 
 func RemovePredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
