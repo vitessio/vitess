@@ -2542,6 +2542,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 "select * from samecolvin where col = :col"
 {

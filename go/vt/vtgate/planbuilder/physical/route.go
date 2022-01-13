@@ -175,6 +175,10 @@ func (r *Route) planComparison(ctx *context.PlanningContext, cmp *sqlparser.Comp
 		if r.isImpossibleNotIN(cmp) {
 			return false, true, nil
 		}
+	case sqlparser.LikeOp:
+		found := r.planLikeOp(ctx, cmp)
+		return found, false, nil
+
 	}
 	return false, false, nil
 }
@@ -373,6 +377,30 @@ func (r *Route) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
 	}
 
 	return false
+}
+
+func (r *Route) planLikeOp(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) bool {
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false
+	}
+
+	vdValue := node.Right
+	val := r.makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return false
+	}
+	selectEqual := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectEqual }
+	vdx := func(vindex *vindexes.ColumnVindex) vindexes.Vindex {
+		if prefixable, ok := vindex.Vindex.(vindexes.Prefixable); ok {
+			return prefixable.PrefixVindex()
+		}
+
+		// if we can't use the vindex as a prefix-vindex, we can't use this vindex at all
+		return nil
+	}
+	return r.haveMatchingVindex(ctx, node, vdValue, column, val, selectEqual, vdx)
+
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
