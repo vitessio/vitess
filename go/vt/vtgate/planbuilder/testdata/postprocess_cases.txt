@@ -1290,6 +1290,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Order by, verify outer symtab is searched according to its own context.
 "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)"
@@ -1309,6 +1310,7 @@ Gen4++
     "Table": "`user`"
   }
 }
+Gen4++
 
 # Order by, qualified '*' expression, name mismatched.
 "select user.* from user where id = 5 order by e.col"

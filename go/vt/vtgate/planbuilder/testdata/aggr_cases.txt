@@ -2579,6 +2579,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # aggregation filtering by having on a route
 "select id from user group by id having count(id) = 10"

@@ -124,6 +124,46 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*ro
 		value = op.Selected.Values[0]
 	}
 
+	condition := getVindexPredicate(ctx, op)
+
+	var values []evalengine.Expr
+	if value != nil {
+		values = []evalengine.Expr{value}
+	}
+	sel := toSQL(ctx, op.Source)
+	replaceSubQuery(ctx, sel)
+	return &routeGen4{
+		eroute: &engine.Route{
+			Opcode:              op.RouteOpCode,
+			TableName:           strings.Join(tableNames, ", "),
+			Keyspace:            op.Keyspace,
+			Vindex:              singleColumn,
+			Values:              values,
+			SysTableTableName:   op.SysTableTableName,
+			SysTableTableSchema: op.SysTableTableSchema,
+		},
+		Select:    sel,
+		tables:    op.TableID(),
+		condition: condition,
+	}, nil
+
+}
+
+func replaceSubQuery(ctx *context.PlanningContext, sel sqlparser.SelectStatement) {
+	extractedSubqueries := ctx.SemTable.GetSubqueryNeedingRewrite()
+	if len(extractedSubqueries) == 0 {
+		return
+	}
+	sqr := &subQReplacer{subqueryToReplace: extractedSubqueries}
+	sqlparser.Rewrite(sel, sqr.replacer, nil)
+	for sqr.replaced {
+		// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
+		sqr.replaced = false
+		sqlparser.Rewrite(sel, sqr.replacer, nil)
+	}
+}
+
+func getVindexPredicate(ctx *context.PlanningContext, op *physical.Route) sqlparser.Expr {
 	var condition sqlparser.Expr
 	if op.Selected != nil {
 		if len(op.Selected.ValueExprs) > 0 {
@@ -153,26 +193,7 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*ro
 		}
 
 	}
-
-	var values []evalengine.Expr
-	if value != nil {
-		values = []evalengine.Expr{value}
-	}
-	return &routeGen4{
-		eroute: &engine.Route{
-			Opcode:              op.RouteOpCode,
-			TableName:           strings.Join(tableNames, ", "),
-			Keyspace:            op.Keyspace,
-			Vindex:              singleColumn,
-			Values:              values,
-			SysTableTableName:   op.SysTableTableName,
-			SysTableTableSchema: op.SysTableTableSchema,
-		},
-		Select:    toSQL(ctx, op.Source),
-		tables:    op.TableID(),
-		condition: condition,
-	}, nil
-
+	return condition
 }
 
 func getAllTableNames(op *physical.Route) ([]string, error) {
