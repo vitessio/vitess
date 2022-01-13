@@ -368,23 +368,12 @@ func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *Ro
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
 		Source: &ApplyJoin{
-			LHS:      aRoute.Source,
-			RHS:      bRoute.Source,
-			Vars:     map[string]int{},
-			LeftJoin: !inner,
+			LHS:       aRoute.Source,
+			RHS:       bRoute.Source,
+			Vars:      map[string]int{},
+			LeftJoin:  !inner,
+			Predicate: sqlparser.AndExpressions(joinPredicates...),
 		},
-	}
-
-	for _, predicate := range joinPredicates {
-		op, err := PushPredicate(ctx, predicate, r)
-		if err != nil {
-			return nil, err
-		}
-		route, ok := op.(*Route)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] did not expect type to change when pushing predicates")
-		}
-		r = route
 	}
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {

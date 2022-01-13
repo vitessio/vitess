@@ -1464,6 +1464,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # routing rules: order by gets pushed for routes
 "select col from route1 where id = 1 order by col"

@@ -2211,6 +2211,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # optimize group by when using distinct with no aggregation
 "select distinct col1, col2 from user group by col1, col2"
@@ -2530,6 +2531,7 @@ Gen4++
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # correlated subquery on sharding key with group by a unique vindex with having clause.
 "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)"
