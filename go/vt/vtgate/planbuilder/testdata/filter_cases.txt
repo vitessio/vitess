@@ -2377,6 +2377,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # pullout sq after pullout sq
 "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)"

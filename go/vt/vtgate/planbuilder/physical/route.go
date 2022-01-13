@@ -171,7 +171,10 @@ func (r *Route) planComparison(ctx *context.PlanningContext, cmp *sqlparser.Comp
 		found := r.planInOp(ctx, cmp)
 		return found, false, nil
 	case sqlparser.NotInOp:
-
+		// NOT IN is always a scatter, except when we can be sure it would return nothing
+		if r.isImpossibleNotIN(cmp) {
+			return false, true, nil
+		}
 	}
 	return false, false, nil
 }
@@ -346,7 +349,6 @@ func (r *Route) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
 func (r *Route) planInOp(ctx *context.PlanningContext, cmp *sqlparser.ComparisonExpr) bool {
 	switch left := cmp.Left.(type) {
 	case *sqlparser.ColName:
-		//return rp.planSimpleInOp(ctx, node, left)
 		vdValue := cmp.Right
 		value := r.makeEvalEngineExpr(ctx, vdValue)
 		if value == nil {
@@ -354,6 +356,20 @@ func (r *Route) planInOp(ctx *context.PlanningContext, cmp *sqlparser.Comparison
 		}
 		opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
 		return r.haveMatchingVindex(ctx, cmp, vdValue, left, value, opcode, justTheVindex)
+	}
+
+	return false
+}
+
+func (r *Route) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
+	switch node := node.Right.(type) {
+	case sqlparser.ValTuple:
+		for _, n := range node {
+			if sqlparser.IsNull(n) {
+				r.RouteOpCode = engine.SelectNone
+				return true
+			}
+		}
 	}
 
 	return false
