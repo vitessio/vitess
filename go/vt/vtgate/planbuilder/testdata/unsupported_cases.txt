@@ -550,6 +550,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # aggr and non-aggr without group by (with query does not give useful result out)
 "select id, count(*) from user"

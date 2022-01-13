@@ -41,11 +41,12 @@ func toSQL(ctx *context.PlanningContext, op abstract.PhysicalOperator) sqlparser
 func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *physical.Table:
-		s := op.QTable.Table.Qualifier.String()
-		if s != "information_schema" {
-			s = ""
+		dbName := ""
+
+		if op.QTable.IsInfSchema {
+			dbName = op.QTable.Table.Qualifier.String()
 		}
-		qb.addTable(s, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID(), op.QTable.Alias.Hints)
+		qb.addTable(dbName, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID(), op.QTable.Alias.Hints)
 		for _, pred := range op.QTable.Predicates {
 			qb.addPredicate(pred)
 		}
