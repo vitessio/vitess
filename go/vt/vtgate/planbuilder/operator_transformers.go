@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
@@ -124,8 +125,33 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*ro
 	}
 
 	var condition sqlparser.Expr
-	if op.Selected != nil && len(op.Selected.ValueExprs) > 0 {
-		condition = op.Selected.ValueExprs[0]
+	if op.Selected != nil {
+		if len(op.Selected.ValueExprs) > 0 {
+			condition = op.Selected.ValueExprs[0]
+		}
+		_, isMultiColumn := op.Selected.FoundVindex.(vindexes.MultiColumn)
+		for idx, predicate := range op.Selected.Predicates {
+			switch predicate := predicate.(type) {
+			case *sqlparser.ComparisonExpr:
+				if predicate.Operator == sqlparser.InOp {
+					switch predicate.Left.(type) {
+					case *sqlparser.ColName:
+						if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
+							extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
+							if extractedSubquery != nil {
+								extractedSubquery.SetArgName(engine.ListVarName)
+							}
+						}
+						if isMultiColumn {
+							predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
+							continue
+						}
+						predicate.Right = sqlparser.ListArg(engine.ListVarName)
+					}
+				}
+			}
+		}
+
 	}
 
 	var values []evalengine.Expr
