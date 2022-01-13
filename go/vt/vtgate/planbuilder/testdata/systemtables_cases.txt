@@ -282,6 +282,7 @@ Gen4++
     "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
   }
 }
+Gen4++
 
 # Select from information schema query with three tables such that route for 2 should be merged but not for the last.
 "SELECT KCU.DELETE_RULE, S.UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.K AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME"
@@ -733,6 +734,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # subquery of information_schema with itself
 "select * from information_schema.a where id in (select * from information_schema.b)"
@@ -788,6 +790,7 @@ Gen4++
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
+Gen4++
 
 # information_schema query using database() func
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
@@ -807,6 +810,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # table_schema predicate the wrong way around
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA"
@@ -827,6 +831,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # table_name predicate against a routed table
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'"
@@ -848,6 +853,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # information_schema query with additional predicates
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and other_column = 42"
@@ -868,6 +874,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # able to isolate table_schema value even when hidden inside of ORs
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')"
@@ -888,6 +895,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # expand star with information schema
 "select x.table_name from (select a.* from information_schema.key_column_usage a) x"
