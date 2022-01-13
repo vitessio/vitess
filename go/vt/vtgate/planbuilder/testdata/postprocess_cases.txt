@@ -265,6 +265,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # ORDER BY, reference col from local table.
 "select col from user where id = 5 order by aa"

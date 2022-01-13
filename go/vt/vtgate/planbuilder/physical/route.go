@@ -43,6 +43,10 @@ type (
 		// The following two fields are used when routing information_schema queries
 		SysTableTableSchema []evalengine.Expr
 		SysTableTableName   map[string]evalengine.Expr
+
+		// SeenPredicates contains all the predicates that have had a chance to influence routing.
+		// If we need to replan routing, we'll use this list
+		SeenPredicates []sqlparser.Expr
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -124,6 +128,7 @@ func (r *Route) Clone() abstract.PhysicalOperator {
 }
 
 func (r *Route) UpdateRoutingLogic(ctx *context.PlanningContext, expr sqlparser.Expr) error {
+	r.SeenPredicates = append(r.SeenPredicates, expr)
 	if r.canImprove() {
 		newVindexFound, err := r.searchForNewVindexes(ctx, expr)
 		if err != nil {
@@ -141,6 +146,24 @@ func (r *Route) UpdateRoutingLogic(ctx *context.PlanningContext, expr sqlparser.
 func (r *Route) searchForNewVindexes(ctx *context.PlanningContext, predicate sqlparser.Expr) (bool, error) {
 	newVindexFound := false
 	switch node := predicate.(type) {
+	case *sqlparser.ExtractedSubquery:
+		originalCmp, ok := node.Original.(*sqlparser.ComparisonExpr)
+		if !ok {
+			break
+		}
+
+		// using the node.subquery which is the rewritten version of our subquery
+		cmp := &sqlparser.ComparisonExpr{
+			Left:     node.OtherSide,
+			Right:    &sqlparser.Subquery{Select: node.Subquery.Select},
+			Operator: originalCmp.Operator,
+		}
+		found, exitEarly, err := r.planComparison(ctx, cmp)
+		if err != nil || exitEarly {
+			return false, err
+		}
+		newVindexFound = newVindexFound || found
+
 	case *sqlparser.ComparisonExpr:
 		found, exitEarly, err := r.planComparison(ctx, node)
 		if err != nil || exitEarly {
@@ -209,6 +232,10 @@ func (r *Route) planEqualOp(ctx *context.PlanningContext, node *sqlparser.Compar
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
 func (r *Route) makeEvalEngineExpr(ctx *context.PlanningContext, n sqlparser.Expr) evalengine.Expr {
+	if ctx.IsSubQueryToReplace(n) {
+		return nil
+	}
+
 	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
 		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
 			extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
@@ -454,6 +481,30 @@ func (r *Route) planCompositeInOpRecursive(
 		}
 	}
 	return foundVindex
+}
+
+func (r *Route) resetRoutingSelections(ctx *context.PlanningContext) error {
+
+	switch r.RouteOpCode {
+	// these we keep as is
+	case engine.SelectDBA, engine.SelectNext, engine.SelectReference, engine.SelectUnsharded:
+
+	default:
+		r.RouteOpCode = engine.SelectScatter
+	}
+
+	r.Selected = nil
+	for i, vp := range r.VindexPreds {
+		r.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
+	}
+
+	for _, predicate := range r.SeenPredicates {
+		err := r.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {

@@ -102,11 +102,10 @@ func mergeSubQueryOp(ctx *context.PlanningContext, outer *Route, inner *Route, s
 		outer.SysTableTableName[k] = v
 	}
 
-	// TODO: implement reset routing selections
-	// err = outer.resetRoutingSelections(ctx)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	err = outer.resetRoutingSelections(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return outer, nil
 }
 

@@ -1820,6 +1820,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # cross-shard subquery in NOT IN clause.
 "select id from user where id not in (select col from user)"
@@ -1980,6 +1981,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # multi-level pullout
 "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))"
@@ -2105,6 +2107,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4++
 
 # routing rules subquery merge
 "select col from user where id = (select id from route1 where route1.id = user.id)"
@@ -2169,6 +2172,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Case preservation test
 "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
@@ -2536,6 +2540,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # solving LIKE query with a CFC prefix vindex
 "select c2 from cfc_vindex_col where c1 like 'A%'"
@@ -2667,6 +2672,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # correlated subquery with different keyspace tables involved
 "select id from user where id in (select col from unsharded where col = user.id)"

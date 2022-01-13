@@ -4641,6 +4641,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # join on int columns
 "select u.id from user as u join user as uu on u.intcol = uu.intcol"
