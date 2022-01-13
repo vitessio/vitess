@@ -151,8 +151,8 @@ func (r *Route) searchForNewVindexes(ctx *context.PlanningContext, predicate sql
 	return newVindexFound, nil
 }
 
-func (r *Route) planComparison(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
-	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
+func (r *Route) planComparison(ctx *context.PlanningContext, cmp *sqlparser.ComparisonExpr) (found bool, exitEarly bool, err error) {
+	if sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
 		// so we can safely bail out here
@@ -160,10 +160,18 @@ func (r *Route) planComparison(ctx *context.PlanningContext, node *sqlparser.Com
 		return false, true, nil
 	}
 
-	switch node.Operator {
+	switch cmp.Operator {
 	case sqlparser.EqualOp:
-		found := r.planEqualOp(ctx, node)
+		found := r.planEqualOp(ctx, cmp)
 		return found, false, nil
+	case sqlparser.InOp:
+		if r.isImpossibleIN(cmp) {
+			return false, true, nil
+		}
+		found := r.planInOp(ctx, cmp)
+		return found, false, nil
+	case sqlparser.NotInOp:
+
 	}
 	return false, false, nil
 }
@@ -321,6 +329,34 @@ func (r *Route) VindexExpressions() []sqlparser.Expr {
 		return nil
 	}
 	return r.Selected.ValueExprs
+}
+
+func (r *Route) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
+	switch nodeR := node.Right.(type) {
+	case sqlparser.ValTuple:
+		// WHERE col IN (null)
+		if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
+			r.RouteOpCode = engine.SelectNone
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Route) planInOp(ctx *context.PlanningContext, cmp *sqlparser.ComparisonExpr) bool {
+	switch left := cmp.Left.(type) {
+	case *sqlparser.ColName:
+		//return rp.planSimpleInOp(ctx, node, left)
+		vdValue := cmp.Right
+		value := r.makeEvalEngineExpr(ctx, vdValue)
+		if value == nil {
+			return false
+		}
+		opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
+		return r.haveMatchingVindex(ctx, cmp, vdValue, left, value, opcode, justTheVindex)
+	}
+
+	return false
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
