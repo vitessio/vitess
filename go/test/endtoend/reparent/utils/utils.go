@@ -64,13 +64,13 @@ var (
 //region cluster setup/teardown
 
 // SetupReparentCluster is used to setup the reparent cluster
-func SetupReparentCluster(t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1})
+func SetupReparentCluster(t *testing.T, enableSemiSync bool) *cluster.LocalProcessCluster {
+	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync)
 }
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2})
+	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, true)
 }
 
 // TeardownCluster is used to teardown the reparent cluster
@@ -78,7 +78,7 @@ func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	clusterInstance.Teardown()
 }
 
-func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int) *cluster.LocalProcessCluster {
+func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, enableSemiSync bool) *cluster.LocalProcessCluster {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
@@ -117,7 +117,6 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
-		"-enable_semi_sync",
 		"-init_populate_metadata",
 		"-track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
@@ -127,6 +126,9 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
 		"-queryserver_enable_online_ddl=false",
+	}
+	if enableSemiSync {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-enable_semi_sync")
 	}
 
 	// Initialize Cluster
@@ -398,6 +400,12 @@ func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 		i++
 	}
 	return fmt.Errorf("data is not yet replicated on tablet %s", tablet.Alias)
+}
+
+func CheckSemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, semiSyncVal string) {
+	dbVar, err := tablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", "")
+	require.NoError(t, err)
+	require.Equal(t, semiSyncVal, dbVar)
 }
 
 // CheckCountOfInsertedValues checks that the number of inserted values matches the given count on the given tablet

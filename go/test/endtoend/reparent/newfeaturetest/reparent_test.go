@@ -107,7 +107,7 @@ func TestPRSForInitialization(t *testing.T) {
 // TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary
 func TestERSPromoteRdonly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -135,7 +135,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 // TestERSPreventCrossCellPromotion tests that we promote a replica in the same cell as the previous primary if prevent cross cell promotion flag is set
 func TestERSPreventCrossCellPromotion(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -158,7 +158,7 @@ func TestERSPreventCrossCellPromotion(t *testing.T) {
 // caught up to it by pulling transactions from it
 func TestPullFromRdonly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -222,7 +222,7 @@ func TestPullFromRdonly(t *testing.T) {
 // two replicas which do not have any replication status
 func TestTwoReplicasNoReplicationStatus(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
