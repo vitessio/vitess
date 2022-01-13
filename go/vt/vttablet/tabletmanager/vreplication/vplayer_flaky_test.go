@@ -1308,7 +1308,7 @@ func TestPlayerRowMove(t *testing.T) {
 
 func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
-	enableJSONColumnTesting := true
+	enableJSONColumnTesting := false
 	flavor := strings.ToLower(env.Flavor)
 	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
 	// either don't support JSON or JSON support is not enabled by default
