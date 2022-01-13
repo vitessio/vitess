@@ -4889,3 +4889,74 @@ Gen4++
     ]
   }
 }
+
+# Duplicate output column from derived table having a join
+"select 0 from (select `user`.col1 from `user` join unsharded) as t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1"
+"unsupported: expression on results of a cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select 0 from (select `user`.col1 from `user` join unsharded) as t join unsharded on unsharded.col1 = t.col1 and unsharded.a = t.col1",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "t_col1": 0
+    },
+    "Predicate": "unsharded.col1 = t.col1 and unsharded.a = t.col1",
+    "TableName": "`user`_unsharded_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          1
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2",
+            "TableName": "`user`_unsharded",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.col1, 0 from `user` where 1 != 1",
+                "Query": "select `user`.col1, 0 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectUnsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded where 1 != 1",
+                "Query": "select 1 from unsharded",
+                "Table": "unsharded"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.a = :t_col1",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
+Gen4++
