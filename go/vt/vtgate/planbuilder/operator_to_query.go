@@ -45,7 +45,7 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		if s != "information_schema" {
 			s = ""
 		}
-		qb.addTable(s, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID())
+		qb.addTable(s, op.QTable.Table.Name.String(), op.QTable.Alias.As.String(), op.TableID(), op.QTable.Alias.Hints)
 		for _, pred := range op.QTable.Predicates {
 			qb.addPredicate(pred)
 		}
@@ -77,9 +77,9 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil
 		sel.SelectExprs = sqlparser.GetFirstSelect(op.Query).SelectExprs
-		qb.addTableExpr("", op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
+		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
 			Select: sel,
-		})
+		}, nil)
 	default:
 		panic(fmt.Sprintf("%T", op))
 	}
@@ -89,15 +89,15 @@ func (qb *queryBuilder) produce() {
 	sort.Sort(qb)
 }
 
-func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet) {
+func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints *sqlparser.IndexHints) {
 	tableExpr := sqlparser.TableName{
 		Name:      sqlparser.NewTableIdent(tableName),
 		Qualifier: sqlparser.NewTableIdent(db),
 	}
-	qb.addTableExpr(db, tableName, alias, tableID, tableExpr)
+	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints)
 }
 
-func (qb *queryBuilder) addTableExpr(db, tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr) {
+func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr, hint *sqlparser.IndexHints) {
 	if qb.sel == nil {
 		qb.sel = &sqlparser.Select{}
 	}
@@ -106,7 +106,7 @@ func (qb *queryBuilder) addTableExpr(db, tableName, alias string, tableID semant
 		Expr:       tblExpr,
 		Partitions: nil,
 		As:         sqlparser.NewTableIdent(alias),
-		Hints:      nil,
+		Hints:      hint,
 		Columns:    nil,
 	})
 	qb.sel = sel
