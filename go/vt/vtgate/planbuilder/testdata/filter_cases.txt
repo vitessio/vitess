@@ -194,6 +194,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN clause, swapped columns
 "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -217,6 +218,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN clause, choose cost within tuple
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -240,6 +242,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN clause, choose cost within tuple, swapped
 "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -263,6 +266,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN clause, choose cost
 "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))"
@@ -286,6 +290,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN clause vs equality
 "select id from user where (col, name) in (('aa', 'bb')) and id = 5"
@@ -333,6 +338,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN: tuple inside tuple
 "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))"
@@ -356,6 +362,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN: tuple inside tuple, but no match in tuple
 "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))"
@@ -379,6 +386,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN: tuple inside tuple, mismiatched values
 "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))"
@@ -455,6 +463,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
+Gen4++
 
 # IN clause: LHS is neither column nor composite tuple
 "select Id from user where 1 in ('aa', 'bb')"
