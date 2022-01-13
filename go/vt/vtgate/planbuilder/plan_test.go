@@ -680,6 +680,19 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
 				case correctOutput && !tcase.check2ndPlanner:
 					t.Errorf("Gen4 - %s:%d\nGen4++ handles it", filename, tcase.lineno)
+
+					// uncomment the following to compare gen4 and gen4++
+					//case !tcase.check2ndPlanner:
+					//	t.Error("not handled by the new planner")
+					//	runGen4New = false
+					//	outOldGen4, err := getPlanOutput(tcase, vschema)
+					//	runGen4New = true
+					//	if err != nil {
+					//		t.Error(err)
+					//	}
+					//	t.Error(cmp.Diff(outOldGen4, out))
+					//	t.Error(outOldGen4)
+					//	t.Error(out)
 				}
 				if !tcase.check2ndPlanner {
 					out := tcase.output2ndPlanner
