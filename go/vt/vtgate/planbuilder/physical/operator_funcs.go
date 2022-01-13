@@ -121,6 +121,24 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 		log.Errorf("here %s", sqlparser.String(expr))
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
+	case *Derived:
+		tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
+		if err != nil {
+			if err == semantics.ErrMultipleTables {
+				return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+			}
+			return nil, err
+		}
+		newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
+		if err != nil {
+			return nil, err
+		}
+		newSrc, err := PushPredicate(ctx, newExpr, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		op.Source = newSrc
+		return op, err
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "we cannot push predicates into %T", op)
 	}

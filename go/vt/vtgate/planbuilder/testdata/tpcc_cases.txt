@@ -964,6 +964,7 @@ Gen4++
     "Vindex": "hash"
   }
 }
+Gen4++
 
 # TPC-C delete order_line1
 "DELETE FROM order_line1 where ol_w_id=178 AND ol_d_id=1 AND ol_o_id=84"

@@ -989,6 +989,7 @@ Gen4++
     "Table": "unsharded"
   }
 }
+Gen4++
 
 # Straight-join (Gen4 ignores the straight_join hint)
 "select m1.col from unsharded as m1 straight_join unsharded as m2"
@@ -2163,6 +2164,7 @@ Gen4++
     "Vindex": "user_index"
   }
 }
+Gen4++
 
 # derived table in FROM with cross-shard join
 "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col"
@@ -2389,6 +2391,7 @@ Gen4++
     "Table": "`user`"
   }
 }
+Gen4++
 
 # recursive derived table predicate push down
 "select bar from (select foo+4 as bar from (select colA+colB as foo from user) as u) as t where bar = 5"
@@ -4140,6 +4143,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # join column selected as alias
 "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id"
