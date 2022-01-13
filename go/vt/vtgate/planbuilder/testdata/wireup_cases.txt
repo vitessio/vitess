@@ -1223,6 +1223,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Wire-up in underlying primitive after pullout
 "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10"

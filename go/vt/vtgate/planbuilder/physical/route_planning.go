@@ -61,7 +61,7 @@ func CreatePhysicalOperator(ctx *context.PlanningContext, opTree abstract.Logica
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoinOp(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
+		return mergeOrJoin(ctx, opInner, opOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	case *abstract.Derived:
 		opInner, err := CreatePhysicalOperator(ctx, op.Inner)
 		if err != nil {
@@ -315,7 +315,7 @@ func getJoinOpFor(ctx *context.PlanningContext, cm opCacheMap, lhs, rhs abstract
 		return cachedPlan, nil
 	}
 
-	join, err := mergeOrJoinOp(ctx, lhs, rhs, joinPredicates, true)
+	join, err := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func getJoinOpFor(ctx *context.PlanningContext, cm opCacheMap, lhs, rhs abstract
 	return join, nil
 }
 
-func mergeOrJoinOp(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
+func mergeOrJoin(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOperator, joinPredicates []sqlparser.Expr, inner bool) (abstract.PhysicalOperator, error) {
 
 	merger := func(a, b *Route) (*Route, error) {
 		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)

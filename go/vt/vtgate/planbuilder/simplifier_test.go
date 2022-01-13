@@ -56,7 +56,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 }
 
 func TestQueryWithNewPlanner(t *testing.T) {
-	query := "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
+	query := "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
 		version: Gen4,
