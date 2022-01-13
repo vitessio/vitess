@@ -341,6 +341,7 @@ Gen4++
     "Table": "INFORMATION_SCHEMA.K, INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
   }
 }
+Gen4++
 
 #information_schema.routines
 "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'"

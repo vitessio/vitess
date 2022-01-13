@@ -150,7 +150,7 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 		predicate = sel.Where.Expr
 	}
 	if otherSel.Where != nil {
-		predicate = sqlparser.AndExpressions(predicate, otherSel.Where.Expr)
+		predicate = sqlparser.AndExpressions(sqlparser.SplitAndExpression(sqlparser.SplitAndExpression(nil, predicate), otherSel.Where.Expr)...)
 	}
 	if predicate != nil {
 		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}

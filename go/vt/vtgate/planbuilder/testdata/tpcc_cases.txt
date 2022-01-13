@@ -38,6 +38,7 @@
     "Vindex": "hash"
   }
 }
+Gen4++
 
 # TPC-C select district1 for update
 "SELECT d_next_o_id, d_tax FROM district1 WHERE d_w_id = 15 AND d_id = 95 FOR UPDATE"
