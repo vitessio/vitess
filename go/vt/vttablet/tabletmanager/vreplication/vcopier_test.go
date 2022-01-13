@@ -1373,7 +1373,7 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 	})
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=CONCAT(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE')"); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 	}
 	defer func() {
