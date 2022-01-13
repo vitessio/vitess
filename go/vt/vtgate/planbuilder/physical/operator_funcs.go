@@ -17,7 +17,6 @@ limitations under the License.
 package physical
 
 import (
-	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -118,7 +117,6 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 			Predicates: []sqlparser.Expr{expr},
 		}, nil
 	case *Filter:
-		log.Errorf("here %s", sqlparser.String(expr))
 		op.Predicates = append(op.Predicates, expr)
 		return op, nil
 	case *Derived:

@@ -426,6 +426,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Composite IN: RHS has no simple values
 "select id from user where (col1, name) in (('aa', 1+1))"
@@ -1569,6 +1570,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # nested subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)"
@@ -1674,6 +1676,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -1697,6 +1700,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # outer and inner subquery route by same str val
 "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')"
@@ -1720,6 +1724,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # outer and inner subquery route by same val arg
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
@@ -1743,6 +1748,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # unresolved symbol in inner subquery.
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
@@ -1768,6 +1774,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # cross-shard subquery in IN clause.
 # Note the improved Underlying plan as SelectIN.
@@ -2117,6 +2124,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # routing rules subquery pullout
 "select col from user where id = (select id from route2)"
@@ -2614,6 +2622,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # in subquery the id will be scoped to local table as there is no qualifier associated with it.
 "select id from user where id in (select col from unsharded where col = id)"
@@ -2683,6 +2692,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SelectDBA with uncorrelated subqueries
 "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)"
@@ -2702,6 +2712,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SelectReference with uncorrelated subqueries
 "select ref.col from ref where ref.col in (select ref.col from ref)"
@@ -2721,6 +2732,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SelectEqualUnique with uncorrelated subqueries
 "select u1.col from user as u1 where u1.id = 5 and u1.name in (select u2.name from user u2 where u2.id = 5)"
@@ -2744,6 +2756,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SelectEqualUnique with EXISTS uncorrelated subquery
 "select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)"
@@ -2767,6 +2780,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SelectEqualUnique with NOT EXISTS uncorrelated subquery
 "select u1.col from user as u1 where u1.id = 5 and not exists (select u2.name from user u2 where u2.id = 5)"
@@ -2790,6 +2804,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SelectScatter with NOT EXISTS uncorrelated subquery
 "select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)"
@@ -2964,6 +2979,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # The outer and second inner are SelectEqualUnique with same Vindex value, the first inner has different Vindex value
 "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -3055,6 +3071,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # two correlated subqueries that can be merge in a single route
 "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
@@ -3088,6 +3105,7 @@ Gen4++
     "Table": "`user`"
   }
 }
+Gen4++
 
 # transitive closures for the win
 "select id from user where user.id = user.col and user.col = 5"
@@ -3284,6 +3302,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # left join where clauses where we can optimize into an inner join
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5"

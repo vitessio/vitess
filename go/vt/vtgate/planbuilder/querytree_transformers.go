@@ -707,17 +707,3 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	}
 	return true
 }
-
-func replaceSubQuery(ctx *context.PlanningContext, sel sqlparser.SelectStatement) {
-	extractedSubqueries := ctx.SemTable.GetSubqueryNeedingRewrite()
-	if len(extractedSubqueries) == 0 {
-		return
-	}
-	sqr := &subQReplacer{subqueryToReplace: extractedSubqueries}
-	sqlparser.Rewrite(sel, sqr.replacer, nil)
-	for sqr.replaced {
-		// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
-		sqr.replaced = false
-		sqlparser.Rewrite(sel, sqr.replacer, nil)
-	}
-}
