@@ -49,7 +49,7 @@ clean: #: Delete generated dashboards (/dashboards_out) Usage: make clean
 	@rm -rf dashboards_out prometheus_alerts.yaml prometheus_rules.yaml > /dev/null
 	@echo "\nDone!\n"
 
-test: #: Compare your .json generated dashboards local version with the origin/master version.
+test: #: Compare your .json generated dashboards local version with the origin/main version.
 	@make clean > /dev/null
 	@ENV=${ENV} scripts/vitess-mixin-plan.sh
 	@make clean > /dev/null
