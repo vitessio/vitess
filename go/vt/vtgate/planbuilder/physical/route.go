@@ -360,6 +360,12 @@ func (r *Route) planInOp(ctx *context.PlanningContext, cmp *sqlparser.Comparison
 		}
 		opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
 		return r.haveMatchingVindex(ctx, cmp, vdValue, left, value, opcode, justTheVindex)
+	case sqlparser.ValTuple:
+		right, rightIsValTuple := cmp.Right.(sqlparser.ValTuple)
+		if !rightIsValTuple {
+			return false
+		}
+		return r.planCompositeInOpRecursive(ctx, cmp, left, right, nil)
 	}
 
 	return false
@@ -401,6 +407,65 @@ func (r *Route) planLikeOp(ctx *context.PlanningContext, node *sqlparser.Compari
 	}
 	return r.haveMatchingVindex(ctx, node, vdValue, column, val, selectEqual, vdx)
 
+}
+
+func (r *Route) planCompositeInOpRecursive(
+	ctx *context.PlanningContext,
+	cmp *sqlparser.ComparisonExpr,
+	left, right sqlparser.ValTuple,
+	coordinates []int,
+) bool {
+	foundVindex := false
+	cindex := len(coordinates)
+	coordinates = append(coordinates, 0)
+	for i, expr := range left {
+		coordinates[cindex] = i
+		switch expr := expr.(type) {
+		case sqlparser.ValTuple:
+			ok := r.planCompositeInOpRecursive(ctx, cmp, expr, right, coordinates)
+			return ok || foundVindex
+		case *sqlparser.ColName:
+			// check if left col is a vindex
+			if !r.hasVindex(expr) {
+				continue
+			}
+
+			rightVals := make(sqlparser.ValTuple, len(right))
+			for j, currRight := range right {
+				switch currRight := currRight.(type) {
+				case sqlparser.ValTuple:
+					val := tupleAccess(currRight, coordinates)
+					if val == nil {
+						return false
+					}
+					rightVals[j] = val
+				default:
+					return false
+				}
+			}
+			newPlanValues := r.makeEvalEngineExpr(ctx, rightVals)
+			if newPlanValues == nil {
+				return false
+			}
+
+			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
+			newVindex := r.haveMatchingVindex(ctx, cmp, rightVals, expr, newPlanValues, opcode, justTheVindex)
+			foundVindex = newVindex || foundVindex
+		}
+	}
+	return foundVindex
+}
+
+func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
+	tuple, _ := expr.(sqlparser.ValTuple)
+	for _, idx := range coordinates {
+		if idx >= len(tuple) {
+			return nil
+		}
+		expr = tuple[idx]
+		tuple, _ = expr.(sqlparser.ValTuple)
+	}
+	return expr
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
