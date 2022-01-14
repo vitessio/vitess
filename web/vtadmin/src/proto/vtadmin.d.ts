@@ -18358,6 +18358,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a PromoteReplicaRequest. */
     interface IPromoteReplicaRequest {
+
+        /** PromoteReplicaRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a PromoteReplicaRequest. */
@@ -18368,6 +18371,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IPromoteReplicaRequest);
+
+        /** PromoteReplicaRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new PromoteReplicaRequest instance using the specified properties.
@@ -43087,6 +43093,12 @@ export namespace binlogdata {
 
         /** VEvent last_p_k_event */
         last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace */
+        keyspace?: (string|null);
+
+        /** VEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a VEvent. */
@@ -43130,6 +43142,12 @@ export namespace binlogdata {
 
         /** VEvent last_p_k_event. */
         public last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace. */
+        public keyspace: string;
+
+        /** VEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new VEvent instance using the specified properties.

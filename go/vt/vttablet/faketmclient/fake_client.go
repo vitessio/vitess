@@ -331,7 +331,7 @@ func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.C
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	return "", nil
 }
 

@@ -714,7 +714,7 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 ) error {
 	erp.logger.Infof("starting promotion for the new primary - %v", newPrimary.Alias)
 	// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-	_, err := erp.tmc.PromoteReplica(ctx, newPrimary)
+	_, err := erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
 	}

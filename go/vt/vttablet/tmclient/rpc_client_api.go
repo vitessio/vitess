@@ -218,7 +218,7 @@ type TabletManagerClient interface {
 	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error)
 
 	// PromoteReplica makes the tablet the new primary
-	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
+	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error)
 
 	//
 	// Backup / restore related methods

@@ -508,7 +508,7 @@ func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatap
 	defer s.tm.HandleRPCPanic(ctx, "PromoteReplica", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PromoteReplicaResponse{}
-	position, err := s.tm.PromoteReplica(ctx)
+	position, err := s.tm.PromoteReplica(ctx, request.GetSemiSync())
 	if err == nil {
 		response.Position = position
 	}

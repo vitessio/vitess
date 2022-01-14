@@ -440,6 +440,7 @@ message StopReplicationAndGetStatusResponse {
 }
 
 message PromoteReplicaRequest {
+  bool semiSync = 1;
 }
 
 message PromoteReplicaResponse {
