@@ -67,7 +67,8 @@ var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
 
 const (
-	throttlerAppName = "vreplication"
+	throttlerAppName      = "vreplication"
+	changeMasterToPrimary = `update _vt.vreplication set tablet_types = replace(lower(convert(tablet_types using utf8mb4)), 'master', 'primary') where instr(convert(tablet_types using utf8mb4), 'master');`
 )
 
 func init() {
@@ -77,6 +78,7 @@ func init() {
 	allddls = append(allddls, createVReplicationLogTable)
 	withDDL = withddl.New(allddls)
 
+	withDDLInitialQueries = append(withDDLInitialQueries, changeMasterToPrimary)
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
 }
 
