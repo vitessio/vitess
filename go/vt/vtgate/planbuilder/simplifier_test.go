@@ -20,14 +20,15 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -35,7 +36,7 @@ import (
 // TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported
 // It will try to minimize the query to make it easier to understand and work with the bug.
 func TestSimplifyBuggyQuery(t *testing.T) {
-	query := "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)"
+	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
 		version: Gen4,
@@ -71,6 +72,27 @@ func TestQueryWithNewPlanner(t *testing.T) {
 		vschema.currentDb(),
 		vschema,
 		keepDifferentPlansBetweenGen4AndGen4Plusplus(query, reservedVars, vschema, rewritten.BindVarNeeds),
+	)
+
+	fmt.Println(sqlparser.String(simplified))
+}
+
+func TestSimplifyPanic(t *testing.T) {
+	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
+	vschema := &vschemaWrapper{
+		v:       loadSchema(t, "schema_test.json", true),
+		version: Gen4,
+	}
+	stmt, reserved, err := sqlparser.Parse2(query)
+	require.NoError(t, err)
+	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+
+	simplified := simplifier.SimplifyStatement(
+		stmt.(sqlparser.SelectStatement),
+		vschema.currentDb(),
+		vschema,
+		keepPanicking(query, reservedVars, vschema, rewritten.BindVarNeeds),
 	)
 
 	fmt.Println(sqlparser.String(simplified))
@@ -144,6 +166,33 @@ func keepSameError(query string, reservedVars *sqlparser.ReservedVars, vschema *
 		}
 		return vterrors.ErrState(myErr) == state
 	}
+}
+
+func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
+	cmp := func(statement sqlparser.SelectStatement) (res bool) {
+		defer func() {
+			r := recover()
+			if r != nil {
+				log.Errorf("panicked with %v", r)
+				res = true
+			}
+		}()
+		log.Errorf("trying %s", sqlparser.String(statement))
+		_, _ = BuildFromStmt(query, statement, reservedVars, vschema, needs, true, true)
+		log.Errorf("did not panic")
+
+		return false
+	}
+
+	stmt, _, err := sqlparser.Parse2(query)
+	if err != nil {
+		panic(err.Error())
+	}
+	if !cmp(stmt.(sqlparser.SelectStatement)) {
+		panic("query is not panicking")
+	}
+
+	return cmp
 }
 
 func keepDifferentPlansBetweenGen4AndGen4Plusplus(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
