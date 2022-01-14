@@ -77,6 +77,10 @@ func (mariadbFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
 }
 
+func (mariadbFlavor) startSQLThreadCommand() string {
+	return "START SLAVE SQL_THREAD"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
 	// Tell the server that we understand GTIDs by setting
