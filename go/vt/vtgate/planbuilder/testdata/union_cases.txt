@@ -573,6 +573,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
@@ -1017,6 +1018,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # union distinct between a scatter query and a join (other side)
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
@@ -1445,6 +1447,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # gen4 optimises away ORDER BY when it's safe to do
 "(select id from user union select id from music order by id) union select 1 from unsharded"
@@ -1485,6 +1488,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # push down the ::upper_limit to the sources, since we are doing DISTINCT on them, it's safe
 "select id from user union select 3 limit 10"
@@ -1710,6 +1714,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"

@@ -1620,6 +1620,7 @@ Gen4++
     "Table": "unsharded"
   }
 }
+Gen4++
 
 # unsharded nested union
 "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
