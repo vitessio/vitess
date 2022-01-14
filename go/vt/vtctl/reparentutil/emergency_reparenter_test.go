@@ -204,6 +204,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				{
 					Keyspace: "testkeyspace",
 					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -320,6 +326,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				{
 					Keyspace: "testkeyspace",
 					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -957,6 +969,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				{
 					Keyspace: "testkeyspace",
 					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -1068,6 +1086,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				{
 					Keyspace: "testkeyspace",
 					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -1891,7 +1915,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				Shard: &topodatapb.Shard{
 					PrimaryAlias: &topodatapb.TabletAlias{
 						Cell: "zone1",
-						Uid:  301,
+						Uid:  100,
 					},
 				},
 			}}
@@ -2268,6 +2292,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 				Cell: "zone1",
 				Uid:  100,
 			},
+			Type:     topodatapb.TabletType_PRIMARY,
 			Keyspace: "testkeyspace",
 			Shard:    "-",
 		},
@@ -2276,6 +2301,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 				Cell: "zone1",
 				Uid:  101,
 			},
+			Type:     topodatapb.TabletType_REPLICA,
 			Keyspace: "testkeyspace",
 			Shard:    "-",
 		},
@@ -2284,6 +2310,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
+			Type:     topodatapb.TabletType_REPLICA,
 			Keyspace: "testkeyspace",
 			Shard:    "-",
 			Hostname: "most up-to-date position, wins election",
@@ -2296,13 +2323,11 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 
-	for i, tablet := range tablets {
-		tablet.Type = topodatapb.TabletType_REPLICA
-		tablets[i] = tablet
-	}
-
 	testutil.AddShards(ctx, t, ts, shards...)
-	testutil.AddTablets(ctx, t, ts, nil, tablets...)
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary: true,
+		SkipShardCreation:   false,
+	}, tablets...)
 
 	erp := NewEmergencyReparenter(ts, tmc, logger)
 
