@@ -218,9 +218,10 @@ func TestPullFromRdonly(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestTwoReplicasNoReplicationStatus checks that ERS is able to fix
-// two replicas which do not have any replication status
-func TestTwoReplicasNoReplicationStatus(t *testing.T) {
+// TestNoReplicationStatusAndReplicationStopped checks that ERS is able to fix
+// replicas which do not have any replication status and also succeeds if the replication
+// is stopped on the primary elect.
+func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t)
 	defer utils.TeardownCluster(clusterInstance)
@@ -229,9 +230,20 @@ func TestTwoReplicasNoReplicationStatus(t *testing.T) {
 
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE; RESET SLAVE ALL`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE; RESET SLAVE ALL`)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
 	require.NoError(t, err)
-
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[3].Alias, `STOP SLAVE SQL_THREAD;`)
+	require.NoError(t, err)
+	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
+	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
+	// Failover to tablets[3]
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, out)
+	// Verify that the tablet has the inserted value
+	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+	require.NoError(t, err)
+	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
+	utils.ConfirmReplication(t, tablets[3], tablets[:1])
+	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
+	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
 }
