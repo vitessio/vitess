@@ -91,7 +91,12 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	case Unsharded:
 		return upd.execUpdateUnsharded(vcursor, bindVars)
 	case Equal:
-		return upd.execUpdateEqual(vcursor, bindVars)
+		switch upd.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return upd.execUpdateEqualMultiCol(vcursor, bindVars)
+		default:
+			return upd.execUpdateEqual(vcursor, bindVars)
+		}
 	case In:
 		return upd.execUpdateIn(vcursor, bindVars)
 	case Scatter:
@@ -203,6 +208,35 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
 }
 
+func (upd *Update) execUpdateEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	var rowValue []sqltypes.Value
+	for _, rvalue := range upd.Values {
+		v, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, err
+		}
+		rowValue = append(rowValue, v.Value())
+	}
+	rss, _, err := resolveShardsMultiCol(vcursor, upd.Vindex.(vindexes.MultiColumn), upd.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex mapped id to multi shards: %d", len(rss))
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, err
+		}
+	}
+	return execShard(vcursor, upd.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+}
+
 // updateVindexEntries performs an update when a vindex is being modified
 // by the statement.
 // Note: the commit order may be different from the DML order because it's possible
@@ -232,7 +266,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	env := evalengine.EnvWithBindVars(bindVars)
 
 	for _, row := range subQueryResult.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex.(vindexes.SingleColumn), row[0])
+		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0:upd.KsidLength])
 		if err != nil {
 			return err
 		}
