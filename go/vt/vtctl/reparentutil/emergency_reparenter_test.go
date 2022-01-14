@@ -1411,6 +1411,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		statusMap             map[string]*replicationdatapb.StopReplicationStatus
 		shouldErr             bool
 		errShouldContain      string
+		initializationTest    bool
 	}{
 		{
 			name:                 "success",
@@ -1789,6 +1790,93 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
 		},
+		{
+			name:                 "success in initialization",
+			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.NewString("zone1-0000000404")},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+					"zone1-0000000404": assert.AnError, // okay, because we're ignoring it.
+				},
+			},
+			initializationTest:    true,
+			newPrimaryTabletAlias: "zone1-0000000100",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Hostname: "primary-elect",
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Hostname: "requires force start",
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": { // forceStart = false
+					Before: &replicationdatapb.Status{
+						IoThreadRunning:  false,
+						SqlThreadRunning: false,
+					},
+				},
+				"zone1-0000000102": { // forceStart = true
+					Before: &replicationdatapb.Status{
+						IoThreadRunning:  true,
+						SqlThreadRunning: true,
+					},
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
+			shouldErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1799,7 +1887,17 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 
 			ctx := context.Background()
 			logger := logutil.NewMemoryLogger()
-			ev := &events.Reparent{}
+			ev := &events.Reparent{ShardInfo: topo.ShardInfo{
+				Shard: &topodatapb.Shard{
+					PrimaryAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  301,
+					},
+				},
+			}}
+			if tt.initializationTest {
+				ev.ShardInfo.PrimaryAlias = nil
+			}
 
 			testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
 				Keyspace: tt.keyspace,
