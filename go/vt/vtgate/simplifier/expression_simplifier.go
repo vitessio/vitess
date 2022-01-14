@@ -120,28 +120,28 @@ type shrinker struct {
 }
 
 func (s *shrinker) Next() sqlparser.Expr {
-	// first we check if there is already something in the queue.
-	// note that we are doing a nil check and not a length check here.
-	// once something has been added to the queue, we are no longer
-	// going to add expressions to the queue
-	if s.queue != nil {
-		if len(s.queue) == 0 {
-			return nil
+	for {
+		// first we check if there is already something in the queue.
+		// note that we are doing a nil check and not a length check here.
+		// once something has been added to the queue, we are no longer
+		// going to add expressions to the queue
+		if s.queue != nil {
+			if len(s.queue) == 0 {
+				return nil
+			}
+			nxt := s.queue[0]
+			s.queue = s.queue[1:]
+			return nxt
 		}
-		nxt := s.queue[0]
-		s.queue = s.queue[1:]
-		return nxt
+		if s.fillQueue() {
+			continue
+		}
+		return nil
 	}
-
-	// we have yet to fill the queue. let's try that next
-	added := s.fillQueue()
-	if added {
-		return s.Next()
-	}
-	return nil
 }
 
 func (s *shrinker) fillQueue() bool {
+	before := len(s.queue)
 	switch e := s.orig.(type) {
 	case *sqlparser.ComparisonExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
@@ -198,12 +198,9 @@ func (s *shrinker) fillQueue() bool {
 			}
 			s.queue = append(s.queue, expr.Expr)
 		}
-		if s.queue == nil {
-			return false
-		}
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
 		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
 	}
-	return true
+	return len(s.queue) > before
 }
