@@ -64,6 +64,7 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edel.Table.Name}, As: aTblExpr.As}
 		edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edel.Table, ksidVindex.Columns)
 		edel.KsidVindex = ksidVindex.Vindex
+		edel.KsidLength = len(ksidVindex.Columns)
 	}
 
 	return edel, nil

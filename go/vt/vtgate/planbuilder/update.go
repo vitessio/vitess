@@ -53,6 +53,7 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	eupd.OwnedVindexQuery = ovq
 	if len(eupd.ChangedVindexValues) != 0 {
 		eupd.KsidVindex = ksidVindex.Vindex
+		eupd.KsidLength = len(ksidVindex.Columns)
 	}
 	return eupd, nil
 }

@@ -215,7 +215,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 
 	for _, row := range subQueryResults.Rows {
 		colnum := 1
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex.(vindexes.SingleColumn), row[0])
+		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex.(vindexes.SingleColumn), row[0:del.KsidLength])
 		if err != nil {
 			return err
 		}

@@ -17,10 +17,15 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -47,8 +52,11 @@ type DML struct {
 	// For now, only one value is specified.
 	Values []evalengine.Expr
 
-	// Keyspace Id Vindex
+	// KsidVindex is primary Vindex
 	KsidVindex vindexes.Vindex
+
+	// KsidLength is number of columns that represents KsidVindex
+	KsidLength int
 
 	// Table specifies the table for the update.
 	Table *vindexes.Table
@@ -132,4 +140,36 @@ func execMultiShard(vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*qu
 	autocommit := (len(rss) == 1 || multiShardAutoCommit) && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
+}
+
+func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
+	for _, rs := range rss {
+		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "supported only for primary tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
+		}
+	}
+	return nil
+}
+
+func resolveKeyspaceID(vcursor VCursor, vindex vindexes.Vindex, vindexKey []sqltypes.Value) ([]byte, error) {
+	var destinations []key.Destination
+	var err error
+	switch vdx := vindex.(type) {
+	case vindexes.MultiColumn:
+		destinations, err = vdx.Map(vcursor, [][]sqltypes.Value{vindexKey})
+	case vindexes.SingleColumn:
+		destinations, err = vdx.Map(vcursor, vindexKey)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	switch ksid := destinations[0].(type) {
+	case key.DestinationKeyspaceID:
+		return ksid, nil
+	case key.DestinationNone:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
+	}
 }

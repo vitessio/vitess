@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -909,21 +907,6 @@ func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *
 	return rss, nil
 }
 
-func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {
-	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
-	if err != nil {
-		return nil, err
-	}
-	switch ksid := destinations[0].(type) {
-	case key.DestinationKeyspaceID:
-		return ksid, nil
-	case key.DestinationNone:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
-	}
-}
-
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
@@ -960,15 +943,6 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 		shardVars[i] = newbv
 	}
 	return shardVars
-}
-
-func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
-	for _, rs := range rss {
-		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "supported only for primary tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
-		}
-	}
-	return nil
 }
 
 func (route *Route) description() PrimitiveDescription {

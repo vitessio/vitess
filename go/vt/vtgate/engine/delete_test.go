@@ -71,7 +71,7 @@ func TestDeleteEqual(t *testing.T) {
 				Sharded: true,
 			},
 			Query:  "dummy_delete",
-			Vindex: vindex.(vindexes.SingleColumn),
+			Vindex: vindex,
 			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
@@ -105,7 +105,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 				Sharded: true,
 			},
 			Query:  "dummy_delete",
-			Vindex: vindex.(vindexes.SingleColumn),
+			Vindex: vindex,
 			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
@@ -134,7 +134,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 				Sharded: true,
 			},
 			Query:  "dummy_delete",
-			Vindex: vindex.(vindexes.SingleColumn),
+			Vindex: vindex,
 			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
@@ -151,11 +151,12 @@ func TestDeleteOwnedVindex(t *testing.T) {
 			Opcode:           Equal,
 			Keyspace:         ks.Keyspace,
 			Query:            "dummy_delete",
-			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Vindex:           ks.Vindexes["hash"],
 			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
-			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+			KsidVindex:       ks.Vindexes["hash"],
+			KsidLength:       1,
 		},
 	}
 
@@ -283,7 +284,8 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 			Query:            "dummy_delete",
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
-			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+			KsidVindex:       ks.Vindexes["hash"],
+			KsidLength:       1,
 		},
 	}
 
