@@ -906,7 +906,7 @@ Gen4++
         "JoinVars": {
           "e_col": 0
         },
-        "Predicate": "m1.col = e.col and e.col = :user_col",
+        "Predicate": "m1.col = e.col",
         "TableName": "user_extra_unsharded",
         "Inputs": [
           {
@@ -936,6 +936,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Right join
 "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b"
@@ -2923,7 +2924,6 @@ Gen4++
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "Predicate": "`user`.id = :ua_id",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -2959,6 +2959,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # subquery in ON clause, single route
 "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)"
