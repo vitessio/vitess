@@ -120,6 +120,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		"-enable_semi_sync",
 		"-init_populate_metadata",
 		"-track_schema_versions=true",
+		"-disable_active_reparents",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
 		// This means that Promoting a tablet to primary is sometimes immediately followed by a DemotePrimary call.
@@ -606,4 +607,20 @@ func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
 		return true
 	}
 	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetMaster", tablet.Alias))
+}
+
+// CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
+func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
+	res := RunSQL(ctx, t, "show slave status;", tablet)
+	if ioThreadRunning {
+		require.Equal(t, "Yes", res.Rows[0][10].ToString())
+	} else {
+		require.Equal(t, "No", res.Rows[0][10].ToString())
+	}
+
+	if sqlThreadRunning {
+		require.Equal(t, "Yes", res.Rows[0][11].ToString())
+	} else {
+		require.Equal(t, "No", res.Rows[0][11].ToString())
+	}
 }
