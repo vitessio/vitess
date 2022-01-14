@@ -120,6 +120,11 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		"-enable_semi_sync",
 		"-init_populate_metadata",
 		"-track_schema_versions=true",
+		// disabling active reparents on the tablet since we don't want the replication manager
+		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
+		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
+		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
+		// setting up the replication correctly
 		"-disable_active_reparents",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
