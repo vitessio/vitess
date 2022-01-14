@@ -484,11 +484,9 @@ func (r *Route) planCompositeInOpRecursive(
 }
 
 func (r *Route) resetRoutingSelections(ctx *context.PlanningContext) error {
-
 	switch r.RouteOpCode {
-	// these we keep as is
 	case engine.SelectDBA, engine.SelectNext, engine.SelectReference, engine.SelectUnsharded:
-
+		// these we keep as is
 	default:
 		r.RouteOpCode = engine.SelectScatter
 	}

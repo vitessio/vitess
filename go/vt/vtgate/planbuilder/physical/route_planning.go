@@ -334,20 +334,14 @@ func mergeOrJoin(ctx *context.PlanningContext, lhs, rhs abstract.PhysicalOperato
 		return newPlan, nil
 	}
 
-	var tree abstract.PhysicalOperator = &ApplyJoin{
+	join := &ApplyJoin{
 		LHS:      lhs.Clone(),
 		RHS:      rhs.Clone(),
 		Vars:     map[string]int{},
 		LeftJoin: !inner,
 	}
-	for _, predicate := range joinPredicates {
-		var err error
-		tree, err = PushPredicate(ctx, predicate, tree)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return tree, nil
+
+	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
 func createRouteOperatorForJoin(ctx *context.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
@@ -785,4 +779,127 @@ func hexEqual(a, b *sqlparser.Literal) bool {
 		return bytes.Equal(v, v2)
 	}
 	return false
+}
+
+func pushJoinPredicates(
+	ctx *context.PlanningContext,
+	exprs []sqlparser.Expr,
+	op abstract.PhysicalOperator,
+) (abstract.PhysicalOperator, error) {
+	if len(exprs) == 0 {
+		return op, nil
+	}
+
+	switch op := op.(type) {
+	case *ApplyJoin:
+		return pushJoinPredicateOnJoin(ctx, exprs, op)
+	case *Route:
+		return pushJoinPredicateOnRoute(ctx, exprs, op)
+	case *Table:
+		return PushPredicate(ctx, sqlparser.AndExpressions(exprs...), op)
+	case *Derived:
+		return pushJoinPredicateOnDerived(ctx, exprs, op)
+	case *Filter:
+		op.Predicates = append(op.Predicates, exprs...)
+		return op, nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown type %T pushJoinPredicates", op)
+	}
+}
+
+func pushJoinPredicateOnRoute(ctx *context.PlanningContext, exprs []sqlparser.Expr, op *Route) (abstract.PhysicalOperator, error) {
+	for _, expr := range exprs {
+		err := op.UpdateRoutingLogic(ctx, expr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	newSrc, err := pushJoinPredicates(ctx, exprs, op.Source)
+	op.Source = newSrc
+	return op, err
+}
+
+func pushJoinPredicateOnJoin(ctx *context.PlanningContext, exprs []sqlparser.Expr, node *ApplyJoin) (abstract.PhysicalOperator, error) {
+	node = node.Clone().(*ApplyJoin)
+	var rhsPreds []sqlparser.Expr
+	var lhsPreds []sqlparser.Expr
+	var lhsColumns []*sqlparser.ColName
+	var lhsVarsName []string
+	for _, expr := range exprs {
+		// We find the dependencies for the given expression and if they are solved entirely by one
+		// side of the join tree, then we push the predicate there and do not break it into parts.
+		// In case a predicate has no dependencies, then it is pushed to both sides so that we can filter
+		// rows as early as possible making join cheaper on the vtgate level.
+		depsForExpr := ctx.SemTable.RecursiveDeps(expr)
+		singleSideDeps := false
+		if depsForExpr.IsSolvedBy(node.LHS.TableID()) {
+			lhsPreds = append(lhsPreds, expr)
+			singleSideDeps = true
+		}
+		if depsForExpr.IsSolvedBy(node.RHS.TableID()) {
+			rhsPreds = append(rhsPreds, expr)
+			singleSideDeps = true
+		}
+
+		if singleSideDeps {
+			continue
+		}
+
+		bvName, cols, predicate, err := breakExpressionInLHSandRHS(ctx, expr, node.LHS.TableID())
+		if err != nil {
+			return nil, err
+		}
+		lhsColumns = append(lhsColumns, cols...)
+		lhsVarsName = append(lhsVarsName, bvName...)
+		rhsPreds = append(rhsPreds, predicate)
+	}
+	if lhsColumns != nil && lhsVarsName != nil {
+		newNode, offsets, err := PushOutputColumns(ctx, node.LHS, lhsColumns...)
+		if err != nil {
+			return nil, err
+		}
+		node.LHS = newNode
+		for i, idx := range offsets {
+			node.Vars[lhsVarsName[i]] = idx
+		}
+	}
+	lhsPlan, err := pushJoinPredicates(ctx, lhsPreds, node.LHS)
+	if err != nil {
+		return nil, err
+	}
+
+	rhsPlan, err := pushJoinPredicates(ctx, rhsPreds, node.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	node.LHS = lhsPlan
+	node.RHS = rhsPlan
+	node.Predicate = sqlparser.AndExpressions(exprs...)
+	return node, nil
+}
+
+func pushJoinPredicateOnDerived(ctx *context.PlanningContext, exprs []sqlparser.Expr, node *Derived) (abstract.PhysicalOperator, error) {
+	node = node.Clone().(*Derived)
+
+	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
+	for _, expr := range exprs {
+		tblInfo, err := ctx.SemTable.TableInfoForExpr(expr)
+		if err != nil {
+			return nil, err
+		}
+		rewritten, err := semantics.RewriteDerivedExpression(expr, tblInfo)
+		if err != nil {
+			return nil, err
+		}
+		newExpressions = append(newExpressions, rewritten)
+	}
+
+	newInner, err := pushJoinPredicates(ctx, newExpressions, node.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	node.Source = newInner
+	return node, nil
 }
