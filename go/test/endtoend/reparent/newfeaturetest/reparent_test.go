@@ -304,4 +304,5 @@ func TestERSForInitialization(t *testing.T) {
 	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, true)
 	assert.Equal(t, len(tablets), len(strArray))
 	assert.Contains(t, strArray[0], "primary") // primary first
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 }
