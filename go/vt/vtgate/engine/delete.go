@@ -262,6 +262,7 @@ func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
 	}
 	if dml.KsidVindex != nil {
 		other["KsidVindex"] = dml.KsidVindex.String()
+		other["KsidLength"] = dml.KsidLength
 	}
 	if len(dml.Values) > 0 {
 		s := []string{}
