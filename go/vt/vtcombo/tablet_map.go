@@ -969,7 +969,7 @@ func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(context.Con
 	return nil, nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) PromoteReplica(context.Context, *topodatapb.Tablet) (string, error) {
+func (itmc *internalTabletManagerClient) PromoteReplica(context.Context, *topodatapb.Tablet, bool) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 

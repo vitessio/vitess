@@ -934,14 +934,16 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
-func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return "", err
 	}
 	defer closer.Close()
 
-	response, err := c.PromoteReplica(ctx, &tabletmanagerdatapb.PromoteReplicaRequest{})
+	response, err := c.PromoteReplica(ctx, &tabletmanagerdatapb.PromoteReplicaRequest{
+		SemiSync: semiSync,
+	})
 	if err != nil {
 		return "", err
 	}

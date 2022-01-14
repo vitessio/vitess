@@ -288,7 +288,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer promoteCancel()
 
-	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect)
+	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}
@@ -485,7 +485,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer promoteCancel()
 
-	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect)
+	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "failed to promote %v to primary", primaryElectAliasStr)
 	}

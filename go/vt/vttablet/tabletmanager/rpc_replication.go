@@ -797,7 +797,7 @@ type StopReplicationAndGetStatusResponse struct {
 }
 
 // PromoteReplica makes the current tablet the primary
-func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
+func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	log.Infof("PromoteReplica")
 	if err := tm.lock(ctx); err != nil {
 		return "", err

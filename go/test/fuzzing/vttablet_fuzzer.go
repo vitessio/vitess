@@ -441,7 +441,7 @@ func (fs *fuzzStore) callPromoteReplica() error {
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.PromoteReplica(context.Background(), tablet)
+	_, _ = fs.client.PromoteReplica(context.Background(), tablet, false)
 	return nil
 }
 

@@ -1192,7 +1192,7 @@ func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) PromoteReplica(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1200,12 +1200,12 @@ func (fra *fakeRPCTM) PromoteReplica(ctx context.Context) (string, error) {
 }
 
 func tmRPCTestPromoteReplica(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, err := client.PromoteReplica(ctx, tablet)
+	rp, err := client.PromoteReplica(ctx, tablet, false)
 	compareError(t, "PromoteReplica", err, rp, testReplicationPosition)
 }
 
 func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.PromoteReplica(ctx, tablet)
+	_, err := client.PromoteReplica(ctx, tablet, false)
 	expectHandleRPCPanic(t, "PromoteReplica", true /*verbose*/, err)
 }
 

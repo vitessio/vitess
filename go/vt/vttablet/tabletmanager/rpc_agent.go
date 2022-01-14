@@ -143,7 +143,7 @@ type RPCTM interface {
 
 	ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
-	PromoteReplica(ctx context.Context) (string, error)
+	PromoteReplica(ctx context.Context, semiSync bool) (string, error)
 
 	// Backup / restore related methods
 
