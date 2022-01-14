@@ -489,7 +489,7 @@ Gen4++
         "JoinVars": {
           "u1_col": 0
         },
-        "Predicate": "u2.col = u1.col",
+        "Predicate": "u1.col = :u3_col",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -656,7 +656,7 @@ Gen4++
             "JoinVars": {
               "u1_col": 0
             },
-            "Predicate": "u3.id = u1.col",
+            "Predicate": ":u4_col = u1.col",
             "TableName": "`user`_`user`",
             "Inputs": [
               {
