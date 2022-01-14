@@ -89,7 +89,7 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 	}
 
 	// Let's see if we need to fix semi-sync acking.
-	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type); err != nil {
+	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type, false); err != nil {
 		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
 	}
 	return nil
