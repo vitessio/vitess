@@ -344,6 +344,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	}
 	cancelMigration()
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -862,6 +863,8 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 	require.Error(t, err, "Workflow has not completed, cannot DropSources")
 
 	tme.dbSourceClients[0].addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1080,6 +1083,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
+	switchWrites(tme)
 	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunWrites, *results))
@@ -1165,6 +1169,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSourceClients[0].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 	tme.dbSourceClients[1].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "journaling intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1226,6 +1231,7 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1303,6 +1309,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1365,6 +1372,7 @@ func TestTableMigrateCancel(t *testing.T) {
 	}
 	cancelMigration()
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1424,6 +1432,7 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	}
 	cancelMigration()
 
+	switchWrites(tme)
 	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(want, *dryRunResults))
@@ -1522,6 +1531,7 @@ func TestTableMigrateNoReverse(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1563,6 +1573,7 @@ func TestMigrateFrozen(t *testing.T) {
 	), nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1935,6 +1946,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	}
 	cancelMigration()
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -2182,4 +2194,12 @@ func stoppedResult(id int) *sqltypes.Result {
 
 func runningResult(id int) *sqltypes.Result {
 	return getResult(id, "Running", tpChoice.keyspace, tpChoice.shard)
+}
+
+func switchWrites(tmeT interface{}) {
+	if tme, ok := tmeT.(*testMigraterEnv); ok {
+		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
+	} else if tme, ok := tmeT.(*testShardMigraterEnv); ok {
+		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
+	}
 }
