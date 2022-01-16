@@ -91,6 +91,36 @@ func TestDeleteEqual(t *testing.T) {
 	require.EqualError(t, err, "query arguments missing for aa")
 }
 
+func TestDeleteEqualMultiCol(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	del := &Delete{
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex,
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
+	})
+
+	// Failure case
+	expr := evalengine.NewBindVar("aa", collations.TypedCollation{})
+	del.Values = []evalengine.Expr{expr}
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.EqualError(t, err, "query arguments missing for aa")
+}
+
 func TestDeleteEqualNoRoute(t *testing.T) {
 	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
 		"table": "lkp",
