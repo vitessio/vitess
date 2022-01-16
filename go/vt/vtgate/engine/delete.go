@@ -186,7 +186,7 @@ func (del *Delete) execDeleteEqualMultiCol(vcursor VCursor, bindVars map[string]
 }
 
 func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex.(vindexes.SingleColumn))
+	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values, del.Vindex)
 	if err != nil {
 		return nil, err
 	}
