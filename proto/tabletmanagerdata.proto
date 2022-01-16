@@ -211,6 +211,7 @@ message ApplySchemaRequest {
   bool allow_replication = 3;
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
+  string sql_mode = 6;
 }
 
 message ApplySchemaResponse {

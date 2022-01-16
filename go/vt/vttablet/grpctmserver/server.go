@@ -172,6 +172,7 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 		AllowReplication: request.AllowReplication,
 		BeforeSchema:     request.BeforeSchema,
 		AfterSchema:      request.AfterSchema,
+		SQLMode:          request.SqlMode,
 	})
 	if err == nil {
 		response.BeforeSchema = scr.BeforeSchema
