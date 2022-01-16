@@ -468,3 +468,52 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
 	})
 }
+
+func TestDeleteInChangedVindexMultiCol(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	del := &Delete{
+		DML: DML{
+			Opcode:   In,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_update",
+			Vindex:   ks.Vindexes["rg_vdx"],
+			Values: []evalengine.Expr{
+				&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+				evalengine.NewLiteralInt(3),
+			},
+			Table:            ks.Tables["rg_tbl"],
+			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["rg_vdx"],
+			KsidLength:       2,
+		},
+	}
+
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"cola|colb|colc",
+			"int64|int64|int64",
+		),
+		"1|3|4",
+		"2|3|5",
+		"1|3|6",
+		"2|3|7",
+	)}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(2) INT64(3)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(024eb190c9a2fa169c)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Those values are returned as 4,5,6 and 7 for colc
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"5" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
