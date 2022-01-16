@@ -249,11 +249,11 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	}
 
 	for _, row := range subQueryResults.Rows {
-		colnum := 1
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex.(vindexes.SingleColumn), row[0:del.KsidLength])
+		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0:del.KsidLength])
 		if err != nil {
 			return err
 		}
+		colnum := del.KsidLength
 		for _, colVindex := range del.Table.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
@@ -265,7 +265,6 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 				return err
 			}
 		}
-
 	}
 
 	return nil

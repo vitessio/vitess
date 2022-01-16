@@ -402,8 +402,8 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// 4 has to be replaced by 5.
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
-		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
@@ -442,11 +442,11 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// 4 has to be replaced by 5.
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
-		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
 		// 6 has to be replaced by 5.
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
-		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
@@ -471,8 +471,8 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// 7 has to be replaced by 5.
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
-		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
@@ -800,7 +800,7 @@ func buildTestVSchema() *vindexes.VSchema {
 					"lkp_rg": {
 						Type: "lookup",
 						Params: map[string]string{
-							"table": "lkp1",
+							"table": "lkp_rg_tbl",
 							"from":  "from",
 							"to":    "toc",
 						},
