@@ -258,6 +258,87 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	})
 }
 
+func TestDeleteOwnedVindexMultiCol(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	del := &Delete{
+		DML: DML{
+			Opcode:           Equal,
+			Keyspace:         ks.Keyspace,
+			Query:            "dummy_delete",
+			Vindex:           ks.Vindexes["rg_vdx"],
+			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			Table:            ks.Tables["rg_tbl"],
+			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["rg_vdx"],
+			KsidLength:       2,
+		},
+	}
+
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"cola|colb|colc",
+			"int64|int64|int64",
+		),
+		"1|2|4",
+	)}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// 4 returned for lkp_rg.
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
+	})
+
+	// No rows changing
+	vc.Rewind()
+	vc.results = nil
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Subquery returns no rows. So, no vindexes are deleted. We still pass-through the original delete.
+		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
+	})
+
+	// Delete can affect multiple rows
+	results = []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"cola|colb|colc",
+			"int64|int64|int64",
+		),
+		"1|2|4",
+		"1|2|6",
+	)}
+	vc.Rewind()
+	vc.results = results
+
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Delete 4 and 6 from lkp_rg.
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		// Send the DML.
+		`ExecuteMultiShard sharded.-20: dummy_delete {} true true`,
+	})
+}
+
 func TestDeleteSharded(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
