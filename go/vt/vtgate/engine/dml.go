@@ -114,15 +114,19 @@ func resolveMultiValueShards(
 	keyspace *vindexes.Keyspace,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
-	val evalengine.Expr,
-	vindex vindexes.SingleColumn,
+	values []evalengine.Expr,
+	vindex vindexes.Vindex,
 ) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	keys, err := env.Evaluate(val)
-	if err != nil {
-		return nil, nil, err
+	var rss []*srvtopo.ResolvedShard
+	var err error
+	switch vindex.(type) {
+	case vindexes.SingleColumn:
+		rss, err = resolveSingleColVindex(vcursor, bindVars, keyspace, vindex, values)
+	case vindexes.MultiColumn:
+		rss, err = resolveMultiColVindex(vcursor, bindVars, keyspace, vindex, values)
+	default:
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vindex type: %T", vindex)
 	}
-	rss, err := resolveMultiShard(vcursor, vindex, keyspace, keys.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -134,6 +138,44 @@ func resolveMultiValueShards(
 		}
 	}
 	return rss, queries, nil
+}
+
+func resolveSingleColVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable, keyspace *vindexes.Keyspace, vindex vindexes.Vindex, values []evalengine.Expr) ([]*srvtopo.ResolvedShard, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	keys, err := env.Evaluate(values[0])
+	if err != nil {
+		return nil, err
+	}
+	rss, err := resolveMultiShard(vcursor, vindex.(vindexes.SingleColumn), keyspace, keys.TupleValues())
+	if err != nil {
+		return nil, err
+	}
+	return rss, nil
+}
+
+func resolveMultiColVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable, keyspace *vindexes.Keyspace, vindex vindexes.Vindex, values []evalengine.Expr) ([]*srvtopo.ResolvedShard, error) {
+	rowColValues, _, err := generateRowColValues(bindVars, values)
+	if err != nil {
+		return nil, err
+	}
+
+	rss, _, err := resolveShardsMultiCol(vcursor, vindex.(vindexes.MultiColumn), keyspace, rowColValues, false /* shardIdsNeeded */)
+	if err != nil {
+		return nil, err
+	}
+	return rss, nil
+}
+
+func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey []sqltypes.Value) ([]*srvtopo.ResolvedShard, error) {
+	destinations, err := vindex.Map(vcursor, vindexKey)
+	if err != nil {
+		return nil, err
+	}
+	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
+	if err != nil {
+		return nil, err
+	}
+	return rss, nil
 }
 
 func execMultiShard(vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {

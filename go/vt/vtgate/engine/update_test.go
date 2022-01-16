@@ -637,6 +637,29 @@ func TestUpdateInStreamExecute(t *testing.T) {
 	})
 }
 
+func TestUpdateInMultiCol(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{DML: DML{
+		Opcode:   In,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_update",
+		Vindex:   ks.Vindexes["rg_vdx"],
+		Values: []evalengine.Expr{
+			&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			&evalengine.TupleExpr{evalengine.NewLiteralInt(3), evalengine.NewLiteralInt(4)},
+		}},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		// ResolveDestinations is hard-coded to return -20.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
+
 func TestUpdateInChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
