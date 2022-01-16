@@ -72,6 +72,19 @@ var (
 	vreplicationStoreCompressedGTID = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
 )
 
+const (
+	getSQLModeQuery = `SELECT @@session.sql_mode AS sql_mode`
+	// Use this whenever performing a schema change as part of a vreplication
+	// workflow to ensure that you set a permissive SQL mode as defined by
+	// VReplication. We follow MySQL's model for recreating database objects
+	// on a target -- using SQL statements generated from a source -- which
+	// ensures that we can recreate them regardless of the sql_mode that was
+	// in effect on the source when it was created:
+	//   https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/client/mysqldump.cc#L795-L818
+	SQLMode          = "NO_AUTO_VALUE_ON_ZERO"
+	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
+)
+
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
@@ -87,6 +100,7 @@ type vreplicator struct {
 	colInfoMap map[string][]*ColumnInfo
 
 	originalFKCheckSetting int64
+	originalSQLMode        string
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -158,6 +172,15 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 }
 
 func (vr *vreplicator) replicate(ctx context.Context) error {
+	// Manage SQL_MODE in the same way that mysqldump does.
+	// Save the original sql_mode, set it to a permissive mode,
+	// and then reset it back to the original value at the end.
+	resetFunc, err := vr.setSQLMode()
+	if err != nil {
+		return err
+	}
+	defer resetFunc()
+
 	colInfo, err := vr.buildColInfoMap(ctx)
 	if err != nil {
 		return err
@@ -168,6 +191,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -186,7 +210,6 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if settings.State == binlogplayer.BlpStopped {
 			return nil
 		}
-
 		switch {
 		case numTablesToCopy != 0:
 			if err := vr.clearFKCheck(); err != nil {
@@ -404,6 +427,39 @@ func (vr *vreplicator) getSettingFKCheck() error {
 func (vr *vreplicator) resetFKCheckAfterCopy() error {
 	_, err := vr.dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
 	return err
+}
+
+func (vr *vreplicator) setSQLMode() (func(), error) {
+	// First save the original SQL mode if we have not already done so
+	if vr.originalSQLMode == "" {
+		res, err := vr.dbClient.Execute(getSQLModeQuery)
+		if err != nil || len(res.Rows) != 1 {
+			return nil, fmt.Errorf("could not get the original sql_mode on target: %v", err)
+		}
+		vr.originalSQLMode = res.Named().Row().AsString("sql_mode", "")
+	}
+
+	// Create a callback function for resetting the original
+	// SQL mode back at the end of the vreplication operation.
+	// You should defer this callback wherever you call setSQLMode()
+	resetFunc := func() {
+		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
+		_, err := vr.dbClient.Execute(query)
+		if err != nil {
+			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
+		}
+	}
+
+	// Now set it to a permissive mode that will allow us to recreate
+	// any database object that exists on the source in full on the
+	// target
+	query := fmt.Sprintf(setSQLModeQueryf, SQLMode)
+	_, err := vr.dbClient.Execute(query)
+	if err != nil {
+		return resetFunc, fmt.Errorf("could not set the permissive sql_mode on target using %s: %v", query, err)
+	}
+
+	return resetFunc, nil
 }
 
 func (vr *vreplicator) clearFKCheck() error {
