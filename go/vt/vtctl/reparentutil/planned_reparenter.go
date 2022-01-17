@@ -275,7 +275,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		undoCtx, undoCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer undoCancel()
 
-		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet); undoErr != nil {
+		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, SemiSyncAckers(currentPrimary.Tablet) > 0); undoErr != nil {
 			pr.logger.Warningf("encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 		}

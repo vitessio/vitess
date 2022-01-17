@@ -1056,7 +1056,7 @@ func tmRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclie
 
 var testUndoDemoteMasterCalled = false
 
-func (fra *fakeRPCTM) UndoDemotePrimary(ctx context.Context) error {
+func (fra *fakeRPCTM) UndoDemotePrimary(ctx context.Context, semiSync bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

@@ -953,7 +953,7 @@ func (itmc *internalTabletManagerClient) DemotePrimary(context.Context, *topodat
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) UndoDemotePrimary(context.Context, *topodatapb.Tablet) error {
+func (itmc *internalTabletManagerClient) UndoDemotePrimary(context.Context, *topodatapb.Tablet, bool) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

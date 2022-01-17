@@ -311,7 +311,7 @@ func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	if forward {
 		_, err = tmc.DemotePrimary(ctx, tablet)
 	} else {
-		err = tmc.UndoDemotePrimary(ctx, tablet)
+		err = tmc.UndoDemotePrimary(ctx, tablet, inst.SemiSyncAckers(instanceKey) > 0)
 	}
 	return err
 }

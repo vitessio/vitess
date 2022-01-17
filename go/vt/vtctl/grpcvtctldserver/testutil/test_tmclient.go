@@ -877,7 +877,7 @@ func (fake *TabletManagerClient) WaitForPosition(ctx context.Context, tablet *to
 }
 
 // UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (fake *TabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	if fake.UndoDemotePrimaryResults == nil {
 		return assert.AnError
 	}
