@@ -464,18 +464,20 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}
 	}()
 
-	// If using semi-sync, we need to disable primary-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionFalse); err != nil {
-		return nil, err
-	}
-	defer func() {
-		if finalErr != nil && revertPartialFailure && wasPrimary {
-			// enable primary-side semi-sync again
-			if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionFalse); err != nil {
-				log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
-			}
+	if tm.isPrimarySideSemiSyncEnabled() {
+		// If using semi-sync, we need to disable primary-side.
+		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionFalse); err != nil {
+			return nil, err
 		}
-	}()
+		defer func() {
+			if finalErr != nil && revertPartialFailure && wasPrimary {
+				// enable primary-side semi-sync again
+				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionTrue); err != nil {
+					log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
+				}
+			}
+		}()
+	}
 
 	// Return the current replication position.
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
@@ -881,6 +883,11 @@ func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync 
 	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
 	// The primary-side needs to be off for a replica, or else it will get stuck.
 	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+}
+
+func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
+	semiSyncEnabled, _ := tm.MysqlDaemon.SemiSyncEnabled()
+	return semiSyncEnabled
 }
 
 func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
