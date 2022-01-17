@@ -170,6 +170,9 @@ func (r *Route) searchForNewVindexes(ctx *context.PlanningContext, predicate sql
 			return false, err
 		}
 		newVindexFound = newVindexFound || found
+	case *sqlparser.IsExpr:
+		found := r.planIsExpr(ctx, node)
+		newVindexFound = newVindexFound || found
 	}
 	return newVindexFound, nil
 }
@@ -581,4 +584,22 @@ func (vpp *VindexPlusPredicates) bestOption() *VindexOption {
 	}
 	vpp.Options = keepOptions
 	return best
+}
+
+func (r *Route) planIsExpr(ctx *context.PlanningContext, node *sqlparser.IsExpr) bool {
+	// we only handle IS NULL correct. IsExpr can contain other expressions as well
+	if node.Right != sqlparser.IsNullOp {
+		return false
+	}
+	column, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false
+	}
+	vdValue := &sqlparser.NullVal{}
+	val := r.makeEvalEngineExpr(ctx, vdValue)
+	if val == nil {
+		return false
+	}
+
+	return r.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 }
