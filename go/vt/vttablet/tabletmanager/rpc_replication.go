@@ -193,7 +193,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context) error {
 		}
 	}()
 
-	if err := tm.fixSemiSync(tm.Tablet().Type, false); err != nil {
+	if err := tm.fixSemiSync(tm.Tablet().Type, SemiSyncActionFalse); err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())
@@ -279,7 +279,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 
 	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, false); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionFalse); err != nil {
 		return "", err
 	}
 
@@ -343,7 +343,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if tt == topodatapb.TabletType_PRIMARY {
 		tt = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tt, false); err != nil {
+	if err := tm.fixSemiSync(tt, SemiSyncActionFalse); err != nil {
 		return err
 	}
 
@@ -465,13 +465,13 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}()
 
 	// If using semi-sync, we need to disable primary-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, false); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionFalse); err != nil {
 		return nil, err
 	}
 	defer func() {
 		if finalErr != nil && revertPartialFailure && wasPrimary {
 			// enable primary-side semi-sync again
-			if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, false); err != nil {
+			if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionFalse); err != nil {
 				log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
 			}
 		}
@@ -501,7 +501,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
 	defer tm.unlock()
 
 	// If using semi-sync, we need to enable source-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, false); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionFalse); err != nil {
 		return err
 	}
 
@@ -628,7 +628,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		tabletType = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tabletType, false); err != nil {
+	if err := tm.fixSemiSync(tabletType, SemiSyncActionFalse); err != nil {
 		return err
 	}
 	// Update the primary/source address only if needed.
@@ -821,7 +821,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, semiSync); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
 
@@ -857,10 +857,10 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 	return false
 }
 
-func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync bool) error {
+func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
 	if !*enableSemiSync {
 		// Semi-sync handling is not enabled.
-		if semiSync {
+		if semiSync == SemiSyncActionTrue {
 			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set")
 		}
 		return nil
@@ -869,13 +869,13 @@ func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync 
 	// Only enable if we're eligible for becoming primary (REPLICA type).
 	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
 	if !isPrimaryEligible(tabletType) {
-		if semiSync {
+		if semiSync == SemiSyncActionTrue {
 			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible")
 		}
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 
-	if !semiSync {
+	if semiSync != SemiSyncActionTrue {
 		log.Error("invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading.")
 	}
 	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
@@ -883,7 +883,7 @@ func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync 
 	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
 }
 
-func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync bool) error {
+func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
 	if !*enableSemiSync {
 		// Semi-sync handling is not enabled.
 		return nil

@@ -43,6 +43,17 @@ const (
 	DBActionSetReadWrite
 )
 
+// SemiSyncAction is used to tell fixSemiSync whether to change the semi-sync
+// settings or not.
+type SemiSyncAction int
+
+// Allowed values for SemiSyncAction
+const (
+	SemiSyncActionNone = SemiSyncAction(iota)
+	SemiSyncActionTrue
+	SemiSyncActionFalse
+)
+
 // This file contains the implementations of RPCTM methods.
 // Major groups of methods are broken out into files named "rpc_*.go".
 
@@ -89,7 +100,7 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 	}
 
 	// Let's see if we need to fix semi-sync acking.
-	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type, false); err != nil {
+	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type, SemiSyncActionFalse); err != nil {
 		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
 	}
 	return nil
@@ -137,4 +148,11 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 // IgnoreHealthError sets the regexp for health check errors to ignore.
 func (tm *TabletManager) IgnoreHealthError(ctx context.Context, pattern string) error {
 	return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "deprecated")
+}
+
+func convertBoolToSemiSyncAction(semiSync bool) SemiSyncAction {
+	if semiSync {
+		return SemiSyncActionTrue
+	}
+	return SemiSyncActionFalse
 }

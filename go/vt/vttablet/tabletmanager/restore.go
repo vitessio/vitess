@@ -527,7 +527,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	}
 
 	// If using semi-sync, we need to enable it before connecting to primary.
-	if err := tm.fixSemiSync(tabletType, false); err != nil {
+	if err := tm.fixSemiSync(tabletType, SemiSyncActionFalse); err != nil {
 		return err
 	}
 
