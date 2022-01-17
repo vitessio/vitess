@@ -415,6 +415,7 @@ message SetReplicationSourceRequest {
   int64 time_created_ns = 2;
   bool force_start_replication = 3;
   string wait_position = 4;
+  bool semiSync = 5;
 }
 
 message SetReplicationSourceResponse {

@@ -321,7 +321,7 @@ func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *to
 }
 
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+func (client *FakeTabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
 	return nil
 }
 
