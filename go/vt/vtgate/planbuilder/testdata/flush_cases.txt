@@ -14,7 +14,6 @@
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Flush statement with no tables
 "flush local tables with read lock"
@@ -32,7 +31,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Flush statement with flush options
 "flush no_write_to_binlog hosts, logs"
@@ -50,4 +48,3 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++

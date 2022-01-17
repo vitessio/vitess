@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -79,4 +80,39 @@ func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalP
 		return mergeSystemTableInformation(oroute, iroute)
 	}
 	return nil
+}
+
+// mergeSystemTableInformation copies over information from the second route to the first and appends to it
+func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
+	// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
+	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
+	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
+	a.eroute.SysTableTableSchema = append(a.eroute.SysTableTableSchema, b.eroute.SysTableTableSchema...)
+	for k, v := range b.eroute.SysTableTableName {
+		a.eroute.SysTableTableName[k] = v
+	}
+	return a
+}
+
+func canMergeSubqueryPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool {
+	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
+	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
+		return false
+	}
+	switch a.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectReference:
+		return a.eroute.Opcode == b.eroute.Opcode
+	case engine.SelectDBA:
+		return canSelectDBAMerge(a, b)
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if b.eroute.Opcode == engine.SelectEqualUnique &&
+			a.eroute.Vindex == b.eroute.Vindex &&
+			a.condition != nil &&
+			b.condition != nil &&
+			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+			return true
+		}
+	}
+	return false
 }

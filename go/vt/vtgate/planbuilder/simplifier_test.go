@@ -56,27 +56,6 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 	fmt.Println(sqlparser.String(simplified))
 }
 
-func TestQueryWithNewPlanner(t *testing.T) {
-	query := "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)"
-	vschema := &vschemaWrapper{
-		v:       loadSchema(t, "schema_test.json", true),
-		version: Gen4,
-	}
-	stmt, reserved, err := sqlparser.Parse2(query)
-	require.NoError(t, err)
-	rewritten, _ := sqlparser.RewriteAST(sqlparser.CloneStatement(stmt), vschema.currentDb(), sqlparser.SQLSelectLimitUnset)
-	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-
-	simplified := simplifier.SimplifyStatement(
-		stmt.(sqlparser.SelectStatement),
-		vschema.currentDb(),
-		vschema,
-		keepDifferentPlansBetweenGen4AndGen4Plusplus(query, reservedVars, vschema, rewritten.BindVarNeeds),
-	)
-
-	fmt.Println(sqlparser.String(simplified))
-}
-
 func TestSimplifyPanic(t *testing.T) {
 	t.Skip("not needed to run")
 	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
@@ -191,35 +170,6 @@ func keepPanicking(query string, reservedVars *sqlparser.ReservedVars, vschema *
 	}
 	if !cmp(stmt.(sqlparser.SelectStatement)) {
 		panic("query is not panicking")
-	}
-
-	return cmp
-}
-
-func keepDifferentPlansBetweenGen4AndGen4Plusplus(query string, reservedVars *sqlparser.ReservedVars, vschema *vschemaWrapper, needs *sqlparser.BindVarNeeds) func(statement sqlparser.SelectStatement) bool {
-	cmp := func(statement sqlparser.SelectStatement) bool {
-		runGen4New = false
-		plan, myErr := BuildFromStmt(query, sqlparser.CloneStatement(statement), reservedVars, vschema, needs, true, true)
-		if myErr != nil {
-			return false
-		}
-		oldPlanner := getPlanOrErrorOutput(myErr, plan)
-		runGen4New = true
-		plan2, myErr := BuildFromStmt(query, sqlparser.CloneStatement(statement), reservedVars, vschema, needs, true, true)
-		if myErr != nil {
-			return false
-		}
-		newPlanner := getPlanOrErrorOutput(myErr, plan2)
-		return newPlanner != oldPlanner
-	}
-
-	stmt, _, err := sqlparser.Parse2(query)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	if !cmp(stmt.(sqlparser.SelectStatement)) {
-		panic("already the same plan")
 	}
 
 	return cmp

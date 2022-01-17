@@ -673,42 +673,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			t.Run(testName, func(t *testing.T) {
 
-				correctOutput := out == tcase.output2ndPlanner
-
-				switch {
-				case !correctOutput && tcase.check2ndPlanner:
-					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output2ndPlanner, out)
-				case correctOutput && !tcase.check2ndPlanner:
-					t.Errorf("Gen4 - %s:%d\nGen4++ handles it", filename, tcase.lineno)
-
-					// uncomment the following to compare gen4 and gen4++
-					//case !tcase.check2ndPlanner:
-					//	t.Errorf("Gen4 - %s:%d\nGen4++ does not handle it", filename, tcase.lineno)
-					//	runGen4New = false
-					//	outOldGen4, err := getPlanOutput(tcase, vschema)
-					//	runGen4New = true
-					//	if err != nil {
-					//		t.Error(err)
-					//	}
-					//	t.Error(cmp.Diff(outOldGen4, out))
-					//	t.Error(outOldGen4)
-					//	t.Error(out)
-				}
-				if !tcase.check2ndPlanner {
-					out := tcase.output2ndPlanner
-					switch {
-					case outFirstPlanner == out || outFirstPlanner == `"`+out+`"`:
-						expected.WriteString(samePlanMarker)
-					case strings.HasPrefix(out, "{"):
-						expected.WriteString(fmt.Sprintf("%s\n", out))
-					default:
-						expected.WriteString(fmt.Sprintf("Gen4 error: %s\n", out))
-					}
-					if correctOutput {
-						expected.WriteString("Gen4++\n")
-					}
-					return
-				}
 				if err != nil {
 					out = `"` + out + `"`
 				}
@@ -722,10 +686,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 					} else {
 						expected.WriteString(fmt.Sprintf("%s\n", out))
 					}
-				}
-
-				if out == tcase.output2ndPlanner {
-					expected.WriteString("Gen4++\n")
 				}
 			})
 			expected.WriteString("\n")
@@ -764,7 +724,6 @@ type testCase struct {
 	input            string
 	output           string
 	output2ndPlanner string
-	check2ndPlanner  bool
 	comments         string
 }
 
@@ -853,24 +812,12 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				output2Planner = []byte(nextLine[len(gen4ErrorPrefix) : len(nextLine)-1])
 			}
 
-			var check2ndPlanner bool
-			if len(output2Planner) != 0 {
-				binput, err = r.ReadBytes('\n')
-				if err != nil && err != io.EOF {
-					panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
-				}
-				lineno++
-				nextLine = string(binput)
-				check2ndPlanner = nextLine == "Gen4++\n"
-			}
-
 			testCaseIterator <- testCase{
 				file:             name,
 				lineno:           lineno,
 				input:            input,
 				output:           string(output),
 				output2ndPlanner: string(output2Planner),
-				check2ndPlanner:  check2ndPlanner,
 				comments:         comments,
 			}
 			comments = ""

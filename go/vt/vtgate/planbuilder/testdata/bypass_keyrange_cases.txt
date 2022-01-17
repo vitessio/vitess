@@ -14,7 +14,6 @@
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # update bypass
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
@@ -33,7 +32,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # update bypass autocommit
 "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user set val = 1 where id = 18446744073709551616 and id = 1"
@@ -53,7 +51,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # delete bypass
 "DELETE FROM USER WHERE ID = 42"
@@ -72,13 +69,11 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # insert bypass: not supported
 "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')"
 "INSERT not supported when targeting a key range: targetString"
 Gen4 plan same as above
-Gen4++
 
 # bypass query for into outfile s3
 "select count(*), col from unsharded into outfile S3 'x.txt'"
@@ -96,7 +91,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Select outfile
 "select * from user into outfile S3 'x.txt'"
@@ -114,7 +108,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 "load data from s3 'x.txt' into table x"
 {
@@ -133,7 +126,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 "load data from s3 'x.txt'"
 {
@@ -152,7 +144,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # create table
 "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
@@ -170,4 +161,3 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++

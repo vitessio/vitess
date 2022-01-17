@@ -399,3 +399,166 @@ func transformDerivedOpToPlan(ctx *plancontext.PlanningContext, op *physical.Der
 	}
 	return plan, nil
 }
+
+type subQReplacer struct {
+	subqueryToReplace []*sqlparser.ExtractedSubquery
+	replaced          bool
+}
+
+func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
+	ext, ok := cursor.Node().(*sqlparser.ExtractedSubquery)
+	if !ok {
+		return true
+	}
+	for _, replaceByExpr := range sqr.subqueryToReplace {
+		// we are comparing the ArgNames in case the expressions have been cloned
+		if ext.GetArgName() == replaceByExpr.GetArgName() {
+			cursor.Replace(ext.Original)
+			sqr.replaced = true
+			return false
+		}
+	}
+	return true
+}
+
+func pushDistinct(plan logicalPlan) {
+	switch n := plan.(type) {
+	case *routeGen4:
+		n.Select.MakeDistinct()
+	case *concatenateGen4:
+		for _, source := range n.sources {
+			pushDistinct(source)
+		}
+	}
+}
+
+func mergeUnionLogicalPlans(ctx *plancontext.PlanningContext, left logicalPlan, right logicalPlan) logicalPlan {
+	lroute, ok := left.(*routeGen4)
+	if !ok {
+		return nil
+	}
+	rroute, ok := right.(*routeGen4)
+	if !ok {
+		return nil
+	}
+
+	if canMergeUnionPlans(ctx, lroute, rroute) {
+		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
+		return mergeSystemTableInformation(lroute, rroute)
+	}
+	return nil
+}
+
+func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool {
+	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
+	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
+		return false
+	}
+	switch a.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectReference:
+		return a.eroute.Opcode == b.eroute.Opcode
+	case engine.SelectDBA:
+		return canSelectDBAMerge(a, b)
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if b.eroute.Opcode == engine.SelectEqualUnique &&
+			a.eroute.Vindex == b.eroute.Vindex &&
+			a.condition != nil &&
+			b.condition != nil &&
+			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+			return true
+		}
+	case engine.SelectScatter:
+		return b.eroute.Opcode == engine.SelectScatter
+	case engine.SelectNext:
+		return false
+	}
+	return false
+}
+
+func canSelectDBAMerge(a, b *routeGen4) bool {
+	if a.eroute.Opcode != engine.SelectDBA {
+		return false
+	}
+	if b.eroute.Opcode != engine.SelectDBA {
+		return false
+	}
+
+	// safe to merge when any 1 table name or schema matches, since either the routing will match or either side would be throwing an error
+	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
+	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
+	for _, aExpr := range a.eroute.SysTableTableSchema {
+		for _, bExpr := range b.eroute.SysTableTableSchema {
+			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
+				return true
+			}
+		}
+	}
+	for _, aExpr := range a.eroute.SysTableTableName {
+		for _, bExpr := range b.eroute.SysTableTableName {
+			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
+				return true
+			}
+		}
+	}
+
+	// if either/both of the side does not have any routing information, then they can be merged.
+	return (len(a.eroute.SysTableTableSchema) == 0 && len(a.eroute.SysTableTableName) == 0) ||
+		(len(b.eroute.SysTableTableSchema) == 0 && len(b.eroute.SysTableTableName) == 0)
+}
+
+func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	// TODO: check SemTable's columnEqualities for better plan
+
+	for i, aExpr := range a {
+		bExpr := b[i]
+		if !gen4ValEqual(ctx, aExpr, bExpr) {
+			return false
+		}
+	}
+	return true
+}
+
+func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
+	switch a := a.(type) {
+	case *sqlparser.ColName:
+		if b, ok := b.(*sqlparser.ColName); ok {
+			if !a.Name.Equal(b.Name) {
+				return false
+			}
+
+			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
+		}
+	case sqlparser.Argument:
+		b, ok := b.(sqlparser.Argument)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *sqlparser.Literal:
+		b, ok := b.(*sqlparser.Literal)
+		if !ok {
+			return false
+		}
+		switch a.Type {
+		case sqlparser.StrVal:
+			switch b.Type {
+			case sqlparser.StrVal:
+				return a.Val == b.Val
+			case sqlparser.HexVal:
+				return hexEqual(b, a)
+			}
+		case sqlparser.HexVal:
+			return hexEqual(a, b)
+		case sqlparser.IntVal:
+			if b.Type == (sqlparser.IntVal) {
+				return a.Val == b.Val
+			}
+		}
+	}
+	return false
+}

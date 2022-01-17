@@ -30,13 +30,11 @@
     "Table": "`user`"
   }
 }
-Gen4++
 
 # ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
 "ambiguous symbol reference: col1"
 Gen4 error: Column 'col1' in field list is ambiguous
-Gen4++
 
 # TODO: this should be 'Column 'col1' in having clause is ambiguous'
 # non-ambiguous symbol reference
@@ -109,7 +107,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # HAVING multi-route
 "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1"
@@ -181,7 +178,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # HAVING uses subquery
 "select id from user having id in (select col from user)"
@@ -265,7 +261,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # ORDER BY, reference col from local table.
 "select col from user where id = 5 order by aa"
@@ -289,7 +284,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY uses column numbers
 "select col from user where id = 1 order by 1"
@@ -331,7 +325,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # ORDER BY on scatter
 "select col from user order by col"
@@ -352,31 +345,26 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY on select t.*
 "select t.*, t.col from user t order by t.col"
 "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
 Gen4 error: unsupported: '*' expression in cross-shard query
-Gen4++
 
 # ORDER BY on select *
 "select *, col from user order by col"
 "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
 Gen4 error: unsupported: '*' expression in cross-shard query
-Gen4++
 
 # ORDER BY on select multi t.*
 "select t.*, t.name, t.*, t.col from user t order by t.col"
 "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
 Gen4 error: unsupported: '*' expression in cross-shard query
-Gen4++
 
 # ORDER BY on select multi *
 "select *, name, *, col from user order by col"
 "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
 Gen4 error: unsupported: '*' expression in cross-shard query
-Gen4++
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by user_id"
@@ -398,7 +386,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by col1"
@@ -436,7 +423,6 @@ Gen4++
     "Table": "authoritative"
   }
 }
-Gen4++
 
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"
@@ -474,7 +460,6 @@ Gen4++
     "Table": "`user`"
   }
 }
-Gen4++
 
 # ORDER BY on scatter with text column, qualified name TODO: can plan better
 "select a, user.textcol1, b from user order by a, textcol1, b"
@@ -512,7 +497,6 @@ Gen4++
     "Table": "`user`"
   }
 }
-Gen4++
 
 # ORDER BY on scatter with multiple text columns
 "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2"
@@ -550,13 +534,11 @@ Gen4++
     "Table": "`user`"
   }
 }
-Gen4++
 
 # ORDER BY invalid col number on scatter
 "select col from user order by 2"
 "Unknown column '2' in 'order clause'"
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY column offset
 "select id as foo from music order by 1"
@@ -594,7 +576,6 @@ Gen4++
     "Table": "music"
   }
 }
-Gen4++
 
 # ORDER BY NULL
 "select col from user order by null"
@@ -614,7 +595,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY after pull-out subquery
 "select col from user where col in (select col2 from user) order by col"
@@ -656,7 +636,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
@@ -750,7 +729,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # ORDER BY non-key column for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a"
@@ -845,7 +823,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # ORDER BY non-key column for implicit join
 "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a"
@@ -940,7 +917,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # ORDER BY NULL after pull-out subquery
 "select col from user where col in (select col2 from user) order by null"
@@ -981,7 +957,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY RAND()
 "select col from user order by RAND()"
@@ -1001,7 +976,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
@@ -1095,7 +1069,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # ORDER BY RAND() after pull-out subquery
 "select col from user where col in (select col2 from user) order by rand()"
@@ -1136,7 +1109,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Order by, '*' expression
 "select * from user where id = 5 order by col"
@@ -1160,7 +1132,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Order by, qualified '*' expression
 "select user.* from user where id = 5 order by user.col"
@@ -1184,7 +1155,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Order by, '*' expression with qualified reference
 "select * from user where id = 5 order by user.col"
@@ -1208,7 +1178,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Order by, '*' expression in a subquery
 "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)"
@@ -1286,7 +1255,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # Order by, verify outer symtab is searched according to its own context.
 "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)"
@@ -1306,25 +1274,21 @@ Gen4++
     "Table": "`user`"
   }
 }
-Gen4++
 
 # Order by, qualified '*' expression, name mismatched.
 "select user.* from user where id = 5 order by e.col"
 "symbol e.col not found"
 Gen4 plan same as above
-Gen4++
 
 # Order by, invalid column number
 "select col from user order by 18446744073709551616"
 "error parsing column number: 18446744073709551616"
 Gen4 plan same as above
-Gen4++
 
 # Order by, out of range column number
 "select col from user order by 2"
 "Unknown column '2' in 'order clause'"
 Gen4 plan same as above
-Gen4++
 
 # Order by, '*' expression with qualified reference and using collate
 "select * from user where id = 5 order by user.col collate utf8_general_ci"
@@ -1348,7 +1312,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 #Order by with math functions
 "select * from user where id = 5 order by -col1"
@@ -1372,7 +1335,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 #Order by with string operations
 "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc"
@@ -1396,7 +1358,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 #Order by with math operations
 "select * from user where id = 5 order by id+col collate utf8_general_ci desc"
@@ -1420,7 +1381,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 #Order by derived table column
 "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
@@ -1462,7 +1422,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # routing rules: order by gets pushed for routes
 "select col from route1 where id = 1 order by col"
@@ -1486,7 +1445,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # LIMIT
 "select col1 from user where id = 1 limit 1"
@@ -1510,7 +1468,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # limit for joins. Can't push down the limit because result
 # counts get multiplied by join operations.
@@ -1556,7 +1513,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # limit for scatter
 "select col from user limit 1"
@@ -1582,7 +1538,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # limit for scatter with bind var
 "select col from user limit :a"
@@ -1608,7 +1563,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # cross-shard expression in parenthesis with limit
 "select * from user where (id1 = 4 AND name1 ='abc') limit 5"
@@ -1634,7 +1588,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"
@@ -1681,7 +1634,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # limit on reference table
 "select col from ref limit 1"
@@ -1701,7 +1653,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # arithmetic limit
 "select id from user limit 1+1"
@@ -1727,7 +1678,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # order by column alias
 "select id as foo from music order by foo"
@@ -1749,7 +1699,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # column alias for a table column in order by
 "select id as foo, id2 as id from music order by id"
@@ -1771,7 +1720,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # ordering on the left side of the join
 "select name from user, music order by name"
@@ -1846,7 +1794,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # aggregation and non-aggregations column without group by
 "select count(id), num from user"
@@ -1873,7 +1820,6 @@ Gen4++
   }
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
-Gen4++
 
 # aggregation and non-aggregations column with order by
 "select count(id), num from user order by 2"
@@ -1909,7 +1855,6 @@ Gen4++
   }
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
-Gen4++
 
 # aggregation and non-aggregations column with group by
 "select count(id), num from user group by 2"
@@ -1963,7 +1908,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # aggregation and non-aggregations column with group by and order by
 "select count(id), num from user group by 2 order by 1"
@@ -2031,7 +1975,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # join order by with ambiguous column reference ; valid in MySQL
 "select name, name from user, music order by name"
@@ -2071,7 +2014,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # order by with ambiguous column reference ; valid in MySQL
 "select id, id from user order by id"
@@ -2093,13 +2035,11 @@ Gen4++
     "Table": "`user`"
   }
 }
-Gen4++
 
 # Scatter order by and aggregation: order by column must reference column from select list
 "select col, count(*) from user group by col order by c1"
 "unsupported: memory sort: order by must reference a column in the select list: c1 asc"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
-Gen4++
 
 # Distinct with cross shard query
 "select distinct user.a from user join user_extra"
@@ -2185,7 +2125,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # Distinct with column alias
 "select distinct a as c, a from user"
@@ -2237,7 +2176,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # Distinct with same column
 "select distinct a, a from user"
@@ -2266,7 +2204,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # Order by has subqueries
 "select id from unsharded order by (select id from unsharded)"
@@ -2286,4 +2223,3 @@ Gen4++
     "Table": "unsharded"
   }
 }
-Gen4++

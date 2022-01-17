@@ -16,7 +16,6 @@
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Query that always return empty
 "select id from user where someColumn = null"
@@ -36,7 +35,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table unique vindex route
 "select id from user where user.id = 5"
@@ -60,7 +58,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table unique vindex route, but complex expr
 "select id from user where user.id = 5+5"
@@ -98,7 +95,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
@@ -122,7 +118,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table multiple non-unique vindex match
 "select id from user where costly = 'aa' and name = 'bb'"
@@ -146,7 +141,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table multiple non-unique vindex match for IN clause
 "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')"
@@ -170,7 +164,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN clause
 "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -194,7 +187,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN clause, swapped columns
 "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -218,7 +210,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN clause, choose cost within tuple
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -242,7 +233,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN clause, choose cost within tuple, swapped
 "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -266,7 +256,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN clause, choose cost
 "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))"
@@ -290,7 +279,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN clause vs equality
 "select id from user where (col, name) in (('aa', 'bb')) and id = 5"
@@ -314,7 +302,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN: multiple vindex matches
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -338,7 +325,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN: tuple inside tuple
 "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))"
@@ -362,7 +348,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN: tuple inside tuple, but no match in tuple
 "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))"
@@ -386,7 +371,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN: tuple inside tuple, mismiatched values
 "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))"
@@ -406,7 +390,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN: RHS not tuple
 "select id from user where (col1, name) in (select * from music where music.user_id=user.id)"
@@ -426,7 +409,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Composite IN: RHS has no simple values
 "select id from user where (col1, name) in (('aa', 1+1))"
@@ -464,7 +446,6 @@ Gen4++
     "Vindex": "name_user_map"
   }
 }
-Gen4++
 
 # IN clause: LHS is neither column nor composite tuple
 "select Id from user where 1 in ('aa', 'bb')"
@@ -484,7 +465,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table complex in clause
 "select id from user where name in (col, 'bb')"
@@ -504,7 +484,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table equality route with val arg
 "select id from user where name = :a"
@@ -528,7 +507,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table equality route with unsigned value
 "select id from user where name = 18446744073709551615"
@@ -552,7 +530,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table in clause list arg
 "select id from user where name in ::list"
@@ -576,7 +553,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Multi-table unique vindex constraint
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5"
@@ -618,7 +594,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # Multi-table unique vindex constraint on right table
 "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
@@ -660,7 +635,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # Multi-table unique vindex constraint on left table of left join
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5"
@@ -684,7 +658,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Multi-table unique vindex constraint on left-joined right table
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
@@ -726,7 +699,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # Multi-route unique vindex constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
@@ -772,7 +744,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
@@ -840,7 +811,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # Multi-route with cross-route constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col"
@@ -886,7 +856,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Multi-route with non-route constraint, should use first route.
 "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
@@ -964,7 +933,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # Route with multiple route constraints, SelectIN is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2)"
@@ -988,7 +956,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Route with multiple route constraints and boolean, SelectIN is the best constraint.
 "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)"
@@ -1012,7 +979,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Route with multiple route constraints and boolean, SelectEqual is the best constraint.
 "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
@@ -1036,7 +1002,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
@@ -1060,7 +1025,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
@@ -1084,7 +1048,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
@@ -1108,7 +1071,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Route with OR and AND clause, must parenthesize correctly.
 "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)"
@@ -1128,7 +1090,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Unsharded route
 "select unsharded.id from user join unsharded where unsharded.id = user.id"
@@ -1210,7 +1171,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # routing rules: choose the redirected table
 "select col from route1 where id = 1"
@@ -1234,7 +1194,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
@@ -1320,7 +1279,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # correlated subquery merge-able into a route of a join tree
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)"
@@ -1406,7 +1364,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # ensure subquery reordering gets us a better plan
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5"
@@ -1486,7 +1443,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # nested subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)"
@@ -1572,7 +1528,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # Correlated subquery in where clause
 "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)"
@@ -1592,7 +1547,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -1616,7 +1570,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # outer and inner subquery route by same str val
 "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')"
@@ -1640,7 +1593,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # outer and inner subquery route by same val arg
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
@@ -1664,13 +1616,11 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # unresolved symbol in inner subquery.
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
 "symbol foo.id not found"
 Gen4 plan same as above
-Gen4++
 
 # outer and inner subquery route by same outermost column value
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
@@ -1690,7 +1640,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # cross-shard subquery in IN clause.
 # Note the improved Underlying plan as SelectIN.
@@ -1736,7 +1685,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # cross-shard subquery in NOT IN clause.
 "select id from user where id not in (select col from user)"
@@ -1777,7 +1725,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # cross-shard subquery in EXISTS clause.
 "select id from user where exists (select col from user)"
@@ -1852,7 +1799,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # cross-shard subquery as expression
 "select id from user where id = (select col from user)"
@@ -1897,7 +1843,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # multi-level pullout
 "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))"
@@ -2023,7 +1968,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # routing rules subquery merge
 "select col from user where id = (select id from route1 where route1.id = user.id)"
@@ -2043,7 +1987,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # routing rules subquery pullout
 "select col from user where id = (select id from route2)"
@@ -2088,7 +2031,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Case preservation test
 "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
@@ -2130,7 +2072,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # database() call in where clause.
 "select id from user where database()"
@@ -2150,7 +2091,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Select with equals null
 "select id from music where id = null"
@@ -2170,7 +2110,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SELECT with IS NULL
 "select id from music where id is null"
@@ -2194,7 +2133,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SELECT with IS NOT NULL
 "select id from music where id is not null"
@@ -2214,7 +2152,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table with unique vindex match and null match
 "select id from music where user_id = 4 and id = null"
@@ -2234,7 +2171,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table with unique vindex match and IN (null)
 "select id from music where user_id = 4 and id IN (null)"
@@ -2254,7 +2190,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table with unique vindex match and IN (null, 1, 2)
 "select id from music where user_id = 4 and id IN (null, 1, 2)"
@@ -2278,7 +2213,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table with unique vindex match and NOT IN (null, 1, 2)
 "select id from music where user_id = 4 and id NOT IN (null, 1, 2)"
@@ -2298,7 +2232,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # Single table with unique vindex match and NOT IN (null, 1, 2) predicates inverted
 "select id from music where id NOT IN (null, 1, 2) and user_id = 4"
@@ -2318,7 +2251,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # pullout sq after pullout sq
 "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)"
@@ -2460,7 +2392,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # solving LIKE query with a CFC prefix vindex
 "select c2 from cfc_vindex_col where c1 like 'A%'"
@@ -2484,7 +2415,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 "select * from samecolvin where col = :col"
 {
@@ -2507,7 +2437,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # non unique predicate on vindex
 "select id from user where user.id > 5"
@@ -2527,7 +2456,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # select from unsharded keyspace with uncorrelated subquery which should be merged to a single route
 "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)"
@@ -2547,7 +2475,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # in subquery the id will be scoped to local table as there is no qualifier associated with it.
 "select id from user where id in (select col from unsharded where col = id)"
@@ -2592,13 +2519,11 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # correlated subquery with different keyspace tables involved
 "select id from user where id in (select col from unsharded where col = user.id)"
 "unsupported: cross-shard correlated subquery"
 Gen4 plan same as above
-Gen4++
 
 # correlated subquery with same keyspace
 "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
@@ -2618,7 +2543,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SelectDBA with uncorrelated subqueries
 "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)"
@@ -2638,7 +2562,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SelectReference with uncorrelated subqueries
 "select ref.col from ref where ref.col in (select ref.col from ref)"
@@ -2658,7 +2581,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SelectEqualUnique with uncorrelated subqueries
 "select u1.col from user as u1 where u1.id = 5 and u1.name in (select u2.name from user u2 where u2.id = 5)"
@@ -2682,7 +2604,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SelectEqualUnique with EXISTS uncorrelated subquery
 "select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)"
@@ -2706,7 +2627,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SelectEqualUnique with NOT EXISTS uncorrelated subquery
 "select u1.col from user as u1 where u1.id = 5 and not exists (select u2.name from user u2 where u2.id = 5)"
@@ -2730,7 +2650,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # SelectScatter with NOT EXISTS uncorrelated subquery
 "select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)"
@@ -2813,7 +2732,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # The outer and first inner are SelectEqualUnique with same Vindex value, the second inner has different Vindex value
 "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)"
@@ -2905,7 +2823,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # The outer and second inner are SelectEqualUnique with same Vindex value, the first inner has different Vindex value
 "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -2997,7 +2914,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # two correlated subqueries that can be merge in a single route
 "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
@@ -3031,7 +2947,6 @@ Gen4++
     "Table": "`user`"
   }
 }
-Gen4++
 
 # transitive closures for the win
 "select id from user where user.id = user.col and user.col = 5"
@@ -3069,7 +2984,6 @@ Gen4++
     "Vindex": "user_index"
   }
 }
-Gen4++
 
 # join with transitive closures
 "select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id"
@@ -3125,7 +3039,6 @@ Gen4++
     "Table": "`user`, user_extra"
   }
 }
-Gen4++
 
 # not supported transitive closures with equality inside of an OR
 "select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)"
@@ -3207,7 +3120,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # routing rules subquery merge with alias
 "select col from user where id = (select id from route1 as a where a.id = user.id)"
@@ -3227,7 +3139,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # left join where clauses where we can optimize into an inner join
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5"
@@ -3269,13 +3180,11 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # this query lead to a nil pointer error
 "select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)"
 "unsupported: cross-shard left join and where clause"
 Gen4 plan same as above
-Gen4++
 
 #subquery on other table
 "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')"
@@ -3365,7 +3274,6 @@ Gen4++
     ]
   }
 }
-Gen4++
 
 # should use colb_colc_map as first column of the vindex is present in predicate
 "select * from multicolvin where column_b = 1"
@@ -3389,7 +3297,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # should only use first column of the vindex colb_colc_map
 "select * from multicolvin where column_b = 1 and column_c = 2"
@@ -3413,7 +3320,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # uses vindex colb_colc_map
 "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3"
@@ -3437,7 +3343,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # v3 takes cola_map, gen4 takes colb_colc_map, may be based on map key ordering
 "select * from multicolvin where column_a = 3 and column_b = 1"
@@ -3479,7 +3384,6 @@ Gen4++
     "Vindex": "colb_colc_map"
   }
 }
-Gen4++
 
 # multi column vindex produces Equal plan in gen4 and Scatter in v3
 "select * from multicol_tbl where cola = 1 and colb = 2"
@@ -3518,7 +3422,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex with different order places the vindex keys in correct order
 "select * from multicol_tbl where colb = 2 and cola = 1"
@@ -3557,7 +3460,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex produces IN plan in gen4 and Scatter in v3
 "select * from multicol_tbl where cola in (1,2) and colb in (3,4)"
@@ -3596,7 +3498,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex with different order places the vindex keys in correct order in IN plan in gen4
 "select * from multicol_tbl where colb in (3,4) and cola in (1,2)"
@@ -3635,7 +3536,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex with different order with one IN predicate and one equality
 "select * from multicol_tbl where colb = 1 and cola in (3,4)"
@@ -3674,7 +3574,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex with both IN predicate and equality predicate
 "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7"
@@ -3713,7 +3612,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex with one column with equal followed by IN predicate, ordering matters for now
 "select * from multicol_tbl where colb = 4 and colb in (1,10) and cola in (5,6)"
@@ -3752,7 +3650,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex with one column with IN followed by equal predicate, ordering matters for now
 "select * from multicol_tbl where colb in (1,10) and colb = 4 and cola in (5,6)"
@@ -3791,7 +3688,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex with better plan selection
 "select * from multicol_tbl where colb in (1,2) and cola IN (3,4) and cola = 5 and colb = 6"
@@ -3830,7 +3726,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex as tuple
 "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))"
@@ -3869,7 +3764,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 
 # multi column vindex, partial vindex with SelectEqual
@@ -3908,7 +3802,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # multi column vindex, partial vindex with SelectEqual over full vindex with SelectIN
 "select * from multicol_tbl where cola = 1 and colb in (2,3)"
@@ -3946,7 +3839,6 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
-Gen4++
 
 # left join with where clause - should be handled by gen4 but still isn't
 "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5"
@@ -3966,4 +3858,3 @@ Gen4++
   }
 }
 Gen4 error: unsupported: cross-shard left join and where clause
-Gen4++

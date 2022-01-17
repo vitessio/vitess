@@ -29,7 +29,6 @@ import (
 )
 
 var _ selectPlanner = gen4Planner
-var runGen4New = true
 
 func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -155,27 +154,14 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	var plan logicalPlan
-	if runGen4New {
-		physOp, err := physical.CreatePhysicalOperator(ctx, logical)
-		if err != nil {
-			return nil, err
-		}
+	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
+	if err != nil {
+		return nil, err
+	}
 
-		plan, err = transformOpToLogicalPlan(ctx, physOp)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		queryTree, err := optimizeQuery(ctx, logical)
-		if err != nil {
-			return nil, err
-		}
-
-		plan, err = transformToLogicalPlan(ctx, queryTree)
-		if err != nil {
-			return nil, err
-		}
+	plan, err := transformOpToLogicalPlan(ctx, physOp)
+	if err != nil {
+		return nil, err
 	}
 
 	plan, err = planHorizon(ctx, plan, selStmt)
