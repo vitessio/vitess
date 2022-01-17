@@ -26,6 +26,9 @@ type Union struct {
 	Sources     []abstract.PhysicalOperator
 	SelectStmts []*sqlparser.Select
 	Distinct    bool
+
+	// TODO this should be removed. For now it's used to fail queries
+	Ordering sqlparser.OrderBy
 }
 
 var _ abstract.PhysicalOperator = (*Union)(nil)

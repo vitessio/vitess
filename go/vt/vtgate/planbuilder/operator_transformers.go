@@ -240,6 +240,9 @@ func transformUnionOpPlan(ctx *plancontext.PlanningContext, op *physical.Union) 
 		}
 		result = src
 	} else {
+		if len(op.Ordering) > 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
+		}
 		result = &concatenateGen4{sources: sources}
 	}
 	if op.Distinct {

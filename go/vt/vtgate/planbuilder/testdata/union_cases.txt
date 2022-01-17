@@ -1744,3 +1744,4 @@ Gen4++
 "select id from user union select 3 order by id"
 "can't do ORDER BY on top of UNION"
 Gen4 plan same as above
+Gen4++

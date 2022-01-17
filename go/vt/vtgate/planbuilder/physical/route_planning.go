@@ -703,7 +703,12 @@ func optimizeUnionOp(ctx *plancontext.PlanningContext, op *abstract.Concatenate)
 
 		sources = append(sources, qt)
 	}
-	return &Union{Sources: sources, SelectStmts: op.SelectStmts, Distinct: op.Distinct}, nil
+	return &Union{
+		Sources:     sources,
+		SelectStmts: op.SelectStmts,
+		Distinct:    op.Distinct,
+		Ordering:    op.OrderBy,
+	}, nil
 }
 
 func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {
