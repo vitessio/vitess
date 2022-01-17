@@ -2318,6 +2318,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table with unique vindex match and IN (null)
 "select id from music where user_id = 4 and id IN (null)"
@@ -2337,6 +2338,7 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table with unique vindex match and IN (null, 1, 2)
 "select id from music where user_id = 4 and id IN (null, 1, 2)"
@@ -2380,6 +2382,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # Single table with unique vindex match and NOT IN (null, 1, 2) predicates inverted
 "select id from music where id NOT IN (null, 1, 2) and user_id = 4"
