@@ -488,8 +488,8 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 }
 
 // UndoDemoteMaster is the old version of UndoDemotePrimary. Deprecated.
-func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
-	return tm.UndoDemotePrimary(ctx, false)
+func (tm *TabletManager) UndoDemoteMaster(ctx context.Context, semiSync bool) error {
+	return tm.UndoDemotePrimary(ctx, semiSync)
 }
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
