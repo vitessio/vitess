@@ -564,7 +564,7 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	}
 
 	if lhsColumns != nil && lhsVarsName != nil {
-		idxs, err := node.pushOutputColumns(lhsColumns, ctx.semTable)
+		idxs, err := node.lhs.pushOutputColumns(lhsColumns, ctx.semTable)
 		if err != nil {
 			return nil, err
 		}
