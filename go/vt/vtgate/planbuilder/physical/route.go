@@ -293,32 +293,131 @@ func (r *Route) haveMatchingVindex(
 		if !ctx.SemTable.DirectDeps(column).IsSolvedBy(v.TableID) {
 			continue
 		}
-		// Ignore MultiColumn vindexes for finding matching Vindex.
-		if _, isSingleCol := v.ColVindex.Vindex.(vindexes.SingleColumn); !isSingleCol {
-			continue
-		}
-
-		col := v.ColVindex.Columns[0]
-		if column.Name.Equal(col) {
-			// single column vindex - just add the option
-			routeOpcode := opcode(v.ColVindex)
-			vindex := vfunc(v.ColVindex)
-			if vindex == nil {
-				continue
+		switch v.ColVindex.Vindex.(type) {
+		case vindexes.SingleColumn:
+			col := v.ColVindex.Columns[0]
+			if column.Name.Equal(col) {
+				// single column vindex - just add the option
+				routeOpcode := opcode(v.ColVindex)
+				vindex := vfunc(v.ColVindex)
+				if vindex == nil {
+					continue
+				}
+				v.Options = append(v.Options, &VindexOption{
+					Values:      []evalengine.Expr{value},
+					ValueExprs:  []sqlparser.Expr{valueExpr},
+					Predicates:  []sqlparser.Expr{node},
+					OpCode:      routeOpcode,
+					FoundVindex: vindex,
+					Cost:        costFor(v.ColVindex, routeOpcode),
+					Ready:       true,
+				})
+				newVindexFound = true
 			}
-			v.Options = append(v.Options, &VindexOption{
-				Values:      []evalengine.Expr{value},
-				ValueExprs:  []sqlparser.Expr{valueExpr},
-				Predicates:  []sqlparser.Expr{node},
-				OpCode:      routeOpcode,
-				FoundVindex: vindex,
-				Cost:        costFor(v.ColVindex, routeOpcode),
-				Ready:       true,
-			})
-			newVindexFound = true
+		case vindexes.MultiColumn:
+			colLoweredName := ""
+			indexOfCol := -1
+			for idx, col := range v.ColVindex.Columns {
+				if column.Name.Equal(col) {
+					colLoweredName = column.Name.Lowered()
+					indexOfCol = idx
+					break
+				}
+			}
+			if colLoweredName == "" {
+				break
+			}
+
+			var newOption []*VindexOption
+			for _, op := range v.Options {
+				if op.Ready {
+					continue
+				}
+				_, isPresent := op.ColsSeen[colLoweredName]
+				if isPresent {
+					continue
+				}
+				option := copyOption(op)
+				optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
+				if optionReady {
+					newVindexFound = true
+				}
+				newOption = append(newOption, option)
+			}
+			v.Options = append(v.Options, newOption...)
+
+			// multi column vindex - just always add as new option for furince we do not have one already
+			option := createOption(v.ColVindex, vfunc)
+			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
+			if optionReady {
+				newVindexFound = true
+			}
+			v.Options = append(v.Options, option)
 		}
 	}
 	return newVindexFound
+}
+
+func createOption(
+	colVindex *vindexes.ColumnVindex,
+	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
+) *VindexOption {
+	values := make([]evalengine.Expr, len(colVindex.Columns))
+	predicates := make([]sqlparser.Expr, len(colVindex.Columns))
+	vindex := vfunc(colVindex)
+
+	return &VindexOption{
+		Values:      values,
+		Predicates:  predicates,
+		ColsSeen:    map[string]interface{}{},
+		FoundVindex: vindex,
+	}
+}
+
+func copyOption(orig *VindexOption) *VindexOption {
+	colsSeen := make(map[string]interface{}, len(orig.ColsSeen))
+	valueExprs := make([]sqlparser.Expr, len(orig.ValueExprs))
+	values := make([]evalengine.Expr, len(orig.Values))
+	predicates := make([]sqlparser.Expr, len(orig.Predicates))
+
+	copy(values, orig.Values)
+	copy(valueExprs, orig.ValueExprs)
+	copy(predicates, orig.Predicates)
+	for k, v := range orig.ColsSeen {
+		colsSeen[k] = v
+	}
+	vo := &VindexOption{
+		Values:      values,
+		ColsSeen:    colsSeen,
+		ValueExprs:  valueExprs,
+		Predicates:  predicates,
+		OpCode:      orig.OpCode,
+		FoundVindex: orig.FoundVindex,
+		Cost:        orig.Cost,
+	}
+	return vo
+}
+
+func (option *VindexOption) updateWithNewColumn(
+	colLoweredName string,
+	valueExpr sqlparser.Expr,
+	indexOfCol int,
+	value evalengine.Expr,
+	node sqlparser.Expr,
+	colVindex *vindexes.ColumnVindex,
+	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
+) bool {
+	option.ColsSeen[colLoweredName] = true
+	option.ValueExprs = append(option.ValueExprs, valueExpr)
+	option.Values[indexOfCol] = value
+	option.Predicates[indexOfCol] = node
+	option.Ready = len(option.ColsSeen) == len(colVindex.Columns)
+	routeOpcode := opcode(colVindex)
+	if option.OpCode < routeOpcode {
+		option.OpCode = routeOpcode
+		option.Cost = costFor(colVindex, routeOpcode)
+	}
+	return option.Ready
 }
 
 // PickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.

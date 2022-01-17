@@ -3605,6 +3605,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex with different order places the vindex keys in correct order
 "select * from multicol_tbl where colb = 2 and cola = 1"
@@ -3643,6 +3644,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex produces IN plan in gen4 and Scatter in v3
 "select * from multicol_tbl where cola in (1,2) and colb in (3,4)"
@@ -3681,6 +3683,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex with different order places the vindex keys in correct order in IN plan in gen4
 "select * from multicol_tbl where colb in (3,4) and cola in (1,2)"
@@ -3719,6 +3722,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex with different order with one IN predicate and one equality
 "select * from multicol_tbl where colb = 1 and cola in (3,4)"
@@ -3757,6 +3761,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex with both IN predicate and equality predicate
 "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7"
@@ -3795,6 +3800,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex with one column with equal followed by IN predicate, ordering matters for now
 "select * from multicol_tbl where colb = 4 and colb in (1,10) and cola in (5,6)"
@@ -3833,6 +3839,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex with one column with IN followed by equal predicate, ordering matters for now
 "select * from multicol_tbl where colb in (1,10) and colb = 4 and cola in (5,6)"
@@ -3871,6 +3878,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex with better plan selection
 "select * from multicol_tbl where colb in (1,2) and cola IN (3,4) and cola = 5 and colb = 6"
@@ -3909,6 +3917,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex as tuple
 "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))"
@@ -3947,6 +3956,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # Multi-route unique vindex constraint (with hash join)
 "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
@@ -4144,6 +4154,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # multi column vindex, partial vindex with SelectEqual over full vindex with SelectIN
 "select * from multicol_tbl where cola = 1 and colb in (2,3)"
@@ -4181,6 +4192,7 @@ Gen4++
     "Vindex": "multicolIdx"
   }
 }
+Gen4++
 
 # left join with where clause - should be handled by gen4 but still isn't
 "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5"

@@ -113,23 +113,13 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*ro
 	if err != nil {
 		return nil, err
 	}
-	var singleColumn vindexes.SingleColumn
-	var value evalengine.Expr
-	if op.SelectedVindex() != nil {
-		vdx, ok := op.Selected.FoundVindex.(vindexes.SingleColumn)
-		if !ok || len(op.Selected.Values) != 1 {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-column values")
-		}
-		singleColumn = vdx
-		value = op.Selected.Values[0]
-	}
-
-	condition := getVindexPredicate(ctx, op)
-
+	var vindex vindexes.Vindex
 	var values []evalengine.Expr
-	if value != nil {
-		values = []evalengine.Expr{value}
+	if op.SelectedVindex() != nil {
+		vindex = op.Selected.FoundVindex
+		values = op.Selected.Values
 	}
+	condition := getVindexPredicate(ctx, op)
 	sel := toSQL(ctx, op.Source)
 	replaceSubQuery(ctx, sel)
 	return &routeGen4{
@@ -137,7 +127,7 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*ro
 			Opcode:              op.RouteOpCode,
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            op.Keyspace,
-			Vindex:              singleColumn,
+			Vindex:              vindex,
 			Values:              values,
 			SysTableTableName:   op.SysTableTableName,
 			SysTableTableSchema: op.SysTableTableSchema,
