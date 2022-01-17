@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
+	"vitess.io/vitess/go/sqlescape"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -78,6 +80,7 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	for _, t := range rr.Tables {
 		tables = append(tables, t.Keyspace.Name+"."+t.Name.String())
 	}
+
 	return json.Marshal(tables)
 }
 
@@ -448,7 +451,24 @@ func addDual(vschema *VSchema) {
 	}
 }
 
+// expects table name of the form <keyspace>.<tablename>
+func escapeQualifiedTable(qualifiedTableName string) (string, error) {
+	arr := strings.Split(qualifiedTableName, ".")
+	switch len(arr) {
+	case 1:
+		return "", fmt.Errorf("table %s must be qualified", qualifiedTableName)
+	case 2:
+		keyspace, tableName := arr[0], arr[1]
+		return fmt.Sprintf("%s.%s",
+			// unescape() first in case an already escaped string was passed
+			sqlescape.EscapeID(sqlescape.UnescapeID(keyspace)),
+			sqlescape.EscapeID(sqlescape.UnescapeID(tableName))), nil
+	}
+	return "", fmt.Errorf("invalid table name: %s", qualifiedTableName)
+}
+
 func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+	var err error
 	if source.RoutingRules == nil {
 		return
 	}
@@ -468,20 +488,31 @@ outer:
 				}
 				continue outer
 			}
-			toks, totabname, err := sqlparser.ParseTable(toTable)
+
+			// we need to backtick the keyspace and table name before calling ParseTable
+			toTable, err = escapeQualifiedTable(toTable)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,
 				}
 				continue outer
 			}
-			if toks == "" {
+
+			toKeyspace, toTableName, err := sqlparser.ParseTable(toTable)
+
+			if err != nil {
+				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+					Error: err,
+				}
+				continue outer
+			}
+			if toKeyspace == "" {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: fmt.Errorf("table %s must be qualified", toTable),
 				}
 				continue outer
 			}
-			t, err := vschema.FindTable(toks, totabname)
+			t, err := vschema.FindTable(toKeyspace, toTableName)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,

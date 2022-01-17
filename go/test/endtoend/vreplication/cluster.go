@@ -117,7 +117,8 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 	}
 
 	return &ClusterConfig{
-		hostname:            "localhost",
+		// the hostname is used to invoke the mysql client using tcp in a test, if localhost is used mysql uses sockets and fails
+		hostname:            "127.0.0.1",
 		topoPort:            etcdPort,
 		vtctldPort:          basePort,
 		vtctldGrpcPort:      basePort + 999,

@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/sqlescape"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -229,7 +231,11 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 	sqlStrings := make([]string, 0, len(sd.TableDefinitions)+1)
 	createViewSQL := make([]string, 0, len(sd.TableDefinitions))
 
-	sqlStrings = append(sqlStrings, sd.DatabaseSchema)
+	// backtick database name since keyspace names appear in the routing rules, and they might need to be escaped
+	// unescape() first in case an already escaped string was passed
+	createDatabaseSQL := strings.Replace(sd.DatabaseSchema, "`{{.DatabaseName}}`", "{{.DatabaseName}}", -1)
+	createDatabaseSQL = strings.Replace(createDatabaseSQL, "{{.DatabaseName}}", sqlescape.EscapeID("{{.DatabaseName}}"), -1)
+	sqlStrings = append(sqlStrings, createDatabaseSQL)
 
 	for _, td := range sd.TableDefinitions {
 		if td.Type == TableView {
