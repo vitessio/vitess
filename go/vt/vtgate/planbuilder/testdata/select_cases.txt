@@ -524,6 +524,7 @@ Gen4++
     "Table": "`user`, user_extra"
   }
 }
+Gen4++
 
 # Cannot auto-resolve for cross-shard joins
 "select col from user join user_extra"
