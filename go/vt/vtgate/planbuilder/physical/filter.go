@@ -64,10 +64,8 @@ func (f *Filter) Cost() int {
 
 // Clone implements the PhysicalOperator interface
 func (f *Filter) Clone() abstract.PhysicalOperator {
-	var predicatesClone []sqlparser.Expr
-	for _, predicate := range f.Predicates {
-		predicatesClone = append(predicatesClone, sqlparser.CloneExpr(predicate))
-	}
+	predicatesClone := make([]sqlparser.Expr, len(f.Predicates))
+	copy(predicatesClone, f.Predicates)
 	return &Filter{
 		Source:     f.Source.Clone(),
 		Predicates: predicatesClone,

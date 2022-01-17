@@ -1289,7 +1289,6 @@ Gen4++
     "JoinVars": {
       "user_extra_col": 0
     },
-    "Predicate": "u.id in (user_extra.col, 1)",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1321,6 +1320,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # correlated subquery merge-able into a route of a join tree
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)"
@@ -1370,13 +1370,11 @@ Gen4++
   "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)",
   "Instructions": {
     "OperatorType": "Join",
-
     "Variant": "Join",
     "JoinColumnIndexes": "1",
     "JoinVars": {
       "user_extra_col": 0
     },
-    "Predicate": "u.id in (user_extra.col, 1)",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1408,6 +1406,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # ensure subquery reordering gets us a better plan
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5"
@@ -1542,7 +1541,6 @@ Gen4++
     "JoinVars": {
       "user_extra_col": 0
     },
-    "Predicate": "u.id in (user_extra.col, 1)",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1574,6 +1572,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Correlated subquery in where clause
 "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)"
