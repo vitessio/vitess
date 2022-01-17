@@ -202,11 +202,11 @@ func compareAsTuples(lVal, rVal *EvalResult) bool {
 }
 
 func evalCompareNullSafe(lVal, rVal *EvalResult) (bool, error) {
-	if compareAsTuples(lVal, rVal) {
-		return evalCompareTuplesNullSafe(lVal, rVal)
-	}
 	if lVal.null() || rVal.null() {
 		return lVal.null() == rVal.null(), nil
+	}
+	if compareAsTuples(lVal, rVal) {
+		return evalCompareTuplesNullSafe(lVal, rVal)
 	}
 	n, err := evalCompare(lVal, rVal)
 	return n == 0, err
@@ -235,11 +235,11 @@ func evalCompareMany(left, right []EvalResult, fulleq bool) (int, bool, error) {
 }
 
 func evalCompareAll(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
-	if compareAsTuples(lVal, rVal) {
-		return evalCompareMany(lVal.tuple(), rVal.tuple(), fulleq)
-	}
 	if lVal.null() || rVal.null() {
 		return 0, true, nil
+	}
+	if compareAsTuples(lVal, rVal) {
+		return evalCompareMany(lVal.tuple(), rVal.tuple(), fulleq)
 	}
 	n, err := evalCompare(lVal, rVal)
 	return n, false, err
