@@ -179,7 +179,7 @@ func (r *Route) planComparison(ctx *context.PlanningContext, cmp *sqlparser.Comp
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
 		// so we can safely bail out here
-		r.RouteOpCode = engine.SelectNone
+		r.setSelectNoneOpcode()
 		return false, true, nil
 	}
 
@@ -204,6 +204,12 @@ func (r *Route) planComparison(ctx *context.PlanningContext, cmp *sqlparser.Comp
 
 	}
 	return false, false, nil
+}
+
+func (r *Route) setSelectNoneOpcode() {
+	r.RouteOpCode = engine.SelectNone
+	// clear any chosen vindex as this query does not need to be sent down.
+	r.Selected = nil
 }
 
 func (r *Route) planEqualOp(ctx *context.PlanningContext, node *sqlparser.ComparisonExpr) bool {
@@ -370,7 +376,7 @@ func (r *Route) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
 	case sqlparser.ValTuple:
 		// WHERE col IN (null)
 		if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
-			r.RouteOpCode = engine.SelectNone
+			r.setSelectNoneOpcode()
 			return true
 		}
 	}
@@ -403,7 +409,7 @@ func (r *Route) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
 	case sqlparser.ValTuple:
 		for _, n := range node {
 			if sqlparser.IsNull(n) {
-				r.RouteOpCode = engine.SelectNone
+				r.setSelectNoneOpcode()
 				return true
 			}
 		}
