@@ -52,6 +52,7 @@ Gen4++
     "Table": "information_schema.`columns`, information_schema.`tables`"
   }
 }
+Gen4++
 
 # system schema query as a subquery
 "SELECT (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1);"

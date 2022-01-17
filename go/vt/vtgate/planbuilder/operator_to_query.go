@@ -124,12 +124,11 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 
 	sel := qb.sel.(*sqlparser.Select)
 	if sel.Where == nil {
-		sel.Where = &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-			Expr: expr,
-		}
-	} else {
-		sel.Where.Expr = sqlparser.AndExpressions(sel.Where.Expr, expr)
+		sel.AddWhere(expr)
+		return
+	}
+	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
+		sel.AddWhere(exp)
 	}
 }
 

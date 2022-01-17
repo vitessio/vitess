@@ -455,6 +455,7 @@ Gen4++
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
+Gen4++
 
 #rails_query 2
 "SELECT * FROM information_schema.schemata WHERE schema_name = 'user'"
@@ -535,6 +536,7 @@ Gen4++
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
+Gen4++
 
 #rails_query 5
 "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'"
@@ -572,6 +574,7 @@ Gen4++
     "Table": "information_schema.check_constraints, information_schema.table_constraints"
   }
 }
+Gen4++
 
 #rails_query 6
 "SELECT column_name FROM information_schema.statistics WHERE index_name = 'PRIMARY' AND table_schema = 'table_schema' AND table_name = 'table_name' ORDER BY seq_in_index"
@@ -693,6 +696,7 @@ Gen4++
     "Table": "information_schema.`tables`"
   }
 }
+Gen4++
 
 # two predicates specifying the database for the same table work if the database is the same
 "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.table_schema = 'a'"
@@ -786,7 +790,7 @@ Gen4++
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_SCHEMA = :__vtschemaname",
     "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
@@ -1188,7 +1192,7 @@ Gen4++
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
     "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
     "Table": "information_schema.`tables`"
   }
@@ -1241,7 +1245,7 @@ Gen4++
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
     "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
     "Table": "information_schema.`tables`"
   }
