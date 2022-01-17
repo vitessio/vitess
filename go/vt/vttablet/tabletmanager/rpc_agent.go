@@ -114,9 +114,9 @@ type RPCTM interface {
 	ResetReplication(ctx context.Context) error
 
 	// Deprecated, use InitPrimary instead
-	InitMaster(ctx context.Context) (string, error)
+	InitMaster(ctx context.Context, semiSync bool) (string, error)
 
-	InitPrimary(ctx context.Context) (string, error)
+	InitPrimary(ctx context.Context, semiSync bool) (string, error)
 
 	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 

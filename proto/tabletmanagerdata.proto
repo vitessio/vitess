@@ -359,6 +359,7 @@ message VReplicationWaitForPosResponse {
 }
 
 message InitPrimaryRequest {
+  bool semiSync = 1;
 }
 
 message InitPrimaryResponse {

@@ -16738,6 +16738,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of an InitPrimaryRequest. */
     interface IInitPrimaryRequest {
+
+        /** InitPrimaryRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents an InitPrimaryRequest. */
@@ -16748,6 +16751,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IInitPrimaryRequest);
+
+        /** InitPrimaryRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new InitPrimaryRequest instance using the specified properties.

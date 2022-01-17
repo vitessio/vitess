@@ -929,11 +929,11 @@ func (itmc *internalTabletManagerClient) ResetReplication(context.Context, *topo
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) InitMaster(context.Context, *topodatapb.Tablet) (string, error) {
+func (itmc *internalTabletManagerClient) InitMaster(context.Context, *topodatapb.Tablet, bool) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) InitPrimary(context.Context, *topodatapb.Tablet) (string, error) {
+func (itmc *internalTabletManagerClient) InitPrimary(context.Context, *topodatapb.Tablet, bool) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 

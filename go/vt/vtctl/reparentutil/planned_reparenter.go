@@ -319,7 +319,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	// This is done to guarantee safety, in the sense that the semi-sync is on before we start accepting writes.
 	// However, during initialization, it is likely that the database would not be created in the MySQL instance.
 	// Therefore, we have to first set read-write mode, create the database and then fix semi-sync, otherwise we get blocked.
-	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect)
+	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}

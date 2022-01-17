@@ -298,7 +298,7 @@ func (fs *fuzzStore) callInitMaster() error {
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.InitMaster(context.Background(), tablet)
+	_, _ = fs.client.InitMaster(context.Background(), tablet, false)
 	return nil
 }
 
