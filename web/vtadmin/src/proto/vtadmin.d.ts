@@ -17836,6 +17836,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest wait_position */
         wait_position?: (string|null);
+
+        /** SetReplicationSourceRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a SetReplicationSourceRequest. */
@@ -17858,6 +17861,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest wait_position. */
         public wait_position: string;
+
+        /** SetReplicationSourceRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new SetReplicationSourceRequest instance using the specified properties.
