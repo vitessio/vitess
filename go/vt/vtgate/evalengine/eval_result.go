@@ -661,7 +661,7 @@ func (er *EvalResult) makeFloat() {
 	case sqltypes.Float64, sqltypes.Float32:
 		return
 	case sqltypes.Decimal:
-		if f, ok := er.decimal().num.Float64(); ok {
+		if f, ok := er.coerceDecimalToFloat(); ok {
 			er.setFloat(f)
 			return
 		}
@@ -695,6 +695,19 @@ func (er *EvalResult) makeNumeric() {
 	er.setFloat(0)
 }
 
+func (er *EvalResult) coerceDecimalToFloat() (float64, bool) {
+	dec := &er.decimal().num
+	if f, ok := dec.Float64(); ok {
+		return f, true
+	}
+
+	// normal form for decimal did not fit in float64, attempt reduction before giving up
+	var reduced decimal.Big
+	reduced.Copy(dec)
+	reduced.Reduce()
+	return reduced.Float64()
+}
+
 func (er *EvalResult) coerceToFloat() (float64, error) {
 	switch er.typeof() {
 	case sqltypes.Int64:
@@ -702,7 +715,7 @@ func (er *EvalResult) coerceToFloat() (float64, error) {
 	case sqltypes.Uint64:
 		return float64(er.uint64()), nil
 	case sqltypes.Decimal:
-		if f, ok := er.decimal().num.Float64(); ok {
+		if f, ok := er.coerceDecimalToFloat(); ok {
 			return f, nil
 		}
 		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
