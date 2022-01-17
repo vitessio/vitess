@@ -853,13 +853,15 @@ func (client *Client) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.T
 }
 
 // UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (client *Client) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *Client) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	_, err = c.UndoDemotePrimary(ctx, &tabletmanagerdatapb.UndoDemotePrimaryRequest{})
+	_, err = c.UndoDemotePrimary(ctx, &tabletmanagerdatapb.UndoDemotePrimaryRequest{
+		SemiSync: semiSync,
+	})
 	return err
 }
 

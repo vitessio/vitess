@@ -451,7 +451,7 @@ func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdat
 	defer s.tm.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UndoDemotePrimaryResponse{}
-	err = s.tm.UndoDemotePrimary(ctx)
+	err = s.tm.UndoDemotePrimary(ctx, request.GetSemiSync())
 	return response, err
 }
 
@@ -459,7 +459,7 @@ func (s *server) UndoDemotePrimary(ctx context.Context, request *tabletmanagerda
 	defer s.tm.HandleRPCPanic(ctx, "UndoDemotePrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UndoDemotePrimaryResponse{}
-	err = s.tm.UndoDemotePrimary(ctx)
+	err = s.tm.UndoDemotePrimary(ctx, request.GetSemiSync())
 	return response, err
 }
 

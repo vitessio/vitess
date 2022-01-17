@@ -489,13 +489,13 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 // UndoDemoteMaster is the old version of UndoDemotePrimary. Deprecated.
 func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
-	return tm.UndoDemotePrimary(ctx)
+	return tm.UndoDemotePrimary(ctx, false)
 }
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
 // it sets read-only to false, fixes semi-sync
 // and returns its primary position.
-func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
+func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) error {
 	log.Infof("UndoDemotePrimary")
 	if err := tm.lock(ctx); err != nil {
 		return err
@@ -503,7 +503,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
 	defer tm.unlock()
 
 	// If using semi-sync, we need to enable source-side.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionFalse); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return err
 	}
 

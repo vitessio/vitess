@@ -398,6 +398,7 @@ message DemotePrimaryResponse {
 }
 
 message UndoDemotePrimaryRequest {
+  bool semiSync = 1;
 }
 
 message UndoDemotePrimaryResponse {

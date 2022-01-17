@@ -195,7 +195,7 @@ type TabletManagerClient interface {
 
 	// UndoDemotePrimary reverts all changes made by DemotePrimary
 	// To be used if we are unable to promote the chosen new primary
-	UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) error
+	UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
 
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error

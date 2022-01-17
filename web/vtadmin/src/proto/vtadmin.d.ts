@@ -17482,6 +17482,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of an UndoDemotePrimaryRequest. */
     interface IUndoDemotePrimaryRequest {
+
+        /** UndoDemotePrimaryRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents an UndoDemotePrimaryRequest. */
@@ -17492,6 +17495,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IUndoDemotePrimaryRequest);
+
+        /** UndoDemotePrimaryRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new UndoDemotePrimaryRequest instance using the specified properties.

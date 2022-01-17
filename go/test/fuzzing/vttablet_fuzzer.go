@@ -419,7 +419,7 @@ func (fs *fuzzStore) callUndoDemotePrimary() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.UndoDemotePrimary(context.Background(), tablet)
+	_ = fs.client.UndoDemotePrimary(context.Background(), tablet, false)
 	return nil
 }
 

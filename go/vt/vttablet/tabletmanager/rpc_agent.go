@@ -130,7 +130,7 @@ type RPCTM interface {
 
 	DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
-	UndoDemotePrimary(ctx context.Context) error
+	UndoDemotePrimary(ctx context.Context, semiSync bool) error
 
 	ReplicaWasPromoted(ctx context.Context) error
 

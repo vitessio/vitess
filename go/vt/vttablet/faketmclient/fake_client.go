@@ -311,7 +311,7 @@ func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet
 }
 
 // UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *FakeTabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	return nil
 }
 
