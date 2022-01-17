@@ -165,12 +165,12 @@ type TabletManagerClient interface {
 	// Deprecated InitMaster tells a tablet to make itself the new primary,
 	// and return the replication position the replicas should use to
 	// reparent to it.
-	InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
+	InitMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error)
 
 	// InitPrimary tells a tablet to make itself the new primary,
 	// and return the replication position the replicas should use to
 	// reparent to it.
-	InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
+	InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error)
 
 	// PopulateReparentJournal asks the primary to insert a row in
 	// its reparent_journal table.

@@ -495,7 +495,7 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (fake *TabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	if fake.InitPrimaryResults == nil {
 		return "", assert.AnError
 	}

@@ -281,12 +281,12 @@ func (client *FakeTabletManagerClient) ResetReplication(ctx context.Context, tab
 }
 
 // InitMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	return "", nil
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *FakeTabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	return "", nil
 }
 

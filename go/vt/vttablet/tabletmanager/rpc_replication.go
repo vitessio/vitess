@@ -238,12 +238,12 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 }
 
 // InitMaster is the old version of InitPrimary. Deprecated.
-func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
-	return tm.InitPrimary(ctx)
+func (tm *TabletManager) InitMaster(ctx context.Context, semiSync bool) (string, error) {
+	return tm.InitPrimary(ctx, semiSync)
 }
 
 // InitPrimary enables writes and returns the replication position.
-func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
+func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	log.Infof("InitPrimary")
 	if err := tm.lock(ctx); err != nil {
 		return "", err
@@ -279,7 +279,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 
 	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
-	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionFalse); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
 

@@ -950,7 +950,7 @@ func tmRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tm
 	expectHandleRPCPanic(t, "ResetReplication", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) InitPrimary(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -958,7 +958,7 @@ func (fra *fakeRPCTM) InitPrimary(ctx context.Context) (string, error) {
 }
 
 // Deprecated
-func (fra *fakeRPCTM) InitMaster(ctx context.Context) (string, error) {
+func (fra *fakeRPCTM) InitMaster(ctx context.Context, semiSync bool) (string, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -966,12 +966,12 @@ func (fra *fakeRPCTM) InitMaster(ctx context.Context) (string, error) {
 }
 
 func tmRPCTestInitMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, err := client.InitMaster(ctx, tablet)
+	rp, err := client.InitMaster(ctx, tablet, false)
 	compareError(t, "InitMaster", err, rp, testReplicationPosition)
 }
 
 func tmRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.InitMaster(ctx, tablet)
+	_, err := client.InitMaster(ctx, tablet, false)
 	expectHandleRPCPanic(t, "InitMaster", true /*verbose*/, err)
 }
 

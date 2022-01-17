@@ -391,7 +391,7 @@ func (s *server) InitMaster(ctx context.Context, request *tabletmanagerdatapb.In
 	defer s.tm.HandleRPCPanic(ctx, "InitMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.InitPrimaryResponse{}
-	position, err := s.tm.InitPrimary(ctx)
+	position, err := s.tm.InitPrimary(ctx, request.GetSemiSync())
 	if err == nil {
 		response.Position = position
 	}
@@ -402,7 +402,7 @@ func (s *server) InitPrimary(ctx context.Context, request *tabletmanagerdatapb.I
 	defer s.tm.HandleRPCPanic(ctx, "InitPrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.InitPrimaryResponse{}
-	position, err := s.tm.InitPrimary(ctx)
+	position, err := s.tm.InitPrimary(ctx, request.GetSemiSync())
 	if err == nil {
 		response.Position = position
 	}

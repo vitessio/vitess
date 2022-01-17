@@ -731,14 +731,16 @@ func (client *Client) ResetReplication(ctx context.Context, tablet *topodatapb.T
 }
 
 // InitMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *Client) InitMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return "", err
 	}
 	defer closer.Close()
 
-	response, err := c.InitMaster(ctx, &tabletmanagerdatapb.InitPrimaryRequest{})
+	response, err := c.InitMaster(ctx, &tabletmanagerdatapb.InitPrimaryRequest{
+		SemiSync: semiSync,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -746,14 +748,16 @@ func (client *Client) InitMaster(ctx context.Context, tablet *topodatapb.Tablet)
 }
 
 // InitPrimary is part of the tmclient.TabletManagerClient interface.
-func (client *Client) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *Client) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return "", err
 	}
 	defer closer.Close()
 
-	response, err := c.InitPrimary(ctx, &tabletmanagerdatapb.InitPrimaryRequest{})
+	response, err := c.InitPrimary(ctx, &tabletmanagerdatapb.InitPrimaryRequest{
+		SemiSync: semiSync,
+	})
 	if err != nil {
 		return "", err
 	}
