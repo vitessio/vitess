@@ -5,7 +5,6 @@
   "Original": "begin"
 }
 Gen4 plan same as above
-Gen4++
 
 # Start Transaction
 "start transaction"
@@ -14,7 +13,6 @@ Gen4++
   "Original": "start transaction"
 }
 Gen4 plan same as above
-Gen4++
 
 # Commit
 "commit"
@@ -23,7 +21,6 @@ Gen4++
   "Original": "commit"
 }
 Gen4 plan same as above
-Gen4++
 
 # Rollback
 "rollback"
@@ -32,7 +29,6 @@ Gen4++
   "Original": "rollback"
 }
 Gen4 plan same as above
-Gen4++
 
 # Savepoint
 "savepoint a"
@@ -41,7 +37,6 @@ Gen4++
   "Original": "savepoint a"
 }
 Gen4 plan same as above
-Gen4++
 
 # Savepoint rollback
 "rollback work to savepoint a"
@@ -50,7 +45,6 @@ Gen4++
   "Original": "rollback work to savepoint a"
 }
 Gen4 plan same as above
-Gen4++
 
 # Savepoint release
 "release savepoint a"
@@ -59,4 +53,3 @@ Gen4++
   "Original": "release savepoint a"
 }
 Gen4 plan same as above
-Gen4++

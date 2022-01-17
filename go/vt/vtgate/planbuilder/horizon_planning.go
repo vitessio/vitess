@@ -1207,3 +1207,128 @@ func isJoin(plan logicalPlan) bool {
 		return false
 	}
 }
+
+func exprHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
+	col, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		return false
+	}
+	ts := semTable.RecursiveDeps(expr)
+	tableInfo, err := semTable.TableInfoFor(ts)
+	if err != nil {
+		return false
+	}
+	tableName, err := tableInfo.Name()
+	if err != nil {
+		return false
+	}
+	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(tableName)
+	if err != nil {
+		return false
+	}
+	for _, vindex := range vschemaTable.ColumnVindexes {
+		if len(vindex.Columns) > 1 || !vindex.IsUnique() {
+			return false
+		}
+		if col.Name.Equal(vindex.Columns[0]) {
+			return true
+		}
+	}
+	return false
+}
+
+func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
+	err := stripDownQuery(sel, rb.Select)
+	if err != nil {
+		return err
+	}
+	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.Cursor) bool {
+		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+			removeKeyspaceFromSelectExpr(aliasedExpr)
+		}
+		return true
+	}, nil)
+	return nil
+}
+
+func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
+	switch expr := expr.(type) {
+	case *sqlparser.AliasedExpr:
+		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+	case *sqlparser.StarExpr:
+		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
+	}
+}
+
+func stripDownQuery(from, to sqlparser.SelectStatement) error {
+	var err error
+
+	switch node := from.(type) {
+	case *sqlparser.Select:
+		toNode, ok := to.(*sqlparser.Select)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		toNode.Distinct = node.Distinct
+		toNode.GroupBy = node.GroupBy
+		toNode.Having = node.Having
+		toNode.OrderBy = node.OrderBy
+		toNode.Comments = node.Comments
+		toNode.SelectExprs = node.SelectExprs
+		for _, expr := range toNode.SelectExprs {
+			removeKeyspaceFromSelectExpr(expr)
+		}
+	case *sqlparser.Union:
+		toNode, ok := to.(*sqlparser.Union)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		err = stripDownQuery(node.Left, toNode.Left)
+		if err != nil {
+			return err
+		}
+		err = stripDownQuery(node.Right, toNode.Right)
+		if err != nil {
+			return err
+		}
+		toNode.OrderBy = node.OrderBy
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
+	}
+	return nil
+}
+
+func breakExpressionInLHSandRHS(
+	ctx *plancontext.PlanningContext,
+	expr sqlparser.Expr,
+	lhs semantics.TableSet,
+) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
+	rewrittenExpr = sqlparser.CloneExpr(expr)
+	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			deps := ctx.SemTable.RecursiveDeps(node)
+			if deps.NumberOfTables() == 0 {
+				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
+				return false
+			}
+			if deps.IsSolvedBy(lhs) {
+				node.Qualifier.Qualifier = sqlparser.NewTableIdent("")
+				columns = append(columns, node)
+				bvName := node.CompliantName()
+				bvNames = append(bvNames, bvName)
+				arg := sqlparser.NewArgument(bvName)
+				// we are replacing one of the sides of the comparison with an argument,
+				// but we don't want to lose the type information we have, so we copy it over
+				ctx.SemTable.CopyExprInfo(node, arg)
+				cursor.Replace(arg)
+			}
+		}
+		return true
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	ctx.JoinPredicates[expr] = append(ctx.JoinPredicates[expr], rewrittenExpr)
+	return
+}

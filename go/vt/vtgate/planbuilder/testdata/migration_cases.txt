@@ -13,7 +13,6 @@
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # retry migration
 "alter vitess_migration 'abc' retry"
@@ -31,7 +30,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # complete migration
 "alter vitess_migration 'abc' complete"
@@ -49,7 +47,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # complete migration
 "alter vitess_migration 'abc' cleanup"
@@ -67,7 +64,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # cancel migration
 "alter vitess_migration 'abc' cancel"
@@ -85,7 +81,6 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
 
 # cancel all migrations
 "alter vitess_migration cancel all"
@@ -103,4 +98,3 @@ Gen4++
   }
 }
 Gen4 plan same as above
-Gen4++
