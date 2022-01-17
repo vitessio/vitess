@@ -52,28 +52,41 @@ func (d *derivedTree) clone() queryTree {
 	return &other
 }
 
-func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) (offsets []int, err error) {
+func (d *derivedTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
 	var noQualifierNames []*sqlparser.ColName
-	if len(names) == 0 {
-		return
+	var offsets []int
+	if len(columns) == 0 {
+		return nil, nil
 	}
-	for _, name := range names {
-		i, err := d.findOutputColumn(name)
+	for _, col := range columns {
+		i, err := d.findOutputColumn(col)
 		if err != nil {
 			return nil, err
 		}
+		var pos int
+		d.columnsOffset, pos = addToIntSlice(d.columnsOffset, i)
+		offsets = append(offsets, pos)
+		// skip adding to columns as it exists already.
 		if i > -1 {
-			d.columnsOffset = append(d.columnsOffset, i)
 			continue
 		}
-		d.columnsOffset = append(d.columnsOffset, i)
-		d.columns = append(d.columns, name)
-		noQualifierNames = append(noQualifierNames, sqlparser.NewColName(name.Name.String()))
+		d.columns = append(d.columns, col)
+		noQualifierNames = append(noQualifierNames, sqlparser.NewColName(col.Name.String()))
 	}
 	if len(noQualifierNames) > 0 {
 		_, _ = d.inner.pushOutputColumns(noQualifierNames, semTable)
 	}
-	return d.columnsOffset, nil
+	return offsets, nil
+}
+
+func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
+	for idx, val := range columnOffset {
+		if val == valToAdd {
+			return columnOffset, idx
+		}
+	}
+	columnOffset = append(columnOffset, valToAdd)
+	return columnOffset, len(columnOffset) - 1
 }
 
 func (d *derivedTree) pushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {

@@ -49,10 +49,10 @@ if (( $uid % 100 % 3 == 0 )) ; then
     tablet_type='rdonly'
 fi
 
-# Consider every tablet with %d00 as external master
+# Consider every tablet with %d00 as external primary
 if [ $external = 1 ] && (( $uid % 100 == 0 )) ; then
     tablet_type='replica'
-    tablet_role='externalmaster'
+    tablet_role='externalprimary'
     keyspace="ext_$keyspace"
 fi
 
@@ -94,8 +94,8 @@ echo "Removing $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}..."
 rm -rf $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}
 
 # Create mysql instances
-# Do not create mysql instance for master if connecting to external mysql database
-if [[ $tablet_role != "externalmaster" ]]; then
+# Do not create mysql instance for primary if connecting to external mysql database
+if [[ $tablet_role != "externalprimary" ]]; then
   echo "Initing mysql for tablet: $uid role: $role external: $external.. "
   $VTROOT/bin/mysqlctld \
   --init_db_sql_file=$init_db_sql_file \
@@ -111,8 +111,8 @@ sleep $sleeptime
 $VTROOT/bin/vtctlclient -server vtctld:$GRPC_PORT AddCellInfo -root vitess/$CELL -server_address consul1:8500 $CELL || true
 
 #Populate external db conditional args
-if [ $tablet_role = "externalmaster" ]; then
-    echo "Setting external db args for master: $DB_NAME"
+if [ $tablet_role = "externalprimary" ]; then
+    echo "Setting external db args for primary: $DB_NAME"
     external_db_args="-db_host $DB_HOST \
                       -db_port $DB_PORT \
                       -init_db_name_override $DB_NAME \
@@ -133,7 +133,7 @@ if [ $tablet_role = "externalmaster" ]; then
                       -enable_replication_reporter=false \
                       -enforce_strict_trans_tables=false \
                       -track_schema_versions=true \
-                      -vreplication_tablet_type=master \
+                      -vreplication_tablet_type=primary \
                       -watch_replication_stream=true"
 else
     external_db_args="-init_db_name_override $DB_NAME \

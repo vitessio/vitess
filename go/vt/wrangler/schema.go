@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -291,13 +292,15 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	if err != nil {
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
-	createSQL := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
+
+	createSQLstmts := tmutils.SchemaDefinitionToSQLStrings(sourceSd)
+
 	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.PrimaryAlias)
 	if err != nil {
 		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.PrimaryAlias, err)
 	}
-	for i, sqlLine := range createSQL {
-		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
+	for _, createSQL := range createSQLstmts {
+		err = wr.applySQLShard(ctx, destTabletInfo, createSQL)
 		if err != nil {
 			return fmt.Errorf("creating a table failed."+
 				" Most likely some tables already exist on the destination and differ from the source."+
@@ -353,15 +356,20 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 // Thus it should be used only for changes that can be applied on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
-func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
+func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string) error {
 	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
 	if err != nil {
 		return fmt.Errorf("fillStringTemplate failed: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	// Need to make sure that we enable binlog, since we're only applying the statement on primaries.
-	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, reloadSchema)
+	// Need to make sure that replication is enabled since we're only applying the statement on primaries
+	_, err = wr.tmc.ApplySchema(ctx, tabletInfo.Tablet, &tmutils.SchemaChange{
+		SQL:              filledChange,
+		Force:            false,
+		AllowReplication: true,
+		SQLMode:          vreplication.SQLMode,
+	})
 	return err
 }
 
