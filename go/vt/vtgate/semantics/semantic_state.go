@@ -70,8 +70,9 @@ type (
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
 		Tables []TableInfo
-		// ShardedError stores any errors that have to be generated if the query cannot be planned as a single route.
-		ShardedError error
+
+		// NotSingleRouteErr stores any errors that have to be generated if the query cannot be planned as a single route.
+		NotSingleRouteErr error
 
 		// Recursive contains the dependencies from the expression to the actual tables
 		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,

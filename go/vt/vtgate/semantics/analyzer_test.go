@@ -397,10 +397,10 @@ func TestUnknownColumnMap2(t *testing.T) {
 					si := &FakeSI{Tables: test.schema}
 					tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
 					if test.err {
-						require.True(t, err != nil || tbl.ShardedError != nil)
+						require.True(t, err != nil || tbl.NotSingleRouteErr != nil)
 					} else {
 						require.NoError(t, err)
-						require.NoError(t, tbl.ShardedError)
+						require.NoError(t, tbl.NotSingleRouteErr)
 						typ := tbl.TypeFor(expr)
 						assert.Equal(t, test.typ, typ)
 					}
@@ -507,7 +507,7 @@ func TestScopeForSubqueries(t *testing.T) {
 			sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
 			exp := extract(sel2, 0)
 			s1 := semTable.RecursiveDeps(exp)
-			require.NoError(t, semTable.ShardedError)
+			require.NoError(t, semTable.NotSingleRouteErr)
 			// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 			assert.Equal(t, tc.deps, s1)
 		})
