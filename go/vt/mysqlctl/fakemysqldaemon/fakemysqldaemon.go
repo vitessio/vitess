@@ -536,10 +536,27 @@ func (fmd *FakeMysqlDaemon) PreflightSchemaChange(ctx context.Context, dbName st
 
 // ApplySchemaChange is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
-	if fmd.ApplySchemaChangeResult == nil {
-		return nil, fmt.Errorf("no apply schema defined")
+	beforeSchema, err := fmd.SchemaFunc()
+	if err != nil {
+		return nil, err
 	}
-	return fmd.ApplySchemaChangeResult, nil
+
+	dbaCon, err := fmd.GetDbaConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = fmd.db.HandleQuery(dbaCon.Conn, change.SQL, func(*sqltypes.Result) error { return nil }); err != nil {
+		return nil, err
+	}
+
+	afterSchema, err := fmd.SchemaFunc()
+	if err != nil {
+		return nil, err
+	}
+
+	return &tabletmanagerdatapb.SchemaChangeResult{
+		BeforeSchema: beforeSchema,
+		AfterSchema:  afterSchema}, nil
 }
 
 // GetAppConnection is part of the MysqlDaemon interface.

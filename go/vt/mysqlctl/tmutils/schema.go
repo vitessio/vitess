@@ -354,6 +354,7 @@ type SchemaChange struct {
 	AllowReplication bool
 	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
 	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
+	SQLMode          string
 }
 
 // Equal compares two SchemaChange objects.
