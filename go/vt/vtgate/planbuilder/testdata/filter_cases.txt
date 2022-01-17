@@ -934,7 +934,7 @@ Gen4++
     "Variant": "Join",
     "JoinColumnIndexes": "1",
     "JoinVars": {
-      "user_col": 1
+      "user_col": 0
     },
     "Predicate": "`user`.col = user_extra.col and user_extra.user_id = `user`.col",
     "TableName": "`user`_user_extra",
@@ -968,6 +968,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Multi-route with non-route constraint, should use first route.
 "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
