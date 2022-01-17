@@ -1,6 +1,6 @@
 package vreplication
 
-// The product, customer, and tenant tables are used to exercise and test most Workflow variants.
+// The product, customer, and Lead tables are used to exercise and test most Workflow variants.
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
@@ -15,7 +15,7 @@ create table orders(oid int, cid int, pid int, mname varchar(128), price int, qt
 create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table customer2(cid int, name varbinary(128), typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid));
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
-create table tenant(tenant_id binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (tenant_id));
+create table Lead(Lead_id binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (Lead_id));
 `
 
 	initialProductVSchema = `
@@ -35,7 +35,7 @@ create table tenant(tenant_id binary(16), name varbinary(16), date1 datetime not
 	"order_seq": {
 		"type": "sequence"
 	},
-	"tenant": {}
+	"Lead": {}
   }
 }
 `
@@ -76,10 +76,10 @@ create table tenant(tenant_id binary(16), name varbinary(16), date1 datetime not
 	        "sequence": "customer_seq2"
 	      }
 	    },
-	  "tenant": {
+	  "Lead": {
           "column_vindexes": [
 	        {
-	          "column": "tenant_id",
+	          "column": "Lead_id",
 	          "name": "bmd5"
 	        }
 	      ]
@@ -245,7 +245,7 @@ create table tenant(tenant_id binary(16), name varbinary(16), date1 datetime not
 {
   "workflow": "morders",
   "sourceKeyspace": "customer",
-  "targetKeyspace": "merchant",
+  "targetKeyspace": "merchant-type",
   "tableSettings": [{
     "targetTable": "morders",
     "sourceExpression": "select oid, cid, mname, pid, price, qty, total from orders",
@@ -258,7 +258,7 @@ create table tenant(tenant_id binary(16), name varbinary(16), date1 datetime not
 {
   "workflow": "msales",
   "sourceKeyspace": "customer",
-  "targetKeyspace": "merchant",
+  "targetKeyspace": "merchant-type",
   "tableSettings": [{
     "targetTable": "msales",
 	"sourceExpression": "select mname as merchant_name, count(*) as kount, sum(price) as amount from orders group by merchant_name",

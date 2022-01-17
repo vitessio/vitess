@@ -12,6 +12,6 @@ insert into customer2(cid, name, typ, sport) values(1, 'john',1,'football,baseba
 insert into customer2(cid, name, typ, sport) values(2, 'paul','soho','cricket');
 insert into customer2(cid, name, typ, sport) values(3, 'ringo','enterprise','');
 -- for testing edge case where inserted binary value is 15 bytes, field is 16, mysql adds a null while storing but binlog returns 15 bytes
-insert into tenant(tenant_id, name) values (x'02BD00987932461E8820C908E84BAE', 'abc');
+insert into `Lead`(Lead_id, name) values (x'02BD00987932461E8820C908E84BAE', 'abc');
 
 
