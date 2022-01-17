@@ -186,11 +186,20 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 		}
 		return op, outputColumns, nil
 	case *Table:
-		before := len(op.Columns)
-		op.Columns = append(op.Columns, columns...)
 		var offsets []int
-		for i := before; i < len(op.Columns); i++ {
-			offsets = append(offsets, i)
+		for _, col := range columns {
+			exists := false
+			for idx, opCol := range op.Columns {
+				if sqlparser.EqualsRefOfColName(col, opCol) {
+					exists = true
+					offsets = append(offsets, idx)
+					break
+				}
+			}
+			if !exists {
+				offsets = append(offsets, len(op.Columns))
+				op.Columns = append(op.Columns, col)
+			}
 		}
 		return op, offsets, nil
 	case *Filter:

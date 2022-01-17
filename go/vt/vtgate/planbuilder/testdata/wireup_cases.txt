@@ -828,6 +828,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # Join on weird columns.
 "select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id"
