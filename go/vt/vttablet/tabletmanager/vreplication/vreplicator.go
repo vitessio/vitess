@@ -176,10 +176,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	// Save the original sql_mode, set it to a permissive mode,
 	// and then reset it back to the original value at the end.
 	resetFunc, err := vr.setSQLMode()
+	defer resetFunc()
 	if err != nil {
 		return err
 	}
-	defer resetFunc()
 
 	colInfo, err := vr.buildColInfoMap(ctx)
 	if err != nil {
@@ -430,11 +430,12 @@ func (vr *vreplicator) resetFKCheckAfterCopy() error {
 }
 
 func (vr *vreplicator) setSQLMode() (func(), error) {
+	resetFunc := func() {}
 	// First save the original SQL mode if we have not already done so
 	if vr.originalSQLMode == "" {
 		res, err := vr.dbClient.Execute(getSQLModeQuery)
 		if err != nil || len(res.Rows) != 1 {
-			return nil, fmt.Errorf("could not get the original sql_mode on target: %v", err)
+			return resetFunc, fmt.Errorf("could not get the original sql_mode on target: %v", err)
 		}
 		vr.originalSQLMode = res.Named().Row().AsString("sql_mode", "")
 	}
@@ -442,7 +443,7 @@ func (vr *vreplicator) setSQLMode() (func(), error) {
 	// Create a callback function for resetting the original
 	// SQL mode back at the end of the vreplication operation.
 	// You should defer this callback wherever you call setSQLMode()
-	resetFunc := func() {
+	resetFunc = func() {
 		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
 		_, err := vr.dbClient.Execute(query)
 		if err != nil {
