@@ -2725,6 +2725,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # wire-up on within cross-shard derived table
 "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"

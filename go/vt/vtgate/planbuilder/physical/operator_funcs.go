@@ -211,12 +211,13 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 			if err != nil {
 				return nil, nil, err
 			}
+			var pos int
+			op.ColumnsOffset, pos = addToIntSlice(op.ColumnsOffset, i)
+			offsets = append(offsets, pos)
+			// skip adding to columns as it exists already.
 			if i > -1 {
-				offsets = append(offsets, i)
-				op.ColumnsOffset = addToIntSlice(op.ColumnsOffset, i)
 				continue
 			}
-			op.ColumnsOffset = addToIntSlice(op.ColumnsOffset, i)
 			op.Columns = append(op.Columns, col)
 			noQualifierNames = append(noQualifierNames, sqlparser.NewColName(col.Name.String()))
 		}
@@ -233,13 +234,14 @@ func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperato
 	}
 }
 
-func addToIntSlice(columnOffset []int, valToAdd int) []int {
-	for _, val := range columnOffset {
+func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
+	for idx, val := range columnOffset {
 		if val == valToAdd {
-			return columnOffset
+			return columnOffset, idx
 		}
 	}
-	return append(columnOffset, valToAdd)
+	columnOffset = append(columnOffset, valToAdd)
+	return columnOffset, len(columnOffset) - 1
 }
 
 func RemovePredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
