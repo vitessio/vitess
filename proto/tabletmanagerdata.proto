@@ -379,6 +379,7 @@ message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
   int64 time_created_ns = 3;
+  bool semiSync = 4;
 }
 
 message InitReplicaResponse {

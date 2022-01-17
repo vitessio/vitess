@@ -585,7 +585,7 @@ func (fs *fuzzStore) callInitReplica() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.InitReplica(context.Background(), tablet, parent, replicationPosition, int64(timeCreatedNS))
+	_ = fs.client.InitReplica(context.Background(), tablet, parent, replicationPosition, int64(timeCreatedNS), false)
 	return nil
 }
 

@@ -309,7 +309,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 
 // InitReplica sets replication primary and position, and waits for the
 // reparent_journal table entry up to context timeout
-func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64, semiSync bool) error {
 	log.Infof("InitReplica: parent: %v  position: %v", parent, position)
 	if err := tm.lock(ctx); err != nil {
 		return err
@@ -343,7 +343,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if tt == topodatapb.TabletType_PRIMARY {
 		tt = topodatapb.TabletType_REPLICA
 	}
-	if err := tm.fixSemiSync(tt, SemiSyncActionFalse); err != nil {
+	if err := tm.fixSemiSync(tt, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return err
 	}
 

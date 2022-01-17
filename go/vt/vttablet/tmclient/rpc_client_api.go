@@ -179,7 +179,7 @@ type TabletManagerClient interface {
 	// InitReplica tells a tablet to start replicating from the
 	// passed in primary tablet alias, and wait for the row in the
 	// reparent_journal table.
-	InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
+	InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error
 
 	// Deprecated DemoteMaster tells the soon-to-be-former primary it's going to change,
 	// and it should go read-only and return its current position.

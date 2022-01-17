@@ -1008,7 +1008,7 @@ func tmRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, cl
 
 var testInitReplicaCalled = false
 
-func (fra *fakeRPCTM) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+func (fra *fakeRPCTM) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64, semiSync bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1020,12 +1020,12 @@ func (fra *fakeRPCTM) InitReplica(ctx context.Context, parent *topodatapb.Tablet
 }
 
 func tmRPCTestInitReplica(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.InitReplica(ctx, tablet, testPrimaryAlias, testReplicationPosition, testTimeCreatedNS)
+	err := client.InitReplica(ctx, tablet, testPrimaryAlias, testReplicationPosition, testTimeCreatedNS, false)
 	compareError(t, "InitReplica", err, true, testInitReplicaCalled)
 }
 
 func tmRPCTestInitReplicaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.InitReplica(ctx, tablet, testPrimaryAlias, testReplicationPosition, testTimeCreatedNS)
+	err := client.InitReplica(ctx, tablet, testPrimaryAlias, testReplicationPosition, testTimeCreatedNS, false)
 	expectHandleRPCPanic(t, "InitReplica", true /*verbose*/, err)
 }
 

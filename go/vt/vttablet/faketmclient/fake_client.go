@@ -217,7 +217,7 @@ func (client *FakeTabletManagerClient) GetReplicas(ctx context.Context, tablet *
 }
 
 // InitReplica is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
+func (client *FakeTabletManagerClient) InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error {
 	return nil
 }
 
