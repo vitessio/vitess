@@ -1,15 +1,16 @@
 package physical
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQueryOp(ctx *context.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
+func optimizeSubQueryOp(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
 	outerOp, err := CreatePhysicalOperator(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -80,7 +81,7 @@ func optimizeSubQueryOp(ctx *context.PlanningContext, op *abstract.SubQuery) (ab
 	return outerOp, nil
 }
 
-func mergeSubQueryOp(ctx *context.PlanningContext, outer *Route, inner *Route, subq *abstract.SubQueryInner) (*Route, error) {
+func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *abstract.SubQueryInner) (*Route, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
 
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
@@ -110,7 +111,7 @@ func mergeSubQueryOp(ctx *context.PlanningContext, outer *Route, inner *Route, s
 }
 
 func tryMergeSubQueryOp(
-	ctx *context.PlanningContext,
+	ctx *plancontext.PlanningContext,
 	outer, subq abstract.PhysicalOperator,
 	subQueryInner *SubQueryInner,
 	joinPredicates []sqlparser.Expr,
@@ -177,7 +178,7 @@ func tryMergeSubQueryOp(
 // outerTree is the joinTree within whose children the subquery lives in
 // the child of joinTree which does not contain the subquery is the otherTree
 func rewriteColumnsInSubqueryOpForApplyJoin(
-	ctx *context.PlanningContext,
+	ctx *plancontext.PlanningContext,
 	innerOp abstract.PhysicalOperator,
 	outerTree *ApplyJoin,
 	subQueryInner *SubQueryInner,
@@ -227,7 +228,7 @@ func rewriteColumnsInSubqueryOpForApplyJoin(
 }
 
 func createCorrelatedSubqueryOp(
-	ctx *context.PlanningContext,
+	ctx *plancontext.PlanningContext,
 	innerOp, outerOp abstract.PhysicalOperator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,

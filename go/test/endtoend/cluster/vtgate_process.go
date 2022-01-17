@@ -30,9 +30,9 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // VtgateProcess is a generic handle for a running vtgate .
@@ -57,7 +57,7 @@ type VtgateProcess struct {
 	VerifyURL             string
 	VSchemaURL            string
 	SysVarSetEnabled      bool
-	PlannerVersion        planbuilder.PlannerVersion
+	PlannerVersion        plancontext.PlannerVersion
 	//Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
@@ -227,7 +227,7 @@ func VtgateProcessInstance(
 	topoPort int,
 	tmpDirectory string,
 	extraArgs []string,
-	plannerVersion planbuilder.PlannerVersion,
+	plannerVersion plancontext.PlannerVersion,
 ) *VtgateProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtgate := &VtgateProcess{

@@ -20,10 +20,10 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func buildCallProcPlan(stmt *sqlparser.CallProc, vschema context.VSchema) (engine.Primitive, error) {
+func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (engine.Primitive, error) {
 	var ks string
 	if !stmt.Name.Qualifier.IsEmpty() {
 		ks = stmt.Name.Qualifier.String()

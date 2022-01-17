@@ -342,7 +342,7 @@ func (cached *Join) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Left.(cachedObject); ok {
@@ -369,10 +369,6 @@ func (cached *Join) CachedSize(alloc bool) int64 {
 		for k := range cached.Vars {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 		}
-	}
-	// field ASTPred vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.ASTPred.(cachedObject); ok {
-		size += cc.CachedSize(true)
 	}
 	return size
 }

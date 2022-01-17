@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -48,9 +46,6 @@ type Join struct {
 	// be built from the LHS result before invoking
 	// the RHS subqquery.
 	Vars map[string]int `json:",omitempty"`
-
-	// ASTPred is the original join condition.
-	ASTPred sqlparser.Expr
 }
 
 // TryExecute performs a non-streaming exec.
@@ -266,9 +261,6 @@ func (jn *Join) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
-	}
-	if jn.ASTPred != nil {
-		other["Predicate"] = sqlparser.String(jn.ASTPred)
 	}
 	if len(jn.Vars) > 0 {
 		other["JoinVars"] = orderedStringIntMap(jn.Vars)

@@ -443,7 +443,6 @@ Gen4++
         "JoinVars": {
           "user_id": 0
         },
-        "Predicate": "`user`.id = music.id",
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -554,7 +553,6 @@ Gen4++
         "JoinVars": {
           "user_id": 0
         },
-        "Predicate": "`user`.id = music.id",
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -893,7 +891,6 @@ Gen4++
     "JoinVars": {
       "u_a": 0
     },
-    "Predicate": "u.a = m.a",
     "TableName": "`user`_music",
     "Inputs": [
       {

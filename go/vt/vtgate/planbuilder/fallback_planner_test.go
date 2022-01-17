@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/assert"
 
@@ -39,8 +39,8 @@ type testPlanner struct {
 
 var _ selectPlanner = (*testPlanner)(nil).plan
 
-func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, context.VSchema) (engine.Primitive, error) {
-	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema context.VSchema) (engine.Primitive, error) {
+func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error) {
 		tp.called = true
 		if tp.panic != nil {
 			panic(tp.panic)
@@ -61,7 +61,7 @@ func TestFallbackPlanner(t *testing.T) {
 	}
 
 	stmt := &sqlparser.Select{}
-	var vschema context.VSchema
+	var vschema plancontext.VSchema
 
 	// first planner succeeds
 	_, _ = fb.plan("query")(stmt, nil, vschema)
@@ -101,7 +101,7 @@ func TestFallbackClonesBeforePlanning(t *testing.T) {
 	stmt := &sqlparser.Select{
 		SelectExprs: sqlparser.SelectExprs{&sqlparser.StarExpr{}},
 	}
-	var vschema context.VSchema
+	var vschema plancontext.VSchema
 
 	// first planner succeeds
 	_, _ = fb.plan("query")(stmt, nil, vschema)

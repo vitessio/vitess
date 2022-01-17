@@ -18,11 +18,12 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
 
-func transformSubQueryOpPlan(ctx *context.PlanningContext, op *physical.SubQueryOp) (logicalPlan, error) {
+func transformSubQueryOpPlan(ctx *plancontext.PlanningContext, op *physical.SubQueryOp) (logicalPlan, error) {
 	innerPlan, err := transformOpToLogicalPlan(ctx, op.Inner)
 	if err != nil {
 		return nil, err
@@ -48,7 +49,7 @@ func transformSubQueryOpPlan(ctx *context.PlanningContext, op *physical.SubQuery
 	return plan, err
 }
 
-func transformCorrelatedSubQueryOpPlan(ctx *context.PlanningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
+func transformCorrelatedSubQueryOpPlan(ctx *plancontext.PlanningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
 	outer, err := transformOpToLogicalPlan(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func transformCorrelatedSubQueryOpPlan(ctx *context.PlanningContext, op *physica
 	return newSemiJoin(outer, inner, op.Vars), nil
 }
 
-func mergeSubQueryOpPlan(ctx *context.PlanningContext, inner, outer logicalPlan, n *physical.SubQueryOp) logicalPlan {
+func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *physical.SubQueryOp) logicalPlan {
 	iroute, ok := inner.(*routeGen4)
 	if !ok {
 		return nil

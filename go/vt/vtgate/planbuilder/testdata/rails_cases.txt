@@ -125,7 +125,6 @@
     "JoinVars": {
       "order2s_id": 0
     },
-    "Predicate": "order2s.id = book6s_order2s.order2_id",
     "TableName": "customer2s, order2s_author5s, book6s_book6s_order2s_supplier5s",
     "Inputs": [
       {
@@ -142,21 +141,19 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,-3,-4",
+        "JoinColumnIndexes": "-2,-3,-4,-5",
         "JoinVars": {
           "book6s_supplier5_id": 0
         },
-        "Predicate": "supplier5s.id = book6s.supplier5_id and book6s_order2s.order2_id = :order2s_id",
         "TableName": "author5s, book6s_book6s_order2s_supplier5s",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-3,-4,-5,-6",
+            "JoinColumnIndexes": "-2,-3,-4,-5,-6",
             "JoinVars": {
               "book6s_id": 0
             },
-            "Predicate": "book6s_order2s.book6_id = book6s.id and book6s_order2s.order2_id = :order2s_id",
             "TableName": "author5s, book6s_book6s_order2s",
             "Inputs": [
               {
@@ -207,6 +204,7 @@
     ]
   }
 }
+Gen4++
 
 # Author5.joins(books: [{orders: :customer}, :supplier]) (with hash join)
 "select /*vt+ ALLOW_HASH_JOIN */ author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id"

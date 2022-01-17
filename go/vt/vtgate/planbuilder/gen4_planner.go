@@ -22,7 +22,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -30,8 +31,8 @@ import (
 var _ selectPlanner = gen4Planner
 var runGen4New = true
 
-func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, context.VSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema) (engine.Primitive, error) {
+func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
@@ -82,7 +83,7 @@ func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars
 	}
 }
 
-func gen4planSQLCalcFoundRows(vschema context.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
+func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -105,7 +106,7 @@ func gen4planSQLCalcFoundRows(vschema context.VSchema, sel *sqlparser.Select, qu
 	return plan.Primitive(), nil
 }
 
-func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema context.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
 	plan, err := newBuildSelectPlan(sel, reservedVars, vschema)
 	if err != nil {
 		return nil, nil, err
@@ -127,7 +128,7 @@ func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparse
 	return nil
 }
 
-func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema) (logicalPlan, error) {
+func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (logicalPlan, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -144,7 +145,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	ctx := context.NewPlanningContext(reservedVars, semTable, vschema)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema)
 	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
@@ -224,7 +225,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(ctx *context.PlanningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
+func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
 	switch node := in.(type) {
 	case *sqlparser.Select:
 		hp := horizonPlanning{
@@ -265,7 +266,7 @@ func planHorizon(ctx *context.PlanningContext, plan logicalPlan, in sqlparser.Se
 
 }
 
-func planOrderByOnUnion(ctx *context.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
+func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
 	qp, err := abstract.CreateQPFromUnion(union, ctx.SemTable)
 	if err != nil {
 		return nil, err

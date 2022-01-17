@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 
@@ -35,8 +35,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, context.VSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema context.VSchema) (engine.Primitive, error) {
+func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
 		if sel.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
@@ -272,8 +272,8 @@ func buildSQLCalcFoundRowsPlan(
 	originalQuery string,
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
-	vschema context.VSchema,
-	planSelect func(reservedVars *sqlparser.ReservedVars, vschema context.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error),
+	vschema plancontext.VSchema,
+	planSelect func(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error),
 ) (logicalPlan, error) {
 	ljt, limitPlan, err := planSelect(reservedVars, vschema, sel)
 	if err != nil {
@@ -325,14 +325,14 @@ func buildSQLCalcFoundRowsPlan(
 	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan, ljt: ljt, cjt: cjt}, nil
 }
 
-func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema context.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
 	ljt := newJointab(reservedVars)
 	frpb := newPrimitiveBuilder(vschema, ljt)
 	err := frpb.processSelect(sel, reservedVars, nil, "")
 	return ljt, frpb.plan, err
 }
 
-func handleDualSelects(sel *sqlparser.Select, vschema context.VSchema) (engine.Primitive, error) {
+func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
 	if !isOnlyDual(sel) {
 		return nil, nil
 	}
@@ -365,7 +365,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema context.VSchema) (engine.P
 	}, nil
 }
 
-func buildLockingPrimitive(sel *sqlparser.Select, vschema context.VSchema) (engine.Primitive, error) {
+func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
 	ks, err := vschema.FirstSortedKeyspace()
 	if err != nil {
 		return nil, err

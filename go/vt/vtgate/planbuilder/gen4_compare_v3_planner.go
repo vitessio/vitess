@@ -19,7 +19,7 @@ package planbuilder
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -29,8 +29,8 @@ type commentDirective struct {
 	onlyV3, onlyGen4 bool
 }
 
-func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, context.VSchema) (engine.Primitive, error) {
-	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema context.VSchema) (engine.Primitive, error) {
+func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema) (engine.Primitive, error) {
 		// we will be switching the planner version to Gen4 and V3 in order to
 		// create instructions using them, thus we make sure to switch back to
 		// the Gen4CompareV3 planner before exiting this method.
@@ -128,7 +128,7 @@ func preliminaryChecks(statement sqlparser.Statement) (bool, bool, []string, err
 	return onlyGen4, hasOrderBy, comments, nil
 }
 
-func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema context.VSchema, query string, version context.PlannerVersion) (engine.Primitive, error) {
+func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema, query string, version plancontext.PlannerVersion) (engine.Primitive, error) {
 	ctxVSchema.SetPlannerVersion(version)
 	stmt := sqlparser.CloneStatement(statement)
 	return createInstructionFor(query, stmt, vars, ctxVSchema, false, false)

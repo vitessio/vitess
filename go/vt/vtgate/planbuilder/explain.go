@@ -19,7 +19,7 @@ package planbuilder
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -31,7 +31,7 @@ import (
 )
 
 // Builds an explain-plan for the given Primitive
-func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema context.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
+func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	switch explain := stmt.(type) {
 	case *sqlparser.ExplainTab:
 		return explainTabPlan(explain, vschema)
@@ -44,7 +44,7 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
 }
 
-func explainTabPlan(explain *sqlparser.ExplainTab, vschema context.VSchema) (engine.Primitive, error) {
+func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (engine.Primitive, error) {
 	table, _, _, _, destination, err := vschema.FindTableOrVindex(explain.Table)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema context.VSchema) (eng
 	}, nil
 }
 
-func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema context.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
+func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	innerInstruction, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err

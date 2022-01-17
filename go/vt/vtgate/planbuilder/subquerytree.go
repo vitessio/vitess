@@ -20,7 +20,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -53,10 +54,10 @@ func (s *subqueryTree) pushOutputColumns([]*sqlparser.ColName, *semantics.SemTab
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push output columns on subquery")
 }
 
-func (s *subqueryTree) pushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
+func (s *subqueryTree) pushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	return s.outer.pushPredicate(ctx, expr)
 }
 
-func (s *subqueryTree) removePredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
+func (s *subqueryTree) removePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	return s.outer.removePredicate(ctx, expr)
 }
