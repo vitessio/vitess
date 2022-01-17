@@ -1008,7 +1008,7 @@ func (itmc *internalTabletManagerClient) GetReplicas(context.Context, *topodatap
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) InitReplica(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias, string, int64) error {
+func (itmc *internalTabletManagerClient) InitReplica(context.Context, *topodatapb.Tablet, *topodatapb.TabletAlias, string, int64, bool) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

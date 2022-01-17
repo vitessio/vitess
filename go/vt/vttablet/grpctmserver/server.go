@@ -420,7 +420,7 @@ func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.I
 	defer s.tm.HandleRPCPanic(ctx, "InitReplica", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.InitReplicaResponse{}
-	return response, s.tm.InitReplica(ctx, request.Parent, request.ReplicationPosition, request.TimeCreatedNs)
+	return response, s.tm.InitReplica(ctx, request.Parent, request.ReplicationPosition, request.TimeCreatedNs, request.GetSemiSync())
 }
 
 func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.DemotePrimaryRequest) (response *tabletmanagerdatapb.DemotePrimaryResponse, err error) {

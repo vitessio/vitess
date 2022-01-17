@@ -120,7 +120,7 @@ type RPCTM interface {
 
 	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
-	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
+	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error
 
 	// Deprecated, use DemotePrimary instead
 	DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)

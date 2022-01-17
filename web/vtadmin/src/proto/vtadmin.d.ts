@@ -17113,6 +17113,9 @@ export namespace tabletmanagerdata {
 
         /** InitReplicaRequest time_created_ns */
         time_created_ns?: (number|Long|null);
+
+        /** InitReplicaRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents an InitReplicaRequest. */
@@ -17132,6 +17135,9 @@ export namespace tabletmanagerdata {
 
         /** InitReplicaRequest time_created_ns. */
         public time_created_ns: (number|Long);
+
+        /** InitReplicaRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new InitReplicaRequest instance using the specified properties.

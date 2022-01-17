@@ -777,7 +777,7 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topod
 }
 
 // InitReplica is part of the tmclient.TabletManagerClient interface.
-func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
+func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -787,6 +787,7 @@ func (client *Client) InitReplica(ctx context.Context, tablet *topodatapb.Tablet
 		Parent:              parent,
 		ReplicationPosition: replicationPosition,
 		TimeCreatedNs:       timeCreatedNS,
+		SemiSync:            semiSync,
 	})
 	return err
 }
