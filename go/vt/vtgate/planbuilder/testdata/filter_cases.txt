@@ -904,7 +904,7 @@ Gen4 plan same as above
     "Variant": "Join",
     "JoinColumnIndexes": "1",
     "JoinVars": {
-      "user_col": 1
+      "user_col": 0
     },
     "Predicate": "`user`.col = user_extra.col and user_extra.user_id = `user`.col",
     "TableName": "`user`_user_extra",
