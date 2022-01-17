@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 
@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 )
 
-func toSQL(ctx *context.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
+func toSQL(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) sqlparser.SelectStatement {
 	q := &queryBuilder{ctx: ctx}
 	buildQuery(op, q)
 	q.produce()
@@ -228,7 +228,7 @@ func (qb *queryBuilder) hasTable(tableName string) bool {
 }
 
 type queryBuilder struct {
-	ctx            *context.PlanningContext
+	ctx            *plancontext.PlanningContext
 	sel            sqlparser.SelectStatement
 	tableIDsInFrom []semantics.TableSet
 	tableNames     []string

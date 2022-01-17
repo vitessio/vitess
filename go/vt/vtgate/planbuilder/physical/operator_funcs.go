@@ -21,12 +21,13 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // PushPredicate is used to push predicates
-func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
+func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *Route:
 		err := op.UpdateRoutingLogic(ctx, expr)
@@ -142,7 +143,7 @@ func PushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstrac
 	}
 }
 
-func PushOutputColumns(ctx *context.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
+func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator, columns ...*sqlparser.ColName) (abstract.PhysicalOperator, []int, error) {
 	switch op := op.(type) {
 	case *Route:
 		retOp, offsets, err := PushOutputColumns(ctx, op.Source, columns...)
@@ -253,7 +254,7 @@ func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 	return columnOffset, len(columnOffset) - 1
 }
 
-func RemovePredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
+func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abstract.PhysicalOperator) (abstract.PhysicalOperator, error) {
 	switch op := op.(type) {
 	case *Route:
 		newSrc, err := RemovePredicate(ctx, expr, op.Source)
@@ -327,7 +328,7 @@ func RemovePredicate(ctx *context.PlanningContext, expr sqlparser.Expr, op abstr
 }
 
 func breakExpressionInLHSandRHS(
-	ctx *context.PlanningContext,
+	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
 ) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {

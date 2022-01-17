@@ -1,4 +1,4 @@
-package context
+package plancontext
 
 import (
 	"vitess.io/vitess/go/mysql/collations"

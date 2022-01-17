@@ -20,7 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -81,7 +81,7 @@ outer:
 	return idxs, nil
 }
 
-func optimizeVindexOp(ctx *context.PlanningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
+func optimizeVindexOp(ctx *plancontext.PlanningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
 	solves := ctx.SemTable.TableSetFor(op.Table.Alias)
 	return &Vindex{
 		OpCode: op.OpCode,

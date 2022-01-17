@@ -771,48 +771,7 @@ Gen4++
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "user_col": 0
-    },
-    "Predicate": "`user`.col = user_extra.col",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
-        "Table": "`user`",
-        "Values": [
-          "INT64(5)"
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 Gen4++
 
 # Multi-route unique vindex route on both routes
@@ -926,48 +885,7 @@ Gen4++
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user_extra.user_id = user.col",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "user_col": 0
-    },
-    "Predicate": "`user`.col = user_extra.col and user_extra.user_id = `user`.col",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
-        "Table": "user_extra",
-        "Values": [
-          ":user_col"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 Gen4++
 
 # Multi-route with non-route constraint, should use first route.
@@ -1019,7 +937,6 @@ Gen4++
     "JoinVars": {
       "user_col": 0
     },
-    "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1262,7 +1179,6 @@ Gen4++
     "JoinVars": {
       "unsharded_id": 0
     },
-    "Predicate": "unsharded.id = `user`.id",
     "TableName": "unsharded_`user`",
     "Inputs": [
       {
@@ -3261,7 +3177,6 @@ Gen4++
     "JoinVars": {
       "user_extra_col": 0
     },
-    "Predicate": "`user`.id = user_extra.col",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -3328,7 +3243,6 @@ Gen4++
     "JoinVars": {
       "user_col": 0
     },
-    "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {

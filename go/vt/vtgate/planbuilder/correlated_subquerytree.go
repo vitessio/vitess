@@ -18,7 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -53,10 +53,10 @@ func (s *correlatedSubqueryTree) pushOutputColumns(colnames []*sqlparser.ColName
 	return s.outer.pushOutputColumns(colnames, semTable)
 }
 
-func (s *correlatedSubqueryTree) pushPredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
+func (s *correlatedSubqueryTree) pushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	return s.outer.pushPredicate(ctx, expr)
 }
 
-func (s *correlatedSubqueryTree) removePredicate(ctx *context.PlanningContext, expr sqlparser.Expr) error {
+func (s *correlatedSubqueryTree) removePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	return s.outer.removePredicate(ctx, expr)
 }

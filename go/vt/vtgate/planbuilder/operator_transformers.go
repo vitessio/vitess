@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 
@@ -39,7 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformOpToLogicalPlan(ctx *context.PlanningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
+func transformOpToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.PhysicalOperator) (logicalPlan, error) {
 	switch op := op.(type) {
 	case *physical.Route:
 		return transformRouteOpPlan(ctx, op)
@@ -60,7 +60,7 @@ func transformOpToLogicalPlan(ctx *context.PlanningContext, op abstract.Physical
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformOpToLogicalPlan)", op)
 }
 
-func transformApplyJoinOpPlan(ctx *context.PlanningContext, n *physical.ApplyJoin) (logicalPlan, error) {
+func transformApplyJoinOpPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJoin) (logicalPlan, error) {
 	// TODO systay we should move the decision of which join to use to the greedy algorithm,
 	// and thus represented as a queryTree
 	// canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
@@ -99,16 +99,15 @@ func transformApplyJoinOpPlan(ctx *context.PlanningContext, n *physical.ApplyJoi
 	//	}, nil
 	// }
 	return &joinGen4{
-		Left:      lhs,
-		Right:     rhs,
-		Cols:      n.Columns,
-		Vars:      n.Vars,
-		Opcode:    opCode,
-		Predicate: n.Predicate,
+		Left:   lhs,
+		Right:  rhs,
+		Cols:   n.Columns,
+		Vars:   n.Vars,
+		Opcode: opCode,
 	}, nil
 }
 
-func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*routeGen4, error) {
+func transformRouteOpPlan(ctx *plancontext.PlanningContext, op *physical.Route) (*routeGen4, error) {
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
 		return nil, err
@@ -139,7 +138,7 @@ func transformRouteOpPlan(ctx *context.PlanningContext, op *physical.Route) (*ro
 
 }
 
-func replaceSubQuery(ctx *context.PlanningContext, sel sqlparser.SelectStatement) {
+func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.SelectStatement) {
 	extractedSubqueries := ctx.SemTable.GetSubqueryNeedingRewrite()
 	if len(extractedSubqueries) == 0 {
 		return
@@ -153,7 +152,7 @@ func replaceSubQuery(ctx *context.PlanningContext, sel sqlparser.SelectStatement
 	}
 }
 
-func getVindexPredicate(ctx *context.PlanningContext, op *physical.Route) sqlparser.Expr {
+func getVindexPredicate(ctx *plancontext.PlanningContext, op *physical.Route) sqlparser.Expr {
 	var condition sqlparser.Expr
 	if op.Selected != nil {
 		if len(op.Selected.ValueExprs) > 0 {
@@ -212,7 +211,7 @@ func getAllTableNames(op *physical.Route) ([]string, error) {
 	return tableNames, nil
 }
 
-func transformUnionOpPlan(ctx *context.PlanningContext, op *physical.Union) (logicalPlan, error) {
+func transformUnionOpPlan(ctx *plancontext.PlanningContext, op *physical.Union) (logicalPlan, error) {
 	var sources []logicalPlan
 	var err error
 	if op.Distinct {
@@ -250,7 +249,7 @@ func transformUnionOpPlan(ctx *context.PlanningContext, op *physical.Union) (log
 
 }
 
-func transformAndMergeOp(ctx *context.PlanningContext, op *physical.Union) (sources []logicalPlan, err error) {
+func transformAndMergeOp(ctx *plancontext.PlanningContext, op *physical.Union) (sources []logicalPlan, err error) {
 	for i, source := range op.Sources {
 		// first we go over all the operator inputs and turn them into logical plans,
 		// including horizon planning
@@ -296,7 +295,7 @@ func transformAndMergeOp(ctx *context.PlanningContext, op *physical.Union) (sour
 	return sources, nil
 }
 
-func transformAndMergeInOrderOp(ctx *context.PlanningContext, op *physical.Union) (sources []logicalPlan, err error) {
+func transformAndMergeInOrderOp(ctx *plancontext.PlanningContext, op *physical.Union) (sources []logicalPlan, err error) {
 	// We go over all the input operators and turn them into logical plans
 	for i, source := range op.Sources {
 		plan, err := createLogicalPlanOp(ctx, source, op.SelectStmts[i])
@@ -322,7 +321,7 @@ func transformAndMergeInOrderOp(ctx *context.PlanningContext, op *physical.Union
 	return sources, nil
 }
 
-func createLogicalPlanOp(ctx *context.PlanningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlanOp(ctx *plancontext.PlanningContext, source abstract.PhysicalOperator, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformOpToLogicalPlan(ctx, source)
 	if err != nil {
 		return nil, err
@@ -339,7 +338,7 @@ func createLogicalPlanOp(ctx *context.PlanningContext, source abstract.PhysicalO
 	return plan, nil
 }
 
-func getCollationsForOp(ctx *context.PlanningContext, n *physical.Union) []collations.ID {
+func getCollationsForOp(ctx *plancontext.PlanningContext, n *physical.Union) []collations.ID {
 	var colls []collations.ID
 	for _, expr := range n.SelectStmts[0].SelectExprs {
 		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
@@ -352,7 +351,7 @@ func getCollationsForOp(ctx *context.PlanningContext, n *physical.Union) []colla
 	return colls
 }
 
-func transformDerivedOpToPlan(ctx *context.PlanningContext, op *physical.Derived) (logicalPlan, error) {
+func transformDerivedOpToPlan(ctx *plancontext.PlanningContext, op *physical.Derived) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased

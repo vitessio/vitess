@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/context"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -95,7 +95,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 	return evalExpr, nil
 }
 
-func (ec *expressionConverter) source(vschema context.VSchema) (engine.Primitive, error) {
+func (ec *expressionConverter) source(vschema plancontext.VSchema) (engine.Primitive, error) {
 	if len(ec.tabletExpressions) == 0 {
 		return &engine.SingleRow{}, nil
 	}
