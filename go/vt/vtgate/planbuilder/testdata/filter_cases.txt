@@ -2279,6 +2279,7 @@ Gen4++
   }
 }
 Gen4 plan same as above
+Gen4++
 
 # SELECT with IS NOT NULL
 "select id from music where id is not null"
