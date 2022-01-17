@@ -57,6 +57,7 @@ func TestSimplifyBuggyQuery(t *testing.T) {
 }
 
 func TestQueryWithNewPlanner(t *testing.T) {
+	t.Skip("not needed to run")
 	query := "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
@@ -78,6 +79,7 @@ func TestQueryWithNewPlanner(t *testing.T) {
 }
 
 func TestSimplifyPanic(t *testing.T) {
+	t.Skip("not needed to run")
 	query := "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
 	vschema := &vschemaWrapper{
 		v:       loadSchema(t, "schema_test.json", true),
