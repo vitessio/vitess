@@ -126,7 +126,7 @@ type RPCTM interface {
 	DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	// Deprecated, use UndoDemotePrimary instead
-	UndoDemoteMaster(ctx context.Context) error
+	UndoDemoteMaster(ctx context.Context, semiSync bool) error
 
 	DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 

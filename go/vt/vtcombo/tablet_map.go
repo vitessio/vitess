@@ -945,7 +945,7 @@ func (itmc *internalTabletManagerClient) DemoteMaster(context.Context, *topodata
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) UndoDemoteMaster(context.Context, *topodatapb.Tablet) error {
+func (itmc *internalTabletManagerClient) UndoDemoteMaster(context.Context, *topodatapb.Tablet, bool) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

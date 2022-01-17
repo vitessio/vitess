@@ -1064,7 +1064,7 @@ func (fra *fakeRPCTM) UndoDemotePrimary(ctx context.Context, semiSync bool) erro
 }
 
 // Deprecated
-func (fra *fakeRPCTM) UndoDemoteMaster(ctx context.Context) error {
+func (fra *fakeRPCTM) UndoDemoteMaster(ctx context.Context, semiSync bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1072,13 +1072,13 @@ func (fra *fakeRPCTM) UndoDemoteMaster(ctx context.Context) error {
 }
 
 func tmRPCTestUndoDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.UndoDemoteMaster(ctx, tablet)
+	err := client.UndoDemoteMaster(ctx, tablet, false)
 	testUndoDemoteMasterCalled = true
 	compareError(t, "UndoDemoteMaster", err, true, testUndoDemoteMasterCalled)
 }
 
 func tmRPCTestUndoDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.UndoDemoteMaster(ctx, tablet)
+	err := client.UndoDemoteMaster(ctx, tablet, false)
 	expectHandleRPCPanic(t, "UndoDemoteMaster", true /*verbose*/, err)
 }
 

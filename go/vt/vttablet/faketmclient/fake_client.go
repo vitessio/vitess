@@ -301,7 +301,7 @@ func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet 
 }
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *FakeTabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	return nil
 }
 

@@ -187,7 +187,7 @@ type TabletManagerClient interface {
 
 	// Deprecated UndoDemoteMaster reverts all changes made by DemoteMaster
 	// To be used if we are unable to promote the chosen new primary
-	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error
+	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
 
 	// DemotePrimary tells the soon-to-be-former primary it's going to change,
 	// and it should go read-only and return its current position.
