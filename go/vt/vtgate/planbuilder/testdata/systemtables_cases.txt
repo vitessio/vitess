@@ -1003,6 +1003,7 @@ Gen4++
     ]
   }
 }
+Gen4++
 
 # join of information_schema queries with select stars exprs
 "select a.*, b.* from information_schema.a a, information_schema.b b"
