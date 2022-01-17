@@ -562,7 +562,7 @@ func (fs *fuzzStore) callSetMaster() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.SetMaster(context.Background(), tablet, parent, int64(timeCreatedNS), pos, false)
+	_ = fs.client.SetMaster(context.Background(), tablet, parent, int64(timeCreatedNS), pos, false, false)
 	return nil
 }
 
