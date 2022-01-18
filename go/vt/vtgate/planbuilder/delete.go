@@ -36,7 +36,7 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 			return nil, err
 		}
 	}
-	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
+	dml, ksidVindex, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +62,9 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: delete on complex table expression")
 		}
 		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edel.Table.Name}, As: aTblExpr.As}
-		edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edel.Table, ksidCol)
-		edel.KsidVindex = ksidVindex
+		edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edel.Table, ksidVindex.Columns)
+		edel.KsidVindex = ksidVindex.Vindex
+		edel.KsidLength = len(ksidVindex.Columns)
 	}
 
 	return edel, nil
