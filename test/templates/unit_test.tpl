@@ -45,6 +45,8 @@ jobs:
         sudo rm -rf /etc/mysql
 
         {{if (eq .Platform "mysql80")}}
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
         # mysql80
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
