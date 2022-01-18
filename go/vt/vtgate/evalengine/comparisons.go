@@ -332,6 +332,10 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	if right.typeof() != querypb.Type_TUPLE {
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
 	}
+	if left.null() {
+		result.setNull()
+		return
+	}
 
 	var foundNull, found bool
 	var righttuple = right.tuple()
