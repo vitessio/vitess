@@ -33,6 +33,7 @@ type Union struct {
 
 var _ abstract.PhysicalOperator = (*Union)(nil)
 
+// TableID implements the PhysicalOperator interface
 func (u *Union) TableID() semantics.TableSet {
 	ts := semantics.EmptyTableSet()
 	for _, source := range u.Sources {
@@ -41,16 +42,20 @@ func (u *Union) TableID() semantics.TableSet {
 	return ts
 }
 
+// UnsolvedPredicates implements the PhysicalOperator interface
 func (u *Union) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
+// CheckValid implements the PhysicalOperator interface
 func (u *Union) CheckValid() error {
 	return nil
 }
 
+// IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
+// Cost implements the PhysicalOperator interface
 func (u *Union) Cost() int {
 	cost := 0
 	for _, source := range u.Sources {
@@ -59,11 +64,12 @@ func (u *Union) Cost() int {
 	return cost
 }
 
+// Clone implements the PhysicalOperator interface
 func (u *Union) Clone() abstract.PhysicalOperator {
-	newOp := &Union{Distinct: u.Distinct}
+	newOp := *u
 	newOp.Sources = make([]abstract.PhysicalOperator, 0, len(u.Sources))
 	for _, source := range u.Sources {
 		newOp.Sources = append(newOp.Sources, source.Clone())
 	}
-	return newOp
+	return &newOp
 }
