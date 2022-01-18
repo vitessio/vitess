@@ -159,15 +159,9 @@ func (er *EvalResult) setNull() {
 	er.collation_ = collationNull
 }
 
-var mysql8 = true
-
 func (er *EvalResult) setBool(b bool) {
 	er.collation_ = collationNumeric
-	if mysql8 {
-		er.type_ = sqltypes.Uint64
-	} else {
-		er.type_ = sqltypes.Int64
-	}
+	er.type_ = sqltypes.Int64
 	if b {
 		er.numeric_ = 1
 	} else {
