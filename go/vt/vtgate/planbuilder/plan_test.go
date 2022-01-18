@@ -245,7 +245,6 @@ func TestSysVarSetDisabled(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
-	// runGen4New = false
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json", true),
 	}
@@ -672,7 +671,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			//       produces the same plan as the V3 planner does
 			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			t.Run(testName, func(t *testing.T) {
-
+				if out != tcase.output2ndPlanner {
+					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output2ndPlanner, out)
+				}
 				if err != nil {
 					out = `"` + out + `"`
 				}
@@ -811,7 +812,6 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			case strings.HasPrefix(nextLine, gen4ErrorPrefix):
 				output2Planner = []byte(nextLine[len(gen4ErrorPrefix) : len(nextLine)-1])
 			}
-
 			testCaseIterator <- testCase{
 				file:             name,
 				lineno:           lineno,
