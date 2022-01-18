@@ -436,7 +436,6 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "JoinVars": {
           "user_id": 0
         },
-        "Predicate": "`user`.id = music.id",
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -546,7 +545,6 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "JoinVars": {
           "user_id": 0
         },
-        "Predicate": "`user`.id = music.id",
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -880,7 +878,6 @@ Gen4 plan same as above
     "JoinVars": {
       "u_a": 0
     },
-    "Predicate": "u.a = m.a",
     "TableName": "`user`_music",
     "Inputs": [
       {

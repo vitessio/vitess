@@ -282,7 +282,6 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
                     "JoinVars": {
                       "ps_partkey": 0
                     },
-                    "Predicate": "p_partkey = ps_partkey",
                     "TableName": "partsupp_part",
                     "Inputs": [
                       {
@@ -364,7 +363,6 @@ Gen4 error: unsupported: cross-shard correlated subquery
             "JoinVars": {
               "o_orderkey": 0
             },
-            "Predicate": "o_orderkey = l_orderkey",
             "TableName": "orders_customer_lineitem",
             "Inputs": [
               {
@@ -374,7 +372,6 @@ Gen4 error: unsupported: cross-shard correlated subquery
                 "JoinVars": {
                   "o_custkey": 0
                 },
-                "Predicate": "c_custkey = o_custkey",
                 "TableName": "orders_customer",
                 "Inputs": [
                   {
@@ -454,7 +451,6 @@ Gen4 error: unsupported: cross-shard correlated subquery
           "l_shipinstruct": 3,
           "l_shipmode": 2
         },
-        "Predicate": "p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity \u003e= 1 and l_quantity \u003c= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity \u003e= 10 and l_quantity \u003c= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' or p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity \u003e= 20 and l_quantity \u003c= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON'",
         "TableName": "lineitem_part",
         "Inputs": [
           {
