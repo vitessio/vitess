@@ -110,6 +110,9 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.lastConn = c
 }
 
+func (th *testHandler) ConnectionReady(_ *Conn) {
+}
+
 func (th *testHandler) ConnectionClosed(_ *Conn) {
 }
 
