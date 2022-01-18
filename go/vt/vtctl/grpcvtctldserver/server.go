@@ -154,6 +154,19 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	return resp, nil
 }
 
+// ApplySchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (*vtctldatapb.ApplySchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
+	defer span.Finish()
+
+	var (
+		sd  *tabletmanagerdatapb.SchemaDefinition
+		err error
+	)
+
+	return &vtctldatapb.ApplySchemaResponse{Schema: sd}, err
+}
+
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyVSchema")
