@@ -115,7 +115,7 @@ func TestTypes(t *testing.T) {
 
 var fuzzMaxTime = flag.Duration("fuzz-duration", 30*time.Second, "maximum time to fuzz for")
 var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
-var fuzzSeed = flag.Int64("fuzz-seed", 1234, "RNG seed when generating fuzz expressions")
+var fuzzSeed = flag.Int64("fuzz-seed", time.Now().Unix(), "RNG seed when generating fuzz expressions")
 var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\d+)\) during query: (.*?)`)
 
 var knownErrors = []*regexp.Regexp{
@@ -251,6 +251,10 @@ func TestGenerateFuzzCases(t *testing.T) {
 		if time.Since(start) > *fuzzMaxTime {
 			break
 		}
+	}
+
+	if len(failures) == 0 {
+		return
 	}
 
 	type evaltest struct {

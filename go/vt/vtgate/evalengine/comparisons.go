@@ -370,24 +370,14 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 		}
 	}
 
-	boolResult := func(b, negate bool, result *EvalResult) {
-		// results from IN operations are always Int64 in MySQL 5.7 and 8+
-		if b == !negate {
-			result.setInt64(1)
-		} else {
-			result.setInt64(0)
-		}
-	}
-
-	if found {
-		boolResult(found, i.Negate, result)
-		return
-	}
-	if foundNull {
+	switch {
+	case found:
+		result.setBool(!i.Negate)
+	case foundNull:
 		result.setNull()
-		return
+	default:
+		result.setBool(i.Negate)
 	}
-	boolResult(found, i.Negate, result)
 }
 
 func (i *InExpr) typeof(env *ExpressionEnv) querypb.Type {
