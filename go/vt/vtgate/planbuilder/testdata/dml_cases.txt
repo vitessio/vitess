@@ -2761,7 +2761,7 @@ Gen4 plan same as above
     "KsidLength": 2,
     "KsidVindex": "multicolIdx",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select cola, colb, colc from multicol_tbl where cola = 1 and colb = 2 for update",
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
     "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
     "Table": "multicol_tbl",
     "Values": [
@@ -2789,7 +2789,7 @@ Gen4 plan same as above
     "KsidLength": 2,
     "KsidVindex": "multicolIdx",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select cola, colb, colc from multicol_tbl where colb = 2 and cola = 1 for update",
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
     "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
     "Table": "multicol_tbl",
     "Values": [
@@ -2817,7 +2817,7 @@ Gen4 plan same as above
     "KsidLength": 2,
     "KsidVindex": "multicolIdx",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select cola, colb, colc from multicol_tbl where colb in (1, 2) and cola = 1 for update",
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola = 1 for update",
     "Query": "delete from multicol_tbl where colb in (1, 2) and cola = 1",
     "Table": "multicol_tbl",
     "Values": [
@@ -2845,7 +2845,7 @@ Gen4 plan same as above
     "KsidLength": 2,
     "KsidVindex": "multicolIdx",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select cola, colb, colc from multicol_tbl where colb in (1, 2) and cola in (3, 4) for update",
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola in (3, 4) for update",
     "Query": "delete from multicol_tbl where colb in (1, 2) and cola in (3, 4)",
     "Table": "multicol_tbl",
     "Values": [
@@ -2871,12 +2871,12 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
-      "colc_map:3"
+      "colc_map:4"
     ],
     "KsidLength": 2,
     "KsidVindex": "multicolIdx",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select cola, colb, colc, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
+    "OwnedVindexQuery": "select cola, colb, colc, `name`, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
     "Query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
     "Table": "multicol_tbl",
     "Values": [
