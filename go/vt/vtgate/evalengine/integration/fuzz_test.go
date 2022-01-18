@@ -75,8 +75,6 @@ func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
 }
 
 func TestTypes(t *testing.T) {
-	t.Skipf("temporarily disabled because of MySQL upgrade")
-
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
