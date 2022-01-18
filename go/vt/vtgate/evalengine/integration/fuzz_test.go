@@ -27,14 +27,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/simplifier"
-
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/simplifier"
 )
 
 type (
@@ -79,8 +75,6 @@ func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
 }
 
 func TestTypes(t *testing.T) {
-	t.Skipf("temporarily disabled because of MySQL upgrade")
-
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
@@ -117,8 +111,9 @@ func TestTypes(t *testing.T) {
 	}
 }
 
+var fuzzMaxTime = flag.Duration("fuzz-duration", 30*time.Second, "maximum time to fuzz for")
 var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
-var fuzzSeed = flag.Int64("fuzz-seed", 1234, "RNG seed when generating fuzz expressions")
+var fuzzSeed = flag.Int64("fuzz-seed", time.Now().Unix(), "RNG seed when generating fuzz expressions")
 var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\d+)\) during query: (.*?)`)
 
 var knownErrors = []*regexp.Regexp{
@@ -187,14 +182,6 @@ func TestGenerateFuzzCases(t *testing.T) {
 	if *fuzzMaxFailures <= 0 {
 		t.Skipf("skipping fuzz test generation")
 	}
-
-	type evaltest struct {
-		Query string
-		Value string `json:",omitempty"`
-		Error string `json:",omitempty"`
-	}
-
-	var golden []evaltest
 	var gen = gencase{
 		rand:         rand.New(rand.NewSource(*fuzzSeed)),
 		ratioTuple:   8,
@@ -211,7 +198,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
-	bothReturnSameResult := func(expr sqlparser.Expr) comparisonResult {
+	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
 		eval, evaluated, localErr := safeEvaluate(query)
@@ -225,58 +212,81 @@ func TestGenerateFuzzCases(t *testing.T) {
 			remoteErr = fmt.Errorf(syntaxErr)
 		}
 
-		res := comparisonResult{
+		res := mismatch{
+			expr:      expr,
 			localErr:  localErr,
 			remoteErr: remoteErr,
 			evaluated: evaluated,
 		}
-
 		if evaluated {
 			res.localVal = eval.Value().String()
 		}
-
 		if remoteErr == nil {
 			res.remoteVal = remote.Rows[0][0].String()
 		}
-
-		return res
+		if res.Error() != "" {
+			return &res
+		}
+		return nil
 	}
 
-	for len(golden) < *fuzzMaxFailures {
+	var failures []*mismatch
+	var start = time.Now()
+	for len(failures) < *fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 		stmt, err := sqlparser.Parse(query)
-		require.NoError(t, err)
-		t.Run(query, func(t *testing.T) {
-			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+		if err != nil {
+			t.Fatal(err)
+		}
 
-			resultCmp := bothReturnSameResult(astExpr)
-			diff := resultCmp.diff()
-			if diff == "" {
-				return
+		astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+
+		if fail := compareWithMySQL(astExpr); fail != nil {
+			failures = append(failures, fail)
+			t.Errorf("mismatch: %v", fail.Error())
+		}
+
+		if time.Since(start) > *fuzzMaxTime {
+			break
+		}
+	}
+
+	if len(failures) == 0 {
+		return
+	}
+
+	type evaltest struct {
+		Query string
+		Value string `json:",omitempty"`
+		Error string `json:",omitempty"`
+	}
+	var golden []evaltest
+
+	for _, fail := range failures {
+		failErr := fail.Error()
+		start := time.Now()
+		simplified := simplifier.SimplifyExpr(fail.expr, func(expr sqlparser.Expr) bool {
+			err := compareWithMySQL(expr)
+			if err == nil {
+				return false
 			}
-
-			log.Infof("found inconsistency - will try to simplify: %s", query)
-
-			astExpr = simplifier.SimplifyExpr(astExpr, func(expr sqlparser.Expr) bool {
-				return bothReturnSameResult(expr).diff() == diff
-			})
-
-			query = "SELECT " + sqlparser.String(astExpr)
-
-			log.Infof("simplified to: %s", query)
-			t.Errorf("%s", diff)
-			if resultCmp.remoteErr != nil {
-				golden = append(golden, evaltest{
-					Query: query,
-					Error: resultCmp.remoteErr.Error(),
-				})
-			} else {
-				golden = append(golden, evaltest{
-					Query: query,
-					Value: resultCmp.remoteVal,
-				})
-			}
+			return err.Error() == failErr
 		})
+
+		t.Logf("simplified\n\t%s\n\t%s\n(%v)", sqlparser.String(fail.expr), sqlparser.String(simplified), time.Since(start))
+
+		query := "SELECT " + sqlparser.String(simplified)
+		if fail.remoteErr != nil {
+			golden = append(golden, evaltest{
+				Query: query,
+				Error: fail.remoteErr.Error(),
+			})
+		} else {
+			golden = append(golden, evaltest{
+				Query: query,
+				Value: fail.remoteVal,
+			})
+		}
 	}
 
 	out, err := os.Create(fmt.Sprintf("testdata/mysql_golden_%d.json", time.Now().Unix()))
@@ -287,16 +297,18 @@ func TestGenerateFuzzCases(t *testing.T) {
 
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
+	enc.SetEscapeHTML(false)
 	enc.Encode(golden)
 }
 
-type comparisonResult struct {
+type mismatch struct {
+	expr                sqlparser.Expr
 	localErr, remoteErr error
 	localVal, remoteVal string
 	evaluated           bool
 }
 
-func (cr comparisonResult) diff() string {
+func (cr *mismatch) Error() string {
 	if cr.localErr != nil {
 		if cr.remoteErr == nil {
 			return fmt.Sprintf("%v (eval=%v); mysql response: %s", cr.localErr, cr.evaluated, cr.remoteVal)
