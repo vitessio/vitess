@@ -40,6 +40,8 @@ func perm1(a []string, f func([]string), i int) {
 }
 
 func TestAllComparisons(t *testing.T) {
+	t.Skipf("temporarily disabled because of MySQL upgrade")
+
 	var elems = []string{"NULL", "-1", "0", "1"}
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 

@@ -32,6 +32,9 @@ jobs:
 
     - name: Get dependencies
       run: |
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+
         # Setup MySQL 8.0
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
@@ -96,4 +99,3 @@ jobs:
         # print test output
         cat output.txt
       if: always()
-
