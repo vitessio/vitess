@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -702,13 +700,25 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rowColValues, isSingleVal, err := generateRowColValues(bindVars, route.Values)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rss, mapVals, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, true /* shardIdsNeeded */)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
+}
+
+func generateRowColValues(bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
 	// gather values from all the column in the vindex
 	var multiColValues [][]sqltypes.Value
-	var err error
 	var lv []sqltypes.Value
 	isSingleVal := map[int]interface{}{}
 	env := evalengine.EnvWithBindVars(bindVars)
-	for colIdx, rvalue := range route.Values {
+	for colIdx, rvalue := range values {
 		result, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
@@ -740,12 +750,7 @@ func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]
 	for idx := 1; idx < len(multiColValues); idx++ {
 		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
 	}
-
-	rss, mapVals, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, true /* shardIdsNeeded */)
-	if err != nil {
-		return nil, nil, err
-	}
-	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
+	return rowColValues, isSingleVal, nil
 }
 
 // buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input
@@ -897,33 +902,6 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace 
 	return rss[0], ksid, nil
 }
 
-func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey []sqltypes.Value) ([]*srvtopo.ResolvedShard, error) {
-	destinations, err := vindex.Map(vcursor, vindexKey)
-	if err != nil {
-		return nil, err
-	}
-	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
-	if err != nil {
-		return nil, err
-	}
-	return rss, nil
-}
-
-func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {
-	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
-	if err != nil {
-		return nil, err
-	}
-	switch ksid := destinations[0].(type) {
-	case key.DestinationKeyspaceID:
-		return ksid, nil
-	case key.DestinationNone:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
-	}
-}
-
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
@@ -960,15 +938,6 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 		shardVars[i] = newbv
 	}
 	return shardVars
-}
-
-func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
-	for _, rs := range rss {
-		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "supported only for primary tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
-		}
-	}
-	return nil
 }
 
 func (route *Route) description() PrimitiveDescription {
