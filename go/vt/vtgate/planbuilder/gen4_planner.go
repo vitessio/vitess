@@ -159,7 +159,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	plan, err := transformOpToLogicalPlan(ctx, physOp)
+	plan, err := transformToLogicalPlan(ctx, physOp)
 	if err != nil {
 		return nil, err
 	}
