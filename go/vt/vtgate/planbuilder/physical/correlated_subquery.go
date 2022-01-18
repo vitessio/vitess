@@ -46,14 +46,17 @@ type (
 var _ abstract.PhysicalOperator = (*SubQueryOp)(nil)
 var _ abstract.PhysicalOperator = (*CorrelatedSubQueryOp)(nil)
 
+// TableID implements the PhysicalOperator interface
 func (s *SubQueryOp) TableID() semantics.TableSet {
 	return s.Inner.TableID().Merge(s.Outer.TableID())
 }
 
+// UnsolvedPredicates implements the PhysicalOperator interface
 func (s *SubQueryOp) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return append(s.Outer.UnsolvedPredicates(semTable), s.Inner.UnsolvedPredicates(semTable)...)
 }
 
+// CheckValid implements the PhysicalOperator interface
 func (s *SubQueryOp) CheckValid() error {
 	err := s.Inner.CheckValid()
 	if err != nil {
@@ -62,12 +65,15 @@ func (s *SubQueryOp) CheckValid() error {
 	return s.Outer.CheckValid()
 }
 
+// IPhysical implements the PhysicalOperator interface
 func (s *SubQueryOp) IPhysical() {}
 
+// Cost implements the PhysicalOperator interface
 func (s *SubQueryOp) Cost() int {
 	return s.Inner.Cost() + s.Outer.Cost()
 }
 
+// Clone implements the PhysicalOperator interface
 func (s *SubQueryOp) Clone() abstract.PhysicalOperator {
 	result := &SubQueryOp{
 		Outer:     s.Outer.Clone(),
