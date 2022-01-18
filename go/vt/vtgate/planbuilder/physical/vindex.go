@@ -81,7 +81,7 @@ outer:
 	return idxs, nil
 }
 
-func optimizeVindexOp(ctx *plancontext.PlanningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
+func optimizeVindex(ctx *plancontext.PlanningContext, op *abstract.Vindex) (abstract.PhysicalOperator, error) {
 	solves := ctx.SemTable.TableSetFor(op.Table.Alias)
 	return &Vindex{
 		OpCode: op.OpCode,

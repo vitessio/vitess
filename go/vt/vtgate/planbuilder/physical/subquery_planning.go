@@ -10,7 +10,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQueryOp(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (abstract.PhysicalOperator, error) {
 	outerOp, err := CreatePhysicalOperator(ctx, op.Outer)
 	if err != nil {
 		return nil, err
@@ -115,13 +115,13 @@ func tryMergeSubQueryOp(
 	outer, subq abstract.PhysicalOperator,
 	subQueryInner *SubQueryInner,
 	joinPredicates []sqlparser.Expr,
-	merger mergeOpFunc,
+	merger mergeFunc,
 ) (abstract.PhysicalOperator, error) {
 	var merged abstract.PhysicalOperator
 	var err error
 	switch outerOp := outer.(type) {
 	case *Route:
-		merged, err = tryMergeOp(ctx, outerOp, subq, joinPredicates, merger)
+		merged, err = tryMerge(ctx, outerOp, subq, joinPredicates, merger)
 		if err != nil {
 			return nil, err
 		}
