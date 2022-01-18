@@ -55,6 +55,15 @@ func (client *gRPCVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctl
 	return client.c.ApplyRoutingRules(ctx, in, opts...)
 }
 
+// ApplySchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ApplySchema(ctx context.Context, in *vtctldatapb.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplySchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ApplySchema(ctx, in, opts...)
+}
+
 // ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	if client.c == nil {

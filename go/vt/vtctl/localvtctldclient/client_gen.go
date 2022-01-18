@@ -41,6 +41,11 @@ func (client *localVtctldClient) ApplyRoutingRules(ctx context.Context, in *vtct
 	return client.s.ApplyRoutingRules(ctx, in)
 }
 
+// ApplySchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ApplySchema(ctx context.Context, in *vtctldatapb.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplySchemaResponse, error) {
+	return client.s.ApplySchema(ctx, in)
+}
+
 // ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	return client.s.ApplyVSchema(ctx, in)
