@@ -61,29 +61,6 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	return nil
 }
 
-func (rp *routeTree) findSysInfoRoutingPredicatesGen4(reservedVars *sqlparser.ReservedVars) error {
-	for _, pred := range rp.predicates {
-		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
-		if err != nil {
-			return err
-		}
-		if out == nil {
-			// we didn't find a predicate to use for routing, continue to look for next predicate
-			continue
-		}
-
-		if isTableSchema {
-			rp.SysTableTableSchema = append(rp.SysTableTableSchema, out)
-		} else {
-			if rp.SysTableTableName == nil {
-				rp.SysTableTableName = map[string]evalengine.Expr{}
-			}
-			rp.SysTableTableName[bvName] = out
-		}
-	}
-	return nil
-}
-
 func findOtherComparator(cmp *sqlparser.ComparisonExpr) (bool, sqlparser.Expr, sqlparser.Expr, func(arg sqlparser.Argument)) {
 	if schema, table := isTableSchemaOrName(cmp.Left); schema || table {
 		return schema, cmp.Left, cmp.Right, func(arg sqlparser.Argument) {

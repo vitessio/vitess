@@ -27,12 +27,14 @@ import (
 type Concatenate struct {
 	Distinct    bool
 	SelectStmts []*sqlparser.Select
-	Sources     []Operator
+	Sources     []LogicalOperator
 	OrderBy     sqlparser.OrderBy
 	Limit       *sqlparser.Limit
 }
 
-var _ Operator = (*Concatenate)(nil)
+var _ LogicalOperator = (*Concatenate)(nil)
+
+func (*Concatenate) iLogical() {}
 
 // TableID implements the Operator interface
 func (c *Concatenate) TableID() semantics.TableSet {
@@ -52,6 +54,7 @@ func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.Sem
 		if _, isStarExpr := c.SelectStmts[index].SelectExprs[0].(*sqlparser.StarExpr); !isStarExpr {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 		}
+
 		err := source.PushPredicate(expr, semTable)
 		if err != nil {
 			return err
@@ -77,8 +80,8 @@ func (c *Concatenate) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (c *Concatenate) Compact(*semantics.SemTable) (Operator, error) {
-	var newSources []Operator
+func (c *Concatenate) Compact(*semantics.SemTable) (LogicalOperator, error) {
+	var newSources []LogicalOperator
 	var newSels []*sqlparser.Select
 	for i, source := range c.Sources {
 		other, isConcat := source.(*Concatenate)

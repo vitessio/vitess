@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -42,8 +41,6 @@ type hashJoin struct {
 	// The keys correspond to the column offset in the inputs where
 	// the join columns can be found
 	LHSKey, RHSKey int
-
-	Predicate sqlparser.Expr
 
 	ComparisonType querypb.Type
 
@@ -68,7 +65,6 @@ func (hj *hashJoin) Primitive() engine.Primitive {
 		Opcode:         hj.Opcode,
 		LHSKey:         hj.LHSKey,
 		RHSKey:         hj.RHSKey,
-		ASTPred:        hj.Predicate,
 		ComparisonType: hj.ComparisonType,
 		Collation:      hj.Collation,
 	}

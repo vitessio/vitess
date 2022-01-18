@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/require"
 
@@ -42,7 +42,7 @@ type ClusterConfig struct {
 	vtgatePort           int
 	vtgateGrpcPort       int
 	vtgateMySQLPort      int
-	vtgatePlannerVersion planbuilder.PlannerVersion
+	vtgatePlannerVersion plancontext.PlannerVersion
 	tabletTypes          string
 	tabletPortBase       int
 	tabletGrpcPortBase   int

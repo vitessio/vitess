@@ -307,7 +307,6 @@ Gen4 plan same as above
     "JoinVars": {
       "user_index_id": 0
     },
-    "Predicate": "unsharded.id = user_index.id",
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -391,7 +390,6 @@ Gen4 plan same as above
     "JoinVars": {
       "user_index_id": 0
     },
-    "Predicate": "unsharded.id = user_index.id",
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -475,7 +473,6 @@ Gen4 plan same as above
     "JoinVars": {
       "user_index_id": 0
     },
-    "Predicate": "unsharded.id = user_index.id",
     "TableName": "_unsharded",
     "Inputs": [
       {
@@ -559,7 +556,6 @@ Gen4 plan same as above
     "JoinVars": {
       "ui_id": 0
     },
-    "Predicate": "unsharded.id = ui.id",
     "TableName": "_unsharded",
     "Inputs": [
       {

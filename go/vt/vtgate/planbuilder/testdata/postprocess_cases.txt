@@ -694,7 +694,6 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
-    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -788,7 +787,6 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
-    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -883,7 +881,6 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
-    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1037,7 +1034,6 @@ Gen4 plan same as above
     "JoinVars": {
       "user_id": 0
     },
-    "Predicate": "`user`.id = music.id",
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -1232,7 +1228,6 @@ Gen4 plan same as above
     "JoinVars": {
       "u_col": 0
     },
-    "Predicate": "u.col = e.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
