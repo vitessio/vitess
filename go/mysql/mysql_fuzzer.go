@@ -87,6 +87,9 @@ type fuzztestRun struct{}
 func (t fuzztestRun) NewConnection(c *Conn) {
 }
 
+func (t fuzztestRun) ConnectionReady(c *Conn) {
+}
+
 func (t fuzztestRun) ConnectionClosed(c *Conn) {
 }
 
@@ -273,6 +276,9 @@ func (th *fuzzTestHandler) NewConnection(c *Conn) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.lastConn = c
+}
+
+func (th *fuzzTestHandler) ConnectionReady(_ *Conn) {
 }
 
 func (th *fuzzTestHandler) ConnectionClosed(_ *Conn) {
