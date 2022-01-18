@@ -38,6 +38,8 @@ var (
 var waitmysql = flag.Bool("waitmysql", false, "")
 
 func mysqlconn(t *testing.T) *mysql.Conn {
+	t.Skipf("temporarily disabled because of MySQL upgrade")
+
 	conn, err := mysql.Connect(context.Background(), &connParams)
 	if err != nil {
 		t.Fatal(err)
