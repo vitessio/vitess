@@ -4,6 +4,9 @@
 
 ## Major Changes
 
+### vtgate -gateway_implementation flag is deprecated (and ignored)
+Support for `discoverygateway` is being dropped. `tabletgateway` is now the only supported implementation. Scripts using this flag should be updated to remove the flag as it will be deleted in the next release.
+
 ### vttablet -use_super_read_only flag now defaults to true
 The default value used to be false. What this means is that during a failover, we will set `super_read_only` on database flavors that support them (MySQL 5.7+ and Percona 5.7+).
 In addition, all Vitess-managed databases will be started with `super-read-only` in the cnf file.

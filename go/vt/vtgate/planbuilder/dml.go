@@ -29,74 +29,107 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+type (
+	// costDML is used to compare the cost of vindexOptionDML
+	costDML struct {
+		vindexCost int
+		isUnique   bool
+		opCode     engine.DMLOpcode
+	}
+
+	// vindexPlusPredicatesDML is a struct used to store all the predicates that the vindex can be used to query
+	vindexPlusPredicatesDML struct {
+		colVindex *vindexes.ColumnVindex
+
+		// during planning, we store the alternatives found for this DML in this slice
+		options []*vindexOptionDML
+	}
+
+	// vindexOptionDML stores the information needed to know if we have all the information needed to use a vindex
+	vindexOptionDML struct {
+		ready  bool
+		values []evalengine.Expr
+		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
+		colsSeen    map[string]interface{}
+		opcode      engine.DMLOpcode
+		foundVindex vindexes.Vindex
+		cost        costDML
+	}
+)
+
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
 func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
 	engine.DMLOpcode,
-	vindexes.SingleColumn,
-	string,
-	vindexes.SingleColumn,
+	*vindexes.ColumnVindex,
+	vindexes.Vindex,
 	[]evalengine.Expr,
 	error,
 ) {
-	var ksidVindex vindexes.SingleColumn
-	var ksidCol string
-	for _, index := range table.Ordered {
-		if !index.IsUnique() {
-			continue
-		}
-		single, ok := index.Vindex.(vindexes.SingleColumn)
-		if !ok {
-			continue
-		}
-		if ksidCol == "" {
-			ksidCol = sqlparser.String(index.Columns[0])
-			ksidVindex = single
-		}
-		if where == nil {
-			return engine.Scatter, ksidVindex, ksidCol, nil, nil, nil
-		}
+	// Check that we have a primary vindex which is valid
+	if len(table.ColumnVindexes) == 0 || !table.ColumnVindexes[0].IsUnique() {
+		return engine.Scatter, nil, nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, table.Name)
+	}
+	// ksidVindex is the primary vindex
+	ksidVindex := table.ColumnVindexes[0]
+	if where == nil {
+		return engine.Scatter, ksidVindex, nil, nil, nil
+	}
 
-		if expr, op := getMatch(where.Expr, index.Columns[0]); expr != nil {
-			opcode := engine.Equal
-			if op == sqlparser.InOp {
-				opcode = engine.In
-			} else if lu, isLu := single.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
-				// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
-				// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
-				continue
-			}
-			return opcode, ksidVindex, ksidCol, single, []evalengine.Expr{expr}, nil
+	filters := sqlparser.SplitAndExpression(nil, where.Expr)
+	// go over the vindexes in the order of increasing cost
+	for _, colVindex := range table.Ordered {
+		if !colVindex.IsUnique() {
+			continue
+		}
+		if lu, isLu := colVindex.Vindex.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
+			// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
+			// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
+			continue
+		}
+		// get the best vindex option that can be used for this vindexes.ColumnVindex
+		if vindexOption := getBestVindexOption(filters, colVindex); vindexOption != nil {
+			return vindexOption.opcode, ksidVindex, colVindex.Vindex, vindexOption.values, nil
 		}
 	}
-	if ksidVindex == nil {
-		return engine.Scatter, nil, "", nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, table.Name)
-	}
-	return engine.Scatter, ksidVindex, ksidCol, nil, nil, nil
+	return engine.Scatter, ksidVindex, nil, nil, nil
 }
 
-// getMatch returns the matched value if there is an equality
-// constraint on the specified column that can be used to
-// decide on a route.
-func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (evalengine.Expr, sqlparser.ComparisonExprOperator) {
-	filters := sqlparser.SplitAndExpression(nil, node)
-	for _, filter := range filters {
+// getBestVindexOption returns the best vindex option that can be used for this vindexes.ColumnVindex
+// It returns nil if there is no suitable way to use the ColumnVindex
+func getBestVindexOption(exprs []sqlparser.Expr, index *vindexes.ColumnVindex) *vindexOptionDML {
+	vindexPlusPredicates := &vindexPlusPredicatesDML{
+		colVindex: index,
+	}
+	for _, filter := range exprs {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
 		if !ok {
 			continue
 		}
-		if !nameMatch(comparison.Left, col) {
+		var colName *sqlparser.ColName
+		var valExpr sqlparser.Expr
+		if col, ok := comparison.Left.(*sqlparser.ColName); ok {
+			colName = col
+			valExpr = comparison.Right
+		} else if col, ok := comparison.Right.(*sqlparser.ColName); ok {
+			colName = col
+			valExpr = comparison.Left
+		} else {
 			continue
 		}
+
+		var opcode engine.DMLOpcode
 		switch comparison.Operator {
 		case sqlparser.EqualOp:
-			if !sqlparser.IsValue(comparison.Right) {
+			if !sqlparser.IsValue(valExpr) {
 				continue
 			}
+			opcode = engine.Equal
 		case sqlparser.InOp:
-			if !sqlparser.IsSimpleTuple(comparison.Right) {
+			if !sqlparser.IsSimpleTuple(valExpr) {
 				continue
 			}
+			opcode = engine.In
 		default:
 			continue
 		}
@@ -104,22 +137,155 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (evalengine.Expr, sql
 		if err != nil {
 			continue
 		}
-		return expr, comparison.Operator
+		addVindexOptions(colName, expr, opcode, vindexPlusPredicates)
 	}
-	return nil, 0
+	return vindexPlusPredicates.bestOption()
 }
 
-func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
-	colName, ok := node.(*sqlparser.ColName)
-	return ok && colName.Name.Equal(col)
+// bestOption returns the option which is ready and has the lowest associated cost
+func (vpp *vindexPlusPredicatesDML) bestOption() *vindexOptionDML {
+	var best *vindexOptionDML
+	for _, option := range vpp.options {
+		if option.ready {
+			if best == nil || lessCostDML(option.cost, best.cost) {
+				best = option
+			}
+		}
+	}
+	return best
 }
 
-func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, vindexes.SingleColumn, string, error) {
+// lessCostDML compares two costDML and returns true if the first cost is cheaper than the second
+func lessCostDML(c1, c2 costDML) bool {
+	switch {
+	case c1.opCode != c2.opCode:
+		return c1.opCode < c2.opCode
+	case c1.isUnique == c2.isUnique:
+		return c1.vindexCost <= c2.vindexCost
+	default:
+		return c1.isUnique
+	}
+}
+
+// addVindexOptions adds new vindexOptionDML if it matches any column of the vindexes.ColumnVindex
+func addVindexOptions(column *sqlparser.ColName, value evalengine.Expr, opcode engine.DMLOpcode, v *vindexPlusPredicatesDML) {
+	switch v.colVindex.Vindex.(type) {
+	case vindexes.SingleColumn:
+		col := v.colVindex.Columns[0]
+		if column.Name.Equal(col) {
+			// single column vindex - just add the option
+			vindex := v.colVindex
+			v.options = append(v.options, &vindexOptionDML{
+				values:      []evalengine.Expr{value},
+				opcode:      opcode,
+				foundVindex: vindex.Vindex,
+				cost:        costForDML(v.colVindex, opcode),
+				ready:       true,
+			})
+		}
+	case vindexes.MultiColumn:
+		colLoweredName := ""
+		indexOfCol := -1
+		for idx, col := range v.colVindex.Columns {
+			if column.Name.Equal(col) {
+				colLoweredName = column.Name.Lowered()
+				indexOfCol = idx
+				break
+			}
+		}
+		if colLoweredName == "" {
+			break
+		}
+
+		var newOption []*vindexOptionDML
+		for _, op := range v.options {
+			if op.ready {
+				continue
+			}
+			_, isPresent := op.colsSeen[colLoweredName]
+			if isPresent {
+				continue
+			}
+			option := copyOptionDML(op)
+			option.updateWithNewColumn(colLoweredName, indexOfCol, value, v.colVindex, opcode)
+			newOption = append(newOption, option)
+		}
+		v.options = append(v.options, newOption...)
+
+		// multi column vindex - just always add as new option
+		option := createOptionDML(v.colVindex)
+		option.updateWithNewColumn(colLoweredName, indexOfCol, value, v.colVindex, opcode)
+		v.options = append(v.options, option)
+	}
+}
+
+// copyOptionDML is used to copy vindexOptionDML
+func copyOptionDML(orig *vindexOptionDML) *vindexOptionDML {
+	colsSeen := make(map[string]interface{}, len(orig.colsSeen))
+	values := make([]evalengine.Expr, len(orig.values))
+
+	copy(values, orig.values)
+	for k, v := range orig.colsSeen {
+		colsSeen[k] = v
+	}
+	vo := &vindexOptionDML{
+		values:      values,
+		colsSeen:    colsSeen,
+		opcode:      orig.opcode,
+		foundVindex: orig.foundVindex,
+		cost:        orig.cost,
+	}
+	return vo
+}
+
+// updateWithNewColumn is used to update vindexOptionDML with a new column that matches one of its unseen columns
+func (option *vindexOptionDML) updateWithNewColumn(colLoweredName string, indexOfCol int, value evalengine.Expr, colVindex *vindexes.ColumnVindex, opcode engine.DMLOpcode) {
+	option.colsSeen[colLoweredName] = true
+	option.values[indexOfCol] = value
+	option.ready = len(option.colsSeen) == len(colVindex.Columns)
+	if option.opcode < opcode {
+		option.opcode = opcode
+		option.cost = costForDML(colVindex, opcode)
+	}
+}
+
+// createOptionDML is used to create a vindexOptionDML
+func createOptionDML(
+	colVindex *vindexes.ColumnVindex,
+) *vindexOptionDML {
+	values := make([]evalengine.Expr, len(colVindex.Columns))
+	vindex := colVindex.Vindex
+
+	return &vindexOptionDML{
+		values:      values,
+		colsSeen:    map[string]interface{}{},
+		foundVindex: vindex,
+	}
+}
+
+// costForDML returns a cost struct to make route choices easier to compare
+func costForDML(foundVindex *vindexes.ColumnVindex, opcode engine.DMLOpcode) costDML {
+	switch opcode {
+	// For these opcodes, we should not have a vindex, so we just return the opcode as the cost
+	case engine.Unsharded, engine.Scatter:
+		return costDML{
+			opCode: opcode,
+		}
+	}
+
+	return costDML{
+		vindexCost: foundVindex.Cost(),
+		isUnique:   foundVindex.IsUnique(),
+		opCode:     opcode,
+	}
+}
+
+func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, *vindexes.ColumnVindex, error) {
 	edml := &engine.DML{}
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	rb, err := pb.processDMLTable(tableExprs, reservedVars, nil)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, err
 	}
 	edml.Keyspace = rb.eroute.Keyspace
 	if !edml.Keyspace.Sharded {
@@ -130,17 +296,17 @@ func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.St
 		if pb.finalizeUnshardedDMLSubqueries(reservedVars, subqueryArgs...) {
 			vschema.WarnUnshardedOnly("subqueries can't be sharded in DML")
 		} else {
-			return nil, nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
+			return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
 		}
 		edml.Opcode = engine.Unsharded
 		// Generate query after all the analysis. Otherwise table name substitutions for
 		// routed tables won't happen.
 		edml.Query = generateQuery(stmt)
-		return edml, nil, "", nil
+		return edml, nil, nil
 	}
 
 	if hasSubquery(stmt) {
-		return nil, nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
 	}
 
 	// Generate query after all the analysis. Otherwise table name substitutions for
@@ -155,43 +321,49 @@ func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.St
 	edml.QueryTimeout = queryTimeout(directives)
 
 	if len(pb.st.tables) != 1 {
-		return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table %s statement is not supported in sharded database", dmlType)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table %s statement is not supported in sharded database", dmlType)
 	}
 	for _, tval := range pb.st.tables {
 		// There is only one table.
 		edml.Table = tval.vschemaTable
 	}
 
-	routingType, ksidVindex, ksidCol, vindex, values, err := getDMLRouting(where, edml.Table)
+	routingType, ksidVindex, vindex, values, err := getDMLRouting(where, edml.Table)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, err
 	}
 
 	if rb.eroute.TargetDestination != nil {
 		if rb.eroute.TargetTabletType != topodatapb.TabletType_PRIMARY {
-			return nil, nil, "", vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %s statement with a replica target", dmlType)
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %s statement with a replica target", dmlType)
 		}
 		edml.Opcode = engine.ByDestination
 		edml.TargetDestination = rb.eroute.TargetDestination
-		return edml, ksidVindex, ksidCol, nil
+		return edml, ksidVindex, nil
 	}
 
 	edml.Opcode = routingType
 	if routingType == engine.Scatter {
 		if limit != nil {
-			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard %s with limit is not supported", dmlType)
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard %s with limit is not supported", dmlType)
 		}
 	} else {
 		edml.Vindex = vindex
 		edml.Values = values
 	}
 
-	return edml, ksidVindex, ksidCol, nil
+	return edml, ksidVindex, nil
 }
 
-func generateDMLSubquery(tblExpr sqlparser.TableExpr, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCol string) string {
+func generateDMLSubquery(tblExpr sqlparser.TableExpr, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCols []sqlparser.ColIdent) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select %s", ksidCol)
+	for idx, col := range ksidCols {
+		if idx == 0 {
+			buf.Myprintf("select %v", col)
+		} else {
+			buf.Myprintf(", %v", col)
+		}
+	}
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
 			buf.Myprintf(", %v", column)
