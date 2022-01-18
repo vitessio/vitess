@@ -288,7 +288,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	require.NoError(t, err)
 
 	// We have to StartReplication on tablets[2] since the MySQL instance is restarted and does not have replication running
-	// We earlier used to rely on replicationManager to fix this but we have disabled in our testing environment now.
+	// We earlier used to rely on replicationManager to fix this but we have disabled it in our testing environment for latest versions of vttablet and vtctl.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", tablets[2].Alias)
 	require.NoError(t, err)
 
