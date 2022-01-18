@@ -118,7 +118,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(160)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -128,7 +128,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field Vindex vitess.io/vitess/go/vt/vtgate/vindexes.SingleColumn
+	// field Vindex vitess.io/vitess/go/vt/vtgate/vindexes.Vindex
 	if cc, ok := cached.Vindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -141,7 +141,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field KsidVindex vitess.io/vitess/go/vt/vtgate/vindexes.SingleColumn
+	// field KsidVindex vitess.io/vitess/go/vt/vtgate/vindexes.Vindex
 	if cc, ok := cached.KsidVindex.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -157,7 +157,7 @@ func (cached *Delete) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(160)
 	}
 	// field DML vitess.io/vitess/go/vt/vtgate/engine.DML
 	size += cached.DML.CachedSize(false)
