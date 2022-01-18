@@ -24,8 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 )
 
-func transformSubQueryOpPlan(ctx *plancontext.PlanningContext, op *physical.SubQueryOp) (logicalPlan, error) {
-	innerPlan, err := transformOpToLogicalPlan(ctx, op.Inner)
+func transformSubQueryPlan(ctx *plancontext.PlanningContext, op *physical.SubQueryOp) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(ctx, op.Inner)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func transformSubQueryOpPlan(ctx *plancontext.PlanningContext, op *physical.SubQ
 
 	argName := op.Extracted.GetArgName()
 	hasValuesArg := op.Extracted.GetHasValuesArg()
-	outerPlan, err := transformOpToLogicalPlan(ctx, op.Outer)
+	outerPlan, err := transformToLogicalPlan(ctx, op.Outer)
 
 	merged := mergeSubQueryOpPlan(ctx, innerPlan, outerPlan, op)
 	if merged != nil {
@@ -50,12 +50,12 @@ func transformSubQueryOpPlan(ctx *plancontext.PlanningContext, op *physical.SubQ
 	return plan, err
 }
 
-func transformCorrelatedSubQueryOpPlan(ctx *plancontext.PlanningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
-	outer, err := transformOpToLogicalPlan(ctx, op.Outer)
+func transformCorrelatedSubQueryPlan(ctx *plancontext.PlanningContext, op *physical.CorrelatedSubQueryOp) (logicalPlan, error) {
+	outer, err := transformToLogicalPlan(ctx, op.Outer)
 	if err != nil {
 		return nil, err
 	}
-	inner, err := transformOpToLogicalPlan(ctx, op.Inner)
+	inner, err := transformToLogicalPlan(ctx, op.Inner)
 	if err != nil {
 		return nil, err
 	}
