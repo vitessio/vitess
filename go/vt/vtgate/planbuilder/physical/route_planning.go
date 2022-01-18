@@ -849,7 +849,7 @@ func pushJoinPredicateOnJoin(ctx *plancontext.PlanningContext, exprs []sqlparser
 			continue
 		}
 
-		bvName, cols, predicate, err := breakExpressionInLHSandRHS(ctx, expr, node.LHS.TableID())
+		bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, node.LHS.TableID())
 		if err != nil {
 			return nil, err
 		}

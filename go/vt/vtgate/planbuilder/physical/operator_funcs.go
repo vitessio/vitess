@@ -89,7 +89,7 @@ func PushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op abs
 				Predicates: []sqlparser.Expr{expr},
 			}, nil
 		case deps.IsSolvedBy(op.TableID()):
-			bvName, cols, predicate, err := breakExpressionInLHSandRHS(ctx, expr, op.LHS.TableID())
+			bvName, cols, predicate, err := BreakExpressionInLHSandRHS(ctx, expr, op.LHS.TableID())
 			if err != nil {
 				return nil, err
 			}
@@ -327,7 +327,9 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op a
 	}
 }
 
-func breakExpressionInLHSandRHS(
+// BreakExpressionInLHSandRHS takes an expression and
+// extracts the parts that are coming from one of the sides into `ColName`s that are needed
+func BreakExpressionInLHSandRHS(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
