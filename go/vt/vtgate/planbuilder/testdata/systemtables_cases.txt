@@ -753,22 +753,7 @@ Gen4 plan same as above
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]",
-    "Table": "INFORMATION_SCHEMA.`TABLES`"
-  }
-}
+Gen4 plan same as above
 
 # information_schema query using database() func
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
@@ -942,7 +927,6 @@ Gen4 plan same as above
     "JoinVars": {
       "x_id": 0
     },
-    "Predicate": "x.id = `user`.id",
     "TableName": "information_schema.key_column_usage_`user`",
     "Inputs": [
       {
@@ -1154,7 +1138,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
     "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
     "Table": "information_schema.`tables`"
   }
@@ -1206,7 +1190,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
     "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
     "Table": "information_schema.`tables`"
   }

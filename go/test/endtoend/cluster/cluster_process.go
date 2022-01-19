@@ -32,7 +32,7 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -96,7 +96,7 @@ type LocalProcessCluster struct {
 
 	// Extra arguments for vtGate
 	VtGateExtraArgs      []string
-	VtGatePlannerVersion planbuilder.PlannerVersion
+	VtGatePlannerVersion plancontext.PlannerVersion
 
 	VtctldExtraArgs []string
 
