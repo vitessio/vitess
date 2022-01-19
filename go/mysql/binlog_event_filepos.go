@@ -109,6 +109,10 @@ func (ev filePosQueryEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, 
 	return ev, nil, nil
 }
 
+func (ev filePosQueryEvent) Bytes() []byte {
+	return []byte{}
+}
+
 //----------------------------------------------------------------------------
 
 // filePosFakeEvent is the base class for fake events.
@@ -214,6 +218,10 @@ func (ev filePosFakeEvent) IsPseudo() bool {
 
 func (ev filePosFakeEvent) IsCompressed() bool {
 	return false
+}
+
+func (ev filePosFakeEvent) Bytes() []byte {
+	return []byte{}
 }
 
 //----------------------------------------------------------------------------

@@ -125,6 +125,9 @@ type BinlogEvent interface {
 
 	// IsCompressed returns true if a compressed event is found (binlog_transaction_compression=ON)
 	IsCompressed() bool
+
+	// Bytes returns the binary representation of the event
+	Bytes() []byte
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.
