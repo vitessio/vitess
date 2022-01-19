@@ -123,6 +123,36 @@ func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup Conver
 	}, nil
 }
 
+func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup ConverterLookup) (Expr, error) {
+	expr, err := convertExpr(left, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	var check func(result *EvalResult) bool
+
+	switch op {
+	case sqlparser.IsNullOp:
+		check = func(er *EvalResult) bool { return er.null() }
+	case sqlparser.IsNotNullOp:
+		check = func(er *EvalResult) bool { return !er.null() }
+	case sqlparser.IsTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolTrue }
+	case sqlparser.IsNotTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolTrue }
+	case sqlparser.IsFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolFalse }
+	case sqlparser.IsNotFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolFalse }
+	}
+
+	return &IsExpr{
+		UnaryExpr: UnaryExpr{expr},
+		Op:        op,
+		Check:     check,
+	}, nil
+}
+
 func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedCollation {
 	collation := collations.TypedCollation{
 		Coercibility: collations.CoerceCoercible,
@@ -178,7 +208,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.IntVal:
 			return NewLiteralIntegralFromBytes(node.Bytes())
 		case sqlparser.FloatVal:
-			return NewLiteralRealFromBytes(node.Bytes())
+			return NewLiteralFloatFromBytes(node.Bytes())
 		case sqlparser.StrVal:
 			collation := getCollation(e, lookup)
 			return NewLiteralString(node.Bytes(), collation), nil
@@ -278,6 +308,8 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			panic("character set introducers are only supported for literals and arguments")
 		}
 		return expr, nil
+	case *sqlparser.IsExpr:
+		return convertIsExpr(node.Left, node.Right, lookup)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }
