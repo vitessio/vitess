@@ -820,6 +820,10 @@ func (t testRun) NewConnection(c *Conn) {
 	panic("implement me")
 }
 
+func (t testRun) ConnectionReady(c *Conn) {
+	panic("implement me")
+}
+
 func (t testRun) ConnectionClosed(c *Conn) {
 	panic("implement me")
 }

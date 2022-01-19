@@ -13327,6 +13327,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest after_schema */
         after_schema?: (tabletmanagerdata.ISchemaDefinition|null);
+
+        /** ApplySchemaRequest sql_mode */
+        sql_mode?: (string|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -13352,6 +13355,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest after_schema. */
         public after_schema?: (tabletmanagerdata.ISchemaDefinition|null);
+
+        /** ApplySchemaRequest sql_mode. */
+        public sql_mode: string;
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,80 +14,65 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package physical
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type derivedTree struct {
-	query         sqlparser.SelectStatement
-	inner         queryTree
-	alias         string
-	columnAliases sqlparser.Columns
+type Derived struct {
+	Source abstract.PhysicalOperator
 
-	// columns needed to feed other plans
-	columns       []*sqlparser.ColName
-	columnsOffset []int
+	Query         sqlparser.SelectStatement
+	Alias         string
+	ColumnAliases sqlparser.Columns
+
+	// Columns needed to feed other plans
+	Columns       []*sqlparser.ColName
+	ColumnsOffset []int
 }
 
-var _ queryTree = (*derivedTree)(nil)
+var _ abstract.PhysicalOperator = (*Derived)(nil)
 
-func (d *derivedTree) tableID() semantics.TableSet {
-	return d.inner.tableID()
+// TableID implements the PhysicalOperator interface
+func (d *Derived) TableID() semantics.TableSet {
+	return d.Source.TableID()
 }
 
-func (d *derivedTree) cost() int {
-	return d.inner.cost()
+// UnsolvedPredicates implements the PhysicalOperator interface
+func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	return d.Source.UnsolvedPredicates(semTable)
 }
 
-func (d *derivedTree) clone() queryTree {
-	other := *d
-	other.inner = d.inner.clone()
-	return &other
+// CheckValid implements the PhysicalOperator interface
+func (d *Derived) CheckValid() error {
+	return d.Source.CheckValid()
 }
 
-func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) (offsets []int, err error) {
-	var noQualifierNames []*sqlparser.ColName
-	if len(names) == 0 {
-		return
+// IPhysical implements the PhysicalOperator interface
+func (d *Derived) IPhysical() {}
+
+// Cost implements the PhysicalOperator interface
+func (d *Derived) Cost() int {
+	return d.Source.Cost()
+}
+
+// Clone implements the PhysicalOperator interface
+func (d *Derived) Clone() abstract.PhysicalOperator {
+	clone := *d
+	clone.Source = d.Source.Clone()
+	clone.ColumnAliases = sqlparser.CloneColumns(d.ColumnAliases)
+	clone.Columns = make([]*sqlparser.ColName, 0, len(d.Columns))
+	for _, x := range d.Columns {
+		clone.Columns = append(clone.Columns, sqlparser.CloneRefOfColName(x))
 	}
-	for _, name := range names {
-		i, err := d.findOutputColumn(name)
-		if err != nil {
-			return nil, err
-		}
-		if i > -1 {
-			d.columnsOffset = append(d.columnsOffset, i)
-			continue
-		}
-		d.columnsOffset = append(d.columnsOffset, i)
-		d.columns = append(d.columns, name)
-		noQualifierNames = append(noQualifierNames, sqlparser.NewColName(name.Name.String()))
-	}
-	if len(noQualifierNames) > 0 {
-		_, _ = d.inner.pushOutputColumns(noQualifierNames, semTable)
-	}
-	return d.columnsOffset, nil
-}
-
-func (d *derivedTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add '%s' predicate not supported on derived trees", sqlparser.String(expr))
-}
-
-func (d *derivedTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	tableInfo, err := ctx.semTable.TableInfoForExpr(expr)
-	if err != nil {
-		return err
-	}
-	rewrittenExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
-	if err != nil {
-		return err
-	}
-	return d.inner.removePredicate(ctx, rewrittenExpr)
+	clone.ColumnsOffset = make([]int, 0, len(d.ColumnsOffset))
+	copy(clone.ColumnsOffset, d.ColumnsOffset)
+	return &clone
 }
 
 // findOutputColumn returns the index on which the given name is found in the slice of
@@ -97,9 +82,9 @@ func (d *derivedTree) removePredicate(ctx *planningContext, expr sqlparser.Expr)
 // the function will return no error and an index equal to -1.
 // If name is not present and the query does not have a *sqlparser.StarExpr, the function
 // will return an unknown column error.
-func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
+func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 	hasStar := false
-	for j, exp := range sqlparser.GetFirstSelect(d.query).SelectExprs {
+	for j, exp := range sqlparser.GetFirstSelect(d.Query).SelectExprs {
 		switch exp := exp.(type) {
 		case *sqlparser.AliasedExpr:
 			if !exp.As.IsEmpty() && exp.As.Equal(name.Name) {

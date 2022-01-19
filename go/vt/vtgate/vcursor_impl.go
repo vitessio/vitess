@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"github.com/google/uuid"
 
 	"golang.org/x/sync/errgroup"
@@ -57,7 +59,7 @@ import (
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
-var _ planbuilder.ContextVSchema = (*vcursorImpl)(nil)
+var _ plancontext.VSchema = (*vcursorImpl)(nil)
 var _ iExecute = (*Executor)(nil)
 var _ vindexes.VCursor = (*vcursorImpl)(nil)
 
@@ -360,7 +362,7 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 }
 
 // Planner implements the ContextVSchema interface
-func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
+func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 	if vc.safeSession.Options != nil &&
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
@@ -716,7 +718,7 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 }
 
 // SetPlannerVersion implements the SessionActions interface
-func (vc *vcursorImpl) SetPlannerVersion(v planbuilder.PlannerVersion) {
+func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 

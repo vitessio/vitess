@@ -76,6 +76,9 @@ type flavor interface {
 	// stopIOThreadCommand returns the command to stop the replica's io thread only.
 	stopIOThreadCommand() string
 
+	// startSQLThreadCommand returns the command to start the replica's sql thread only.
+	startSQLThreadCommand() string
+
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error
@@ -222,6 +225,11 @@ func (c *Conn) StopReplicationCommand() string {
 // StopIOThreadCommand returns the command to stop the replica's io thread.
 func (c *Conn) StopIOThreadCommand() string {
 	return c.flavor.stopIOThreadCommand()
+}
+
+// StartSQLThreadCommand returns the command to start the replica's SQL thread.
+func (c *Conn) StartSQLThreadCommand() string {
+	return c.flavor.startSQLThreadCommand()
 }
 
 // SendBinlogDumpCommand sends the flavor-specific version of

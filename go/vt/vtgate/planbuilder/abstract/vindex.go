@@ -44,7 +44,9 @@ type (
 	}
 )
 
-var _ Operator = (*Vindex)(nil)
+var _ LogicalOperator = (*Vindex)(nil)
+
+func (*Vindex) iLogical() {}
 
 // TableID implements the Operator interface
 func (v *Vindex) TableID() semantics.TableSet {
@@ -112,6 +114,6 @@ func (v *Vindex) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (v *Vindex) Compact(*semantics.SemTable) (Operator, error) {
+func (v *Vindex) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	return v, nil
 }

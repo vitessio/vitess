@@ -303,11 +303,11 @@ func generateClusterWorkflows(list []string, tpl string) {
 		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
-		var tplPlatform string
 		template := tpl
 		if test.Platform != "" {
-			tplPlatform = "_" + test.Platform
-			template = fmt.Sprintf(tpl, tplPlatform)
+			template = fmt.Sprintf(tpl, "_"+test.Platform)
+		} else if strings.Contains(template, "%s") {
+			template = fmt.Sprintf(tpl, "")
 		}
 		err := writeFileFromTemplate(template, path, test)
 		if err != nil {

@@ -308,6 +308,11 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 	db.connections[c.ConnectionID] = c
 }
 
+// ConnectionReady is part of the mysql.Handler interface.
+func (db *DB) ConnectionReady(c *mysql.Conn) {
+
+}
+
 // ConnectionClosed is part of the mysql.Handler interface.
 func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	db.mu.Lock()

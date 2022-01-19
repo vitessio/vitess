@@ -74,7 +74,7 @@ func TestUpdateEqual(t *testing.T) {
 				Sharded: true,
 			},
 			Query:  "dummy_update",
-			Vindex: vindex.(vindexes.SingleColumn),
+			Vindex: vindex,
 			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
@@ -93,6 +93,30 @@ func TestUpdateEqual(t *testing.T) {
 	require.EqualError(t, err, `query arguments missing for aa`)
 }
 
+func TestUpdateEqualMultiCol(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	upd := &Update{
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_update",
+			Vindex: vindex,
+			Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		`ExecuteMultiShard ks.-20: dummy_update {} true true`,
+	})
+}
+
 func TestUpdateScatter(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	upd := &Update{
@@ -103,7 +127,7 @@ func TestUpdateScatter(t *testing.T) {
 				Sharded: true,
 			},
 			Query:  "dummy_update",
-			Vindex: vindex.(vindexes.SingleColumn),
+			Vindex: vindex,
 			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
@@ -126,7 +150,7 @@ func TestUpdateScatter(t *testing.T) {
 				Sharded: true,
 			},
 			Query:                "dummy_update",
-			Vindex:               vindex.(vindexes.SingleColumn),
+			Vindex:               vindex,
 			Values:               []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			MultiShardAutocommit: true,
 		},
@@ -156,7 +180,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 				Sharded: true,
 			},
 			Query:  "dummy_update",
-			Vindex: vindex.(vindexes.SingleColumn),
+			Vindex: vindex,
 			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
@@ -185,7 +209,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 				Sharded: true,
 			},
 			Query:  "dummy_update",
-			Vindex: vindex.(vindexes.SingleColumn),
+			Vindex: vindex,
 			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 		},
 	}
@@ -202,11 +226,12 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 			Opcode:           Equal,
 			Keyspace:         ks.Keyspace,
 			Query:            "dummy_update",
-			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Vindex:           ks.Vindexes["hash"],
 			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
-			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+			KsidVindex:       ks.Vindexes["hash"],
+			KsidLength:       1,
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
@@ -335,6 +360,124 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 
 }
 
+func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{
+		DML: DML{
+			Opcode:           Equal,
+			Keyspace:         ks.Keyspace,
+			Query:            "dummy_update",
+			Vindex:           ks.Vindexes["rg_vdx"],
+			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			Table:            ks.Tables["rg_tbl"],
+			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["rg_vdx"],
+			KsidLength:       2,
+		},
+		ChangedVindexValues: map[string]*VindexValues{
+			"lkp_rg": {
+				PvMap: map[string]evalengine.Expr{
+					"colc": evalengine.NewLiteralInt(5),
+				},
+				Offset: 3,
+			},
+		},
+	}
+
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"cola|colb|colc|colc=5",
+			"int64|int64|int64|int64",
+		),
+		"1|2|4|0",
+	)}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
+	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// 4 has to be replaced by 5.
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		// Finally, the actual update, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+
+	// No rows changing
+	vc.Rewind()
+	vc.results = nil
+	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Subquery returns no rows. So, no vindexes are updated. We still pass-through the original update.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+
+	// multiple rows changing.
+	results = []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"cola|colb|colc|colc=5",
+			"int64|int64|int64|int64",
+		),
+		"1|2|4|0",
+		"1|2|6|0",
+	)}
+	vc.Rewind()
+	vc.results = results
+
+	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// 4 has to be replaced by 5.
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		// 6 has to be replaced by 5.
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		// Finally, the actual update, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+
+	// multiple rows changing, but only some rows actually changes
+	results = []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"cola|colb|colc|colc=5",
+			"int64|int64|int64|int64",
+		),
+		"1|2|5|1",
+		"1|2|7|0",
+	)}
+	vc.Rewind()
+	vc.results = results
+
+	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// 7 has to be replaced by 5.
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01\x06\xe7\xea\"Βp\x8f" true`,
+		// Finally, the actual update, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
+
 func TestUpdateScatterChangedVindex(t *testing.T) {
 	// update t1 set c1 = 1, c2 = 2, c3 = 3
 	ks := buildTestVSchema().Keyspaces["sharded"]
@@ -345,7 +488,8 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 			Query:            "dummy_update",
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
-			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+			KsidVindex:       ks.Vindexes["hash"],
+			KsidLength:       1,
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
@@ -451,7 +595,7 @@ func TestUpdateIn(t *testing.T) {
 		Opcode:   In,
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
-		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+		Vindex:   ks.Vindexes["hash"],
 		Values: []evalengine.Expr{&evalengine.TupleExpr{
 			evalengine.NewLiteralInt(1),
 			evalengine.NewLiteralInt(2),
@@ -474,7 +618,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 		Opcode:   In,
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
-		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+		Vindex:   ks.Vindexes["hash"],
 		Values: []evalengine.Expr{&evalengine.TupleExpr{
 			evalengine.NewLiteralInt(1),
 			evalengine.NewLiteralInt(2),
@@ -493,6 +637,29 @@ func TestUpdateInStreamExecute(t *testing.T) {
 	})
 }
 
+func TestUpdateInMultiCol(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{DML: DML{
+		Opcode:   In,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_update",
+		Vindex:   ks.Vindexes["rg_vdx"],
+		Values: []evalengine.Expr{
+			&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			&evalengine.TupleExpr{evalengine.NewLiteralInt(3), evalengine.NewLiteralInt(4)},
+		}},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
+		// ResolveDestinations is hard-coded to return -20.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
+
 func TestUpdateInChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
@@ -500,14 +667,15 @@ func TestUpdateInChangedVindex(t *testing.T) {
 			Opcode:   In,
 			Keyspace: ks.Keyspace,
 			Query:    "dummy_update",
-			Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Vindex:   ks.Vindexes["hash"],
 			Values: []evalengine.Expr{&evalengine.TupleExpr{
 				evalengine.NewLiteralInt(1),
 				evalengine.NewLiteralInt(2),
 			}},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
-			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+			KsidVindex:       ks.Vindexes["hash"],
+			KsidLength:       1,
 		},
 		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
@@ -619,6 +787,65 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	})
 }
 
+func TestUpdateInChangedVindexMultiCol(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{
+		DML: DML{
+			Opcode:   In,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_update",
+			Vindex:   ks.Vindexes["rg_vdx"],
+			Values: []evalengine.Expr{
+				&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+				evalengine.NewLiteralInt(3),
+			},
+			Table:            ks.Tables["rg_tbl"],
+			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["rg_vdx"],
+			KsidLength:       2,
+		},
+		ChangedVindexValues: map[string]*VindexValues{
+			"lkp_rg": {
+				PvMap: map[string]evalengine.Expr{
+					"colc": evalengine.NewLiteralInt(5),
+				},
+				Offset: 3,
+			},
+		},
+	}
+
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"cola|colb|colc|colc=5",
+			"int64|int64|int64|int64",
+		),
+		"1|3|4|0",
+		"2|3|5|1",
+		"1|3|6|0",
+		"2|3|7|0",
+	)}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
+	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(2) INT64(3)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(024eb190c9a2fa169c)`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
+		// Those values are returned as 4,5,6 and 7 for colc, but 5 is unchanged so only 3 rows will be updated.
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"4" toc: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x01N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute delete from lkp_rg_tbl where from = :from and toc = :toc from: type:INT64 value:"7" toc: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		`Execute insert into lkp_rg_tbl(from, toc) values(:from_0, :toc_0) from_0: type:INT64 value:"5" toc_0: type:VARBINARY value:"\x02N\xb1\x90ɢ\xfa\x16\x9c" true`,
+		// Finally, the actual update, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
+
 func buildTestVSchema() *vindexes.VSchema {
 	invschema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -627,6 +854,12 @@ func buildTestVSchema() *vindexes.VSchema {
 				Vindexes: map[string]*vschemapb.Vindex{
 					"hash": {
 						Type: "hash",
+					},
+					"rg_vdx": {
+						Type: "region_experimental",
+						Params: map[string]string{
+							"region_bytes": "1",
+						},
 					},
 					"twocol": {
 						Type: "lookup",
@@ -646,6 +879,15 @@ func buildTestVSchema() *vindexes.VSchema {
 						},
 						Owner: "t1",
 					},
+					"lkp_rg": {
+						Type: "lookup",
+						Params: map[string]string{
+							"table": "lkp_rg_tbl",
+							"from":  "from",
+							"to":    "toc",
+						},
+						Owner: "rg_tbl",
+					},
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
@@ -664,6 +906,15 @@ func buildTestVSchema() *vindexes.VSchema {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
 							Columns: []string{"id"},
+						}},
+					},
+					"rg_tbl": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "rg_vdx",
+							Columns: []string{"cola", "colb"},
+						}, {
+							Name:    "lkp_rg",
+							Columns: []string{"colc"},
 						}},
 					},
 				},

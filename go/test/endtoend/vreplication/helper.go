@@ -53,7 +53,9 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	execQuery(t, conn, "use `"+database+"`;")
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
 	execQuery(t, conn, "commit")

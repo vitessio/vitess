@@ -46,6 +46,9 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 	th.lastConn = c
 }
 
+func (th *testHandler) ConnectionReady(c *mysql.Conn) {
+}
+
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
