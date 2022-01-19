@@ -167,9 +167,6 @@ var AllTabletTypes = []topodatapb.TabletType{
 
 // ParseTabletType parses the tablet type into the enum.
 func ParseTabletType(param string) (topodatapb.TabletType, error) {
-	if strings.ToUpper(param) == "MASTER" {
-		param = "PRIMARY"
-	}
 	value, ok := topodatapb.TabletType_value[strings.ToUpper(param)]
 	if !ok {
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)

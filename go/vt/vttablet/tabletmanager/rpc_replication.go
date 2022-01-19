@@ -253,6 +253,17 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 	// Initializing as primary implies undoing any previous "do not replicate".
 	tm.replManager.reset()
 
+	if *setSuperReadOnly {
+		// Setting super_read_only off so that we can run the DDL commands
+		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+				log.Warningf("server does not know about super_read_only, continuing anyway...")
+			} else {
+				return "", err
+			}
+		}
+	}
+
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
 	cmds := mysqlctl.CreateReparentJournal()

@@ -240,6 +240,12 @@ func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
 		}, {
 			Name: "description",
 			Type: sqltypes.VarBinary,
+		}, {
+			Name: "date1",
+			Type: sqltypes.Datetime,
+		}, {
+			Name: "date2",
+			Type: sqltypes.Datetime,
 		}}
 		gotFields, err := streamConn.Fields()
 		require.NoError(t, err)

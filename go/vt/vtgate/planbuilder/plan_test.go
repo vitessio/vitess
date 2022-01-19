@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -472,7 +474,7 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 	return vschema
 }
 
-var _ ContextVSchema = (*vschemaWrapper)(nil)
+var _ plancontext.VSchema = (*vschemaWrapper)(nil)
 
 type vschemaWrapper struct {
 	v             *vindexes.VSchema
@@ -480,7 +482,7 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
-	version       PlannerVersion
+	version       plancontext.PlannerVersion
 }
 
 func (vw *vschemaWrapper) ConnCollation() collations.ID {
@@ -501,12 +503,12 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	return []*vindexes.Keyspace{vw.keyspace}, nil
 }
 
-func (vw *vschemaWrapper) Planner() PlannerVersion {
+func (vw *vschemaWrapper) Planner() plancontext.PlannerVersion {
 	return vw.version
 }
 
 // SetPlannerVersion implements the ContextVSchema interface
-func (vw *vschemaWrapper) SetPlannerVersion(v PlannerVersion) {
+func (vw *vschemaWrapper) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vw.version = v
 }
 
@@ -922,7 +924,7 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	})
 }
 
-func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {
+func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for _, tcase := range testCases {
