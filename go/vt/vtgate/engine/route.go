@@ -329,10 +329,8 @@ func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		sysTableTableSchema: route.SysTableTableSchema,
 	}
 	switch route.Opcode {
-	case SelectDBA, SelectUnsharded, SelectNext, SelectReference:
+	case SelectDBA, SelectUnsharded, SelectNext, SelectReference, SelectScatter:
 		return params.findRoute(vcursor, bindVars)
-	case SelectScatter:
-		return route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
 		switch route.Vindex.(type) {
 		case vindexes.MultiColumn:
@@ -450,18 +448,6 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
-}
-
-func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, nil, err
-	}
-	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
-	}
-	return rss, multiBindVars, nil
 }
 
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
