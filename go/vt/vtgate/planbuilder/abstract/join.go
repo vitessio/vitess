@@ -70,7 +70,11 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 			j.RHS = rhs
 			return j, err
 		}
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
+		op := &Filter{
+			Source:     j,
+			Predicates: []sqlparser.Expr{expr},
+		}
+		return op, nil
 	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
 		j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
 		return j, nil

@@ -349,6 +349,8 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
 	case *distinct:
 		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
+	case *filter:
+		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
 	case *semiJoin:
 		passDownReuseCol := reuseCol
 		if !reuseCol {

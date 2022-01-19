@@ -55,6 +55,29 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 		return transformCorrelatedSubQueryPlan(ctx, op)
 	case *physical.Derived:
 		return transformDerivedPlan(ctx, op)
+	case *physical.Filter:
+		plan, err := transformToLogicalPlan(ctx, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		scl := &simpleConverterLookup{
+			canPushProjection: true,
+			ctx:               ctx,
+			plan:              plan,
+		}
+		ast := sqlparser.AndExpressions(op.Predicates...)
+		predicate, err := evalengine.Convert(ast, scl)
+		if err != nil {
+			return nil, err
+		}
+
+		return &filter{
+			logicalPlanCommon: newBuilderCommon(plan),
+			efilter: &engine.Filter{
+				Predicate:    predicate,
+				ASTPredicate: ast,
+			},
+		}, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformToLogicalPlan)", op)

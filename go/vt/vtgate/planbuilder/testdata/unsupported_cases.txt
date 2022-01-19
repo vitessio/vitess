@@ -71,7 +71,7 @@ Gen4 plan same as above
 # left join where clauses #2
 "select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.col, 4) = 5"
 "unsupported: cross-shard left join and where clause"
-Gen4 plan same as above
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
