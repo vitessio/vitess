@@ -278,6 +278,26 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			panic("character set introducers are only supported for literals and arguments")
 		}
 		return expr, nil
+	case *sqlparser.IsExpr:
+		expr, err := convertExpr(node.Left, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		switch node.Right {
+		case sqlparser.IsNullOp:
+			return newIsNull(expr), nil
+		case sqlparser.IsNotNullOp:
+			return newIsNotNull(expr), nil
+		case sqlparser.IsTrueOp:
+			return newIsTrue(expr), nil
+		case sqlparser.IsNotTrueOp:
+			return newIsNotTrue(expr), nil
+		case sqlparser.IsFalseOp:
+			return newIsFalse(expr), nil
+		case sqlparser.IsNotFalseOp:
+			return newIsNotFalse(expr), nil
+		}
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }

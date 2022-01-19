@@ -50,6 +50,10 @@ func (expr *UnaryExpr) constant() bool {
 	return expr.Inner.constant()
 }
 
+func (i *IsExpr) constant() bool {
+	return i.Expr.constant()
+}
+
 func (expr *Literal) simplify() error {
 	return nil
 }
@@ -183,6 +187,15 @@ func (expr *UnaryExpr) simplify() error {
 	var err error
 	expr.Inner, err = simplifyExpr(expr.Inner)
 	return err
+}
+
+func (i *IsExpr) simplify() error {
+	expr, err := simplifyExpr(i.Expr)
+	if err != nil {
+		return err
+	}
+	i.Expr = expr
+	return nil
 }
 
 func simplifyExpr(e Expr) (Expr, error) {
