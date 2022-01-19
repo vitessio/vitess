@@ -363,7 +363,7 @@ func (er *EvalResult) textual() bool {
 	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt)
 }
 
-func (er *EvalResult) nonzero() boolean {
+func (er *EvalResult) truthy() boolean {
 	switch er.type_ {
 	case sqltypes.Null:
 		return boolNULL

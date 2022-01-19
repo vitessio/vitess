@@ -210,6 +210,9 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		for _, subexpr := range expr {
 			env.typecheck(subexpr)
 		}
+
+	case *IsExpr:
+		env.ensureCardinality(expr.Inner, 1)
 	}
 }
 
@@ -302,8 +305,8 @@ func NewLiteralFloat(val float64) Expr {
 	return lit
 }
 
-// NewLiteralRealFromBytes returns a float literal expression from a slice of bytes
-func NewLiteralRealFromBytes(val []byte) (Expr, error) {
+// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	lit := &Literal{}
 	if bytes.IndexByte(val, 'e') >= 0 || bytes.IndexByte(val, 'E') >= 0 {
 		fval, err := strconv.ParseFloat(string(val), 64)

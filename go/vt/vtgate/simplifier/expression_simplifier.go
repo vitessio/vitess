@@ -178,6 +178,28 @@ func (s *shrinker) fillQueue() bool {
 			if oneLess != half {
 				s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", oneLess)))
 			}
+		case sqlparser.FloatVal:
+			fval, err := strconv.ParseFloat(e.Val, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			intval := int(fval)
+
+			// add the value as an integer
+			s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", intval)))
+
+			// we'll simplify by halving the current value and decreasing it by one
+			half := fval / 2
+			oneLess := fval - 1
+			if fval < 0 {
+				oneLess = fval + 1
+			}
+
+			s.queue = append(s.queue, sqlparser.NewFloatLiteral(fmt.Sprintf("%f", half)))
+			if oneLess != half {
+				s.queue = append(s.queue, sqlparser.NewFloatLiteral(fmt.Sprintf("%f", oneLess)))
+			}
 		default:
 			panic(fmt.Sprintf("unhandled literal type %v", e.Type))
 		}

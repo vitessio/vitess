@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func FormatExpr(expr Expr) string {
@@ -149,4 +150,23 @@ func (n *NotExpr) format(w *formatter, depth int) {
 
 func (b *LogicalExpr) format(w *formatter, depth int) {
 	w.formatBinary(b.Left, b.opname, b.Right, depth)
+}
+
+func (i *IsExpr) format(w *formatter, depth int) {
+	w.Indent(depth)
+	i.Inner.format(w, depth)
+	switch i.Op {
+	case sqlparser.IsNullOp:
+		w.WriteString(" IS NULL")
+	case sqlparser.IsNotNullOp:
+		w.WriteString(" IS NOT NULL")
+	case sqlparser.IsTrueOp:
+		w.WriteString(" IS TRUE")
+	case sqlparser.IsNotTrueOp:
+		w.WriteString(" IS NOT TRUE")
+	case sqlparser.IsFalseOp:
+		w.WriteString(" IS FALSE")
+	case sqlparser.IsNotFalseOp:
+		w.WriteString(" IS NOT FALSE")
+	}
 }
