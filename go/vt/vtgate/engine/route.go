@@ -250,8 +250,10 @@ func (route *Route) GetGenericOpcode() Opcode {
 	switch route.Opcode {
 	case SelectDBA:
 		return DBA
-	case SelectUnsharded, SelectNext, SelectReference:
+	case SelectUnsharded, SelectNext:
 		return Unsharded
+	case SelectReference:
+		return Any
 	case SelectScatter:
 		return Scatter
 	case SelectEqual, SelectEqualUnique:
@@ -327,10 +329,8 @@ func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		sysTableTableSchema: route.SysTableTableSchema,
 	}
 	switch route.Opcode {
-	case SelectDBA:
-		return params.systemQuery(vcursor, bindVars)
-	case SelectUnsharded, SelectNext, SelectReference:
-		return route.paramsAnyShard(vcursor, bindVars)
+	case SelectDBA, SelectUnsharded, SelectNext, SelectReference:
+		return params.findRoute(vcursor, bindVars)
 	case SelectScatter:
 		return route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
@@ -454,18 +454,6 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, nil, err
-	}
-	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
-	}
-	return rss, multiBindVars, nil
-}
-
-func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, nil, err
 	}
