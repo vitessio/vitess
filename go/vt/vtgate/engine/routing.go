@@ -71,6 +71,9 @@ type RoutingParameters struct {
 	// Required for - DBA
 	sysTableTableSchema []evalengine.Expr
 	sysTableTableName   map[string]evalengine.Expr
+
+	// Required for - ByDestination
+	targetDestination key.Destination
 }
 
 func (params *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -82,7 +85,9 @@ func (params *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]
 	case Any:
 		return params.anyShard(vcursor, bindVars)
 	case Scatter:
-		return params.allShards(vcursor, bindVars)
+		return params.byDestination(vcursor, bindVars, key.DestinationAllShards{})
+	case ByDestination:
+		return params.byDestination(vcursor, bindVars, params.targetDestination)
 	case None:
 		return nil, nil, nil
 	default:
@@ -246,8 +251,8 @@ func (params *RoutingParameters) unsharded(vcursor VCursor, bindVars map[string]
 	return rss, multiBindVars, nil
 }
 
-func (params *RoutingParameters) allShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+func (params *RoutingParameters) byDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, destination key.Destination) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{destination})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -255,5 +260,5 @@ func (params *RoutingParameters) allShards(vcursor VCursor, bindVars map[string]
 	for i := range multiBindVars {
 		multiBindVars[i] = bindVars
 	}
-	return rss, multiBindVars, nil
+	return rss, multiBindVars, err
 }

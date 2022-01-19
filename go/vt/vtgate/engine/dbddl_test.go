@@ -68,7 +68,6 @@ func TestDBDDLDropExecute(t *testing.T) {
 }
 
 func TestDBDDLTimeout(t *testing.T) {
-	t.Skip()
 	pluginName := "timeoutFake"
 	plugin := &dbddlTestFake{sleep: 2}
 	DBDDLRegister(pluginName, plugin)

@@ -205,7 +205,12 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
+	params := RoutingParameters{
+		opcode:            del.Opcode,
+		keyspace:          del.Keyspace,
+		targetDestination: dest,
+	}
+	rss, _, err := params.findRoute(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
