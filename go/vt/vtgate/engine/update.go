@@ -54,7 +54,7 @@ type Update struct {
 	noInputs
 }
 
-var updName = map[DMLOpcode]string{
+var updName = map[Opcode]string{
 	Unsharded:     "UpdateUnsharded",
 	Equal:         "UpdateEqual",
 	In:            "UpdateIn",

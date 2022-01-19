@@ -44,7 +44,7 @@ type Delete struct {
 	noInputs
 }
 
-var delName = map[DMLOpcode]string{
+var delName = map[Opcode]string{
 	Unsharded:     "DeleteUnsharded",
 	Equal:         "DeleteEqual",
 	In:            "DeleteIn",

@@ -34,7 +34,7 @@ import (
 // DML contains the common elements between Update and Delete plans
 type DML struct {
 	// Opcode is the execution opcode.
-	Opcode DMLOpcode
+	Opcode Opcode
 
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
@@ -74,30 +74,7 @@ type DML struct {
 	txNeeded
 }
 
-// DMLOpcode is a number representing the opcode
-// for the Update or Delete primitve.
-type DMLOpcode int
-
-// This is the list of UpdateOpcode values.
-const (
-	// Unsharded is for routing a dml statement
-	// to an unsharded keyspace.
-	Unsharded = DMLOpcode(iota)
-	// Equal is for routing an dml statement to a single shard.
-	// Requires: A Vindex, and a single Value.
-	Equal
-	// In is for routing an dml statement to a multi shard.
-	// Requires: A Vindex, and a multi Values.
-	In
-	// Scatter is for routing a scattered dml statement.
-	Scatter
-	// ByDestination is to route explicitly to a given target destination.
-	// Is used when the query explicitly sets a target destination:
-	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
-	ByDestination
-)
-
-var opcodeName = map[DMLOpcode]string{
+var opcodeName = map[Opcode]string{
 	Unsharded:     "Unsharded",
 	Equal:         "Equal",
 	In:            "In",
@@ -105,7 +82,7 @@ var opcodeName = map[DMLOpcode]string{
 	ByDestination: "ByDestination",
 }
 
-func (op DMLOpcode) String() string {
+func (op Opcode) String() string {
 	return opcodeName[op]
 }
 
