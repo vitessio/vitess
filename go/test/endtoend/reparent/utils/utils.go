@@ -128,6 +128,15 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// DemotePrimary rpc is stalled!
 		"-queryserver_enable_online_ddl=false",
 	}
+	if clusterInstance.VtTabletMajorVersion >= 13 && clusterInstance.VtctlMajorVersion >= 13 {
+		// disabling active reparents on the tablet since we don't want the replication manager
+		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
+		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
+		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
+		// setting up the replication correctly.
+		// However, due to the bugs in old vitess components we can only do this for version >= 13.
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-disable_active_reparents")
+	}
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -606,4 +615,20 @@ func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
 		return true
 	}
 	return strings.Contains(prsOut, fmt.Sprintf("tablet %s failed to SetMaster", tablet.Alias))
+}
+
+// CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
+func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
+	res := RunSQL(ctx, t, "show slave status;", tablet)
+	if ioThreadRunning {
+		require.Equal(t, "Yes", res.Rows[0][10].ToString())
+	} else {
+		require.Equal(t, "No", res.Rows[0][10].ToString())
+	}
+
+	if sqlThreadRunning {
+		require.Equal(t, "Yes", res.Rows[0][11].ToString())
+	} else {
+		require.Equal(t, "No", res.Rows[0][11].ToString())
+	}
 }

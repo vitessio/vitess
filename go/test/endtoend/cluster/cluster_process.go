@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"regexp"
 	"strconv"
 	"sync"
 	"syscall"
@@ -71,6 +72,10 @@ type LocalProcessCluster struct {
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
 	VtctldHTTPPort  int
+
+	// major version numbers
+	VtTabletMajorVersion int
+	VtctlMajorVersion    int
 
 	// standalone executable
 	VtctlclientProcess VtctlClientProcess
@@ -212,6 +217,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 			log.Error(err)
 			return
 		}
+		cluster.VtctlProcess.LogDir = cluster.TmpDirectory
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
@@ -627,8 +633,40 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
 
+	err := cluster.populateVersionInfo()
+	if err != nil {
+		log.Errorf("Error populating version information - %v", err)
+	}
+
 	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
+}
+
+// populateVersionInfo is used to populate the version information for the binaries used to setup the cluster.
+func (cluster *LocalProcessCluster) populateVersionInfo() error {
+	var err error
+	cluster.VtTabletMajorVersion, err = getMajorVersion("vttablet")
+	if err != nil {
+		return err
+	}
+	cluster.VtctlMajorVersion, err = getMajorVersion("vtctl")
+	return err
+}
+
+func getMajorVersion(binaryName string) (int, error) {
+	version, err := exec.Command(binaryName, "--version").Output()
+	if err != nil {
+		return 0, err
+	}
+	versionRegex := regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	v := versionRegex.FindStringSubmatch(string(version))
+	if len(v) != 4 {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	return strconv.Atoi(v[1])
 }
 
 // RestartVtgate starts vtgate with updated configs

@@ -78,6 +78,10 @@ func (flv *filePosFlavor) stopIOThreadCommand() string {
 	return "unsupported"
 }
 
+func (flv *filePosFlavor) startSQLThreadCommand() string {
+	return "unsupported"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
 	rpos, ok := startPos.GTIDSet.(filePosGTID)
