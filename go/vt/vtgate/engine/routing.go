@@ -81,6 +81,8 @@ func (params *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]
 		return params.unsharded(vcursor, bindVars)
 	case Any:
 		return params.anyShard(vcursor, bindVars)
+	case Scatter:
+		return params.allShards(vcursor, bindVars)
 	case None:
 		return nil, nil, nil
 	default:
@@ -236,6 +238,18 @@ func (params *RoutingParameters) unsharded(vcursor VCursor, bindVars map[string]
 	}
 	if len(rss) != 1 {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+func (params *RoutingParameters) allShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, nil, err
 	}
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i := range multiBindVars {
