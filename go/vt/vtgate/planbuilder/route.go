@@ -36,6 +36,7 @@ var _ logicalPlan = (*route)(nil)
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 type route struct {
+	v3Plan
 	order int
 
 	// Redirect may point to another route if this route
@@ -65,9 +66,6 @@ type route struct {
 
 	// eroute is the primitive being built.
 	eroute *engine.Route
-
-	// tables keeps track of which tables this route is covering
-	tables semantics.TableSet
 }
 
 type tableSubstitution struct {
@@ -131,24 +129,6 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
-}
-
-// WireupGen4 implements the logicalPlan interface
-func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
-	rb.prepareTheAST()
-
-	rb.eroute.Query = sqlparser.String(rb.Select)
-
-	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-	node := buffer.WriteNode(rb.Select)
-	query := node.ParsedQuery()
-	rb.eroute.FieldQuery = query.Query
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (rb *route) ContainsTables() semantics.TableSet {
-	return rb.tables
 }
 
 // Wireup implements the logicalPlan interface

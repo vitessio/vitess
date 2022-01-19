@@ -115,7 +115,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return nil, err
 	}
 
-	err = hp.truncateColumnsIfNeeded(plan)
+	plan, err = hp.truncateColumnsIfNeeded(ctx, plan)
 	if err != nil {
 		return nil, err
 	}
@@ -136,11 +136,10 @@ func pushProjections(ctx *plancontext.PlanningContext, plan logicalPlan, selectE
 	return nil
 }
 
-func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
-	if !hp.needsTruncation {
-		return nil
+func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
+	if len(plan.OutputColumns()) == hp.sel.GetColumnCount() {
+		return plan, nil
 	}
-
 	switch p := plan.(type) {
 	case *routeGen4:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
@@ -151,14 +150,23 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	case *memorySort:
 		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *pulloutSubquery:
-		return hp.truncateColumnsIfNeeded(p.underlying)
-	case *filter:
-		return hp.truncateColumnsIfNeeded(p.input)
+		newUnderlyingPlan, err := hp.truncateColumnsIfNeeded(ctx, p.underlying)
+		if err != nil {
+			return nil, err
+		}
+		p.underlying = newUnderlyingPlan
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", plan)
-	}
+		plan = &simpleProjection{
+			logicalPlanCommon: newBuilderCommon(plan),
+			eSimpleProj:       &engine.SimpleProjection{},
+		}
 
-	return nil
+		err := pushProjections(ctx, plan, hp.qp.SelectExprs)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }
 
 // pushProjection pushes a projection to the plan.
