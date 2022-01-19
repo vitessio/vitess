@@ -212,7 +212,7 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		}
 
 	case *IsExpr:
-		env.ensureCardinality(expr.Expr, 1)
+		env.ensureCardinality(expr.Inner, 1)
 	}
 }
 

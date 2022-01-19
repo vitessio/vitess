@@ -123,6 +123,36 @@ func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup Conver
 	}, nil
 }
 
+func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup ConverterLookup) (Expr, error) {
+	expr, err := convertExpr(left, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	var check func(result *EvalResult) bool
+
+	switch op {
+	case sqlparser.IsNullOp:
+		check = func(er *EvalResult) bool { return er.null() }
+	case sqlparser.IsNotNullOp:
+		check = func(er *EvalResult) bool { return !er.null() }
+	case sqlparser.IsTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolTrue }
+	case sqlparser.IsNotTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolTrue }
+	case sqlparser.IsFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolFalse }
+	case sqlparser.IsNotFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolFalse }
+	}
+
+	return &IsExpr{
+		UnaryExpr: UnaryExpr{expr},
+		Op:        op,
+		Check:     check,
+	}, nil
+}
+
 func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedCollation {
 	collation := collations.TypedCollation{
 		Coercibility: collations.CoerceCoercible,
@@ -279,25 +309,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		}
 		return expr, nil
 	case *sqlparser.IsExpr:
-		expr, err := convertExpr(node.Left, lookup)
-		if err != nil {
-			return nil, err
-		}
-
-		switch node.Right {
-		case sqlparser.IsNullOp:
-			return newIsNull(expr), nil
-		case sqlparser.IsNotNullOp:
-			return newIsNotNull(expr), nil
-		case sqlparser.IsTrueOp:
-			return newIsTrue(expr), nil
-		case sqlparser.IsNotTrueOp:
-			return newIsNotTrue(expr), nil
-		case sqlparser.IsFalseOp:
-			return newIsFalse(expr), nil
-		case sqlparser.IsNotFalseOp:
-			return newIsNotFalse(expr), nil
-		}
+		return convertIsExpr(node.Left, node.Right, lookup)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }
