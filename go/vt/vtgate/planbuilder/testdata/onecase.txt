@@ -1,4 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-"select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.id, 42) = 42"
-"unsupported: cross-shard left join and where clause"
-Gen4 plan same as above

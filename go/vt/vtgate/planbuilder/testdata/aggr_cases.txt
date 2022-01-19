@@ -2986,3 +2986,35 @@ Gen4 plan same as above
     ]
   }
 }
+
+# Less Equal filter on scatter with grouping
+"select col, count(*) a from user group by col having a <= 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a \u003c= 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a \u003c= 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
