@@ -626,7 +626,7 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	}
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
-
+	cluster.VtTabletExtraArgs = append(cluster.VtTabletExtraArgs, "-enable_semi_sync")
 	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
 }
