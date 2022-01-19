@@ -64,6 +64,7 @@ type VReplicationWorkflowParams struct {
 	KeepRoutingRules                  bool
 	Timeout                           time.Duration
 	Direction                         workflow.TrafficSwitchDirection
+	MaxAllowedLagSeconds              int64
 
 	// MoveTables specific
 	SourceKeyspace, Tables  string
@@ -244,7 +245,6 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchDirection) (*[]string, error) {
 	var dryRunResults []string
 	var rdDryRunResults, wrDryRunResults *[]string
-	var isCopyInProgress bool
 	var err error
 	var hasReplica, hasRdonly, hasPrimary bool
 
@@ -255,15 +255,21 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchD
 		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
 	}
 
-	isCopyInProgress, err = vrw.IsCopyInProgress()
+	vrw.params.Direction = direction
+
+	workflowName := vrw.params.Workflow
+	if vrw.params.Direction == workflow.DirectionBackward {
+		workflowName = workflow.ReverseWorkflowName(workflowName)
+	}
+
+	reason, err := vrw.canSwitch(workflowName)
 	if err != nil {
 		return nil, err
 	}
-	if isCopyInProgress {
-		return nil, fmt.Errorf("cannot switch traffic at this time, copy is still in progress for this workflow")
+	if reason != "" {
+		return nil, fmt.Errorf("cannot switch traffic for workflow %s at this time: %s", workflowName, reason)
 	}
 
-	vrw.params.Direction = direction
 	hasReplica, hasRdonly, hasPrimary, err = vrw.parseTabletTypes()
 	if err != nil {
 		return nil, err
@@ -457,23 +463,32 @@ type TableCopyProgress struct {
 // CopyProgress stores the TableCopyProgress for all tables still being copied
 type CopyProgress map[string]*TableCopyProgress
 
-// IsCopyInProgress returns true if any table remains to be copied
-func (vrw *VReplicationWorkflow) IsCopyInProgress() (bool, error) {
-	ctx := context.Background()
-	getTablesQuery := "select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
-	for _, target := range vrw.ts.targets {
-		for id := range target.Sources {
-			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), 1, false, false)
-			if err != nil {
-				return false, err
-			}
-			if len(p3qr.Rows) > 0 {
-				return true, nil
+const (
+	cannotSwitchError          = "workflow has errors"
+	cannotSwitchCopyIncomplete = "copy is still in progress"
+	cannotSwitchHighLag        = "replication lag %ds is higher than allowed lag %ds"
+)
+
+func (vrw *VReplicationWorkflow) canSwitch(workflowName string) (reason string, err error) {
+	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, vrw.params.TargetKeyspace)
+	if err != nil {
+		return "", err
+	}
+	if result.MaxVReplicationLag >= vrw.params.MaxAllowedLagSeconds {
+		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationLag, vrw.params.MaxAllowedLagSeconds), nil
+	}
+	for ksShard := range result.ShardStatuses {
+		statuses := result.ShardStatuses[ksShard].PrimaryReplicationStatuses
+		for _, st := range statuses {
+			switch st.State {
+			case "Copying":
+				return cannotSwitchCopyIncomplete, nil
+			case "Error":
+				return cannotSwitchError, nil
 			}
 		}
 	}
-	return false, nil
+	return "", nil
 }
 
 // GetCopyProgress returns the progress of all tables being copied in the workflow

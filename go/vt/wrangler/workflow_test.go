@@ -120,11 +120,6 @@ func TestCopyProgress(t *testing.T) {
 	require.Equal(t, int64(400), (*cp)["t2"].TargetRowCount)
 	require.Equal(t, int64(4000), (*cp)["t2"].SourceTableSize)
 	require.Equal(t, int64(1000), (*cp)["t2"].TargetTableSize)
-
-	var isCopyInProgress bool
-	isCopyInProgress, err = wf.IsCopyInProgress()
-	require.NoError(t, err)
-	require.True(t, isCopyInProgress)
 }
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
@@ -196,7 +191,6 @@ func TestMoveTablesV2(t *testing.T) {
 
 func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server, cnt int) {
 	rr, err := ts.GetRoutingRules(ctx)
-	fmt.Printf("Rules %+v\n", rr.Rules)
 	require.NoError(t, err)
 	require.NotNil(t, rr)
 	rules := rr.Rules

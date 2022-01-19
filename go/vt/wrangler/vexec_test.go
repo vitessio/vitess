@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 )
 
-func TestVExec2(t *testing.T) {
+func TestVExec(t *testing.T) {
 	ctx := context.Background()
 	workflow := "wrWorkflow"
 	keyspace := "target"
