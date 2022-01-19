@@ -133,6 +133,45 @@ func TestUpdateEqual(t *testing.T) {
 	assertQueries(t, sbclookup, wantQueries)
 }
 
+func TestUpdateEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
+	res := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|wo_lu_col|lu_col|t2_lu_vdx", "int64|int64|int64|int64"),
+		"1|2|1|0",
+	)}
+	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
+
+	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select id, wo_lu_col, lu_col, lu_col = 5 from t2_wo_lookup where wo_lu_col = 2 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}}
+
+	assertQueries(t, sbc1, wantQueries)
+	assertQueries(t, sbc2, wantQueries)
+
+	bq1 := &querypb.BoundQuery{
+		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": sqltypes.Uint64BindVariable(1),
+			"lu_col":      sqltypes.Int64BindVariable(1),
+		},
+	}
+	bq2 := &querypb.BoundQuery{
+		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
+			"lu_col_0":      sqltypes.Int64BindVariable(5),
+		},
+	}
+	lookWant := []*querypb.BoundQuery{bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2}
+	assertQueries(t, sbcLookup, lookWant)
+}
+
 func TestUpdateMultiOwned(t *testing.T) {
 	vschema := `
 {
@@ -432,45 +471,6 @@ func TestDeleteScatter(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	assertQueries(t, sbc2, wantQueries)
-}
-
-func TestUpdateEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
-	res := []*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|wo_lu_col|lu_col|t2_lu_vdx", "int64|int64|int64|int64"),
-		"1|2|1|0",
-	)}
-	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
-
-	_, err := executorExec(executor, "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2", nil)
-	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{
-		{
-			Sql:           "select id, wo_lu_col, lu_col, lu_col = 5 from t2_wo_lookup where wo_lu_col = 2 for update",
-			BindVariables: map[string]*querypb.BindVariable{},
-		}, {
-			Sql:           "update t2_wo_lookup set lu_col = 5 where wo_lu_col = 2",
-			BindVariables: map[string]*querypb.BindVariable{},
-		}}
-
-	assertQueries(t, sbc1, wantQueries)
-	assertQueries(t, sbc2, wantQueries)
-
-	bq1 := &querypb.BoundQuery{
-		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
-		BindVariables: map[string]*querypb.BindVariable{
-			"keyspace_id": sqltypes.Uint64BindVariable(1),
-			"lu_col":      sqltypes.Int64BindVariable(1),
-		},
-	}
-	bq2 := &querypb.BoundQuery{
-		Sql: "insert into lu_idx(lu_col, keyspace_id) values (:lu_col_0, :keyspace_id_0)",
-		BindVariables: map[string]*querypb.BindVariable{
-			"keyspace_id_0": sqltypes.Uint64BindVariable(1),
-			"lu_col_0":      sqltypes.Int64BindVariable(5),
-		},
-	}
-	lookWant := []*querypb.BoundQuery{bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2}
-	assertQueries(t, sbcLookup, lookWant)
 }
 
 func TestUpdateEqualWithMultipleLookupVindex(t *testing.T) {

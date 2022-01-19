@@ -247,6 +247,7 @@ func (fhc *FakeHealthCheck) Reset() {
 	defer fhc.mu.Unlock()
 
 	fhc.items = make(map[string]*fhcItem)
+	fhc.currentTabletUID.Set(0)
 }
 
 // AddFakeTablet inserts a fake entry into FakeHealthCheck.

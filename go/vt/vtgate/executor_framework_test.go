@@ -458,7 +458,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	_ = hc.AddTestTablet(cell, "c0-e0", 1, "TestExecutor", "c0-e0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "e0-", 1, "TestExecutor", "e0-", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	// Below is needed so that SendAnyWherePlan doesn't fail
-	_ = hc.AddTestTablet(cell, "e0-", 1, "TestXBadVSchema", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_ = hc.AddTestTablet(cell, "random", 1, "TestXBadVSchema", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	createSandbox(KsTestUnsharded)
 	_ = topo.NewShardInfo(KsTestUnsharded, "0", &topodatapb.Shard{}, nil)
@@ -489,6 +489,10 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
+	// create a new session each time so that ShardSessions don't get re-used across tests
+	primarySession = &vtgatepb.Session{
+		TargetString: "@primary",
+	}
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -507,6 +511,10 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
 	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	// create a new session each time so that ShardSessions don't get re-used across tests
+	primarySession = &vtgatepb.Session{
+		TargetString: "@primary",
+	}
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -532,6 +540,10 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
 	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	// create a new session each time so that ShardSessions don't get re-used across tests
+	primarySession = &vtgatepb.Session{
+		TargetString: "@primary",
+	}
 	return executor, sbcs[0], sbcs[1], sbclookup
 }
 
