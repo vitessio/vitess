@@ -18,6 +18,7 @@ package vtadmin
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -81,6 +82,10 @@ type Options struct {
 	GRPCOpts grpcserver.Options
 	HTTPOpts vtadminhttp.Options
 	RBAC     *rbac.Config
+}
+
+type DynamicClusterJSON struct {
+	ClusterName string `json:"name,omitempty"`
 }
 
 // NewAPI returns a new API, configured to service the given set of clusters,
@@ -227,41 +232,39 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		options:    api.options,
 	}
 
-	clusterIDCookie, err := r.Cookie("cluster_id")
+	clusterCookie, err := r.Cookie("cluster")
 
 	if err == nil {
-		clusterID := clusterIDCookie.Value
-		if _, ok := api.clusterMap[clusterID]; !ok {
-			vtgateHostname, err1 := r.Cookie("vtgate_hostname")
-			vtctldHostname, err2 := r.Cookie("vtctld_hostname")
-			vtctldFqdn, err3 := r.Cookie("vtctld_fqdn")
-			// Client must have set a vtgate hostname, vtctld hostname, and vtctld fqdn to use dynamic clusters
-			if err1 == nil && err2 == nil && err3 == nil {
-				cluster, err := cluster.Config{
+		decoded, err := base64.StdEncoding.DecodeString(clusterCookie.Value)
+		if err == nil {
+			var clusterJSON DynamicClusterJSON
+			err = json.Unmarshal(decoded, &clusterJSON)
+
+			if err == nil {
+				clusterID := clusterJSON.ClusterName
+				c, err := cluster.Config{
 					ID:            clusterID,
 					Name:          clusterID,
-					DiscoveryImpl: "dynamic",
+					DiscoveryImpl: "json",
 					DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-						"dynamic": map[string]string{
-							"vtctld_hostname": vtctldHostname.Value,
-							"vtctld_fqdn":     vtctldFqdn.Value,
-							"vtgate_hostname": vtgateHostname.Value,
+						"json": map[string]string{
+							"discovery": string(decoded),
 						},
 					},
 				}.Cluster()
 				if err == nil {
-					api.clusterMap[clusterID] = cluster
-					api.clusters = append(api.clusters, cluster)
-					err = api.clusterCache.Add(clusterID, cluster, 24*time.Hour)
+					api.clusterMap[clusterID] = c
+					api.clusters = append(api.clusters, c)
+					err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
 					if err != nil {
 						log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
 					}
 				}
+				selectedCluster := api.clusterMap[clusterID]
+				dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
+				dynamicAPI.clusterMap = map[string]*cluster.Cluster{clusterID: selectedCluster}
 			}
 		}
-		selectedCluster := api.clusterMap[clusterID]
-		dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
-		dynamicAPI.clusterMap = map[string]*cluster.Cluster{clusterID: selectedCluster}
 	}
 
 	defer dynamicAPI.Close()

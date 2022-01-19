@@ -119,4 +119,5 @@ func init() { // nolint:gochecknoinits
 	Register("consul", NewConsul)
 	Register("staticfile", NewStaticFile)
 	Register("dynamic", NewDynamic)
+	Register("json", NewJSON)
 }
