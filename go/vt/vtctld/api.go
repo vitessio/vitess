@@ -640,8 +640,9 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			return fmt.Errorf("error setting DDL strategy: %v", err)
 		}
 
-		return schemamanager.Run(ctx,
+		_, err = schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
+		return err
 	})
 
 	// Features

@@ -220,7 +220,7 @@ message ApplySchemaRequest {
 }
 
 message ApplySchemaResponse {
-  tabletmanagerdata.SchemaDefinition schema = 1;
+  repeated string uuid_list = 1;
 }
 
 message ApplyVSchemaRequest {

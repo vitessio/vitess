@@ -35,8 +35,13 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/schema"
+
+	// "vitess.io/vitess/go/vt/schemamanager"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -55,6 +60,7 @@ import (
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -159,12 +165,50 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
 	defer span.Finish()
 
-	var (
-		sd  *tabletmanagerdatapb.SchemaDefinition
-		err error
-	)
+	// 1. Attach the callerID as the EffectiveCallerID.
+	if req.CallerId != nil {
+		ctx = callerid.NewContext(ctx, req.CallerId, &querypb.VTGateCallerID{Username: req.CallerId.Principal})
+	}
 
-	return &vtctldatapb.ApplySchemaResponse{Schema: sd}, err
+	// 2. Apply the new schema.
+	// 3. Return any errors from applying schema.
+
+	executionUUID, err := schema.CreateUUID()
+	if err != nil {
+		return &vtctldatapb.ApplySchemaResponse{}, err
+	}
+
+	requestContext := req.RequestContext
+	if requestContext == "" {
+		requestContext = fmt.Sprintf("vtctl:%s", executionUUID)
+	}
+
+	// executor := schemamanager.NewTabletExecutor(requestContext, wr, req.WaitReplicasTimeout)
+	// if req.AllowLongUnavailability {
+	// 	executor.AllowBigSchemaChange()
+	// }
+	// if req.SkipPreflight {
+	// 	executor.SkipPreflight()
+	// }
+
+	// if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
+	// 	return err
+	// }
+
+	// if err := executor.SetUUIDList(req.UuidList); err != nil {
+	// 	return err
+	// }
+
+	// execResult, err := schemamanager.Run(
+	// 	ctx,
+	// 	schemamanager.NewPlainController(strings.Join(req.Sqls, ","), req.Keyspace),
+	// 	executor,
+	// )
+
+	// return &vtctldatapb.ApplySchemaResponse{
+	// 	UuidList: execResult.UUIds,
+	// }, err
+	return &vtctldatapb.ApplySchemaResponse{}, err
 }
 
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.

@@ -57,7 +57,7 @@ func TestSchemaManagerControllerOpenFail(t *testing.T) {
 		[]string{"select * from test_db"}, true, false, false)
 	ctx := context.Background()
 
-	err := Run(ctx, controller, newFakeExecutor(t))
+	_, err := Run(ctx, controller, newFakeExecutor(t))
 	if err != errControllerOpen {
 		t.Fatalf("controller.Open fail, should get error: %v, but get error: %v",
 			errControllerOpen, err)
@@ -68,7 +68,7 @@ func TestSchemaManagerControllerReadFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"select * from test_db"}, false, true, false)
 	ctx := context.Background()
-	err := Run(ctx, controller, newFakeExecutor(t))
+	_, err := Run(ctx, controller, newFakeExecutor(t))
 	if err != errControllerRead {
 		t.Fatalf("controller.Read fail, should get error: %v, but get error: %v",
 			errControllerRead, err)
@@ -83,7 +83,7 @@ func TestSchemaManagerValidationFail(t *testing.T) {
 		[]string{"invalid sql"}, false, false, false)
 	ctx := context.Background()
 
-	err := Run(ctx, controller, newFakeExecutor(t))
+	_, err := Run(ctx, controller, newFakeExecutor(t))
 	if err == nil || !strings.Contains(err.Error(), "failed to parse sql") {
 		t.Fatalf("run schema change should fail due to executor.Validate fail, but got: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerExecutorOpenFail", wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
-	err := Run(ctx, controller, executor)
+	_, err := Run(ctx, controller, executor)
 	if err == nil || !strings.Contains(err.Error(), "unknown_keyspace") {
 		t.Fatalf("run schema change should fail due to executor.Open fail, but got: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerExecutorExecuteFail", wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
-	err := Run(ctx, controller, executor)
+	_, err := Run(ctx, controller, executor)
 	if err == nil || !strings.Contains(err.Error(), "unknown database: vt_test_keyspace") {
 		t.Fatalf("run schema change should fail due to executor.Execute fail, but got: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestSchemaManagerRun(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerRun", wr, testWaitReplicasTimeout)
 
 	ctx := context.Background()
-	err := Run(ctx, controller, executor)
+	_, err := Run(ctx, controller, executor)
 
 	if err != nil {
 		t.Fatalf("schema change should success but get error: %v", err)
@@ -187,7 +187,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", wr, testWaitReplicasTimeout)
 
 	ctx := context.Background()
-	err := Run(ctx, controller, executor)
+	_, err := Run(ctx, controller, executor)
 
 	if err == nil || !strings.Contains(err.Error(), "schema change failed") {
 		t.Fatalf("schema change should fail, but got err: %v", err)

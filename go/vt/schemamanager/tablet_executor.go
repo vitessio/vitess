@@ -278,6 +278,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 			for _, onlineDDL := range onlineDDLs {
 				exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
 				if len(execResult.SuccessShards) > 0 {
+					execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
 					exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 				}
 			}
@@ -291,6 +292,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 			return err
 		}
 		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+		execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
 		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 		return nil
 	case *sqlparser.AlterMigration:
@@ -374,6 +376,7 @@ func (exec *TabletExecutor) executeOnlineDDL(
 	if err != nil {
 		execResult.ExecutorErr = err.Error()
 	}
+	execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
 	exec.wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
 	exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 }
