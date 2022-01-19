@@ -184,8 +184,8 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	}
 
 	// Force the replica to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
-		"-force", fmt.Sprintf("%s/%s", KeyspaceName, shardName), tablets[0].Alias)
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
+		fmt.Sprintf("%s/%s", KeyspaceName, shardName), tablets[0].Alias)
 	require.NoError(t, err)
 
 	ValidateTopology(t, clusterInstance, true)
