@@ -47,6 +47,15 @@ type (
 	dummyCollation collations.ID
 )
 
+var rhsOfIs = []string{
+	"null",
+	"not null",
+	"true",
+	"not true",
+	"false",
+	"not false",
+}
+
 func (g *gencase) arg(tuple bool) string {
 	if tuple || g.rand.Intn(g.ratioTuple) == 0 {
 		var exprs []string
@@ -63,7 +72,11 @@ func (g *gencase) arg(tuple bool) string {
 
 func (g *gencase) expr() string {
 	op := g.operators[g.rand.Intn(len(g.operators))]
-	return fmt.Sprintf("%s %s %s", g.arg(false), op, g.arg(op == "IN" || op == "NOT IN"))
+	rhs := g.arg(op == "IN" || op == "NOT IN")
+	if op == "IS" {
+		rhs = rhsOfIs[g.rand.Intn(len(rhsOfIs))]
+	}
+	return fmt.Sprintf("%s %s %s", g.arg(false), op, rhs)
 }
 
 func (d dummyCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
@@ -188,10 +201,10 @@ func TestGenerateFuzzCases(t *testing.T) {
 		ratioSubexpr: 8,
 		tupleLen:     4,
 		operators: []string{
-			"+", "-", "/", "*", "=", "!=", "<=>", "<", "<=", ">", ">=", "IN", "NOT IN", "LIKE", "NOT LIKE",
+			"+", "-", "/", "*", "=", "!=", "<=>", "<", "<=", ">", ">=", "IN", "NOT IN", "LIKE", "NOT LIKE", "IS",
 		},
 		primitives: []string{
-			"1", "0", "-1", `"foo"`, `"FOO"`, `"fOo"`, "NULL",
+			"1", "0", "-1", `"foo"`, `"FOO"`, `"fOo"`, "NULL", "12.0",
 		},
 	}
 
