@@ -102,6 +102,8 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 	vh.connections[c] = true
 }
 
+func (vh *vtgateHandler) ConnectionReady(_ *mysql.Conn) {}
+
 func (vh *vtgateHandler) numConnections() int {
 	vh.mu.Lock()
 	defer vh.mu.Unlock()

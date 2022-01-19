@@ -32,7 +32,7 @@ The `prometheus_alerts.yaml` and `prometheus_rules.yaml` file then need to passe
 
 ## 👩‍💻 Development
 
-If you want to contribute please read [Vitess mixin quickstart guide]()
+If you want to contribute please read [Vitess mixin quickstart guide](vitess-mixin-quickstart.md)
 
 ## 📚 Useful links & further learning
 

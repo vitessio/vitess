@@ -65,7 +65,7 @@ func TestConvertSimplification(t *testing.T) {
 		{"42", ok("INT64(42)"), ok("INT64(42)")},
 		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
 		{"1.0e0 + (1 + 1) * 8.0e0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
-		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") LIKE VARBINARY(\"poke%\")"), ok("UINT64(1)")},
+		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") LIKE VARBINARY(\"poke%\")"), ok("INT64(1)")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
 			ok(`VARBINARY("foo") COLLATE utf8mb4_general_ci IN (VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz"))`),
@@ -184,13 +184,13 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewInt64(1),
 	}, {
 		expression: "(1,2) = (1,2)",
-		expected:   sqltypes.NewUint64(1),
+		expected:   sqltypes.NewInt64(1),
 	}, {
 		expression: "1 = 'sad'",
-		expected:   sqltypes.NewUint64(0),
+		expected:   sqltypes.NewInt64(0),
 	}, {
 		expression: "(1,2) = (1,3)",
-		expected:   sqltypes.NewUint64(0),
+		expected:   sqltypes.NewInt64(0),
 	}, {
 		expression: "(1,2) = (1,null)",
 		expected:   NULL,
@@ -202,7 +202,7 @@ func TestEvaluate(t *testing.T) {
 		expected:   NULL,
 	}, {
 		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
-		expected:   sqltypes.NewUint64(1),
+		expected:   sqltypes.NewInt64(1),
 	}, {
 		expression: "(1,(1,2,3),(1,(1,NULL),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
 		expected:   NULL,

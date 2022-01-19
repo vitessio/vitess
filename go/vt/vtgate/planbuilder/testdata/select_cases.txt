@@ -631,25 +631,7 @@ Gen4 plan same as above
     "Vindex": "binary"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from pin_test",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select * from pin_test where 1 != 1",
-    "Query": "select * from pin_test",
-    "Table": "pin_test",
-    "Values": [
-      "VARBINARY(\"\\x80\")"
-    ],
-    "Vindex": "binary"
-  }
-}
+Gen4 plan same as above
 
 # select from dual on sharded keyspace
 "select @@session.auto_increment_increment from user.dual"
@@ -2791,3 +2773,86 @@ Gen4 error: exists sub-queries are only supported with AND clause
   }
 }
 Gen4 plan same as above
+
+# use output column containing data from both sides of the join
+"select user_extra.col + user.col from user join user_extra on user.id = user_extra.id"
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0,
+      "user_id": 1
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col, `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col + :user_col from user_extra where 1 != 1",
+        "Query": "select user_extra.col + :user_col from user_extra where user_extra.id = :user_id",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 1,
+      "user_extra_id": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id, user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.id, user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :user_extra_col + `user`.col from `user` where 1 != 1",
+        "Query": "select :user_extra_col + `user`.col from `user` where `user`.id = :user_extra_id",
+        "Table": "`user`",
+        "Values": [
+          ":user_extra_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}

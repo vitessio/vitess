@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -34,7 +33,6 @@ type joinGen4 struct {
 	Opcode      engine.JoinOpcode
 	Cols        []int
 	Vars        map[string]int
-	Predicate   sqlparser.Expr
 
 	gen4Plan
 }
@@ -51,12 +49,11 @@ func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 // Primitive implements the logicalPlan interface
 func (j *joinGen4) Primitive() engine.Primitive {
 	return &engine.Join{
-		Left:    j.Left.Primitive(),
-		Right:   j.Right.Primitive(),
-		Cols:    j.Cols,
-		Vars:    j.Vars,
-		Opcode:  j.Opcode,
-		ASTPred: j.Predicate,
+		Left:   j.Left.Primitive(),
+		Right:  j.Right.Primitive(),
+		Cols:   j.Cols,
+		Vars:   j.Vars,
+		Opcode: j.Opcode,
 	}
 }
 

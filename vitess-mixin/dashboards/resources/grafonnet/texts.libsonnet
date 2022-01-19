@@ -10,7 +10,7 @@ local text = grafana.text;
   local footnote =
     |||
       This Dasboard has been automatically generated using vitess-mixin.
-      If you want to contribute please visit [https://github.com/vitess/vitess-mixin](https://github.com/vitessio/vitess/tree/master/vitess-mixin)!
+      If you want to contribute please visit [https://github.com/vitess/vitess-mixin](https://github.com/vitessio/vitess/tree/main/vitess-mixin)!
     |||,
 
   local notes = {

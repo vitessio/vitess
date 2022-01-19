@@ -105,9 +105,9 @@ You should now have Vitess running against your external database instance.
 ### Migrating to Vitess
 Migrating to Vitess entirely can be done from;  
 a) The Vitess Control Panel at http://<vitess_ip>:15000  
-b) The `lvtcl.sh` Helper Script;  
+b) The `lvtctl.sh` Helper Script;  
 
 The steps are same
-1. Do an EmergencyReparentShard to make a replica the new master.
-2. Ran InitShardMaster on the new master.
-3. If Vitess is wrong about who the MySQL master is, you can update it with TabletExternallyReparented
+1. Do an EmergencyReparentShard to make a replica the new primary.
+2. Ran InitShardPrimary on the new primary.
+3. If Vitess is wrong about who the MySQL primary is, you can update it with TabletExternallyReparented

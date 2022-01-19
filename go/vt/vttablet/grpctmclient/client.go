@@ -381,6 +381,7 @@ func (client *Client) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet
 		AllowReplication: change.AllowReplication,
 		BeforeSchema:     change.BeforeSchema,
 		AfterSchema:      change.AfterSchema,
+		SqlMode:          change.SQLMode,
 	})
 	if err != nil {
 		return nil, err

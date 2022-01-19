@@ -87,6 +87,10 @@
         },
         "multicolIdx": {
           "type": "multiCol_test"
+        },
+        "colc_map": {
+          "type": "lookup_test",
+          "owner": "multicol_tbl"
         }
       },
       "tables": {
@@ -300,6 +304,10 @@
             {
               "columns": ["cola", "colb"],
               "name": "multicolIdx"
+            },
+            {
+              "column": "colc",
+              "name": "colc_map"
             }
           ]
         }

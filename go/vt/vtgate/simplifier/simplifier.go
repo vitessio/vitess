@@ -40,20 +40,24 @@ func SimplifyStatement(
 		return testF(sqlparser.CloneSelectStatement(s))
 	}
 
+	if success := trySimplifyUnions(sqlparser.CloneSelectStatement(in), test); success != nil {
+		return SimplifyStatement(success, currentDB, si, testF)
+	}
+
 	// first we try to simplify the query by removing any table.
 	// If we can remove a table and all uses of it, that's a good start
-	if success := tryRemoveTable(tables, in, currentDB, si, testF); success != nil {
+	if success := tryRemoveTable(tables, sqlparser.CloneSelectStatement(in), currentDB, si, testF); success != nil {
 		return SimplifyStatement(success, currentDB, si, testF)
 	}
 
 	// now let's try to simplify * expressions
-	if simplifyStarExpr(in, test) {
+	if simplifyStarExpr(sqlparser.CloneSelectStatement(in), test) {
 		return SimplifyStatement(in, currentDB, si, testF)
 	}
 
 	// we try to remove select expressions next
-	if success := trySimplifyExpressions(in, test); success != nil {
-		return SimplifyStatement(in, currentDB, si, testF)
+	if success := trySimplifyExpressions(sqlparser.CloneSelectStatement(in), test); success != nil {
+		return SimplifyStatement(success, currentDB, si, testF)
 	}
 	return in
 }
@@ -95,6 +99,55 @@ func trySimplifyExpressions(in sqlparser.SelectStatement, test func(sqlparser.Se
 	}
 
 	return nil
+}
+
+func trySimplifyUnions(in sqlparser.SelectStatement, test func(sqlparser.SelectStatement) bool) (res sqlparser.SelectStatement) {
+
+	if union, ok := in.(*sqlparser.Union); ok {
+		// the root object is an UNION
+		if test(sqlparser.CloneSelectStatement(union.Left)) {
+			return union.Left
+		}
+		if test(sqlparser.CloneSelectStatement(union.Right)) {
+			return union.Right
+		}
+	}
+
+	abort := false
+
+	sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.Union:
+			if _, ok := cursor.Parent().(*sqlparser.RootNode); ok {
+				// we have already checked the root node
+				return true
+			}
+			cursor.Replace(node.Left)
+			clone := sqlparser.CloneSelectStatement(in)
+			if test(clone) {
+				log.Errorf("replaced UNION with one of its children")
+				abort = true
+				return true
+			}
+			cursor.Replace(node.Right)
+			clone = sqlparser.CloneSelectStatement(in)
+			if test(clone) {
+				log.Errorf("replaced UNION with one of its children")
+				abort = true
+				return true
+			}
+			cursor.Replace(node)
+		}
+		return true
+	}, func(*sqlparser.Cursor) bool {
+		return !abort
+	})
+
+	if !abort {
+		// we found no simplifications
+		return nil
+	}
+	return in
 }
 
 func tryRemoveTable(tables []semantics.TableInfo, in sqlparser.SelectStatement, currentDB string, si semantics.SchemaInformation, test func(sqlparser.SelectStatement) bool) sqlparser.SelectStatement {
