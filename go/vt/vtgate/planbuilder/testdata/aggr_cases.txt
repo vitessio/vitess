@@ -946,7 +946,7 @@ Gen4 plan same as above
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
 
-# scatter aggregate using distinct
+# scatter aggregate using distinctdistinct
 "select distinct col from user"
 {
   "QueryType": "SELECT",

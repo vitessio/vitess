@@ -109,3 +109,8 @@ func (c *concatenateGen4) ContainsTables() semantics.TableSet {
 func (c *concatenateGen4) Inputs() []logicalPlan {
 	return c.sources
 }
+
+// OutputColumns implements the logicalPlan interface
+func (c *concatenateGen4) OutputColumns() []sqlparser.SelectExpr {
+	return c.sources[0].OutputColumns()
+}
