@@ -634,7 +634,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			return err
 		}
 		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
-		executor := schemamanager.NewTabletExecutor(requestContext, wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
+		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
 
 		if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
 			return fmt.Errorf("error setting DDL strategy: %v", err)
