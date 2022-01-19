@@ -41,20 +41,22 @@ func (d *Derived) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrMultipleTables {
-			return semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
 		}
-		return err
+		return nil, err
 	}
 
 	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return d.Inner.PushPredicate(newExpr, semTable)
+	newSrc, err := d.Inner.PushPredicate(newExpr, semTable)
+	d.Inner = newSrc
+	return d, err
 }
 
 // UnsolvedPredicates implements the Operator interface
