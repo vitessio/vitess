@@ -40,6 +40,9 @@ const (
 	// Unsharded is for routing a statement
 	// to an unsharded keyspace.
 	Unsharded
+	// Any is for routing a statement
+	// to any shard of a keyspace. e.g. - Reference tables
+	Any
 	// Equal is for routing a statement to a single shard.
 	// Requires: A Vindex, and a single Value.
 	Equal
@@ -74,6 +77,10 @@ func (params *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]
 	switch params.opcode {
 	case DBA:
 		return params.systemQuery(vcursor, bindVars)
+	case Unsharded:
+		return params.unsharded(vcursor, bindVars)
+	case Any:
+		return params.anyShard(vcursor, bindVars)
 	case None:
 		return nil, nil, nil
 	default:
@@ -208,4 +215,31 @@ func (params *RoutingParameters) routedTable(vcursor VCursor, bindVars map[strin
 func setReplaceSchemaName(bindVars map[string]*querypb.BindVariable) {
 	delete(bindVars, sqltypes.BvSchemaName)
 	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+}
+
+func (params *RoutingParameters) anyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+	if err != nil {
+		return nil, nil, err
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+func (params *RoutingParameters) unsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(rss) != 1 {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
 }
