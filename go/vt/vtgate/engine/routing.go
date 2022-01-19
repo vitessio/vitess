@@ -74,6 +74,10 @@ type RoutingParameters struct {
 
 	// Required for - ByDestination
 	targetDestination key.Destination
+
+	// Required for - In, Equal and MultiEqual
+	vindex vindexes.Vindex
+	values []evalengine.Expr
 }
 
 func (params *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -88,6 +92,13 @@ func (params *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]
 		return params.byDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
 		return params.byDestination(vcursor, bindVars, params.targetDestination)
+	case Equal:
+		switch params.vindex.(type) {
+		case vindexes.MultiColumn:
+			return params.paramsSelectEqualMultiCol(vcursor, bindVars)
+		default:
+			return params.paramsSelectEqual(vcursor, bindVars)
+		}
 	case None:
 		return nil, nil, nil
 	default:
@@ -261,4 +272,43 @@ func (params *RoutingParameters) byDestination(vcursor VCursor, bindVars map[str
 		multiBindVars[i] = bindVars
 	}
 	return rss, multiBindVars, err
+}
+
+func (params *RoutingParameters) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(params.values[0])
+	if err != nil {
+		return nil, nil, err
+	}
+	rss, _, err := resolveShards(vcursor, params.vindex.(vindexes.SingleColumn), params.keyspace, []sqltypes.Value{value.Value()})
+	if err != nil {
+		return nil, nil, err
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+func (params *RoutingParameters) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	var rowValue []sqltypes.Value
+	for _, rvalue := range params.values {
+		v, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, nil, err
+		}
+		rowValue = append(rowValue, v.Value())
+	}
+
+	rss, _, err := resolveShardsMultiCol(vcursor, params.vindex.(vindexes.MultiColumn), params.keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
+	if err != nil {
+		return nil, nil, err
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
 }

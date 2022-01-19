@@ -327,17 +327,12 @@ func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		keyspace:            route.Keyspace,
 		sysTableTableName:   route.SysTableTableName,
 		sysTableTableSchema: route.SysTableTableSchema,
+		values:              route.Values,
+		vindex:              route.Vindex,
 	}
 	switch route.Opcode {
-	case SelectDBA, SelectUnsharded, SelectNext, SelectReference, SelectScatter:
+	case SelectDBA, SelectUnsharded, SelectNext, SelectReference, SelectScatter, SelectEqual, SelectEqualUnique:
 		return params.findRoute(vcursor, bindVars)
-	case SelectEqual, SelectEqualUnique:
-		switch route.Vindex.(type) {
-		case vindexes.MultiColumn:
-			return route.paramsSelectEqualMultiCol(vcursor, bindVars)
-		default:
-			return route.paramsSelectEqual(vcursor, bindVars)
-		}
 	case SelectIN:
 		switch route.Vindex.(type) {
 		case vindexes.MultiColumn:
@@ -448,45 +443,6 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
-}
-
-func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	value, err := env.Evaluate(route.Values[0])
-	if err != nil {
-		return nil, nil, err
-	}
-	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, []sqltypes.Value{value.Value()})
-	if err != nil {
-		return nil, nil, err
-	}
-	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
-	}
-	return rss, multiBindVars, nil
-}
-
-func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	var rowValue []sqltypes.Value
-	for _, rvalue := range route.Values {
-		v, err := env.Evaluate(rvalue)
-		if err != nil {
-			return nil, nil, err
-		}
-		rowValue = append(rowValue, v.Value())
-	}
-
-	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
-	if err != nil {
-		return nil, nil, err
-	}
-	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
-	}
-	return rss, multiBindVars, nil
 }
 
 func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value, shardIdsNeeded bool) ([]*srvtopo.ResolvedShard, [][][]*querypb.Value, error) {
