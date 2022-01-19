@@ -210,6 +210,9 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		for _, subexpr := range expr {
 			env.typecheck(subexpr)
 		}
+
+	case *IsExpr:
+		env.ensureCardinality(expr.Expr, 1)
 	}
 }
 

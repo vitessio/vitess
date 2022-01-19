@@ -150,3 +150,24 @@ func (n *NotExpr) format(w *formatter, depth int) {
 func (b *LogicalExpr) format(w *formatter, depth int) {
 	w.formatBinary(b.Left, b.opname, b.Right, depth)
 }
+
+func (i *IsExpr) format(w *formatter, depth int) {
+	var op string
+	switch {
+	case i.Null && i.Negate:
+		op = " IS NOT NULL"
+	case i.Null && !i.Negate:
+		op = " IS NULL"
+	case i.True && !i.Negate:
+		op = " IS TRUE"
+	case i.True && i.Negate:
+		op = " IS NOT TRUE"
+	case i.False && !i.Negate:
+		op = " IS FALSE"
+	case i.False && i.Negate:
+		op = " IS NOT FALSE"
+	}
+	w.Indent(depth)
+	i.Expr.format(w, depth)
+	w.WriteString(op)
+}
