@@ -1281,15 +1281,14 @@ func (m *ApplySchemaResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.Schema != nil {
-		size, err := m.Schema.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
+	if len(m.UuidList) > 0 {
+		for iNdEx := len(m.UuidList) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.UuidList[iNdEx])
+			copy(dAtA[i:], m.UuidList[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.UuidList[iNdEx])))
+			i--
+			dAtA[i] = 0xa
 		}
-		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -7745,9 +7744,11 @@ func (m *ApplySchemaResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Schema != nil {
-		l = m.Schema.SizeVT()
-		n += 1 + l + sov(uint64(l))
+	if len(m.UuidList) > 0 {
+		for _, s := range m.UuidList {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -13417,9 +13418,9 @@ func (m *ApplySchemaResponse) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Schema", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field UuidList", wireType)
 			}
-			var msglen int
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -13429,27 +13430,23 @@ func (m *ApplySchemaResponse) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if msglen < 0 {
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + msglen
+			postIndex := iNdEx + intStringLen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Schema == nil {
-				m.Schema = &tabletmanagerdata.SchemaDefinition{}
-			}
-			if err := m.Schema.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
+			m.UuidList = append(m.UuidList, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
