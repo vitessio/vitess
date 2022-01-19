@@ -91,7 +91,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		hc:                hc,
 		srvTopoServer:     serv,
 		localCell:         localCell,
-		retryCount:        *RetryCount,
+		retryCount:        *retryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
