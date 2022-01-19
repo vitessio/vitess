@@ -82,6 +82,14 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
+
+	if enableSemiSync {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-enable_semi_sync")
+		if clusterInstance.VtctlMajorVersion >= 13 {
+			clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+		}
+	}
+
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	if err != nil {
@@ -115,7 +123,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard := &cluster.Shard{Name: shardName}
 	shard.Vttablets = tablets
 
-	clusterInstance.VtTabletExtraArgs = []string{
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"-lock_tables_timeout", "5s",
 		"-init_populate_metadata",
 		"-track_schema_versions=true",
@@ -125,8 +133,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"-queryserver_enable_online_ddl=false",
-	}
+		"-queryserver_enable_online_ddl=false")
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-enable_semi_sync")
 	}
@@ -304,7 +311,7 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 
 // ErsWithVtctl runs ERS via vtctl binary
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	args := []string{"-durability=semi_sync", "EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 
