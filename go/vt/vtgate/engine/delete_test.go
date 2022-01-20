@@ -34,8 +34,8 @@ import (
 func TestDeleteUnsharded(t *testing.T) {
 	del := &Delete{
 		DML: &DML{
-			Opcode: Unsharded,
 			RoutingParameters: &RoutingParameters{
+				Opcode: Unsharded,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",
 					Sharded: false,
@@ -67,8 +67,8 @@ func TestDeleteEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	del := &Delete{
 		DML: &DML{
-			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",
 					Sharded: true,
@@ -99,8 +99,8 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	del := &Delete{
 		DML: &DML{
-			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",
 					Sharded: true,
@@ -135,8 +135,8 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	})
 	del := &Delete{
 		DML: &DML{
-			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",
 					Sharded: true,
@@ -166,9 +166,8 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 	})
 	del := &Delete{
 		DML: &DML{
-			Opcode: Equal,
-			Query:  "dummy_delete",
 			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",
 					Sharded: true,
@@ -176,6 +175,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 				Vindex: vindex,
 				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -188,8 +188,8 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: &DML{
-			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
+				Opcode:   Equal,
 				Keyspace: ks.Keyspace,
 				Vindex:   ks.Vindexes["hash"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
@@ -274,8 +274,8 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: &DML{
-			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
+				Opcode:   Equal,
 				Keyspace: ks.Keyspace,
 				Vindex:   ks.Vindexes["rg_vdx"],
 				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
@@ -357,8 +357,8 @@ func TestDeleteSharded(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: &DML{
-			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
 			Query: "dummy_delete",
@@ -384,8 +384,8 @@ func TestDeleteShardedStreaming(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: &DML{
-			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
 			Query: "dummy_delete",
@@ -408,8 +408,8 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: &DML{
-			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
 				Keyspace: ks.Keyspace,
 			},
 			Query:            "dummy_delete",
@@ -493,8 +493,8 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: &DML{
-			Opcode: In,
 			RoutingParameters: &RoutingParameters{
+				Opcode:   IN,
 				Keyspace: ks.Keyspace,
 				Vindex:   ks.Vindexes["rg_vdx"],
 				Values: []evalengine.Expr{

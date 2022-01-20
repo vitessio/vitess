@@ -50,7 +50,7 @@ var defaultSelectResult = sqltypes.MakeTestResult(
 
 func TestSelectUnsharded(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -81,7 +81,7 @@ func TestSelectUnsharded(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
-func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
+func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	stringListToExprList := func(in []string) []evalengine.Expr {
 		var schema []evalengine.Expr
 		for _, s := range in {
@@ -163,8 +163,8 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
 			sel := &Route{
-				Opcode: SelectDBA,
 				RoutingParameters: &RoutingParameters{
+					Opcode: DBA,
 					Keyspace: &vindexes.Keyspace{
 						Name:    "ks",
 						Sharded: false,
@@ -195,7 +195,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 
 func TestSelectScatter(t *testing.T) {
 	sel := NewRoute(
-		SelectScatter,
+		Scatter,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -229,7 +229,7 @@ func TestSelectScatter(t *testing.T) {
 func TestSelectEqualUnique(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	sel := NewRoute(
-		SelectEqualUnique,
+		EqualUnique,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -267,7 +267,7 @@ func TestSelectEqualUnique(t *testing.T) {
 func TestSelectNone(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	sel := NewRoute(
-		SelectNone,
+		None,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -302,7 +302,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	sel := NewRoute(
-		SelectEqualUnique,
+		EqualUnique,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -344,7 +344,7 @@ func TestSelectEqual(t *testing.T) {
 		"to":    "toc",
 	})
 	sel := NewRoute(
-		SelectEqual,
+		Equal,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -397,7 +397,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	sel := NewRoute(
-		SelectEqual,
+		Equal,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -429,10 +429,10 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, nil)
 }
 
-func TestSelectINUnique(t *testing.T) {
+func TestINUnique(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	sel := NewRoute(
-		SelectIN,
+		IN,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -474,14 +474,14 @@ func TestSelectINUnique(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
-func TestSelectINNonUnique(t *testing.T) {
+func TestINNonUnique(t *testing.T) {
 	vindex, _ := vindexes.NewLookup("", map[string]string{
 		"table": "lkp",
 		"from":  "from",
 		"to":    "toc",
 	})
 	sel := NewRoute(
-		SelectIN,
+		IN,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -541,10 +541,10 @@ func TestSelectINNonUnique(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
-func TestSelectMultiEqual(t *testing.T) {
+func TestMultiEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	sel := NewRoute(
-		SelectMultiEqual,
+		MultiEqual,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -594,7 +594,7 @@ func TestSelectLike(t *testing.T) {
 	}
 
 	sel := NewRoute(
-		SelectEqual,
+		Equal,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -666,7 +666,7 @@ func TestSelectLike(t *testing.T) {
 
 func TestSelectNext(t *testing.T) {
 	sel := NewRoute(
-		SelectNext,
+		Next,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -698,7 +698,7 @@ func TestSelectNext(t *testing.T) {
 
 func TestSelectDBA(t *testing.T) {
 	sel := NewRoute(
-		SelectDBA,
+		DBA,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -730,7 +730,7 @@ func TestSelectDBA(t *testing.T) {
 
 func TestSelectReference(t *testing.T) {
 	sel := NewRoute(
-		SelectReference,
+		Reference,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -767,7 +767,7 @@ func TestRouteGetFields(t *testing.T) {
 		"to":    "toc",
 	})
 	sel := NewRoute(
-		SelectEqual,
+		Equal,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -805,7 +805,7 @@ func TestRouteGetFields(t *testing.T) {
 
 func TestRouteSort(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -887,7 +887,7 @@ func TestRouteSort(t *testing.T) {
 
 func TestRouteSortWeightStrings(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -989,7 +989,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 
 func TestRouteSortCollation(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -1120,7 +1120,7 @@ func TestRouteSortCollation(t *testing.T) {
 
 func TestRouteSortTruncate(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -1169,7 +1169,7 @@ func TestRouteSortTruncate(t *testing.T) {
 
 func TestRouteStreamTruncate(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -1211,7 +1211,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 
 func TestRouteStreamSortTruncate(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -1260,7 +1260,7 @@ func TestRouteStreamSortTruncate(t *testing.T) {
 
 func TestParamsFail(t *testing.T) {
 	sel := NewRoute(
-		SelectUnsharded,
+		Unsharded,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -1283,7 +1283,7 @@ func TestExecFail(t *testing.T) {
 	t.Run("unsharded", func(t *testing.T) {
 		// Unsharded error
 		sel := NewRoute(
-			SelectUnsharded,
+			Unsharded,
 			&vindexes.Keyspace{
 				Name:    "ks",
 				Sharded: false,
@@ -1305,7 +1305,7 @@ func TestExecFail(t *testing.T) {
 	t.Run("normal route with no scatter errors as warnings", func(t *testing.T) {
 		// Scatter fails if one of N fails without ScatterErrorsAsWarnings
 		sel := NewRoute(
-			SelectScatter,
+			Scatter,
 			&vindexes.Keyspace{
 				Name:    "ks",
 				Sharded: true,
@@ -1333,7 +1333,7 @@ func TestExecFail(t *testing.T) {
 	t.Run("ScatterErrorsAsWarnings", func(t *testing.T) {
 		// Scatter succeeds if one of N fails with ScatterErrorsAsWarnings
 		sel := NewRoute(
-			SelectScatter,
+			Scatter,
 			&vindexes.Keyspace{
 				Name:    "ks",
 				Sharded: true,
@@ -1375,7 +1375,7 @@ func TestExecFail(t *testing.T) {
 func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
-		SelectEqualUnique,
+		EqualUnique,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -1419,7 +1419,7 @@ func TestSelectEqualMultiColumnVindex(t *testing.T) {
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
 	sel := NewRoute(
-		SelectEqual,
+		Equal,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -1448,10 +1448,10 @@ func TestSelectEqualMultiColumnVindex(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
-func TestSelectINMultiColumnVindex(t *testing.T) {
+func TestINMultiColumnVindex(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
-		SelectIN,
+		IN,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -1494,10 +1494,10 @@ func TestSelectINMultiColumnVindex(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
-func TestSelectINMixedMultiColumnComparision(t *testing.T) {
+func TestINMixedMultiColumnComparision(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
-		SelectIN,
+		IN,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -1537,10 +1537,10 @@ func TestSelectINMixedMultiColumnComparision(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
-func TestSelectMultiEqualMultiCol(t *testing.T) {
+func TestMultiEqualMultiCol(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	sel := NewRoute(
-		SelectMultiEqual,
+		MultiEqual,
 		&vindexes.Keyspace{Name: "ks", Sharded: true},
 		"dummy_select",
 		"dummy_select_field",

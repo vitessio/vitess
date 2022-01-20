@@ -33,9 +33,6 @@ import (
 
 // DML contains the common elements between Update and Delete plans
 type DML struct {
-	// Opcode is the execution opcode.
-	Opcode Opcode
-
 	// Query specifies the query to be executed.
 	Query string
 
@@ -67,18 +64,6 @@ type DML struct {
 // NewDML returns and empty initialized DML struct.
 func NewDML() *DML {
 	return &DML{RoutingParameters: &RoutingParameters{}}
-}
-
-var opcodeName = map[Opcode]string{
-	Unsharded:     "Unsharded",
-	Equal:         "Equal",
-	In:            "In",
-	Scatter:       "Scatter",
-	ByDestination: "ByDestination",
-}
-
-func (op Opcode) String() string {
-	return opcodeName[op]
 }
 
 func resolveMultiValueShards(

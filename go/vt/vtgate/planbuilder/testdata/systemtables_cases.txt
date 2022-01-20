@@ -5,7 +5,7 @@
   "Original": "select col from information_schema.foo",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -24,7 +24,7 @@ Gen4 plan same as above
   "Original": "select a.id,b.id from information_schema.a as a, information_schema.b as b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -43,7 +43,7 @@ Gen4 plan same as above
   "Original": "select column_name from information_schema.columns where table_schema = (select schema())",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -62,7 +62,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a join information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -77,7 +77,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a join information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -95,7 +95,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where b=10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -114,7 +114,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where information_schema.a.b=10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -129,7 +129,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where information_schema.a.b=10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -147,7 +147,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a union select * from information_schema.b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -172,7 +172,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -184,7 +184,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -210,7 +210,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -222,7 +222,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -245,7 +245,7 @@ Gen4 plan same as above
   "Original": "SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -262,7 +262,7 @@ Gen4 plan same as above
   "Original": "SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -288,7 +288,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -301,7 +301,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -320,7 +320,7 @@ Gen4 plan same as above
   "Original": "SELECT KCU.DELETE_RULE, S.UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.K AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -340,7 +340,7 @@ Gen4 plan same as above
   "Original": "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -360,7 +360,7 @@ Gen4 plan same as above
   "Original": "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -380,7 +380,7 @@ Gen4 plan same as above
   "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -396,7 +396,7 @@ Gen4 plan same as above
   "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -415,7 +415,7 @@ Gen4 plan same as above
   "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -431,7 +431,7 @@ Gen4 plan same as above
   "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -450,7 +450,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM information_schema.schemata WHERE schema_name = 'user'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -470,7 +470,7 @@ Gen4 plan same as above
   "Original": "SELECT table_comment FROM information_schema.tables WHERE table_schema = 'schema_name' AND table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -491,7 +491,7 @@ Gen4 plan same as above
   "Original": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -508,7 +508,7 @@ Gen4 plan same as above
   "Original": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -528,7 +528,7 @@ Gen4 plan same as above
   "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -545,7 +545,7 @@ Gen4 plan same as above
   "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -565,7 +565,7 @@ Gen4 plan same as above
   "Original": "SELECT column_name FROM information_schema.statistics WHERE index_name = 'PRIMARY' AND table_schema = 'table_schema' AND table_name = 'table_name' ORDER BY seq_in_index",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -586,7 +586,7 @@ Gen4 plan same as above
   "Original": "SELECT generation_expression FROM information_schema.columns WHERE table_schema = 'table_schema' AND table_name = 'table_name' AND column_name = 'column_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -607,7 +607,7 @@ Gen4 plan same as above
   "Original": "SELECT id FROM information_schema.processlist WHERE info LIKE '% FOR UPDATE'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -626,7 +626,7 @@ Gen4 plan same as above
   "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -646,7 +646,7 @@ Gen4 plan same as above
   "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -663,7 +663,7 @@ Gen4 plan same as above
   "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -682,7 +682,7 @@ Gen4 plan same as above
   "Original": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.table_schema = 'a'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -702,7 +702,7 @@ Gen4 plan same as above
   "Original": "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -723,7 +723,7 @@ Gen4 plan same as above
   "Original": "select * from information_schema.a where id in (select * from information_schema.b)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -742,7 +742,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -762,7 +762,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -781,7 +781,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -801,7 +801,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -822,7 +822,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and other_column = 42",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -842,7 +842,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -862,7 +862,7 @@ Gen4 plan same as above
   "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -890,7 +890,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -901,7 +901,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -931,7 +931,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -942,7 +942,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -966,7 +966,7 @@ Gen4 plan same as above
   "Original": "select a.*, b.* from information_schema.a a, information_schema.b b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -985,7 +985,7 @@ Gen4 plan same as above
   "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1001,7 +1001,7 @@ Gen4 plan same as above
   "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1020,7 +1020,7 @@ Gen4 plan same as above
   "Original": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1048,7 +1048,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -1060,7 +1060,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -1080,7 +1080,7 @@ Gen4 plan same as above
   "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1102,7 +1102,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1114,7 +1114,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1132,7 +1132,7 @@ Gen4 plan same as above
   "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1154,7 +1154,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1166,7 +1166,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1184,7 +1184,7 @@ Gen4 plan same as above
   "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1214,7 +1214,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -1226,7 +1226,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectDBA",
+            "Variant": "DBA",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -1240,7 +1240,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1258,7 +1258,7 @@ Gen4 plan same as above
   "Original": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1289,7 +1289,7 @@ Gen4 plan same as above
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -1301,7 +1301,7 @@ Gen4 plan same as above
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -1322,7 +1322,7 @@ Gen4 plan same as above
   "Original": "select id from (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns) dt",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1355,7 +1355,7 @@ Gen4 plan same as above
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -1367,7 +1367,7 @@ Gen4 plan same as above
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectDBA",
+                "Variant": "DBA",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": false
@@ -1382,7 +1382,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectDBA",
+        "Variant": "DBA",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1399,7 +1399,7 @@ Gen4 plan same as above
   "Original": "select id from information_schema.random t where t.col in (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -1419,7 +1419,7 @@ Gen4 plan same as above
   "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false

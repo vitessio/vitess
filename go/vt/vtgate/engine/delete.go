@@ -44,17 +44,9 @@ type Delete struct {
 	noInputs
 }
 
-var delName = map[Opcode]string{
-	Unsharded:     "DeleteUnsharded",
-	Equal:         "DeleteEqual",
-	In:            "DeleteIn",
-	Scatter:       "DeleteScatter",
-	ByDestination: "DeleteByDestination",
-}
-
 // RouteType returns a description of the query routing type used by the primitive
 func (del *Delete) RouteType() string {
-	return delName[del.Opcode]
+	return del.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
@@ -87,7 +79,7 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		default:
 			return del.execDeleteEqual(vcursor, bindVars)
 		}
-	case In:
+	case IN:
 		return del.execDeleteIn(vcursor, bindVars)
 	case Scatter:
 		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
@@ -114,7 +106,6 @@ func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 }
 
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	del.opcode = del.Opcode
 	rss, _, err := del.findRoutingInfo(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -202,7 +193,6 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	del.opcode = del.Opcode
 	rss, _, err := del.findRoutingInfo(vcursor, bindVars)
 	if err != nil {
 		return nil, err

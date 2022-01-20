@@ -46,9 +46,11 @@ func unshardedShortcut(stmt sqlparser.SelectStatement, ks *vindexes.Keyspace, se
 	}
 	plan := &routeGen4{
 		eroute: &engine.Route{
-			Opcode:    engine.SelectUnsharded,
+			RoutingParameters: &engine.RoutingParameters{
+				Opcode:   engine.Unsharded,
+				Keyspace: ks,
+			},
 			TableName: strings.Join(tableNames, ", "),
-			Keyspace:  ks,
 		},
 		Select: stmt,
 	}
