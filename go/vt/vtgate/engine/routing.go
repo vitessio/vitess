@@ -65,50 +65,55 @@ const (
 
 type RoutingParameters struct {
 	// Required for - All
-	opcode   Opcode
-	keyspace *vindexes.Keyspace
+	opcode Opcode
 
-	// Required for - DBA
-	sysTableTableSchema []evalengine.Expr
-	sysTableTableName   map[string]evalengine.Expr
+	// Keyspace specifies the keyspace to send the query to.
+	Keyspace *vindexes.Keyspace
 
-	// Required for - ByDestination
-	targetDestination key.Destination
+	// The following two fields are used when routing information_schema queries
+	SysTableTableSchema []evalengine.Expr
+	SysTableTableName   map[string]evalengine.Expr
 
-	// Required for - In, Equal and MultiEqual
-	vindex vindexes.Vindex
-	values []evalengine.Expr
+	// TargetDestination specifies an explicit target destination to send the query to.
+	// This will bypass the routing logic.
+	TargetDestination key.Destination
+
+	// Vindex specifies the vindex to be used.
+	Vindex vindexes.Vindex
+
+	// Values specifies the vindex values to use for routing.
+	Values []evalengine.Expr
 }
 
-func (params *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	switch params.opcode {
+func (rp *RoutingParameters) findRoutingInfo(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	switch rp.opcode {
 	case DBA:
-		return params.systemQuery(vcursor, bindVars)
+		return rp.systemQuery(vcursor, bindVars)
 	case Unsharded:
-		return params.unsharded(vcursor, bindVars)
+		return rp.unsharded(vcursor, bindVars)
 	case Any:
-		return params.anyShard(vcursor, bindVars)
+		return rp.anyShard(vcursor, bindVars)
 	case Scatter:
-		return params.byDestination(vcursor, bindVars, key.DestinationAllShards{})
+		return rp.byDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
-		return params.byDestination(vcursor, bindVars, params.targetDestination)
+		return rp.byDestination(vcursor, bindVars, rp.TargetDestination)
 	case Equal:
-		switch params.vindex.(type) {
+		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
-			return params.paramsSelectEqualMultiCol(vcursor, bindVars)
+			return rp.paramsSelectEqualMultiCol(vcursor, bindVars)
 		default:
-			return params.paramsSelectEqual(vcursor, bindVars)
+			return rp.paramsSelectEqual(vcursor, bindVars)
 		}
 	case None:
 		return nil, nil, nil
 	default:
 		// Unreachable.
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported opcode: %v", params.opcode)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported opcode: %v", rp.opcode)
 	}
 }
 
-func (params *RoutingParameters) systemQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	destinations, err := params.routeInfoSchemaQuery(vcursor, bindVars)
+func (rp *RoutingParameters) systemQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	destinations, err := rp.routeInfoSchemaQuery(vcursor, bindVars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -116,20 +121,20 @@ func (params *RoutingParameters) systemQuery(vcursor VCursor, bindVars map[strin
 	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }
 
-func (params *RoutingParameters) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
+func (rp *RoutingParameters) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
 	defaultRoute := func() ([]*srvtopo.ResolvedShard, error) {
-		ks := params.keyspace.Name
+		ks := rp.Keyspace.Name
 		destinations, _, err := vcursor.ResolveDestinations(ks, nil, []key.Destination{key.DestinationAnyShard{}})
 		return destinations, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
 	}
 
-	if len(params.sysTableTableName) == 0 && len(params.sysTableTableSchema) == 0 {
+	if len(rp.SysTableTableName) == 0 && len(rp.SysTableTableSchema) == 0 {
 		return defaultRoute()
 	}
 
 	env := evalengine.EnvWithBindVars(bindVars)
 	var specifiedKS string
-	for _, tableSchema := range params.sysTableTableSchema {
+	for _, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
@@ -147,7 +152,7 @@ func (params *RoutingParameters) routeInfoSchemaQuery(vcursor VCursor, bindVars 
 	}
 
 	tableNames := map[string]string{}
-	for tblBvName, sysTableName := range params.sysTableTableName {
+	for tblBvName, sysTableName := range rp.SysTableTableName {
 		val, err := env.Evaluate(sysTableName)
 		if err != nil {
 			return nil, err
@@ -164,7 +169,7 @@ func (params *RoutingParameters) routeInfoSchemaQuery(vcursor VCursor, bindVars 
 
 	// the use has specified a table_name - let's check if it's a routed table
 	if len(tableNames) > 0 {
-		rss, err := params.routedTable(vcursor, bindVars, specifiedKS, tableNames)
+		rss, err := rp.routedTable(vcursor, bindVars, specifiedKS, tableNames)
 		if err != nil {
 			// Only if keyspace is not found in vschema, we try with default keyspace.
 			// As the in the table_schema predicates for a keyspace 'ks' it can contain 'vt_ks'.
@@ -194,7 +199,7 @@ func (params *RoutingParameters) routeInfoSchemaQuery(vcursor VCursor, bindVars 
 	return destinations, nil
 }
 
-func (params *RoutingParameters) routedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableNames map[string]string) ([]*srvtopo.ResolvedShard, error) {
+func (rp *RoutingParameters) routedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableNames map[string]string) ([]*srvtopo.ResolvedShard, error) {
 	var routedKs *vindexes.Keyspace
 	for tblBvName, tableName := range tableNames {
 		tbl := sqlparser.TableName{
@@ -235,8 +240,8 @@ func setReplaceSchemaName(bindVars map[string]*querypb.BindVariable) {
 	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
 }
 
-func (params *RoutingParameters) anyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+func (rp *RoutingParameters) anyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(rp.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -247,8 +252,8 @@ func (params *RoutingParameters) anyShard(vcursor VCursor, bindVars map[string]*
 	return rss, multiBindVars, nil
 }
 
-func (params *RoutingParameters) unsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+func (rp *RoutingParameters) unsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(rp.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -262,8 +267,8 @@ func (params *RoutingParameters) unsharded(vcursor VCursor, bindVars map[string]
 	return rss, multiBindVars, nil
 }
 
-func (params *RoutingParameters) byDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, destination key.Destination) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rss, _, err := vcursor.ResolveDestinations(params.keyspace.Name, nil, []key.Destination{destination})
+func (rp *RoutingParameters) byDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, destination key.Destination) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, _, err := vcursor.ResolveDestinations(rp.Keyspace.Name, nil, []key.Destination{destination})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -274,13 +279,13 @@ func (params *RoutingParameters) byDestination(vcursor VCursor, bindVars map[str
 	return rss, multiBindVars, err
 }
 
-func (params *RoutingParameters) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (rp *RoutingParameters) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	env := evalengine.EnvWithBindVars(bindVars)
-	value, err := env.Evaluate(params.values[0])
+	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, params.vindex.(vindexes.SingleColumn), params.keyspace, []sqltypes.Value{value.Value()})
+	rss, _, err := resolveShards(vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, []sqltypes.Value{value.Value()})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -291,10 +296,10 @@ func (params *RoutingParameters) paramsSelectEqual(vcursor VCursor, bindVars map
 	return rss, multiBindVars, nil
 }
 
-func (params *RoutingParameters) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (rp *RoutingParameters) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	env := evalengine.EnvWithBindVars(bindVars)
 	var rowValue []sqltypes.Value
-	for _, rvalue := range params.values {
+	for _, rvalue := range rp.Values {
 		v, err := env.Evaluate(rvalue)
 		if err != nil {
 			return nil, nil, err
@@ -302,7 +307,7 @@ func (params *RoutingParameters) paramsSelectEqualMultiCol(vcursor VCursor, bind
 		rowValue = append(rowValue, v.Value())
 	}
 
-	rss, _, err := resolveShardsMultiCol(vcursor, params.vindex.(vindexes.MultiColumn), params.keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
+	rss, _, err := resolveShardsMultiCol(vcursor, rp.Vindex.(vindexes.MultiColumn), rp.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
 	if err != nil {
 		return nil, nil, err
 	}

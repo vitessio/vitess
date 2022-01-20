@@ -49,13 +49,6 @@ type Route struct {
 	// Opcode is the execution opcode.
 	Opcode RouteOpcode
 
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
-
-	// TargetDestination specifies an explicit target destination to send the query to.
-	// This bypases the core of the v3 engine.
-	TargetDestination key.Destination
-
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
@@ -68,12 +61,6 @@ type Route struct {
 
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
-
-	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
-
-	// Values specifies the vindex values to use for routing.
-	Values []evalengine.Expr
 
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
@@ -91,9 +78,8 @@ type Route struct {
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
 
-	// The following two fields are used when routing information_schema queries
-	SysTableTableSchema []evalengine.Expr
-	SysTableTableName   map[string]evalengine.Expr
+	// RoutingParameters parameters required for query routing.
+	*RoutingParameters
 
 	// Route does not take inputs
 	noInputs
@@ -105,18 +91,18 @@ type Route struct {
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
 func NewSimpleRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace) *Route {
 	return &Route{
-		Opcode:   opcode,
-		Keyspace: keyspace,
+		Opcode:            opcode,
+		RoutingParameters: &RoutingParameters{Keyspace: keyspace},
 	}
 }
 
 // NewRoute creates a Route.
 func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
 	return &Route{
-		Opcode:     opcode,
-		Keyspace:   keyspace,
-		Query:      query,
-		FieldQuery: fieldQuery,
+		Opcode:            opcode,
+		RoutingParameters: &RoutingParameters{Keyspace: keyspace},
+		Query:             query,
+		FieldQuery:        fieldQuery,
 	}
 }
 
@@ -322,17 +308,10 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 }
 
 func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	params := RoutingParameters{
-		opcode:              route.GetGenericOpcode(),
-		keyspace:            route.Keyspace,
-		sysTableTableName:   route.SysTableTableName,
-		sysTableTableSchema: route.SysTableTableSchema,
-		values:              route.Values,
-		vindex:              route.Vindex,
-	}
+	route.opcode = route.GetGenericOpcode()
 	switch route.Opcode {
 	case SelectDBA, SelectUnsharded, SelectNext, SelectReference, SelectScatter, SelectEqual, SelectEqualUnique:
-		return params.findRoute(vcursor, bindVars)
+		return route.findRoutingInfo(vcursor, bindVars)
 	case SelectIN:
 		switch route.Vindex.(type) {
 		case vindexes.MultiColumn:

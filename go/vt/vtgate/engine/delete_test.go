@@ -35,9 +35,11 @@ func TestDeleteUnsharded(t *testing.T) {
 	del := &Delete{
 		DML: DML{
 			Opcode: Unsharded,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: false,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: false,
+				},
 			},
 			Query: "dummy_delete",
 		},
@@ -66,13 +68,15 @@ func TestDeleteEqual(t *testing.T) {
 	del := &Delete{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -96,13 +100,15 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 	del := &Delete{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			},
-			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -130,13 +136,15 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	del := &Delete{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_delete",
 		},
 	}
 
@@ -159,13 +167,15 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 	del := &Delete{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
-			},
 			Query:  "dummy_delete",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
 		},
 	}
 
@@ -178,11 +188,13 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
+			Opcode: Equal,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
 			Query:            "dummy_delete",
-			Vindex:           ks.Vindexes["hash"],
-			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
@@ -262,11 +274,13 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
+			Opcode: Equal,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["rg_vdx"],
+				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			},
 			Query:            "dummy_delete",
-			Vindex:           ks.Vindexes["rg_vdx"],
-			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			Table:            ks.Tables["rg_tbl"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
@@ -343,10 +357,12 @@ func TestDeleteSharded(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:   Scatter,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_delete",
-			Table:    ks.Tables["t2"],
+			Opcode: Scatter,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+			},
+			Query: "dummy_delete",
+			Table: ks.Tables["t2"],
 		},
 	}
 
@@ -368,10 +384,12 @@ func TestDeleteShardedStreaming(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:   Scatter,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_delete",
-			Table:    ks.Tables["t2"],
+			Opcode: Scatter,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+			},
+			Query: "dummy_delete",
+			Table: ks.Tables["t2"],
 		},
 	}
 
@@ -390,8 +408,10 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:           Scatter,
-			Keyspace:         ks.Keyspace,
+			Opcode: Scatter,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+			},
 			Query:            "dummy_delete",
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
@@ -473,14 +493,16 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:   In,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_update",
-			Vindex:   ks.Vindexes["rg_vdx"],
-			Values: []evalengine.Expr{
-				&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
-				evalengine.NewLiteralInt(3),
+			Opcode: In,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["rg_vdx"],
+				Values: []evalengine.Expr{
+					&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+					evalengine.NewLiteralInt(3),
+				},
 			},
+			Query:            "dummy_update",
 			Table:            ks.Tables["rg_tbl"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
