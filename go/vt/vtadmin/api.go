@@ -217,6 +217,9 @@ func (api *API) ListenAndServe() error {
 	return api.serv.ListenAndServe()
 }
 
+// ServeHTTP serves all routes matching path "/api" (see above)
+// It first processes cookies, and acts accordingly
+// Primarily, it sets up a dynamic API if HttpOpts.EnableDynamicClusters is set to true
 func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !api.options.HTTPOpts.EnableDynamicClusters {
 		api.Handler().ServeHTTP(w, r)
@@ -268,7 +271,6 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer dynamicAPI.Close()
-
 	dynamicAPI.Handler().ServeHTTP(w, r)
 }
 
@@ -276,6 +278,7 @@ func (api *API) Close() error {
 	return nil
 }
 
+// Handler handles all routes under "/api" (see above)
 func (api *API) Handler() http.Handler {
 	router := mux.NewRouter().PathPrefix("/api").Subrouter()
 
