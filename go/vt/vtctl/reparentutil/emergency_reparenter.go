@@ -55,10 +55,11 @@ type EmergencyReparenter struct {
 // EmergencyReparentShard operations. Options are passed by value, so it is safe
 // for callers to mutate and reuse options structs for multiple calls.
 type EmergencyReparentOptions struct {
-	NewPrimaryAlias           *topodatapb.TabletAlias
-	IgnoreReplicas            sets.String
-	WaitReplicasTimeout       time.Duration
-	PreventCrossCellPromotion bool
+	NewPrimaryAlias              *topodatapb.TabletAlias
+	IgnoreReplicas               sets.String
+	WaitReplicasTimeout          time.Duration
+	PreventCrossCellPromotion    bool
+	WaitForAllReplicasToReparent bool
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
@@ -726,8 +727,10 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
 	}
 	// we now reparent all the replicas to the new primary we have promoted.
-	// Here we do not need to wait for all the replicas, We can finish early when even 1 succeeds.
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, false /* waitForAllReplicas */, true /* populateReparentJournal */)
+	// Here we check the options. If we do not need to wait for all the replicas, we can finish early when even 1 succeeds.
+	// We have to wait for all replicas when running ERS from vtctl binary because if we finish early, we stop the grpc client threads
+	// for the other replicas which are still reparenting themselves and this causes their contexts to be cancelled and replication in a broken state.
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, opts.WaitForAllReplicasToReparent /* waitForAllReplicas */, true /* populateReparentJournal */)
 	if err != nil {
 		return err
 	}

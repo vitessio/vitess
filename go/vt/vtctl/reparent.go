@@ -186,7 +186,10 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		}
 	}
 	unreachableReplicas := topoproto.ParseTabletSet(*ignoreReplicasList)
-	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas, *preventCrossCellPromotion)
+	// From the vtctl binary we should be waiting for all the replicas to reparent themselves
+	// since we finish main function execution when ERS ends. We would end up stopping the grpc clients for the replicas which
+	// are still in the process of reparenting themselves if we do not wait for them.
+	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas, *preventCrossCellPromotion /* waitForReplicasToReparent */, true)
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
