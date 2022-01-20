@@ -4,6 +4,10 @@ package vreplication
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
+// The Lead table also allows us to test several things:
+//   1. Mixed case identifiers
+//   2. Column names with special characters in them, namely a dash
+//   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 var (
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid));
@@ -15,7 +19,7 @@ create table orders(oid int, cid int, pid int, mname varchar(128), price int, qt
 create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table customer2(cid int, name varbinary(128), typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid));
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
-create table Lead(Lead_id binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (Lead_id));
+create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `));
 `
 
 	initialProductVSchema = `
@@ -79,7 +83,7 @@ create table Lead(Lead_id binary(16), name varbinary(16), date1 datetime not nul
 	  "Lead": {
           "column_vindexes": [
 	        {
-	          "column": "Lead_id",
+	          "column": "Lead-id",
 	          "name": "bmd5"
 	        }
 	      ]
@@ -241,6 +245,8 @@ create table Lead(Lead_id binary(16), name varbinary(16), date1 datetime not nul
       }
 }
 `
+
+	// the merchant-type keyspace allows us to test keyspace names with special characters in them (dash)
 	materializeMerchantOrdersSpec = `
 {
   "workflow": "morders",

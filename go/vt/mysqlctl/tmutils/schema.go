@@ -231,8 +231,8 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 	sqlStrings := make([]string, 0, len(sd.TableDefinitions)+1)
 	createViewSQL := make([]string, 0, len(sd.TableDefinitions))
 
-	// backtick database name since keyspace names appear in the routing rules, and they might need to be escaped
-	// unescape() first in case an already escaped string was passed
+	// Backtick database name since keyspace names appear in the routing rules, and they might need to be escaped.
+	// We unescape() them first in case we have an explicitly escaped string was specified.
 	createDatabaseSQL := strings.Replace(sd.DatabaseSchema, "`{{.DatabaseName}}`", "{{.DatabaseName}}", -1)
 	createDatabaseSQL = strings.Replace(createDatabaseSQL, "{{.DatabaseName}}", sqlescape.EscapeID("{{.DatabaseName}}"), -1)
 	sqlStrings = append(sqlStrings, createDatabaseSQL)

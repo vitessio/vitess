@@ -48,7 +48,7 @@ func EscapeIDs(identifiers []string) []string {
 // UnescapeID reverses any backticking in the input string.
 func UnescapeID(in string) string {
 	l := len(in)
-	if len(in) >= 2 && in[0] == '`' && in[l-1] == '`' {
+	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
 		return in[1 : l-1]
 	}
 	return in
