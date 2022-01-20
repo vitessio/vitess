@@ -19,6 +19,9 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
+
+	"github.com/klauspost/compress/zstd"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -288,6 +291,75 @@ varsLoop:
 	}
 
 	return query, nil
+}
+
+// CompressedTransactionPayload implements BinlogEvent.CompressedTransactionPayload().
+//
+// See: https://dev.mysql.com/doc/refman/en/binary-log-transaction-compression.html
+//      https://dev.mysql.com/worklog/task/?id=3549
+//      https://github.com/mysql/mysql-server/search?l=C%2B%2B&q=Transaction_payload_event
+//
+// The following events are compressed as part of the transaction payload:
+//  QUERY_EVENT = 2,
+//  INTVAR_EVENT = 5,
+//  APPEND_BLOCK_EVENT = 9,
+//  DELETE_FILE_EVENT = 11,
+//  RAND_EVENT = 13,
+//  USER_VAR_EVENT = 14,
+//  XID_EVENT = 16,
+//  BEGIN_LOAD_QUERY_EVENT = 17,
+//  EXECUTE_LOAD_QUERY_EVENT = 18,
+//  TABLE_MAP_EVENT = 19,
+//  WRITE_ROWS_EVENT_V1 = 23,
+//  UPDATE_ROWS_EVENT_V1 = 24,
+//  DELETE_ROWS_EVENT_V1 = 25,
+//  IGNORABLE_LOG_EVENT = 28,
+//  ROWS_QUERY_LOG_EVENT = 29,
+//  WRITE_ROWS_EVENT = 30,
+//  UPDATE_ROWS_EVENT = 31,
+//  DELETE_ROWS_EVENT = 32,
+//  XA_PREPARE_LOG_EVENT = 38,
+//  PARTIAL_UPDATE_ROWS_EVENT = 39,
+//
+// When compression is enabled, the GTID log event has the following fields:
+// +-----------------------------------------+
+// | field_type (1-9 bytes)                  |
+// +-----------------------------------------+
+// | field_size (1-9 bytes)                  |
+// +-----------------------------------------+
+// | m_payload (1 to N bytes)                |
+// +-----------------------------------------+
+// | field_type (1-9 bytes)                  |
+// +-----------------------------------------+
+// | field_size (1-9 bytes)                  |
+// +-----------------------------------------+
+// | m_compression_type (1 to 9 bytes)       |
+// +-----------------------------------------+
+// | field_type (1-9 bytes)                  |
+// +-----------------------------------------+
+// | field_size (1-9 bytes)                  |
+// +-----------------------------------------+
+// | m_uncompressed_size size (0 to 9 bytes) |
+// +-----------------------------------------+
+//
+// We need to extract the compressed transaction payload from the GTID event, uncompress it
+// with zstd, and then process the events (e.g. Query events) that make up the transaction.
+func (ev binlogEvent) CompressedTransactionPayload(f BinlogFormat) (query []Query, err error) {
+	// First we must uncompress the payload using ZSTD
+	// We should compare our uncompressed byte size with the m_uncompressed_size field
+	in := io.Reader(bytes.NewReader(ev.Bytes()[f.HeaderLength:]))
+	d, err := zstd.NewReader(in)
+	if err != nil {
+		return nil, err
+	}
+	defer d.Close()
+
+	out := io.Writer(&bytes.Buffer{})
+	_, _ = io.Copy(out, d)
+
+	// Now we need to process the individual events in the decompressed payload
+	// ...
+	return nil, nil
 }
 
 // IntVar implements BinlogEvent.IntVar().
