@@ -184,29 +184,26 @@ func TestMain(m *testing.M) {
 	"table_groups":
 	[
 	    {
-	        "name": "planetscale user groups",
+	        "name": "vitess user groups",
 	        "table_names_or_prefixes":
 	        [
 	            "%"
 	        ],
 	        "readers":
 	        [
-	            "planetscale-reader",
-	            "planetscale-writer",
-	            "planetscale-admin",
-	            "root"
+	            "vitess-reader",
+	            "vitess-writer",
+	            "vitess-admin"
 	        ],
 	        "writers":
 	        [
-	            "planetscale-writer",
-	            "planetscale-writer-only",
-	            "planetscale-admin",
-	            "root"
+	            "vitess-writer",
+	            "vitess-writer-only",
+	            "vitess-admin"
 	        ],
 	        "admins":
 	        [
-	            "planetscale-admin",
-	            "root"
+	            "vitess-admin"
 	        ]
 	    }
 	]
