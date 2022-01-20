@@ -175,12 +175,13 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 
 	// Attach the callerID as the EffectiveCallerID.
 	if req.CallerId != nil {
+		span.Annotate("caller_id", req.CallerId.Principal)
 		ctx = callerid.NewContext(ctx, req.CallerId, &querypb.VTGateCallerID{Username: req.CallerId.Principal})
 	}
 
 	executionUUID, err := schema.CreateUUID()
 	if err != nil {
-		return resp, vterrors.Wrapf(err, "Unable to create execution UUID")
+		return resp, vterrors.Wrapf(err, "unable to create execution UUID")
 	}
 
 	requestContext := req.RequestContext
@@ -190,7 +191,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 
 	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "Unable to parse WaitReplicasTimeout into a valid duration")
+		return nil, vterrors.Wrapf(err, "unable to parse WaitReplicasTimeout into a valid duration")
 	} else if !ok {
 		waitReplicasTimeout = time.Second * 30
 	}
@@ -213,12 +214,12 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	}
 
 	if err := executor.SetDDLStrategy(req.DdlStrategy); err != nil {
-		return resp, vterrors.Wrapf(err, "Invalid DdlStrategy")
+		return resp, vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)
 	}
 
 	if len(req.UuidList) > 0 {
 		if err := executor.SetUUIDList(strings.Join(req.UuidList, ",")); err != nil {
-			return resp, vterrors.Wrapf(err, "Invalid UUIDList")
+			return resp, vterrors.Wrapf(err, "invalid UuidList: %s", req.UuidList)
 		}
 	}
 
