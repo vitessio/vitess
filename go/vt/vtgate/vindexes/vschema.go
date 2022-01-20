@@ -453,6 +453,7 @@ func addDual(vschema *VSchema) {
 
 // expects table name of the form <keyspace>.<tablename>
 func escapeQualifiedTable(qualifiedTableName string) (string, error) {
+	// It's possible to have a database or table name with a dot in it, but that's not otherwise supported within vitess today
 	arr := strings.Split(qualifiedTableName, ".")
 	switch len(arr) {
 	case 1:
@@ -464,7 +465,7 @@ func escapeQualifiedTable(qualifiedTableName string) (string, error) {
 			sqlescape.EscapeID(sqlescape.UnescapeID(keyspace)),
 			sqlescape.EscapeID(sqlescape.UnescapeID(tableName))), nil
 	}
-	return "", fmt.Errorf("invalid table name: %s", qualifiedTableName)
+	return "", fmt.Errorf("invalid table name: %s, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)", qualifiedTableName)
 }
 
 func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {

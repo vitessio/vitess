@@ -674,7 +674,7 @@ func shardMerchant(t *testing.T) {
 
 		// confirm that the backticking of keyspaces in the routing rules works
 		output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-			"--host=127.0.0.1", "-e", "select * from merchant"})
+			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "-e", "select * from merchant"})
 		if err != nil {
 			require.FailNow(t, output)
 		}
