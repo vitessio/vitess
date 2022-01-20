@@ -1427,3 +1427,31 @@
     ]
   }
 }
+
+# derived table with column aliases not supported by v3, but planner is overridden with hint
+"select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+    "Query": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+    "Table": "`user`",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+Gen4 plan same as above
+
+# derived table with column aliases not supported by v3, but planner is overridden with hint
+"select /*vt+ PLANNER=v3 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1"
+"unsupported: column aliases in derived table"
+Gen4 plan same as above
