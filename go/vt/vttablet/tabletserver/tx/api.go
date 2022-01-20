@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/streamlog"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -131,10 +132,16 @@ func (p *Properties) String() string {
 		return ""
 	}
 
-	redactedQueries := make([]string, len(p.Queries))
-	for i, query := range p.Queries {
-		rq, _ := sqlparser.RedactSQLQuery(query)
-		redactedQueries[i] = rq
+	printQueries := func() string {
+		sb := strings.Builder{}
+		for _, query := range p.Queries {
+			if *streamlog.RedactDebugUIQueries {
+				query, _ = sqlparser.RedactSQLQuery(query)
+			}
+			sb.WriteString(query)
+			sb.WriteString(";")
+		}
+		return sb.String()
 	}
 
 	return fmt.Sprintf(
@@ -145,6 +152,6 @@ func (p *Properties) String() string {
 		p.EndTime.Format(time.StampMicro),
 		p.EndTime.Sub(p.StartTime).Seconds(),
 		p.Conclusion,
-		strings.Join(redactedQueries, ";"),
+		printQueries(),
 	)
 }
