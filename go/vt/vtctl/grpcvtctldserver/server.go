@@ -169,7 +169,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	span.Annotate("skip_preflight", req.SkipPreflight)
 	span.Annotate("ddl_strategy", req.DdlStrategy)
 
-	if (len(req.Sql) == 0) {
+	if len(req.Sql) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Sql must be a non-empty array")
 	}
 
