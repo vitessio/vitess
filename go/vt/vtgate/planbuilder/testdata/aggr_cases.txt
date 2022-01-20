@@ -2992,7 +2992,7 @@ Gen4 plan same as above
 "unsupported: filtering on results of aggregates"
 {
   "QueryType": "SELECT",
-  "Original": "select count(*) a from user having a \u003c= 10",
+  "Original": "select col, count(*) a from user group by col having a \u003c= 10",
   "Instructions": {
     "OperatorType": "Filter",
     "Predicate": "a \u003c= 10",
@@ -3000,7 +3000,8 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "count(1) AS a",
+        "GroupBy": "0",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3009,8 +3010,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
-            "Query": "select count(*) as a from `user`",
+            "FieldQuery": "select col, count(*) as a from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, count(*) as a from `user` group by col order by col asc",
             "Table": "`user`"
           }
         ]

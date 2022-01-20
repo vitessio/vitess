@@ -3184,7 +3184,7 @@ Gen4 plan same as above
 # this query lead to a nil pointer error
 "select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)"
 "unsupported: cross-shard left join and where clause"
-Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
 
 # filter after outer join
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.id is null"
@@ -3912,4 +3912,4 @@ Gen4 plan same as above
     "Table": "unsharded_a, unsharded_b"
   }
 }
-Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4 error: expr cannot be converted, not supported: coalesce(unsharded_b.col, 4) = 5
