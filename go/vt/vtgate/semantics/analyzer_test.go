@@ -1357,6 +1357,34 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	return parse, semTable
 }
 
+func TestSingleUnshardedKeyspace(t *testing.T) {
+	tests := []struct {
+		query     string
+		unsharded bool
+	}{
+		{
+			query:     "select 1 from t, t1",
+			unsharded: false, // both tables are unsharded, but from different keyspaces
+		}, {
+			query:     "select 1 from t2",
+			unsharded: false,
+		}, {
+			query:     "select 1 from t, t2",
+			unsharded: false,
+		}, {
+			query:     "select 1 from t as A, t as B",
+			unsharded: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			_, semTable := parseAndAnalyze(t, test.query, "d")
+			assert.Equal(t, test.unsharded, semTable.SingleUnshardedKeyspace())
+		})
+	}
+}
+
 func fakeSchemaInfo() *FakeSI {
 	cols1 := []vindexes.Column{{
 		Name: sqlparser.NewColIdent("id"),
@@ -1370,11 +1398,24 @@ func fakeSchemaInfo() *FakeSI {
 		Type: querypb.Type_VARCHAR,
 	}}
 
+	ks1 := &vindexes.Keyspace{
+		Name:    "ks1",
+		Sharded: false,
+	}
+	ks2 := &vindexes.Keyspace{
+		Name:    "ks2",
+		Sharded: false,
+	}
+	ks3 := &vindexes.Keyspace{
+		Name:    "ks3",
+		Sharded: true,
+	}
+
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
-			"t":  {Name: sqlparser.NewTableIdent("t")},
-			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
-			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
+			"t":  {Name: sqlparser.NewTableIdent("t"), Keyspace: ks1},
+			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true, Keyspace: ks2},
+			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true, Keyspace: ks3},
 		},
 	}
 	return si
