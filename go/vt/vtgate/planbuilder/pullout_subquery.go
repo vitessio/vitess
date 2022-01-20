@@ -124,7 +124,7 @@ func (ps *pulloutSubquery) Rewrite(inputs ...logicalPlan) error {
 	return nil
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (ps *pulloutSubquery) ContainsTables() semantics.TableSet {
 	return ps.underlying.ContainsTables().Merge(ps.subquery.ContainsTables())
 }
@@ -132,4 +132,9 @@ func (ps *pulloutSubquery) ContainsTables() semantics.TableSet {
 // Inputs implements the logicalPlan interface
 func (ps *pulloutSubquery) Inputs() []logicalPlan {
 	return []logicalPlan{ps.underlying, ps.subquery}
+}
+
+// OutputColumns implements the logicalPlan interface
+func (ps *pulloutSubquery) OutputColumns() []sqlparser.SelectExpr {
+	return ps.underlying.OutputColumns()
 }

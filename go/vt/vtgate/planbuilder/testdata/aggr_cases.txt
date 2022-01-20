@@ -946,7 +946,7 @@ Gen4 plan same as above
 }
 Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
 
-# scatter aggregate using distinct
+# scatter aggregate using distinctdistinct
 "select distinct col from user"
 {
   "QueryType": "SELECT",
@@ -2980,6 +2980,83 @@ Gen4 plan same as above
             "FieldQuery": "select count(*) as a from `user` where 1 != 1",
             "Query": "select count(*) as a from `user`",
             "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Less Equal filter on scatter with grouping
+"select col, count(*) a from user group by col having a <= 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) a from user group by col having a \u003c= 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a \u003c= 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1) AS a",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, count(*) as a from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, count(*) as a from `user` group by col order by col asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# We should be able to find grouping keys on ordered aggregates
+"select count(*) as a, val1 from user group by val1 having a = 1.00"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) as a, val1 from user group by val1 having a = 1.00",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0,
+      1
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "a = 1.00",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count(0) AS a",
+            "GroupBy": "(1|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as a, val1, weight_string(val1) from `user` where 1 != 1 group by val1, weight_string(val1)",
+                "OrderBy": "(1|2) ASC",
+                "Query": "select count(*) as a, val1, weight_string(val1) from `user` group by val1, weight_string(val1) order by val1 asc",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       }
