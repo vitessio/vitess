@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -77,7 +76,7 @@ func TestBackupRestore(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := ioutil.TempDir("", "backuptest")
+	root, err := os.MkdirTemp("", "backuptest")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 
@@ -94,9 +93,9 @@ func TestBackupRestore(t *testing.T) {
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
@@ -151,6 +150,8 @@ func TestBackupRestore(t *testing.T) {
 	assert.True(t, sourceTablet.FakeMysqlDaemon.Replicating)
 	assert.True(t, sourceTablet.FakeMysqlDaemon.Running)
 
+	backupTime := time.Now()
+
 	// create a destination tablet, set it up so we can do restores
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
@@ -175,7 +176,7 @@ func TestBackupRestore(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -190,7 +191,7 @@ func TestBackupRestore(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */))
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */))
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -223,8 +224,9 @@ func TestBackupRestore(t *testing.T) {
 
 	primary.FakeMysqlDaemon.SetReplicationPositionPos = primary.FakeMysqlDaemon.CurrentPrimaryPosition
 
-	// restore primary from backup
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
+	// restore primary from latest backup
+	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */),
+		"RestoreData failed")
 	// tablet was created as PRIMARY, so it's baseTabletType is PRIMARY
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
@@ -238,8 +240,9 @@ func TestBackupRestore(t *testing.T) {
 		"SHOW TABLES FROM `vt_test_keyspace`": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}},
 	}
 
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
-	// Tablet type should not change
+	// Test restore with the backup timestamp
+	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, backupTime),
+		"RestoreData with backup timestamp failed")
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)
@@ -278,7 +281,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := ioutil.TempDir("", "backuptest")
+	root, err := os.MkdirTemp("", "backuptest")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 
@@ -295,9 +298,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its position
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
@@ -399,7 +402,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = destTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -416,7 +419,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	errCh = make(chan error, 1)
 	go func(ctx context.Context, tablet *FakeTablet) {
-		errCh <- tablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */)
+		errCh <- tablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */)
 	}(ctx, destTablet)
 
 	timer = time.NewTicker(1 * time.Second)
@@ -475,7 +478,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := ioutil.TempDir("", "backuptest")
+	root, err := os.MkdirTemp("", "backuptest")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 
@@ -492,9 +495,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
@@ -567,7 +570,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -588,7 +591,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	// set a short timeout so that we don't have to wait 30 seconds
 	*topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */))
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */))
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -628,7 +631,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := ioutil.TempDir("", "backuptest")
+	root, err := os.MkdirTemp("", "backuptest")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 
@@ -645,9 +648,9 @@ func TestDisableActiveReparents(t *testing.T) {
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
-	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
@@ -724,7 +727,7 @@ func TestDisableActiveReparents(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -739,7 +742,7 @@ func TestDisableActiveReparents(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */))
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */))
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.False(t, destTablet.FakeMysqlDaemon.Replicating)

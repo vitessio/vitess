@@ -17,13 +17,19 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -49,6 +55,11 @@ var (
 	targetThrottlerAppName = "vreplication"
 )
 
+// for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
+// we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
+const openTxQuery = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
+const deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
+
 func init() {
 	defaultRdonly = 0
 	defaultReplicas = 1
@@ -60,7 +71,7 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.
 	if err != nil {
 		return resp, respBody, err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
 }
@@ -79,7 +90,7 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	if err != nil {
 		return resp, respBody, err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
 }
@@ -108,7 +119,8 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	insertInitialData(t)
 	materializeRollup(t)
 
-	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
+	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName, false)
+
 	// the tenant table was to test a specific case with binary sharding keys. Drop it now so that we don't
 	// have to update the rest of the tests
 	execVtgateQuery(t, vtgateConn, "customer", "drop table tenant")
@@ -138,7 +150,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	allCellNames = "zone1,zone2"
 
-	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestMultiCellVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
@@ -158,16 +170,18 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name)
+	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
 }
 
+// TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test the tablet picker's alias functionality
+// We also reuse the setup of this test to validate that the "vstream * from" vtgate query functionality is functional
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	mainClusterConfig.vreplicationCompressGTID = true
 	defer func() {
 		mainClusterConfig.vreplicationCompressGTID = false
 	}()
-	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestCellAliasVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
@@ -192,16 +206,84 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
-	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
+	t.Run("VStreamFrom", func(t *testing.T) {
+		testVStreamFrom(t, "product", 2)
+	})
+	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
+}
+
+// testVStreamFrom confirms that the "vstream * from" endpoint is serving data
+func testVStreamFrom(t *testing.T, table string, expectedRowCount int) {
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: vtgate.MySQLServerPort,
+	}
+	ch := make(chan bool, 1)
+	go func() {
+		streamConn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer streamConn.Close()
+		_, err = streamConn.ExecuteFetch("set workload='olap'", 1000, false)
+		require.NoError(t, err)
+
+		query := fmt.Sprintf("vstream * from %s", table)
+		err = streamConn.ExecuteStreamFetch(query)
+		require.NoError(t, err)
+
+		wantFields := []*querypb.Field{{
+			Name: "op",
+			Type: sqltypes.VarChar,
+		}, {
+			Name: "pid",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "description",
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: "date1",
+			Type: sqltypes.Datetime,
+		}, {
+			Name: "date2",
+			Type: sqltypes.Datetime,
+		}}
+		gotFields, err := streamConn.Fields()
+		require.NoError(t, err)
+		for i, field := range gotFields {
+			gotFields[i] = &querypb.Field{
+				Name: field.Name,
+				Type: field.Type,
+			}
+		}
+		utils.MustMatch(t, wantFields, gotFields)
+
+		gotRows, err := streamConn.FetchNext(nil)
+		require.NoError(t, err)
+		log.Infof("QR1:%v\n", gotRows)
+
+		gotRows, err = streamConn.FetchNext(nil)
+		require.NoError(t, err)
+		log.Infof("QR2:%+v\n", gotRows)
+
+		ch <- true
+	}()
+
+	select {
+	case <-ch:
+		return
+	case <-time.After(5 * time.Second):
+		t.Fatal("nothing streamed within timeout")
+	}
 }
 
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
 		log.Infof("Inserting initial data")
-		lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
+		lines, _ := os.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
+		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
 		log.Infof("Done inserting initial data")
 
 		validateCount(t, vtgateConn, "product:0", "product", 2)
@@ -239,7 +321,7 @@ func insertMoreProductsForTargetThrottler(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
-func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string) {
+func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string, withOpenTx bool) {
 	t.Run("shardCustomer", func(t *testing.T) {
 		workflow := "p2c"
 		sourceKs := "product"
@@ -255,12 +337,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			t.Fatal(err)
 		}
 
-		tables := "customer,tenant"
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
-
 		// Assume we are operating on first cell
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+
+		tables := "customer,tenant"
+		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 
@@ -278,8 +361,21 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
+
+		var commit func(t *testing.T)
+		if withOpenTx {
+			commit, _ = vc.startQuery(t, openTxQuery)
+		}
 		switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
 		switchWrites(t, ksWorkflow, false)
+		if withOpenTx && commit != nil {
+			commit(t)
+		}
+		vdiff(t, "product.p2c_reverse", "")
+		if withOpenTx {
+			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
+		}
+
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"

@@ -19,9 +19,11 @@ package sqltypes
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -29,6 +31,9 @@ import (
 	"vitess.io/vitess/go/hack"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -79,7 +84,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
-	case IsQuoted(typ) || typ == Bit || typ == Null:
+	case IsQuoted(typ) || typ == Bit || typ == HexNum || typ == HexVal || typ == Null:
 		return MakeTrusted(typ, val), nil
 	}
 	// All other types are unsafe or invalid.
@@ -100,6 +105,16 @@ func MakeTrusted(typ querypb.Type, val []byte) Value {
 	}
 
 	return Value{typ: typ, val: val}
+}
+
+// NewHexNum builds an Hex Value.
+func NewHexNum(v []byte) Value {
+	return MakeTrusted(HexNum, v)
+}
+
+// NewHexVal builds a HexVal Value.
+func NewHexVal(v []byte) Value {
+	return MakeTrusted(HexVal, v)
 }
 
 // NewInt64 builds an Int64 Value.
@@ -141,6 +156,31 @@ func NewVarChar(v string) Value {
 // The input is a string because it's the most common use case.
 func NewVarBinary(v string) Value {
 	return MakeTrusted(VarBinary, []byte(v))
+}
+
+// NewDate builds a Date value.
+func NewDate(v string) Value {
+	return MakeTrusted(Date, []byte(v))
+}
+
+// NewTime builds a Time value.
+func NewTime(v string) Value {
+	return MakeTrusted(Time, []byte(v))
+}
+
+// NewTimestamp builds a Timestamp value.
+func NewTimestamp(v string) Value {
+	return MakeTrusted(Timestamp, []byte(v))
+}
+
+// NewDatetime builds a Datetime value.
+func NewDatetime(v string) Value {
+	return MakeTrusted(Datetime, []byte(v))
+}
+
+// NewDecimal builds a Decimal value.
+func NewDecimal(v string) Value {
+	return MakeTrusted(Decimal, []byte(v))
 }
 
 // NewIntegral builds an integral type from a string representation.
@@ -192,15 +232,30 @@ func (v Value) Raw() []byte {
 	return v.val
 }
 
+// RawStr returns the internal representation of the value as a string instead
+// of a byte slice. This is equivalent to calling `string(v.Raw())` but does
+// not allocate.
+func (v Value) RawStr() string {
+	return hack.String(v.val)
+}
+
 // ToBytes returns the value as MySQL would return it as []byte.
 // In contrast, Raw returns the internal representation of the Value, which may not
-// match MySQL's representation for newer types.
-// If the value is not convertible like in the case of Expression, it returns nil.
-func (v Value) ToBytes() []byte {
+// match MySQL's representation for hex encoded binary data or newer types.
+// If the value is not convertible like in the case of Expression, it returns an error.
+func (v Value) ToBytes() ([]byte, error) {
 	if v.typ == Expression {
-		return nil
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes")
 	}
-	return v.val
+	if v.typ == HexVal {
+		dv, err := v.decodeHexVal()
+		return dv, err
+	}
+	if v.typ == HexNum {
+		dv, err := v.decodeHexNum()
+		return dv, err
+	}
+	return v.val, nil
 }
 
 // Len returns the length.
@@ -425,6 +480,38 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 	}
 	*v, err = InterfaceToValue(val)
 	return err
+}
+
+// decodeHexVal decodes the SQL hex value of the form x'A1' into a byte
+// array matching what MySQL would return when querying the column where
+// an INSERT was performed with x'A1' having been specified as a value
+func (v *Value) decodeHexVal() ([]byte, error) {
+	match, err := regexp.Match("^x'.*'$", v.val)
+	if !match || err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex value: %v", v.val)
+	}
+	hexBytes := v.val[2 : len(v.val)-1]
+	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
+	if err != nil {
+		return nil, err
+	}
+	return decodedHexBytes, nil
+}
+
+// decodeHexNum decodes the SQL hex value of the form 0xA1 into a byte
+// array matching what MySQL would return when querying the column where
+// an INSERT was performed with 0xA1 having been specified as a value
+func (v *Value) decodeHexNum() ([]byte, error) {
+	match, err := regexp.Match("^0x.*$", v.val)
+	if !match || err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex number: %v", v.val)
+	}
+	hexBytes := v.val[2:]
+	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
+	if err != nil {
+		return nil, err
+	}
+	return decodedHexBytes, nil
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {

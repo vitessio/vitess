@@ -172,6 +172,7 @@ func (s *server) ApplySchema(ctx context.Context, request *tabletmanagerdatapb.A
 		AllowReplication: request.AllowReplication,
 		BeforeSchema:     request.BeforeSchema,
 		AfterSchema:      request.AfterSchema,
+		SQLMode:          request.SqlMode,
 	})
 	if err == nil {
 		response.BeforeSchema = scr.BeforeSchema
@@ -285,7 +286,7 @@ func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatap
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PrimaryPositionResponse{}
-	position, err := s.tm.MasterPosition(ctx)
+	position, err := s.tm.PrimaryPosition(ctx)
 	if err == nil {
 		response.Position = position
 	}
@@ -296,7 +297,7 @@ func (s *server) PrimaryPosition(ctx context.Context, request *tabletmanagerdata
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryPosition", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.PrimaryPositionResponse{}
-	position, err := s.tm.MasterPosition(ctx)
+	position, err := s.tm.PrimaryPosition(ctx)
 	if err == nil {
 		response.Position = position
 	}
@@ -391,7 +392,7 @@ func (s *server) InitMaster(ctx context.Context, request *tabletmanagerdatapb.In
 	defer s.tm.HandleRPCPanic(ctx, "InitMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.InitPrimaryResponse{}
-	position, err := s.tm.InitMaster(ctx)
+	position, err := s.tm.InitPrimary(ctx)
 	if err == nil {
 		response.Position = position
 	}
@@ -548,7 +549,7 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 		})
 	})
 
-	return s.tm.RestoreFromBackup(ctx, logger)
+	return s.tm.RestoreFromBackup(ctx, logger, logutil.ProtoToTime(request.GetBackupTime()))
 }
 
 // registration glue

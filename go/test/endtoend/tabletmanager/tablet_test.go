@@ -79,6 +79,7 @@ func TestLocalMetadata(t *testing.T) {
 	log.Info(fmt.Sprintf("Started vttablet %v", rTablet))
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
+	clusterInstance.VtGatePlannerVersion = 0
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 

@@ -19,42 +19,45 @@ package semantics
 import (
 	"reflect"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// scoper is responsible for figuring out the scoping for the query,
-// and keeps the current scope when walking the tree
-type scoper struct {
-	rScope       map[*sqlparser.Select]*scope
-	wScope       map[*sqlparser.Select]*scope
-	sqlNodeScope map[scopeKey]*scope
-	scopes       []*scope
-}
+type (
+	// scoper is responsible for figuring out the scoping for the query,
+	// and keeps the current scope when walking the tree
+	scoper struct {
+		rScope map[*sqlparser.Select]*scope
+		wScope map[*sqlparser.Select]*scope
+		scopes []*scope
+		org    originable
 
-type scopeKey struct {
-	typ  keyType
-	node sqlparser.SQLNode
-}
+		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
+		specialExprScopes map[*sqlparser.Literal]*scope
+	}
 
-type keyType int8
-
-const (
-	_ keyType = iota
-	orderBy
-	groupBy
-	having
+	scope struct {
+		parent     *scope
+		selectStmt *sqlparser.Select
+		tables     []TableInfo
+		isUnion    bool
+	}
 )
 
 func newScoper() *scoper {
 	return &scoper{
-		rScope:       map[*sqlparser.Select]*scope{},
-		wScope:       map[*sqlparser.Select]*scope{},
-		sqlNodeScope: map[scopeKey]*scope{},
+		rScope:            map[*sqlparser.Select]*scope{},
+		wScope:            map[*sqlparser.Select]*scope{},
+		specialExprScopes: map[*sqlparser.Literal]*scope{},
 	}
 }
 
-func (s *scoper) down(cursor *sqlparser.Cursor) {
-	switch node := cursor.Node().(type) {
+func (s *scoper) down(cursor *sqlparser.Cursor) error {
+	node := cursor.Node()
+	switch node := node.(type) {
 	case *sqlparser.Select:
 		currScope := newScope(s.currentScope())
 		s.push(currScope)
@@ -64,7 +67,6 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 
 		s.rScope[node] = currScope
 		s.wScope[node] = newScope(nil)
-		s.sqlNodeScope[scopeKey{node: node}] = currScope
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
@@ -74,39 +76,70 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			nScope := newScope(nil)
 			nScope.selectStmt = cursor.Parent().(*sqlparser.Select)
 			s.push(nScope)
-			s.sqlNodeScope[scopeKey{node: node}] = nScope
 		}
-	case *sqlparser.Union:
-		scope := newScope(s.currentScope())
-		s.push(scope)
-		s.sqlNodeScope[scopeKey{node: node}] = scope
 	case sqlparser.SelectExprs:
 		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
 		if !parentIsSelect {
 			break
 		}
 
+		// adding a vTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
+		// the vTableInfo we are creating here should not be confused with derived tables' vTableInfo
 		wScope, exists := s.wScope[sel]
 		if !exists {
 			break
 		}
-
-		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
+		wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
 	case sqlparser.OrderBy:
-		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
+		err := s.createSpecialScopePostProjection(cursor.Parent())
+		if err != nil {
+			return err
+		}
+		for _, order := range node {
+			lit := keepIntLiteral(order.Expr)
+			if lit != nil {
+				s.specialExprScopes[lit] = s.currentScope()
+			}
+		}
 	case sqlparser.GroupBy:
-		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+		err := s.createSpecialScopePostProjection(cursor.Parent())
+		if err != nil {
+			return err
+		}
+		for _, expr := range node {
+			lit := keepIntLiteral(expr)
+			if lit != nil {
+				s.specialExprScopes[lit] = s.currentScope()
+			}
+		}
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
 			break
 		}
-		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: having})
+		return s.createSpecialScopePostProjection(cursor.Parent())
 	}
+	return nil
+}
+
+func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
+	coll, ok := e.(*sqlparser.CollateExpr)
+	if ok {
+		e = coll.Expr
+	}
+	l, ok := e.(*sqlparser.Literal)
+	if !ok {
+		return nil
+	}
+	if l.Type != sqlparser.IntVal {
+		return nil
+	}
+	return l
 }
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
-	switch node := cursor.Node().(type) {
-	case sqlparser.SelectStatement, sqlparser.OrderBy, sqlparser.GroupBy:
+	node := cursor.Node()
+	switch node := node.(type) {
+	case *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
@@ -130,78 +163,51 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) downPost(cursor *sqlparser.Cursor) {
-	var scope *scope
-	var found bool
-
-	switch node := cursor.Node().(type) {
-	case sqlparser.OrderBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
-	case sqlparser.GroupBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
-	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
-		}
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
-	default:
-		if validAsMapKey(node) {
-			scope, found = s.sqlNodeScope[scopeKey{node: node}]
-		}
-	}
-
-	if found {
-		s.push(scope)
-	}
-}
-
-func validAsMapKey(s sqlparser.SQLNode) bool {
+func ValidAsMapKey(s sqlparser.SQLNode) bool {
 	return reflect.TypeOf(s).Comparable()
 }
 
-func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
-	var found bool
+// createSpecialScopePostProjection is used for the special projection in ORDER BY, GROUP BY and HAVING
+func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) error {
+	switch parent := parent.(type) {
+	case *sqlparser.Select:
+		// In ORDER BY, GROUP BY and HAVING, we can see both the scope in the FROM part of the query, and the SELECT columns created
+		// so before walking the rest of the tree, we change the scope to match this behaviour
+		incomingScope := s.currentScope()
+		nScope := newScope(incomingScope)
+		nScope.tables = s.wScope[parent].tables
+		nScope.selectStmt = incomingScope.selectStmt
+		s.push(nScope)
 
-	switch node := cursor.Node().(type) {
-	case sqlparser.OrderBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
-	case sqlparser.GroupBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
-	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
+		if s.rScope[parent] != incomingScope {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: scope counts did not match")
 		}
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
-	default:
-		if validAsMapKey(node) {
-			_, found = s.sqlNodeScope[scopeKey{node: node}]
-		}
-	}
+	case *sqlparser.Union:
+		nScope := newScope(nil)
+		nScope.isUnion = true
+		var tableInfo *vTableInfo
 
-	if found {
-		s.popScope()
+		for i, sel := range sqlparser.GetAllSelects(parent) {
+			if i == 0 {
+				nScope.selectStmt = sel
+				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+				nScope.tables = append(nScope.tables, tableInfo)
+			}
+			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+			if len(tableInfo.cols) != len(thisTableInfo.cols) {
+				return engine.ErrWrongNumberOfColumnsInSelect
+			}
+			for i, col := range tableInfo.cols {
+				// at this stage, we don't store the actual dependencies, we only store the expressions.
+				// only later will we walk the expression tree and figure out the deps. so, we need to create a
+				// composite expression that contains all the expressions in the SELECTs that this UNION consists of
+				tableInfo.cols[i] = sqlparser.AndExpressions(col, thisTableInfo.cols[i])
+			}
+		}
+
+		s.push(nScope)
 	}
 	return nil
-}
-
-func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) {
-	sel, ok := cursor.Parent().(*sqlparser.Select)
-	if !ok {
-		return
-	}
-	// In ORDER BY, GROUP BY and HAVING, we can see both the scope in the FROM part of the query, and the SELECT columns created
-	// so before walking the rest of the tree, we change the scope to match this behaviour
-	incomingScope := s.currentScope()
-	nScope := newScope(incomingScope)
-	s.push(nScope)
-	s.sqlNodeScope[k] = nScope
-	wScope := s.wScope[sel]
-	nScope.tables = append(nScope.tables, wScope.tables...)
-	nScope.selectStmt = incomingScope.selectStmt
-
-	if s.rScope[sel] != incomingScope {
-		panic("BUG: scope counts did not match")
-	}
 }
 
 func (s *scoper) currentScope() *scope {
@@ -219,4 +225,28 @@ func (s *scoper) push(sc *scope) {
 func (s *scoper) popScope() {
 	l := len(s.scopes) - 1
 	s.scopes = s.scopes[:l]
+}
+
+func newScope(parent *scope) *scope {
+	return &scope{parent: parent}
+}
+
+func (s *scope) addTable(info TableInfo) error {
+	name, err := info.Name()
+	if err != nil {
+		return err
+	}
+	tblName := name.Name.String()
+	for _, table := range s.tables {
+		name, err := table.Name()
+		if err != nil {
+			return err
+		}
+
+		if tblName == name.Name.String() {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name.Name.String())
+		}
+	}
+	s.tables = append(s.tables, info)
+	return nil
 }

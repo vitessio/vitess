@@ -18,7 +18,6 @@ limitations under the License.
 package ioutil2
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 )
@@ -26,7 +25,7 @@ import (
 // WriteFileAtomic writes the data to a temp file and atomically move if everything else succeeds.
 func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
 	dir, name := path.Split(filename)
-	f, err := ioutil.TempFile(dir, name)
+	f, err := os.CreateTemp(dir, name)
 	if err != nil {
 		return err
 	}

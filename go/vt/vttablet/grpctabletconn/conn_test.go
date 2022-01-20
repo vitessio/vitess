@@ -18,7 +18,6 @@ package grpctabletconn
 
 import (
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -90,7 +89,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
          "Password": "valid"
         }`
 
-	f, err := ioutil.TempFile("", "static_auth_creds.json")
+	f, err := os.CreateTemp("", "static_auth_creds.json")
 	if err != nil {
 		t.Fatal(err)
 	}

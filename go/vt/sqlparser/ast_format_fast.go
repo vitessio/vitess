@@ -25,6 +25,9 @@ import (
 
 // formatFast formats the node.
 func (node *Select) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("select ")
 	node.Comments.formatFast(buf)
 
@@ -70,36 +73,34 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *ParenSelect) formatFast(buf *TrackedBuffer) {
-	buf.WriteByte('(')
-	node.Select.formatFast(buf)
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node.
 func (node *Union) formatFast(buf *TrackedBuffer) {
-	node.FirstStatement.formatFast(buf)
-	for _, us := range node.UnionSelects {
-		us.formatFast(buf)
+	if requiresParen(node.Left) {
+		buf.WriteByte('(')
+		node.Left.formatFast(buf)
+		buf.WriteByte(')')
+	} else {
+		node.Left.formatFast(buf)
 	}
+
+	buf.WriteString(" ")
+	if node.Distinct {
+		buf.WriteString(UnionStr)
+	} else {
+		buf.WriteString(UnionAllStr)
+	}
+	buf.WriteString(" ")
+
+	if requiresParen(node.Right) {
+		buf.WriteByte('(')
+		node.Right.formatFast(buf)
+		buf.WriteByte(')')
+	} else {
+		node.Right.formatFast(buf)
+	}
+
 	node.OrderBy.formatFast(buf)
 	node.Limit.formatFast(buf)
 	buf.WriteString(node.Lock.ToString())
-}
-
-// formatFast formats the node.
-func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
-	if node.Distinct {
-		buf.WriteByte(' ')
-		buf.WriteString(UnionStr)
-		buf.WriteByte(' ')
-		node.Statement.formatFast(buf)
-	} else {
-		buf.WriteByte(' ')
-		buf.WriteString(UnionAllStr)
-		buf.WriteByte(' ')
-		node.Statement.formatFast(buf)
-	}
 }
 
 // formatFast formats the node.
@@ -187,7 +188,34 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *With) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("with ")
+
+	if node.Recursive {
+		buf.WriteString("recursive ")
+	}
+	ctesLength := len(node.ctes)
+	for i := 0; i < ctesLength-1; i++ {
+		node.ctes[i].formatFast(buf)
+		buf.WriteString(", ")
+	}
+	node.ctes[ctesLength-1].formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *CommonTableExpr) formatFast(buf *TrackedBuffer) {
+	node.TableID.formatFast(buf)
+	node.Columns.formatFast(buf)
+	buf.WriteString(" as ")
+	node.Subquery.formatFast(buf)
+	buf.WriteByte(' ')
+}
+
+// formatFast formats the node.
 func (node *Update) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("update ")
 	node.Comments.formatFast(buf)
 	buf.WriteString(node.Ignore.ToString())
@@ -206,6 +234,9 @@ func (node *Update) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Delete) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("delete ")
 	node.Comments.formatFast(buf)
 	if node.Ignore {
@@ -361,6 +392,8 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case RetryMigrationType:
 		alterType = "retry"
+	case CleanupMigrationType:
+		alterType = "cleanup"
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CancelMigrationType:
@@ -572,6 +605,112 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("partition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.WriteString(" (")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.WriteByte(' ')
+			node.KeyColList.formatFast(buf)
+		}
+	}
+	if node.RangeOrList != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(node.RangeOrList)
+		buf.WriteByte(' ')
+		node.ExprOrCol.formatFast(buf)
+	}
+	if node.Partitions != "" {
+		buf.WriteString(" partitions ")
+		buf.WriteString(node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.WriteByte(' ')
+		node.SubPartition.formatFast(buf)
+	}
+	if node.Definitions != nil {
+		buf.WriteString(" (")
+		for i, pd := range node.Definitions {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			pd.formatFast(buf)
+		}
+		buf.WriteString(")")
+	}
+}
+
+// formatFast formats the node.
+func (node *SubPartition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subpartition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.WriteString(" (")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.WriteString(" (")
+			node.KeyColList.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.SubPartitions != "" {
+		buf.WriteString(" subpartitions ")
+		buf.WriteString(node.SubPartitions)
+	}
+}
+
+// formatFast formats the node.
+func (node *ExprOrColumns) formatFast(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.WriteByte('(')
+		node.Expr.formatFast(buf)
+		buf.WriteByte(')')
+	}
+	if node.ColumnList != nil {
+		buf.WriteString("columns ")
+		node.ColumnList.formatFast(buf)
+	}
+}
+
+// formatFast formats the node.
 func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("(\n")
 	for i, col := range ts.Columns {
@@ -610,6 +749,10 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 			opt.Tables.formatFast(buf)
 			buf.WriteByte(')')
 		}
+	}
+	if ts.PartitionOption != nil {
+		buf.WriteByte(' ')
+		ts.PartitionOption.formatFast(buf)
 	}
 }
 
@@ -659,11 +802,11 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(ct.Charset)
 	}
-	if ct.Collate != "" {
+	if ct.Options != nil && ct.Options.Collate != "" {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[COLLATE])
 		buf.WriteByte(' ')
-		buf.WriteString(ct.Collate)
+		buf.WriteString(ct.Options.Collate)
 	}
 	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
@@ -679,16 +822,13 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
-		_, isLiteral := ct.Options.Default.(*Literal)
-		_, isBool := ct.Options.Default.(BoolVal)
-		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-			buf.WriteByte(' ')
-			ct.Options.Default.formatFast(buf)
-		} else {
+		if defaultRequiresParens(ct) {
 			buf.WriteString(" (")
 			ct.Options.Default.formatFast(buf)
 			buf.WriteByte(')')
+		} else {
+			buf.WriteByte(' ')
+			ct.Options.Default.formatFast(buf)
 		}
 	}
 	if ct.Options.OnUpdate != nil {
@@ -930,7 +1070,8 @@ func (node *Show) formatFast(buf *TrackedBuffer) {
 func (node *ShowLegacy) formatFast(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
+		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_replication_status" ||
+		nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.WriteString("show ")
@@ -1171,6 +1312,9 @@ func (node *AliasedTableExpr) formatFast(buf *TrackedBuffer) {
 	if !node.As.IsEmpty() {
 		buf.WriteString(" as ")
 		node.As.formatFast(buf)
+		if len(node.Columns) != 0 {
+			node.Columns.formatFast(buf)
+		}
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.
@@ -1312,14 +1456,20 @@ func (node *ComparisonExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *RangeCond) formatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Left, true)
-	buf.WriteByte(' ')
-	buf.WriteString(node.Operator.ToString())
-	buf.WriteByte(' ')
-	buf.printExpr(node, node.From, true)
-	buf.WriteString(" and ")
-	buf.printExpr(node, node.To, false)
+func (node *BetweenExpr) formatFast(buf *TrackedBuffer) {
+	if node.IsBetween {
+		buf.printExpr(node, node.Left, true)
+		buf.WriteString(" between ")
+		buf.printExpr(node, node.From, true)
+		buf.WriteString(" and ")
+		buf.printExpr(node, node.To, false)
+	} else {
+		buf.printExpr(node, node.Left, true)
+		buf.WriteString(" not between ")
+		buf.printExpr(node, node.From, true)
+		buf.WriteString(" and ")
+		buf.printExpr(node, node.To, false)
+	}
 }
 
 // formatFast formats the node.
@@ -1432,6 +1582,13 @@ func (node *UnaryExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *IntroducerExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.CharacterSet)
+	buf.WriteByte(' ')
+	buf.printExpr(node, node.Expr, true)
+}
+
+// formatFast formats the node.
 func (node *IntervalExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("interval ")
 	buf.printExpr(node, node.Expr, true)
@@ -1452,18 +1609,32 @@ func (node *TimestampFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *CurTimeFuncExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString(node.Name.String())
-	buf.WriteByte('(')
-	buf.printExpr(node, node.Fsp, true)
+func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("extract(")
+	buf.WriteString(node.IntervalTypes.ToString())
+	buf.WriteString(" from ")
+	buf.printExpr(node, node.Expr, true)
 	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *CurTimeFuncExpr) formatFast(buf *TrackedBuffer) {
+	if node.Fsp != nil {
+		buf.WriteString(node.Name.String())
+		buf.WriteByte('(')
+		buf.printExpr(node, node.Fsp, true)
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString(node.Name.String())
+		buf.WriteString("()")
+	}
 }
 
 // formatFast formats the node.
 func (node *CollateExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(" collate ")
-	buf.WriteString(node.Charset)
+	buf.WriteString(node.Collation)
 }
 
 // formatFast formats the node.
@@ -1520,22 +1691,15 @@ func (node *ValuesFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
-	var val SQLNode
-	if node.Name != nil {
-		val = node.Name
-	} else {
-		val = node.StrVal
-	}
-
 	if node.To == nil {
 		buf.WriteString("substr(")
-		val.formatFast(buf)
+		buf.printExpr(node, node.Name, true)
 		buf.WriteString(", ")
 		buf.printExpr(node, node.From, true)
 		buf.WriteByte(')')
 	} else {
 		buf.WriteString("substr(")
-		val.formatFast(buf)
+		buf.printExpr(node, node.Name, true)
 		buf.WriteString(", ")
 		buf.printExpr(node, node.From, true)
 		buf.WriteString(", ")
@@ -2247,4 +2411,12 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 		pair.ToTable.formatFast(buf)
 		prefix = ", "
 	}
+}
+
+// formatFast formats the node.
+// If an extracted subquery is still in the AST when we print it,
+// it will be formatted as if the subquery has been extracted, and instead
+// show up like argument comparisons
+func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
+	node.alternative.Format(buf)
 }

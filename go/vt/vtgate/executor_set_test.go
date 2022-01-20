@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -25,8 +26,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
@@ -286,7 +285,7 @@ func TestExecutorSetOp(t *testing.T) {
 	}, {
 		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
 		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
-		result:  returnResult("sql_mode", "varchar", "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+		result:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
 	}, {
 		// even though the tablet is saying that the value has changed,
 		// useReservedConn is false, so we won't allow this change
@@ -438,7 +437,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{sqltypes.DecimalFloat(2.1), "baz"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {

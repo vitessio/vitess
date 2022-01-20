@@ -353,6 +353,9 @@ message EmergencyReparentShardRequest {
   // WaitReplicasTimeout is the duration of time to wait for replicas to catch
   // up in reparenting.
   vttime.Duration wait_replicas_timeout = 5;
+  // PreventCrossCellPromotion is used to only promote the new primary from the same cell
+  // as the failed primary.
+  bool prevent_cross_cell_promotion = 6;
 }
 
 message EmergencyReparentShardResponse {
@@ -366,6 +369,15 @@ message EmergencyReparentShardResponse {
   // up-to-date.
   topodata.TabletAlias promoted_primary = 3;
   repeated logutil.Event events = 4;
+}
+
+message ExecuteHookRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  tabletmanagerdata.ExecuteHookRequest tablet_hook_request = 2;
+}
+
+message ExecuteHookResponse {
+  tabletmanagerdata.ExecuteHookResponse hook_result = 1;
 }
 
 message FindAllShardsInKeyspaceRequest {
@@ -580,6 +592,13 @@ message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
 }
 
+message PingTabletRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message PingTabletResponse {
+}
+
 message PlannedReparentShardRequest {
   // Keyspace is the name of the keyspace to perform the Planned Reparent in.
   string keyspace = 1;
@@ -618,6 +637,17 @@ message PlannedReparentShardResponse {
   repeated logutil.Event events = 4;
 }
 
+message RebuildKeyspaceGraphRequest {
+  string keyspace = 1;
+  repeated string cells = 2;
+  // AllowPartial, when set, allows a SNAPSHOT keyspace to serve with an
+  // incomplete set of shards. It is ignored for all other keyspace types.
+  bool allow_partial = 3;
+}
+
+message RebuildKeyspaceGraphResponse {
+}
+
 message RebuildVSchemaGraphRequest {
   // Cells specifies the cells to rebuild the SrvVSchema objects for. If empty,
   // RebuildVSchemaGraph rebuilds the SrvVSchema for every cell in the topo.
@@ -642,6 +672,40 @@ message RefreshStateByShardRequest {
 
 message RefreshStateByShardResponse {
   bool is_partial_refresh = 1;
+}
+
+message ReloadSchemaRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message ReloadSchemaResponse {
+}
+
+message ReloadSchemaKeyspaceRequest {
+  string keyspace = 1;
+  string wait_position = 2;
+  bool include_primary = 3;
+  // Concurrency is the global concurrency across all shards in the keyspace
+  // (so, at most this many tablets will be reloaded across the keyspace at any
+  // given point).
+  uint32 concurrency = 4;
+}
+
+message ReloadSchemaKeyspaceResponse {
+  repeated logutil.Event events = 1;
+}
+
+message ReloadSchemaShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  string wait_position = 3;
+  bool include_primary = 4;
+  // Concurrency is the maximum number of tablets to reload at one time.
+  uint32 concurrency = 5;
+}
+
+message ReloadSchemaShardResponse {
+  repeated logutil.Event events = 2;
 }
 
 message RemoveKeyspaceCellRequest {
@@ -694,6 +758,86 @@ message ReparentTabletResponse {
   topodata.TabletAlias primary = 3;
 }
 
+message RunHealthCheckRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message RunHealthCheckResponse {
+}
+
+message SetKeyspaceServedFromRequest {
+  string keyspace = 1;
+  topodata.TabletType tablet_type = 2;
+  repeated string cells = 3;
+  bool remove = 4;
+  string source_keyspace = 5;
+}
+
+message SetKeyspaceServedFromResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
+message SetKeyspaceShardingInfoRequest {
+  string keyspace = 1;
+  string column_name = 2;
+  topodata.KeyspaceIdType column_type = 3;
+  bool force = 4;
+}
+
+message SetKeyspaceShardingInfoResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
+message SetShardIsPrimaryServingRequest {
+  string keyspace = 1;
+  string shard = 2;
+  bool is_serving = 3;
+}
+
+message SetShardIsPrimaryServingResponse {
+  // Shard is the updated shard record.
+  topodata.Shard shard = 1;
+}
+
+message SetShardTabletControlRequest {
+  string keyspace = 1;
+  string shard = 2;
+  topodata.TabletType tablet_type = 3;
+  repeated string cells = 4;
+  // DeniedTables updates the list of denied tables the shard will serve for
+  // the given tablet type. This is useful to fix tables that are being blocked
+  // after a MoveTables operation.
+  //
+  // NOTE: Setting this field will cause DisableQueryService to be ignored.
+  repeated string denied_tables = 5;
+  // DisableQueryService instructs whether to enable the query service on
+  // tablets of the given type in the shard. This is useful to fix Reshard
+  // operations gone awry.
+  //
+  // NOTE: this is ignored if DeniedTables is not empty.
+  bool disable_query_service = 6;
+  // Remove removes the ShardTabletControl record entirely. If set, this takes
+  // precedence over DeniedTables and DisableQueryService fields, and is useful
+  // to manually remove serving restrictions after a completed MoveTables
+  // operation.
+  bool remove = 7;
+}
+
+message SetShardTabletControlResponse {
+  // Shard is the updated shard record.
+  topodata.Shard shard = 1;
+}
+
+message SetWritableRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  bool writable = 2;
+}
+
+message SetWritableResponse {
+}
+
 message ShardReplicationPositionsRequest {
   string keyspace = 1;
   string shard = 2;
@@ -706,6 +850,28 @@ message ShardReplicationPositionsResponse {
   // TabletMap is the set of tablets whose replication statuses were queried,
   // keyed by tablet alias.
   map<string, topodata.Tablet> tablet_map = 2;
+}
+
+message SleepTabletRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  vttime.Duration duration = 2;
+}
+
+message SleepTabletResponse {
+}
+
+message StartReplicationRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message StartReplicationResponse {
+}
+
+message StopReplicationRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message StopReplicationResponse {
 }
 
 message TabletExternallyReparentedRequest {
@@ -739,4 +905,33 @@ message UpdateCellsAliasRequest {
 message UpdateCellsAliasResponse {
   string name = 1;
   topodata.CellsAlias cells_alias = 2;
+}
+
+message ValidateRequest {
+  bool ping_tablets = 1;
+}
+
+message ValidateResponse {
+  repeated string results = 1;
+  map<string, ValidateKeyspaceResponse> results_by_keyspace = 2;
+}
+
+message ValidateKeyspaceRequest {
+  string keyspace = 1;
+  bool ping_tablets = 2;
+}
+
+message ValidateKeyspaceResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message ValidateShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  bool ping_tablets = 3;
+}
+
+message ValidateShardResponse {
+  repeated string results = 1;
 }

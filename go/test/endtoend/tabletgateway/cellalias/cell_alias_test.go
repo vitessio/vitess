@@ -130,7 +130,8 @@ func TestMain(m *testing.M) {
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range []*cluster.Vttablet{shard1Primary, shard1Replica, shard1Rdonly, shard2Primary, shard2Replica, shard2Rdonly} {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				tablet.Cell,
@@ -143,7 +144,7 @@ func TestMain(m *testing.M) {
 				localCluster.TmpDirectory,
 				commonTabletArg,
 				true,
-			)
+				localCluster.DefaultCharset)
 			tablet.VttabletProcess.SupportsBackup = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
@@ -184,7 +185,7 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
-		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID); err != nil {
 			return 1, err
 		}
 
@@ -202,7 +203,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
 			return 1, err
 		}
 

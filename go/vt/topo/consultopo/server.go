@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -72,7 +72,7 @@ func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
 		return nil, nil
 	}
 
-	data, err := ioutil.ReadFile(*consulAuthClientStaticFile)
+	data, err := os.ReadFile(*consulAuthClientStaticFile)
 	if err != nil {
 		err = vterrors.Wrapf(err, "Failed to read consul_auth_static_file file")
 		return creds, err

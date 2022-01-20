@@ -1,4 +1,4 @@
-ARG bootstrap_version=3
+ARG bootstrap_version=4
 ARG image="vitess/bootstrap:${bootstrap_version}-{{.Platform}}"
 
 FROM "${image}"
@@ -35,10 +35,13 @@ ENV VTDATAROOT /vt/vtdataroot
 # create the vtdataroot directory
 RUN mkdir -p $VTDATAROOT
 
+# install goimports
+RUN go install golang.org/x/tools/cmd/goimports@latest
+
 {{if .MakeTools}}
 # make tools
 RUN make tools
 {{end}}
 
-  # sleep for 50 minutes
+# sleep for 50 minutes
 CMD sleep 3000

@@ -105,6 +105,8 @@ func ParseDBName(connectionString string) string {
 // See https://vitess.io/docs/faq/queries/ for where these come from.
 func ParseTabletType(connectionString string) string {
 	databaseName := ParseDBName(connectionString)
+	// for backwards compatibility
+	// TODO(deepthi): delete after v13.0
 	if strings.HasSuffix(databaseName, "@master") {
 		return "primary"
 	} else if strings.HasSuffix(databaseName, "@primary") {

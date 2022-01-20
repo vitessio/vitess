@@ -30,6 +30,9 @@ type ReplicationStatus struct {
 	// were to finish executing everything that's currently in its relay log.
 	// However, some MySQL flavors don't expose this information,
 	// in which case RelayLogPosition.IsZero() will be true.
+	// If ReplicationLagUnknown is true then we should not rely on the seconds
+	// behind value and we can instead try to calculate the lag ourselves when
+	// appropriate.
 	RelayLogPosition      Position
 	FilePosition          Position
 	FileRelayLogPosition  Position
@@ -37,6 +40,7 @@ type ReplicationStatus struct {
 	IOThreadRunning       bool
 	SQLThreadRunning      bool
 	ReplicationLagSeconds uint
+	ReplicationLagUnknown bool
 	SourceHost            string
 	SourcePort            int
 	ConnectRetry          int
@@ -123,16 +127,7 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 		if !ok {
 			panic("The receiver ReplicationStatus contained a Mysql56GTIDSet in its relay log, but a replica's ReplicationStatus is of another flavor. This should never happen.")
 		}
-		// Copy and throw out primary SID from consideration, so we don't mutate input.
-		otherSetNoPrimarySID := make(Mysql56GTIDSet, len(otherSet))
-		for sid, intervals := range otherSet {
-			if sid == status.SourceUUID {
-				continue
-			}
-			otherSetNoPrimarySID[sid] = intervals
-		}
-
-		otherSets = append(otherSets, otherSetNoPrimarySID)
+		otherSets = append(otherSets, otherSet)
 	}
 
 	// Copy set for final diffSet so we don't mutate receiver.

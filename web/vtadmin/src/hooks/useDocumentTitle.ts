@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+const BASE_TITLE = process.env.REACT_APP_DOCUMENT_TITLE || 'VTAdmin';
+
 // useDocumentTitle is a simple hook to set the document.title of the page.
 //
 // Note that there's a noticeable delay, around ~500ms, between
@@ -20,7 +22,7 @@ import { useEffect } from 'react';
 export const useDocumentTitle = (title: string) => {
     // Update document.title whenever the `title` argument changes.
     useEffect(() => {
-        document.title = `${title} | VTAdmin`;
+        document.title = `${title} | ${BASE_TITLE}`;
     }, [title]);
 
     // Restore the default document title on unmount.
@@ -29,7 +31,7 @@ export const useDocumentTitle = (title: string) => {
     // that is not the case as the lag happens even without this.)
     useEffect(() => {
         return () => {
-            document.title = 'VTAdmin';
+            document.title = BASE_TITLE;
         };
     }, []);
 };

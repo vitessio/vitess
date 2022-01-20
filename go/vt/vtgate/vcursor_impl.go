@@ -24,9 +24,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"github.com/google/uuid"
+
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -54,7 +59,7 @@ import (
 )
 
 var _ engine.VCursor = (*vcursorImpl)(nil)
-var _ planbuilder.ContextVSchema = (*vcursorImpl)(nil)
+var _ plancontext.VSchema = (*vcursorImpl)(nil)
 var _ iExecute = (*Executor)(nil)
 var _ vindexes.VCursor = (*vcursorImpl)(nil)
 
@@ -62,7 +67,7 @@ var _ vindexes.VCursor = (*vcursorImpl)(nil)
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error
+	StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -92,15 +97,13 @@ type vcursorImpl struct {
 	resolver       *srvtopo.Resolver
 	topoServer     *topo.Server
 	logStats       *LogStats
-	// rollbackOnPartialExec is set to true if any DML was successfully
-	// executed. If there was a subsequent failure, the transaction
-	// must be forced to rollback.
-	rollbackOnPartialExec bool
-	ignoreMaxMemoryRows   bool
-	vschema               *vindexes.VSchema
-	vm                    VSchemaOperator
-	semTable              *semantics.SemTable
-	warnShardedOnly       bool // when using sharded only features, a warning will be warnings field
+	collation      collations.ID
+
+	ignoreMaxMemoryRows bool
+	vschema             *vindexes.VSchema
+	vm                  VSchemaOperator
+	semTable            *semantics.SemTable
+	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 }
@@ -140,6 +143,22 @@ func newVCursorImpl(
 		}
 	}
 
+	// we only support collations for the new TabletGateway implementation
+	collationEnv := collations.Local()
+	var connCollation collations.ID
+	if executor != nil {
+		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
+			connCollation = gw.DefaultConnCollation()
+		}
+	}
+	if connCollation == collations.Unknown {
+		coll, err := collationEnv.ResolveCollation("", "")
+		if err != nil {
+			panic("should never happen: don't know how to resolve default collation")
+		}
+		connCollation = coll.ID()
+	}
+
 	return &vcursorImpl{
 		ctx:             ctx,
 		safeSession:     safeSession,
@@ -149,12 +168,18 @@ func newVCursorImpl(
 		marginComments:  marginComments,
 		executor:        executor,
 		logStats:        logStats,
+		collation:       connCollation,
 		resolver:        resolver,
 		vschema:         vschema,
 		vm:              vm,
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
 	}, nil
+}
+
+// ConnCollation returns the collation of this session
+func (vc *vcursorImpl) ConnCollation() collations.ID {
+	return vc.collation
 }
 
 // Context returns the current Context.
@@ -337,7 +362,7 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 }
 
 // Planner implements the ContextVSchema interface
-func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
+func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 	if vc.safeSession.Options != nil &&
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
@@ -353,6 +378,8 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 		return planbuilder.Gen4Left2Right
 	case "gen4fallback":
 		return planbuilder.Gen4WithFallback
+	case "gen4comparev3":
+		return planbuilder.Gen4CompareV3
 	}
 
 	log.Warning("unknown planner version configured. using the default")
@@ -369,6 +396,7 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
+// MaxBufferingRetries is to represent max retries on buffering.
 const MaxBufferingRetries = 3
 
 func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -405,20 +433,38 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 	}
 
 	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	if err == nil && rollbackOnError {
-		vc.rollbackOnPartialExec = true
-	}
 	return qr, err
 }
+
+// markSavepoint opens an internal savepoint before executing the original query.
+// This happens only when rollback is allowed and no other savepoint was executed
+// and the query is executed in an explicit transaction (i.e. started by the client).
+func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, bindVars map[string]*querypb.BindVariable) (string, error) {
+	if !rollbackOnError || vc.safeSession.rollbackOnPartialExec != "" || !vc.safeSession.InsertSavepoints() {
+		return "", nil
+	}
+	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
+	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
+	_, err := vc.executor.Execute(vc.ctx, "MarkSavepoint", vc.safeSession, spQuery, bindVars)
+	if err != nil {
+		return "", err
+	}
+	return uID, nil
+}
+
+const txRollback = "Rollback Transaction"
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(queries)))
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
-
-	if errs == nil && rollbackOnError {
-		vc.rollbackOnPartialExec = true
+	uID, err := vc.markSavepoint(rollbackOnError, map[string]*querypb.BindVariable{})
+	if err != nil {
+		return nil, []error{err}
 	}
+
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
+	vc.setRollbackOnPartialExecIfRequired(errs, rss, rollbackOnError, uID)
+
 	return qr, errs
 }
 
@@ -466,10 +512,32 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	return qr, vterrors.Aggregate(errs)
 }
 
-// StreamExeculteMulti is the streaming version of ExecuteMultiShard.
-func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
+// StreamExecuteMulti is the streaming version of ExecuteMultiShard.
+func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
-	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession.Options, callback)
+	uID, err := vc.markSavepoint(rollbackOnError, map[string]*querypb.BindVariable{})
+	if err != nil {
+		return []error{err}
+	}
+
+	errs := vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, autocommit, callback)
+	vc.setRollbackOnPartialExecIfRequired(errs, rss, rollbackOnError, uID)
+
+	return errs
+}
+
+// setRollbackOnPartialExecIfRequired sets the value on SafeSession.rollbackOnPartialExec
+// when the query gets successfully executed on at least one shard,
+// there does not exist any old savepoint for which rollback is already set
+// and rollback on error is allowed.
+func (vc *vcursorImpl) setRollbackOnPartialExecIfRequired(errs []error, rss []*srvtopo.ResolvedShard, rollbackOnError bool, uID string) {
+	if len(errs) != len(rss) && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
+		if uID == "" {
+			vc.safeSession.rollbackOnPartialExec = txRollback
+		} else {
+			vc.safeSession.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+		}
+	}
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
@@ -485,17 +553,15 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 	}}
 	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
 
-	if len(errs) == 0 {
-		if rollbackOnError {
-			vc.rollbackOnPartialExec = true
-		}
-		return qr, nil
-	}
-	return nil, errs[0]
+	return qr, vterrors.Aggregate(errs)
 }
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	return vc.resolver.ResolveDestinations(vc.ctx, keyspace, vc.tabletType, ids, destinations)
+}
+
+func (vc *vcursorImpl) ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
+	return vc.resolver.ResolveDestinationsMultiCol(vc.ctx, keyspace, vc.tabletType, ids, destinations)
 }
 
 func (vc *vcursorImpl) Session() engine.SessionActions {
@@ -652,7 +718,7 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 }
 
 // SetPlannerVersion implements the SessionActions interface
-func (vc *vcursorImpl) SetPlannerVersion(v planbuilder.PlannerVersion) {
+func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
@@ -744,7 +810,18 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 	}
 }
 
-// ForeignKey implements the VCursor interface
+// PlannerWarning implements the VCursor interface
+func (vc *vcursorImpl) PlannerWarning(message string) {
+	if message == "" {
+		return
+	}
+	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
+		Code:    mysql.ERNotSupportedYet,
+		Message: message,
+	})
+}
+
+// ForeignKeyMode implements the VCursor interface
 func (vc *vcursorImpl) ForeignKeyMode() string {
 	if foreignKeyMode == nil {
 		return ""

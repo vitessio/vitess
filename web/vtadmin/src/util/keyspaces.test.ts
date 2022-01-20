@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { getShardsByState, ShardsByState, ShardState } from './keyspaces';
+import { getShardsByState, getShardSortRange, ShardRange, ShardsByState, ShardState } from './keyspaces';
 import { vtadmin as pb } from '../proto/vtadmin';
 
 describe('getShardsByState', () => {
@@ -100,5 +100,54 @@ describe('getShardsByState', () => {
     test.each(tests.map(Object.values))('%s', (name: string, keyspace: pb.Keyspace, expected: ShardsByState) => {
         const result = getShardsByState(keyspace);
         expect(result).toEqual(expected);
+    });
+});
+
+describe('getShardSortRange', () => {
+    const tests: {
+        shardName: string;
+        expected: ShardRange;
+    }[] = [
+        {
+            shardName: '0',
+            expected: { start: Number.MIN_VALUE, end: Number.MAX_VALUE },
+        },
+        {
+            shardName: '-',
+            expected: { start: Number.MIN_VALUE, end: Number.MAX_VALUE },
+        },
+        {
+            shardName: '-40',
+            expected: { start: Number.MIN_VALUE, end: 64 },
+        },
+        {
+            shardName: '40-80',
+            expected: { start: 64, end: 128 },
+        },
+        {
+            shardName: '80-c0',
+            expected: { start: 128, end: 192 },
+        },
+        {
+            shardName: 'c0-',
+            expected: { start: 192, end: Number.MAX_VALUE },
+        },
+        {
+            shardName: 'c0-',
+            expected: { start: 192, end: Number.MAX_VALUE },
+        },
+    ];
+
+    test.each(tests.map(Object.values))('%s', (shardName: string, expected: ShardRange) => {
+        const result = getShardSortRange(shardName);
+        expect(result).toEqual(expected);
+    });
+
+    it('handles invalid shard names', () => {
+        ['nope', '--', '', '40--'].forEach((s) => {
+            expect(() => {
+                getShardSortRange(s);
+            }).toThrow(`could not parse sortable range from shard ${s}`);
+        });
     });
 });

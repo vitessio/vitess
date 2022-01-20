@@ -34,7 +34,7 @@ var _ Primitive = (*MemorySort)(nil)
 
 // MemorySort is a primitive that performs in-memory sorting.
 type MemorySort struct {
-	UpperLimit sqltypes.PlanValue
+	UpperLimit evalengine.Expr
 	OrderBy    []OrderByParams
 	Input      Primitive
 
@@ -64,7 +64,7 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
 }
 
-// Execute satisfies the Primitive interface.
+// TryExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
@@ -90,7 +90,7 @@ func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 	return result.Truncate(ms.TruncateColumnCount), nil
 }
 
-// StreamExecute satisfies the Primitive interface.
+// TryStreamExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
@@ -158,14 +158,15 @@ func (ms *MemorySort) NeedsTransaction() bool {
 }
 
 func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
-	resolved, err := ms.UpperLimit.ResolveValue(bindVars)
+	if ms.UpperLimit == nil {
+		return math.MaxInt64, nil
+	}
+	env := evalengine.EnvWithBindVars(bindVars)
+	resolved, err := env.Evaluate(ms.UpperLimit)
 	if err != nil {
 		return 0, err
 	}
-	if resolved.IsNull() {
-		return math.MaxInt64, nil
-	}
-	num, err := evalengine.ToUint64(resolved)
+	num, err := resolved.Value().ToUint64()
 	if err != nil {
 		return 0, err
 	}
@@ -178,11 +179,7 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
-	value := ms.UpperLimit.Value
 	other := map[string]interface{}{"OrderBy": orderByIndexes}
-	if !value.IsNull() {
-		other["UpperLimit"] = value.String()
-	}
 	if ms.TruncateColumnCount > 0 {
 		other["ResultColumns"] = ms.TruncateColumnCount
 	}
@@ -197,8 +194,8 @@ func orderByParamsToString(i interface{}) string {
 	return i.(OrderByParams).String()
 }
 
-//GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
-//string representation of each element, and then uses strings.Join() join all the strings into a single one
+// GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
+// string representation of each element, and then uses strings.Join() join all the strings into a single one
 func GenericJoin(input interface{}, f func(interface{}) string) string {
 	sl := reflect.ValueOf(input)
 	var keys []string

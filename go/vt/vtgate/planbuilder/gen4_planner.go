@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,39 +22,57 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ selectPlanner = gen4Planner
 
-func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
-		sel, ok := stmt.(*sqlparser.Select)
+func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
-
-		// handle dual table for processing at vtgate.
-		p, err := handleDualSelects(sel, vschema)
-		if err != nil {
-			return nil, err
-		}
-		if p != nil {
-			return p, nil
-		}
-
-		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
-			return newBuildSelectPlan(sel, reservedVars, vschema)
+		switch node := selStatement.(type) {
+		case *sqlparser.Select:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			}
+		case *sqlparser.Union:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			}
 		}
 
-		plan, err := getPlan(sel)
+		sel, isSel := selStatement.(*sqlparser.Select)
+		if isSel {
+			// handle dual table for processing at vtgate.
+			p, err := handleDualSelects(sel, vschema)
+			if err != nil || p != nil {
+				return p, err
+			}
+
+			if sel.SQLCalcFoundRows && sel.Limit != nil {
+				return gen4planSQLCalcFoundRows(vschema, sel, query, reservedVars)
+			}
+			// if there was no limit, we can safely ignore the SQLCalcFoundRows directive
+			sel.SQLCalcFoundRows = false
+		}
+
+		getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
+			return newBuildSelectPlan(selStatement, reservedVars, vschema)
+		}
+
+		plan, err := getPlan(selStatement)
 		if err != nil {
 			return nil, err
 		}
 
 		if shouldRetryWithCNFRewriting(plan) {
 			// by transforming the predicates to CNF, the planner will sometimes find better plans
-			primitive := rewriteToCNFAndReplan(stmt, getPlan)
+			primitive := gen4CNFRewrite(stmt, getPlan)
 			if primitive != nil {
 				return primitive, nil
 			}
@@ -63,79 +81,121 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 	}
 }
 
-func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
+func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(sel, ksName, vschema, starRewrite)
+	semTable, err := semantics.Analyze(sel, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
+	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
+	if err != nil {
+		return nil, err
+	}
+	err = plan.WireupGen4(semTable)
+	if err != nil {
+		return nil, err
+	}
+	return plan.Primitive(), nil
+}
+
+func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+	plan, err := newBuildSelectPlan(sel, reservedVars, vschema)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, plan, nil
+}
+
+func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, error)) engine.Primitive {
+	rewritten, isSel := sqlparser.RewriteToCNF(stmt).(sqlparser.SelectStatement)
+	if !isSel {
+		// Fail-safe code, should never happen
+		return nil
+	}
+	plan2, err := getPlan(rewritten)
+	if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+		// we only use this new plan if it's better than the old one we got
+		return plan2.Primitive()
+	}
+	return nil
+}
+
+func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (logicalPlan, error) {
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
+	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+		return unshardedShortcut(selStmt, ks, semTable)
+	}
+
+	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	err = queryRewrite(ctx, sel)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema)
+	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
+	err = logical.CheckValid()
 	if err != nil {
 		return nil, err
 	}
 
-	opTree, err := abstract.CreateOperatorFromSelect(sel, semTable)
+	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
 		return nil, err
 	}
 
-	tree, err := optimizeQuery(ctx, opTree)
+	plan, err := transformToLogicalPlan(ctx, physOp)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, tree, semTable)
+	plan, err = planHorizon(ctx, plan, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err = planHorizon(ctx, plan, sel)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := setMiscFunc(plan, sel); err != nil {
-		return nil, err
+	sel, isSel := selStmt.(*sqlparser.Select)
+	if isSel {
+		if err := setMiscFunc(plan, sel); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
 	}
 
-	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-			switch plan := logicalPlan.(type) {
-			case *route:
-				plan.eroute.ScatterErrorsAsWarnings = true
-			}
-			return true, logicalPlan, nil
-		})
+	plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
+	if err != nil {
+		return nil, err
 	}
 
 	return plan, nil
-}
-
-func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) planningContext {
-	ctx := planningContext{
-		reservedVars: reservedVars,
-		semTable:     semTable,
-		vschema:      vschema,
-		sqToReplace:  map[string]*sqlparser.Select{},
-	}
-	return ctx
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	if limit == nil {
 		return plan, nil
 	}
-	rb, ok := plan.(*route)
+	rb, ok := plan.(*routeGen4)
 	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return plan, nil
@@ -154,29 +214,81 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func checkUnsupportedConstructs(sel *sqlparser.Select) error {
-	if sel.SQLCalcFoundRows {
-		return semantics.Gen4NotSupportedF("sql_calc_found_rows")
-	}
-	return nil
-}
+func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
+	switch node := in.(type) {
+	case *sqlparser.Select:
+		hp := horizonPlanning{
+			sel: node,
+		}
 
-func planHorizon(ctx planningContext, plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
-	hp := horizonPlanning{
-		sel: sel,
-	}
+		replaceSubQuery(ctx, node)
+		var err error
+		plan, err = hp.planHorizon(ctx, plan)
+		if err != nil {
+			return nil, err
+		}
+		plan, err = planLimit(node.Limit, plan)
+		if err != nil {
+			return nil, err
+		}
+	case *sqlparser.Union:
+		var err error
+		rb, isRoute := plan.(*routeGen4)
+		if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+			return nil, ctx.SemTable.NotSingleRouteErr
+		}
+		if isRoute && rb.isSingleShard() {
+			err = planSingleShardRoutePlan(node, rb)
+		} else {
+			plan, err = planOrderByOnUnion(ctx, plan, node)
+		}
+		if err != nil {
+			return nil, err
+		}
 
-	replaceSubQuery(ctx.sqToReplace, sel)
-	var err error
-	plan, err = hp.planHorizon(ctx, plan)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err = planLimit(sel.Limit, plan)
-	if err != nil {
-		return nil, err
+		plan, err = planLimit(node.Limit, plan)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return plan, nil
 
+}
+
+func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
+	qp, err := abstract.CreateQPFromUnion(union, ctx.SemTable)
+	if err != nil {
+		return nil, err
+	}
+	hp := horizonPlanning{
+		qp: qp,
+	}
+	if len(qp.OrderExprs) > 0 {
+		plan, err = hp.planOrderBy(ctx, qp.OrderExprs, plan)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(stmt).Comments)
+	scatterAsWarns := false
+	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+		scatterAsWarns = true
+	}
+	queryTimeout := queryTimeout(directives)
+	if scatterAsWarns || queryTimeout > 0 {
+		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+			switch plan := logicalPlan.(type) {
+			case *routeGen4:
+				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+				plan.eroute.QueryTimeout = queryTimeout
+			}
+			return true, logicalPlan, nil
+		})
+	}
+
+	return plan, nil
 }

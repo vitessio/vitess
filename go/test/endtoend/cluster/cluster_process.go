@@ -20,17 +20,19 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path"
+	"regexp"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -42,7 +44,7 @@ const (
 )
 
 var (
-	keepData           = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData           = flag.Bool("keep-data", true, "don't delete the per-test VTDATAROOT subfolders")
 	topoFlavor         = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
 	isCoverage         = flag.Bool("is-coverage", false, "whether coverage is required")
 	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
@@ -57,6 +59,7 @@ var (
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace
 	Cell               string
+	DefaultCharset     string
 	BaseTabletUID      int
 	Hostname           string
 	TopoFlavor         string
@@ -69,6 +72,10 @@ type LocalProcessCluster struct {
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
 	VtctldHTTPPort  int
+
+	// major version numbers
+	VtTabletMajorVersion int
+	VtctlMajorVersion    int
 
 	// standalone executable
 	VtctlclientProcess VtctlClientProcess
@@ -84,11 +91,12 @@ type LocalProcessCluster struct {
 
 	nextPortForProcess int
 
-	//Extra arguments for vtTablet
+	// Extra arguments for vtTablet
 	VtTabletExtraArgs []string
 
-	//Extra arguments for vtGate
-	VtGateExtraArgs []string
+	// Extra arguments for vtGate
+	VtGateExtraArgs      []string
+	VtGatePlannerVersion plancontext.PlannerVersion
 
 	VtctldExtraArgs []string
 
@@ -209,6 +217,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 			log.Error(err)
 			return
 		}
+		cluster.VtctlProcess.LogDir = cluster.TmpDirectory
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
@@ -265,10 +274,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 			}
 			if i == 0 { // Make the first one as primary
-				// version_upgrade test depends on using older binaries
-				// which means we cannot use the new PRIMARY tabletType here
-				// TODO(deepthi): fix after v12.0
-				tablet.Type = "master"
+				tablet.Type = "primary"
 			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
 				tablet.Type = "rdonly"
 			}
@@ -283,7 +289,8 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			mysqlctlProcessList = append(mysqlctlProcessList, proc)
 
 			// start vttablet process
-			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				cluster.Cell,
@@ -295,7 +302,149 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync)
+				cluster.EnableSemiSync,
+				cluster.DefaultCharset)
+			tablet.Alias = tablet.VttabletProcess.TabletPath
+			if cluster.ReusingVTDATAROOT {
+				tablet.VttabletProcess.ServingStatus = "SERVING"
+			}
+			shard.Vttablets = append(shard.Vttablets, tablet)
+			// Apply customizations
+			for _, customizer := range customizers {
+				if f, ok := customizer.(func(*VttabletProcess)); ok {
+					f(tablet.VttabletProcess)
+				} else {
+					return fmt.Errorf("type mismatch on customizer: %T", customizer)
+				}
+			}
+		}
+
+		// wait till all mysqlctl is instantiated
+		for _, proc := range mysqlctlProcessList {
+			if err = proc.Wait(); err != nil {
+				log.Errorf("unable to start mysql process %v: %v", proc, err)
+				return err
+			}
+		}
+		for _, tablet := range shard.Vttablets {
+			log.Infof("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort)
+
+			if err = tablet.VttabletProcess.Setup(); err != nil {
+				log.Errorf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err)
+				return
+			}
+		}
+
+		// Make first tablet as primary
+		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
+			return
+		}
+		keyspace.Shards = append(keyspace.Shards, *shard)
+	}
+	// if the keyspace is present then append the shard info
+	existingKeyspace := false
+	for idx, ks := range cluster.Keyspaces {
+		if ks.Name == keyspace.Name {
+			cluster.Keyspaces[idx].Shards = append(cluster.Keyspaces[idx].Shards, keyspace.Shards...)
+			existingKeyspace = true
+		}
+	}
+	if !existingKeyspace {
+		cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
+	}
+
+	// Apply Schema SQL
+	if keyspace.SchemaSQL != "" {
+		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+			log.Errorf("error applying schema: %v, %v", keyspace.SchemaSQL, err)
+			return
+		}
+	}
+
+	//Apply VSchema
+	if keyspace.VSchema != "" {
+		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
+			return
+		}
+	}
+
+	log.Infof("Done creating keyspace: %v ", keyspace.Name)
+	return
+}
+
+// StartUnshardedKeyspaceLegacy starts unshared keyspace with shard name as "0"
+func (cluster *LocalProcessCluster) StartUnshardedKeyspaceLegacy(keyspace Keyspace, replicaCount int, rdonly bool) error {
+	return cluster.StartKeyspaceLegacy(keyspace, []string{"0"}, replicaCount, rdonly)
+}
+
+// StartKeyspaceLegacy starts required number of shard and the corresponding tablets
+// keyspace : struct containing keyspace name, Sqlschema to apply, VSchema to apply
+// shardName : list of shard names
+// replicaCount: total number of replicas excluding shard primary and rdonly
+// rdonly: whether readonly tablets needed
+// customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
+// after they're created.
+func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...interface{}) (err error) {
+	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
+	if rdonly {
+		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
+	}
+
+	log.Infof("Starting keyspace: %v", keyspace.Name)
+	if !cluster.ReusingVTDATAROOT {
+		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	}
+	var mysqlctlProcessList []*exec.Cmd
+	for _, shardName := range shardNames {
+		shard := &Shard{
+			Name: shardName,
+		}
+		log.Infof("Starting shard: %v", shardName)
+		mysqlctlProcessList = []*exec.Cmd{}
+		for i := 0; i < totalTabletsRequired; i++ {
+			// instantiate vttablet object with reserved ports
+			tabletUID := cluster.GetAndReserveTabletUID()
+			tablet := &Vttablet{
+				TabletUID: tabletUID,
+				Type:      "replica",
+				HTTPPort:  cluster.GetAndReservePort(),
+				GrpcPort:  cluster.GetAndReservePort(),
+				MySQLPort: cluster.GetAndReservePort(),
+				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
+			}
+			if i == 0 { // Make the first one as primary
+				tablet.Type = "primary"
+			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
+				tablet.Type = "rdonly"
+			}
+			// Start Mysqlctl process
+			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
+			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
+				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
+				return err
+			}
+			mysqlctlProcessList = append(mysqlctlProcessList, proc)
+
+			// start vttablet process
+			tablet.VttabletProcess = VttabletProcessInstance(
+				tablet.HTTPPort,
+				tablet.GrpcPort,
+				tablet.TabletUID,
+				cluster.Cell,
+				shardName,
+				keyspace.Name,
+				cluster.VtctldProcess.Port,
+				tablet.Type,
+				cluster.TopoProcess.Port,
+				cluster.Hostname,
+				cluster.TmpDirectory,
+				cluster.VtTabletExtraArgs,
+				cluster.EnableSemiSync,
+				cluster.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			if cluster.ReusingVTDATAROOT {
 				tablet.VttabletProcess.ServingStatus = "SERVING"
@@ -410,7 +559,8 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync)
+				cluster.EnableSemiSync,
+				cluster.DefaultCharset)
 		}
 
 		keyspace.Shards = append(keyspace.Shards, shard)
@@ -444,31 +594,30 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 // NewVtgateInstance returns an instance of vtgateprocess
 func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
-	vtgateGrpcPort := cluster.GetAndReservePort()
+	cluster.VtgateGrpcPort = cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
 	vtgateProcInstance := VtgateProcessInstance(
 		vtgateHTTPPort,
-		vtgateGrpcPort,
+		cluster.VtgateGrpcPort,
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
-		// version_upgrade test depends on using older binaries
-		// which means we cannot use the new PRIMARY tablet_type here
-		// TODO(deepthi): fix after v12.0
-		"MASTER,REPLICA",
+		"PRIMARY,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
-		cluster.VtGateExtraArgs)
+		cluster.VtGateExtraArgs,
+		cluster.VtGatePlannerVersion)
 	return vtgateProcInstance
 }
 
 // NewCluster instantiates a new cluster
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
-	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex)}
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
 	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
+	cluster.VtGatePlannerVersion = defaultVtGatePlannerVersion
 	if *forceVTDATAROOT != "" {
 		cluster.CurrentVTDATAROOT = *forceVTDATAROOT
 	}
@@ -481,8 +630,40 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
 
+	err := cluster.populateVersionInfo()
+	if err != nil {
+		log.Errorf("Error populating version information - %v", err)
+	}
+
 	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
+}
+
+// populateVersionInfo is used to populate the version information for the binaries used to setup the cluster.
+func (cluster *LocalProcessCluster) populateVersionInfo() error {
+	var err error
+	cluster.VtTabletMajorVersion, err = getMajorVersion("vttablet")
+	if err != nil {
+		return err
+	}
+	cluster.VtctlMajorVersion, err = getMajorVersion("vtctl")
+	return err
+}
+
+func getMajorVersion(binaryName string) (int, error) {
+	version, err := exec.Command(binaryName, "--version").Output()
+	if err != nil {
+		return 0, err
+	}
+	versionRegex := regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	v := versionRegex.FindStringSubmatch(string(version))
+	if len(v) != 4 {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	return strconv.Atoi(v[1])
 }
 
 // RestartVtgate starts vtgate with updated configs
@@ -665,14 +846,14 @@ func getPort() int {
 	if _, err := os.Stat(tmpPortFileName); os.IsNotExist(err) {
 		port = getVtStartPort()
 	} else {
-		result, _ := ioutil.ReadFile(tmpPortFileName)
+		result, _ := os.ReadFile(tmpPortFileName)
 		cport, err := strconv.Atoi(string(result))
 		if err != nil || cport > 60000 || cport == 0 {
 			cport = getVtStartPort()
 		}
 		port = cport
 	}
-	ioutil.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
+	os.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
 	return port
 }
 
@@ -749,7 +930,8 @@ func (cluster *LocalProcessCluster) NewVtgrProcess(clusters []string, config str
 
 // VtprocessInstanceFromVttablet creates a new vttablet object
 func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
-	return VttabletProcessInstance(tablet.HTTPPort,
+	return VttabletProcessInstance(
+		tablet.HTTPPort,
 		tablet.GrpcPort,
 		tablet.TabletUID,
 		cluster.Cell,
@@ -761,7 +943,8 @@ func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttabl
 		cluster.Hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
-		cluster.EnableSemiSync)
+		cluster.EnableSemiSync,
+		cluster.DefaultCharset)
 }
 
 // StartVttablet starts a new tablet
@@ -780,7 +963,8 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 		hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
-		cluster.EnableSemiSync)
+		cluster.EnableSemiSync,
+		cluster.DefaultCharset)
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus

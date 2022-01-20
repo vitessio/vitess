@@ -39,7 +39,7 @@ var _ Primitive = (*Update)(nil)
 
 // VindexValues contains changed values for a vindex.
 type VindexValues struct {
-	PvMap  map[string]sqltypes.PlanValue
+	PvMap  map[string]evalengine.Expr
 	Offset int // Offset from ownedVindexQuery to provide input decision for vindex update.
 }
 
@@ -80,7 +80,7 @@ func (upd *Update) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
@@ -91,7 +91,12 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	case Unsharded:
 		return upd.execUpdateUnsharded(vcursor, bindVars)
 	case Equal:
-		return upd.execUpdateEqual(vcursor, bindVars)
+		switch upd.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return upd.execUpdateEqualMultiCol(vcursor, bindVars)
+		default:
+			return upd.execUpdateEqual(vcursor, bindVars)
+		}
 	case In:
 		return upd.execUpdateIn(vcursor, bindVars)
 	case Scatter:
@@ -104,9 +109,14 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	}
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return fmt.Errorf("query %q cannot be used for streaming", upd.Query)
+	res, err := upd.TryExecute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(res)
+
 }
 
 // GetFields fetches the field info.
@@ -130,11 +140,12 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 }
 
 func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	key, err := upd.Values[0].ResolveValue(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	key, err := env.Evaluate(upd.Values[0])
 	if err != nil {
 		return nil, err
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex.(vindexes.SingleColumn), upd.Keyspace, key.Value())
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +165,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values[0], upd.Vindex)
+	rss, queries, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values, upd.Vindex)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +208,35 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
 }
 
+func (upd *Update) execUpdateEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	var rowValue []sqltypes.Value
+	for _, rvalue := range upd.Values {
+		v, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, err
+		}
+		rowValue = append(rowValue, v.Value())
+	}
+	rss, _, err := resolveShardsMultiCol(vcursor, upd.Vindex.(vindexes.MultiColumn), upd.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex mapped id to multi shards: %d", len(rss))
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, err
+		}
+	}
+	return execShard(vcursor, upd.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+}
+
 // updateVindexEntries performs an update when a vindex is being modified
 // by the statement.
 // Note: the commit order may be different from the DML order because it's possible
@@ -223,9 +263,10 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	for colNum, field := range subQueryResult.Fields {
 		fieldColNumMap[field.Name] = colNum
 	}
+	env := evalengine.EnvWithBindVars(bindVars)
 
 	for _, row := range subQueryResult.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0:upd.KsidLength])
 		if err != nil {
 			return err
 		}
@@ -249,11 +290,11 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 					origColValue := row[fieldColNumMap[vCol.String()]]
 					fromIds = append(fromIds, origColValue)
 					if colValue, exists := updColValues.PvMap[vCol.String()]; exists {
-						resolvedVal, err := colValue.ResolveValue(bindVars)
+						resolvedVal, err := env.Evaluate(colValue)
 						if err != nil {
 							return err
 						}
-						vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
+						vindexColumnKeys = append(vindexColumnKeys, resolvedVal.Value())
 					} else {
 						// Set the column value to original as this column in vindex is not updated.
 						vindexColumnKeys = append(vindexColumnKeys, origColValue)

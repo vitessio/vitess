@@ -17,12 +17,11 @@ limitations under the License.
 package ldapauthserver
 
 import (
-	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -75,7 +74,7 @@ func Init() {
 	data := []byte(*ldapAuthConfigString)
 	if *ldapAuthConfigFile != "" {
 		var err error
-		data, err = ioutil.ReadFile(*ldapAuthConfigFile)
+		data, err = os.ReadFile(*ldapAuthConfigFile)
 		if err != nil {
 			log.Exitf("Failed to read mysql_ldap_auth_config_file: %v", err)
 		}
@@ -118,7 +117,7 @@ func (asl *AuthServerLdap) HandleUser(user string) bool {
 
 // UserEntryWithPassword is part of the PlaintextStorage interface
 // and called after the password is sent by the client.
-func (asl *AuthServerLdap) UserEntryWithPassword(userCerts []*x509.Certificate, user string, password string, remoteAddr net.Addr) (mysql.Getter, error) {
+func (asl *AuthServerLdap) UserEntryWithPassword(conn *mysql.Conn, user string, password string, remoteAddr net.Addr) (mysql.Getter, error) {
 	return asl.validate(user, password)
 }
 
@@ -215,6 +214,7 @@ type ServerConfig struct {
 	LdapCert          string
 	LdapKey           string
 	LdapCA            string
+	LdapCRL           string
 	LdapTLSMinVersion string
 }
 
@@ -250,7 +250,7 @@ func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 		return err
 	}
 
-	tlsConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, config.LdapCert, config.LdapKey, config.LdapCA, serverName, tlsVersion)
+	tlsConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, config.LdapCert, config.LdapKey, config.LdapCA, config.LdapCRL, serverName, tlsVersion)
 	if err != nil {
 		return err
 	}

@@ -34,8 +34,9 @@
 # ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
 "ambiguous symbol reference: col1"
-Gen4 error: Column 'col1' is ambiguous
+Gen4 error: Column 'col1' in field list is ambiguous
 
+# TODO: this should be 'Column 'col1' in having clause is ambiguous'
 # non-ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2"
 {
@@ -186,6 +187,10 @@ Gen4 error: Column 'col1' is ambiguous
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -209,7 +214,7 @@ Gen4 error: Column 'col1' is ambiguous
         "Query": "select id from `user` having :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq1"
+          ":__sq1"
         ],
         "Vindex": "user_index"
       }
@@ -222,6 +227,10 @@ Gen4 error: Column 'col1' is ambiguous
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -242,10 +251,10 @@ Gen4 error: Column 'col1' is ambiguous
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id in ::__vals",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq1"
+          ":__sq1"
         ],
         "Vindex": "user_index"
       }
@@ -269,7 +278,7 @@ Gen4 error: Column 'col1' is ambiguous
     "Query": "select col from `user` where id = 5 order by aa asc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -292,12 +301,30 @@ Gen4 plan same as above
     "Query": "select col from `user` where id = 1 order by 1 asc",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where id = 1 order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = 1 order by col asc",
+    "Table": "`user`",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # ORDER BY on scatter
 "select col from user order by col"
@@ -311,10 +338,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(0|1) ASC",
-    "Query": "select col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 1,
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "OrderBy": "0 ASC",
+    "Query": "select col from `user` order by col asc",
     "Table": "`user`"
   }
 }
@@ -322,83 +348,23 @@ Gen4 plan same as above
 
 # ORDER BY on select t.*
 "select t.*, t.col from user t order by t.col"
-{
-  "QueryType": "SELECT",
-  "Original": "select t.*, t.col from user t order by t.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
-    "OrderBy": "(9|2) ASC",
-    "Query": "select t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select *
 "select *, col from user order by col"
-{
-  "QueryType": "SELECT",
-  "Original": "select *, col from user order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select *, col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(9|2) ASC",
-    "Query": "select *, col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select multi t.*
 "select t.*, t.name, t.*, t.col from user t order by t.col"
-{
-  "QueryType": "SELECT",
-  "Original": "select t.*, t.name, t.*, t.col from user t order by t.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
-    "OrderBy": "(19|4) ASC",
-    "Query": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
-    "ResultColumns": 4,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select multi *
 "select *, name, *, col from user order by col"
-{
-  "QueryType": "SELECT",
-  "Original": "select *, name, *, col from user order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select *, `name`, *, col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(19|4) ASC",
-    "Query": "select *, `name`, *, col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 4,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by user_id"
@@ -440,7 +406,23 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from authoritative order by col1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user_id, col1, col2, weight_string(col1) from authoritative where 1 != 1",
+    "OrderBy": "(1|3) ASC COLLATE latin1_swedish_ci",
+    "Query": "select user_id, col1, col2, weight_string(col1) from authoritative order by col1 asc",
+    "ResultColumns": 3,
+    "Table": "authoritative"
+  }
+}
 
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"
@@ -461,7 +443,23 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select a, textcol1, b from user order by a, textcol1, b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
+    "OrderBy": "(0|3) ASC, (1|4) ASC COLLATE latin1_swedish_ci, (2|5) ASC",
+    "Query": "select a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
+    "ResultColumns": 3,
+    "Table": "`user`"
+  }
+}
 
 # ORDER BY on scatter with text column, qualified name TODO: can plan better
 "select a, user.textcol1, b from user order by a, textcol1, b"
@@ -493,7 +491,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
-    "OrderBy": "(0|3) ASC, (1|4) ASC, (2|5) ASC",
+    "OrderBy": "(0|3) ASC, (1|4) ASC COLLATE latin1_swedish_ci, (2|5) ASC",
     "Query": "select a, `user`.textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
     "ResultColumns": 3,
     "Table": "`user`"
@@ -519,7 +517,23 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(a), weight_string(textcol1), weight_string(b), weight_string(textcol2) from `user` where 1 != 1",
+    "OrderBy": "(0|4) ASC, (1|5) ASC COLLATE latin1_swedish_ci, (2|6) ASC, (3|7) ASC COLLATE latin1_swedish_ci",
+    "Query": "select a, textcol1, b, textcol2, weight_string(a), weight_string(textcol1), weight_string(b), weight_string(textcol2) from `user` order by a asc, textcol1 asc, b asc, textcol2 asc",
+    "ResultColumns": 4,
+    "Table": "`user`"
+  }
+}
 
 # ORDER BY invalid col number on scatter
 "select col from user order by 2"
@@ -590,6 +604,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -609,49 +627,15 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
-        "ResultColumns": 1,
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "OrderBy": "0 ASC",
+        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
         "Table": "`user`"
       }
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where col in (select col2 from user) order by col",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col2 from `user` where 1 != 1",
-        "Query": "select col2 from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` where col in ::__sq1 order by col asc",
-        "ResultColumns": 1,
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
@@ -678,7 +662,7 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by null",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -723,7 +707,7 @@ Gen4 plan same as above
         "Query": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where `user`.id = 1 order by null",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -735,7 +719,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select music.col3 from music where 1 != 1",
-        "Query": "select music.col3 from music where music.id = :user_id",
+        "Query": "select music.col3 from music where music.id = :user_id order by null",
         "Table": "music",
         "Values": [
           ":user_id"
@@ -771,7 +755,7 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -817,7 +801,7 @@ Gen4 plan same as above
         "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1) from `user` where `user`.id = 1 order by a asc",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -865,7 +849,7 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -911,7 +895,7 @@ Gen4 plan same as above
         "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1) from `user` where `user`.id = 1 order by a asc",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -942,6 +926,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -968,38 +956,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where col in (select col2 from user) order by null",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col2 from `user` where 1 != 1",
-        "Query": "select col2 from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where col in ::__sq1 order by null",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY RAND()
 "select col from user order by RAND()"
@@ -1018,6 +975,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
@@ -1044,7 +1002,52 @@ Gen4 plan same as above
         "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by RAND()",
         "Table": "`user`",
         "Values": [
-          1
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.col3 from music where 1 != 1",
+        "Query": "select music.col3 from music where music.id = :user_id order by RAND()",
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where `user`.id = 1 order by RAND()",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
         ],
         "Vindex": "user_index"
       },
@@ -1075,6 +1078,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1101,6 +1108,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Order by, '*' expression
 "select * from user where id = 5 order by col"
@@ -1118,7 +1126,7 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by col asc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1141,7 +1149,7 @@ Gen4 plan same as above
     "Query": "select `user`.* from `user` where id = 5 order by `user`.col asc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1164,7 +1172,7 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by `user`.col asc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1194,6 +1202,43 @@ Gen4 plan same as above
         },
         "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
         "Query": "select u.id, u.col from `user` as u where u.col in (select * from `user` where `user`.id = u.id order by col asc)",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+        "Query": "select e.id from user_extra as e where e.col = :u_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,1",
+    "JoinVars": {
+      "u_col": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
+        "Query": "select u.col, u.id from `user` as u where u.col in (select * from `user` where `user`.id = u.id order by col asc)",
         "Table": "`user`"
       },
       {
@@ -1261,7 +1306,7 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by `user`.col collate utf8_general_ci asc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1284,7 +1329,7 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by -col1 asc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1307,7 +1352,7 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1330,7 +1375,7 @@ Gen4 plan same as above
     "Query": "select * from `user` where id = 5 order by id + col collate utf8_general_ci desc",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1353,7 +1398,26 @@ Gen4 plan same as above
     "Query": "select * from `user` as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` as u, (select user_id from user_extra where 1 != 1) as eu where 1 != 1",
+    "Query": "select * from `user` as u, (select user_id from user_extra where user_id = 5) as eu where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
+    "Table": "`user`, user_extra",
+    "Values": [
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1375,7 +1439,7 @@ Gen4 plan same as above
     "Query": "select col from `user` as route1 where id = 1 order by col asc",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -1398,7 +1462,7 @@ Gen4 plan same as above
     "Query": "select col1 from `user` where id = 1 limit 1",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -1413,7 +1477,7 @@ Gen4 plan same as above
   "Original": "select user.col from user join user_extra limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -1457,7 +1521,7 @@ Gen4 plan same as above
   "Original": "select col from user limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1482,7 +1546,7 @@ Gen4 plan same as above
   "Original": "select col from user limit :a",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": null,
+    "Count": ":a",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1507,7 +1571,7 @@ Gen4 plan same as above
   "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 5,
+    "Count": "INT64(5)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1523,6 +1587,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"
@@ -1531,11 +1596,15 @@ Gen4 plan same as above
   "Original": "select col from user where col in (select col1 from user) limit 1",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 1,
+    "Count": "INT64(1)",
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1564,44 +1633,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where col in (select col1 from user) limit 1",
-  "Instructions": {
-    "OperatorType": "Limit",
-    "Count": 1,
-    "Inputs": [
-      {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1 from `user` where 1 != 1",
-            "Query": "select col1 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where col in ::__sq1 limit :__upper_limit",
-            "Table": "`user`"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # limit on reference table
 "select col from ref limit 1"
@@ -1622,9 +1654,29 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# invalid limit expression
+# arithmetic limit
 "select id from user limit 1+1"
-"unexpected expression in LIMIT: expression is too complex '1 + 1'"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user limit 1+1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": "INT64(2)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` limit :__upper_limit",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 Gen4 plan same as above
 
 # order by column alias
@@ -1822,9 +1874,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2",
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2, weight_string(num)",
         "OrderBy": "(1|2) ASC",
-        "Query": "select count(id), num, weight_string(num) from `user` group by 2 order by num asc",
+        "Query": "select count(id), num, weight_string(num) from `user` group by 2, weight_string(num) order by num asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -1848,9 +1900,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
         "OrderBy": "(1|2) ASC",
-        "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+        "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
         "Table": "`user`"
       }
     ]
@@ -1880,9 +1932,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2",
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2, weight_string(num)",
             "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` group by 2 order by num asc",
+            "Query": "select count(id), num, weight_string(num) from `user` group by 2, weight_string(num) order by num asc",
             "ResultColumns": 2,
             "Table": "`user`"
           }
@@ -1913,9 +1965,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
             "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+            "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
             "Table": "`user`"
           }
         ]

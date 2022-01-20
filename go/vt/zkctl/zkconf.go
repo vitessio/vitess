@@ -23,7 +23,7 @@ package zkctl
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -90,7 +90,7 @@ func (cnf *ZkConfig) MyidFile() string {
 }
 
 func (cnf *ZkConfig) WriteMyid() error {
-	return ioutil.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerId)), 0664)
+	return os.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerId)), 0664)
 }
 
 /*
@@ -103,7 +103,7 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 	}
 	var dataErr error
 	for _, path := range cnfFiles {
-		data, dataErr := ioutil.ReadFile(path)
+		data, dataErr := os.ReadFile(path)
 		if dataErr != nil {
 			continue
 		}

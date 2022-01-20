@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -27,28 +28,28 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/workflow"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
-
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type materializer struct {
@@ -64,6 +65,34 @@ const (
 	createDDLAsCopyDropConstraint = "copy:drop_constraint"
 )
 
+// addTablesToVSchema adds tables to an (unsharded) vschema. Depending on copyAttributes It will also add any sequence info
+// that is associated with a table by copying it from the vschema of the source keyspace.
+// For a migrate workflow we do not copy attributes since the source keyspace is just a proxy to import data into Vitess
+// Todo: For now we only copy sequence but later we may also want to copy other attributes like authoritative column flag and list of columns
+func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace string, targetVSchema *vschemapb.Keyspace, tables []string, copyAttributes bool) error {
+	if targetVSchema.Tables == nil {
+		targetVSchema.Tables = make(map[string]*vschemapb.Table)
+	}
+	for _, table := range tables {
+		targetVSchema.Tables[table] = &vschemapb.Table{}
+	}
+
+	if copyAttributes { // if source keyspace is provided, copy over the sequence info.
+		srcVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			srcTable, ok := srcVSchema.Tables[table]
+			if ok {
+				targetVSchema.Tables[table].AutoIncrement = srcTable.AutoIncrement
+			}
+		}
+
+	}
+	return nil
+}
+
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
@@ -73,7 +102,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	var externalTopo *topo.Server
 	var err error
 
-	if externalCluster != "" {
+	if externalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
 		externalTopo, err = wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
 		if err != nil {
 			return err
@@ -81,6 +110,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		wr.sourceTs = externalTopo
 		log.Infof("Successfully opened external topo: %+v", externalTopo)
 	}
+
 	var vschema *vschemapb.Keyspace
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
@@ -149,11 +179,8 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 		if !vschema.Sharded {
-			if vschema.Tables == nil {
-				vschema.Tables = make(map[string]*vschemapb.Table)
-			}
-			for _, table := range tables {
-				vschema.Tables[table] = &vschemapb.Table{}
+			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables, externalTopo == nil); err != nil {
+				return err
 			}
 		}
 	}
@@ -249,6 +276,13 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 	var missingTables []string
 	for _, table := range tables {
 		found := false
+
+		// Skip Vitess internal tables
+		if schema.IsInternalOperationTableName(table) {
+			log.Infof("found internal table %s, ignoring in materialization schema validation", table)
+			continue
+		}
+
 		for _, ksTable := range ksTables {
 			if table == ksTable {
 				found = true
@@ -488,7 +522,11 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil {
-		return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
+		if schema.IsInternalOperationTableName(sourceTableName) {
+			log.Infof("found internal table %s, ignoring in materialization", sourceTableName)
+		} else {
+			return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
+		}
 	}
 	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
 		// For a conflict, the vindex name and column should match.
@@ -513,7 +551,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if onesource.PrimaryAlias == nil {
 		return nil, nil, nil, fmt.Errorf("source shard has no primary: %v", onesource.ShardName())
 	}
-	tableSchema, err := wr.GetSchema(ctx, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
+	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -910,7 +948,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		targetSchema, err := mz.wr.GetSchema(ctx, target.PrimaryAlias, allTables, nil, false)
+		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false)
 		if err != nil {
 			return err
 		}
@@ -988,6 +1026,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				SQL:              sql,
 				Force:            false,
 				AllowReplication: true,
+				SQLMode:          vreplication.SQLMode,
 			})
 			if err != nil {
 				return err

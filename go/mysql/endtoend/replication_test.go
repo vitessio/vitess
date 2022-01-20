@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
@@ -1025,7 +1027,12 @@ func TestRowReplicationTypes(t *testing.T) {
 		sql.WriteString(", ")
 		sql.WriteString(tcase.name)
 		sql.WriteString(" = ")
-		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].ToBytes(), mysql.ZeroTimestamp) {
+		valueBytes, err := values[i+1].ToBytes()
+		// Expression values are not supported with ToBytes
+		if values[i+1].Type() != querypb.Type_EXPRESSION {
+			require.NoError(t, err)
+		}
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(valueBytes, mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -1098,7 +1105,7 @@ func valuesForTests(t *testing.T, rs *mysql.Rows, tm *mysql.TableMap, rowIndex i
 		}
 
 		// We have real data
-		value, l, err := mysql.CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
+		value, l, err := mysql.CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
 		if err != nil {
 			return nil, err
 		}

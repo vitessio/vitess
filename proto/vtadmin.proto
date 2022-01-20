@@ -34,8 +34,14 @@ import "vtctldata.proto";
 service VTAdmin {
     // CreateKeyspace creates a new keyspace in the given cluster.
     rpc CreateKeyspace(CreateKeyspaceRequest) returns (CreateKeyspaceResponse) {};
+    // CreateShard creates a new shard in the given cluster and keyspace.
+    rpc CreateShard(CreateShardRequest) returns (vtctldata.CreateShardResponse) {};
     // DeleteKeyspace deletes a keyspace in the given cluster.
     rpc DeleteKeyspace(DeleteKeyspaceRequest) returns (vtctldata.DeleteKeyspaceResponse) {};
+    // DeleteShard deletes one or more shards in the given cluster and keyspace.
+    rpc DeleteShards(DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
+    // DeleteTablet deletes a tablet from the topology
+    rpc DeleteTablet(DeleteTabletRequest) returns (DeleteTabletResponse) {};
     // FindSchema returns a single Schema that matches the provided table name
     // across all specified clusters IDs. Not specifying a set of cluster IDs
     // causes the search to span all configured clusters.
@@ -58,6 +64,9 @@ service VTAdmin {
     rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
+    // GetShardReplicationPositions returns shard replication positions grouped
+    // by cluster.
+    rpc GetShardReplicationPositions(GetShardReplicationPositionsRequest) returns (GetShardReplicationPositionsResponse) {};
     // GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
     rpc GetSrvVSchema (GetSrvVSchemaRequest) returns (SrvVSchema) {};
     // GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
@@ -72,11 +81,25 @@ service VTAdmin {
     rpc GetVSchema(GetVSchemaRequest) returns (VSchema) {};
     // GetVSchemas returns the VSchemas for all specified clusters.
     rpc GetVSchemas(GetVSchemasRequest) returns (GetVSchemasResponse) {};
+    // GetVtctlds returns the Vtctlds for all specified clusters.
+    rpc GetVtctlds(GetVtctldsRequest) returns (GetVtctldsResponse) {};
     // GetWorkflow returns a single Workflow for a given cluster, keyspace, and
     // workflow name.
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
     // GetWorkflows returns the Workflows for all specified clusters.
     rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
+    // PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+    rpc PingTablet(PingTabletRequest) returns (PingTabletResponse) {};
+    // RefreshState reloads the tablet record on the specified tablet.
+    rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
+    // ReparentTablet 
+    rpc ReparentTablet(ReparentTabletRequest) returns (ReparentTabletResponse) {};
+    // RunHealthCheck runs a health check on the tablet
+    rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
+    // StartReplication will run the underlying database command to start replication on a tablet
+    rpc StartReplication(StartReplicationRequest) returns (StartReplicationResponse) {};
+    // StopReplication will run th underlying database command to stop replication on a tablet
+    rpc StopReplication(StopReplicationRequest) returns (StopReplicationResponse) {};
     // VTExplain provides information on how Vitess plans to execute a particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
@@ -92,6 +115,13 @@ message Cluster {
 message ClusterBackup {
     Cluster cluster = 1;
     mysqlctl.BackupInfo backup = 2;
+}
+
+message ClusterShardReplicationPosition {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    vtctldata.ShardReplicationPositionsResponse position_info = 4;
 }
 
 message ClusterWorkflows {
@@ -202,9 +232,28 @@ message CreateKeyspaceResponse {
     Keyspace keyspace = 1;
 }
 
+message CreateShardRequest {
+    string cluster_id = 1;
+    vtctldata.CreateShardRequest options = 2;
+}
+
 message DeleteKeyspaceRequest {
     string cluster_id = 1;
     vtctldata.DeleteKeyspaceRequest options = 2;
+}
+
+message DeleteShardsRequest {
+    string cluster_id = 1;
+    vtctldata.DeleteShardsRequest options = 2;
+}
+
+message DeleteTabletRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message DeleteTabletResponse {
+    string status = 1;
 }
 
 message FindSchemaRequest {
@@ -278,6 +327,23 @@ message GetSchemasResponse {
     repeated Schema schemas = 1;
 }
 
+message GetShardReplicationPositionsRequest {
+    repeated string cluster_ids = 1;
+    // Keyspaces, if set, limits replication positions to just the specified
+    // keyspaces. Applies to all clusters in the request.
+    repeated string keyspaces = 2;
+    // KeyspaceShards, if set, limits replicatin positions to just the specified
+    // keyspace/shards. Applies to all clusters in the request.
+    //
+    // This field takes precedence over Keyspaces. If KeyspaceShards is set,
+    // Keyspaces is ignored.
+    repeated string keyspace_shards = 3;
+}
+
+message GetShardReplicationPositionsResponse {
+    repeated ClusterShardReplicationPosition replication_positions = 1;
+}
+
 message GetSrvVSchemaRequest {
     string cluster_id = 1;
     string cell = 2;
@@ -327,6 +393,14 @@ message GetVSchemasResponse {
     repeated VSchema v_schemas = 1;
 }
 
+message GetVtctldsRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetVtctldsResponse {
+    repeated Vtctld vtctlds = 1;
+}
+
 message GetWorkflowRequest {
     string cluster_id = 1;
     string keyspace = 2;
@@ -358,6 +432,66 @@ message GetWorkflowsRequest {
 
 message GetWorkflowsResponse {
     map <string, ClusterWorkflows> workflows_by_cluster = 1;
+}
+
+message PingTabletRequest {
+    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
+    string alias = 1;
+    // ClusterIDs is an optional parameter to narrow the scope of the search, if
+    // the caller knows which cluster the tablet may be in, or, to disamiguate if
+    // multiple clusters have a tablet with the same hostname.
+    repeated string cluster_ids = 2;
+}
+
+message PingTabletResponse {
+    string status = 1;
+}
+
+message RefreshStateRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message RefreshStateResponse {
+    string status = 1;
+}
+
+message ReparentTabletRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message ReparentTabletResponse {
+    string keyspace = 1;
+    string shard = 2;
+    string primary = 3;
+}
+
+message RunHealthCheckRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message RunHealthCheckResponse {
+    string status = 1;
+}
+
+message StartReplicationRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message StartReplicationResponse {
+    string status = 1;
+}
+
+message StopReplicationRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message StopReplicationResponse {
+    string status = 1;
 }
 
 message VTExplainRequest {

@@ -30,22 +30,26 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql57, mysql80, mariadb102, mariadb103"
+	unitTestDatabases = "mysql57, mariadb103, mysql80, mariadb102"
 
-	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
+	// An empty string will cause the default non platform specific template
+	// to be used.
+	clusterTestTemplateFormatStr = "templates/cluster_endtoend_test%s.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
-	unitTestSelfHostedDatabases   = "mysql57, mariadb"
+	unitTestSelfHostedDatabases   = ""
 	dockerFileTemplate            = "templates/dockerfile.tpl"
 	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
+	clusterTestDockerTemplate     = "templates/cluster_endtoend_test_docker.tpl"
 )
 
 var (
+	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
+	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"11",
 		"12",
 		"13",
-		"14",
 		"15",
 		"16",
 		"17",
@@ -57,13 +61,10 @@ var (
 		"23",
 		"24",
 		"26",
-		"vreplication_basic",
-		"vreplication_multicell",
-		"vreplication_cellalias",
 		"vstream_failover",
-		"vreplication_v2",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
+		"vstream_with_keyspaces_to_watch",
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
@@ -73,39 +74,52 @@ var (
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
+		"onlineddl_scheduler",
+		"onlineddl_revertible",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
-		"vtorc",
+		"tabletmanager_consul",
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
+		"vtgate_godriver",
 		"vtgate_gen4",
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
 		"vtgate_schema",
 		"vtgate_topo",
+		"vtgate_topo_consul",
+		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
 		"vtgate_vindex",
 		"vtgate_vschema",
+		"vtgate_queries",
+		"vtgate_schema_tracker",
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
+		"vreplication_multicell",
+		"vreplication_cellalias",
 	}
 
 	clusterSelfHostedList = []string{
+		"14",
+		"vtorc",
+	}
+	clusterDockerList = []string{
 		"vreplication_basic",
-		"vreplication_multicell",
-		"vreplication_cellalias",
 		"vreplication_v2",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = clusterList
+	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
+		"vtgate_topo_consul",
+		"tabletmanager_consul",
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
@@ -117,7 +131,7 @@ type unitTest struct {
 }
 
 type clusterTest struct {
-	Name, Shard                  string
+	Name, Shard, Platform        string
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20                     bool
 }
@@ -148,7 +162,8 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 
 func main() {
 	generateUnitTestWorkflows()
-	generateClusterWorkflows()
+	generateClusterWorkflows(clusterList, clusterTestTemplateFormatStr)
+	generateClusterWorkflows(clusterDockerList, clusterTestDockerTemplate)
 
 	// tests that will use self-hosted runners
 	err := generateSelfHostedUnitTestWorkflows()
@@ -174,7 +189,9 @@ func canonnizeList(list []string) []string {
 func parseList(csvList string) []string {
 	var list []string
 	for _, item := range strings.Split(csvList, ",") {
-		list = append(list, strings.TrimSpace(item))
+		if item != "" {
+			list = append(list, strings.TrimSpace(item))
+		}
 	}
 	return list
 }
@@ -184,7 +201,7 @@ func generateSelfHostedUnitTestWorkflows() error {
 	for _, platform := range platforms {
 		directoryName := fmt.Sprintf("unit_test_%s", platform)
 		test := &selfHostedTest{
-			Name:              fmt.Sprintf("Unit Test Self Hosted (%s)", platform),
+			Name:              fmt.Sprintf("Unit Test (%s)", platform),
 			ImageName:         fmt.Sprintf("unit_test_%s", platform),
 			Platform:          platform,
 			directoryName:     directoryName,
@@ -196,7 +213,7 @@ func generateSelfHostedUnitTestWorkflows() error {
 		if err != nil {
 			return err
 		}
-		filePath := fmt.Sprintf("%s/unit_test_%s_self_hosted.yml", workflowConfigDir, platform)
+		filePath := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
 		err = writeFileFromTemplate(unitTestSelfHostedTemplate, filePath, test)
 		if err != nil {
 			log.Print(err)
@@ -210,7 +227,7 @@ func generateSelfHostedClusterWorkflows() error {
 	for _, cluster := range clusters {
 		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
 		test := &selfHostedTest{
-			Name:              fmt.Sprintf("Cluster Self Hosted (%s)", cluster),
+			Name:              fmt.Sprintf("Cluster (%s)", cluster),
 			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
 			Platform:          "mysql57",
 			directoryName:     directoryName,
@@ -245,7 +262,8 @@ func generateSelfHostedClusterWorkflows() error {
 		if err != nil {
 			return err
 		}
-		filePath := fmt.Sprintf("%s/cluster_endtoend_%s_self_hosted.yml", workflowConfigDir, cluster)
+
+		filePath := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
 		err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
 		if err != nil {
 			log.Print(err)
@@ -254,8 +272,8 @@ func generateSelfHostedClusterWorkflows() error {
 	return nil
 }
 
-func generateClusterWorkflows() {
-	clusters := canonnizeList(clusterList)
+func generateClusterWorkflows(list []string, tpl string) {
+	clusters := canonnizeList(list)
 	for _, cluster := range clusters {
 		test := &clusterTest{
 			Name:  fmt.Sprintf("Cluster (%s)", cluster),
@@ -279,12 +297,19 @@ func generateClusterWorkflows() {
 		for _, ubuntu20Cluster := range ubuntu20Clusters {
 			if ubuntu20Cluster == cluster {
 				test.Ubuntu20 = true
+				test.Platform = "mysql80"
 				break
 			}
 		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
-		err := writeFileFromTemplate(clusterTestTemplate, path, test)
+		template := tpl
+		if test.Platform != "" {
+			template = fmt.Sprintf(tpl, "_"+test.Platform)
+		} else if strings.Contains(template, "%s") {
+			template = fmt.Sprintf(tpl, "")
+		}
+		err := writeFileFromTemplate(template, path, test)
 		if err != nil {
 			log.Print(err)
 		}

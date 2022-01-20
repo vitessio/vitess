@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -105,7 +105,7 @@ func TestStandalone(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 200, resp.StatusCode)
 	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.Nil(t, err)
 	cmd := resultMap["cmdline"]
@@ -122,7 +122,7 @@ func TestStandalone(t *testing.T) {
 	insertManyRows(ctx, t, conn, idStart, rowCount)
 	assertInsertedRowsExist(ctx, t, conn, idStart, rowCount)
 	assertCanInsertRow(ctx, t, conn)
-	assertTablesPresent(t)
+	assertTabletsPresent(t)
 
 	err = localCluster.TearDown()
 	require.Nil(t, err)
@@ -130,7 +130,7 @@ func TestStandalone(t *testing.T) {
 	require.Nil(t, err)
 
 	assertInsertedRowsExist(ctx, t, conn, idStart, rowCount)
-	assertTablesPresent(t)
+	assertTabletsPresent(t)
 }
 
 func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {
@@ -193,7 +193,7 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 	require.Nil(t, err)
 }
 
-func assertTablesPresent(t *testing.T) {
+func assertTabletsPresent(t *testing.T) {
 	tmpCmd := exec.Command("vtctlclient", "-vtctl_client_protocol", "grpc", "-server", grpcAddress, "-stderrthreshold", "0", "ListAllTablets", "test")
 
 	log.Infof("Running vtctlclient with command: %v", tmpCmd.Args)

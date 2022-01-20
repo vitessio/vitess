@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"fmt"
 	"go/types"
-	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"strings"
+
+	"vitess.io/vitess/go/tools/goimports"
 
 	"vitess.io/vitess/go/tools/common"
 
@@ -176,19 +178,19 @@ func (t *TypePaths) Set(path string) error {
 // currently exist on disk and returns any mismatches
 func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	for fullPath, file := range result {
-		existing, err := ioutil.ReadFile(fullPath)
+		existing, err := os.ReadFile(fullPath)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("missing file on disk: %s (%w)", fullPath, err))
 			continue
 		}
 
-		var buf bytes.Buffer
-		if err := file.Render(&buf); err != nil {
-			errors = append(errors, fmt.Errorf("render error for '%s': %w", fullPath, err))
+		genFile, err := goimports.FormatJenFile(file)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
 		}
 
-		if !bytes.Equal(existing, buf.Bytes()) {
+		if !bytes.Equal(existing, genFile) {
 			errors = append(errors, fmt.Errorf("'%s' has changed", fullPath))
 			continue
 		}

@@ -27,6 +27,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+type DecimalFloat float64
+
 var (
 	// BvSchemaName is bind variable to be sent down to vttablet for schema name.
 	BvSchemaName = "__vtschemaname"
@@ -65,6 +67,16 @@ func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVari
 	return out, nil
 }
 
+// HexNumBindVariable converts bytes representing a hex number to a bind var.
+func HexNumBindVariable(v []byte) *querypb.BindVariable {
+	return ValueBindVariable(NewHexNum(v))
+}
+
+// HexValBindVariable converts bytes representing a hex encoded string to a bind var.
+func HexValBindVariable(v []byte) *querypb.BindVariable {
+	return ValueBindVariable(NewHexVal(v))
+}
+
 // Int8BindVariable converts an int8 to a bind var.
 func Int8BindVariable(v int8) *querypb.BindVariable {
 	return ValueBindVariable(NewInt8(v))
@@ -96,6 +108,11 @@ func Uint64BindVariable(v uint64) *querypb.BindVariable {
 // Float64BindVariable converts a float64 to a bind var.
 func Float64BindVariable(v float64) *querypb.BindVariable {
 	return ValueBindVariable(NewFloat64(v))
+}
+
+func DecimalBindVariable(v DecimalFloat) *querypb.BindVariable {
+	f := strconv.FormatFloat(float64(v), 'f', -1, 64)
+	return ValueBindVariable(NewDecimal(f))
 }
 
 // StringBindVariable converts a string to a bind var.
@@ -134,6 +151,8 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		return Int64BindVariable(v), nil
 	case uint64:
 		return Uint64BindVariable(v), nil
+	case DecimalFloat:
+		return DecimalBindVariable(v), nil
 	case float64:
 		return Float64BindVariable(v), nil
 	case nil:

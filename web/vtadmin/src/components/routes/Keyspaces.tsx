@@ -16,7 +16,6 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 
-import style from './Keyspaces.module.scss';
 import { useKeyspaces } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
@@ -58,8 +57,8 @@ export const Keyspaces = () => {
             <tr key={idx}>
                 <DataCell>
                     <KeyspaceLink clusterID={row.clusterID} name={row.name}>
-                        <div className="font-weight-bold">{row.name}</div>
-                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        <div className="font-bold">{row.name}</div>
+                        <div className="text-sm text-secondary">{row.cluster}</div>
                     </KeyspaceLink>
                 </DataCell>
                 <DataCell>
@@ -69,7 +68,7 @@ export const Keyspaces = () => {
                         </div>
                     )}
                     {!!row.nonservingShards && (
-                        <div className="font-weight-bold">
+                        <div className="font-bold">
                             <Pip state="danger" /> {row.nonservingShards}{' '}
                             {row.nonservingShards === 1 ? 'shard' : 'shards'} not serving
                         </div>
@@ -91,7 +90,7 @@ export const Keyspaces = () => {
                     placeholder="Filter keyspaces"
                     value={filter || ''}
                 />
-                <div className={style.container}>
+                <div className="max-w-screen-md">
                     <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
                 </div>
             </ContentContainer>

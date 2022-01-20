@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -64,7 +63,7 @@ func TestVtctlTopoCommands(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	tmp, err := ioutil.TempDir("", "vtctltopotest")
+	tmp, err := os.MkdirTemp("", "vtctltopotest")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
@@ -83,7 +82,7 @@ sharding_column_name:"col2"
 	if err != nil {
 		t.Fatalf("TopoCp(/keyspaces/ks1/Keyspace) failed: %v", err)
 	}
-	contents, err := ioutil.ReadFile(ksFile)
+	contents, err := os.ReadFile(ksFile)
 	if err != nil {
 		t.Fatalf("copy failed: %v", err)
 	}

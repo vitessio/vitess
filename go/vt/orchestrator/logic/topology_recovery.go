@@ -17,7 +17,9 @@
 package logic
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	goos "os"
@@ -26,9 +28,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
@@ -38,7 +46,9 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/os"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 var countPendingRecoveries int64
@@ -58,7 +68,7 @@ type RecoveryAcknowledgement struct {
 
 	Key           inst.InstanceKey
 	ClusterName   string
-	Id            int64
+	ID            int64
 	UID           string
 	AllRecoveries bool
 }
@@ -85,14 +95,14 @@ type BlockedTopologyRecovery struct {
 	ClusterName          string
 	Analysis             inst.AnalysisCode
 	LastBlockedTimestamp string
-	BlockingRecoveryId   int64
+	BlockingRecoveryID   int64
 }
 
 // TopologyRecovery represents an entry in the topology_recovery table
 type TopologyRecovery struct {
 	inst.PostponedFunctionsContainer
 
-	Id                        int64
+	ID                        int64
 	UID                       string
 	AnalysisEntry             inst.ReplicationAnalysis
 	SuccessorKey              *inst.InstanceKey
@@ -110,8 +120,8 @@ type TopologyRecovery struct {
 	AcknowledgedAt            string
 	AcknowledgedBy            string
 	AcknowledgedComment       string
-	LastDetectionId           int64
-	RelatedRecoveryId         int64
+	LastDetectionID           int64
+	RelatedRecoveryID         int64
 	Type                      RecoveryType
 	RecoveryType              PrimaryRecoveryType
 }
@@ -128,21 +138,21 @@ func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *Topology
 	return topologyRecovery
 }
 
-func (this *TopologyRecovery) AddError(err error) error {
+func (topologyRecovery *TopologyRecovery) AddError(err error) error {
 	if err != nil {
-		this.AllErrors = append(this.AllErrors, err.Error())
+		topologyRecovery.AllErrors = append(topologyRecovery.AllErrors, err.Error())
 	}
 	return err
 }
 
-func (this *TopologyRecovery) AddErrors(errs []error) {
+func (topologyRecovery *TopologyRecovery) AddErrors(errs []error) {
 	for _, err := range errs {
-		this.AddError(err)
+		topologyRecovery.AddError(err)
 	}
 }
 
 type TopologyRecoveryStep struct {
-	Id          int64
+	ID          int64
 	RecoveryUID string
 	AuditAt     string
 	Message     string
@@ -171,19 +181,20 @@ var emergencyOperationGracefulPeriodMap *cache.Cache
 // InstancesByCountReplicas sorts instances by umber of replicas, descending
 type InstancesByCountReplicas [](*inst.Instance)
 
-func (this InstancesByCountReplicas) Len() int      { return len(this) }
-func (this InstancesByCountReplicas) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this InstancesByCountReplicas) Less(i, j int) bool {
-	if len(this[i].Replicas) == len(this[j].Replicas) {
+func (instancesByCountReplicas InstancesByCountReplicas) Len() int {
+	return len(instancesByCountReplicas)
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Swap(i, j int) {
+	instancesByCountReplicas[i], instancesByCountReplicas[j] = instancesByCountReplicas[j], instancesByCountReplicas[i]
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
+	if len(instancesByCountReplicas[i].Replicas) == len(instancesByCountReplicas[j].Replicas) {
 		// Secondary sorting: prefer more advanced replicas
-		return !this[i].ExecBinlogCoordinates.SmallerThan(&this[j].ExecBinlogCoordinates)
+		return !instancesByCountReplicas[i].ExecBinlogCoordinates.SmallerThan(&instancesByCountReplicas[j].ExecBinlogCoordinates)
 	}
-	return len(this[i].Replicas) < len(this[j].Replicas)
+	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
 }
 
-var recoverDeadPrimaryCounter = metrics.NewCounter()
-var recoverDeadPrimarySuccessCounter = metrics.NewCounter()
-var recoverDeadPrimaryFailureCounter = metrics.NewCounter()
 var recoverDeadIntermediatePrimaryCounter = metrics.NewCounter()
 var recoverDeadIntermediatePrimarySuccessCounter = metrics.NewCounter()
 var recoverDeadIntermediatePrimaryFailureCounter = metrics.NewCounter()
@@ -193,9 +204,6 @@ var recoverDeadCoPrimaryFailureCounter = metrics.NewCounter()
 var countPendingRecoveriesGauge = metrics.NewGauge()
 
 func init() {
-	metrics.Register("recover.dead_primary.start", recoverDeadPrimaryCounter)
-	metrics.Register("recover.dead_primary.success", recoverDeadPrimarySuccessCounter)
-	metrics.Register("recover.dead_primary.fail", recoverDeadPrimaryFailureCounter)
 	metrics.Register("recover.dead_intermediate_primary.start", recoverDeadIntermediatePrimaryCounter)
 	metrics.Register("recover.dead_intermediate_primary.success", recoverDeadIntermediatePrimarySuccessCounter)
 	metrics.Register("recover.dead_intermediate_primary.fail", recoverDeadIntermediatePrimaryFailureCounter)
@@ -372,101 +380,6 @@ func executeProcesses(processes []string, description string, topologyRecovery *
 	return err
 }
 
-func recoverDeadPrimaryInBinlogServerTopology(topologyRecovery *TopologyRecovery) (promotedReplica *inst.Instance, err error) {
-	failedPrimaryKey := &topologyRecovery.AnalysisEntry.AnalyzedInstanceKey
-
-	var promotedBinlogServer *inst.Instance
-
-	_, promotedBinlogServer, err = inst.RegroupReplicasBinlogServers(failedPrimaryKey, true)
-	if err != nil {
-		return nil, log.Errore(err)
-	}
-	promotedBinlogServer, err = inst.StopReplication(&promotedBinlogServer.Key)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	// Find candidate replica
-	promotedReplica, err = inst.GetCandidateReplicaOfBinlogServerTopology(&promotedBinlogServer.Key)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	// Align it with binlog server coordinates
-	promotedReplica, err = inst.StopReplication(&promotedReplica.Key)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	promotedReplica, err = inst.StartReplicationUntilPrimaryCoordinates(&promotedReplica.Key, &promotedBinlogServer.ExecBinlogCoordinates)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	promotedReplica, err = inst.StopReplication(&promotedReplica.Key)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	// Detach, flush binary logs forward
-	promotedReplica, err = inst.ResetReplication(&promotedReplica.Key)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	promotedReplica, err = inst.FlushBinaryLogsTo(&promotedReplica.Key, promotedBinlogServer.ExecBinlogCoordinates.LogFile)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	promotedReplica, err = inst.FlushBinaryLogs(&promotedReplica.Key, 1)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	promotedReplica, err = inst.PurgeBinaryLogsToLatest(&promotedReplica.Key, false)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	// Reconnect binlog servers to promoted replica (now primary):
-	promotedBinlogServer, err = inst.SkipToNextBinaryLog(&promotedBinlogServer.Key)
-	if err != nil {
-		return promotedReplica, log.Errore(err)
-	}
-	promotedBinlogServer, err = inst.Repoint(&promotedBinlogServer.Key, &promotedReplica.Key, inst.GTIDHintDeny)
-	if err != nil {
-		return nil, log.Errore(err)
-	}
-
-	func() {
-		// Move binlog server replicas up to replicate from primary.
-		// This can only be done once a BLS has skipped to the next binlog
-		// We postpone this operation. The primary is already promoted and we're happy.
-		binlogServerReplicas, err := inst.ReadBinlogServerReplicaInstances(&promotedBinlogServer.Key)
-		if err != nil {
-			return
-		}
-		maxBinlogServersToPromote := 3
-		for i, binlogServerReplica := range binlogServerReplicas {
-			binlogServerReplica := binlogServerReplica
-			if i >= maxBinlogServersToPromote {
-				return
-			}
-			postponedFunction := func() error {
-				binlogServerReplica, err := inst.StopReplication(&binlogServerReplica.Key)
-				if err != nil {
-					return err
-				}
-				// Make sure the BLS has the "next binlog" -- the one the primary flushed & purged to. Otherwise the BLS
-				// will request a binlog the primary does not have
-				if binlogServerReplica.ExecBinlogCoordinates.SmallerThan(&promotedBinlogServer.ExecBinlogCoordinates) {
-					binlogServerReplica, err = inst.StartReplicationUntilPrimaryCoordinates(&binlogServerReplica.Key, &promotedBinlogServer.ExecBinlogCoordinates)
-					if err != nil {
-						return err
-					}
-				}
-				_, err = inst.Repoint(&binlogServerReplica.Key, &promotedReplica.Key, inst.GTIDHintDeny)
-				return err
-			}
-			topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("recoverDeadPrimaryInBinlogServerTopology, moving binlog server %+v", binlogServerReplica.Key))
-		}
-	}()
-
-	return promotedReplica, err
-}
-
 func GetPrimaryRecoveryType(analysisEntry *inst.ReplicationAnalysis) (primaryRecoveryType PrimaryRecoveryType) {
 	primaryRecoveryType = PrimaryRecoveryUnknown
 	if analysisEntry.OracleGTIDImmediateTopology || analysisEntry.MariaDBGTIDImmediateTopology {
@@ -475,115 +388,6 @@ func GetPrimaryRecoveryType(analysisEntry *inst.ReplicationAnalysis) (primaryRec
 		primaryRecoveryType = PrimaryRecoveryBinlogServer
 	}
 	return primaryRecoveryType
-}
-
-// recoverDeadPrimary recovers a dead primary, complete logic inside
-func recoverDeadPrimary(topologyRecovery *TopologyRecovery, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
-	topologyRecovery.Type = PrimaryRecovery
-	analysisEntry := &topologyRecovery.AnalysisEntry
-	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
-	var cannotReplicateReplicas [](*inst.Instance)
-	postponedAll := false
-
-	inst.AuditOperation("recover-dead-primary", failedInstanceKey, "problem found; will recover")
-	if !skipProcesses {
-		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
-			return false, nil, lostReplicas, topologyRecovery.AddError(err)
-		}
-	}
-
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: will recover %+v", *failedInstanceKey))
-
-	err = TabletDemotePrimary(*failedInstanceKey)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: TabletDemotePrimary: %v", err))
-
-	topologyRecovery.RecoveryType = GetPrimaryRecoveryType(analysisEntry)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: primaryRecoveryType=%+v", topologyRecovery.RecoveryType))
-
-	promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
-		if promoted == nil {
-			return false
-		}
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: promotedReplicaIsIdeal(%+v)", promoted.Key))
-		if candidateInstanceKey != nil { //explicit request to promote a specific server
-			return promoted.Key.Equals(candidateInstanceKey)
-		}
-		if promoted.DataCenter == topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
-			promoted.PhysicalEnvironment == topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
-			if promoted.PromotionRule == inst.MustPromoteRule || promoted.PromotionRule == inst.PreferPromoteRule ||
-				(hasBestPromotionRule && promoted.PromotionRule != inst.MustNotPromoteRule) {
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: found %+v to be ideal candidate; will optimize recovery", promoted.Key))
-				postponedAll = true
-				return true
-			}
-		}
-		return false
-	}
-	switch topologyRecovery.RecoveryType {
-	case PrimaryRecoveryUnknown:
-		{
-			return false, nil, lostReplicas, topologyRecovery.AddError(log.Errorf("RecoveryType unknown/unsupported"))
-		}
-	case PrimaryRecoveryGTID:
-		{
-			AuditTopologyRecovery(topologyRecovery, "RecoverDeadPrimary: regrouping replicas via GTID")
-			lostReplicas, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasGTID(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
-		}
-	case PrimaryRecoveryBinlogServer:
-		{
-			AuditTopologyRecovery(topologyRecovery, "RecoverDeadPrimary: recovering via binlog servers")
-			promotedReplica, err = recoverDeadPrimaryInBinlogServerTopology(topologyRecovery)
-		}
-	}
-	topologyRecovery.AddError(err)
-	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
-	for _, replica := range lostReplicas {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: - lost replica: %+v", replica.Key))
-	}
-
-	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterPrimaryFailover {
-		postponedFunction := func() error {
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
-			for _, replica := range lostReplicas {
-				replica := replica
-				inst.DetachReplicaPrimaryHost(&replica.Key)
-			}
-			return nil
-		}
-		topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadPrimary, detach %+v lost replicas", len(lostReplicas)))
-	}
-
-	func() error {
-		// TODO(sougou): Commented out: this downtime feels a little aggressive.
-		//inst.BeginDowntime(inst.NewDowntime(failedInstanceKey, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
-		acknowledgeInstanceFailureDetection(&analysisEntry.AnalyzedInstanceKey)
-		for _, replica := range lostReplicas {
-			replica := replica
-			inst.BeginDowntime(inst.NewDowntime(&replica.Key, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
-		}
-		return nil
-	}()
-
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: %d postponed functions", topologyRecovery.PostponedFunctionsContainer.Len()))
-
-	if promotedReplica != nil && !postponedAll {
-		promotedReplica, err = replacePromotedReplicaWithCandidate(topologyRecovery, &analysisEntry.AnalyzedInstanceKey, promotedReplica, candidateInstanceKey)
-		topologyRecovery.AddError(err)
-	}
-
-	if promotedReplica == nil {
-		err := TabletUndoDemotePrimary(*failedInstanceKey)
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: TabletUndoDemotePrimary: %v", err))
-		message := "Failure: no replica promoted."
-		AuditTopologyRecovery(topologyRecovery, message)
-		inst.AuditOperation("recover-dead-primary", failedInstanceKey, message)
-		return true, promotedReplica, lostReplicas, err
-	}
-
-	message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
-	AuditTopologyRecovery(topologyRecovery, message)
-	inst.AuditOperation("recover-dead-primary", failedInstanceKey, message)
-	return true, promotedReplica, lostReplicas, err
 }
 
 func PrimaryFailoverGeographicConstraintSatisfied(analysisEntry *inst.ReplicationAnalysis, suggestedInstance *inst.Instance) (satisfied bool, dissatisfiedReason string) {
@@ -653,13 +457,13 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 		for _, candidateReplica := range candidateReplicas {
 			if promotedReplica.Key.Equals(&candidateReplica.Key) {
 				// Seems like we promoted a candidate replica (though not in same DC and ENV as dead primary)
-				if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, candidateReplica); satisfied {
+				satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, candidateReplica)
+				if satisfied {
 					// Good enough. No further action required.
 					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoted replica %+v is a good candidate", promotedReplica.Key))
 					return promotedReplica, false, nil
-				} else {
-					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", candidateReplica.Key, reason))
 				}
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", candidateReplica.Key, reason))
 			}
 		}
 	}
@@ -697,7 +501,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	keepSearchingHint := ""
 	if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, promotedReplica); !satisfied {
 		keepSearchingHint = fmt.Sprintf("Will keep searching; %s", reason)
-	} else if promotedReplica.PromotionRule == inst.PreferNotPromoteRule {
+	} else if promotedReplica.PromotionRule == promotionrule.PreferNot {
 		keepSearchingHint = fmt.Sprintf("Will keep searching because we have promoted a server with prefer_not rule: %+v", promotedReplica.Key)
 	}
 	if keepSearchingHint != "" {
@@ -790,7 +594,7 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 		relocateReplicasFunc := func() error {
 			log.Debugf("replace-promoted-replica-with-candidate: relocating replicas of %+v below %+v", promotedReplica.Key, candidateInstance.Key)
 
-			relocatedReplicas, _, err, _ := inst.RelocateReplicas(&promotedReplica.Key, &candidateInstance.Key, "")
+			relocatedReplicas, _, _, err := inst.RelocateReplicas(&promotedReplica.Key, &candidateInstance.Key, "")
 			log.Debugf("replace-promoted-replica-with-candidate: + relocated %+v replicas of %+v below %+v", len(relocatedReplicas), promotedReplica.Key, candidateInstance.Key)
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("relocated %+v replicas of %+v below %+v", len(relocatedReplicas), promotedReplica.Key, candidateInstance.Key))
 			return log.Errore(err)
@@ -815,6 +619,19 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery) {
 		return false, nil, nil
 	}
+	tablet, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		return false, nil, err
+	}
+
+	var candidateTabletAlias *topodatapb.TabletAlias
+	if candidateInstanceKey != nil {
+		candidateTablet, err := inst.ReadTablet(*candidateInstanceKey)
+		if err != nil {
+			return false, nil, err
+		}
+		candidateTabletAlias = candidateTablet.Alias
+	}
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, !forceInstanceRecovery, !forceInstanceRecovery)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadPrimary.", analysisEntry.AnalyzedInstanceKey))
@@ -822,106 +639,99 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	}
 	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	// That's it! We must do recovery!
-	// TODO(sougou): This function gets called by GracefulPrimaryTakeover which may
-	// need to obtain shard lock before getting here.
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
-			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
-		return false, nil, err
-	}
-	defer unlock(&err)
-
-	// Check if someone else fixed the problem.
-	tablet, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey)
-	if err == nil && tablet.Type != topodatapb.TabletType_PRIMARY {
-		// TODO(sougou); use a version that only refreshes the current shard.
-		RefreshTablets()
+	// this check is needed because sometimes DeadPrimary code path is forcefully spawned off from other recoveries like PrimaryHasPrimary.
+	// So we need to check that we only run an ERS if the instance that we analyzed was actually a primary! Otherwise, we would end up running an ERS
+	// even when the cluster is fine or the problem can be fixed via some other recovery
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		RefreshTablets(true /* forceRefresh */)
 		AuditTopologyRecovery(topologyRecovery, "another agent seems to have fixed the problem")
-		// TODO(sougou): see if we have to reset the cluster as healthy.
 		return false, topologyRecovery, nil
 	}
 
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("will handle DeadPrimary event on %+v", analysisEntry.ClusterDetails.ClusterName))
-	recoverDeadPrimaryCounter.Inc(1)
-	recoveryAttempted, promotedReplica, lostReplicas, err := recoverDeadPrimary(topologyRecovery, candidateInstanceKey, skipProcesses)
-	if err != nil {
-		AuditTopologyRecovery(topologyRecovery, err.Error())
-	}
-	topologyRecovery.LostReplicas.AddInstances(lostReplicas)
-	if !recoveryAttempted {
-		return false, topologyRecovery, err
+	// check if we have received SIGTERM, if we have, we should not continue with the recovery
+	val := atomic.LoadInt32(&hasReceivedSIGTERM)
+	if val > 0 {
+		return false, topologyRecovery, errors.New("Can't lock shard: SIGTERM received")
 	}
 
-	overridePrimaryPromotion := func() (*inst.Instance, error) {
-		if promotedReplica == nil {
-			// No promotion; nothing to override.
-			return promotedReplica, err
-		}
-		// Scenarios where we might cancel the promotion.
-		if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&analysisEntry, promotedReplica); !satisfied {
-			return nil, fmt.Errorf("RecoverDeadPrimary: failed %+v promotion; %s", promotedReplica.Key, reason)
-		}
-		if config.Config.FailPrimaryPromotionOnLagMinutes > 0 &&
-			time.Duration(promotedReplica.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(config.Config.FailPrimaryPromotionOnLagMinutes)*time.Minute {
-			// candidate replica lags too much
-			return nil, fmt.Errorf("RecoverDeadPrimary: failed promotion. FailPrimaryPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", config.Config.FailPrimaryPromotionOnLagMinutes, promotedReplica.Key, promotedReplica.ReplicationLagSeconds.Int64)
-		}
-		if config.Config.FailPrimaryPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
-			return nil, fmt.Errorf("RecoverDeadPrimary: failed promotion. FailPrimaryPromotionIfSQLThreadNotUpToDate is set and promoted replica %+v 's sql thread is not up to date (relay logs still unapplied). Aborting promotion", promotedReplica.Key)
-		}
-		if config.Config.DelayPrimaryPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("DelayPrimaryPromotionIfSQLThreadNotUpToDate: waiting for SQL thread on %+v", promotedReplica.Key))
-			if _, err := inst.WaitForSQLThreadUpToDate(&promotedReplica.Key, 0, 0); err != nil {
-				return nil, fmt.Errorf("DelayPrimaryPromotionIfSQLThreadNotUpToDate error: %+v", err)
-			}
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("DelayPrimaryPromotionIfSQLThreadNotUpToDate: SQL thread caught up on %+v", promotedReplica.Key))
-		}
-		// All seems well. No override done.
-		return promotedReplica, err
+	// check if we have received an ERS in progress, if we do, we should not continue with the recovery
+	if checkAndSetIfERSInProgress() {
+		AuditTopologyRecovery(topologyRecovery, "an ERS is already in progress, not issuing another")
+		return false, topologyRecovery, nil
 	}
-	if promotedReplica, err = overridePrimaryPromotion(); err != nil {
-		AuditTopologyRecovery(topologyRecovery, err.Error())
+	defer setERSCompleted()
+
+	// add to the shard lock counter since ERS will lock the shard
+	atomic.AddInt32(&shardsLockCounter, 1)
+	defer atomic.AddInt32(&shardsLockCounter, -1)
+
+	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+		level := event.GetLevel()
+		value := event.GetValue()
+		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
+		switch level {
+		case logutilpb.Level_WARNING:
+			log.Warningf("ERS - %s", value)
+		case logutilpb.Level_ERROR:
+			log.Errorf("ERS - %s", value)
+		}
+		AuditTopologyRecovery(topologyRecovery, value)
+	})).ReparentShard(context.Background(),
+		tablet.Keyspace,
+		tablet.Shard,
+		reparentutil.EmergencyReparentOptions{
+			NewPrimaryAlias:           candidateTabletAlias,
+			IgnoreReplicas:            nil,
+			WaitReplicasTimeout:       time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
+		},
+	)
+
+	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
+	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
+	// PrimaryHasPrimary analysis which runs another ERS
+	RefreshTablets(true /* forceRefresh */)
+	var promotedReplica *inst.Instance
+	if ev.NewPrimary != nil {
+		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
+			Hostname: ev.NewPrimary.MysqlHostname,
+			Port:     int(ev.NewPrimary.MysqlPort),
+		})
+	}
+	postErsCompletion(topologyRecovery, analysisEntry, skipProcesses, promotedReplica)
+	return true, topologyRecovery, err
+}
+
+// checkAndSetIfERSInProgress checks if an ERS is already in progress. If it is not in progress, then we set it to be in progress.
+func checkAndSetIfERSInProgress() bool {
+	ersInProgressMutex.Lock()
+	defer ersInProgressMutex.Unlock()
+	if ersInProgress {
+		return true
+	}
+	ersInProgress = true
+	return false
+}
+
+// setERSCompleted sets the variable tracking if an ers is in progress to false.
+func setERSCompleted() {
+	ersInProgressMutex.Lock()
+	defer ersInProgressMutex.Unlock()
+	ersInProgress = false
+}
+
+func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, skipProcesses bool, promotedReplica *inst.Instance) {
+	if promotedReplica != nil {
+		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
+		AuditTopologyRecovery(topologyRecovery, message)
+		inst.AuditOperation("recover-dead-primary", &analysisEntry.AnalyzedInstanceKey, message)
 	}
 	// And this is the end; whether successful or not, we're done.
 	resolveRecovery(topologyRecovery, promotedReplica)
 	// Now, see whether we are successful or not. From this point there's no going back.
 	if promotedReplica != nil {
 		// Success!
-		recoverDeadPrimarySuccessCounter.Inc(1)
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: successfully promoted %+v", promotedReplica.Key))
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: promoted server coordinates: %+v", promotedReplica.SelfBinlogCoordinates))
-
-		AuditTopologyRecovery(topologyRecovery, "- RecoverDeadPrimary: will apply MySQL changes to promoted primary")
-		{
-			_, err := inst.ResetReplicationOperation(&promotedReplica.Key)
-			if err != nil {
-				// Ugly, but this is important. Let's give it another try
-				_, err = inst.ResetReplicationOperation(&promotedReplica.Key)
-			}
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: applying RESET SLAVE ALL on promoted primary: success=%t", (err == nil)))
-			if err != nil {
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: NOTE that %+v is promoted even though SHOW SLAVE STATUS may still show it has a primary", promotedReplica.Key))
-			}
-		}
-		{
-			count := inst.PrimarySemiSync(promotedReplica.Key)
-			err := inst.SetSemiSyncPrimary(&promotedReplica.Key, count > 0)
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
-
-			// Dont' allow writes if semi-sync settings fail.
-			if err == nil {
-				_, err := inst.SetReadOnly(&promotedReplica.Key, false)
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: applying read-only=0 on promoted primary: success=%t", (err == nil)))
-			}
-		}
-		// Let's attempt, though we won't necessarily succeed, to set old primary as read-only
-		go func() {
-			_, err := inst.SetReadOnly(&analysisEntry.AnalyzedInstanceKey, true)
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: applying read-only=1 on demoted primary: success=%t", (err == nil)))
-		}()
 
 		kvPairs := inst.GetClusterPrimaryKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
@@ -961,11 +771,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 			// Execute post primary-failover processes
 			executeProcesses(config.Config.PostPrimaryFailoverProcesses, "PostPrimaryFailoverProcesses", topologyRecovery, false)
 		}
-	} else {
-		recoverDeadPrimaryFailureCounter.Inc(1)
 	}
-
-	return true, topologyRecovery, err
 }
 
 // isGenerallyValidAsCandidateSiblingOfIntermediatePrimary sees that basic server configuration and state are valid
@@ -1130,7 +936,7 @@ func RecoverDeadIntermediatePrimary(topologyRecovery *TopologyRecovery, skipProc
 		}
 		// We have a candidate
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediatePrimary: will attempt a candidate intermediate primary: %+v", candidateSiblingOfIntermediatePrimary.Key))
-		relocatedReplicas, candidateSibling, err, errs := inst.RelocateReplicas(failedInstanceKey, &candidateSiblingOfIntermediatePrimary.Key, "")
+		relocatedReplicas, candidateSibling, errs, err := inst.RelocateReplicas(failedInstanceKey, &candidateSiblingOfIntermediatePrimary.Key, "")
 		topologyRecovery.AddErrors(errs)
 		topologyRecovery.ParticipatingInstanceKeys.AddKey(candidateSiblingOfIntermediatePrimary.Key)
 
@@ -1185,7 +991,7 @@ func RecoverDeadIntermediatePrimary(topologyRecovery *TopologyRecovery, skipProc
 		// So, match up all that's left, plan D
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediatePrimary: will next attempt to relocate up from %+v", *failedInstanceKey))
 
-		relocatedReplicas, primaryInstance, _, errs := inst.RelocateReplicas(failedInstanceKey, &analysisEntry.AnalyzedInstancePrimaryKey, "")
+		relocatedReplicas, primaryInstance, errs, _ := inst.RelocateReplicas(failedInstanceKey, &analysisEntry.AnalyzedInstancePrimaryKey, "")
 		topologyRecovery.AddErrors(errs)
 		topologyRecovery.ParticipatingInstanceKeys.AddKey(analysisEntry.AnalyzedInstancePrimaryKey)
 
@@ -1258,7 +1064,7 @@ func RecoverDeadCoPrimary(topologyRecovery *TopologyRecovery, skipProcesses bool
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadCoPrimary: will recover %+v", *failedInstanceKey))
 
-	var coPrimaryRecoveryType PrimaryRecoveryType = PrimaryRecoveryUnknown
+	var coPrimaryRecoveryType = PrimaryRecoveryUnknown
 	if analysisEntry.OracleGTIDImmediateTopology || analysisEntry.MariaDBGTIDImmediateTopology {
 		coPrimaryRecoveryType = PrimaryRecoveryGTID
 	}
@@ -1521,15 +1327,13 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, false
-		} else {
-			return checkAndRecoverDeadPrimary, true
 		}
+		return checkAndRecoverDeadPrimary, true
 	case inst.LockedSemiSyncPrimary:
 		if isInEmergencyOperationGracefulPeriod(analyzedInstanceKey) {
 			return checkAndRecoverGenericProblem, false
-		} else {
-			return checkAndRecoverLockedSemiSyncPrimary, true
 		}
+		return checkAndRecoverLockedSemiSyncPrimary, true
 	// topo
 	case inst.ClusterHasNoPrimary:
 		return electNewPrimary, true
@@ -1810,9 +1614,9 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 	clusterPrimary := clusterPrimaries[0]
 
 	if !destination.SourceKey.Equals(&clusterPrimary.Key) {
-		return nil, fmt.Errorf("You may only promote a direct child of the primary %+v. The primary of %+v is %+v.", clusterPrimary.Key, destination.Key, destination.SourceKey)
+		return nil, fmt.Errorf("you may only promote a direct child of the primary %+v. The primary of %+v is %+v", clusterPrimary.Key, destination.Key, destination.SourceKey)
 	}
-	log.Infof("Will demote %+v and promote %+v instead", clusterPrimary.Key, destination.Key)
+	log.Infof("will demote %+v and promote %+v instead", clusterPrimary.Key, destination.Key)
 
 	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadPrimary, inst.ForcePrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {
@@ -1834,261 +1638,183 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 	return topologyRecovery, nil
 }
 
-func getGracefulPrimaryTakeoverDesignatedInstance(clusterPrimaryKey *inst.InstanceKey, designatedKey *inst.InstanceKey, clusterPrimaryDirectReplicas [](*inst.Instance), auto bool) (designatedInstance *inst.Instance, err error) {
-	if designatedKey == nil {
-		// User did not specify a replica to promote
-		if len(clusterPrimaryDirectReplicas) == 1 {
-			// Single replica. That's the one we'll promote
-			return clusterPrimaryDirectReplicas[0], nil
-		}
-		// More than one replica.
-		if !auto {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover: target instance not indicated, auto=false, and primary %+v has %+v replicas. orchestrator cannot choose where to failover to. Aborting", *clusterPrimaryKey, len(clusterPrimaryDirectReplicas))
-		}
-		log.Debugf("GracefulPrimaryTakeover: request takeover for primary %+v, no designated replica indicated. orchestrator will attempt to auto deduce replica.", *clusterPrimaryKey)
-		designatedInstance, _, _, _, _, err = inst.GetCandidateReplica(clusterPrimaryKey, false)
-		if err != nil || designatedInstance == nil {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover: no target instance indicated, failed to auto-detect candidate replica for primary %+v. Aborting", *clusterPrimaryKey)
-		}
-		log.Debugf("GracefulPrimaryTakeover: candidateReplica=%+v", designatedInstance.Key)
-		if _, err := inst.StartReplication(&designatedInstance.Key); err != nil {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover:cannot start replication on designated replica %+v. Aborting", designatedKey)
-		}
-		log.Infof("GracefulPrimaryTakeover: designated primary deduced to be %+v", designatedInstance.Key)
-		return designatedInstance, nil
-	}
-
-	// Verify designated instance is a direct replica of primary
-	for _, directReplica := range clusterPrimaryDirectReplicas {
-		if directReplica.Key.Equals(designatedKey) {
-			designatedInstance = directReplica
-		}
-	}
-	if designatedInstance == nil {
-		return nil, fmt.Errorf("GracefulPrimaryTakeover: indicated designated instance %+v must be directly replicating from the primary %+v", *designatedKey, *clusterPrimaryKey)
-	}
-	log.Infof("GracefulPrimaryTakeover: designated primary instructed to be %+v", designatedInstance.Key)
-	return designatedInstance, nil
-}
-
 // GracefulPrimaryTakeover will demote primary of existing topology and promote its
 // direct replica instead.
 // It expects that replica to have no siblings.
 // This function is graceful in that it will first lock down the primary, then wait
 // for the designated replica to catch up with last position.
 // It will point old primary at the newly promoted primary at the correct coordinates.
-func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey, auto bool) (topologyRecovery *TopologyRecovery, promotedPrimaryCoordinates *inst.BinlogCoordinates, err error) {
+// All of this is accomplished via PlannedReparentShard operation. It is an idempotent operation, look at its documentation for more detail
+func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey) (topologyRecovery *TopologyRecovery, err error) {
 	clusterPrimaries, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
+		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
 	}
 	if len(clusterPrimaries) != 1 {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
+		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
 	}
 	clusterPrimary := clusterPrimaries[0]
 
-	clusterPrimaryDirectReplicas, err := inst.ReadReplicaInstances(&clusterPrimary.Key)
+	analysisEntry, err := forceAnalysisEntry(clusterName, inst.GraceFulPrimaryTakeover, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {
-		return nil, nil, log.Errore(err)
+		return nil, err
+	}
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, false /*failIfClusterInActiveRecovery*/)
+	if topologyRecovery == nil || err != nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard.", analysisEntry.AnalyzedInstanceKey))
+		return topologyRecovery, err
 	}
 
-	if len(clusterPrimaryDirectReplicas) == 0 {
-		return nil, nil, fmt.Errorf("Primary %+v doesn't seem to have replicas", clusterPrimary.Key)
+	primaryTablet, err := inst.ReadTablet(clusterPrimary.Key)
+	if err != nil {
+		return topologyRecovery, err
 	}
-
 	if designatedKey != nil && !designatedKey.IsValid() {
 		// An empty or invalid key is as good as no key
 		designatedKey = nil
 	}
-	designatedInstance, err := getGracefulPrimaryTakeoverDesignatedInstance(&clusterPrimary.Key, designatedKey, clusterPrimaryDirectReplicas, auto)
-	if err != nil {
-		return nil, nil, log.Errore(err)
+	var designatedTabletAlias *topodatapb.TabletAlias
+	if designatedKey != nil {
+		designatedTablet, err := inst.ReadTablet(*designatedKey)
+		if err != nil {
+			return topologyRecovery, err
+		}
+		designatedTabletAlias = designatedTablet.Alias
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("started PlannedReparentShard, new primary will be %s.", topoproto.TabletAliasString(designatedTabletAlias)))
+	} else {
+		AuditTopologyRecovery(topologyRecovery, "started PlannedReparentShard with automatic primary selection.")
 	}
 
-	if inst.IsBannedFromBeingCandidateReplica(designatedInstance) {
-		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: designated instance %+v cannot be promoted due to promotion rule or it is explicitly ignored in PromotionIgnoreHostnameFilters configuration", designatedInstance.Key)
+	// check for the constraint failure for cross cell promotion
+	if designatedTabletAlias != nil && designatedTabletAlias.Cell != primaryTablet.Alias.Cell && config.Config.PreventCrossDataCenterPrimaryFailover {
+		errorMessage := fmt.Sprintf("GracefulPrimaryTakeover: constraint failure - %s and %s are in different cells", topoproto.TabletAliasString(designatedTabletAlias), topoproto.TabletAliasString(primaryTablet.Alias))
+		AuditTopologyRecovery(topologyRecovery, errorMessage)
+		return topologyRecovery, fmt.Errorf(errorMessage)
 	}
 
-	primaryOfDesignatedInstance, err := inst.GetInstancePrimary(designatedInstance)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !primaryOfDesignatedInstance.Key.Equals(&clusterPrimary.Key) {
-		return nil, nil, fmt.Errorf("Sanity check failure. It seems like the designated instance %+v does not replicate from the primary %+v (designated instance's primary key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterPrimary.Key, designatedInstance.SourceKey)
-	}
-	if !designatedInstance.HasReasonableMaintenanceReplicationLag() {
-		return nil, nil, fmt.Errorf("Desginated instance %+v seems to be lagging to much for thie operation. Aborting.", designatedInstance.Key)
-	}
+	ev, err := reparentutil.NewPlannedReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+		level := event.GetLevel()
+		value := event.GetValue()
+		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
+		switch level {
+		case logutilpb.Level_WARNING:
+			log.Warningf("PRS - %s", value)
+		case logutilpb.Level_ERROR:
+			log.Errorf("PRS - %s", value)
+		}
+		AuditTopologyRecovery(topologyRecovery, value)
+	})).ReparentShard(context.Background(),
+		primaryTablet.Keyspace,
+		primaryTablet.Shard,
+		reparentutil.PlannedReparentOptions{
+			NewPrimaryAlias:     designatedTabletAlias,
+			WaitReplicasTimeout: time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+		},
+	)
 
-	if len(clusterPrimaryDirectReplicas) > 1 {
-		log.Infof("GracefulPrimaryTakeover: Will let %+v take over its siblings", designatedInstance.Key)
-		relocatedReplicas, _, err, _ := inst.RelocateReplicas(&clusterPrimary.Key, &designatedInstance.Key, "")
-		if len(relocatedReplicas) != len(clusterPrimaryDirectReplicas)-1 {
-			// We are unable to make designated instance primary of all its siblings
-			relocatedReplicasKeyMap := inst.NewInstanceKeyMap()
-			relocatedReplicasKeyMap.AddInstances(relocatedReplicas)
-			// Let's see which replicas have not been relocated
-			for _, directReplica := range clusterPrimaryDirectReplicas {
-				if relocatedReplicasKeyMap.HasKey(directReplica.Key) {
-					// relocated, good
-					continue
-				}
-				if directReplica.Key.Equals(&designatedInstance.Key) {
-					// obviously we skip this one
-					continue
-				}
-				if directReplica.IsDowntimed {
-					// obviously we skip this one
-					log.Warningf("GracefulPrimaryTakeover: unable to relocate %+v below designated %+v, but since it is downtimed (downtime reason: %s) I will proceed", directReplica.Key, designatedInstance.Key, directReplica.DowntimeReason)
-					continue
-				}
-				return nil, nil, fmt.Errorf("Desginated instance %+v cannot take over all of its siblings. Error: %+v", designatedInstance.Key, err)
+	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
+	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
+	// PrimaryHasPrimary analysis which runs ERS
+	RefreshTablets(true /* forceRefresh */)
+	var promotedReplica *inst.Instance
+	if ev.NewPrimary != nil {
+		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
+			Hostname: ev.NewPrimary.MysqlHostname,
+			Port:     int(ev.NewPrimary.MysqlPort),
+		})
+	}
+	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
+	return topologyRecovery, err
+}
+
+func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, promotedReplica *inst.Instance) {
+	if promotedReplica != nil {
+		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
+		AuditTopologyRecovery(topologyRecovery, message)
+		inst.AuditOperation(string(analysisEntry.Analysis), &analysisEntry.AnalyzedInstanceKey, message)
+	}
+	// And this is the end; whether successful or not, we're done.
+	resolveRecovery(topologyRecovery, promotedReplica)
+	// Now, see whether we are successful or not. From this point there's no going back.
+	if promotedReplica != nil {
+		// Success!
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.Key))
+
+		kvPairs := inst.GetClusterPrimaryKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
+		for _, kvPair := range kvPairs {
+			err := kv.PutKVPair(kvPair)
+			log.Errore(err)
+		}
+		{
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
+			err := kv.DistributePairs(kvPairs)
+			log.Errore(err)
+		}
+		func() error {
+			before := analysisEntry.AnalyzedInstanceKey.StringCode()
+			after := promotedReplica.Key.StringCode()
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- %+v: updating cluster_alias: %v -> %v", analysisEntry.Analysis, before, after))
+			//~~~inst.ReplaceClusterName(before, after)
+			if alias := analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
+				inst.SetClusterAlias(promotedReplica.Key.StringCode(), alias)
+			} else {
+				inst.ReplaceAliasClusterName(before, after)
 			}
-		}
-	}
-	log.Infof("GracefulPrimaryTakeover: Will demote %+v and promote %+v instead", clusterPrimary.Key, designatedInstance.Key)
+			return nil
+		}()
 
-	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadPrimary, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
-	if err != nil {
-		return nil, nil, err
+		attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 	}
-	preGracefulTakeoverTopologyRecovery := &TopologyRecovery{
-		SuccessorKey:  &designatedInstance.Key,
-		AnalysisEntry: analysisEntry,
-	}
-	if err := executeProcesses(config.Config.PreGracefulTakeoverProcesses, "PreGracefulTakeoverProcesses", preGracefulTakeoverTopologyRecovery, true); err != nil {
-		return nil, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
-	}
-	demotedPrimarySelfBinlogCoordinates := &clusterPrimary.SelfBinlogCoordinates
-	log.Infof("GracefulPrimaryTakeover: Will wait for %+v to reach primary coordinates %+v", designatedInstance.Key, *demotedPrimarySelfBinlogCoordinates)
-	if designatedInstance, _, err = inst.WaitForExecBinlogCoordinatesToReach(&designatedInstance.Key, demotedPrimarySelfBinlogCoordinates, time.Duration(config.Config.ReasonableMaintenanceReplicationLagSeconds)*time.Second); err != nil {
-		return nil, nil, err
-	}
-	promotedPrimaryCoordinates = &designatedInstance.SelfBinlogCoordinates
-
-	log.Infof("GracefulPrimaryTakeover: attempting recovery")
-	recoveryAttempted, topologyRecovery, err := ForceExecuteRecovery(analysisEntry, &designatedInstance.Key, false)
-	if err != nil {
-		log.Errorf("GracefulPrimaryTakeover: noting an error, and for now proceeding: %+v", err)
-	}
-	if !recoveryAttempted {
-		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: unexpected error: recovery not attempted. This should not happen")
-	}
-	if topologyRecovery == nil {
-		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: recovery attempted but with no results. This should not happen")
-	}
-	var gtidHint inst.OperationGTIDHint = inst.GTIDHintNeutral
-	if topologyRecovery.RecoveryType == PrimaryRecoveryGTID {
-		gtidHint = inst.GTIDHintForce
-	}
-	clusterPrimary, err = inst.ChangePrimaryTo(&clusterPrimary.Key, &designatedInstance.Key, promotedPrimaryCoordinates, false, gtidHint)
-	if !clusterPrimary.SelfBinlogCoordinates.Equals(demotedPrimarySelfBinlogCoordinates) {
-		log.Errorf("GracefulPrimaryTakeover: sanity problem. Demoted primary's coordinates changed from %+v to %+v while supposed to have been frozen", *demotedPrimarySelfBinlogCoordinates, clusterPrimary.SelfBinlogCoordinates)
-	}
-	_, startReplicationErr := inst.StartReplication(&clusterPrimary.Key)
-	if err == nil {
-		err = startReplicationErr
-	}
-
-	if designatedInstance.AllowTLS {
-		_, enableSSLErr := inst.EnablePrimarySSL(&clusterPrimary.Key)
-		if err == nil {
-			err = enableSSLErr
-		}
-	}
-	executeProcesses(config.Config.PostGracefulTakeoverProcesses, "PostGracefulTakeoverProcesses", topologyRecovery, false)
-
-	return topologyRecovery, promotedPrimaryCoordinates, err
 }
 
 // electNewPrimary elects a new primary while none were present before.
-// TODO(sougou): this should be mreged with recoverDeadPrimary
 func electNewPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
-	if topologyRecovery == nil {
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, true /*failIfClusterInActiveRecovery*/)
+	if topologyRecovery == nil || err != nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, will elect a new primary: %v", analysisEntry.Analysis, analysisEntry.SuggestedClusterAlias)
 
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
-			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
-		return false, topologyRecovery, err
-	}
-	defer unlock(&err)
-
-	// TODO(sougou): check if another Orc succeeded before fixing anything.
-
-	replicas, err := inst.ReadClusterAliasInstances(analysisEntry.SuggestedClusterAlias)
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
-	// TODO(sougou): this is not reliable, because of the timeout.
-	replicas = inst.StopReplicasNicely(replicas, time.Duration(config.Config.InstanceBulkOperationsWaitTimeoutSeconds)*time.Second)
-	if len(replicas) == 0 {
-		return false, topologyRecovery, fmt.Errorf("no instances in cluster %v", analysisEntry.SuggestedClusterAlias)
-	}
+	AuditTopologyRecovery(topologyRecovery, "starting PlannedReparentShard for electing new primary.")
 
-	// Find an initial candidate
-	var candidate *inst.Instance
-	for _, replica := range replicas {
-		// TODO(sougou): this needs to do more. see inst.chooseCandidateReplica
-		if !inst.IsBannedFromBeingCandidateReplica(replica) {
-			candidate = replica
-			break
+	ev, err := reparentutil.NewPlannedReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+		level := event.GetLevel()
+		value := event.GetValue()
+		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
+		switch level {
+		case logutilpb.Level_WARNING:
+			log.Warningf("PRS - %s", value)
+		case logutilpb.Level_ERROR:
+			log.Errorf("PRS - %s", value)
 		}
-	}
-	if candidate == nil {
-		err := fmt.Errorf("no candidate qualifies to be a primary")
-		AuditTopologyRecovery(topologyRecovery, err.Error())
-		return true, topologyRecovery, err
-	}
+		AuditTopologyRecovery(topologyRecovery, value)
+	})).ReparentShard(context.Background(),
+		analyzedTablet.Keyspace,
+		analyzedTablet.Shard,
+		reparentutil.PlannedReparentOptions{
+			WaitReplicasTimeout: time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+		},
+	)
 
-	// Compare the current candidate with the rest to see if other instances can be
-	// moved under. If not, see if the other intance can become a candidate instead.
-	for _, replica := range replicas {
-		if replica == candidate {
-			continue
-		}
-		if err := inst.CheckMoveViaGTID(replica, candidate); err != nil {
-			if err := inst.CheckMoveViaGTID(candidate, replica); err != nil {
-				return false, topologyRecovery, fmt.Errorf("instances are not compatible: %+v %+v: %v", candidate, replica, err)
-			} else {
-				// Make sure the new candidate meets the requirements.
-				if !inst.IsBannedFromBeingCandidateReplica(replica) {
-					candidate = replica
-				}
-			}
-		}
+	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
+	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
+	// PrimaryHasPrimary analysis which runs ERS
+	RefreshTablets(true /* forceRefresh */)
+	var promotedReplica *inst.Instance
+	if ev.NewPrimary != nil {
+		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
+			Hostname: ev.NewPrimary.MysqlHostname,
+			Port:     int(ev.NewPrimary.MysqlPort),
+		})
 	}
-
-	if _, err := inst.ChangeTabletType(candidate.Key, topodatapb.TabletType_PRIMARY); err != nil {
-		return true, topologyRecovery, err
-	}
-	// TODO(sougou): parallelize
-	for _, replica := range replicas {
-		if replica.Key == candidate.Key {
-			continue
-		}
-		if _, err := inst.MoveBelowGTID(&replica.Key, &candidate.Key); err != nil {
-			return false, topologyRecovery, err
-		}
-	}
-	count := inst.PrimarySemiSync(candidate.Key)
-	err = inst.SetSemiSyncPrimary(&candidate.Key, count > 0)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
-	if err != nil {
-		return false, topologyRecovery, err
-	}
-	_, err = inst.SetReadOnly(&candidate.Key, false)
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewPrimary: set read-only false: success=%t", (err == nil)))
-	if err != nil {
-		return false, topologyRecovery, err
-	}
-	return true, topologyRecovery, nil
+	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
+	return true, topologyRecovery, err
 }
 
 // fixClusterAndPrimary performs a traditional vitess PlannedReparentShard.
@@ -2130,7 +1856,7 @@ func fixPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *in
 	}
 	log.Infof("Analysis: %v, will fix primary to read-write %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
@@ -2140,7 +1866,7 @@ func fixPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *in
 	defer unlock(&err)
 
 	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
-	count := inst.PrimarySemiSync(analysisEntry.AnalyzedInstanceKey)
+	count := inst.SemiSyncAckers(analysisEntry.AnalyzedInstanceKey)
 	err = inst.SetSemiSyncPrimary(&analysisEntry.AnalyzedInstanceKey, count > 0)
 	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 	if err != nil {
@@ -2162,7 +1888,7 @@ func fixReplica(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *in
 	}
 	log.Infof("Analysis: %v, will fix replica %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
-	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	_, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",

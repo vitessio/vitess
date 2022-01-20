@@ -135,7 +135,11 @@ func init() {
 	flag.IntVar(&topo.rdonly, "rdonly_count", 1,
 		"Rdonly tablets per shard")
 
-	flag.StringVar(&config.Charset, "charset", "utf8", "MySQL charset")
+	flag.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
+	flag.StringVar(&config.Collation, "collation", "", "MySQL collation")
+
+	flag.StringVar(&config.PlannerVersion, "planner_version", "v3", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails. All Gen4 versions should be considered experimental!")
+
 	flag.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
 
@@ -151,6 +155,11 @@ func init() {
 	flag.StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	flag.BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	flag.BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+
+	// flags for using an actual topo implementation for vtcombo instead of in-memory topo. useful for test setup where an external topo server is shared across multiple vtcombo processes or other components
+	flag.StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
+	flag.StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
+	flag.StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
 }
 
 func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {

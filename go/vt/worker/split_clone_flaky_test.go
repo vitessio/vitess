@@ -17,6 +17,7 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -26,20 +27,17 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/wrangler/testlib"
@@ -192,7 +190,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 	if err := tc.wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, false); err != nil {
 		tc.t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := tc.wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, false); err != nil {
+	if err := topotools.RebuildKeyspace(ctx, tc.wi.wr.Logger(), tc.wi.wr.TopoServer(), "ks", nil, false); err != nil {
 		tc.t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
@@ -351,7 +349,7 @@ func newTestQueryService(t *testing.T, target *querypb.Target, shqs *fakes.Strea
 	}
 }
 
-func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	// Custom parsing of the query we expect.
 	// Example: SELECT `id`, `msg`, `keyspace_id` FROM table1 WHERE id>=180 AND id<190 ORDER BY id
 	min := math.MinInt32

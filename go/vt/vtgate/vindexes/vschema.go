@@ -20,7 +20,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -103,17 +103,39 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Columns []sqlparser.ColIdent `json:"columns"`
-	Type    string               `json:"type"`
-	Name    string               `json:"name"`
-	Owned   bool                 `json:"owned,omitempty"`
-	Vindex  Vindex               `json:"vindex"`
+	Columns     []sqlparser.ColIdent `json:"columns"`
+	Type        string               `json:"type"`
+	Name        string               `json:"name"`
+	Owned       bool                 `json:"owned,omitempty"`
+	Vindex      Vindex               `json:"vindex"`
+	isUnique    bool
+	cost        int
+	ignoreInDML bool
+}
+
+// IsUnique is used to tell whether the ColumnVindex
+// will return a unique shard value or not when queried with
+// the given column list
+func (c *ColumnVindex) IsUnique() bool {
+	return c.isUnique
+}
+
+// Cost represents the cost associated with using the
+// ColumnVindex
+func (c *ColumnVindex) Cost() int {
+	return c.cost
+}
+
+// IgnoreInDML is used to let planner and engine know that they need to be ignored for dml queries.
+func (c *ColumnVindex) IgnoreInDML() bool {
+	return c.ignoreInDML
 }
 
 // Column describes a column.
 type Column struct {
-	Name sqlparser.ColIdent `json:"name"`
-	Type querypb.Type       `json:"type"`
+	Name          sqlparser.ColIdent `json:"name"`
+	Type          querypb.Type       `json:"type"`
+	CollationName string             `json:"collation_name"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
@@ -305,11 +327,13 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				}
 			}
 			columnVindex := &ColumnVindex{
-				Columns: columns,
-				Type:    vindexInfo.Type,
-				Name:    ind.Name,
-				Owned:   owned,
-				Vindex:  vindex,
+				Columns:  columns,
+				Type:     vindexInfo.Type,
+				Name:     ind.Name,
+				Owned:    owned,
+				Vindex:   vindex,
+				isUnique: vindex.IsUnique(),
+				cost:     vindex.Cost(),
 			}
 			if i == 0 {
 				// Perform Primary vindex check.
@@ -328,6 +352,34 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 					}
 				}
 				t.Owned = append(t.Owned, columnVindex)
+			}
+
+			mcv, isMultiColumn := vindex.(MultiColumn)
+			if !isMultiColumn {
+				continue
+			}
+			if i != 0 {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindex %s should be a primary vindex for table %s", ind.Name, tname)
+			}
+			if !mcv.PartialVindex() {
+				// Partial column selection not allowed.
+				// Do not create subset column vindex.
+				continue
+			}
+			cost := vindex.Cost()
+			for i := len(columns) - 1; i > 0; i-- {
+				columnSubset := columns[:i]
+				cost++
+				columnVindex = &ColumnVindex{
+					Columns:     columnSubset,
+					Type:        vindexInfo.Type,
+					Name:        ind.Name,
+					Owned:       owned,
+					Vindex:      vindex,
+					cost:        cost,
+					ignoreInDML: true,
+				}
+				t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			}
 		}
 		t.Ordered = colVindexSorted(t.ColumnVindexes)
@@ -573,7 +625,7 @@ type ByCost []*ColumnVindex
 
 func (bc ByCost) Len() int           { return len(bc) }
 func (bc ByCost) Swap(i, j int)      { bc[i], bc[j] = bc[j], bc[i] }
-func (bc ByCost) Less(i, j int) bool { return bc[i].Vindex.Cost() < bc[j].Vindex.Cost() }
+func (bc ByCost) Less(i, j int) bool { return bc[i].Cost() < bc[j].Cost() }
 
 func colVindexSorted(cvs []*ColumnVindex) (sorted []*ColumnVindex) {
 	sorted = append(sorted, cvs...)
@@ -587,7 +639,7 @@ func LoadFormal(filename string) (*vschemapb.SrvVSchema, error) {
 	if filename == "" {
 		return formal, nil
 	}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +657,7 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	if filename == "" {
 		return formal, nil
 	}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -639,10 +691,10 @@ func FindBestColVindex(table *Table) (*ColumnVindex, error) {
 		if cv.Vindex.NeedsVCursor() {
 			continue
 		}
-		if !cv.Vindex.IsUnique() {
+		if !cv.IsUnique() {
 			continue
 		}
-		if result == nil || result.Vindex.Cost() > cv.Vindex.Cost() {
+		if result == nil || result.Cost() > cv.Cost() {
 			result = cv
 		}
 	}
@@ -667,11 +719,11 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 		if _, ok := colVindex.Vindex.(SingleColumn); !ok {
 			continue
 		}
-		if colVindex.Vindex.Cost() < result.Vindex.Cost() && colVindex.Vindex.IsUnique() {
+		if colVindex.Cost() < result.Cost() && colVindex.IsUnique() {
 			result = colVindex
 		}
 	}
-	if result.Vindex.Cost() > 1 || !result.Vindex.IsUnique() {
+	if result.Cost() > 1 || !result.IsUnique() {
 		return nil, fmt.Errorf("could not find a vindex to use for sharding table %v", tableName)
 	}
 	return result, nil

@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"crypto/x509"
 	"flag"
 	"fmt"
 	"net"
@@ -85,7 +84,8 @@ func (asl *AuthServerClientCert) HandleUser(user string) bool {
 }
 
 // UserEntryWithPassword is part of the PlaintextStorage interface
-func (asl *AuthServerClientCert) UserEntryWithPassword(userCerts []*x509.Certificate, user string, password string, remoteAddr net.Addr) (Getter, error) {
+func (asl *AuthServerClientCert) UserEntryWithPassword(conn *Conn, user string, password string, remoteAddr net.Addr) (Getter, error) {
+	userCerts := conn.GetTLSClientCerts()
 	if len(userCerts) == 0 {
 		return nil, fmt.Errorf("no client certs for connection")
 	}
@@ -96,7 +96,7 @@ func (asl *AuthServerClientCert) UserEntryWithPassword(userCerts []*x509.Certifi
 	}
 
 	return &StaticUserData{
-		username: commonName,
-		groups:   userCerts[0].DNSNames,
+		Username: commonName,
+		Groups:   userCerts[0].DNSNames,
 	}, nil
 }

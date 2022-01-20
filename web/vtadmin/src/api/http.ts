@@ -30,12 +30,11 @@ import { TabletDebugVars } from '../util/tabletDebugVars';
  * Note that this only validates the HttpResponse envelope; it does not
  * do any type checking or validation on the result.
  */
-export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
+export const vtfetch = async (endpoint: string, options: RequestInit = {}): Promise<HttpOkResponse> => {
     try {
         const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
-
         const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
-        const opts = vtfetchOpts();
+        const opts = { ...vtfetchOpts(), ...options };
 
         let response = null;
         try {
@@ -53,7 +52,7 @@ export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
         try {
             json = await response.json();
         } catch (error) {
-            throw new MalformedHttpResponseError(error.message, endpoint, json, response);
+            throw new MalformedHttpResponseError((error as Error).message, endpoint, json, response);
         }
 
         if (!('ok' in json)) {
@@ -73,7 +72,7 @@ export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
         // Instead, we catch errors and manually notify our error handling serivce(s),
         // and then rethrow the error for react-query to propagate the usual way.
         // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
-        errorHandler.notify(error);
+        errorHandler.notify(error as Error);
         throw error;
     }
 };
@@ -85,6 +84,7 @@ export const vtfetchOpts = (): RequestInit => {
             `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
         );
     }
+
     return { credentials };
 };
 
@@ -149,6 +149,31 @@ export const fetchGates = async () =>
         },
     });
 
+export const fetchVtctlds = async () =>
+    vtfetchEntities({
+        endpoint: '/api/vtctlds',
+        extract: (res) => res.result.vtctlds,
+        transform: (e) => {
+            const err = pb.Vtctld.verify(e);
+            if (err) throw Error(err);
+            return pb.Vtctld.create(e);
+        },
+    });
+
+export interface FetchKeyspaceParams {
+    clusterID: string;
+    name: string;
+}
+
+export const fetchKeyspace = async ({ clusterID, name }: FetchKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${name}`);
+
+    const err = pb.Keyspace.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Keyspace.create(result);
+};
+
 export const fetchKeyspaces = async () =>
     vtfetchEntities({
         endpoint: '/api/keyspaces',
@@ -200,6 +225,98 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
     return pb.Tablet.create(result);
 };
 
+export interface DeleteTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: 'delete' });
+
+    const err = pb.DeleteTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.DeleteTabletResponse.create(result);
+};
+
+export interface ReparentTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const reparentTablet = async ({ clusterID, alias }: ReparentTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
+
+    const err = pb.ReparentTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.ReparentTabletResponse.create(result);
+};
+
+export interface PingTabletParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const pingTablet = async ({ clusterID, alias }: PingTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/ping?cluster=${clusterID}`);
+    const err = pb.PingTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.PingTabletResponse.create(result);
+};
+
+export interface RefreshStateParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const refreshState = async ({ clusterID, alias }: RefreshStateParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/refresh?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.RefreshStateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RefreshStateResponse.create(result);
+};
+
+export interface RunHealthCheckParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/healthcheck?cluster=${clusterID}`);
+    const err = pb.RunHealthCheckResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RunHealthCheckResponse.create(result);
+};
+
+export interface StartReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const startReplication = async ({ clusterID, alias }: StartReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/start_replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StartReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StartReplicationResponse.create(result);
+};
+
+export interface StopReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const stopReplication = async ({ clusterID, alias }: StopReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/stop_replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StopReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StopReplicationResponse.create(result);
+};
 export interface TabletDebugVarsResponse {
     params: FetchTabletParams;
     data?: TabletDebugVars;

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -83,14 +82,14 @@ func (vs *VaultServer) start() error {
 	}
 
 	hclFile := path.Join(os.Getenv("PWD"), vaultConfigFileName)
-	hcl, _ := ioutil.ReadFile(hclFile)
+	hcl, _ := os.ReadFile(hclFile)
 	// Replace variable parts in Vault config file
 	hcl = bytes.Replace(hcl, []byte("$server"), []byte(vs.address), 1)
 	hcl = bytes.Replace(hcl, []byte("$port"), []byte(fmt.Sprintf("%d", vs.port1)), 1)
 	hcl = bytes.Replace(hcl, []byte("$cert"), []byte(path.Join(os.Getenv("PWD"), vaultCertFileName)), 1)
 	hcl = bytes.Replace(hcl, []byte("$key"), []byte(path.Join(os.Getenv("PWD"), vaultKeyFileName)), 1)
 	newHclFile := path.Join(vs.logDir, vaultConfigFileName)
-	err = ioutil.WriteFile(newHclFile, hcl, 0700)
+	err = os.WriteFile(newHclFile, hcl, 0700)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -154,7 +153,7 @@ func downloadExecFile(path string, url string) error {
 	}
 	defer resp.Body.Close()
 
-	err = ioutil.WriteFile(path, []byte(""), 0700)
+	err = os.WriteFile(path, []byte(""), 0700)
 	if err != nil {
 		return err
 	}

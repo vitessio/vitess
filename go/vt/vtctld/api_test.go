@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -431,11 +431,11 @@ func TestAPI(t *testing.T) {
 				return
 			}
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			resp.Body.Close()
 
 			if err != nil {
-				t.Fatalf("[%v] ioutil.ReadAll(resp.Body) error: %v", in.path, err)
+				t.Fatalf("[%v] io.ReadAll(resp.Body) error: %v", in.path, err)
 				return
 			}
 

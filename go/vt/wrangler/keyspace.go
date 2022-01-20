@@ -18,13 +18,12 @@ package wrangler
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -56,39 +56,14 @@ var (
 
 // SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName
 // and ShardingColumnType
-func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) (err error) {
-	// Lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetKeyspaceShardingInfo")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// and change it
-	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-
-	if ki.ShardingColumnName != "" && ki.ShardingColumnName != shardingColumnName {
-		if force {
-			wr.Logger().Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, shardingColumnName)
-		} else {
-			return fmt.Errorf("cannot change ShardingColumnName from %v to %v (use -force to override)", ki.ShardingColumnName, shardingColumnName)
-		}
-	}
-
-	if ki.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET && ki.ShardingColumnType != shardingColumnType {
-		if force {
-			wr.Logger().Warningf("Forcing keyspace ShardingColumnType change from %v to %v", ki.ShardingColumnType, shardingColumnType)
-		} else {
-			return fmt.Errorf("cannot change ShardingColumnType from %v to %v (use -force to override)", ki.ShardingColumnType, shardingColumnType)
-		}
-	}
-
-	ki.ShardingColumnName = shardingColumnName
-	ki.ShardingColumnType = shardingColumnType
-	return wr.ts.UpdateKeyspace(ctx, ki)
+func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
+	_, err := wr.VtctldServer().SetKeyspaceShardingInfo(ctx, &vtctldatapb.SetKeyspaceShardingInfoRequest{
+		Keyspace:   keyspace,
+		ColumnName: shardingColumnName,
+		ColumnType: shardingColumnType,
+		Force:      force,
+	})
+	return err
 }
 
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
@@ -379,7 +354,7 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 
 		destinationShards[i] = updatedShard
 
-		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
+		if _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
 			return err
 		}
 	}
@@ -467,7 +442,8 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		refreshShards = destinationShards
 	}
 	for _, si := range refreshShards {
-		rec.RecordError(wr.RefreshTabletsByShard(ctx, si, cells))
+		_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
+		rec.RecordError(err)
 	}
 	return rec.Error()
 }
@@ -526,7 +502,7 @@ func (wr *Wrangler) getPrimaryPositions(ctx context.Context, shards []*topo.Shar
 				return
 			}
 
-			pos, err := wr.tmc.MasterPosition(ctx, ti.Tablet)
+			pos, err := wr.tmc.PrimaryPosition(ctx, ti.Tablet)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -816,7 +792,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	}
 
 	for _, si := range destinationShards {
-		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
+		if _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
 			return err
 		}
 	}
@@ -846,7 +822,7 @@ func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, d
 		}
 
 		wr.Logger().Infof("Gathering primary position for %v", topoproto.TabletAliasString(dest.PrimaryAlias))
-		primaryPositions[i], err = wr.tmc.MasterPosition(ctx, ti.Tablet)
+		primaryPositions[i], err = wr.tmc.PrimaryPosition(ctx, ti.Tablet)
 		if err != nil {
 			return err
 		}
@@ -1250,7 +1226,8 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 
 	// Now refresh the source servers so they reload the denylist
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their denied tables")
-	return wr.RefreshTabletsByShard(ctx, sourceShard, cells)
+	_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, sourceShard, cells, wr.Logger())
+	return err
 }
 
 // masterMigrateServedFrom handles the primary migration. The ordering is
@@ -1292,7 +1269,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// get the position
 	event.DispatchUpdate(ev, "getting primary position")
-	primaryPosition, err := wr.tmc.MasterPosition(ctx, sourcePrimaryTabletInfo.Tablet)
+	primaryPosition, err := wr.tmc.PrimaryPosition(ctx, sourcePrimaryTabletInfo.Tablet)
 	if err != nil {
 		return err
 	}
@@ -1334,96 +1311,6 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard primary tablets read-write")
 	return wr.refreshPrimaryTablets(ctx, []*topo.ShardInfo{destinationShard})
-}
-
-// SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap
-func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) (err error) {
-	// Lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetKeyspaceServedFrom")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// and update it
-	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-	if err := ki.UpdateServedFromMap(servedType, cells, sourceKeyspace, remove, nil); err != nil {
-		return err
-	}
-	return wr.ts.UpdateKeyspace(ctx, ki)
-}
-
-// RefreshTabletsByShard calls RefreshState on all the tablets in a given shard.
-func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, cells []string) error {
-	_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
-	return err
-}
-
-// DeleteKeyspace will do all the necessary changes in the topology server
-// to entirely remove a keyspace.
-func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursive bool) error {
-	shards, err := wr.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-	if recursive {
-		wr.Logger().Infof("Deleting all shards (and their tablets) in keyspace %v", keyspace)
-		for _, shard := range shards {
-			wr.Logger().Infof("Recursively deleting shard %v/%v", keyspace, shard)
-			if err := wr.DeleteShard(ctx, keyspace, shard, true /* recursive */, true /* evenIfServing */); err != nil && !topo.IsErrType(err, topo.NoNode) {
-				// Unlike the errors below in non-recursive steps, we don't want to
-				// continue if a DeleteShard fails. If we continue and delete the
-				// keyspace, the tablet records will be orphaned, since we'll
-				// no longer know how to list out the shard they belong to.
-				//
-				// If the problem is temporary, or resolved externally, re-running
-				// DeleteKeyspace will skip over shards that were already deleted.
-				return fmt.Errorf("can't delete shard %v/%v: %v", keyspace, shard, err)
-			}
-		}
-	} else if len(shards) > 0 {
-		return fmt.Errorf("keyspace %v still has %v shards; use -recursive or remove them manually", keyspace, len(shards))
-	}
-
-	// Delete the cell-local keyspace entries.
-	cells, err := wr.ts.GetKnownCells(ctx)
-	if err != nil {
-		return err
-	}
-	for _, cell := range cells {
-		if err := wr.ts.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			wr.Logger().Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, keyspace, err)
-		}
-
-		if err := wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			wr.Logger().Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, keyspace, err)
-		}
-	}
-
-	return wr.ts.DeleteKeyspace(ctx, keyspace)
-}
-
-// RemoveKeyspaceCell will remove a cell from the Cells list in all
-// shards of a keyspace (by calling RemoveShardCell on every
-// shard). It will also remove the SrvKeyspace for that keyspace/cell.
-func (wr *Wrangler) RemoveKeyspaceCell(ctx context.Context, keyspace, cell string, force, recursive bool) error {
-	shards, err := wr.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-	for _, shard := range shards {
-		wr.Logger().Infof("Removing cell %v from shard %v/%v", cell, keyspace, shard)
-		if err := wr.RemoveShardCell(ctx, keyspace, shard, cell, force, recursive); err != nil {
-			return fmt.Errorf("can't remove cell %v from shard %v/%v: %v", cell, keyspace, shard, err)
-		}
-	}
-
-	// Now remove the SrvKeyspace object.
-	wr.Logger().Infof("Removing cell %v keyspace %v SrvKeyspace object", cell, keyspace)
-	return wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace)
 }
 
 func encodeString(in string) string {

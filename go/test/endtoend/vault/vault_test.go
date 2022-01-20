@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -151,7 +150,7 @@ func TestVaultAuth(t *testing.T) {
 	time.Sleep(30 * time.Second)
 	// Check the log for the Vault token renewal message
 	//   If we don't see it, that is a test failure
-	logContents, _ := ioutil.ReadFile(path.Join(clusterInstance.TmpDirectory, vttabletLogFileName))
+	logContents, _ := os.ReadFile(path.Join(clusterInstance.TmpDirectory, vttabletLogFileName))
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
 

@@ -128,7 +128,7 @@ olapReadPool:
   idleTimeoutSeconds: 1800
   size: 200
 oltp:
-  maxRpws: 10000
+  maxRows: 10000
   queryTimeoutSeconds: 30
   txTimeoutSeconds: 30
 oltpReadPool:

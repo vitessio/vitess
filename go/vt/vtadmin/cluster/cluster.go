@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -277,6 +278,38 @@ func (c *Cluster) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKey
 	}, nil
 }
 
+// CreateShard creates a shard in the given cluster, proxying a
+// CreateShardRequest to a vtctld in that cluster.
+func (c *Cluster) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CreateShard")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.ShardName)
+	span.Annotate("force", req.Force)
+	span.Annotate("include_parent", req.IncludeParent)
+
+	if req.Keyspace == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	if req.ShardName == "" {
+		return nil, fmt.Errorf("%w: shard name is required", errors.ErrInvalidRequest)
+	}
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("CreateShard(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	return c.Vtctld.CreateShard(ctx, req)
+}
+
 // DeleteKeyspace deletes a keyspace in the given cluster, proxying a
 // DeleteKeyspaceRequest to a vtctld in that cluster.
 func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
@@ -300,6 +333,37 @@ func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKey
 	}
 
 	return c.Vtctld.DeleteKeyspace(ctx, req)
+}
+
+// DeleteShards deletes one or more shards in the given cluster, proxying a
+// single DeleteShardsRequest to a vtctld in that cluster.
+func (c *Cluster) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.DeleteShards")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	shards := make([]string, len(req.Shards))
+	for i, shard := range req.Shards {
+		shards[i] = fmt.Sprintf("%s/%s", shard.Keyspace, shard.Name)
+	}
+
+	sort.Strings(shards)
+
+	span.Annotate("num_shards", len(shards))
+	span.Annotate("shards", strings.Join(shards, ", "))
+	span.Annotate("recursive", req.Recursive)
+	span.Annotate("even_if_serving", req.EvenIfServing)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteShards(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	return c.Vtctld.DeleteShards(ctx, req)
 }
 
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
@@ -1125,6 +1189,79 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 	return []*vtadminpb.Tablet{randomServingTablet}, nil
 }
 
+// GetShardReplicationPositions returns a ClusterShardReplicationPosition object
+// for each keyspace/shard in the cluster.
+func (c *Cluster) GetShardReplicationPositions(ctx context.Context, req *vtadminpb.GetShardReplicationPositionsRequest) ([]*vtadminpb.ClusterShardReplicationPosition, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetShardReplicationPositions")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	shardsByKeyspace, err := c.getShardSets(ctx, req.Keyspaces, req.KeyspaceShards)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m            sync.Mutex
+		wg           sync.WaitGroup
+		rec          concurrency.AllErrorRecorder
+		positions    []*vtadminpb.ClusterShardReplicationPosition
+		clusterProto = c.ToProto()
+	)
+
+	for ks, shardSet := range shardsByKeyspace {
+		for _, shard := range shardSet.List() {
+			wg.Add(1)
+
+			go func(keyspace, shard string) {
+				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "Cluster.getShardReplicationPositionsForShard")
+				defer span.Finish()
+
+				AnnotateSpan(c, span)
+				span.Annotate("keyspace", keyspace)
+				span.Annotate("shard", shard)
+
+				if err := c.topoReadPool.Acquire(ctx); err != nil {
+					rec.RecordError(fmt.Errorf("ShardReplicationPositions(%s/%s) failed to acquire topoReadPool: %w", keyspace, shard, err))
+					return
+				}
+
+				resp, err := c.Vtctld.ShardReplicationPositions(ctx, &vtctldatapb.ShardReplicationPositionsRequest{
+					Keyspace: keyspace,
+					Shard:    shard,
+				})
+				c.topoReadPool.Release()
+
+				if err != nil {
+					rec.RecordError(fmt.Errorf("ShardReplicationPositions(%s/%s): %w", keyspace, shard, err))
+					return
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				positions = append(positions, &vtadminpb.ClusterShardReplicationPosition{
+					Cluster:      clusterProto,
+					Keyspace:     keyspace,
+					Shard:        shard,
+					PositionInfo: resp,
+				})
+			}(ks, shard)
+		}
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return positions, nil
+}
+
 // GetSrvVSchema returns the SrvVSchema for a given cell in the cluster.
 func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.SrvVSchema, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
@@ -1222,6 +1359,24 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 		Name:    keyspace,
 		VSchema: vschema.VSchema,
 	}, nil
+}
+
+// GetVtctlds returns a list of all Vtctlds in the cluster.
+func (c *Cluster) GetVtctlds(ctx context.Context) ([]*vtadminpb.Vtctld, error) {
+	vtctlds, err := c.Discovery.DiscoverVtctlds(ctx, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("DiscoverVtctlds(cluster = %s): %w", c.ID, err)
+	}
+
+	// This overwrites any Cluster field populated by a particular discovery
+	// implementation.
+	cpb := c.ToProto()
+
+	for _, v := range vtctlds {
+		v.Cluster = cpb
+	}
+
+	return vtctlds, nil
 }
 
 // GetWorkflowOptions is the set of filtering options for GetWorkflow requests.

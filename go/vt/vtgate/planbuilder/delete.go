@@ -21,11 +21,15 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 	del := stmt.(*sqlparser.Delete)
+	if del.With != nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
+	}
 	var err error
 	if len(del.TableExprs) == 1 && len(del.Targets) == 1 {
 		del, err = rewriteSingleTbl(del)
@@ -33,7 +37,7 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 			return nil, err
 		}
 	}
-	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
+	dml, ksidVindex, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +58,14 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	}
 
 	if len(edel.Table.Owned) > 0 {
-		edel.OwnedVindexQuery = generateDMLSubquery(del.Where, del.OrderBy, del.Limit, edel.Table, ksidCol)
-		edel.KsidVindex = ksidVindex
+		aTblExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: delete on complex table expression")
+		}
+		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edel.Table.Name}, As: aTblExpr.As}
+		edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edel.Table, ksidVindex.Columns)
+		edel.KsidVindex = ksidVindex.Vindex
+		edel.KsidLength = len(ksidVindex.Columns)
 	}
 
 	return edel, nil

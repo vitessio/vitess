@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -97,6 +99,9 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 // columns that represent underlying vindex columns are also exposed as
 // vindex columns.
 func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, reservedVars *sqlparser.ReservedVars) error {
+	if tableExpr.Columns != nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: column aliases in derived table")
+	}
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
@@ -258,8 +263,9 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		// for keyspace id.
 		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.NewBinary("binary", nil)
-		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
-		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
+		eroute.Vindex = vindex
+		lit := evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})
+		eroute.Values = []evalengine.Expr{lit}
 	}
 	eroute.TableName = sqlparser.String(vschemaTable.Name)
 	rb.eroute = eroute
@@ -348,6 +354,14 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	// join table name
 	if lRoute.eroute.TableName != rRoute.eroute.TableName {
 		lRoute.eroute.TableName = strings.Join([]string{lRoute.eroute.TableName, rRoute.eroute.TableName}, ", ")
+	}
+
+	// join sysTableNames
+	for tableName, expr := range rRoute.eroute.SysTableTableName {
+		_, ok := lRoute.eroute.SysTableTableName[tableName]
+		if !ok {
+			lRoute.eroute.SysTableTableName[tableName] = expr
+		}
 	}
 
 	// Since the routes have merged, set st.singleRoute to point at

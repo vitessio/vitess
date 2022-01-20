@@ -17,9 +17,7 @@ limitations under the License.
 package abstract
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -36,15 +34,21 @@ type (
 		Tables []*QueryTable
 
 		// innerJoins contains the predicates that need multiple Tables
-		innerJoins map[semantics.TableSet][]sqlparser.Expr
+		innerJoins []*innerJoin
 
 		// NoDeps contains the predicates that can be evaluated anywhere.
 		NoDeps sqlparser.Expr
 	}
 
+	innerJoin struct {
+		deps  semantics.TableSet
+		exprs []sqlparser.Expr
+	}
+
 	// QueryTable is a single FROM table, including all predicates particular to this table
+	// This is to be used as an immutable data structure which is created in the logical Operator Tree
 	QueryTable struct {
-		TableID     semantics.TableSet
+		ID          semantics.TableSet
 		Alias       *sqlparser.AliasedTableExpr
 		Table       sqlparser.TableName
 		Predicates  []sqlparser.Expr
@@ -52,24 +56,26 @@ type (
 	}
 )
 
-var _ Operator = (*QueryGraph)(nil)
+var _ LogicalOperator = (*QueryGraph)(nil)
+
+func (*QueryGraph) iLogical() {}
 
 // PushPredicate implements the Operator interface
-func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(e, semTable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return qg, nil
 }
 
 // TableID implements the Operator interface
 func (qg *QueryGraph) TableID() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
-		ts = ts.Merge(table.TableID)
+		ts = ts.Merge(table.ID)
 	}
 	return ts
 }
@@ -77,8 +83,9 @@ func (qg *QueryGraph) TableID() semantics.TableSet {
 // GetPredicates returns the predicates that are applicable for the two given TableSets
 func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
 	var allExprs []sqlparser.Expr
-	for tableSet, exprs := range qg.innerJoins {
-		if tableSet.IsSolvedBy(lhs|rhs) &&
+	for _, join := range qg.innerJoins {
+		tableSet, exprs := join.deps, join.exprs
+		if tableSet.IsSolvedBy(lhs.Merge(rhs)) &&
 			tableSet.IsOverlapping(rhs) &&
 			tableSet.IsOverlapping(lhs) {
 			allExprs = append(allExprs, exprs...)
@@ -88,9 +95,7 @@ func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Exp
 }
 
 func newQueryGraph() *QueryGraph {
-	return &QueryGraph{
-		innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
-	}
+	return &QueryGraph{}
 }
 
 func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semantics.SemTable) error {
@@ -105,31 +110,48 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 	return nil
 }
 
+func (qg *QueryGraph) getPredicateByDeps(ts semantics.TableSet) ([]sqlparser.Expr, bool) {
+	for _, join := range qg.innerJoins {
+		if join.deps == ts {
+			return join.exprs, true
+		}
+	}
+	return nil, false
+}
+func (qg *QueryGraph) addJoinPredicates(ts semantics.TableSet, expr sqlparser.Expr) {
+	for _, join := range qg.innerJoins {
+		if join.deps == ts {
+			join.exprs = append(join.exprs, expr)
+			return
+		}
+	}
+
+	qg.innerJoins = append(qg.innerJoins, &innerJoin{
+		deps:  ts,
+		exprs: []sqlparser.Expr{expr},
+	})
+}
+
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.BaseTableDependencies(predicate)
+	deps := semTable.RecursiveDeps(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
 	case 1:
 		found := qg.addToSingleTable(deps, predicate)
 		if !found {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %v for predicate %v not found", deps, sqlparser.String(predicate))
+			// this could be a predicate that only has dependencies from outside this QG
+			qg.addJoinPredicates(deps, predicate)
 		}
 	default:
-		allPredicates, found := qg.innerJoins[deps]
-		if found {
-			allPredicates = append(allPredicates, predicate)
-		} else {
-			allPredicates = []sqlparser.Expr{predicate}
-		}
-		qg.innerJoins[deps] = allPredicates
+		qg.addJoinPredicates(deps, predicate)
 	}
 	return nil
 }
 
 func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
 	for _, t := range qg.Tables {
-		if table == t.TableID {
+		if table == t.ID {
 			t.Predicates = append(t.Predicates, predicate)
 			return true
 		}
@@ -151,10 +173,21 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 // UnsolvedPredicates implements the Operator interface
 func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
-	for set, exprs := range qg.innerJoins {
+	for _, join := range qg.innerJoins {
+		set, exprs := join.deps, join.exprs
 		if !set.IsSolvedBy(qg.TableID()) {
 			result = append(result, exprs...)
 		}
 	}
 	return result
+}
+
+// CheckValid implements the Operator interface
+func (qg *QueryGraph) CheckValid() error {
+	return nil
+}
+
+// Compact implements the Operator interface
+func (qg *QueryGraph) Compact(*semantics.SemTable) (LogicalOperator, error) {
+	return qg, nil
 }

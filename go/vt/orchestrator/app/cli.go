@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/logic"
 	"vitess.io/vitess/go/vt/orchestrator/process"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 var thisInstanceKey *inst.InstanceKey
@@ -205,7 +206,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey == nil {
 				log.Fatal("Cannot deduce destination:", destination)
 			}
-			replicas, _, err, errs := inst.RelocateReplicas(instanceKey, destinationKey, pattern)
+			replicas, _, errs, err := inst.RelocateReplicas(instanceKey, destinationKey, pattern)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -268,7 +269,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Fatal("Cannot deduce instance:", instance)
 			}
 
-			movedReplicas, _, err, errs := inst.MoveUpReplicas(instanceKey, pattern)
+			movedReplicas, _, errs, err := inst.MoveUpReplicas(instanceKey, pattern)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -305,7 +306,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("repoint-replicas", "Classic file:pos relocation", `Repoint all replicas of given instance to replicate back from the instance. Use with care`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			repointedReplicas, err, errs := inst.RepointReplicasTo(instanceKey, pattern, destinationKey)
+			repointedReplicas, errs, err := inst.RepointReplicasTo(instanceKey, pattern, destinationKey)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -388,7 +389,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey == nil {
 				log.Fatal("Cannot deduce destination:", destination)
 			}
-			movedReplicas, _, err, errs := inst.MoveReplicasGTID(instanceKey, destinationKey, pattern)
+			movedReplicas, _, errs, err := inst.MoveReplicasGTID(instanceKey, destinationKey, pattern)
 			if err != nil {
 				log.Fatale(err)
 			} else {
@@ -1078,7 +1079,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if reason == "" {
 				log.Fatal("--reason option required")
 			}
-			var durationSeconds int = 0
+			var durationSeconds int
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {
@@ -1124,7 +1125,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if reason == "" {
 				log.Fatal("--reason option required")
 			}
-			var durationSeconds int = 0
+			var durationSeconds int
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {
@@ -1199,13 +1200,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey != nil {
 				validateInstanceIsFound(destinationKey)
 			}
-			topologyRecovery, promotedPrimaryCoordinates, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey, false)
+			topologyRecovery, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey)
 			if err != nil {
 				log.Fatale(err)
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
-			fmt.Println(*promotedPrimaryCoordinates)
-			log.Debugf("Promoted %+v as new primary. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new primary.", topologyRecovery.SuccessorKey)
 		}
 	case registerCliCommand("graceful-primary-takeover-auto", "Recovery", `Gracefully promote a new primary. orchestrator will attempt to pick the promoted replica automatically`):
 		{
@@ -1215,13 +1215,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey != nil {
 				validateInstanceIsFound(destinationKey)
 			}
-			topologyRecovery, promotedPrimaryCoordinates, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey, true)
+			topologyRecovery, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey)
 			if err != nil {
 				log.Fatale(err)
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
-			fmt.Println(*promotedPrimaryCoordinates)
-			log.Debugf("Promoted %+v as new primary. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new primary.", topologyRecovery.SuccessorKey)
 		}
 	case registerCliCommand("replication-analysis", "Recovery", `Request an analysis of potential crash incidents in all known topologies`):
 		{
@@ -1273,7 +1272,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("register-candidate", "Instance, meta", `Indicate that a specific instance is a preferred candidate for primary promotion`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			promotionRule, err := inst.ParseCandidatePromotionRule(*config.RuntimeCLIFlags.PromotionRule)
+			promotionRule, err := promotionrule.Parse(*config.RuntimeCLIFlags.PromotionRule)
 			if err != nil {
 				log.Fatale(err)
 			}

@@ -61,6 +61,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	ShardReplicationPositionsResults map[string]struct {
+		Response *vtctldatapb.ShardReplicationPositionsResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -179,4 +183,18 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// ShardReplicationPositions is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
+	if fake.ShardReplicationPositionsResults == nil {
+		return nil, fmt.Errorf("%w: ShardReplicationPositionsResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
+	if result, ok := fake.ShardReplicationPositionsResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }

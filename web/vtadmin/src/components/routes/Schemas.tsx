@@ -35,26 +35,24 @@ import { HelpTooltip } from '../tooltip/HelpTooltip';
 const TABLE_COLUMNS = [
     'Keyspace',
     'Table',
-    <div className="text-align-right">
+    <div className="text-right">
         Approx. Size{' '}
         <HelpTooltip
             text={
                 <span>
-                    Size is an approximate value derived from{' '}
-                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>.
+                    Size is an approximate value derived from <span className="font-mono">INFORMATION_SCHEMA</span>.
                 </span>
             }
         />
     </div>,
-    <div className="text-align-right">
+    <div className="text-right">
         Approx. Rows{' '}
         <HelpTooltip
             text={
                 // c.f. https://dev.mysql.com/doc/refman/5.7/en/information-schema-tables-table.html
                 <span>
-                    Row count is an approximate value derived from{' '}
-                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>. Actual values may vary by as much
-                    as 40% to 50%.
+                    Row count is an approximate value derived from <span className="font-mono">INFORMATION_SCHEMA</span>
+                    . Actual values may vary by as much as 40% to 50%.
                 </span>
             }
         />
@@ -93,21 +91,17 @@ export const Schemas = () => {
                     <DataCell>
                         <KeyspaceLink clusterID={row.clusterID} name={row.keyspace}>
                             <div>{row.keyspace}</div>
-                            <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                            <div className="text-sm text-secondary">{row.cluster}</div>
                         </KeyspaceLink>
                     </DataCell>
-                    <DataCell className="font-weight-bold">
-                        {href ? <Link to={href}>{row.table}</Link> : row.table}
-                    </DataCell>
-                    <DataCell className="text-align-right">
+                    <DataCell className="font-bold">{href ? <Link to={href}>{row.table}</Link> : row.table}</DataCell>
+                    <DataCell className="text-right">
                         <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
-                        <div className="font-size-small text-color-secondary">
+                        <div className="text-sm text-secondary">
                             {formatBytes(row._raw.tableSize?.data_length, 'B')}
                         </div>
                     </DataCell>
-                    <DataCell className="text-align-right">
-                        {(row._raw.tableSize?.row_count || 0).toLocaleString()}
-                    </DataCell>
+                    <DataCell className="text-right">{(row._raw.tableSize?.row_count || 0).toLocaleString()}</DataCell>
                 </tr>
             );
         });

@@ -24,8 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -64,7 +62,7 @@ func TestMain(m *testing.M) {
 		// Collect tablet paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
-			if tablet.Type == "master" || tablet.Type == "primary" {
+			if tablet.Type == "primary" {
 				primaryTablet = tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = tablet
@@ -105,7 +103,8 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 			}
 
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
@@ -117,17 +116,11 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+				clusterInstance.EnableSemiSync,
+				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
 			shard.Vttablets = append(shard.Vttablets, tablet)
-		}
-
-		for _, tablet := range shard.Vttablets {
-			if _, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), "", false); err != nil {
-				log.Error(err.Error())
-				return err
-			}
 		}
 
 		keyspace.Shards = append(keyspace.Shards, *shard)
@@ -159,7 +152,7 @@ func TestAutoDetect(t *testing.T) {
 	require.Nil(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shardName, cell, primaryTablet.TabletUID)
 	require.Nil(t, err, "error should be nil")
 
 	//Reset flavor

@@ -17,78 +17,15 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // shard related methods for Wrangler
-
-// SetShardIsPrimaryServing changes the IsPrimaryServing parameter of a shard.
-// It does not rebuild any serving graph or do any consistency check.
-// This is an emergency manual operation.
-func (wr *Wrangler) SetShardIsPrimaryServing(ctx context.Context, keyspace, shard string, isServing bool) (err error) {
-	// lock the keyspace to not conflict with resharding operations
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SetShardIsPrimaryServing(%v,%v,%v)", keyspace, shard, isServing))
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// and update the shard
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.IsPrimaryServing = isServing
-		return nil
-	})
-	return err
-}
-
-// SetShardTabletControl changes the TabletControl records
-// for a shard.  It does not rebuild any serving graph or do
-// cross-shard consistency check.
-// - sets list of denied tables in tablet control record
-//
-// This takes the keyspace lock as to not interfere with resharding operations.
-func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove bool, deniedTables []string) (err error) {
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardTabletControl")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// update the shard
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		// we are setting / removing the denied tables only
-		return si.UpdateSourceDeniedTables(ctx, tabletType, cells, remove, deniedTables)
-	})
-	return err
-}
-
-// UpdateDisableQueryService changes the TabletControl records
-// for a shard.  It updates serving graph
-//
-// This takes the keyspace lock as to not interfere with resharding operations.
-func (wr *Wrangler) UpdateDisableQueryService(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) (err error) {
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardTabletControl")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	si, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	// disable query service for shard
-	return wr.ts.UpdateDisableQueryService(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells, disableQueryService)
-}
 
 // UpdateSrvKeyspacePartitions changes the SrvKeyspaceGraph
 // for a shard.  It updates serving graph
@@ -224,87 +161,6 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 	}
 
 	return wr.ts.DeleteShard(ctx, keyspace, shard)
-}
-
-// RemoveShardCell will remove a cell from the Cells list in a shard.
-//
-// It will first check the shard has no tablets there. If 'force' is
-// specified, it will remove the cell even when the tablet map cannot
-// be retrieved. This is intended to be used when a cell is completely
-// down and its topology server cannot even be reached.
-//
-// If 'recursive' is specified, it will delete any tablets in the cell/shard,
-// with the assumption that the tablet processes have already been terminated.
-func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell string, force, recursive bool) error {
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	shardServingCells, err := wr.ts.GetShardServingCells(ctx, shardInfo)
-
-	// check the cell is in the list already
-	if !topo.InCellList(cell, shardServingCells) {
-		return fmt.Errorf("cell %v in not in shard info", cell)
-	}
-
-	// check the primary alias is not in the cell
-	if shardInfo.PrimaryAlias != nil && shardInfo.PrimaryAlias.Cell == cell {
-		return fmt.Errorf("primary %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.PrimaryAlias), cell)
-	}
-
-	// get the ShardReplication object in the cell
-	sri, err := wr.ts.GetShardReplication(ctx, cell, keyspace, shard)
-	switch {
-	case err == nil:
-		if recursive {
-			wr.Logger().Infof("Deleting all tablets in shard %v/%v", keyspace, shard)
-			for _, node := range sri.Nodes {
-				// We don't care about scrapping or updating the replication graph,
-				// because we're about to delete the entire replication graph.
-				wr.Logger().Infof("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias))
-				if err := wr.TopoServer().DeleteTablet(ctx, node.TabletAlias); err != nil && !topo.IsErrType(err, topo.NoNode) {
-					return fmt.Errorf("can't delete tablet %v: %v", topoproto.TabletAliasString(node.TabletAlias), err)
-				}
-			}
-		} else if len(sri.Nodes) > 0 {
-			return fmt.Errorf("cell %v has %v possible tablets in replication graph", cell, len(sri.Nodes))
-		}
-
-		// ShardReplication object is now useless, remove it
-		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			return fmt.Errorf("error deleting ShardReplication object in cell %v: %v", cell, err)
-		}
-
-		// we keep going
-	case topo.IsErrType(err, topo.NoNode):
-		// no ShardReplication object, we keep going
-	default:
-		// we can't get the object, assume topo server is down there,
-		// so we look at force flag
-		if !force {
-			return err
-		}
-		wr.Logger().Warningf("Cannot get ShardReplication from cell %v, assuming cell topo server is down, and forcing the removal", cell)
-	}
-
-	// now we can update the shard
-	wr.Logger().Infof("Removing cell %v from SrvKeyspace %v/%v", cell, keyspace, shard)
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "Locking keyspace to remove shard from SrvKeyspace")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, []string{cell}); err != nil {
-		return err
-	}
-
-	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, []string{cell}); err != nil {
-		return err
-	}
-	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_PRIMARY, []string{cell})
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.

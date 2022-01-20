@@ -22,19 +22,19 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgr/config"
-
-	"vitess.io/vitess/go/vt/vtgr/db"
-
-	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgr/config"
+	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtgr/log"
 )
 
 var (
@@ -53,6 +53,7 @@ type grInstance struct {
 // GRTopo is VTGR wrapper for topo server
 type GRTopo interface {
 	GetShardNames(ctx context.Context, keyspace string) ([]string, error)
+	GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error)
 	GetTabletMapForShardByCell(ctx context.Context, keyspace, shard string, cells []string) (map[string]*topo.TabletInfo, error)
 	LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error)
 }
@@ -68,6 +69,7 @@ type GRShard struct {
 	KeyspaceShard        *topo.KeyspaceShard
 	cells                []string
 	instances            []*grInstance
+	primaryAlias         string
 	shardStatusCollector *shardStatusCollector
 	sqlGroup             *SQLGroup
 	ts                   GRTopo
@@ -90,6 +92,10 @@ type GRShard struct {
 
 	lastDiagnoseResult DiagnoseType
 	lastDiagnoseSince  time.Time
+
+	isActive sync2.AtomicBool
+
+	logger *log.Logger
 
 	// lock prevents multiple go routine fights with each other
 	sync.Mutex
@@ -126,8 +132,9 @@ func NewGRShard(
 	ts GRTopo,
 	dbAgent db.Agent,
 	config *config.VTGRConfig,
-	localDbPort int) *GRShard {
-	return &GRShard{
+	localDbPort int,
+	isActive bool) *GRShard {
+	grShard := &GRShard{
 		KeyspaceShard:             &topo.KeyspaceShard{Keyspace: keyspace, Shard: shard},
 		cells:                     cells,
 		shardStatusCollector:      newShardStatusCollector(keyspace, shard),
@@ -135,13 +142,16 @@ func NewGRShard(
 		ts:                        ts,
 		dbAgent:                   dbAgent,
 		unlock:                    nil,
-		sqlGroup:                  NewSQLGroup(config.GroupSize, true, keyspace, shard),
+		sqlGroup:                  NewSQLGroup(config.BootstrapGroupSize, true, keyspace, shard),
 		minNumReplicas:            config.MinNumReplica,
 		disableReadOnlyProtection: config.DisableReadOnlyProtection,
 		localDbPort:               localDbPort,
+		logger:                    log.NewVTGRLogger(keyspace, shard),
 		transientErrorWaitTime:    time.Duration(config.BackoffErrorWaitTimeSeconds) * time.Second,
 		bootstrapWaitTime:         time.Duration(config.BootstrapWaitTimeSeconds) * time.Second,
 	}
+	grShard.isActive.Set(isActive)
+	return grShard
 }
 
 // refreshTabletsInShardLocked is called by repair to get a fresh view of the shard
@@ -151,6 +161,13 @@ func (shard *GRShard) refreshTabletsInShardLocked(ctx context.Context) {
 	if err == nil {
 		shard.instances = instances
 	}
+	primary, err := shard.refreshPrimaryShard(ctx)
+	if err == nil {
+		shard.primaryAlias = primary
+		return
+	}
+	// If we failed to refreshPrimaryShard, use primary from local tablets
+	shard.primaryAlias = shard.findPrimaryFromLocalCell()
 }
 
 // UpdateTabletsInShardWithLock updates the shard instances with a lock
@@ -160,19 +177,60 @@ func (shard *GRShard) UpdateTabletsInShardWithLock(ctx context.Context) {
 		// Take a per shard lock here when we actually refresh the data to avoid
 		// race conditions bewteen controller and repair tasks
 		shard.Lock()
-		defer shard.Unlock()
 		shard.instances = instances
+		shard.Unlock()
 	}
+	primary, err := shard.refreshPrimaryShard(ctx)
+	// We set primary separately from instances so that if global topo is not available
+	// VTGR can still discover the new tablets from local cell
+	shard.Lock()
+	defer shard.Unlock()
+	if err == nil {
+		shard.primaryAlias = primary
+		return
+	}
+	shard.primaryAlias = shard.findPrimaryFromLocalCell()
 }
 
 func (shard *GRShard) refreshTabletsInShardInternal(ctx context.Context) ([]*grInstance, error) {
 	keyspace, shardName := shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard
 	tablets, err := shard.ts.GetTabletMapForShardByCell(ctx, keyspace, shardName, shard.cells)
 	if err != nil {
-		log.Errorf("Error fetching tablets for keyspace/shardName %v/%v: %v", keyspace, shardName, err)
+		shard.logger.Errorf("Error fetching tablets for keyspace/shardName %v/%v: %v", keyspace, shardName, err)
 		return nil, err
 	}
 	return parseTabletInfos(tablets), nil
+}
+
+func (shard *GRShard) refreshPrimaryShard(ctx context.Context) (string, error) {
+	keyspace, shardName := shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard
+	si, err := shard.ts.GetShard(ctx, keyspace, shardName)
+	if err != nil {
+		shard.logger.Errorf("Error calling GetShard: %v", err)
+		return "", err
+	}
+	return topoproto.TabletAliasString(si.PrimaryAlias), nil
+}
+
+// findPrimaryFromLocalCell iterates through the replicas stored in grShard and returns
+// the one that's marked as primary
+func (shard *GRShard) findPrimaryFromLocalCell() string {
+	var latestPrimaryTimestamp time.Time
+	var primaryInstance *grInstance
+	for _, instance := range shard.instances {
+		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
+			// It is possible that there are more than one master in topo server
+			// we should compare timestamp to pick the latest one
+			if latestPrimaryTimestamp.Before(instance.primaryTimeStamp) {
+				latestPrimaryTimestamp = instance.primaryTimeStamp
+				primaryInstance = instance
+			}
+		}
+	}
+	if primaryInstance != nil {
+		return primaryInstance.alias
+	}
+	return ""
 }
 
 // parseTabletInfos replaces the replica reports for the shard key
@@ -229,7 +287,7 @@ func (shard *GRShard) UnlockShard() {
 	shard.unlockMu.Lock()
 	defer shard.unlockMu.Unlock()
 	if shard.unlock == nil {
-		log.Warningf("Shard %s/%s does not hold a lock", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
+		shard.logger.Warningf("Shard %s/%s does not hold a lock", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
 		return
 	}
 	var err error
@@ -272,11 +330,26 @@ func (shard *GRShard) GetCurrentShardStatuses() ShardStatus {
 	return status
 }
 
+// OverrideRebootstrapGroupSize force override the group expectedBootstrapSize used in safety check for rebootstrap
+func (shard *GRShard) OverrideRebootstrapGroupSize(groupSize int) error {
+	shard.Lock()
+	defer shard.Unlock()
+	shard.logger.Infof("Override rebootstrap group size=%v", groupSize)
+	shard.sqlGroup.rebootstrapSize = groupSize
+	return nil
+}
+
 // GetUnlock returns the unlock function for the shard for testing
 func (shard *GRShard) GetUnlock() func(*error) {
 	shard.unlockMu.Lock()
 	defer shard.unlockMu.Unlock()
 	return shard.unlock
+}
+
+// SetIsActive sets isActive for the shard
+func (shard *GRShard) SetIsActive(isActive bool) {
+	shard.logger.Infof("Setting is active to %v", isActive)
+	shard.isActive.Set(isActive)
 }
 
 func (collector *shardStatusCollector) isUnreachable(instance *grInstance) bool {

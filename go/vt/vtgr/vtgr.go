@@ -26,6 +26,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/concurrency"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
@@ -69,9 +71,16 @@ func newVTGR(ctx context.Context, ts controller.GRTopo, tmc tmclient.TabletManag
 	}
 }
 
-// OpenTabletDiscovery opens connection with topo server
+// OpenTabletDiscovery calls OpenTabletDiscoveryWithAcitve and set the shard to be active
+// it opens connection with topo server
 // and triggers the first round of controller based on specified cells and keyspace/shards.
 func OpenTabletDiscovery(ctx context.Context, cellsToWatch, clustersToWatch []string) *VTGR {
+	return OpenTabletDiscoveryWithAcitve(ctx, cellsToWatch, clustersToWatch, true)
+}
+
+// OpenTabletDiscoveryWithAcitve opens connection with topo server
+// and triggers the first round of controller based on parameter
+func OpenTabletDiscoveryWithAcitve(ctx context.Context, cellsToWatch, clustersToWatch []string, active bool) *VTGR {
 	if *vtgrConfigFile == "" {
 		log.Fatal("vtgr_config is required")
 	}
@@ -91,7 +100,7 @@ func OpenTabletDiscovery(ctx context.Context, cellsToWatch, clustersToWatch []st
 		if strings.Contains(ks, "/") {
 			// This is a keyspace/shard specification
 			input := strings.Split(ks, "/")
-			shards = append(shards, controller.NewGRShard(input[0], input[1], cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort))
+			shards = append(shards, controller.NewGRShard(input[0], input[1], cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort, active))
 		} else {
 			// Assume this is a keyspace and find all shards in keyspace
 			shardNames, err := vtgr.topo.GetShardNames(ctx, ks)
@@ -105,7 +114,7 @@ func OpenTabletDiscovery(ctx context.Context, cellsToWatch, clustersToWatch []st
 				continue
 			}
 			for _, s := range shardNames {
-				shards = append(shards, controller.NewGRShard(ks, s, cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort))
+				shards = append(shards, controller.NewGRShard(ks, s, cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort, active))
 			}
 		}
 	}
@@ -182,6 +191,18 @@ func (vtgr *VTGR) GetCurrentShardStatuses() []controller.ShardStatus {
 		result = append(result, status)
 	}
 	return result
+}
+
+// OverrideRebootstrapGroupSize forces an override the group size used in safety check for rebootstrap
+func (vtgr *VTGR) OverrideRebootstrapGroupSize(groupSize int) error {
+	errorRecord := concurrency.AllErrorRecorder{}
+	for _, shard := range vtgr.Shards {
+		err := shard.OverrideRebootstrapGroupSize(groupSize)
+		if err != nil {
+			errorRecord.RecordError(err)
+		}
+	}
+	return errorRecord.Error()
 }
 
 func (vtgr *VTGR) handleSignal(action func(int)) {

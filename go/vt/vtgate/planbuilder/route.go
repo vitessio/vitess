@@ -17,11 +17,12 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -35,6 +36,7 @@ var _ logicalPlan = (*route)(nil)
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 type route struct {
+	v3Plan
 	order int
 
 	// Redirect may point to another route if this route
@@ -64,9 +66,6 @@ type route struct {
 
 	// eroute is the primitive being built.
 	eroute *engine.Route
-
-	// tables keeps track of which tables this route is covering
-	tables semantics.TableSet
 }
 
 type tableSubstitution struct {
@@ -132,24 +131,6 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// WireupGen4 implements the logicalPlan interface
-func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
-	rb.prepareTheAST()
-
-	rb.eroute.Query = sqlparser.String(rb.Select)
-
-	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-	node := buffer.WriteNode(rb.Select)
-	query := node.ParsedQuery()
-	rb.eroute.FieldQuery = query.Query
-	return nil
-}
-
-// Solves implements the logicalPlan interface
-func (rb *route) ContainsTables() semantics.TableSet {
-	return rb.tables
-}
-
 // Wireup implements the logicalPlan interface
 func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	// Precaution: update ERoute.Values only if it's not set already.
@@ -161,7 +142,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []sqltypes.PlanValue{pv}
+			rb.eroute.Values = []evalengine.Expr{pv}
 			vals.Right = sqlparser.ListArg(engine.ListVarName)
 		case nil:
 			// no-op.
@@ -170,7 +151,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			rb.eroute.Values = []sqltypes.PlanValue{pv}
+			rb.eroute.Values = []evalengine.Expr{pv}
 		}
 	}
 
@@ -179,11 +160,11 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.Select:
 			if len(node.SelectExprs) == 0 {
-				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+				node.SelectExprs = []sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
 						Expr: sqlparser.NewIntLiteral("1"),
 					},
-				})
+				}
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.EqualOp {
@@ -255,23 +236,23 @@ func (rb *route) prepareTheAST() {
 
 // procureValues procures and converts the input into
 // the expected types for rb.Values.
-func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
-	switch val := val.(type) {
+func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (evalengine.Expr, error) {
+	switch typedVal := val.(type) {
 	case sqlparser.ValTuple:
-		pv := sqltypes.PlanValue{}
-		for _, val := range val {
-			v, err := rb.procureValues(plan, jt, val)
+		exprs := make([]evalengine.Expr, 0, len(typedVal))
+		for _, item := range typedVal {
+			v, err := rb.procureValues(plan, jt, item)
 			if err != nil {
-				return pv, err
+				return nil, err
 			}
-			pv.Values = append(pv.Values, v)
+			exprs = append(exprs, v)
 		}
-		return pv, nil
+		return evalengine.NewTupleExpr(exprs...), nil
 	case *sqlparser.ColName:
-		joinVar := jt.Procure(plan, val, rb.Order())
-		return sqltypes.PlanValue{Key: joinVar}, nil
+		joinVar := jt.Procure(plan, typedVal, rb.Order())
+		return evalengine.NewBindVar(joinVar, collations.TypedCollation{}), nil
 	default:
-		return sqlparser.NewPlanValue(val)
+		return evalengine.Convert(typedVal, semantics.EmptySemTable())
 	}
 }
 
@@ -334,11 +315,8 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	rc := rb.resultColumns[colNumber]
-	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
-		return weightcolNumber, nil
-	}
 	s, ok := rb.Select.(*sqlparser.Select)
 	if !ok {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
@@ -348,15 +326,27 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 	if !ok {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
 	}
-	expr := &sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name: sqlparser.NewColIdent("weight_string"),
-			Exprs: []sqlparser.SelectExpr{
-				&sqlparser.AliasedExpr{
-					Expr: aliasExpr.Expr,
-				},
+	weightStringExpr := &sqlparser.FuncExpr{
+		Name: sqlparser.NewColIdent("weight_string"),
+		Exprs: []sqlparser.SelectExpr{
+			&sqlparser.AliasedExpr{
+				Expr: aliasExpr.Expr,
 			},
 		},
+	}
+	expr := &sqlparser.AliasedExpr{
+		Expr: weightStringExpr,
+	}
+	if alsoAddToGroupBy {
+		sel, isSelect := rb.Select.(*sqlparser.Select)
+		if !isSelect {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot add weight string in %T", rb.Select)
+		}
+		sel.GroupBy = append(sel.GroupBy, weightStringExpr)
+	}
+
+	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
+		return weightcolNumber, nil
 	}
 	// It's ok to pass nil for pb and logicalPlan because PushSelect doesn't use them.
 	// TODO: we are ignoring a potential error here. need to clean this up
@@ -385,6 +375,18 @@ func (rb *route) Inputs() []logicalPlan {
 // with the outer route.
 func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 	if rb.SubqueryCanMerge(pb, inner) {
+		if inner.eroute.Opcode == engine.SelectDBA && (len(inner.eroute.SysTableTableName) > 0 || len(inner.eroute.SysTableTableSchema) > 0) {
+			switch rb.eroute.Opcode {
+			case engine.SelectDBA, engine.SelectReference:
+				rb.eroute.SysTableTableSchema = append(rb.eroute.SysTableTableSchema, inner.eroute.SysTableTableSchema...)
+				for k, v := range inner.eroute.SysTableTableName {
+					rb.eroute.SysTableTableName[k] = v
+				}
+				rb.eroute.Opcode = engine.SelectDBA
+			default:
+				return false
+			}
+		}
 		rb.substitutions = append(rb.substitutions, inner.substitutions...)
 		inner.Redirect = rb
 		return true
@@ -490,8 +492,14 @@ func (rb *route) unionCanMerge(other *route, distinct bool) bool {
 		return false
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
+	case engine.SelectUnsharded, engine.SelectReference:
 		return rb.eroute.Opcode == other.eroute.Opcode
+	case engine.SelectDBA:
+		return other.eroute.Opcode == engine.SelectDBA &&
+			len(rb.eroute.SysTableTableSchema) == 0 &&
+			len(rb.eroute.SysTableTableName) == 0 &&
+			len(other.eroute.SysTableTableSchema) == 0 &&
+			len(other.eroute.SysTableTableName) == 0
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
 		if other.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == other.eroute.Vindex && valEqual(rb.condition, other.condition) {

@@ -45,9 +45,10 @@ import (
 // It is only enabled if restore_from_backup is set.
 
 var (
-	restoreFromBackup     = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
-	restoreConcurrency    = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
-	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
+	restoreFromBackup      = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
+	restoreFromBackupTsStr = flag.String("restore_from_backup_ts", "", "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
+	restoreConcurrency     = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
+	waitForBackupInterval  = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 
 	// Flags for PITR
 	binlogHost           = flag.String("binlog_host", "", "PITR restore parameter: hostname/IP of binlog server.")
@@ -65,7 +66,7 @@ var (
 // It will either work, fail gracefully, or return
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, backupTime time.Time) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 
 	startTime = time.Now()
 
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, backupTime)
 	if err != nil {
 		return err
 	}
@@ -137,7 +138,7 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, backupTime time.Time) error {
 
 	tablet := tm.Tablet()
 	originalType := tablet.Type
@@ -152,6 +153,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	if err != nil {
 		return err
 	}
+
 	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
 	// so we will pass the BaseKeyspace in RestoreParams instead of tablet.Keyspace
 	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
@@ -159,7 +161,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		log.Infof("Using base_keyspace %v to restore keyspace %v", keyspace, tablet.Keyspace)
+		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, backupTime)
 	}
 
 	params := mysqlctl.RestoreParams{
@@ -173,7 +175,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DbName:              topoproto.TabletDbName(tablet),
 		Keyspace:            keyspace,
 		Shard:               tablet.Shard,
-		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
+		StartTime:           backupTime,
 	}
 
 	// Check whether we're going to restore before changing to RESTORE type,
@@ -415,17 +417,17 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 
 	if *binlogSslCa != "" || *binlogSslCert != "" {
 		// We need to use TLS
-		changeMasterCmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
+		cmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
 		if *binlogSslCa != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
+			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
 		}
 		if *binlogSslCert != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
+			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
 		}
 		if *binlogSslKey != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
+			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
 		}
-		cmds = append(cmds, changeMasterCmd+";")
+		cmds = append(cmds, cmd+";")
 	} else {
 		// No TLS
 		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", *binlogHost, *binlogPort, *binlogUser, *binlogPwd))
@@ -549,7 +551,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	defer tmc.Close()
 	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer remoteCancel()
-	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(remoteCtx, ti.Tablet)
 	if err != nil {
 		// It is possible that though PrimaryAlias is set, the primary tablet is unreachable
 		// Log a warning and let tablet restore in that case

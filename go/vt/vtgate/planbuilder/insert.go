@@ -21,7 +21,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -30,7 +34,7 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
@@ -164,22 +168,29 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	}
 
 	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
-	routeValues := make([]sqltypes.PlanValue, len(eins.Table.ColumnVindexes))
-	for vIdx, colVindex := range eins.Table.ColumnVindexes {
-		routeValues[vIdx].Values = make([]sqltypes.PlanValue, len(colVindex.Columns))
+	var colVindexes []*vindexes.ColumnVindex
+	for _, colVindex := range eins.Table.ColumnVindexes {
+		if colVindex.IgnoreInDML() {
+			continue
+		}
+		colVindexes = append(colVindexes, colVindex)
+	}
+	routeValues := make([][][]evalengine.Expr, len(colVindexes))
+	for vIdx, colVindex := range colVindexes {
+		routeValues[vIdx] = make([][]evalengine.Expr, len(colVindex.Columns))
 		for colIdx, col := range colVindex.Columns {
-			routeValues[vIdx].Values[colIdx].Values = make([]sqltypes.PlanValue, len(rows))
+			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				innerpv, err := sqlparser.NewPlanValue(row[colNum])
+				innerpv, err := evalengine.Convert(row[colNum], semantics.EmptySemTable())
 				if err != nil {
 					return nil, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
 				}
-				routeValues[vIdx].Values[colIdx].Values[rowNum] = innerpv
+				routeValues[vIdx][colIdx][rowNum] = innerpv
 			}
 		}
 	}
-	for _, colVindex := range eins.Table.ColumnVindexes {
+	for _, colVindex := range colVindexes {
 		for _, col := range colVindex.Columns {
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
@@ -189,6 +200,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 		}
 	}
 	eins.VindexValues = routeValues
+	eins.ColVindexes = colVindexes
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
 	return eins, nil
@@ -225,24 +237,26 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 // is set. Bind variable names are generated using baseName.
 func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
-	autoIncValues := sqltypes.PlanValue{}
-	for rowNum, row := range ins.Rows.(sqlparser.Values) {
+	rows := ins.Rows.(sqlparser.Values)
+	autoIncValues := make([]evalengine.Expr, 0, len(rows))
+	for rowNum, row := range rows {
 		// Support the DEFAULT keyword by treating it as null
 		if _, ok := row[colNum].(*sqlparser.Default); ok {
 			row[colNum] = &sqlparser.NullVal{}
 		}
-		pv, err := sqlparser.NewPlanValue(row[colNum])
+
+		pv, err := evalengine.Convert(row[colNum], semantics.EmptySemTable())
 		if err != nil {
 			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}
-		autoIncValues.Values = append(autoIncValues.Values, pv)
+		autoIncValues = append(autoIncValues, pv)
 		row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 	}
 
 	eins.Generate = &engine.Generate{
 		Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
 		Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eins.Table.AutoIncrement.Sequence.Name)),
-		Values:   autoIncValues,
+		Values:   evalengine.NewTupleExpr(autoIncValues...),
 	}
 	return nil
 }

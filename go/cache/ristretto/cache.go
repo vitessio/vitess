@@ -46,7 +46,7 @@ func defaultStringHash(key string) (uint64, uint64) {
 type itemCallback func(*Item)
 
 // CacheItemSize is the overhead in bytes for every stored cache item
-const CacheItemSize = int64(unsafe.Sizeof(storeItem{}))
+var CacheItemSize = hack.RuntimeAllocSize(int64(unsafe.Sizeof(storeItem{})))
 
 // Cache is a thread-safe implementation of a hashmap with a TinyLFU admission
 // policy and a Sampled LFU eviction policy. You can use the same Cache instance

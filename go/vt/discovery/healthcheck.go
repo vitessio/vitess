@@ -60,10 +60,6 @@ import (
 var (
 	hcErrorCounters = stats.NewCountersWithMultiLabels("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
 
-	// DEPRECATED HealthcheckMasterPromoted in favor of HealthcheckPrimaryPromoted
-	//TODO(rohit) : remove this metric and related parameter in V13
-	hcMasterPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckMasterPromoted", "Primary promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
-
 	hcPrimaryPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckPrimaryPromoted", "Primary promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
 	healthcheckOnce           sync.Once
 
@@ -279,7 +275,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
 	cells := strings.Split(cellsToWatch, ",")
-	if len(cells) == 0 {
+	if cellsToWatch == "" {
 		cells = append(cells, localCell)
 	}
 	for _, c := range cells {
@@ -310,7 +306,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 
 	// start the topo watches here
 	for _, tw := range hc.topoWatchers {
-		go tw.Start()
+		tw.Start()
 	}
 
 	return hc
@@ -355,13 +351,10 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	}
 	hc.healthByAlias[tabletAliasString(tabletAlias)] = thc
 	res := thc.SimpleCopy()
-	if ths, ok := hc.healthData[key]; !ok {
+	if _, ok := hc.healthData[key]; !ok {
 		hc.healthData[key] = make(map[tabletAliasString]*TabletHealth)
-		hc.healthData[key][tabletAliasString(tabletAlias)] = res
-	} else {
-		// just overwrite it if it exists already
-		ths[tabletAliasString(tabletAlias)] = res
 	}
+	hc.healthData[key][tabletAliasString(tabletAlias)] = res
 
 	hc.broadcast(res)
 	hc.connsWG.Add(1)
@@ -390,7 +383,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
-		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tabletAlias)
+		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tablet)
 		return
 	}
 	// Calling this will end the context associated with th.checkConn,
@@ -417,6 +410,14 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	defer hc.mu.Unlock()
 
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(th.Tablet.Alias))
+	// let's be sure that this tablet hasn't been deleted from the authoritative map
+	// so that we're not racing to update it and in effect re-adding a copy of the
+	// tablet record that was deleted
+	if _, ok := hc.healthByAlias[tabletAlias]; !ok {
+		log.Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
+		return
+	}
+
 	targetKey := hc.keyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
 	if targetChanged {
@@ -431,7 +432,10 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
 		}
 	}
-	// add it to the map by target
+	// add it to the map by target and create the map record if needed
+	if _, ok := hc.healthData[targetKey]; !ok {
+		hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
+	}
 	hc.healthData[targetKey][tabletAlias] = th
 
 	isPrimary := th.Target.TabletType == topodata.TabletType_PRIMARY
@@ -481,7 +485,6 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	isNewPrimary := isPrimary && prevTarget.TabletType != topodata.TabletType_PRIMARY
 	if isNewPrimary {
 		log.Errorf("Adding 1 to PrimaryPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
-		hcMasterPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 		hcPrimaryPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 	}
 

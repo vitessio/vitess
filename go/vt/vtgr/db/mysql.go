@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -34,9 +35,10 @@ import (
 )
 
 var (
-	configFilePath = flag.String("db_config", "", "full path to db config file that will be used by VTGR")
-	dbFlavor       = flag.String("db_flavor", "MySQL56", "mysql flavor override")
-	mysqlGroupPort = flag.Int("gr_port", 33061, "port to bootstrap a mysql group")
+	configFilePath       = flag.String("db_config", "", "full path to db config file that will be used by VTGR")
+	dbFlavor             = flag.String("db_flavor", "MySQL56", "mysql flavor override")
+	mysqlGroupPort       = flag.Int("gr_port", 33061, "port to bootstrap a mysql group")
+	enableHeartbeatCheck = flag.Bool("enable_heartbeat_check", false, "enable heartbeat checking, set together with -group_heartbeat_threshold")
 
 	// ErrGroupSplitBrain is the error when mysql group is split-brain
 	ErrGroupSplitBrain = errors.New("group has split brain")
@@ -55,6 +57,9 @@ type Agent interface {
 	// BootstrapGroupLocked bootstraps a mysql group
 	// the caller should grab a lock before
 	BootstrapGroupLocked(instanceKey *inst.InstanceKey) error
+
+	// RebootstrapGroupLocked rebootstrap a group with an existing name
+	RebootstrapGroupLocked(instanceKey *inst.InstanceKey, name string) error
 
 	// StopGroupLocked stops a mysql group
 	StopGroupLocked(instanceKey *inst.InstanceKey) error
@@ -109,17 +114,19 @@ type GroupMember struct {
 
 // GroupView is an instance's view for the group
 type GroupView struct {
-	TabletAlias       string
-	MySQLHost         string
-	MySQLPort         int
-	GroupName         string
-	UnresolvedMembers []*GroupMember
+	TabletAlias        string
+	MySQLHost          string
+	MySQLPort          int
+	GroupName          string
+	HeartbeatStaleness int
+	UnresolvedMembers  []*GroupMember
 }
 
 // SQLAgentImpl implements Agent
 type SQLAgentImpl struct {
-	config   *config.Configuration
-	dbFlavor string
+	config          *config.Configuration
+	dbFlavor        string
+	enableHeartbeat bool
 }
 
 // NewGroupView creates a new GroupView
@@ -149,8 +156,9 @@ func NewVTGRSqlAgent() *SQLAgentImpl {
 		conf = config.Config
 	}
 	agent := &SQLAgentImpl{
-		config:   conf,
-		dbFlavor: *dbFlavor,
+		config:          conf,
+		dbFlavor:        *dbFlavor,
+		enableHeartbeat: *enableHeartbeatCheck,
 	}
 	return agent
 }
@@ -175,6 +183,15 @@ func (agent *SQLAgentImpl) BootstrapGroupLocked(instanceKey *inst.InstanceKey) e
 		log.Infof("Try to bootstrap with a new uuid")
 	}
 	log.Infof("Bootstrap group on %v with %v", instanceKey.Hostname, uuid)
+	return agent.bootstrapInternal(instanceKey, uuid)
+}
+
+func (agent *SQLAgentImpl) RebootstrapGroupLocked(instanceKey *inst.InstanceKey, name string) error {
+	log.Infof("Rebootstrapping group on %v with %v", instanceKey.Hostname, name)
+	return agent.bootstrapInternal(instanceKey, name)
+}
+
+func (agent *SQLAgentImpl) bootstrapInternal(instanceKey *inst.InstanceKey, uuid string) error {
 	// Use persist to set group_replication_group_name
 	// so that the instance will persist the name after restart
 	cmds := []string{
@@ -188,6 +205,7 @@ func (agent *SQLAgentImpl) BootstrapGroupLocked(instanceKey *inst.InstanceKey) e
 	}
 	for _, cmd := range cmds {
 		if err := execInstanceWithTopo(instanceKey, cmd); err != nil {
+			log.Errorf("Failed to execute: %v: %v", cmd, err)
 			return err
 		}
 	}
@@ -295,6 +313,17 @@ func (agent *SQLAgentImpl) Failover(instance *inst.InstanceKey) error {
 	return nil
 }
 
+// heartbeatCheck returns heartbeat check freshness result
+func (agent *SQLAgentImpl) heartbeatCheck(instanceKey *inst.InstanceKey) (int, error) {
+	query := `select timestampdiff(SECOND, from_unixtime(truncate(ts * 0.000000001, 0)), NOW()) as diff from _vt.heartbeat;`
+	var result int
+	err := fetchInstance(instanceKey, query, func(m sqlutils.RowMap) error {
+		result = m.GetInt("diff")
+		return nil
+	})
+	return result, err
+}
+
 // FetchGroupView implements Agent interface
 func (agent *SQLAgentImpl) FetchGroupView(alias string, instanceKey *inst.InstanceKey) (*GroupView, error) {
 	view := NewGroupView(alias, instanceKey.Hostname, instanceKey.Port)
@@ -331,6 +360,22 @@ func (agent *SQLAgentImpl) FetchGroupView(alias string, instanceKey *inst.Instan
 	view.GroupName = groupName
 	if err != nil {
 		return nil, err
+	}
+	view.HeartbeatStaleness = math.MaxInt32
+	if agent.enableHeartbeat {
+		heartbeatStaleness, err := agent.heartbeatCheck(instanceKey)
+		if err != nil {
+			// We can run into Error 1146: Table '_vt.heartbeat' doesn't exist on new provisioned shard:
+			//   vtgr is checking heartbeat table
+			//   -> heartbeat table is waiting primary tablet
+			//   -> primary tablet needs vtgr.
+			//
+			// Therefore if we run into error, HeartbeatStaleness will
+			// remain to be max int32, which is 2147483647 sec
+			log.Errorf("Failed to check heartbeatCheck: %v", err)
+		} else {
+			view.HeartbeatStaleness = heartbeatStaleness
+		}
 	}
 	return view, nil
 }

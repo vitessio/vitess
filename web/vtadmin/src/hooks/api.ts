@@ -13,25 +13,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useQueries, useQuery, useQueryClient, UseQueryOptions, UseQueryResult } from 'react-query';
+import {
+    useMutation,
+    UseMutationOptions,
+    useQueries,
+    useQuery,
+    useQueryClient,
+    UseQueryOptions,
+    UseQueryResult,
+} from 'react-query';
 import {
     fetchBackups,
     fetchClusters,
     fetchExperimentalTabletDebugVars,
     fetchGates,
+    fetchKeyspace,
     fetchKeyspaces,
     fetchSchema,
     FetchSchemaParams,
     fetchSchemas,
     fetchTablet,
     FetchTabletParams,
+    pingTablet,
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
+    fetchVtctlds,
     fetchVTExplain,
     fetchWorkflow,
     fetchWorkflows,
     TabletDebugVarsResponse,
+    refreshState,
+    runHealthCheck,
+    deleteTablet,
+    reparentTablet,
+    startReplication,
+    stopReplication,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -55,6 +72,25 @@ export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefin
     useQuery(['gates'], fetchGates, options);
 
 /**
+ * useKeyspace is a query hook that fetches a single keyspace by name.
+ */
+export const useKeyspace = (
+    params: Parameters<typeof fetchKeyspace>[0],
+    options?: UseQueryOptions<pb.Keyspace, Error>
+) => {
+    const queryClient = useQueryClient();
+    return useQuery(['keyspace', params], () => fetchKeyspace(params), {
+        initialData: () => {
+            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>('keyspaces');
+            return (keyspaces || []).find(
+                (k) => k.cluster?.id === params.clusterID && k.keyspace?.name === params.name
+            );
+        },
+        ...options,
+    });
+};
+
+/**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
  */
 export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error> | undefined) =>
@@ -73,6 +109,12 @@ export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undef
     useQuery(['tablets'], fetchTablets, options);
 
 /**
+ * useVtctlds is a query hook that fetches all vtctlds across every cluster.
+ */
+export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
+    useQuery(['vtctlds'], fetchVtctlds, options);
+
+/**
  * useTablet is a query hook that fetches a single tablet by alias.
  */
 export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
@@ -86,6 +128,86 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
         },
         ...options,
     });
+};
+
+/**
+ *
+ * useDeleteTablet is a mutate hook that deletes a tablet by alias and optionally, cluster id.
+ */
+export const useDeleteTablet = (
+    params: Parameters<typeof deleteTablet>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>(() => {
+        return deleteTablet(params);
+    }, options);
+};
+
+/**
+ * useReparentTablet reparents a tablet to the current primary in the shard.
+ * This only works if the current replication position matches the last known reparent action.
+ */
+export const useReparentTablet = (
+    params: Parameters<typeof reparentTablet>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof reparentTablet>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof reparentTablet>>, Error>(() => {
+        return reparentTablet(params);
+    }, options);
+};
+
+/**
+ * useStartReplication starts replication on the specified tablet.
+ */
+export const useStartReplication = (
+    params: Parameters<typeof startReplication>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>(() => {
+        return startReplication(params);
+    }, options);
+};
+
+/**
+ * useStopReplication stops replication on the specified tablet.
+ */
+export const useStopReplication = (
+    params: Parameters<typeof stopReplication>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>(() => {
+        return stopReplication(params);
+    }, options);
+};
+
+/**
+ * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
+ */
+export const usePingTablet = (
+    params: Parameters<typeof pingTablet>[0],
+    options?: UseQueryOptions<pb.PingTabletResponse, Error>
+) => {
+    return useQuery(['ping-tablet', params], () => pingTablet(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useRefreshState = (
+    params: Parameters<typeof refreshState>[0],
+    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
+) => {
+    return useQuery(['refresh-state', params], () => refreshState(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useHealthCheck = (
+    params: Parameters<typeof runHealthCheck>[0],
+    options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
+) => {
+    return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
 };
 
 export const useExperimentalTabletDebugVars = (

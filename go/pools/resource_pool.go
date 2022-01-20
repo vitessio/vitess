@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"context"
 
 	"vitess.io/vitess/go/sync2"
@@ -50,6 +52,10 @@ var (
 // Factory is a function that can be used to create a resource.
 type Factory func(context.Context) (Resource, error)
 
+// RefreshCheck is a function used to determine if a resource pool should be
+// refreshed (i.e. closed and reopened)
+type RefreshCheck func() (bool, error)
+
 // Resource defines the interface that every resource must provide.
 // Thread synchronization between Close() and IsClosed()
 // is the responsibility of the caller.
@@ -75,6 +81,13 @@ type ResourcePool struct {
 	factory   Factory
 	idleTimer *timer.Timer
 	logWait   func(time.Time)
+
+	refreshCheck    RefreshCheck
+	refreshInterval time.Duration
+	refreshStop     chan struct{}
+	refreshTicker   *time.Ticker
+	refreshWg       sync.WaitGroup
+	reopenMutex     sync.Mutex
 }
 
 type resourceWrapper struct {
@@ -93,7 +106,9 @@ type resourceWrapper struct {
 // An idleTimeout of 0 means that there is no timeout.
 // A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time)) *ResourcePool {
+// refreshCheck is a function we consult at refreshInterval
+// intervals to determine if the pool should be drained and reopened
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time), refreshCheck RefreshCheck, refreshInterval time.Duration) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -142,7 +157,38 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
+
+	if refreshCheck != nil && refreshInterval > 0 {
+		rp.refreshInterval = refreshInterval
+		rp.refreshCheck = refreshCheck
+		rp.startRefreshTicker()
+	}
+
 	return rp
+}
+
+func (rp *ResourcePool) startRefreshTicker() {
+	rp.refreshTicker = time.NewTicker(rp.refreshInterval)
+	rp.refreshStop = make(chan struct{})
+	rp.refreshWg.Add(1)
+	go func() {
+		defer rp.refreshWg.Done()
+		for {
+			select {
+			case <-rp.refreshTicker.C:
+				val, err := rp.refreshCheck()
+				if err != nil {
+					log.Info(err)
+				}
+				if val {
+					go rp.reopen()
+					return
+				}
+			case <-rp.refreshStop:
+				return
+			}
+		}
+	}()
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -152,6 +198,11 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 func (rp *ResourcePool) Close() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Stop()
+	}
+	if rp.refreshTicker != nil {
+		rp.refreshTicker.Stop()
+		close(rp.refreshStop)
+		rp.refreshWg.Wait()
 	}
 	_ = rp.SetCapacity(0)
 }
@@ -185,6 +236,22 @@ func (rp *ResourcePool) closeIdleResources() {
 			}
 		}()
 
+	}
+}
+
+// reopen drains and reopens the connection pool
+func (rp *ResourcePool) reopen() {
+	rp.reopenMutex.Lock() // Avoid race, since we can refresh asynchronously
+	defer rp.reopenMutex.Unlock()
+	capacity := int(rp.capacity.Get())
+	log.Infof("Draining and reopening resource pool with capacity %d by request", capacity)
+	rp.Close()
+	_ = rp.SetCapacity(capacity)
+	if rp.idleTimer != nil {
+		rp.idleTimer.Start(rp.closeIdleResources)
+	}
+	if rp.refreshCheck != nil {
+		rp.startRefreshTicker()
 	}
 }
 
@@ -290,13 +357,13 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
-	// Atomically swap new capacity with old, but only
-	// if old capacity is non-zero.
+	// Atomically swap new capacity with old
 	var oldcap int
 	for {
 		oldcap = int(rp.capacity.Get())
-		if oldcap == 0 {
-			return ErrClosed
+		if oldcap == 0 && capacity > 0 {
+			// Closed this before, re-open the channel
+			rp.resources = make(chan resourceWrapper, cap(rp.resources))
 		}
 		if oldcap == capacity {
 			return nil

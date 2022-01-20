@@ -52,6 +52,8 @@ type Tokenizer struct {
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func NewStringTokenizer(sql string) *Tokenizer {
+	checkParserVersionFlag()
+
 	return &Tokenizer{
 		buf:      sql,
 		BindVars: make(map[string]struct{}),
@@ -156,6 +158,14 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			if tkn.peek(1) == '\'' {
 				tkn.skip(2)
 				return tkn.scanBitLiteral()
+			}
+		}
+		// N\'literal' is used to create a string in the national character set
+		if ch == 'N' || ch == 'n' {
+			nxt := tkn.peek(1)
+			if nxt == '\'' || nxt == '"' {
+				tkn.skip(2)
+				return tkn.scanString(nxt, NCHAR_STRING)
 			}
 		}
 		return tkn.scanIdentifier(false)
@@ -492,9 +502,21 @@ exponent:
 	}
 
 exit:
-	// A letter cannot immediately follow a number.
 	if isLetter(tkn.cur()) {
-		return LEX_ERROR, tkn.buf[start:tkn.Pos]
+		// A letter cannot immediately follow a float number.
+		if token == FLOAT {
+			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+		}
+		// A letter seen after a few numbers means that we should parse this
+		// as an identifier and not a number.
+		for {
+			ch := tkn.cur()
+			if !isLetter(ch) && !isDigit(ch) {
+				break
+			}
+			tkn.skip(1)
+		}
+		return ID, tkn.buf[start:tkn.Pos]
 	}
 
 	return token, tkn.buf[start:tkn.Pos]

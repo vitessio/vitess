@@ -17,12 +17,7 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
-	"strconv"
-
 	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -34,72 +29,52 @@ import (
 // While doing this, it will also find the types for columns and
 // store these in the typer:s expression map
 type binder struct {
-	exprRecursiveDeps ExprDependencies
-	exprDeps          ExprDependencies
-	scoper            *scoper
-	tc                *tableCollector
-	org               originable
-	typer             *typer
-	subqueryMap       map[*sqlparser.Select][]*subquery
-	subqueryRef       map[*sqlparser.Subquery]*subquery
+	recursive   ExprDependencies
+	direct      ExprDependencies
+	scoper      *scoper
+	tc          *tableCollector
+	org         originable
+	typer       *typer
+	subqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
+	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
-		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
-		exprDeps:          map[sqlparser.Expr]TableSet{},
-		scoper:            scoper,
-		org:               org,
-		tc:                tc,
-		typer:             typer,
-		subqueryMap:       map[*sqlparser.Select][]*subquery{},
-		subqueryRef:       map[*sqlparser.Subquery]*subquery{},
+		recursive:   map[sqlparser.Expr]TableSet{},
+		direct:      map[sqlparser.Expr]TableSet{},
+		scoper:      scoper,
+		org:         org,
+		tc:          tc,
+		typer:       typer,
+		subqueryMap: map[*sqlparser.Select][]*sqlparser.ExtractedSubquery{},
+		subqueryRef: map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
 	}
 }
 
-func (b *binder) down(cursor *sqlparser.Cursor) error {
+func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
-		if currScope.selectStmt == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
-		}
-		opcode := engine.PulloutValue
-		switch par := cursor.Parent().(type) {
-		case *sqlparser.ComparisonExpr:
-			switch par.Operator {
-			case sqlparser.InOp:
-				opcode = engine.PulloutIn
-			case sqlparser.NotInOp:
-				opcode = engine.PulloutNotIn
-			}
-		case *sqlparser.ExistsExpr:
-			opcode = engine.PulloutExists
-		}
-		sq := &subquery{
-			SubQuery: node,
-			OpCode:   opcode,
-		}
-		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
-		b.subqueryRef[node] = sq
-	case *sqlparser.Order:
-		return b.analyzeOrderByGroupByExprForLiteral(node.Expr, "order clause")
-	case sqlparser.GroupBy:
-		for _, grpExpr := range node {
-			err := b.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
-			if err != nil {
-				return err
-			}
-		}
-	case *sqlparser.ColName:
-		baseTableTS, ts, typ, err := b.resolveColumn(node, b.scoper.currentScope())
+		sq, err := b.createExtractedSubquery(cursor, currScope, node)
 		if err != nil {
 			return err
 		}
-		b.exprRecursiveDeps[node] = baseTableTS
-		b.exprDeps[node] = ts
-		if typ != nil {
-			b.typer.setTypeFor(node, *typ)
+
+		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
+		b.subqueryRef[node] = sq
+
+		b.setSubQueryDependencies(node, currScope)
+
+	case *sqlparser.ColName:
+		deps, err := b.resolveColumn(node, b.scoper.currentScope())
+		if err != nil {
+			return err
+		}
+		b.recursive[node] = deps.recursive
+		b.direct[node] = deps.direct
+		if deps.typ != nil {
+			b.typer.setTypeFor(node, *deps.typ)
 		}
 	case *sqlparser.FuncExpr:
 		// need special handling so that any lingering `*` expressions are bound to all local tables
@@ -110,138 +85,134 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 		scope := b.scoper.currentScope()
-		ts := TableSet(0)
+		var ts TableSet
 		for _, table := range scope.tables {
-			if !table.IsActualTable() {
-				continue
+			expr := table.getExpr()
+			if expr != nil {
+				ts.MergeInPlace(b.tc.tableSetFor(expr))
 			}
-			ts |= b.tc.tableSetFor(table.GetExpr())
 		}
-		b.exprRecursiveDeps[node] = ts
-		b.exprDeps[node] = ts
+		b.recursive[node] = ts
+		b.direct[node] = ts
 	}
 	return nil
 }
 
-func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, caller string) error {
-	l, ok := input.(*sqlparser.Literal)
-	if !ok {
-		return nil
-	}
-	if l.Type != sqlparser.IntVal {
-		return nil
-	}
-	currScope := b.scoper.currentScope()
-	num, err := strconv.Atoi(l.Val)
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
-	}
-	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
+// setSubQueryDependencies sets the correct dependencies for the subquery
+// the binder usually only sets the dependencies of ColNames, but we need to
+// handle the subquery dependencies differently, so they are set manually here
+// this method will only keep dependencies to tables outside the subquery
+func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *scope) {
+	subqRecursiveDeps := b.recursive.dependencies(subq)
+	subqDirectDeps := b.direct.dependencies(subq)
+
+	tablesToKeep := EmptyTableSet()
+	sco := currScope
+	for sco != nil {
+		for _, table := range sco.tables {
+			tablesToKeep.MergeInPlace(table.getTableSet(b.org))
+		}
+		sco = sco.parent
 	}
 
-	expr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
-	if !ok {
-		return nil
-	}
-
-	b.exprRecursiveDeps[input] = b.exprRecursiveDeps.Dependencies(expr.Expr)
-	return nil
+	subqDirectDeps.KeepOnly(tablesToKeep)
+	subqRecursiveDeps.KeepOnly(tablesToKeep)
+	b.recursive[subq] = subqRecursiveDeps
+	b.direct[subq] = subqDirectDeps
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
-	if colName.Qualifier.IsEmpty() {
-		return b.resolveUnQualifiedColumn(current, colName)
+func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
+	if currScope.selectStmt == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
 	}
-	return b.resolveQualifiedColumn(current, colName)
+
+	sq := &sqlparser.ExtractedSubquery{
+		Subquery: subq,
+		Original: subq,
+		OpCode:   int(engine.PulloutValue),
+	}
+
+	switch par := cursor.Parent().(type) {
+	case *sqlparser.ComparisonExpr:
+		switch par.Operator {
+		case sqlparser.InOp:
+			sq.OpCode = int(engine.PulloutIn)
+		case sqlparser.NotInOp:
+			sq.OpCode = int(engine.PulloutNotIn)
+		}
+		subq, exp := GetSubqueryAndOtherSide(par)
+		sq.Original = &sqlparser.ComparisonExpr{
+			Left:     exp,
+			Operator: par.Operator,
+			Right:    subq,
+		}
+		sq.OtherSide = exp
+	case *sqlparser.ExistsExpr:
+		sq.OpCode = int(engine.PulloutExists)
+		sq.Original = par
+	}
+	return sq, nil
 }
 
-// resolveQualifiedColumn handles column expressions where the table is explicitly stated
-func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
-	// search up the scope stack until we find a match
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps dependency, err error) {
+	var thisDeps dependencies
 	for current != nil {
-		for _, table := range current.tables {
-			if !table.Matches(expr.Qualifier) {
-				continue
-			}
-			if table.IsActualTable() {
-				actualTable, ts, typ := b.resolveQualifiedColumnOnActualTable(table, expr)
-				return actualTable, ts, typ, nil
-			}
-			recursiveTs, typ, err := table.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs == nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-			}
-
-			ts, err := table.DepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			return *recursiveTs, *ts, typ, nil
+		thisDeps, err = b.resolveColumnInScope(current, colName)
+		if err != nil {
+			err = makeAmbiguousError(colName, err)
+			return dependency{}, err
+		}
+		if !thisDeps.empty() {
+			deps, err = thisDeps.get()
+			err = makeAmbiguousError(colName, err)
+			return deps, err
 		}
 		current = current.parent
 	}
-	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(colName))
 }
 
-// resolveUnQualifiedColumn handles column that do not specify which table they belong to
-func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
-	var tspRecursive, tsp *TableSet
-	var typp *querypb.Type
-
-	for current != nil && tspRecursive == nil {
-		for _, tbl := range current.tables {
-			recursiveTs, typ, err := tbl.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs != nil && tspRecursive != nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-			}
-			if recursiveTs != nil {
-				tspRecursive = recursiveTs
-				typp = typ
-			}
-			if tbl.IsActualTable() {
-				tsp = tspRecursive
-				continue
-			}
-			ts, err := tbl.DepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if ts != nil {
-				tsp = ts
-			}
+func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName) (dependencies, error) {
+	var deps dependencies = &nothing{}
+	for _, table := range current.tables {
+		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) {
+			continue
 		}
-
-		current = current.parent
+		thisDeps, err := table.dependencies(expr.Name.String(), b.org)
+		if err != nil {
+			return nil, err
+		}
+		deps, err = thisDeps.merge(deps)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	if tspRecursive == nil {
-		return 0, 0, nil, ProjError{vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))}
+	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
+		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
+		return nil, ProjError{
+			Inner: vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Column '%s' in field list is ambiguous", sqlparser.String(expr)),
+		}
 	}
-
-	if tsp == nil {
-		return *tspRecursive, 0, typp, nil
-	}
-	return *tspRecursive, *tsp, typp, nil
+	return deps, nil
 }
 
-func (b *binder) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
-	ts := b.tc.tableSetFor(table.GetExpr())
-	for _, colInfo := range table.GetColumns() {
-		if expr.Name.EqualString(colInfo.Name) {
-			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
-			// But expressions can be of NULL type, so we use nil to represent an unknown type
-			if colInfo.Type == querypb.Type_NULL_TYPE {
-				return ts, ts, nil
-			}
-			return ts, ts, &colInfo.Type
-		}
+func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
+	if err == ambigousErr {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Column '%s' in field list is ambiguous", sqlparser.String(colName))
 	}
-	return ts, ts, nil
+	return err
+}
+
+// GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
+func GetSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
+	var subq *sqlparser.Subquery
+	var exp sqlparser.Expr
+	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
+		subq = lSubq
+		exp = node.Right
+	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
+		subq = rSubq
+		exp = node.Left
+	}
+	return subq, exp
 }

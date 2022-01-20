@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -54,7 +54,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	resp, _ := http.Get(url)
 	if resp != nil && resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		require.Nil(t, err)
 		if resultMap["VtgateVSchemaCounts"] == nil {

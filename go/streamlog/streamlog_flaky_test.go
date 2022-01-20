@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -194,7 +193,7 @@ func TestChannel(t *testing.T) {
 func TestFile(t *testing.T) {
 	logger := New("logger", 10)
 
-	dir, err := ioutil.TempDir("", "streamlog_file")
+	dir, err := os.MkdirTemp("", "streamlog_file")
 	if err != nil {
 		t.Fatalf("error getting tempdir: %v", err)
 	}
@@ -213,7 +212,7 @@ func TestFile(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	want := "test 1\ntest 2\n"
-	contents, _ := ioutil.ReadFile(logPath)
+	contents, _ := os.ReadFile(logPath)
 	got := string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
@@ -227,7 +226,7 @@ func TestFile(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	want = "test 1\ntest 2\ntest 3\n"
-	contents, _ = ioutil.ReadFile(rotatedPath)
+	contents, _ = os.ReadFile(rotatedPath)
 	got = string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
@@ -244,14 +243,14 @@ func TestFile(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	want = "test 1\ntest 2\ntest 3\n"
-	contents, _ = ioutil.ReadFile(rotatedPath)
+	contents, _ = os.ReadFile(rotatedPath)
 	got = string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
 	}
 
 	want = "test 4\n"
-	contents, _ = ioutil.ReadFile(logPath)
+	contents, _ = os.ReadFile(logPath)
 	got = string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)

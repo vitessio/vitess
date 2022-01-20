@@ -17,10 +17,17 @@ limitations under the License.
 package abstract
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,229 +36,80 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func TestOperator(t *testing.T) {
-	type tcase struct {
-		input, output string
-	}
-	tcases := []tcase{{
-		input: "select * from t",
-		output: `QueryGraph: {
-Tables:
-	1:t
-}`,
-	}, {
-		input: "select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2",
-		output: `QueryGraph: {
-Tables:
-	1:t
-	2:y
-	4:z
-JoinPredicates:
-	1:2 - t.c = y.c
-	1:2:4 - t.a = z.a or t.a = y.a
-ForAll: 1 < 2
-}`,
-	}, {
-		input: "select t.c from t join y on t.id = y.t_id join z on t.id = z.t_id where t.name = 'foo' and y.col = 42 and z.baz = 101",
-		output: `QueryGraph: {
-Tables:
-	1:t where t.` + "`name`" + ` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
-JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
-}`,
-	}, {
-		input: "select t.c from t,y,z where t.name = 'foo' and y.col = 42 and z.baz = 101 and t.id = y.t_id and t.id = z.t_id",
-		output: `QueryGraph: {
-Tables:
-	1:t where t.` + "`name`" + ` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
-JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
-}`,
-	}, {
-		input: "select 1 from t where '1' = 1 and 12 = '12'",
-		output: `QueryGraph: {
-Tables:
-	1:t
-ForAll: '1' = 1 and 12 = '12'
-}`,
-	}, {
-		input: "select 1 from t left join s on t.id = s.id",
-		output: `OuterJoin: {
-	Inner: 	QueryGraph: {
-	Tables:
-		1:t
-	}
-	Outer: 	QueryGraph: {
-	Tables:
-		2:s
-	}
-	Predicate: t.id = s.id
-}`,
-	}, {
-		input: "select 1 from t join s on t.id = s.id and t.name = s.name",
-		output: `QueryGraph: {
-Tables:
-	1:t
-	2:s
-JoinPredicates:
-	1:2 - t.id = s.id and t.` + "`name`" + ` = s.` + "`name`" + `
-}`,
-	}, {
-		input: "select 1 from t left join s on t.id = s.id where t.name = 'Mister'",
-		output: `OuterJoin: {
-	Inner: 	QueryGraph: {
-	Tables:
-		1:t where t.` + "`name`" + ` = 'Mister'
-	}
-	Outer: 	QueryGraph: {
-	Tables:
-		2:s
-	}
-	Predicate: t.id = s.id
-}`,
-	}, {
-		input: "select 1 from t right join s on t.id = s.id",
-		output: `OuterJoin: {
-	Inner: 	QueryGraph: {
-	Tables:
-		2:s
-	}
-	Outer: 	QueryGraph: {
-	Tables:
-		1:t
-	}
-	Predicate: t.id = s.id
-}`,
-	}, {
-		input: "select 1 from (a left join b on a.id = b.id) join (c left join d on c.id = d.id) on a.id = c.id",
-		output: `Join: {
-	LHS: 	OuterJoin: {
-		Inner: 	QueryGraph: {
-		Tables:
-			1:a
-		}
-		Outer: 	QueryGraph: {
-		Tables:
-			2:b
-		}
-		Predicate: a.id = b.id
-	}
-	RHS: 	OuterJoin: {
-		Inner: 	QueryGraph: {
-		Tables:
-			4:c
-		}
-		Outer: 	QueryGraph: {
-		Tables:
-			8:d
-		}
-		Predicate: c.id = d.id
-	}
-	Predicate: a.id = c.id
-}`,
-	}, {
-		input: "select 1 from (select 42 as id from tbl) as t",
-		output: `Derived t: {
-	Query: select 42 as id from tbl
-	Inner:	QueryGraph: {
-	Tables:
-		1:tbl
-	}
-}`,
-	}, {
-		input: "select 1 from (select id from tbl limit 10) as t join (select foo, count(*) from usr group by foo) as s on t.id = s.foo",
-		output: `Join: {
-	LHS: 	Derived t: {
-		Query: select id from tbl limit 10
-		Inner:	QueryGraph: {
-		Tables:
-			1:tbl
-		}
-	}
-	RHS: 	Derived s: {
-		Query: select foo, count(*) from usr group by foo
-		Inner:	QueryGraph: {
-		Tables:
-			4:usr
-		}
-	}
-	Predicate: t.id = s.foo
-}`,
-	}, {
-		input: "select (select 1) from t where exists (select 1) and id in (select 1)",
-		output: `SubQuery: {
-	SubQueries: [	
-	{
-		Type: PulloutValue
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			2:dual
-		}
-	} 	
-	{
-		Type: PulloutExists
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			4:dual
-		}
-	} 	
-	{
-		Type: PulloutIn
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			8:dual
-		}
-	}]
-	Outer: 	QueryGraph: {
-	Tables:
-		1:t where id in (select 1 from dual)
-	ForAll: exists (select 1 from dual)
-	}
-}`,
-	}, {
-		input: "select u.id from user u where u.id = (select id from user_extra where id = u.id)",
-		output: `SubQuery: {
-	SubQueries: [	
-	{
-		Type: PulloutValue
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			2:user_extra
-		JoinPredicates:
-			1:2 - id = u.id
-		}
-	}]
-	Outer: 	QueryGraph: {
-	Tables:
-		1:` + "`user`" + ` AS u
-	JoinPredicates:
-		1:2 - u.id = (select id from user_extra where id = u.id)
-	}
-}`,
-	}}
+type lineCountingReader struct {
+	line int
+	r    *bufio.Reader
+}
 
-	for i, tc := range tcases {
-		sql := tc.input
-		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
-			tree, err := sqlparser.Parse(sql)
+func (lcr *lineCountingReader) nextLine() (string, error) {
+	queryBytes, err := lcr.r.ReadBytes('\n')
+	lcr.line++
+	return string(queryBytes), err
+}
+
+func readTestCase(lcr *lineCountingReader) (testCase, error) {
+	query := ""
+	var err error
+	for query == "" || query == "\n" || strings.HasPrefix(query, "#") {
+		query, err = lcr.nextLine()
+		if err != nil {
+			return testCase{}, err
+		}
+	}
+
+	tc := testCase{query: query, line: lcr.line}
+
+	for {
+		jsonPart, err := lcr.nextLine()
+		if err != nil {
+			if err == io.EOF {
+				return tc, fmt.Errorf("test data is bad. expectation not finished")
+			}
+			return tc, err
+		}
+		if jsonPart == "}\n" {
+			tc.expected += "}"
+			break
+		}
+		tc.expected += jsonPart
+	}
+	return tc, nil
+}
+
+type testCase struct {
+	line            int
+	query, expected string
+}
+
+func TestOperator(t *testing.T) {
+	fd, err := os.OpenFile("operator_test_data.txt", os.O_RDONLY, 0)
+	require.NoError(t, err)
+	r := bufio.NewReader(fd)
+
+	hash, _ := vindexes.NewHash("user_index", map[string]string{})
+	si := &semantics.FakeSI{VindexTables: map[string]vindexes.Vindex{"user_index": hash}}
+	lcr := &lineCountingReader{r: r}
+	for {
+		tc, err := readTestCase(lcr)
+		if err == io.EOF {
+			break
+		}
+		t.Run(fmt.Sprintf("%d:%s", tc.line, tc.query), func(t *testing.T) {
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(tree.(sqlparser.SelectStatement), "", &semantics.FakeSI{}, semantics.NoRewrite)
+			tree, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
-			optree, err := CreateOperatorFromSelect(tree.(*sqlparser.Select), semTable)
+			stmt := tree.(sqlparser.SelectStatement)
+			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
-			assert.Equal(t, tc.output, testString(optree))
+			optree, err := CreateOperatorFromAST(stmt, semTable)
+			require.NoError(t, err)
+			output := testString(optree)
+			if tc.expected != output {
+				fmt.Println(1)
+			}
+			assert.Equal(t, tc.expected, output)
 			if t.Failed() {
-				fmt.Println(testString(optree))
+				fmt.Println(output)
 			}
 		})
 	}
@@ -264,11 +122,10 @@ func testString(op Operator) string {
 	case *Join:
 		leftStr := indent(testString(op.LHS))
 		rightStr := indent(testString(op.RHS))
-		return fmt.Sprintf("Join: {\n\tLHS: %s\n\tRHS: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Exp))
-	case *LeftJoin:
-		leftStr := indent(testString(op.Left))
-		rightStr := indent(testString(op.Right))
-		return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
+		if op.LeftJoin {
+			return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
+		}
+		return fmt.Sprintf("Join: {\n\tLHS: %s\n\tRHS: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
 	case *Derived:
 		inner := indent(testString(op.Inner))
 		query := sqlparser.String(op.Sel)
@@ -276,13 +133,39 @@ func testString(op Operator) string {
 	case *SubQuery:
 		var inners []string
 		for _, sqOp := range op.Inner {
-			subquery := fmt.Sprintf("\n{\n\tType: %s\n\tArgName: %s\n\tQuery: %s\n}", sqOp.Type.String(), sqOp.ArgName, indent(testString(sqOp.Inner)))
-			inners = append(inners, indent(subquery))
+			subquery := fmt.Sprintf("{\n\tType: %s", engine.PulloutOpcode(sqOp.ExtractedSubquery.OpCode).String())
+			if sqOp.ExtractedSubquery.GetArgName() != "" {
+				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ExtractedSubquery.GetArgName())
+			}
+			subquery += fmt.Sprintf("\n\tQuery: %s\n}", indent(testString(sqOp.Inner)))
+			subquery = indent(subquery)
+			inners = append(inners, subquery)
 		}
 		outer := indent(testString(op.Outer))
-		return fmt.Sprintf("SubQuery: {\n\tSubQueries: %s\n\tOuter: %s\n}", inners, outer)
+		join := strings.Join(inners, "\n")
+		sprintf := fmt.Sprintf("SubQuery: {\n\tSubQueries: [\n%s]\n\tOuter: %s\n}", join, outer)
+		return sprintf
+	case *Vindex:
+		value := sqlparser.String(op.Value)
+		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
+	case *Concatenate:
+		var inners []string
+		for _, source := range op.Sources {
+			inners = append(inners, indent(testString(source)))
+		}
+		if len(op.OrderBy) > 0 {
+			inners = append(inners, indent(sqlparser.String(op.OrderBy)[1:]))
+		}
+		if op.Limit != nil {
+			inners = append(inners, indent(sqlparser.String(op.Limit)[1:]))
+		}
+		dist := ""
+		if op.Distinct {
+			dist = "(distinct)"
+		}
+		return fmt.Sprintf("Concatenate%s {\n%s\n}", dist, strings.Join(inners, ",\n"))
 	}
-	return "implement me"
+	return fmt.Sprintf("implement me: %T", op)
 }
 
 func indent(s string) string {
@@ -309,7 +192,7 @@ func (qt *QueryTable) testString() string {
 		where = " where " + strings.Join(preds, " and ")
 	}
 
-	return fmt.Sprintf("\t%d:%s%s%s", qt.TableID, sqlparser.String(qt.Table), alias, where)
+	return fmt.Sprintf("\t%v:%s%s%s", qt.ID, sqlparser.String(qt.Table), alias, where)
 }
 
 func (qg *QueryGraph) testString() string {
@@ -324,18 +207,15 @@ func (qg *QueryGraph) crossPredicateString() string {
 		return ""
 	}
 	var joinPreds []string
-	for deps, predicates := range qg.innerJoins {
-		var tables []string
-		for _, id := range deps.Constituents() {
-			tables = append(tables, fmt.Sprintf("%d", id))
-		}
+	for _, join := range qg.innerJoins {
+		deps, predicates := join.deps, join.exprs
 		var expressions []string
 		for _, expr := range predicates {
 			expressions = append(expressions, sqlparser.String(expr))
 		}
-		tableConcat := strings.Join(tables, ":")
+
 		exprConcat := strings.Join(expressions, " and ")
-		joinPreds = append(joinPreds, fmt.Sprintf("\t%s - %s", tableConcat, exprConcat))
+		joinPreds = append(joinPreds, fmt.Sprintf("\t%v - %s", deps, exprConcat))
 	}
 	sort.Strings(joinPreds)
 	return fmt.Sprintf("\nJoinPredicates:\n%s", strings.Join(joinPreds, "\n"))

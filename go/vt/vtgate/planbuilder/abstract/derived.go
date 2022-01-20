@@ -17,18 +17,23 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Derived represents a derived table in the query
 type Derived struct {
-	Sel   *sqlparser.Select
-	Inner Operator
-	Alias string
+	Sel           sqlparser.SelectStatement
+	Inner         LogicalOperator
+	Alias         string
+	ColumnAliases sqlparser.Columns
 }
 
-var _ Operator = (*Derived)(nil)
+var _ LogicalOperator = (*Derived)(nil)
+
+func (*Derived) iLogical() {}
 
 // TableID implements the Operator interface
 func (d *Derived) TableID() semantics.TableSet {
@@ -36,20 +41,35 @@ func (d *Derived) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
-		return err
+		if err == semantics.ErrMultipleTables {
+			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		}
+		return nil, err
 	}
 
 	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return d.Inner.PushPredicate(newExpr, semTable)
+	newSrc, err := d.Inner.PushPredicate(newExpr, semTable)
+	d.Inner = newSrc
+	return d, err
 }
 
 // UnsolvedPredicates implements the Operator interface
 func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return d.Inner.UnsolvedPredicates(semTable)
+}
+
+// CheckValid implements the Operator interface
+func (d *Derived) CheckValid() error {
+	return d.Inner.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (d *Derived) Compact(*semantics.SemTable) (LogicalOperator, error) {
+	return d, nil
 }

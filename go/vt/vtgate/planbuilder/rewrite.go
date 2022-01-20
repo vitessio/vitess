@@ -25,139 +25,132 @@ import (
 )
 
 type rewriter struct {
-	err          error
 	semTable     *semantics.SemTable
 	reservedVars *sqlparser.ReservedVars
+	inSubquery   int
+	err          error
 }
 
-func starRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error {
+func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.SelectStatement) error {
 	r := rewriter{
-		semTable: semTable,
+		semTable:     semTable,
+		reservedVars: reservedVars,
 	}
-	sqlparser.Rewrite(statement, r.starRewrite, nil)
-	return r.err
-}
-
-func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.Select:
-		tables := r.semTable.GetSelectTables(node)
-		var selExprs sqlparser.SelectExprs
-		for _, selectExpr := range node.SelectExprs {
-			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-			if !isStarExpr {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
-			if err != nil {
-				r.err = err
-				return false
-			}
-			if !starExpanded {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			selExprs = append(selExprs, colNames...)
-		}
-		node.SelectExprs = selExprs
-	}
-	return true
-}
-
-func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
-	unknownTbl := true
-	var colNames sqlparser.SelectExprs
-	starExpanded := true
-	for _, tbl := range tables {
-		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
-			continue
-		}
-		unknownTbl = false
-		if !tbl.Authoritative() {
-			starExpanded = false
-			break
-		}
-		tblName, err := tbl.Name()
-		if err != nil {
-			return false, nil, err
-		}
-
-		withAlias := len(tables) > 1
-		withQualifier := withAlias || !tbl.GetExpr().As.IsEmpty()
-		for _, col := range tbl.GetColumns() {
-			var colName *sqlparser.ColName
-			var alias sqlparser.ColIdent
-			if withQualifier {
-				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
-			} else {
-				colName = sqlparser.NewColName(col.Name)
-			}
-			if withAlias {
-				alias = sqlparser.NewColIdent(col.Name)
-			}
-			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
-		}
-	}
-
-	if unknownTbl {
-		// This will only happen for case when starExpr has qualifier.
-		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
-	}
-	return starExpanded, colNames, nil
-}
-
-func queryRewrite(ctx planningContext, statement sqlparser.SelectStatement) error {
-	r := rewriter{
-		semTable:     ctx.semTable,
-		reservedVars: ctx.reservedVars,
-	}
-	sqlparser.Rewrite(statement, r.rewrite, nil)
+	sqlparser.Rewrite(statement, r.rewriteDown, r.rewriteUp)
 	return nil
 }
 
-func (r *rewriter) rewrite(cursor *sqlparser.Cursor) bool {
+func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
+	case *sqlparser.ComparisonExpr:
+		err := rewriteInSubquery(cursor, r, node)
+		if err != nil {
+			r.err = err
+		}
 	case *sqlparser.ExistsExpr:
-		return r.rewriteExistsSubquery(cursor, node)
+		err := r.rewriteExistsSubquery(cursor, node)
+		if err != nil {
+			r.err = err
+		}
+		return false
+	case *sqlparser.AliasedTableExpr:
+		// rewrite names of the routed tables for the subquery
+		// We only need to do this for non-derived tables and if they are in a subquery
+		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived || r.inSubquery == 0 {
+			break
+		}
+		// find the tableSet and tableInfo that this table points to
+		// tableInfo should contain the information for the original table that the routed table points to
+		tableSet := r.semTable.TableSetFor(node)
+		tableInfo, err := r.semTable.TableInfoFor(tableSet)
+		if err != nil {
+			// Fail-safe code, should never happen
+			break
+		}
+		// vindexTable is the original table
+		vindexTable := tableInfo.GetVindexTable()
+		if vindexTable == nil {
+			break
+		}
+		tableName := node.Expr.(sqlparser.TableName)
+		// if the table name matches what the original is, then we do not need to rewrite
+		if sqlparser.EqualsTableIdent(vindexTable.Name, tableName.Name) {
+			break
+		}
+		// if there is no as clause, then move the routed table to the as clause.
+		// i.e
+		// routed as x -> original as x
+		// routed -> original as routed
+		if node.As.IsEmpty() {
+			node.As = tableName.Name
+		}
+		// replace the table name with the original table
+		tableName.Name = vindexTable.Name
+		node.Expr = tableName
 	case *sqlparser.Subquery:
-		rewriteSubquery(cursor, r, node)
+		err := rewriteSubquery(cursor, r, node)
+		if err != nil {
+			r.err = err
+		}
 	}
 	return true
 }
 
-func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) {
-	semTableSQ, found := r.semTable.SubqueryRef[node]
-	if !found {
-		// should never happen
-		return
+func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
+	switch cursor.Node().(type) {
+	case *sqlparser.Subquery:
+		r.inSubquery--
 	}
-
-	argName := r.reservedVars.ReserveSubQuery()
-	semTableSQ.ArgName = argName
-
-	switch semTableSQ.OpCode {
-	case engine.PulloutIn, engine.PulloutNotIn:
-		cursor.Replace(sqlparser.NewListArg(argName))
-	default:
-		cursor.Replace(sqlparser.NewArgument(argName))
-	}
+	return r.err == nil
 }
 
-func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) bool {
-	semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
-	if !found {
-		// should never happen
-		return false
+func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.ComparisonExpr) error {
+	subq, exp := semantics.GetSubqueryAndOtherSide(node)
+	if subq == nil || exp == nil {
+		return nil
 	}
 
-	argName := r.reservedVars.ReserveHasValuesSubQuery()
-	semTableSQ.ArgName = argName
+	semTableSQ, found := r.semTable.SubqueryRef[subq]
+	if !found {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
+	}
 
-	cursor.Replace(sqlparser.NewArgument(argName))
-	return false
+	r.inSubquery++
+	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
+	semTableSQ.SetArgName(argName)
+	semTableSQ.SetHasValuesArg(hasValuesArg)
+	cursor.Replace(semTableSQ)
+	return nil
+}
+
+func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) error {
+	semTableSQ, found := r.semTable.SubqueryRef[node]
+	if !found {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
+	}
+	if semTableSQ.GetArgName() != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
+		return nil
+	}
+	r.inSubquery++
+	argName := r.reservedVars.ReserveSubQuery()
+	semTableSQ.SetArgName(argName)
+	cursor.Replace(semTableSQ)
+	return nil
+}
+
+func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) error {
+	semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
+	if !found {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
+	}
+
+	r.inSubquery++
+	argName := r.reservedVars.ReserveHasValuesSubQuery()
+	semTableSQ.SetArgName(argName)
+	cursor.Replace(semTableSQ)
+	return nil
 }
 
 func rewriteHavingClause(node *sqlparser.Select) {
@@ -174,26 +167,36 @@ func rewriteHavingClause(node *sqlparser.Select) {
 		selectExprMap[aliasedExpr.As.Lowered()] = aliasedExpr.Expr
 	}
 
-	sqlparser.Rewrite(node.Having.Expr, func(cursor *sqlparser.Cursor) bool {
-		switch x := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			if !x.Qualifier.IsEmpty() {
-				return false
-			}
-			originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
-			if isInMap {
-				cursor.Replace(originalExpr)
-				return false
-			}
-			return false
-		}
-		return true
-	}, nil)
-
+	// for each expression in the having clause, we check if it contains aggregation.
+	// if it does, we keep the expression in the having clause ; and if it does not
+	// and the expression is in the select list, we replace the expression by the one
+	// used in the select list and add it to the where clause instead of the having clause.
 	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 	node.Having = nil
 	for _, expr := range exprs {
-		if sqlparser.ContainsAggregation(expr) {
+		var hasAggr bool
+		sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+			switch x := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if !x.Qualifier.IsEmpty() {
+					return false
+				}
+				originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
+				if isInMap {
+					if sqlparser.ContainsAggregation(originalExpr) {
+						hasAggr = true
+					} else {
+						cursor.Replace(originalExpr)
+					}
+				}
+				return false
+			default:
+				hasAggr = hasAggr || sqlparser.IsAggregation(x)
+			}
+			return true
+		}, nil)
+
+		if hasAggr {
 			node.AddHaving(expr)
 		} else {
 			node.AddWhere(expr)

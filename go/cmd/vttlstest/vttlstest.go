@@ -48,7 +48,9 @@ var cmdMap map[string]cmdFunc
 func init() {
 	cmdMap = map[string]cmdFunc{
 		"CreateCA":         cmdCreateCA,
+		"CreateCRL":        cmdCreateCRL,
 		"CreateSignedCert": cmdCreateSignedCert,
+		"RevokeCert":       cmdRevokeCert,
 	}
 }
 
@@ -65,6 +67,28 @@ func cmdCreateCA(subFlags *flag.FlagSet, args []string) {
 	tlstest.CreateCA(*root)
 }
 
+func cmdCreateCRL(subFlags *flag.FlagSet, args []string) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("CreateCRL command takes a single CA name as a parameter")
+	}
+
+	ca := subFlags.Arg(0)
+	tlstest.CreateCRL(*root, ca)
+}
+
+func cmdRevokeCert(subFlags *flag.FlagSet, args []string) {
+	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
+
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("RevokeCert command takes a single name as a parameter")
+	}
+
+	name := subFlags.Arg(0)
+	tlstest.RevokeCertAndRegenerateCRL(*root, *parent, name)
+}
+
 func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 	parent := subFlags.String("parent", "ca", "Parent cert name to use. Use 'ca' for the toplevel CA.")
 	serial := subFlags.String("serial", "01", "Serial number for the certificate to create. Should be different for two certificates with the same parent.")
@@ -74,11 +98,13 @@ func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 	if subFlags.NArg() != 1 {
 		log.Fatalf("CreateSignedCert command takes a single name as a parameter")
 	}
+
+	name := subFlags.Arg(0)
 	if *commonName == "" {
-		*commonName = subFlags.Arg(0)
+		*commonName = name
 	}
 
-	tlstest.CreateSignedCert(*root, *parent, *serial, subFlags.Arg(0), *commonName)
+	tlstest.CreateSignedCert(*root, *parent, *serial, name, *commonName)
 }
 
 func main() {

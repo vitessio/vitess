@@ -10,19 +10,13 @@ jobs:
 
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
         go-version: 1.17
 
     - name: Tune the OS
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
-
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
     - name: Check out code
       uses: actions/checkout@v2
@@ -50,19 +44,9 @@ jobs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
-        {{if (eq .Platform "percona56")}}
-
-        # percona56
-        sudo rm -rf /var/lib/mysql
-        sudo apt install -y gnupg2
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y percona-server-server-5.6 percona-server-client-5.6
-
-        {{end}}
-
         {{if (eq .Platform "mysql80")}}
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
         # mysql80
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
@@ -119,6 +103,7 @@ jobs:
         mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
+        go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make tools
       run: |

@@ -18,7 +18,7 @@ package onlineddl
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
@@ -31,7 +31,7 @@ import (
 
 // CreateTempScript creates a script in the temporary directory with given content
 func CreateTempScript(t *testing.T, content string) (fileName string) {
-	f, err := ioutil.TempFile("", "onlineddl-test-")
+	f, err := os.CreateTemp("", "onlineddl-test-")
 	require.NoError(t, err)
 
 	_, err = f.WriteString(content)

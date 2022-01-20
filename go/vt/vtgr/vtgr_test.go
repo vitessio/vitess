@@ -6,16 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
+	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/sync2"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/controller"
 	"vitess.io/vitess/go/vt/vtgr/db"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestSighupHandle(t *testing.T) {
@@ -32,12 +31,12 @@ func TestSighupHandle(t *testing.T) {
 	var shards []*controller.GRShard
 	config := &config.VTGRConfig{
 		DisableReadOnlyProtection:   false,
-		GroupSize:                   5,
+		BootstrapGroupSize:          5,
 		MinNumReplica:               3,
 		BackoffErrorWaitTimeSeconds: 10,
 		BootstrapWaitTimeSeconds:    10 * 60,
 	}
-	shards = append(shards, controller.NewGRShard("ks", "0", nil, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort))
+	shards = append(shards, controller.NewGRShard("ks", "0", nil, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort, true))
 	vtgr.Shards = shards
 	shard := vtgr.Shards[0]
 	shard.LockShard(ctx, "test")

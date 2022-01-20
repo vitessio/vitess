@@ -22,6 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -164,7 +167,8 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value) (bool, 
 	}
 	// at this point neither values can be null
 	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
-	result, err := evalengine.NullsafeCompare(columnValue, filterValue)
+	// TODO(king-11) make collation aware
+	result, err := evalengine.NullsafeCompare(columnValue, filterValue, collations.Unknown)
 	if err != nil {
 		return false, err
 	}
@@ -502,18 +506,19 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := sqlparser.NewPlanValue(val)
+			pv, err := evalengine.Convert(val, semantics.EmptySemTable())
 			if err != nil {
 				return err
 			}
-			resolved, err := pv.ResolveValue(nil)
+			env := evalengine.EmptyExpressionEnv()
+			resolved, err := env.Evaluate(pv)
 			if err != nil {
 				return err
 			}
 			plan.Filters = append(plan.Filters, Filter{
 				Opcode: opcode,
 				ColNum: colnum,
-				Value:  resolved,
+				Value:  resolved.Value(),
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {

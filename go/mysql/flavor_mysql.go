@@ -80,6 +80,10 @@ func (mysqlFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
 }
 
+func (mysqlFlavor) startSQLThreadCommand() string {
+	return "START SLAVE SQL_THREAD"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
@@ -252,20 +256,25 @@ const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_t
 // TablesWithSize57 is a query to select table along with size for mysql 5.7.
 // It's a little weird, because the JOIN predicate only works if the table and databases do not contain weird characters.
 // As a fallback, we use the mysql 5.6 query, which is not always up to date, but works for all table/db names.
-const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, sum(i.file_size), sum(i.allocated_size) 
 	FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i 
-	WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)
+	WHERE t.table_schema = database() and 
+	(i.name = concat(t.table_schema,'/',t.table_name) or i.name like concat(t.table_schema,'/',t.table_name, '#p#%')) 
+	group by t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size
 UNION ALL
 	SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
 	FROM information_schema.tables t
-	WHERE table_schema = database() AND NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name)) 
+	WHERE table_schema = database() AND 
+	NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name) or i.name like concat(t.table_schema,'/',t.table_name, '#p#%')) 
 	group by table_name, table_type, unix_timestamp(create_time), table_comment
 `
 
 // TablesWithSize80 is a query to select table along with size for mysql 8.0
-const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, sum(i.file_size), sum(i.allocated_size) 
 		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
-		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+		WHERE t.table_schema = database() and 
+		(i.name = concat(t.table_schema,'/',t.table_name) or i.name like concat(t.table_schema,'/',t.table_name, '#p#%')) 
+		group by t.table_name, t.table_type, t.create_time, t.table_comment, i.file_size`
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor56) baseShowTablesWithSizes() string {

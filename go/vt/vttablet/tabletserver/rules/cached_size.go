@@ -17,6 +17,8 @@ limitations under the License.
 
 package rules
 
+import hack "vitess.io/vitess/go/hack"
+
 type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
@@ -30,7 +32,7 @@ func (cached *BindVarCond) CachedSize(alloc bool) int64 {
 		size += int64(48)
 	}
 	// field name string
-	size += int64(len(cached.name))
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field value vitess.io/vitess/go/vt/vttablet/tabletserver/rules.bvcValue
 	if cc, ok := cached.value.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -43,12 +45,12 @@ func (cached *Rule) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(232)
+		size += int64(240)
 	}
 	// field Description string
-	size += int64(len(cached.Description))
+	size += hack.RuntimeAllocSize(int64(len(cached.Description)))
 	// field Name string
-	size += int64(len(cached.Name))
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field requestIP vitess.io/vitess/go/vt/vttablet/tabletserver/rules.namedRegexp
 	size += cached.requestIP.CachedSize(false)
 	// field user vitess.io/vitess/go/vt/vttablet/tabletserver/rules.namedRegexp
@@ -61,18 +63,18 @@ func (cached *Rule) CachedSize(alloc bool) int64 {
 	size += cached.trailingComment.CachedSize(false)
 	// field plans []vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder.PlanType
 	{
-		size += int64(cap(cached.plans)) * int64(8)
+		size += hack.RuntimeAllocSize(int64(cap(cached.plans)) * int64(8))
 	}
 	// field tableNames []string
 	{
-		size += int64(cap(cached.tableNames)) * int64(16)
+		size += hack.RuntimeAllocSize(int64(cap(cached.tableNames)) * int64(16))
 		for _, elem := range cached.tableNames {
-			size += int64(len(elem))
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	// field bindVarConds []vitess.io/vitess/go/vt/vttablet/tabletserver/rules.BindVarCond
 	{
-		size += int64(cap(cached.bindVarConds)) * int64(48)
+		size += hack.RuntimeAllocSize(int64(cap(cached.bindVarConds)) * int64(48))
 		for _, elem := range cached.bindVarConds {
 			size += elem.CachedSize(false)
 		}
@@ -89,7 +91,7 @@ func (cached *Rules) CachedSize(alloc bool) int64 {
 	}
 	// field rules []*vitess.io/vitess/go/vt/vttablet/tabletserver/rules.Rule
 	{
-		size += int64(cap(cached.rules)) * int64(8)
+		size += hack.RuntimeAllocSize(int64(cap(cached.rules)) * int64(8))
 		for _, elem := range cached.rules {
 			size += elem.CachedSize(true)
 		}
@@ -106,7 +108,7 @@ func (cached *bvcre) CachedSize(alloc bool) int64 {
 	}
 	// field re *regexp.Regexp
 	if cached.re != nil {
-		size += int64(153)
+		size += hack.RuntimeAllocSize(int64(153))
 	}
 	return size
 }
@@ -119,10 +121,10 @@ func (cached *namedRegexp) CachedSize(alloc bool) int64 {
 		size += int64(24)
 	}
 	// field name string
-	size += int64(len(cached.name))
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field Regexp *regexp.Regexp
 	if cached.Regexp != nil {
-		size += int64(153)
+		size += hack.RuntimeAllocSize(int64(153))
 	}
 	return size
 }

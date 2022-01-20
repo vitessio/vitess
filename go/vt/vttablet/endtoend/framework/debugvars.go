@@ -19,7 +19,7 @@ package framework
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -97,7 +97,7 @@ func FetchURL(urlPath string) string {
 		return ""
 	}
 	defer response.Body.Close()
-	b, err := ioutil.ReadAll(response.Body)
+	b, err := io.ReadAll(response.Body)
 	if err != nil {
 		return ""
 	}

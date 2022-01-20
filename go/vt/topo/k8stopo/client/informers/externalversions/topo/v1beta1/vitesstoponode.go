@@ -19,6 +19,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	time "time"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,13 +63,13 @@ func NewFilteredVitessTopoNodeInformer(client versioned.Interface, namespace str
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.TopoV1beta1().VitessTopoNodes(namespace).List(options)
+				return client.TopoV1beta1().VitessTopoNodes(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.TopoV1beta1().VitessTopoNodes(namespace).Watch(options)
+				return client.TopoV1beta1().VitessTopoNodes(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&topov1beta1.VitessTopoNode{},

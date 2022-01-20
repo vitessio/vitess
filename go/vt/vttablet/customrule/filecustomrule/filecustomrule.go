@@ -19,7 +19,7 @@ package filecustomrule
 
 import (
 	"flag"
-	"io/ioutil"
+	"os"
 	"path"
 	"time"
 
@@ -63,7 +63,7 @@ func NewFileCustomRule() (fcr *FileCustomRule) {
 // of error it returns nil and that error. A log will be printed to capture the
 // stage at which parsing failed.
 func ParseRules(path string) (*rules.Rules, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		log.Warningf("Error reading file %v: %v", path, err)
 		// Don't update any internal cache, just return error

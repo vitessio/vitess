@@ -274,6 +274,11 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
+
+		// Execute Alter commands on reparent_journal and ignore errors
+		cmds = mysqlctl.AlterReparentJournal()
+		_ = mysqld.ExecuteSuperQueryList(ctx, cmds)
+
 		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
 		if err := mysqlctl.Backup(ctx, backupParams); err != nil {
@@ -487,9 +492,7 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
-	// Use old RPC for backwards-compatibility
-	// TODO(deepthi): change to PrimaryPosition after v12.0
-	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}

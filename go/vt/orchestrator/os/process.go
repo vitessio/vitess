@@ -18,7 +18,6 @@ package os
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -28,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
-var EmptyEnv = []string{}
+var EmptyEnv []string
 
 // CommandRun executes some text as a command. This is assumed to be
 // text that will be run by a shell so we need to write out the
@@ -74,12 +73,12 @@ func generateShellScript(commandText string, env []string, arguments ...string) 
 	shell := config.Config.ProcessesShellCommand
 
 	commandBytes := []byte(commandText)
-	tmpFile, err := ioutil.TempFile("", "orchestrator-process-cmd-")
+	tmpFile, err := os.CreateTemp("", "orchestrator-process-cmd-")
 	if err != nil {
 		return nil, "", log.Errorf("generateShellScript() failed to create TempFile: %v", err.Error())
 	}
 	// write commandText to temporary file
-	ioutil.WriteFile(tmpFile.Name(), commandBytes, 0640)
+	os.WriteFile(tmpFile.Name(), commandBytes, 0640)
 	shellArguments := append([]string{}, tmpFile.Name())
 	shellArguments = append(shellArguments, arguments...)
 

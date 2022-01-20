@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -77,7 +76,7 @@ func Fuzz(data []byte) int {
          "Password": "valid"
         }`
 
-	f, err := ioutil.TempFile("", "static_auth_creds.json")
+	f, err := os.CreateTemp("", "static_auth_creds.json")
 	if err != nil {
 		return -1
 	}

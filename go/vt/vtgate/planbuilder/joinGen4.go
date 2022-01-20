@@ -34,26 +34,8 @@ type joinGen4 struct {
 	Opcode      engine.JoinOpcode
 	Cols        []int
 	Vars        map[string]int
-}
 
-// Order implements the logicalPlan interface
-func (j *joinGen4) Order() int {
-	panic("implement me")
-}
-
-// ResultColumns implements the logicalPlan interface
-func (j *joinGen4) ResultColumns() []*resultColumn {
-	panic("implement me")
-}
-
-// Reorder implements the logicalPlan interface
-func (j *joinGen4) Reorder(i int) {
-	panic("implement me")
-}
-
-// Wireup implements the logicalPlan interface
-func (j *joinGen4) Wireup(lp logicalPlan, jt *jointab) error {
-	panic("implement me")
+	gen4Plan
 }
 
 // WireupGen4 implements the logicalPlan interface
@@ -63,21 +45,6 @@ func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 		return err
 	}
 	return j.Right.WireupGen4(semTable)
-}
-
-// SupplyVar implements the logicalPlan interface
-func (j *joinGen4) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("implement me")
-}
-
-// SupplyCol implements the logicalPlan interface
-func (j *joinGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("implement me")
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (j *joinGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	panic("implement me")
 }
 
 // Primitive implements the logicalPlan interface
@@ -109,4 +76,9 @@ func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 // ContainsTables implements the logicalPlan interface
 func (j *joinGen4) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
+}
+
+// OutputColumns implements the logicalPlan interface
+func (j *joinGen4) OutputColumns() []sqlparser.SelectExpr {
+	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }

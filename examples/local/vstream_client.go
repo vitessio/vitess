@@ -22,6 +22,7 @@ import (
 	"io"
 	"log"
 	"time"
+
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

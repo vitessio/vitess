@@ -244,6 +244,14 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos mysql.Positio
 			return nil
 		}
 
+		// Start the SQL Thread before waiting for position to be reached, since the replicas
+		// can only make forward progress if the SQL thread is started and we have already verified
+		// that the replica is not already as advanced as we want it to be
+		err = mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StartSQLThreadCommand()})
+		if err != nil {
+			return err
+		}
+
 		// Find the query to run, run it.
 		query, err = conn.WaitUntilPositionCommand(ctx, targetPos)
 		if err != nil {

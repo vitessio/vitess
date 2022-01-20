@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -24,23 +26,27 @@ var (
 	vtdataroot            string
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
+	extraVTGateArgs       = []string{"-tablet_refresh_interval", "10ms"}
+	extraVtctldArgs       = []string{"-remote_operation_timeout", "600s", "-topo_etcd_lease_ttl", "120"}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
 type ClusterConfig struct {
-	hostname            string
-	topoPort            int
-	vtctldPort          int
-	vtctldGrpcPort      int
-	vtdataroot          string
-	tmpDir              string
-	vtgatePort          int
-	vtgateGrpcPort      int
-	vtgateMySQLPort     int
-	tabletTypes         string
-	tabletPortBase      int
-	tabletGrpcPortBase  int
-	tabletMysqlPortBase int
+	charset              string
+	hostname             string
+	topoPort             int
+	vtctldPort           int
+	vtctldGrpcPort       int
+	vtdataroot           string
+	tmpDir               string
+	vtgatePort           int
+	vtgateGrpcPort       int
+	vtgateMySQLPort      int
+	vtgatePlannerVersion plancontext.PlannerVersion
+	tabletTypes          string
+	tabletPortBase       int
+	tabletGrpcPortBase   int
+	tabletMysqlPortBase  int
 
 	vreplicationCompressGTID bool
 }
@@ -124,6 +130,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
+		charset:             "utf8mb4",
 	}
 }
 
@@ -164,7 +171,7 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	vc.Vtctld = vtctld
 	require.NotNil(t, vc.Vtctld)
 	// use first cell as `-cell`
-	vc.Vtctld.Setup(cellNames[0])
+	vc.Vtctld.Setup(cellNames[0], extraVtctldArgs...)
 
 	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	require.NotNil(t, vc.Vtctl)
@@ -251,7 +258,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
 		options,
-		false)
+		false,
+		vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
@@ -333,11 +341,6 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				}
 			}
 			for ind, tablet := range tablets {
-				log.Infof("Creating vt_keyspace database for tablet %s", tablets[ind].Name)
-				if _, err := tablet.Vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name),
-					keyspace.Name, false); err != nil {
-					t.Fatalf("Unable to start create database vt_%s for tablet %v", keyspace.Name, tablet.Vttablet)
-				}
 				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())
@@ -345,8 +348,8 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
-		log.Infof("InitShardPrimary for %d", primaryTabletUID)
-		require.NoError(t, vc.VtctlClient.InitShardPrimary(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
+		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
+		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
 	return nil
@@ -380,7 +383,8 @@ func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch stri
 		vc.ClusterConfig.tabletTypes,
 		vc.ClusterConfig.topoPort,
 		vc.ClusterConfig.tmpDir,
-		[]string{"-tablet_refresh_interval", "10ms"})
+		extraVTGateArgs,
+		vc.ClusterConfig.vtgatePlannerVersion)
 	require.NotNil(t, vtgate)
 	if err := vtgate.Setup(); err != nil {
 		t.Fatalf(err.Error())
@@ -483,4 +487,43 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 		}
 	}
 	return tablets
+}
+
+func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string) *cluster.VttabletProcess {
+	for _, cell := range vc.Cells {
+		keyspace := cell.Keyspaces[ksName]
+		for _, shard := range keyspace.Shards {
+			if shard.Name != shardName {
+				continue
+			}
+			for _, tablet := range shard.Tablets {
+				if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, "primary") {
+					return tablet.Vttablet
+				}
+			}
+		}
+	}
+	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
+	return nil
+}
+
+func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing.T), func(t *testing.T)) {
+	conn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	_, err := conn.ExecuteFetch("begin", 1000, false)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(query, 1000, false)
+	require.NoError(t, err)
+
+	commit := func(t *testing.T) {
+		_, err = conn.ExecuteFetch("commit", 1000, false)
+		log.Infof("startQuery:commit:err: %+v", err)
+		conn.Close()
+		log.Infof("startQuery:after closing connection")
+	}
+	rollback := func(t *testing.T) {
+		defer conn.Close()
+		_, err = conn.ExecuteFetch("rollback", 1000, false)
+		log.Infof("startQuery:rollback:err: %+v", err)
+	}
+	return commit, rollback
 }

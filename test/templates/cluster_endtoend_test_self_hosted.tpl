@@ -5,7 +5,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  build:
+    name: Run endtoend tests on {{.Name}}
     runs-on: self-hosted
 
     steps:

@@ -79,7 +79,6 @@
   }
 }
 
-
 # bind var already in use
 "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid"
 {
@@ -491,7 +490,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-            "Query": "select u1.col, u1.id from `user` as u1",
+            "Query": "select u1.col, u1.id from `user` as u1 where u1.col = :u3_col",
             "Table": "`user`"
           },
           {
@@ -502,7 +501,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.col = :u1_col and :u3_col = :u1_col",
+            "Query": "select 1 from `user` as u2 where u2.col = :u1_col",
             "Table": "`user`"
           }
         ]
@@ -655,7 +654,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, u1.id from `user` as u1",
+                "Query": "select u1.col, u1.id from `user` as u1 where u1.col = :u4_col",
                 "Table": "`user`"
               },
               {
@@ -666,7 +665,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-                "Query": "select 1 from `user` as u3 where u3.id = :u1_col and :u4_col = :u1_col",
+                "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
                 "Table": "`user`",
                 "Values": [
                   ":u1_col"
@@ -983,7 +982,7 @@
   "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -1026,7 +1025,7 @@
   "Original": "select u.id, e.id from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -1073,10 +1072,14 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 10,
+        "Count": "INT64(10)",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -1124,7 +1127,7 @@
         "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq1"
+          ":__sq1"
         ],
         "Vindex": "user_index"
       }
@@ -1137,10 +1140,14 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Limit",
-        "Count": 10,
+        "Count": "INT64(10)",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -1185,10 +1192,10 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` where 1 != 1",
-        "Query": "select 1 from `user` where id in ::__vals",
+        "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq1"
+          ":__sq1"
         ],
         "Vindex": "user_index"
       }
@@ -1203,11 +1210,15 @@
   "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1263,11 +1274,14 @@
   "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1322,14 +1336,94 @@
 # Invalid value in IN clause
 "select id from user where id in (18446744073709551616, 1)"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (18446744073709551616, 1)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id in (18446744073709551616, 1)",
+    "Table": "`user`"
+  }
+}
 
 # Invalid value in IN clause from LHS of join
 "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1 where u1.id = 18446744073709551616",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # Invalid value in IN clause from RHS of join
 "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
+        "Query": "select u1.id from `user` as u1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 18446744073709551616",
+        "Table": "`user`"
+      }
+    ]
+  }
+}

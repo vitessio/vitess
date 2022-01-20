@@ -61,6 +61,7 @@ type VReplicationWorkflowParams struct {
 	Cells, TabletTypes, ExcludeTables string
 	EnableReverseReplication, DryRun  bool
 	KeepData                          bool
+	KeepRoutingRules                  bool
 	Timeout                           time.Duration
 	Direction                         workflow.TrafficSwitchDirection
 
@@ -210,11 +211,11 @@ func NewWorkflowError(tablet string, id int64, description string) *WorkflowErro
 	return wfErr
 }
 
-// GetStreamCount returns a count of total and running streams and any stream errors
+// GetStreamCount returns a count of total streams and of streams that have started processing
 func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowError, error) {
 	var err error
 	var workflowErrors []*WorkflowError
-	var totalStreams, runningStreams int64
+	var total, started int64
 	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace)
 	if err != nil {
 		return 0, 0, nil, err
@@ -222,7 +223,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 	for ksShard := range res.ShardStatuses {
 		statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
-			totalStreams++
+			total++
 			if strings.HasPrefix(st.Message, "Error:") {
 				workflowErrors = append(workflowErrors, NewWorkflowError(st.Tablet, st.ID, st.Message))
 				continue
@@ -230,13 +231,13 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 			if st.Pos == "" {
 				continue
 			}
-			if st.State == "Running" {
-				runningStreams++
+			if st.State == "Running" || st.State == "Copying" {
+				started++
 			}
 		}
 	}
 
-	return totalStreams, runningStreams, workflowErrors, nil
+	return total, started, workflowErrors, nil
 }
 
 // SwitchTraffic switches traffic in the direction passed for specified tablet_types
@@ -311,7 +312,7 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 
 	if vrw.workflowType == MigrateWorkflow {
 		return vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, vrw.params.Tables,
-			false, vrw.params.KeepData, vrw.params.DryRun)
+			false, vrw.params.KeepData, vrw.params.KeepRoutingRules, vrw.params.DryRun)
 	}
 
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
@@ -324,7 +325,7 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 		renameTable = workflow.DropTable
 	}
 	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable,
-		false, vrw.params.KeepData, vrw.params.DryRun); err != nil {
+		vrw.params.KeepData, vrw.params.KeepRoutingRules, false /* force */, vrw.params.DryRun); err != nil {
 		return nil, err
 	}
 	return dryRunResults, nil
@@ -335,14 +336,14 @@ func (vrw *VReplicationWorkflow) Cancel() error {
 	ws := vrw.ws
 	if vrw.workflowType == MigrateWorkflow {
 		_, err := vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, "",
-			true, vrw.params.KeepData, vrw.params.DryRun)
+			true, vrw.params.KeepData, vrw.params.KeepRoutingRules, vrw.params.DryRun)
 		return err
 	}
 
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
 		return fmt.Errorf(ErrWorkflowPartiallySwitched)
 	}
-	if _, err := vrw.wr.DropTargets(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, vrw.params.KeepData, false); err != nil {
+	if _, err := vrw.wr.DropTargets(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, vrw.params.KeepData, vrw.params.KeepRoutingRules, false); err != nil {
 		return err
 	}
 	vrw.ts = nil
@@ -373,7 +374,7 @@ func (vrw *VReplicationWorkflow) getTabletTypes() []topodatapb.TabletType {
 func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasPrimary bool, err error) {
 	tabletTypesArr := strings.Split(vrw.params.TabletTypes, ",")
 	for _, tabletType := range tabletTypesArr {
-		switch tabletType {
+		switch strings.ToLower(tabletType) {
 		case "replica":
 			hasReplica = true
 		case "rdonly":

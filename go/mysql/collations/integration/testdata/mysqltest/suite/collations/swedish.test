@@ -1,0 +1,6 @@
+--source suite/collations/include/unicode.inc
+--test:uca0900 utf8mb4_sv_0900_ai_ci
+select hex(convert(uc using utf32)), hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_sv_0900_ai_ci)), name from unicode where category in ('Lu','Ll','Lt','Lm') order by uc  collate utf8mb4_sv_0900_ai_ci, cp;
+--test:uca0900 utf8mb4_sv_0900_as_cs
+select hex(convert(uc using utf32)), hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_sv_0900_as_cs)), name from unicode where category in ('Lu','Ll','Lt','Lm') order by uc  collate utf8mb4_sv_0900_as_cs, cp;
+drop table if exists unicode;

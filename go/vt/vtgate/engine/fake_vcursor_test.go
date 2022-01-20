@@ -29,6 +29,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
@@ -52,6 +53,11 @@ var _ SessionActions = (*noopVCursor)(nil)
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 	ctx context.Context
+}
+
+// ConnCollation implements VCursor
+func (t *noopVCursor) ConnCollation() collations.ID {
+	panic("implement me")
 }
 
 func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -242,7 +248,7 @@ func (t *noopVCursor) ExecuteStandalone(query string, bindvars map[string]*query
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
+func (t *noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	panic("unimplemented")
 }
 
@@ -251,6 +257,10 @@ func (t *noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query stri
 }
 
 func (t *noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	panic("unimplemented")
+}
+
+func (t *noopVCursor) ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
 	panic("unimplemented")
 }
 
@@ -421,7 +431,7 @@ func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*qu
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
+func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	f.mu.Lock()
 	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
 	r, err := f.nextResult()
@@ -441,6 +451,73 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 	var rss []*srvtopo.ResolvedShard
 	var values [][]*querypb.Value
+	visited := make(map[string]int)
+	for i, destination := range destinations {
+		var shards []string
+
+		switch d := destination.(type) {
+		case key.DestinationAllShards:
+			shards = f.shards
+		case key.DestinationKeyRange:
+			shards = f.shardForKsid
+		case key.DestinationKeyspaceID:
+			if f.shardForKsid == nil || f.curShardForKsid >= len(f.shardForKsid) {
+				shards = []string{"-20"}
+			} else {
+				shards = []string{f.shardForKsid[f.curShardForKsid]}
+				f.curShardForKsid++
+			}
+		case key.DestinationKeyspaceIDs:
+			for _, ksid := range d {
+				if string(ksid) < "\x20" {
+					shards = append(shards, "-20")
+				} else {
+					shards = append(shards, "20-")
+				}
+			}
+		case key.DestinationAnyShard:
+			// Take the first shard.
+			shards = f.shards[:1]
+		case key.DestinationNone:
+			// Nothing to do here.
+		case key.DestinationShard:
+			shards = []string{destination.String()}
+		default:
+			return nil, nil, fmt.Errorf("unsupported destination: %v", destination)
+		}
+
+		for _, shard := range shards {
+			vi, ok := visited[shard]
+			if !ok {
+				vi = len(rss)
+				visited[shard] = vi
+				rss = append(rss, &srvtopo.ResolvedShard{
+					Target: &querypb.Target{
+						Keyspace:   keyspace,
+						Shard:      shard,
+						TabletType: f.resolvedTargetTabletType,
+					},
+				})
+				if ids != nil {
+					values = append(values, nil)
+				}
+			}
+			if ids != nil {
+				values[vi] = append(values[vi], ids[i])
+			}
+		}
+	}
+	return rss, values, nil
+}
+
+func (f *loggingVCursor) ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
+	f.log = append(f.log, fmt.Sprintf("ResolveDestinationsMultiCol %v %v %v", keyspace, ids, key.DestinationsString(destinations)))
+	if f.shardErr != nil {
+		return nil, nil, f.shardErr
+	}
+
+	var rss []*srvtopo.ResolvedShard
+	var values [][][]sqltypes.Value
 	visited := make(map[string]int)
 	for i, destination := range destinations {
 		var shards []string

@@ -156,7 +156,7 @@ func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 	w.Write(gridTable)
 	w.Write([]byte("<h3>Internal Variables</h3>\n"))
 	if msg != "" {
-		w.Write([]byte(fmt.Sprintf("<b>%s</b><br /><br />\n", html.EscapeString(msg))))
+		fmt.Fprintf(w, "<b>%s</b><br /><br />\n", html.EscapeString(msg))
 	}
 	w.Write(startTable)
 	w.Write(debugEnvHeader)

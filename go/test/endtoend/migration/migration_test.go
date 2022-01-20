@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -245,7 +245,7 @@ func startCluster(t *testing.T) string {
 	tabletConfig := fmt.Sprintf(connFormat, productSocket, customerSocket)
 	fmt.Printf("tablet_config:\n%s\n", tabletConfig)
 	yamlFile := path.Join(clusterInstance.TmpDirectory, "external.yaml")
-	err = ioutil.WriteFile(yamlFile, []byte(tabletConfig), 0644)
+	err = os.WriteFile(yamlFile, []byte(tabletConfig), 0644)
 	require.NoError(t, err)
 	return yamlFile
 }

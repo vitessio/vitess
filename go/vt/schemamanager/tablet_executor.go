@@ -24,11 +24,13 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/textutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -42,6 +44,7 @@ type TabletExecutor struct {
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 	ddlStrategySetting   *schema.DDLStrategySetting
+	uuids                []string
 	skipPreflight        bool
 }
 
@@ -76,6 +79,28 @@ func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
 	}
 	exec.ddlStrategySetting = ddlStrategySetting
 	return nil
+}
+
+// SetUUIDList sets a (possibly empty) list of provided UUIDs for schema migrations
+func (exec *TabletExecutor) SetUUIDList(commaDelimitedUUIDs string) error {
+	uuids := textutil.SplitDelimitedList(commaDelimitedUUIDs)
+	uuidsMap := map[string]bool{}
+	for _, uuid := range uuids {
+		if !schema.IsOnlineDDLUUID(uuid) {
+			return fmt.Errorf("Not a valid UUID: %s", uuid)
+		}
+		uuidsMap[uuid] = true
+	}
+	if len(uuidsMap) != len(uuids) {
+		return fmt.Errorf("UUID values must be unique")
+	}
+	exec.uuids = uuids
+	return nil
+}
+
+// hasProvidedUUIDs returns true when UUIDs were provided
+func (exec *TabletExecutor) hasProvidedUUIDs() bool {
+	return len(exec.uuids) != 0
 }
 
 // SkipPreflight disables preflight checks
@@ -124,7 +149,7 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 
 	// We ignore DATABASE-level DDLs here because detectBigSchemaChanges doesn't
 	// look at them anyway.
-	parsedDDLs, _, _, err := exec.parseDDLs(sqls)
+	parsedDDLs, _, _, _, err := exec.parseDDLs(sqls)
 	if err != nil {
 		return err
 	}
@@ -137,14 +162,15 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	return err
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, [](*sqlparser.RevertMigration), error) {
+func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, [](*sqlparser.RevertMigration), [](*sqlparser.AlterMigration), error) {
 	parsedDDLs := make([]sqlparser.DDLStatement, 0)
 	parsedDBDDLs := make([]sqlparser.DBDDLStatement, 0)
 	revertStatements := make([](*sqlparser.RevertMigration), 0)
+	alterMigrationStatements := make([](*sqlparser.AlterMigration), 0)
 	for _, sql := range sqls {
 		stmt, err := sqlparser.Parse(sql)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
 		}
 		switch stmt := stmt.(type) {
 		case sqlparser.DDLStatement:
@@ -153,13 +179,15 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, 
 			parsedDBDDLs = append(parsedDBDDLs, stmt)
 		case *sqlparser.RevertMigration:
 			revertStatements = append(revertStatements, stmt)
+		case *sqlparser.AlterMigration:
+			alterMigrationStatements = append(alterMigrationStatements, stmt)
 		default:
 			if len(exec.tablets) != 1 {
-				return nil, nil, nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
+				return nil, nil, nil, nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
 			}
 		}
 	}
-	return parsedDDLs, parsedDBDDLs, revertStatements, nil
+	return parsedDDLs, parsedDBDDLs, revertStatements, alterMigrationStatements, nil
 }
 
 // IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
@@ -234,7 +262,7 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
-func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResult *ExecuteResult) error {
+func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) error {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return err
@@ -242,39 +270,33 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		if exec.isOnlineSchemaDDL(stmt) {
-			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext)
+			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext, providedUUID)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
 				return err
 			}
 			for _, onlineDDL := range onlineDDLs {
-				if exec.ddlStrategySetting.IsSkipTopo() {
-					exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
-					if len(execResult.SuccessShards) > 0 {
-						exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
-					}
-				} else {
-					exec.executeOnlineDDL(ctx, execResult, onlineDDL)
+				exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+				if len(execResult.SuccessShards) > 0 {
+					exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 				}
 			}
 			return nil
 		}
 	case *sqlparser.RevertMigration:
 		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext, providedUUID)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return err
 		}
-		if exec.ddlStrategySetting.IsSkipTopo() {
-			exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
-			exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
-		} else {
-			exec.executeOnlineDDL(ctx, execResult, onlineDDL)
-		}
+		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+		return nil
+	case *sqlparser.AlterMigration:
+		exec.executeOnAllTablets(ctx, execResult, sql, true)
 		return nil
 	}
-	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
 	exec.executeOnAllTablets(ctx, execResult, sql, false)
 	return nil
 }
@@ -313,9 +335,18 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		return &execResult
 	}
 
+	if exec.hasProvidedUUIDs() && len(exec.uuids) != len(sqls) {
+		execResult.ExecutorErr = fmt.Sprintf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls))
+		return &execResult
+	}
+	providedUUID := ""
+
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
-		if err := exec.executeSQL(ctx, sql, &execResult); err != nil {
+		if exec.hasProvidedUUIDs() {
+			providedUUID = exec.uuids[index]
+		}
+		if err := exec.executeSQL(ctx, sql, providedUUID, &execResult); err != nil {
 			execResult.ExecutorErr = err.Error()
 			return &execResult
 		}
@@ -386,7 +417,17 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 		wg.Add(1)
 		go func(result ShardResult) {
 			defer wg.Done()
-			exec.wr.ReloadSchemaShard(reloadCtx, exec.keyspace, result.Shard, result.Position, concurrency, false /* includePrimary */)
+			schematools.ReloadShard(
+				reloadCtx,
+				exec.wr.TopoServer(),
+				exec.wr.TabletManagerClient(),
+				exec.wr.Logger(),
+				exec.keyspace,
+				result.Shard,
+				result.Position,
+				concurrency,
+				false, /* includePrimary */
+			)
 		}(result)
 	}
 	wg.Wait()
@@ -405,6 +446,9 @@ func (exec *TabletExecutor) executeOneTablet(
 	if viaQueryService {
 		result, err = exec.wr.TabletManagerClient().ExecuteQuery(ctx, tablet, []byte(sql), 10)
 	} else {
+		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
+			sql = fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''); %s", sql)
+		}
 		result, err = exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
 	}
 	if err != nil {
@@ -413,7 +457,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	}
 	// Get a replication position that's guaranteed to be after the schema change
 	// was applied on the primary.
-	pos, err := exec.wr.TabletManagerClient().MasterPosition(ctx, tablet)
+	pos, err := exec.wr.TabletManagerClient().PrimaryPosition(ctx, tablet)
 	if err != nil {
 		errChan <- ShardWithError{
 			Shard: tablet.Shard,

@@ -66,6 +66,8 @@ const (
 	CreateAction Action = "create"
 	DeleteAction Action = "delete"
 	GetAction    Action = "get"
+	PingAction   Action = "ping"
+	PutAction    Action = "put"
 )
 
 // Resource is an enum representing all resources managed by vtadmin.
@@ -75,17 +77,25 @@ type Resource string
 const (
 	ClusterResource Resource = "Cluster"
 
+	/* generic topo resources */
+
 	KeyspaceResource Resource = "Keyspace"
 	ShardResource    Resource = "Shard"
 	TabletResource   Resource = "Tablet"
 	VTGateResource   Resource = "VTGate"
+	VtctldResource   Resource = "Vtctld"
+
+	/* vschema resources */
 
 	SrvVSchemaResource Resource = "SrvVSchema"
 	VSchemaResource    Resource = "VSchema"
 
-	BackupResource   Resource = "Backup"
-	SchemaResource   Resource = "Schema"
-	WorkflowResource Resource = "Workflow"
+	/* misc resources */
+
+	BackupResource                   Resource = "Backup"
+	SchemaResource                   Resource = "Schema"
+	ShardReplicationPositionResource Resource = "ShardReplicationPosition"
+	WorkflowResource                 Resource = "Workflow"
 
 	VTExplainResource Resource = "VTExplain"
 )

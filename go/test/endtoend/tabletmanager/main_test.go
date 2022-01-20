@@ -35,21 +35,23 @@ import (
 )
 
 var (
-	clusterInstance     *cluster.LocalProcessCluster
-	tmClient            *tmc.Client
-	primaryTabletParams mysql.ConnParams
-	replicaTabletParams mysql.ConnParams
-	primaryTablet       cluster.Vttablet
-	replicaTablet       cluster.Vttablet
-	rdonlyTablet        cluster.Vttablet
-	hostname            = "localhost"
-	keyspaceName        = "ks"
-	shardName           = "0"
-	keyspaceShard       = "ks/" + shardName
-	dbName              = "vt_" + keyspaceName
-	username            = "vt_dba"
-	cell                = "zone1"
-	sqlSchema           = `
+	clusterInstance                  *cluster.LocalProcessCluster
+	tmClient                         *tmc.Client
+	primaryTabletParams              mysql.ConnParams
+	replicaTabletParams              mysql.ConnParams
+	primaryTablet                    cluster.Vttablet
+	replicaTablet                    cluster.Vttablet
+	rdonlyTablet                     cluster.Vttablet
+	hostname                         = "localhost"
+	keyspaceName                     = "ks"
+	shardName                        = "0"
+	keyspaceShard                    = "ks/" + shardName
+	dbName                           = "vt_" + keyspaceName
+	username                         = "vt_dba"
+	cell                             = "zone1"
+	tabletHealthcheckRefreshInterval = 5 * time.Second
+	tabletUnhealthyThreshold         = tabletHealthcheckRefreshInterval * 2
+	sqlSchema                        = `
 	create table t1(
 		id bigint,
 		value varchar(16),
@@ -93,12 +95,17 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = []string{"-vschema_ddl_authorized_users=%"}
+		clusterInstance.VtGateExtraArgs = []string{
+			"-vschema_ddl_authorized_users=%",
+			"-discovery_low_replication_lag", tabletUnhealthyThreshold.String(),
+		}
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-lock_tables_timeout", "5s",
 			"-watch_replication_stream",
 			"-enable_replication_reporter",
+			"-health_check_interval", tabletHealthcheckRefreshInterval.String(),
+			"-unhealthy_threshold", tabletUnhealthyThreshold.String(),
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -122,8 +129,7 @@ func TestMain(m *testing.M) {
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
-			// TODO(deepthi): fix after v12.0
-			if tablet.Type == "primary" || tablet.Type == "master" {
+			if tablet.Type == "primary" {
 				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet

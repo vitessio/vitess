@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -475,7 +474,8 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
-	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(
+		tablet.HTTPPort,
 		tablet.GrpcPort,
 		tablet.TabletUID,
 		clusterInstance.Cell,
@@ -487,7 +487,8 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		clusterInstance.VtTabletExtraArgs,
-		clusterInstance.EnableSemiSync)
+		clusterInstance.EnableSemiSync,
+		clusterInstance.DefaultCharset)
 	tablet.Alias = tablet.VttabletProcess.TabletPath
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.Keyspace = restoreKeyspaceName
@@ -526,7 +527,7 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 }
 
 func getCNFromCertPEM(filename string) string {
-	pemBytes, _ := ioutil.ReadFile(filename)
+	pemBytes, _ := os.ReadFile(filename)
 	block, _ := pem.Decode(pemBytes)
 	cert, _ := x509.ParseCertificate(block.Bytes)
 	rdn := cert.Subject.ToRDNSequence()[0][0]

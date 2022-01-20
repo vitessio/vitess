@@ -194,6 +194,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.CantDoThisInTransaction:      {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},
 	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
+	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
 }
 
 func init() {
@@ -214,7 +215,7 @@ func convertToMysqlError(err error) error {
 	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
 }
 
-var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
+var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
 
 func demuxResourceExhaustedErrors(msg string) int {
 	switch {

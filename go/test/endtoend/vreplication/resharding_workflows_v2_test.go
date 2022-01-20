@@ -22,6 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tidwall/gjson"
+
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/wrangler"
@@ -235,9 +239,127 @@ func TestBasicV2Workflows(t *testing.T) {
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
 
+	// Internal tables like the lifecycle ones for OnlineDDL should be ignored
+	ddlSQL := "ALTER TABLE customer MODIFY cid bigint UNSIGNED"
+	tstApplySchemaOnlineDDL(t, ddlSQL, sourceKs)
+
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
 	log.Flush()
+}
+
+const workflowStartTimeout = 5 * time.Second
+
+func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
+	done := false
+	ticker := time.NewTicker(100 * time.Millisecond)
+	timer := time.NewTimer(workflowStartTimeout)
+	log.Infof("Waiting for workflow %s to start", ksWorkflow)
+	for {
+		select {
+		case <-ticker.C:
+			if done {
+				log.Infof("Workflow %s has started", ksWorkflow)
+				return
+			}
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+			require.NoError(t, err)
+			done = true
+			state := ""
+			result := gjson.Get(output, "ShardStatuses")
+			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each participating tablet
+				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+					if streamId.String() == "PrimaryReplicationStatuses" {
+						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+							state = attributeValue.Get("State").String()
+							if state != "Running" {
+								done = false // we need to wait for all streams to start
+							}
+							return true
+						})
+					}
+					return true
+				})
+				return true
+			})
+
+		case <-timer.C:
+			require.FailNowf(t, "workflow %s not yet started", ksWorkflow)
+		}
+	}
+}
+
+/*
+testVSchemaForSequenceAfterMoveTables checks that the related sequence tag is migrated correctly in the vschema
+while moving a table with an auto-increment from sharded to unsharded.
+*/
+func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
+	// at this point the unsharded product and sharded customer keyspaces are created by previous tests
+
+	// use MoveTables to move customer2 from product to customer using
+	currentWorkflowType = wrangler.MoveTablesWorkflow
+	err := tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
+		"customer2", workflowActionCreate, "", "", "")
+	require.NoError(t, err)
+
+	waitForWorkflowToStart(t, "customer.wf2")
+
+	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
+		"", workflowActionSwitchTraffic, "", "", "")
+	require.NoError(t, err)
+	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
+		"", workflowActionComplete, "", "", "")
+	require.NoError(t, err)
+
+	// sanity check
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	require.NoError(t, err)
+	assert.NotContains(t, output, "customer2\"", "customer2 still found in keyspace product")
+	validateCount(t, vtgateConn, "customer", "customer2", 3)
+
+	// check that customer2 has the sequence tag
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "customer")
+	require.NoError(t, err)
+	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 sequence missing in keyspace customer")
+
+	// ensure sequence is available to vtgate
+	num := 5
+	for i := 0; i < num; i++ {
+		execVtgateQuery(t, vtgateConn, "customer", "insert into customer2(name) values('a')")
+	}
+	validateCount(t, vtgateConn, "customer", "customer2", 3+num)
+	want := fmt.Sprintf("[[INT32(%d)]]", 100+num-1)
+	validateQuery(t, vtgateConn, "customer", "select max(cid) from customer2", want)
+
+	// use MoveTables to move customer2 back to product. Note that now the table has an associated sequence
+	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
+		"customer2", workflowActionCreate, "", "", "")
+	require.NoError(t, err)
+	waitForWorkflowToStart(t, "product.wf3")
+	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
+		"", workflowActionSwitchTraffic, "", "", "")
+	require.NoError(t, err)
+	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
+		"", workflowActionComplete, "", "", "")
+	require.NoError(t, err)
+
+	// sanity check
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	require.NoError(t, err)
+	assert.Contains(t, output, "customer2\"", "customer2 not found in keyspace product ")
+
+	// check that customer2 still has the sequence tag
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	require.NoError(t, err)
+	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 still found in keyspace product")
+
+	// ensure sequence is available to vtgate
+	for i := 0; i < num; i++ {
+		execVtgateQuery(t, vtgateConn, "product", "insert into customer2(name) values('a')")
+	}
+	validateCount(t, vtgateConn, "product", "customer2", 3+num+num)
+	want = fmt.Sprintf("[[INT32(%d)]]", 100+num+num-1)
+	validateQuery(t, vtgateConn, "product", "select max(cid) from customer2", want)
 }
 
 func testReshardV2Workflow(t *testing.T) {
@@ -272,7 +394,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	output, _ := vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "No workflows found in keyspace customer")
 
-	createMoveTablesWorkflow(t, "customer2")
+	testVSchemaForSequenceAfterMoveTables(t)
+
+	createMoveTablesWorkflow(t, "tenant")
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "Following workflow(s) found in keyspace customer: wf1")
 
@@ -564,4 +688,10 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 
 	sourceReplicaTab = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
 	sourceTab = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+}
+
+func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
+	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "-skip_preflight", "-ddl_strategy=online",
+		"-sql", sql, keyspace)
+	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 }

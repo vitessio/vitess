@@ -36,12 +36,7 @@ func TestQP(t *testing.T) {
 		expOrder []OrderBy
 	}{
 		{
-			sql:    "select * from user",
-			expErr: "gen4 does not yet support: *sqlparser.StarExpr in select list",
-		},
-		{
-			sql:    "select next value from user_seq",
-			expErr: "gen4 does not yet support: *sqlparser.Nextval in select list",
+			sql: "select * from user",
 		},
 		{
 			sql:    "select 1, count(1) from user",
@@ -83,7 +78,7 @@ func TestQP(t *testing.T) {
 			},
 		}, {
 			sql:    "select count(*) b from user group by b",
-			expErr: "Can't group on 'b'",
+			expErr: "Can't group on 'count(*)'",
 		},
 	}
 
@@ -93,10 +88,10 @@ func TestQP(t *testing.T) {
 			require.NoError(t, err)
 
 			sel := stmt.(*sqlparser.Select)
-			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{}, semantics.NoRewrite)
+			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := CreateQPFromSelect(sel, semantics.NewSemTable())
+			qp, err := CreateQPFromSelect(sel, semantics.EmptySemTable())
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -200,10 +195,10 @@ func TestQPSimplifiedExpr(t *testing.T) {
 			ast, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
 			sel := ast.(*sqlparser.Select)
-			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{}, semantics.NoRewrite)
+			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := CreateQPFromSelect(sel, semantics.NewSemTable())
+			qp, err := CreateQPFromSelect(sel, semantics.EmptySemTable())
 			require.NoError(t, err)
 			require.Equal(t, tc.expected[1:], qp.toString())
 		})

@@ -48,13 +48,6 @@ create table vstream_test(
 	primary key(id)
 ) Engine=InnoDB;
 
-create table aggr_test(
-	id bigint,
-	val1 varchar(16),
-	val2 bigint,
-	primary key(id)
-) Engine=InnoDB;
-
 create table t2(
 	id3 bigint,
 	id4 bigint,
@@ -138,9 +131,22 @@ create table t7_fk(
 ) Engine=InnoDB;
 
 create table t8(
-	id8 bigint,
-	testId bigint,
-	primary key(id8)
+	id bigint,
+	t9_id bigint DEFAULT NULL,
+  parent_id bigint,
+  primary key(id)
+) Engine=InnoDB;
+
+create table t9(
+	id bigint,
+  parent_id bigint,
+  primary key(id)
+) Engine=InnoDB;
+
+create table t9_id_to_keyspace_id_idx(
+	id bigint,
+	keyspace_id varbinary(10),
+	primary key(id)
 ) Engine=InnoDB;
 `
 
@@ -149,10 +155,10 @@ create table t8(
   "sharded": true,
   "vindexes": {
     "unicode_loose_xxhash" : {
-	  "type": "unicode_loose_xxhash"
+      "type": "unicode_loose_xxhash"
     },
     "unicode_loose_md5" : {
-	  "type": "unicode_loose_md5"
+      "type": "unicode_loose_md5"
     },
     "hash": {
       "type": "hash"
@@ -216,6 +222,15 @@ create table t8(
         "ignore_nulls": "true"
       },
       "owner": "t7_xxhash"
+    },
+    "t9_id_to_keyspace_id_idx": {
+      "type": "lookup_unique",
+      "params": {
+        "table": "t9_id_to_keyspace_id_idx",
+        "from": "id",
+        "to": "keyspace_id"
+      },
+      "owner": "t9"
     }
   },
   "tables": {
@@ -279,7 +294,7 @@ create table t8(
         }
       ]
     },
-	"t4": {
+    "t4": {
       "column_vindexes": [
         {
           "column": "id1",
@@ -299,7 +314,7 @@ create table t8(
         }
       ]
     },
-	"t6": {
+    "t6": {
       "column_vindexes": [
         {
           "column": "id1",
@@ -319,7 +334,7 @@ create table t8(
         }
       ]
     },
-	"t5_null_vindex": {
+    "t5_null_vindex": {
       "column_vindexes": [
         {
           "column": "idx",
@@ -349,7 +364,7 @@ create table t8(
         }
       ]
     },
-	"t7_xxhash": {
+    "t7_xxhash": {
       "column_vindexes": [
         {
           "column": "uid",
@@ -369,7 +384,7 @@ create table t8(
         }
       ]
     },
-	"t7_fk": {
+    "t7_fk": {
       "column_vindexes": [
         {
           "column": "t7_uid",
@@ -380,13 +395,38 @@ create table t8(
     "t8": {
       "column_vindexes": [
         {
-          "column": "id8",
+          "column": "parent_id",
+          "name": "hash"
+        },
+        {
+          "column": "t9_id",
+          "name": "t9_id_to_keyspace_id_idx"
+        }
+      ]
+    },
+    "t9": {
+      "column_vindexes": [
+        {
+          "column": "parent_id",
+          "name": "hash"
+        },
+        {
+          "column": "id",
+          "name": "t9_id_to_keyspace_id_idx"
+        }
+      ]
+    },
+    "t9_id_to_keyspace_id_idx": {
+      "column_vindexes": [
+        {
+          "column": "id",
           "name": "hash"
         }
       ]
     }
   }
-}`
+}
+`
 	routingRules = `
 {"rules": [
   {

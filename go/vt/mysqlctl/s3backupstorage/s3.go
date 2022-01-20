@@ -30,9 +30,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -221,7 +221,7 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) init() error {
 
 	if strings.HasPrefix(*sse, sseCustomerPrefix) {
 		sseCustomerKeyFile := strings.TrimPrefix(*sse, sseCustomerPrefix)
-		base64CodedKey, err := ioutil.ReadFile(sseCustomerKeyFile)
+		base64CodedKey, err := os.ReadFile(sseCustomerKeyFile)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err

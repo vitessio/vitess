@@ -19,7 +19,7 @@ package vttest
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -66,7 +66,7 @@ func getVars(addr string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // defaultHealthCheck checks the health of the Vitess process using getVars.
@@ -136,15 +136,11 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	}
 
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
-
-	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stdout = os.Stdout
-
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
 
 	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stderr = os.Stdout
+	vtp.proc.Stdout = os.Stdout
 
 	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
@@ -175,8 +171,13 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, <-vtp.exit)
 }
 
-// DefaultCharset is the default charset used by MySQL instances
-const DefaultCharset = "utf8"
+const (
+	// DefaultCharset is the default charset used by MySQL instances
+	DefaultCharset = "utf8mb4"
+
+	// DefaultCollation is the default collation used between VTTablet and MySQL
+	DefaultCollation = "utf8mb4_general_ci"
+)
 
 // QueryServerArgs are the default arguments passed to all Vitess query servers
 var QueryServerArgs = []string{
@@ -210,10 +211,15 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if charset == "" {
 		charset = DefaultCharset
 	}
+	collation := args.Collation
+	if collation == "" {
+		collation = DefaultCollation
+	}
 
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"-db_charset", charset,
+		"-db_collation", collation,
 		"-db_app_user", user,
 		"-db_app_password", pass,
 		"-db_dba_user", user,
@@ -225,6 +231,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-enable_query_plan_field_caching=false",
 		"-dbddl_plugin", "vttest",
 		"-foreign_key_mode", args.ForeignKeyMode,
+		"-planner_version", args.PlannerVersion,
 		fmt.Sprintf("-enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("-enable_direct_ddl=%t", args.EnableDirectDDL),
 	}...)
@@ -282,6 +289,15 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-mysql_server_port", fmt.Sprintf("%d", vtcomboMysqlPort),
 		"-mysql_server_bind_address", vtcomboMysqlBindAddress,
 	}...)
+
+	if args.ExternalTopoImplementation != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{
+			"-external_topo_server",
+			"-topo_implementation", args.ExternalTopoImplementation,
+			"-topo_global_server_address", args.ExternalTopoGlobalServerAddress,
+			"-topo_global_root", args.ExternalTopoGlobalRoot,
+		}...)
+	}
 
 	return vt
 }

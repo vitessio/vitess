@@ -49,7 +49,8 @@
             {
               "name": "n_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "region": {
           "column_vindexes": [
@@ -68,7 +69,8 @@
             {
               "name": "r_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "part": {
           "column_vindexes": [
@@ -105,7 +107,8 @@
             {
               "name": "p_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "supplier": {
           "column_vindexes": [
@@ -136,7 +139,8 @@
             {
               "name": "s_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "partsupp": {
           "column_vindexes": [
@@ -161,7 +165,8 @@
             {
               "name": "ps_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "partsupp_map": {
           "column_vindexes": [
@@ -203,7 +208,8 @@
             {
               "name": "c_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "orders": {
           "column_vindexes": [
@@ -240,7 +246,8 @@
             {
               "name": "o_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "lineitem": {
           "column_vindexes": [
@@ -298,7 +305,8 @@
             {
               "name": "l_comment"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "lineitem_map": {
           "column_vindexes": [
@@ -306,7 +314,8 @@
               "column": "l_orderkey",
               "name": "md5"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         },
         "revenue0": {
           "column_vindexes": [
@@ -322,7 +331,8 @@
             {
               "name": "total_revenue"
             }
-          ]
+          ],
+          "column_list_authoritative": true
         }
       }
     }

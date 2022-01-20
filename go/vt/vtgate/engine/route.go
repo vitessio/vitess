@@ -24,12 +24,11 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -74,9 +73,10 @@ type Route struct {
 	FieldQuery string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.SingleColumn
+	Vindex vindexes.Vindex
+
 	// Values specifies the vindex values to use for routing.
-	Values []sqltypes.PlanValue
+	Values []evalengine.Expr
 
 	// OrderBy specifies the key order for merge sorting. This will be
 	// set only for scatter queries that need the results to be
@@ -132,6 +132,10 @@ type OrderByParams struct {
 	WeightStringCol   int
 	Desc              bool
 	StarColFixedIndex int
+	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
+	FromGroupBy bool
+	// Collation ID for comparison using collation
+	CollationID collations.ID
 }
 
 // String returns a string. Used for plan descriptions
@@ -147,6 +151,10 @@ func (obp OrderByParams) String() string {
 		val += " DESC"
 	} else {
 		val += " ASC"
+	}
+	if obp.CollationID != collations.Unknown {
+		collation := collations.Local().LookupByID(obp.CollationID)
+		val += " COLLATE " + collation.Name()
 	}
 	return val
 }
@@ -240,7 +248,7 @@ func (route *Route) SetTruncateColumnCount(count int) {
 	route.TruncateColumnCount = count
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
@@ -254,28 +262,7 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	var rss []*srvtopo.ResolvedShard
-	var bvs []map[string]*querypb.BindVariable
-	var err error
-	switch route.Opcode {
-	case SelectDBA:
-		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
-	case SelectUnsharded, SelectNext, SelectReference:
-		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
-	case SelectScatter:
-		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
-	case SelectEqual, SelectEqualUnique:
-		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
-	case SelectIN:
-		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
-	case SelectMultiEqual:
-		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
-	case SelectNone:
-		rss, bvs, err = nil, nil, nil
-	default:
-		// Unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
-	}
+	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -312,6 +299,43 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	return route.sort(result)
 }
 
+func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	switch route.Opcode {
+	case SelectDBA:
+		return route.paramsSystemQuery(vcursor, bindVars)
+	case SelectUnsharded, SelectNext, SelectReference:
+		return route.paramsAnyShard(vcursor, bindVars)
+	case SelectScatter:
+		return route.paramsAllShards(vcursor, bindVars)
+	case SelectEqual, SelectEqualUnique:
+		switch route.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return route.paramsSelectEqualMultiCol(vcursor, bindVars)
+		default:
+			return route.paramsSelectEqual(vcursor, bindVars)
+		}
+	case SelectIN:
+		switch route.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return route.paramsSelectInMultiCol(vcursor, bindVars)
+		default:
+			return route.paramsSelectIn(vcursor, bindVars)
+		}
+	case SelectMultiEqual:
+		switch route.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return route.paramsSelectMultiEqualMultiCol(vcursor, bindVars)
+		default:
+			return route.paramsSelectMultiEqual(vcursor, bindVars)
+		}
+	case SelectNone:
+		return nil, nil, nil
+	default:
+		// Unreachable.
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
+	}
+}
+
 func filterOutNilErrors(errs []error) []error {
 	var errors []error
 	for _, err := range errs {
@@ -322,33 +346,13 @@ func filterOutNilErrors(errs []error) []error {
 	return errors
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var rss []*srvtopo.ResolvedShard
-	var bvs []map[string]*querypb.BindVariable
-	var err error
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
 	}
-	switch route.Opcode {
-	case SelectDBA:
-		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
-	case SelectUnsharded, SelectNext, SelectReference:
-		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
-	case SelectScatter:
-		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
-	case SelectEqual, SelectEqualUnique:
-		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
-	case SelectIN:
-		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
-	case SelectMultiEqual:
-		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
-	case SelectNone:
-		rss, bvs, err = nil, nil, nil
-	default:
-		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
-	}
+	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -366,7 +370,7 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 	}
 
 	if len(route.OrderBy) == 0 {
-		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
@@ -454,14 +458,10 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return defaultRoute()
 	}
 
-	env := evalengine.ExpressionEnv{
-		BindVars: bindVars,
-		Row:      []sqltypes.Value{},
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars)
 	var specifiedKS string
 	for _, tableSchema := range route.SysTableTableSchema {
-		result, err := tableSchema.Evaluate(env)
+		result, err := env.Evaluate(tableSchema)
 		if err != nil {
 			return nil, err
 		}
@@ -479,7 +479,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 
 	tableNames := map[string]string{}
 	for tblBvName, sysTableName := range route.SysTableTableName {
-		val, err := sysTableName.Evaluate(env)
+		val, err := env.Evaluate(sysTableName)
 		if err != nil {
 			return nil, err
 		}
@@ -579,11 +579,12 @@ func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	key, err := route.Values[0].ResolveValue(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{key})
+	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, []sqltypes.Value{value.Value()})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -594,24 +595,221 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 	return rss, multiBindVars, nil
 }
 
-func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	keys, err := route.Values[0].ResolveList(bindVars)
+func (route *Route) paramsSelectEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	var rowValue []sqltypes.Value
+	for _, rvalue := range route.Values {
+		v, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, nil, err
+		}
+		rowValue = append(rowValue, v.Value())
+	}
+
+	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value, shardIdsNeeded bool) ([]*srvtopo.ResolvedShard, [][][]*querypb.Value, error) {
+	destinations, err := vindex.Map(vcursor, rowColValues)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// And use the Resolver to map to ResolvedShards.
+	rss, shardsValues, err := vcursor.ResolveDestinationsMultiCol(keyspace.Name, rowColValues, destinations)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if shardIdsNeeded {
+		return rss, buildMultiColumnVindexValues(shardsValues), nil
+	}
+	return rss, nil, nil
+}
+
+// buildMultiColumnVindexValues takes in the values resolved for each shard and transposes them
+// and eliminates duplicates, returning the values to be used for each column for a multi column
+// vindex in each shard.
+func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*querypb.Value {
+	var shardsIds [][][]*querypb.Value
+	for _, shardValues := range shardsValues {
+		// shardValues -> [[0,1], [0,2], [0,3]]
+		// shardIds -> [[0,0,0], [1,2,3]]
+		// cols = 2
+		cols := len(shardValues[0])
+		shardIds := make([][]*querypb.Value, cols)
+		colValSeen := make([]map[string]interface{}, cols)
+		for _, values := range shardValues {
+			for colIdx, value := range values {
+				if colValSeen[colIdx] == nil {
+					colValSeen[colIdx] = map[string]interface{}{}
+				}
+				if _, found := colValSeen[colIdx][value.String()]; found {
+					continue
+				}
+				shardIds[colIdx] = append(shardIds[colIdx], sqltypes.ValueToProto(value))
+				colValSeen[colIdx][value.String()] = nil
+			}
+		}
+		shardsIds = append(shardsIds, shardIds)
+	}
+	return shardsIds
+}
+
+func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value, isSingleVal map[int]interface{}) []map[string]*querypb.BindVariable {
+	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
+	for i, shardVals := range mapVals {
+		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals)-len(isSingleVal))
+		for k, v := range bv {
+			newbv[k] = v
+		}
+		for j, vals := range shardVals {
+			if _, found := isSingleVal[j]; found {
+				// this vindex column is non-tuple column hence listVal bind variable is not required to be set.
+				continue
+			}
+			newbv[ListVarName+strconv.Itoa(j)] = &querypb.BindVariable{
+				Type:   querypb.Type_TUPLE,
+				Values: vals,
+			}
+		}
+		shardVars[i] = newbv
+	}
+	return shardVars
+}
+
+func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
+	if err != nil {
+		return nil, nil, err
+	}
+	rss, values, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value.TupleValues())
 	if err != nil {
 		return nil, nil, err
 	}
 	return rss, shardVars(bindVars, values), nil
 }
 
-func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	keys, err := route.Values[0].ResolveList(bindVars)
+func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rowColValues, isSingleVal, err := generateRowColValues(bindVars, route.Values)
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
+
+	rss, mapVals, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, true /* shardIdsNeeded */)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
+}
+
+func generateRowColValues(bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
+	// gather values from all the column in the vindex
+	var multiColValues [][]sqltypes.Value
+	var lv []sqltypes.Value
+	isSingleVal := map[int]interface{}{}
+	env := evalengine.EnvWithBindVars(bindVars)
+	for colIdx, rvalue := range values {
+		result, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, nil, err
+		}
+		lv = result.TupleValues()
+		if lv == nil {
+			v, err := env.Evaluate(rvalue)
+			if err != nil {
+				return nil, nil, err
+			}
+			isSingleVal[colIdx] = nil
+			lv = []sqltypes.Value{v.Value()}
+		}
+		multiColValues = append(multiColValues, lv)
+	}
+
+	/*
+		need to convert them into vindex keys
+		from: cola (1,2) colb (3,4,5)
+		to: keys (1,3) (1,4) (1,5) (2,3) (2,4) (2,5)
+
+		so that the vindex can map them into correct destination.
+	*/
+
+	var rowColValues [][]sqltypes.Value
+	for _, firstCol := range multiColValues[0] {
+		rowColValues = append(rowColValues, []sqltypes.Value{firstCol})
+	}
+	for idx := 1; idx < len(multiColValues); idx++ {
+		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
+	}
+	return rowColValues, isSingleVal, nil
+}
+
+// buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input
+// convert it into [1,2,4][1,2,5][1,3,4][1,3,5]
+// all combination of left and right side.
+func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqltypes.Value {
+	var allCombinations [][]sqltypes.Value
+	for _, firstPart := range left {
+		for _, secondPart := range right {
+			allCombinations = append(allCombinations, append(firstPart, secondPart))
+		}
+	}
+	return allCombinations
+}
+
+func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	value, err := env.Evaluate(route.Values[0])
+	if err != nil {
+		return nil, nil, err
+	}
+	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value.TupleValues())
+	if err != nil {
+		return nil, nil, err
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
+func (route *Route) paramsSelectMultiEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	var multiColValues [][]sqltypes.Value
+	env := evalengine.EnvWithBindVars(bindVars)
+	for _, rvalue := range route.Values {
+		v, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, nil, err
+		}
+		multiColValues = append(multiColValues, v.TupleValues())
+	}
+
+	// transpose from multi col value to vindex keys with one value from each multi column values.
+	// [1,3]
+	// [2,4]
+	// [5,6]
+	// change
+	// [1,2,5]
+	// [3,4,6]
+
+	rowColValues := make([][]sqltypes.Value, len(multiColValues[0]))
+	for _, colValues := range multiColValues {
+		for row, colVal := range colValues {
+			rowColValues[row] = append(rowColValues[row], colVal)
+		}
+	}
+
+	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, false /* shardIdsNotNeeded */)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -633,6 +831,7 @@ func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vind
 	destinations, err := vindex.Map(vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
+
 	}
 
 	// And use the Resolver to map to ResolvedShards.
@@ -703,33 +902,6 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace 
 	return rss[0], ksid, nil
 }
 
-func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey []sqltypes.Value) ([]*srvtopo.ResolvedShard, error) {
-	destinations, err := vindex.Map(vcursor, vindexKey)
-	if err != nil {
-		return nil, err
-	}
-	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
-	if err != nil {
-		return nil, err
-	}
-	return rss, nil
-}
-
-func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {
-	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
-	if err != nil {
-		return nil, err
-	}
-	switch ksid := destinations[0].(type) {
-	case key.DestinationKeyspaceID:
-		return ksid, nil
-	case key.DestinationNone:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
-	}
-}
-
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
@@ -768,15 +940,6 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 	return shardVars
 }
 
-func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
-	for _, rs := range rss {
-		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "supported only for primary tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
-		}
-	}
-	return nil
-}
-
 func (route *Route) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":      route.Query,
@@ -786,8 +949,12 @@ func (route *Route) description() PrimitiveDescription {
 	if route.Vindex != nil {
 		other["Vindex"] = route.Vindex.String()
 	}
-	if len(route.Values) > 0 {
-		other["Values"] = route.Values
+	if route.Values != nil {
+		formattedValues := make([]string, 0, len(route.Values))
+		for _, value := range route.Values {
+			formattedValues = append(formattedValues, evalengine.FormatExpr(value))
+		}
+		other["Values"] = formattedValues
 	}
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["
@@ -795,7 +962,7 @@ func (route *Route) description() PrimitiveDescription {
 			if idx != 0 {
 				sysTabSchema += ", "
 			}
-			sysTabSchema += tableSchema.String()
+			sysTabSchema += evalengine.FormatExpr(tableSchema)
 		}
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
@@ -803,7 +970,7 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.SysTableTableName) != 0 {
 		var sysTableName []string
 		for k, v := range route.SysTableTableName {
-			sysTableName = append(sysTableName, k+":"+v.String())
+			sysTableName = append(sysTableName, k+":"+evalengine.FormatExpr(v))
 		}
 		sort.Strings(sysTableName)
 		other["SysTableTableName"] = "[" + strings.Join(sysTableName, ", ") + "]"
@@ -817,6 +984,9 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if route.ScatterErrorsAsWarnings {
 		other["ScatterErrorsAsWarnings"] = true
+	}
+	if route.QueryTimeout > 0 {
+		other["QueryTimeout"] = route.QueryTimeout
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",

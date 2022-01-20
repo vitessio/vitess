@@ -45,22 +45,32 @@ const (
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	alterSchemaMigrationsTableRetries            = "ALTER TABLE _vt.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTablet             = "ALTER TABLE _vt.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableArtifacts          = "ALTER TABLE _vt.schema_migrations modify artifacts TEXT NOT NULL"
-	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE _vt.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE _vt.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
-	alterSchemaMigrationsTableProgress           = "ALTER TABLE _vt.schema_migrations add column progress float NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableContext            = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
-	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
-	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
-	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRetries                  = "ALTER TABLE _vt.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTablet                   = "ALTER TABLE _vt.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableArtifacts                = "ALTER TABLE _vt.schema_migrations modify artifacts TEXT NOT NULL"
+	alterSchemaMigrationsTableTabletFailure            = "ALTER TABLE _vt.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTabletFailureIndex       = "ALTER TABLE _vt.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
+	alterSchemaMigrationsTableProgress                 = "ALTER TABLE _vt.schema_migrations add column progress float NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableContext                  = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableDDLAction                = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableMessage                  = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
+	alterSchemaMigrationsTableTableCompleteIndex       = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
+	alterSchemaMigrationsTableETASeconds               = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
+	alterSchemaMigrationsTableRowsCopied               = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTableRows                = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableAddedUniqueKeys          = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRemovedUniqueKeys        = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableLogFile                  = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRetainArtifacts          = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTablePostponeCompletion       = "ALTER TABLE _vt.schema_migrations add column postpone_completion tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableContextIndex             = "ALTER TABLE _vt.schema_migrations add KEY migration_context_idx (migration_context(64))"
+	alterSchemaMigrationsTableRemovedUniqueNames       = "ALTER TABLE _vt.schema_migrations add column removed_unique_key_names text NOT NULL"
+	alterSchemaMigrationsTableRemovedNoDefaultColNames = "ALTER TABLE _vt.schema_migrations add column dropped_no_default_column_names text NOT NULL"
+	alterSchemaMigrationsTableExpandedColNames         = "ALTER TABLE _vt.schema_migrations add column expanded_column_names text NOT NULL"
+	alterSchemaMigrationsTableRevertibleNotes          = "ALTER TABLE _vt.schema_migrations add column revertible_notes text NOT NULL"
+	alterSchemaMigrationsTableAllowConcurrent          = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRevertedUUID             = "ALTER TABLE _vt.schema_migrations add column reverted_uuid varchar(64) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -75,9 +85,13 @@ const (
 		requested_timestamp,
 		migration_context,
 		migration_status,
-		tablet
+		tablet,
+		retain_artifacts_seconds,
+		postpone_completion,
+		allow_concurrent,
+		reverted_uuid
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
@@ -86,10 +100,13 @@ const (
 			ready_timestamp=NOW()
 		WHERE
 			migration_status='queued'
+			AND (
+				postpone_completion=0 OR ddl_action='alter'
+			)
 		ORDER BY
 			requested_timestamp ASC
 		LIMIT 1
-	`
+	`  // if the migration is CREATE or DROP, and postpone_completion=1, we just don't schedule it
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a
 		WHERE
@@ -141,6 +158,17 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateReadyForCleanup = `UPDATE _vt.schema_migrations
+			SET retain_artifacts_seconds=-1
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateCompleteMigration = `UPDATE _vt.schema_migrations
+			SET postpone_completion=0
+		WHERE
+			migration_uuid=%a
+			AND postpone_completion != 0
+	`
 	sqlUpdateTablet = `UPDATE _vt.schema_migrations
 			SET tablet=%a
 		WHERE
@@ -161,8 +189,10 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateAddedRemovedUniqueKeys = `UPDATE _vt.schema_migrations
-			SET added_unique_keys=%a, removed_unique_keys=%a
+	sqlUpdateSchemaAnalysis = `UPDATE _vt.schema_migrations
+			SET added_unique_keys=%a, removed_unique_keys=%a, removed_unique_key_names=%a,
+			dropped_no_default_column_names=%a, expanded_column_names=%a,
+			revertible_notes=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -230,8 +260,7 @@ const (
 	`
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
-			strategy,
-			options,
+			postpone_completion,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
@@ -249,11 +278,16 @@ const (
 			completed_timestamp DESC
 		LIMIT 1
 	`
-	sqlSelectCountReadyMigrations = `SELECT
-			count(*) as count_ready
+	sqlSelectCompleteMigrationsByContextAndSQL = `SELECT
+			migration_uuid,
+			strategy
 		FROM _vt.schema_migrations
 		WHERE
-			migration_status='ready'
+			migration_status='complete'
+			AND keyspace=%a
+			AND migration_context=%a
+			AND migration_statement=%a
+		LIMIT 1
 	`
 	sqlSelectStaleMigrations = `SELECT
 			migration_uuid
@@ -263,10 +297,20 @@ const (
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
 	sqlSelectPendingMigrations = `SELECT
-			migration_uuid
+			migration_uuid,
+			keyspace,
+			mysql_table,
+			migration_status
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
+	`
+	sqlSelectQueuedRevertMigrations = `SELECT
+			migration_uuid
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='queued'
+			AND ddl_action='revert'
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
@@ -276,7 +320,10 @@ const (
 		WHERE
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
-			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
+			AND completed_timestamp <= IF(retain_artifacts_seconds=0,
+				NOW() - INTERVAL %a SECOND,
+				NOW() - INTERVAL retain_artifacts_seconds SECOND
+			)
 	`
 	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
 		SET
@@ -310,40 +357,19 @@ const (
 			tablet,
 			added_unique_keys,
 			removed_unique_keys,
-			migration_context
+			migration_context,
+			retain_artifacts_seconds,
+			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
 			migration_uuid=%a
 	`
-	sqlSelectReadyMigration = `SELECT
-			id,
-			migration_uuid,
-			keyspace,
-			shard,
-			mysql_schema,
-			mysql_table,
-			migration_statement,
-			strategy,
-			options,
-			added_timestamp,
-			ready_timestamp,
-			started_timestamp,
-			liveness_timestamp,
-			completed_timestamp,
-			migration_status,
-			log_path,
-			log_file,
-			retries,
-			ddl_action,
-			artifacts,
-			tablet,
-			added_unique_keys,
-			removed_unique_keys,
-			migration_context
+	sqlSelectReadyMigrations = `SELECT
+			migration_uuid
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
-		LIMIT 1
+		ORDER BY id
 	`
 	sqlSelectPTOSCMigrationTriggers = `SELECT
 			TRIGGER_SCHEMA as trigger_schema,
@@ -357,7 +383,8 @@ const (
 		`
 	sqlSelectColumnTypes = `
 		select
-				*
+				*,
+				COLUMN_DEFAULT IS NULL AS is_default_null
 			from
 				information_schema.columns
 			where
@@ -486,6 +513,7 @@ const (
 	retryMigrationHint     = "retry"
 	cancelMigrationHint    = "cancel"
 	cancelAllMigrationHint = "cancel-all"
+	completeMigrationHint  = "complete"
 )
 
 var (
@@ -523,4 +551,14 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableAddedUniqueKeys,
 	alterSchemaMigrationsTableRemovedUniqueKeys,
 	alterSchemaMigrationsTableLogFile,
+	alterSchemaMigrationsTableRetainArtifacts,
+	alterSchemaMigrationsTablePostponeCompletion,
+	alterSchemaMigrationsTableContextIndex,
+	alterSchemaMigrationsTableRemovedUniqueNames,
+	alterSchemaMigrationsTableRemovedNoDefaultColNames,
+	alterSchemaMigrationsTableExpandedColNames,
+	alterSchemaMigrationsTableRevertibleNotes,
+	alterSchemaMigrationsTableAllowConcurrent,
+	alterSchemaMigrationsTableRevertedUUID,
+	alterSchemaMigrationsTableRevertedUUIDIndex,
 }

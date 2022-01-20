@@ -1,12 +1,18 @@
 # VTAdmin
 
+## Prerequisites
+
+- [node](https://nodejs.org) >= 16.13.0 LTS
+- npm >= 8.1.0 (comes with node)
+
 ## Available scripts
 
 Scripts for common and not-so-common tasks. These are always run from the `vitess/web/vtadmin` directory (although some of them have counterparts in `vitess/Makefile`):
 
 | Command | Description |
 |---|---|
-| `npm start` | Start vtadmin-web on [http://localhost:3000](http://localhost:3000) with the development server. Changes you make will be automatically picked up in the browser, no need to refresh. |
+| `npm local` | Start vtadmin-web in development mode on [http://localhost:3000](http://localhost:3000), pointed at a vtadmin-api server running on [http://localhost:14200](http://localhost:14200). This is most useful when running against a [local Vitess cluster](https://vitess.io/docs/get-started/local/). |
+| `npm start` | Start vtadmin-web in development mode on [http://localhost:3000](http://localhost:3000). Additional environment variables can be specified on the command line or in a .env file; see [Environment Variables](#environment-variables). |
 | `npm run test` | Launches the test runner in the interactive watch mode. See the create-react-app documentation about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information. |
 | `npm run lint` | Run all of the linters and formatters. The `package.json` file defines a bunch more scripts to run individual linters, if you prefer, like `npm run lint:eslint`. |
 | `npm run lint:fix` | Run all of the linters and fix errors (where possible) in place. Note that this will overwrite your files so you may want to consider committing your work beforehand! |
@@ -19,12 +25,23 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 - [create-react-app](https://create-react-app.dev/) (generated with v.4.0.1)
 - [TypeScript](http://typescriptlang.org/)
 - [protobufjs](https://github.com/protobufjs)
+- [tailwindcss](https://tailwindcss.com/)
 
 ## Environment Variables
 
 Under the hood, we use create-react-app's environment variable set-up which is very well documented: https://create-react-app.dev/docs/adding-custom-environment-variables. 
 
 All of our environment variables are enumerated and commented in [react-app-env.d.ts](./src/react-app-env.d.ts). This also gives us type hinting on `process.env`, for editors that support it. 
+
+## Linters and Formatters
+
+We use three libraries for consistent formatting and linting across the front-end codebase. (Not quite as streamlined as Go, alas!) These can be run individually, as noted below, or all in sequence with `npm run lint`.
+
+| Library | Commands | What it's for |
+|---------|----------|---------------|
+| [eslint](https://eslint.org/) | `npm run lint:eslint`<br/><br/>`npm run lint:eslint:fix` | ESLint identifies potential bugs and other issues. vtadmin-web uses the default ESLint configuration [built in to create-react-app](https://create-react-app.dev/docs/setting-up-your-editor/#extending-or-replacing-the-default-eslint-config). |
+| [prettier](https://prettier.io/) | `npm run lint:prettier`<br/><br/>`npm run lint:prettier:fix` | Prettier is an "opinionated code formatter" run against our JavaScript, TypeScript, and (S)CSS code to ensure a consistent style. Prettier is not a linter, and so it complements (rather than replaces) eslint/stylelint. | 
+| [stylelint](https://stylelint.io/) | `npm run lint:stylelint`<br/><br/>`npm run lint:stylelint:fix` | Stylelint is a linter for CSS/SCSS. Whereas prettier's CSS/SCSS support is largely focused on formatting (newlines, spaces vs. tabs), stylelint is able to flag possible errors, limit language features, and surface stylistic issues that prettier isn't intended to catch. |
 
 ## Configuring your editor
 
@@ -65,12 +82,16 @@ To set up automatic formatting on save:
 		},
 
 		"[css]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
 			"editor.codeActionsOnSave": {
 				"source.fixAll.stylelint": true
 			}
 		},
 
 		"[scss]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
 			"editor.codeActionsOnSave": {
 				"source.fixAll.stylelint": true
 			}

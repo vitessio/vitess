@@ -754,11 +754,15 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		}
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Fields[c].Type)
+		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
+		vBytes, err := value.ToBytes()
+		if err != nil {
+			return sqltypes.Value{}, nil, err
+		}
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -815,11 +819,15 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		sql.WriteByte('=')
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Fields[c].Type)
+		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
+		vBytes, err := value.ToBytes()
+		if err != nil {
+			return keyspaceIDCell, nil, err
+		}
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.

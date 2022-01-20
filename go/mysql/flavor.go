@@ -32,7 +32,7 @@ import (
 var (
 	// ErrNotReplica means there is no replication status.
 	// Returned by ShowReplicationStatus().
-	ErrNotReplica = errors.New("no replication status")
+	ErrNotReplica = NewSQLError(ERNotReplica, SSUnknownSQLState, "no replication status")
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
@@ -75,6 +75,9 @@ type flavor interface {
 
 	// stopIOThreadCommand returns the command to stop the replica's io thread only.
 	stopIOThreadCommand() string
+
+	// startSQLThreadCommand returns the command to start the replica's sql thread only.
+	startSQLThreadCommand() string
 
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
@@ -224,6 +227,11 @@ func (c *Conn) StopIOThreadCommand() string {
 	return c.flavor.stopIOThreadCommand()
 }
 
+// StartSQLThreadCommand returns the command to start the replica's SQL thread.
+func (c *Conn) StartSQLThreadCommand() string {
+	return c.flavor.startSQLThreadCommand()
+}
+
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
@@ -315,8 +323,15 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status.SourcePort = int(parseInt)
 	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
 	status.ConnectRetry = int(parseInt)
-	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	status.ReplicationLagSeconds = uint(parseUint)
+	parseUint, err := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	if err != nil {
+		// we could not parse the value into a valid uint -- most commonly because the value is NULL from the
+		// database -- so let's reflect that the underlying value was unknown on our last check
+		status.ReplicationLagUnknown = true
+	} else {
+		status.ReplicationLagUnknown = false
+		status.ReplicationLagSeconds = uint(parseUint)
+	}
 	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
 	status.SourceServerID = uint(parseUint)
 

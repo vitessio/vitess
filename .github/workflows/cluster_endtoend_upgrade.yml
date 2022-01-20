@@ -17,7 +17,7 @@ jobs:
 
       - name: Get latest Vitess tag
         run: |
-          last_major_releases=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.0$' | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n3)
+          last_major_releases=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.0$' | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n1)
           last_major_release_nb=$(echo "$last_major_releases" | head -n1 | sed 's/.[0-9]*.[0-9]*$//')
           last_minor_release=$(git show-ref --tags | grep -E "refs/tags/v$last_major_release_nb.[0-9]*.[1-9]*$" | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n1)
           major_and_minor_releases=$last_major_releases
@@ -46,7 +46,7 @@ jobs:
 
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
         go-version: 1.17
 
@@ -63,7 +63,14 @@ jobs:
       run: |
         # This prepares general purpose binary dependencies
         # as well as latest version specific go modules
+        # Setup MySQL 8.0
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
+
+        # Install everything else we need, and configure
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
         sudo service etcd stop

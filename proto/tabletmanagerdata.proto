@@ -26,6 +26,7 @@ import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
 import "logutil.proto";
+import "vttime.proto";
 
 //
 // Data structures
@@ -210,6 +211,7 @@ message ApplySchemaRequest {
   bool allow_replication = 3;
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
+  string sql_mode = 6;
 }
 
 message ApplySchemaResponse {
@@ -457,6 +459,7 @@ message BackupResponse {
 }
 
 message RestoreFromBackupRequest {
+  vttime.Time backup_time = 1;
 }
 
 message RestoreFromBackupResponse {

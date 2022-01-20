@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"github.com/pkg/errors"
@@ -210,7 +211,11 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
 			}
 			var bls binlogdatapb.BinlogSource
-			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
+			rowBytes, err := row[1].ToBytes()
+			if err != nil {
+				return err
+			}
+			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 				return vterrors.Wrapf(err, "prototext.Unmarshal: %v", row)
 			}
 			isReference, err := rs.blsIsReference(&bls)
@@ -272,7 +277,11 @@ func (rs *resharder) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, error
 func (rs *resharder) identifyRuleType(rule *binlogdatapb.Rule) (workflow.StreamType, error) {
 	vtable, ok := rs.vschema.Tables[rule.Match]
 	if !ok {
-		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
+		if schema.IsInternalOperationTableName(rule.Match) {
+			log.Infof("found internal table %s, ignoring in resharding", rule.Match)
+		} else {
+			return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
+		}
 	}
 	if vtable.Type == vindexes.TypeReference {
 		return workflow.StreamTypeReference, nil

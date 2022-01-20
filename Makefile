@@ -88,8 +88,8 @@ endif
 	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# unset GOOS and embed local resources in the vttablet executable
-	(cd go/cmd/vttablet && unset GOOS && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
-	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it 
+	(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
 ifndef NOBANNER
@@ -104,14 +104,14 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
@@ -126,8 +126,8 @@ install-testing: build
 	mkdir -p "$${PREFIX}/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
-grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
-	make -C go/vt/vtctl/grpcvtctldclient
+vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
+	make -C go/vt/vtctl/vtctldclient
 
 parser:
 	make -C go/vt/sqlparser
@@ -196,6 +196,7 @@ e2e_test_cluster: build
 
 .ONESHELL:
 SHELL = /bin/bash
+.SHELLFLAGS = -ec
 
 # Run the following tests after making worker changes.
 worker_test:
@@ -243,7 +244,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql56 mysql57 mysql80 percona percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=3
+BOOTSTRAP_VERSION=4
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -292,6 +293,9 @@ docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
 
+docker_run_local:
+	./docker/local/run.sh
+
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
@@ -335,10 +339,10 @@ ifndef DEV_VERSION
 endif
 ifeq ($(strip $(GIT_STATUS)),)
 	echo so much clean
-else	
+else
 	echo cannot do release with dirty git state
 	exit 1
-	echo so much win        
+	echo so much win
 endif
 # Pre checks passed. Let's change the current version
 	cd java && mvn versions:set -DnewVersion=$(RELEASE_VERSION)
@@ -348,18 +352,25 @@ endif
 	echo -n Pausing so relase notes can be added. Press enter to continue
 	read line
 	git add --all
-	git commit -n -s -m "Release commit for $(RELEASE_VERSION)" 
+	git commit -n -s -m "Release commit for $(RELEASE_VERSION)"
 	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
+ifdef GODOC_RELEASE_VERSION
 	git tag -a v$(GODOC_RELEASE_VERSION) -m "Tagging $(RELEASE_VERSION) also as $(GODOC_RELEASE_VERSION) for godoc/go modules"
+endif
 	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
 	echo package servenv > go/vt/servenv/version.go
 	echo  >> go/vt/servenv/version.go
 	echo const versionName = \"$(DEV_VERSION)\" >> go/vt/servenv/version.go
 	git add --all
 	git commit -n -s -m "Back to dev mode"
-	echo "Release preparations successful" 
+	echo "Release preparations successful"
+ifdef GODOC_RELEASE_VERSION
 	echo "Two git tags were created, you can push them with:"
 	echo "   git push upstream v$(RELEASE_VERSION) && git push upstream v$(GODOC_RELEASE_VERSION)"
+else
+	echo "One git tag was created, you can push it with:"
+	echo "   git push upstream v$(RELEASE_VERSION)"
+endif
 	echo "The git branch has also been updated. You need to push it and get it merged"
 
 tools:
@@ -373,7 +384,7 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
-install_k8s-code-generator: tools.go go.mod
+install_k8s-code-generator: tools/tools.go go.mod
 	go install k8s.io/code-generator/cmd/deepcopy-gen
 	go install k8s.io/code-generator/cmd/client-gen
 	go install k8s.io/code-generator/cmd/lister-gen
@@ -463,4 +474,4 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from $(FROM) -to $(TO) -release-branch $(RELEASE_BRANCH)
+	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"

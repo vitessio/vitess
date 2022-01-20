@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -50,13 +50,30 @@ func TestVtgateHealthCheck(t *testing.T) {
 	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
 }
 
+func TestVtgateReplicationStatusCheck(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
+	time.Sleep(2 * time.Second)
+	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
+	qr := exec(t, conn, "show vitess_replication_status like '%'", "")
+	expectNumRows := 2
+	numRows := len(qr.Rows)
+	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+}
+
 func verifyVtgateVariables(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.StatusCode, "Vtgate api url response not found")
 
 	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
 	assert.Contains(t, resultMap, "VtgateVSchemaCounts", "Vschema count should be present in variables")
@@ -179,11 +196,16 @@ func TestReplicaTransactions(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	exec(t, readConn, fetchAllCustomers, "is either down or nonexistent")
 
-	// bring up tablet again
-	// query using same transaction will fail
-	_ = replicaTablet.VttabletProcess.Setup()
+	// bring up the tablet again
+	// trying to use the same session/transaction should fail as the vtgate has
+	// been restarted and the session lost
+	replicaTablet.VttabletProcess.ServingStatus = "SERVING"
+	err = replicaTablet.VttabletProcess.Setup()
+	require.Nil(t, err)
+	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
+	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
 	exec(t, readConn, fetchAllCustomers, "not found")
-	exec(t, readConn, "commit", "")
+
 	// create a new connection, should be able to query again
 	readConn, err = mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

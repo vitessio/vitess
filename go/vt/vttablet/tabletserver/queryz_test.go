@@ -18,7 +18,7 @@ package tabletserver
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -90,7 +90,7 @@ func TestQueryzHandler(t *testing.T) {
 	qe.plans.Wait()
 
 	queryzHandler(qe, resp, req)
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="high">`,
 		`<td>select name from test_table</td>`,

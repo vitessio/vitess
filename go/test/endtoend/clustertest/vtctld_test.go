@@ -20,7 +20,7 @@ package clustertest
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -66,7 +66,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 	assert.Equal(t, resp.StatusCode, 200)
 
 	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.Nil(t, err)
 
@@ -101,7 +101,7 @@ func testListAllTablets(t *testing.T) {
 func testTabletStatus(t *testing.T) {
 	resp, err := http.Get(fmt.Sprintf("http://%s:%d", clusterInstance.Hostname, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort))
 	require.Nil(t, err)
-	respByte, err := ioutil.ReadAll(resp.Body)
+	respByte, err := io.ReadAll(resp.Body)
 	require.Nil(t, err)
 	result := string(respByte)
 	log.Infof("Tablet status response: %v", result)

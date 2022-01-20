@@ -335,8 +335,7 @@ func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet
 	return nil
 }
 
-// TODO(deepthi): rename this to PrimaryPosition after v12.0
-func (tmc *testVDiffTMClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (tmc *testVDiffTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	pos, ok := tmc.pos[int(tablet.Alias.Uid)]
 	if !ok {
 		return "", fmt.Errorf("no primary position for %d", tablet.Alias.Uid)

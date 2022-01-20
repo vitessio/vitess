@@ -48,8 +48,8 @@ func TestRefreshTabletsInShard(t *testing.T) {
 	testutil.AddTablet(ctx, t, ts, tablet1.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet2.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet3.Tablet, nil)
-	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0)
+	cfg := &config.VTGRConfig{BootstrapGroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0, true)
 	assert.Equal(t, "ks", shard.shardStatusCollector.status.Keyspace)
 	assert.Equal(t, "0", shard.shardStatusCollector.status.Shard)
 	shard.refreshTabletsInShardLocked(context.Background())
@@ -80,8 +80,8 @@ func TestRefreshWithCells(t *testing.T) {
 	testutil.AddTablet(ctx, t, ts, tablet1.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet2.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet3.Tablet, nil)
-	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", []string{"cell1", "cell3"}, nil, ts, nil, cfg, testPort0)
+	cfg := &config.VTGRConfig{BootstrapGroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	shard := NewGRShard("ks", "0", []string{"cell1", "cell3"}, nil, ts, nil, cfg, testPort0, true)
 	shard.refreshTabletsInShardLocked(context.Background())
 	instances := shard.instances
 	// only have 2 instances here because we are not watching cell2
@@ -105,8 +105,8 @@ func TestRefreshWithEmptyCells(t *testing.T) {
 	testutil.AddTablet(ctx, t, ts, tablet1.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet2.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet3.Tablet, nil)
-	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0)
+	cfg := &config.VTGRConfig{BootstrapGroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0, true)
 	shard.refreshTabletsInShardLocked(context.Background())
 	instances := shard.instances
 	// nil cell will return everything
@@ -125,8 +125,8 @@ func TestLockRelease(t *testing.T) {
 	defer ts.Close()
 	ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{})
 	ts.CreateShard(ctx, "ks", "0")
-	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0)
+	cfg := &config.VTGRConfig{BootstrapGroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0, true)
 	ctx, err := shard.LockShard(ctx, "")
 	assert.NoError(t, err)
 	// make sure we get the lock

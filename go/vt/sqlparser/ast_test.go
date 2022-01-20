@@ -157,19 +157,13 @@ func TestAddOrder(t *testing.T) {
 	dst.(*Select).AddOrder(order)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
-	want := "select * from t order by foo asc"
-	if buf.String() != want {
-		t.Errorf("order: %q, want %s", buf.String(), want)
-	}
+	require.Equal(t, "select * from t order by foo asc", buf.String())
 	dst, err = Parse("select * from t union select * from s")
 	require.NoError(t, err)
 	dst.(*Union).AddOrder(order)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
-	want = "select * from t union select * from s order by foo asc"
-	if buf.String() != want {
-		t.Errorf("order: %q, want %s", buf.String(), want)
-	}
+	require.Equal(t, "select * from t union select * from s order by foo asc", buf.String())
 }
 
 func TestSetLimit(t *testing.T) {
@@ -181,19 +175,13 @@ func TestSetLimit(t *testing.T) {
 	dst.(*Select).SetLimit(limit)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
-	want := "select * from t limit 4"
-	if buf.String() != want {
-		t.Errorf("limit: %q, want %s", buf.String(), want)
-	}
+	require.Equal(t, "select * from t limit 4", buf.String())
 	dst, err = Parse("select * from t union select * from s")
 	require.NoError(t, err)
 	dst.(*Union).SetLimit(limit)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
-	want = "select * from t union select * from s limit 4"
-	if buf.String() != want {
-		t.Errorf("order: %q, want %s", buf.String(), want)
-	}
+	require.Equal(t, "select * from t union select * from s limit 4", buf.String())
 }
 
 func TestDDL(t *testing.T) {

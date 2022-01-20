@@ -1,6 +1,3 @@
-By default, the [Helm Charts](https://github.com/vitessio/vitess/tree/main/helm)
-point to the `vitess/lite` image on [Docker Hub](https://hub.docker.com/u/vitess/).
-
 We created the `lite` image as a stripped down version of our old image `base` such that Kubernetes pods can start faster.
 The `lite` image is updated automatically after every push to the GitHub main branch.
 

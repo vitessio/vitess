@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/json2"
@@ -132,9 +134,9 @@ func TestVerticalSplit(t *testing.T) {
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, ksServedFrom, *clusterInstance)
 
 	// reparent to make the tablets work (we use health check, fix their types)
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(sourceKeyspace, shardName, cellj, sourcePrimaryTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(sourceKeyspace, shardName, cellj, sourcePrimaryTablet.TabletUID)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitShardPrimary(destinationKeyspace, shardName, cellj, destinationPrimaryTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(destinationKeyspace, shardName, cellj, destinationPrimaryTablet.TabletUID)
 	require.NoError(t, err)
 
 	sourcePrimaryTablet.Type = "primary"
@@ -625,6 +627,7 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 func initializeCluster() (int, error) {
 	var mysqlProcesses []*exec.Cmd
 	clusterInstance = cluster.NewCluster(cellj, hostname)
+	clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {
@@ -665,7 +668,8 @@ func initializeCluster() (int, error) {
 			}
 			mysqlProcesses = append(mysqlProcesses, proc)
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
@@ -677,7 +681,8 @@ func initializeCluster() (int, error) {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+				clusterInstance.EnableSemiSync,
+				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
 			shard.Vttablets = append(shard.Vttablets, tablet)

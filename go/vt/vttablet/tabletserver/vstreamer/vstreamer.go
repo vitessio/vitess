@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -200,6 +199,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// all existing rows are sent without the new row.
 	// If a single row exceeds the packet size, it will be in its own packet.
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
+		vevent.Keyspace = vs.vse.keyspace
+		vevent.Shard = vs.vse.shard
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
 			binlogdatapb.VEventType_JOURNAL:
@@ -403,7 +404,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid) //TODO: #sugu why Append?
+		vs.pos = mysql.AppendGTID(vs.pos, gtid)
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
@@ -730,11 +731,13 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return nil, err
 	}
 	for _, field := range fields {
-		typ := strings.ToLower(field.Type.String())
-		if typ == "enum" || typ == "set" {
-			if extColInfo, ok := extColInfos[field.Name]; ok {
-				field.ColumnType = extColInfo.columnType
-			}
+		// we want the MySQL column type info so that we can properly handle
+		// ambiguous binlog events and other cases where the internal types
+		// don't match the MySQL column type. One example being that in binlog
+		// events CHAR columns with a binary collation are indistinguishable
+		// from BINARY columns.
+		if extColInfo, ok := extColInfos[field.Name]; ok {
+			field.ColumnType = extColInfo.columnType
 		}
 	}
 	return fields, nil
@@ -801,7 +804,11 @@ nextrow:
 				continue
 			}
 			journal := &binlogdatapb.Journal{}
-			if err := prototext.Unmarshal(afterValues[i].ToBytes(), journal); err != nil {
+			avBytes, err := afterValues[i].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			if err := prototext.Unmarshal(avBytes, journal); err != nil {
 				return nil, err
 			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -887,7 +894,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			valueIndex++
 			continue
 		}
-		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
+		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum])
 		if err != nil {
 			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 				err, plan.Table.Name, colNum, plan.Table.Fields, values)

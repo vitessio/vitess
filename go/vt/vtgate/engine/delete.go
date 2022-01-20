@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -68,7 +70,7 @@ func (del *Delete) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
@@ -79,7 +81,12 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	case Unsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
 	case Equal:
-		return del.execDeleteEqual(vcursor, bindVars)
+		switch del.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return del.execDeleteEqualMultiCol(vcursor, bindVars)
+		default:
+			return del.execDeleteEqual(vcursor, bindVars)
+		}
 	case In:
 		return del.execDeleteIn(vcursor, bindVars)
 	case Scatter:
@@ -92,9 +99,13 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	}
 }
 
-// StreamExecute performs a streaming exec.
-func (del *Delete) TryStreamExecute(VCursor, map[string]*querypb.BindVariable, bool, func(*sqltypes.Result) error) error {
-	return fmt.Errorf("query %q cannot be used for streaming", del.Query)
+// TryStreamExecute performs a streaming exec.
+func (del *Delete) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := del.TryExecute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(res)
 }
 
 // GetFields fetches the field info.
@@ -118,11 +129,12 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 }
 
 func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	key, err := del.Values[0].ResolveValue(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars)
+	key, err := env.Evaluate(del.Values[0])
 	if err != nil {
 		return nil, err
 	}
-	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
+	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex.(vindexes.SingleColumn), del.Keyspace, key.Value())
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +155,38 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	return execShard(vcursor, del.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
 }
 
+func (del *Delete) execDeleteEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	env := evalengine.EnvWithBindVars(bindVars)
+	var rowValue []sqltypes.Value
+	for _, rvalue := range del.Values {
+		v, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, err
+		}
+		rowValue = append(rowValue, v.Value())
+	}
+	rss, _, err := resolveShardsMultiCol(vcursor, del.Vindex.(vindexes.MultiColumn), del.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex mapped id to multi shards: %d", len(rss))
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+	if del.OwnedVindexQuery != "" {
+		err = del.deleteVindexEntries(vcursor, bindVars, rss)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return execShard(vcursor, del.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+}
+
 func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex)
+	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values, del.Vindex)
 	if err != nil {
 		return nil, err
 	}
@@ -207,11 +249,11 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	}
 
 	for _, row := range subQueryResults.Rows {
-		colnum := 1
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0:del.KsidLength])
 		if err != nil {
 			return err
 		}
+		colnum := del.KsidLength
 		for _, colVindex := range del.Table.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
@@ -223,7 +265,6 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 				return err
 			}
 		}
-
 	}
 
 	return nil
@@ -255,8 +296,13 @@ func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
 	}
 	if dml.KsidVindex != nil {
 		other["KsidVindex"] = dml.KsidVindex.String()
+		other["KsidLength"] = dml.KsidLength
 	}
 	if len(dml.Values) > 0 {
-		other["Values"] = dml.Values
+		s := []string{}
+		for _, value := range dml.Values {
+			s = append(s, evalengine.FormatExpr(value))
+		}
+		other["Values"] = s
 	}
 }

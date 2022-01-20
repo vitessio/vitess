@@ -173,7 +173,7 @@ func TestMoveTablesV2(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
+		TabletTypes:    "REPLICA,RDONLY,PRIMARY",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -280,7 +280,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	expectMoveTablesQueries(t, tme)
 
 	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "rdonly"
+	wf.params.TabletTypes = "RDONLY"
 	wf.params.Cells = "cell1"
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. Replica not switched. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
@@ -292,7 +292,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	require.Equal(t, "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "replica"
+	wf.params.TabletTypes = "REPLICA"
 	wf.params.Cells = "cell1,cell2"
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateReadsSwitched, wf.CurrentState())
@@ -568,6 +568,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 	tme.tmeDB.AddQuery("drop table vt_ks2.t1", noResult)
 	tme.tmeDB.AddQuery("drop table vt_ks2.t2", noResult)
 	tme.tmeDB.AddQuery("update _vt.vreplication set message='Picked source tablet: cell:\"cell1\" uid:10 ' where id=1", noResult)
+	tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
 	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
 

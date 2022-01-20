@@ -19,7 +19,6 @@ package endtoend
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"reflect"
 	"strings"
@@ -345,8 +344,8 @@ func TestBindInSelect(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:         "abcd",
 			Type:         sqltypes.VarChar,
-			ColumnLength: 12,
-			Charset:      33,
+			ColumnLength: 16,
+			Charset:      45,
 			Flags:        1,
 		}},
 		Rows: [][]sqltypes.Value{
@@ -374,8 +373,8 @@ func TestBindInSelect(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:         "",
 			Type:         sqltypes.VarChar,
-			ColumnLength: 6,
-			Charset:      33,
+			ColumnLength: 8,
+			Charset:      45,
 			Flags:        1,
 		}},
 		Rows: [][]sqltypes.Value{
@@ -398,7 +397,7 @@ func TestHealth(t *testing.T) {
 		return
 	}
 	defer response.Body.Close()
-	result, err := ioutil.ReadAll(response.Body)
+	result, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Error(err)
 		return

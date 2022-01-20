@@ -17,19 +17,17 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"net"
-	"strconv"
-	"strings"
 	"time"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/mysql/collations"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -61,12 +59,6 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		addr = params.UnixSocket
 	} else {
 		addr = net.JoinHostPort(params.Host, fmt.Sprintf("%v", params.Port))
-	}
-
-	// Figure out the character set we want.
-	characterSet, err := parseCharacterSet(params.Charset)
-	if err != nil {
-		return nil, err
 	}
 
 	// Start a background connection routine.  It first
@@ -123,7 +115,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		// make any read or write just return with an error
 		// right away.
 		status <- connectResult{
-			err: c.clientHandshake(characterSet, params),
+			err: c.clientHandshake(params),
 		}
 	}()
 
@@ -174,6 +166,15 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 			return nil, cr.err
 		}
 	}
+
+	// Once we are connected to the server, we set the collation for this connection.
+	// This step usually occurs during the handshake, however, the handshake protocol
+	// grants us 8 bits for the collation ID, which is lower than the range of supported
+	// collations. For this reason, we manually set the collation for the connection.
+	if err := setCollationForConnection(c, params); err != nil {
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -198,36 +199,65 @@ func (c *Conn) Ping() error {
 	case ErrPacket:
 		return ParseErrorPacket(data)
 	}
-	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet type: %d", data[0])
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
-// parseCharacterSet parses the provided character set.
-// Returns SQLError(CRCantReadCharset) if it can't.
-func parseCharacterSet(cs string) (uint8, error) {
-	// Check if it's empty, return utf8. This is a reasonable default.
-	if cs == "" {
-		return CharacterSetUtf8, nil
+// setCollationForConnection sets the connection's collation to the given collation.
+//
+// The charset should always be set as it has a default value ("utf8mb4"),
+// however, one can always override its default to an empty string, which
+// is not a problem as long as the user has specified the collation.
+// If the collation flag was not specified when starting the tablet, we
+// attempt to find the default collation for the current charset.
+// If either the collation and charset are missing, or the resolution of
+// the default collation using the given charset fails, we error out.
+//
+// This method is also responsible for creating and storing the collation
+// environment that will be used by this connection. The collation environment
+// allows us to make informed decisions around charset's default collation
+// depending on the MySQL/MariaDB version we are using.
+func setCollationForConnection(c *Conn, params *ConnParams) error {
+	// Once we have done the initial handshake with MySQL, we receive the server version
+	// string. This string is critical as it enables the instantiation of a new collation
+	// environment variable.
+	// Certain MySQL or MariaDB versions might have different default collations for some
+	// charsets, so it is important to use a database-version-aware collation system/API.
+	env := collations.NewEnvironment(c.ServerVersion)
+	coll, err := env.ResolveCollation(params.Charset, params.Collation)
+	if err != nil {
+		return err
 	}
 
-	// Check if it's in our map.
-	characterSet, ok := CharacterSetMap[strings.ToLower(cs)]
-	if ok {
-		return characterSet, nil
+	// We send a query to MySQL to set the connection's collation.
+	// See: https://dev.mysql.com/doc/refman/8.0/en/charset-connection.html
+	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", coll.Name())
+	if _, err := c.ExecuteFetch(querySetCollation, 1, false); err != nil {
+		return err
 	}
 
-	// As a fallback, try to parse a number. So we support more values.
-	if i, err := strconv.ParseInt(cs, 10, 8); err == nil {
-		return uint8(i), nil
-	}
+	c.Collation = coll.ID()
+	return nil
+}
 
-	// No luck.
-	return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set '%v'. Try using an integer value if needed", cs)
+// getHandshakeCharacterSet returns the collation ID of DefaultCollation in an
+// 8 bits integer which will be used to feed the handshake protocol's packet.
+func getHandshakeCharacterSet() (uint8, error) {
+	coll := collations.Local().LookupByName(DefaultCollation)
+	if coll == nil {
+		// theoretically, this should never happen from an end user perspective
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation ID for collation: '%s'", DefaultCollation)
+	}
+	if coll.ID() > 255 {
+		// same here, this should never happen
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "collation ID for '%s' will overflow, value: %d", DefaultCollation, coll.ID())
+	}
+	return uint8(coll.ID()), nil
 }
 
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
-func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
+func (c *Conn) clientHandshake(params *ConnParams) error {
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
@@ -250,6 +280,28 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	c.Capabilities = 0
 	if !params.DisableClientDeprecateEOF {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
+	}
+
+	// The MySQL handshake package uses the "character set" field to define
+	// which character set must be used. But, the value we give to this field
+	// correspond in fact to the collation ID. MySQL will then deduce what the
+	// character set for this collation ID is, and use it.
+	// Problem is, this field is 8-bits long meaning that the ID can range from
+	// 0 to 255, which is smaller than the range of IDs we support.
+	// If, for instance, we used the collation "utf8mb4_0900_as_ci" that has an
+	// ID equal to 305, the value would overflow when transformed into an 8 bits
+	// integer.
+	// To alleviate this issue, we use a default and safe collation for the handshake
+	// and once the connection is established, we will manually set the collation.
+	// The code below gets that default character set for the Handshake packet.
+	//
+	// Note: this character set might be different from the one we will use
+	// for the connection.
+	//
+	// See: https://dev.mysql.com/doc/internals/en/connection-phase-packets.html
+	characterSet, err := getHandshakeCharacterSet()
+	if err != nil {
+		return err
 	}
 
 	// Handle switch to SSL if necessary.
@@ -282,7 +334,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		}
 
 		// Build the TLS config.
-		clientConfig, err := vttls.ClientConfig(params.EffectiveSslMode(), params.SslCert, params.SslKey, params.SslCa, serverName, tlsVersion)
+		clientConfig, err := vttls.ClientConfig(params.EffectiveSslMode(), params.SslCert, params.SslKey, params.SslCa, params.SslCrl, serverName, tlsVersion)
 		if err != nil {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
 		}
@@ -720,7 +772,7 @@ func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
 			// Encrypt password with public key
 			enc, err := EncryptPasswordWithPublicKey(c.salt, []byte(params.Pass), pub)
 			if err != nil {
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "error encrypting password with public key: %v", err)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error encrypting password with public key: %v", err)
 			}
 			// Write encrypted password
 			if err := c.writeScrambledPassword(enc); err != nil {
@@ -738,7 +790,7 @@ func parseAuthSwitchRequest(data []byte) (AuthMethodDescription, []byte, error) 
 	pos := 1
 	pluginName, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
 	}
 
 	// If this was a request with a salt in it, max 20 bytes
@@ -755,7 +807,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = 0x02
 	if err := c.writeEphemeralPacket(); err != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error sending public key request packet: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending public key request packet: %v", err)
 	}
 
 	response, err := c.readPacket()
@@ -771,7 +823,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	block, _ := pem.Decode(response[1:])
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to parse public key from server: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to parse public key from server: %v", err)
 	}
 
 	return pub.(*rsa.PublicKey), nil
@@ -785,7 +837,7 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }
@@ -797,7 +849,7 @@ func (c *Conn) writeScrambledPassword(scrambledPassword []byte) error {
 	pos += copy(data[pos:], scrambledPassword)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }

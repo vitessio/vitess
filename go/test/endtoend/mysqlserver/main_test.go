@@ -42,11 +42,20 @@ var (
 		data longblob,
 		primary key (id)
 		) Engine=InnoDB;
+	create table vt_partition_test (
+		c1 int NOT NULL,
+		logdata BLOB NOT NULL,
+		created DATETIME NOT NULL,
+		PRIMARY KEY(c1, created)
+		)
+		PARTITION BY HASH( TO_DAYS(created) )
+		PARTITIONS 10;
 `
 	createProcSQL = `use vt_test_keyspace;
 CREATE PROCEDURE testing()
 BEGIN
 	delete from vt_insert_test;
+	delete from vt_partition_test;
 END;
 `
 )
@@ -73,7 +82,7 @@ func TestMain(m *testing.M) {
 		ACLConfig := `{
 			"table_groups": [
 				{
-					"table_names_or_prefixes": ["vt_insert_test", "dual"],
+					"table_names_or_prefixes": ["vt_insert_test", "vt_partition_test", "dual"],
 					"readers": ["vtgate client 1"],
 					"writers": ["vtgate client 1"],
 					"admins": ["vtgate client 1"]

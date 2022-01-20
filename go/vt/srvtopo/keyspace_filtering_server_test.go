@@ -73,11 +73,17 @@ func TestFilteringServerHandlesNilUnderlying(t *testing.T) {
 func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
 	_, _, f := newFiltering(nil)
 	got, gotErr := f.GetTopoServer()
-	if got != nil {
-		t.Errorf("Got non-nil topo.Server from FilteringServer")
+	if gotErr != nil {
+		t.Errorf("Got error getting topo.Server from FilteringServer")
 	}
-	if gotErr != ErrTopoServerNotAvailable {
-		t.Errorf("Unexpected error from GetTopoServer; wanted %v but got %v", ErrTopoServerNotAvailable, gotErr)
+
+	readOnly, err := got.IsReadOnly()
+	if err != nil || !readOnly {
+		t.Errorf("Got read-write topo.Server from FilteringServer -- must be read-only")
+	}
+	gotErr = got.CreateCellsAlias(stockCtx, "should_fail", &topodatapb.CellsAlias{Cells: []string{stockCell}})
+	if gotErr == nil {
+		t.Errorf("Were able to perform a write against the topo.Server from a FilteringServer -- it must be read-only")
 	}
 }
 

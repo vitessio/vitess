@@ -23,14 +23,15 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -58,11 +59,12 @@ var (
 // This implementation uses the new healthcheck module.
 type TabletGateway struct {
 	queryservice.QueryService
-	hc            discovery.HealthCheck
-	kev           *discovery.KeyspaceEventWatcher
-	srvTopoServer srvtopo.Server
-	localCell     string
-	retryCount    int
+	hc                   discovery.HealthCheck
+	kev                  *discovery.KeyspaceEventWatcher
+	srvTopoServer        srvtopo.Server
+	localCell            string
+	retryCount           int
+	defaultConnCollation uint32
 
 	// mu protects the fields of this group.
 	mu sync.Mutex
@@ -98,7 +100,6 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		}
 		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, *CellsToWatch)
 	}
-	vtgateHealthCheck = hc
 	gw := &TabletGateway{
 		hc:                hc,
 		srvTopoServer:     serv,
@@ -270,10 +271,18 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		tablets := gw.hc.GetHealthyTabletStats(target)
 		if len(tablets) == 0 {
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
-			if target.TabletType == topodatapb.TabletType_PRIMARY && gw.kev != nil && gw.kev.TargetIsBeingResharded(target.Keyspace, target.Shard) {
-				err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
-				continue
+			// or if a reparent operation is in progress.
+			if kev := gw.kev; kev != nil {
+				if kev.TargetIsBeingResharded(target) {
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
+					continue
+				}
+				if kev.PrimaryIsNotServing(target) {
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there is a reparent operation in progress")
+					continue
+				}
 			}
+
 			// fail fast if there is no tablet
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
@@ -303,6 +312,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
 			continue
 		}
+
+		gw.updateDefaultConnCollation(tabletLastUsed)
 
 		startTime := time.Now()
 		var canRetry bool
@@ -389,6 +400,20 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 // TabletsCacheStatus returns a displayable version of the health check cache.
 func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 	return gw.hc.CacheStatus()
+}
+
+func (gw *TabletGateway) updateDefaultConnCollation(tablet *topodatapb.Tablet) {
+	if atomic.CompareAndSwapUint32(&gw.defaultConnCollation, 0, tablet.DefaultConnCollation) {
+		return
+	}
+	if atomic.LoadUint32(&gw.defaultConnCollation) != tablet.DefaultConnCollation {
+		log.Warning("this Vitess cluster has tablets with different default connection collations")
+	}
+}
+
+// DefaultConnCollation returns the default connection collation of this TabletGateway
+func (gw *TabletGateway) DefaultConnCollation() collations.ID {
+	return collations.ID(atomic.LoadUint32(&gw.defaultConnCollation))
 }
 
 // NewShardError returns a new error with the shard info amended.

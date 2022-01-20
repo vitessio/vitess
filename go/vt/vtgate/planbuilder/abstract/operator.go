@@ -17,59 +17,79 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
-	// An operator can be:
-	//	*  Derived - which represents an expression that generates a table.
-	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
-	//     while still preserving the results
-	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
-	//	*  Join - A join represents inner join.
-	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
 
-		// PushPredicate pushes a predicate to the closest possible operator
-		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
-
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
 		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
+
+		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
+		CheckValid() error
+	}
+
+	LogicalOperator interface {
+		Operator
+		iLogical()
+
+		// PushPredicate pushes a predicate to the closest possible operator
+		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error)
+
+		// Compact will optimise the operator tree into a smaller but equivalent version
+		Compact(semTable *semantics.SemTable) (LogicalOperator, error)
+	}
+
+	PhysicalOperator interface {
+		Operator
+		IPhysical()
+		// Cost is simply the number of routes in the operator tree
+		Cost() int
+		// Clone creates a copy of the operator that can be updated without changing the original
+		Clone() PhysicalOperator
 	}
 )
 
-func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (Operator, error) {
+func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
 		case sqlparser.TableName:
-			qg := newQueryGraph()
 			tableID := semTable.TableSetFor(tableExpr)
 			tableInfo, err := semTable.TableInfoFor(tableID)
 			if err != nil {
 				return nil, err
 			}
+
+			if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
+				return &Vindex{Table: VindexTable{
+					TableID: tableID,
+					Alias:   tableExpr,
+					Table:   tbl,
+					VTable:  vt.Table.GetVindexTable(),
+				}, Vindex: vt.Vindex}, nil
+			}
+			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
-			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
-			sel, isSel := tbl.Select.(*sqlparser.Select)
-			if !isSel {
-				return nil, semantics.Gen4NotSupportedF("UNION")
-			}
-			inner, err := CreateOperatorFromSelect(sel, semTable)
+			inner, err := CreateOperatorFromAST(tbl.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
-			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: sel}, nil
+			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
 		default:
-			return nil, semantics.Gen4NotSupportedF("%T", tbl)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
 		}
 	case *sqlparser.JoinTableExpr:
 		switch tableExpr.Join {
@@ -83,41 +103,38 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				return nil, err
 			}
 			op := createJoin(lhs, rhs)
-			err = op.PushPredicate(tableExpr.Condition.On, semTable)
-			if err != nil {
-				return nil, err
+			if tableExpr.Condition.On != nil {
+				op, err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), semTable)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return op, nil
 		case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-			inner, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
+			lhs, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
 			if err != nil {
 				return nil, err
 			}
-			outer, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
+			rhs, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
 			if err != nil {
 				return nil, err
 			}
 			if tableExpr.Join == sqlparser.RightJoinType {
-				inner, outer = outer, inner
+				lhs, rhs = rhs, lhs
 			}
-			op := &LeftJoin{
-				Left:      inner,
-				Right:     outer,
-				Predicate: tableExpr.Condition.On,
-			}
-			return op, nil
+			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
 		default:
-			return nil, semantics.Gen4NotSupportedF("%s joins", tableExpr.Join.ToString())
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
 	case *sqlparser.ParenTableExpr:
 		return crossJoin(tableExpr.Exprs, semTable)
 	default:
-		return nil, semantics.Gen4NotSupportedF("%T table type", tableExpr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T table type", tableExpr)
 	}
 }
 
-func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operator, error) {
-	var output Operator
+func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (LogicalOperator, error) {
+	var output LogicalOperator
 	for _, tableExpr := range exprs {
 		op, err := getOperatorFromTableExpr(tableExpr, semTable)
 		if err != nil {
@@ -132,22 +149,67 @@ func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operat
 	return output, nil
 }
 
-// CreateOperatorFromSelect creates an operator tree that represents the input SELECT query
-func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
+func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
+	switch s := s.(type) {
+	case *sqlparser.Select:
+		return s
+	default:
+		return nil
+	}
+}
+
+// CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
+func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
+	switch node := selStmt.(type) {
+	case *sqlparser.Select:
+		op, err = createOperatorFromSelect(node, semTable)
+	case *sqlparser.Union:
+		op, err = createOperatorFromUnion(node, semTable)
+	default:
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return op.Compact(semTable)
+}
+
+func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
+	opLHS, err := CreateOperatorFromAST(node.Left, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	_, isRHSUnion := node.Right.(*sqlparser.Union)
+	if isRHSUnion {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
+	}
+	opRHS, err := CreateOperatorFromAST(node.Right, semTable)
+	if err != nil {
+		return nil, err
+	}
+	return &Concatenate{
+		Distinct:    node.Distinct,
+		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
+		Sources:     []LogicalOperator{opLHS, opRHS},
+		OrderBy:     node.OrderBy,
+		Limit:       node.Limit,
+	}, nil
+}
+
+// createOperatorFromSelect creates an operator tree that represents the input SELECT query
+func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (LogicalOperator, error) {
 	var resultantOp *SubQuery
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement := sq.SubQuery.Select.(*sqlparser.Select)
-			opInner, err := CreateOperatorFromSelect(subquerySelectStatement, semTable)
+			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				SelectStatement: subquerySelectStatement,
-				Inner:           opInner,
-				Type:            sq.OpCode,
-				ArgName:         sq.ArgName,
+				ExtractedSubquery: sq,
+				Inner:             opInner,
 			})
 		}
 	}
@@ -158,7 +220,7 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			err := op.PushPredicate(expr, semTable)
+			op, err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(expr), semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -188,20 +250,14 @@ func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 	}
 }
 
-func createJoin(LHS, RHS Operator) Operator {
+func createJoin(LHS, RHS LogicalOperator) LogicalOperator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {
 		op := &QueryGraph{
 			Tables:     append(lqg.Tables, rqg.Tables...),
-			innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
+			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
 			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
-		}
-		for k, v := range lqg.innerJoins {
-			op.innerJoins[k] = v
-		}
-		for k, v := range rqg.innerJoins {
-			op.innerJoins[k] = v
 		}
 		return op
 	}

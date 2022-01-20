@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,9 @@ var (
 	NewUint64  = sqltypes.NewUint64
 	NewFloat64 = sqltypes.NewFloat64
 	TestValue  = sqltypes.TestValue
+	NewDecimal = sqltypes.NewDecimal
+
+	maxUint64 uint64 = math.MaxUint64
 )
 
 func TestArithmetics(t *testing.T) {
@@ -82,11 +86,11 @@ func TestArithmetics(t *testing.T) {
 			// testing for int64 overflow with min negative value
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(1),
-			err: "BIGINT value is out of range in -9223372036854775808 - 1",
+			err: dataOutOfRangeError(math.MinInt64, 1, "BIGINT", "-").Error(),
 		}, {
 			v1:  NewUint64(4),
 			v2:  NewInt64(5),
-			err: "BIGINT UNSIGNED value is out of range in 4 - 5",
+			err: dataOutOfRangeError(4, 5, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			// testing uint - int
 			v1:  NewUint64(7),
@@ -100,15 +104,15 @@ func TestArithmetics(t *testing.T) {
 			// testing for int64 overflow
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewUint64(0),
-			err: "BIGINT UNSIGNED value is out of range in -9223372036854775808 - 0",
+			err: dataOutOfRangeError(math.MinInt64, 0, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			v1:  TestValue(querypb.Type_VARCHAR, "c"),
 			v2:  NewInt64(1),
-			out: NewInt64(-1),
+			out: NewFloat64(-1),
 		}, {
 			v1:  NewUint64(1),
 			v2:  TestValue(querypb.Type_VARCHAR, "c"),
-			out: NewUint64(1),
+			out: NewFloat64(1),
 		}, {
 			// testing for error for parsing float value to uint64
 			v1:  TestValue(querypb.Type_UINT64, "1.2"),
@@ -137,7 +141,7 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  NewInt64(-1),
 			v2:  NewUint64(2),
-			err: "BIGINT UNSIGNED value is out of range in -1 - 2",
+			err: dataOutOfRangeError(-1, 2, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			v1:  NewInt64(2),
 			v2:  NewUint64(1),
@@ -166,7 +170,7 @@ func TestArithmetics(t *testing.T) {
 			// testing uint - uint if v2 > v1
 			v1:  NewUint64(2),
 			v2:  NewUint64(4),
-			err: "BIGINT UNSIGNED value is out of range in 2 - 4",
+			err: dataOutOfRangeError(2, 4, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			// testing uint - (- int)
 			v1:  NewUint64(1),
@@ -204,7 +208,7 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  NewInt64(-2),
 			v2:  NewUint64(1),
-			err: "BIGINT UNSIGNED value is out of range in 1 + -2",
+			err: dataOutOfRangeError(1, -2, "BIGINT UNSIGNED", "+").Error(),
 		}, {
 			v1:  NewInt64(math.MaxInt64),
 			v2:  NewInt64(-2),
@@ -216,14 +220,14 @@ func TestArithmetics(t *testing.T) {
 			out: NewUint64(3),
 		}, {
 			// testing for overflow uint64
-			v1:  NewUint64(math.MaxUint64),
+			v1:  NewUint64(maxUint64),
 			v2:  NewUint64(2),
-			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2",
+			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
 		}, {
 			// int64 underflow
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(-2),
-			err: "BIGINT value is out of range in -9223372036854775808 + -2",
+			err: dataOutOfRangeError(math.MinInt64, -2, "BIGINT", "+").Error(),
 		}, {
 			// checking int64 max value can be returned
 			v1:  NewInt64(math.MaxInt64),
@@ -241,7 +245,7 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  NewUint64(1),
 			v2:  TestValue(querypb.Type_VARCHAR, "c"),
-			out: NewUint64(1),
+			out: NewFloat64(1),
 		}, {
 			v1:  NewUint64(1),
 			v2:  TestValue(querypb.Type_VARCHAR, "1.2"),
@@ -256,9 +260,9 @@ func TestArithmetics(t *testing.T) {
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for uint64 overflow with max uint64 + int value
-			v1:  NewUint64(math.MaxUint64),
+			v1:  NewUint64(maxUint64),
 			v2:  NewInt64(2),
-			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2",
+			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
 		}},
 	}, {
 		operator: "/",
@@ -292,7 +296,7 @@ func TestArithmetics(t *testing.T) {
 			// case with negative value
 			v1:  NewInt64(-1),
 			v2:  NewInt64(-2),
-			out: NewFloat64(0.5000),
+			out: NewDecimal("0.5000"),
 		}, {
 			// float64 division by zero
 			v1:  NewFloat64(2),
@@ -302,12 +306,12 @@ func TestArithmetics(t *testing.T) {
 			// Lower bound for int64
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(1),
-			out: NewFloat64(math.MinInt64),
+			out: NewDecimal(strconv.Itoa(math.MinInt64) + ".0000"),
 		}, {
 			// upper bound for uint64
 			v1:  NewUint64(math.MaxUint64),
 			v2:  NewUint64(1),
-			out: NewFloat64(math.MaxUint64),
+			out: NewDecimal(strconv.FormatUint(math.MaxUint64, 10) + ".0000"),
 		}, {
 			// testing for error in types
 			v1:  TestValue(querypb.Type_INT64, "1.2"),
@@ -322,12 +326,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for uint/int
 			v1:  NewUint64(4),
 			v2:  NewInt64(5),
-			out: NewFloat64(0.8),
+			out: NewDecimal("0.8000"),
 		}, {
 			// testing for uint/uint
 			v1:  NewUint64(1),
 			v2:  NewUint64(2),
-			out: NewFloat64(0.5),
+			out: NewDecimal("0.5000"),
 		}, {
 			// testing for float64/int64
 			v1:  TestValue(querypb.Type_FLOAT64, "1.2"),
@@ -342,7 +346,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of float64
 			v1:  NewFloat64(math.MaxFloat64),
 			v2:  NewFloat64(0.5),
-			err: "BIGINT value is out of range in 1.7976931348623157e+308 / 0.5",
+			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "BIGINT", "/").Error(),
 		}},
 	}, {
 		operator: "*",
@@ -406,12 +410,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of int64
 			v1:  NewInt64(math.MaxInt64),
 			v2:  NewInt64(2),
-			err: "BIGINT value is out of range in 9223372036854775807 * 2",
+			err: dataOutOfRangeError(math.MaxInt64, 2, "BIGINT", "*").Error(),
 		}, {
 			// testing for underflow of uint64*max.uint64
 			v1:  NewInt64(2),
-			v2:  NewUint64(math.MaxUint64),
-			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 * 2",
+			v2:  NewUint64(maxUint64),
+			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "*").Error(),
 		}, {
 			v1:  NewUint64(math.MaxUint64),
 			v2:  NewUint64(1),
@@ -420,7 +424,7 @@ func TestArithmetics(t *testing.T) {
 			//Checking whether maxInt value can be passed as uint value
 			v1:  NewUint64(math.MaxInt64),
 			v2:  NewInt64(3),
-			err: "BIGINT UNSIGNED value is out of range in 9223372036854775807 * 3",
+			err: dataOutOfRangeError(math.MaxInt64, 3, "BIGINT UNSIGNED", "*").Error(),
 		}},
 	}}
 
@@ -442,7 +446,7 @@ func TestArithmetics(t *testing.T) {
 	}
 }
 
-func TestNullsafeAdd(t *testing.T) {
+func TestNullSafeAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    sqltypes.Value
@@ -481,7 +485,11 @@ func TestNullsafeAdd(t *testing.T) {
 		// Make sure underlying error is returned while adding.
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
-		out: NewInt64(-9223372036854775808),
+		out: NewInt64(1),
+	}, {
+		v1:  NewInt64(-100),
+		v2:  NewUint64(10),
+		err: dataOutOfRangeError(10, -100, "BIGINT UNSIGNED", "+"),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
@@ -489,15 +497,22 @@ func TestNullsafeAdd(t *testing.T) {
 		out: NewInt64(3),
 	}}
 	for _, tcase := range tcases {
-		got := NullsafeAdd(tcase.v1, tcase.v2, querypb.Type_INT64)
+		got, err := NullSafeAdd(tcase.v1, tcase.v2, querypb.Type_INT64)
+
+		if tcase.err == nil {
+			require.NoError(t, err)
+		} else {
+			require.EqualError(t, err, tcase.err.Error())
+		}
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("NullsafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("NullSafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 }
 
 func TestNullsafeCompare(t *testing.T) {
+	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
@@ -521,7 +536,7 @@ func TestNullsafeCompare(t *testing.T) {
 		// LHS Text
 		v1:  TestValue(querypb.Type_VARCHAR, "abcd"),
 		v2:  TestValue(querypb.Type_VARCHAR, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		out: 0,
 	}, {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(querypb.Type_INT64, "1.2"),
@@ -584,9 +599,9 @@ func TestNullsafeCompare(t *testing.T) {
 		out: -1,
 	}}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(tcase.v1, tcase.v2)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		got, err := NullsafeCompare(tcase.v1, tcase.v2, collation)
+		if tcase.err != nil {
+			require.EqualError(t, err, tcase.err.Error())
 		}
 		if tcase.err != nil {
 			continue
@@ -594,6 +609,95 @@ func TestNullsafeCompare(t *testing.T) {
 
 		if got != tcase.out {
 			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
+		}
+	}
+}
+
+func getCollationID(collation string) collations.ID {
+	id, _ := collations.Local().LookupID(collation)
+	return id
+}
+
+func TestNullsafeCompareCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       int
+		err       error
+	}{
+		{
+			// case insensitive
+			v1:        "abCd",
+			v2:        "aBcd",
+			out:       0,
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// accent sensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       1,
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// hangul decomposition
+			v1:        "\uAC00",
+			v2:        "\u326E",
+			out:       0,
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       -1,
+			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       -1,
+			collation: getCollationID("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       -1,
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			v1:        "abcd",
+			v2:        "abcd",
+			collation: 0,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
+		},
+		{
+			v1:        "abcd",
+			v2:        "abcd",
+			collation: 1111,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 1111)"),
+		},
+		{
+			v1: "abcd",
+			v2: "abcd",
+			// unsupported collation gb18030_bin
+			collation: 249,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 249)"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := NullsafeCompare(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got != tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
@@ -679,7 +783,7 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: querypb.Type_VARCHAR,
 		v:   TestValue(sqltypes.Expression, "bad string"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(bad string) cannot be cast to VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes"),
 	}}
 	for _, tcase := range tcases {
 		got, err := Cast(tcase.v, tcase.typ)
@@ -912,21 +1016,21 @@ func TestNewNumeric(t *testing.T) {
 		err error
 	}{{
 		v:   NewInt64(1),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: newEvalInt64(1),
 	}, {
 		v:   NewUint64(1),
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		out: newEvalUint64(1),
 	}, {
 		v:   NewFloat64(1),
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
+		out: newEvalFloat(1.0),
 	}, {
 		// For non-number type, Int64 is the default.
 		v:   TestValue(querypb.Type_VARCHAR, "1"),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: newEvalInt64(1),
 	}, {
 		// If Int64 can't work, we use Float64.
 		v:   TestValue(querypb.Type_VARCHAR, "1.2"),
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2},
+		out: newEvalFloat(1.2),
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(querypb.Type_INT64, "1.2"),
@@ -941,7 +1045,7 @@ func TestNewNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(querypb.Type_VARCHAR, "abcd"),
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 0},
+		out: newEvalFloat(0),
 	}}
 	for _, tcase := range tcases {
 		got, err := newEvalResult(tcase.v)
@@ -963,21 +1067,21 @@ func TestNewIntegralNumeric(t *testing.T) {
 		err error
 	}{{
 		v:   NewInt64(1),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: newEvalInt64(1),
 	}, {
 		v:   NewUint64(1),
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		out: newEvalUint64(1),
 	}, {
 		v:   NewFloat64(1),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: newEvalInt64(1),
 	}, {
 		// For non-number type, Int64 is the default.
 		v:   TestValue(querypb.Type_VARCHAR, "1"),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: newEvalInt64(1),
 	}, {
 		// If Int64 can't work, we use Uint64.
 		v:   TestValue(querypb.Type_VARCHAR, "18446744073709551615"),
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 18446744073709551615},
+		out: newEvalUint64(18446744073709551615),
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(querypb.Type_INT64, "1.2"),
@@ -991,7 +1095,7 @@ func TestNewIntegralNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}}
 	for _, tcase := range tcases {
-		got, err := newIntegralNumeric(tcase.v)
+		got, err := newEvalResultNumeric(tcase.v)
 		if err != nil && !vterrors.Equals(err, tcase.err) {
 			t.Errorf("newIntegralNumeric(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1009,62 +1113,71 @@ func TestAddNumeric(t *testing.T) {
 		out    EvalResult
 		err    error
 	}{{
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: EvalResult{typ: querypb.Type_INT64, ival: 3},
+		v1:  newEvalInt64(1),
+		v2:  newEvalInt64(2),
+		out: newEvalInt64(3),
 	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 3},
+		v1:  newEvalInt64(1),
+		v2:  newEvalUint64(2),
+		out: newEvalUint64(3),
 	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 3},
+		v1:  newEvalInt64(1),
+		v2:  newEvalFloat(2),
+		out: newEvalFloat(3),
 	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 3},
+		v1:  newEvalUint64(1),
+		v2:  newEvalUint64(2),
+		out: newEvalUint64(3),
 	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 3},
+		v1:  newEvalUint64(1),
+		v2:  newEvalFloat(2),
+		out: newEvalFloat(3),
 	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 3},
+		v1:  newEvalFloat(1),
+		v2:  newEvalFloat(2),
+		out: newEvalFloat(3),
 	}, {
 		// Int64 overflow.
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 9223372036854775807},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 9223372036854775809},
+		v1:  newEvalInt64(9223372036854775807),
+		v2:  newEvalInt64(2),
+		err: dataOutOfRangeError(9223372036854775807, 2, "BIGINT", "+"),
 	}, {
 		// Int64 underflow.
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: -9223372036854775807},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: -2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: -9223372036854775809},
+		v1:  newEvalInt64(-9223372036854775807),
+		v2:  newEvalInt64(-2),
+		err: dataOutOfRangeError(-9223372036854775807, -2, "BIGINT", "+"),
 	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: -1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 18446744073709551617},
+		v1:  newEvalInt64(-1),
+		v2:  newEvalUint64(2),
+		out: newEvalUint64(1),
 	}, {
 		// Uint64 overflow.
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 18446744073709551615},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 18446744073709551617},
+		v1:  newEvalUint64(18446744073709551615),
+		v2:  newEvalUint64(2),
+		err: dataOutOfRangeError(uint64(18446744073709551615), 2, "BIGINT UNSIGNED", "+"),
 	}}
 	for _, tcase := range tcases {
-		got := addNumeric(tcase.v1, tcase.v2)
-
+		var got EvalResult
+		err := addNumericWithError(&tcase.v1, &tcase.v2, &got)
+		if err != nil {
+			if tcase.err == nil {
+				t.Fatal(err)
+			}
+			if err.Error() != tcase.err.Error() {
+				t.Fatalf("bad error message: got %q want %q", err, tcase.err)
+			}
+			continue
+		}
 		utils.MustMatch(t, tcase.out, got, "addNumeric")
 	}
 }
 
 func TestPrioritize(t *testing.T) {
-	ival := EvalResult{typ: querypb.Type_INT64, ival: -1}
-	uval := EvalResult{typ: querypb.Type_UINT64, uval: 1}
-	fval := EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2}
-	textIntval := EvalResult{typ: querypb.Type_VARBINARY, bytes: []byte("-1")}
-	textFloatval := EvalResult{typ: querypb.Type_VARBINARY, bytes: []byte("1.2")}
+	ival := newEvalInt64(-1)
+	uval := newEvalUint64(1)
+	fval := newEvalFloat(1.2)
+	textIntval := newEvalRaw(querypb.Type_VARBINARY, []byte("-1"))
+	textFloatval := newEvalRaw(querypb.Type_VARBINARY, []byte("1.2"))
 
 	tcases := []struct {
 		v1, v2     EvalResult
@@ -1112,9 +1225,9 @@ func TestPrioritize(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
-			got1, got2 := makeNumericAndprioritize(tcase.v1, tcase.v2)
-			utils.MustMatch(t, tcase.out1, got1, "makeNumericAndprioritize")
-			utils.MustMatch(t, tcase.out2, got2, "makeNumericAndprioritize")
+			got1, got2 := makeNumericAndPrioritize(&tcase.v1, &tcase.v2)
+			utils.MustMatch(t, tcase.out1.value(), got1.value(), "makeNumericAndPrioritize")
+			utils.MustMatch(t, tcase.out2.value(), got2.value(), "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -1127,52 +1240,52 @@ func TestToSqlValue(t *testing.T) {
 		err error
 	}{{
 		typ: querypb.Type_INT64,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   newEvalInt64(1),
 		out: NewInt64(1),
 	}, {
 		typ: querypb.Type_INT64,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   newEvalUint64(1),
 		out: NewInt64(1),
 	}, {
 		typ: querypb.Type_INT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   newEvalFloat(1.2e-16),
 		out: NewInt64(0),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   newEvalInt64(1),
 		out: NewUint64(1),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   newEvalUint64(1),
 		out: NewUint64(1),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   newEvalFloat(1.2e-16),
 		out: NewUint64(0),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   newEvalInt64(1),
 		out: TestValue(querypb.Type_FLOAT64, "1"),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   newEvalUint64(1),
 		out: TestValue(querypb.Type_FLOAT64, "1"),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   newEvalFloat(1.2e-16),
 		out: TestValue(querypb.Type_FLOAT64, "1.2e-16"),
 	}, {
 		typ: querypb.Type_DECIMAL,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   newEvalInt64(1),
 		out: TestValue(querypb.Type_DECIMAL, "1"),
 	}, {
 		typ: querypb.Type_DECIMAL,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   newEvalUint64(1),
 		out: TestValue(querypb.Type_DECIMAL, "1"),
 	}, {
 		// For float, we should not use scientific notation.
 		typ: querypb.Type_DECIMAL,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   newEvalFloat(1.2e-16),
 		out: TestValue(querypb.Type_DECIMAL, "0.00000000000000012"),
 	}}
 	for _, tcase := range tcases {
@@ -1186,17 +1299,17 @@ func TestToSqlValue(t *testing.T) {
 
 func TestCompareNumeric(t *testing.T) {
 	values := []EvalResult{
-		{typ: querypb.Type_INT64, ival: 1},
-		{typ: querypb.Type_INT64, ival: -1},
-		{typ: querypb.Type_INT64, ival: 0},
-		{typ: querypb.Type_INT64, ival: 2},
-		{typ: querypb.Type_UINT64, uval: 1},
-		{typ: querypb.Type_UINT64, uval: 0},
-		{typ: querypb.Type_UINT64, uval: 2},
-		{typ: querypb.Type_FLOAT64, fval: 1},
-		{typ: querypb.Type_FLOAT64, fval: -1},
-		{typ: querypb.Type_FLOAT64, fval: 0},
-		{typ: querypb.Type_FLOAT64, fval: 2},
+		newEvalInt64(1),
+		newEvalInt64(-1),
+		newEvalInt64(0),
+		newEvalInt64(2),
+		newEvalUint64(1),
+		newEvalUint64(0),
+		newEvalUint64(2),
+		newEvalFloat(1.0),
+		newEvalFloat(-1.0),
+		newEvalFloat(0.0),
+		newEvalFloat(2.0),
 	}
 
 	// cmpResults is a 2D array with the comparison expectations if we compare all values with each other
@@ -1218,15 +1331,18 @@ func TestCompareNumeric(t *testing.T) {
 	for aIdx, aVal := range values {
 		for bIdx, bVal := range values {
 			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, aVal.debugString(), bVal.debugString()), func(t *testing.T) {
-				result, err := compareNumeric(aVal, bVal)
+				result, err := compareNumeric(&aVal, &bVal)
 				require.NoError(t, err)
 				assert.Equal(t, cmpResults[aIdx][bIdx], result)
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					aHash := hashCode(aVal)
-					bHash := hashCode(bVal)
-					assert.Equal(t, aHash, bHash, "hash code does not match")
+					if aVal.typeof() == bVal.typeof() {
+						// hash codes can only be compared if they are coerced to the same type first
+						aHash, _ := aVal.nullSafeHashcode()
+						bHash, _ := bVal.nullSafeHashcode()
+						assert.Equal(t, aHash, bHash, "hash code does not match")
+					}
 				}
 			})
 		}
@@ -1265,10 +1381,10 @@ func TestMin(t *testing.T) {
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
 		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 	}}
 	for _, tcase := range tcases {
-		v, err := Min(tcase.v1, tcase.v2)
+		v, err := Min(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Min error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1278,6 +1394,64 @@ func TestMin(t *testing.T) {
 
 		if !reflect.DeepEqual(v, tcase.min) {
 			t.Errorf("Min(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.min)
+		}
+	}
+}
+
+func TestMinCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       string
+		err       error
+	}{
+		{
+			// accent insensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       "ǍḄÇ",
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       "abc\u00a0",
+			collation: getCollationID("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       "cs",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "cukor",
+			v2:        "csak",
+			out:       "csak",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := Min(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got.ToString() == tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
@@ -1314,10 +1488,10 @@ func TestMax(t *testing.T) {
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
 		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 	}}
 	for _, tcase := range tcases {
-		v, err := Max(tcase.v1, tcase.v2)
+		v, err := Max(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Max error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1331,27 +1505,67 @@ func TestMax(t *testing.T) {
 	}
 }
 
-func TestHashCodes(t *testing.T) {
-	n1 := sqltypes.NULL
-	n2 := sqltypes.Value{}
+func TestMaxCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       string
+		err       error
+	}{
+		{
+			// accent insensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       "ǍḄÇ",
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       "abc\u00a0",
+			collation: getCollationID("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       "cs",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "cukor",
+			v2:        "csak",
+			out:       "csak",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := Max(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
 
-	h1, err := NullsafeHashcode(n1)
-	require.NoError(t, err)
-	h2, err := NullsafeHashcode(n2)
-	require.NoError(t, err)
-	assert.Equal(t, h1, h2)
-
-	char := TestValue(querypb.Type_VARCHAR, "aa")
-	_, err = NullsafeHashcode(char)
-	require.Error(t, err)
-
-	num := TestValue(querypb.Type_INT64, "123")
-	_, err = NullsafeHashcode(num)
-	require.NoError(t, err)
+		if got.ToString() != tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
+		}
+	}
 }
 
 func printValue(v sqltypes.Value) string {
-	return fmt.Sprintf("%v:%q", v.Type(), v.ToBytes())
+	vBytes, _ := v.ToBytes()
+	return fmt.Sprintf("%v:%q", v.Type(), vBytes)
 }
 
 // These benchmarks show that using existing ASCII representations
@@ -1375,7 +1589,7 @@ func BenchmarkAddActual(b *testing.B) {
 	v1 := sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1"))
 	v2 := sqltypes.MakeTrusted(querypb.Type_INT64, []byte("12"))
 	for i := 0; i < b.N; i++ {
-		v1 = NullsafeAdd(v1, v2, querypb.Type_INT64)
+		v1, _ = NullSafeAdd(v1, v2, querypb.Type_INT64)
 	}
 }
 
@@ -1415,16 +1629,16 @@ func BenchmarkAddGoInterface(b *testing.B) {
 }
 
 func BenchmarkAddGoNonInterface(b *testing.B) {
-	v1 := EvalResult{typ: querypb.Type_INT64, ival: 1}
-	v2 := EvalResult{typ: querypb.Type_INT64, ival: 12}
+	v1 := newEvalInt64(1)
+	v2 := newEvalInt64(12)
 	for i := 0; i < b.N; i++ {
-		if v1.typ != querypb.Type_INT64 {
+		if v1.typeof() != querypb.Type_INT64 {
 			b.Error("type assertion failed")
 		}
-		if v2.typ != querypb.Type_INT64 {
+		if v2.typeof() != querypb.Type_INT64 {
 			b.Error("type assertion failed")
 		}
-		v1 = EvalResult{typ: querypb.Type_INT64, ival: v1.ival + v2.ival}
+		v1 = newEvalInt64(v1.int64() + v2.int64())
 	}
 }
 
@@ -1433,5 +1647,38 @@ func BenchmarkAddGo(b *testing.B) {
 	v2 := int64(2)
 	for i := 0; i < b.N; i++ {
 		v1 += v2
+	}
+}
+
+func TestParseStringToFloat(t *testing.T) {
+	tcs := []struct {
+		str string
+		val float64
+	}{
+		{str: ""},
+		{str: " "},
+		{str: "1", val: 1},
+		{str: "1.10", val: 1.10},
+		{str: "    6.87", val: 6.87},
+		{str: "93.66  ", val: 93.66},
+		{str: "\t 42.10 \n ", val: 42.10},
+		{str: "1.10aa", val: 1.10},
+		{str: ".", val: 0.00},
+		{str: ".99", val: 0.99},
+		{str: "..99", val: 0},
+		{str: "1.", val: 1},
+		{str: "0.1.99", val: 0.1},
+		{str: "0.", val: 0},
+		{str: "8794354", val: 8794354},
+		{str: "    10  ", val: 10},
+		{str: "2266951196291479516", val: 2266951196291479516},
+		{str: "abcd123", val: 0},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.str, func(t *testing.T) {
+			got := parseStringToFloat(tc.str)
+			require.EqualValues(t, tc.val, got)
+		})
 	}
 }

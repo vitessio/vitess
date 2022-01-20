@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	leaseTTL = flag.Int("topo_etcd_lease_ttl", 30, "Lease TTL for locks and master election. The client will use KeepAlive to keep the lease going.")
+	leaseTTL = flag.Int("topo_etcd_lease_ttl", 30, "Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going.")
 )
 
 // newUniqueEphemeralKV creates a new file in the provided directory.
