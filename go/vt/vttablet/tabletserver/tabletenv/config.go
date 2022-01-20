@@ -34,11 +34,9 @@ import (
 
 // These constants represent values for various config parameters.
 const (
-	Enable  = "enable"
-	Disable = "disable"
-	Dryrun  = "dryRun"
-	// TODO(deepthi): Deprecated. Should be deleted after v12.0
-	NotOnMaster  = "notOnMaster"
+	Enable       = "enable"
+	Disable      = "disable"
+	Dryrun       = "dryRun"
 	NotOnPrimary = "notOnPrimary"
 	Polling      = "polling"
 	Heartbeat    = "heartbeat"
