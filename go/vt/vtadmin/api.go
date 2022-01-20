@@ -200,7 +200,6 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		middlewares = append(middlewares, vthandlers.NewAuthenticationHandler(authn))
 	}
 
-	opts.HTTPOpts.EnableDynamicClusters = true
 	if opts.HTTPOpts.EnableDynamicClusters {
 		api.clusterCache = cache.New(24*time.Hour, 24*time.Hour)
 		api.clusterCache.OnEvicted(api.EjectDynamicCluster)
