@@ -318,3 +318,42 @@ func TestERSForInitialization(t *testing.T) {
 	assert.Contains(t, strArray[0], "primary") // primary first
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 }
+
+// TestReplicationStatusAfterERS checks that the replication status on all the tablets is set correctly after we run ERS.
+func TestReplicationStatusAfterERS(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+	var newPrimary *cluster.Vttablet
+
+	// We should be able to do a series of ERS-es, even if nothing
+	// is down, without issue and the replication status should be okay
+	for i := 1; i <= 4; i++ {
+		newPrimary = tablets[i%2]
+		out, err := utils.Ers(clusterInstance, newPrimary, "60s", "30s")
+		log.Infof("ERS loop %d.  EmergencyReparentShard Output: %v", i, out)
+		require.NoError(t, err)
+		time.Sleep(2 * time.Second)
+		for _, tablet := range tablets {
+			if tablet.Alias != newPrimary.Alias {
+				utils.CheckReplicationStatus(context.Background(), t, tablet, true, true)
+			}
+		}
+	}
+	// We should do the same for vtctl binary
+	for i := 1; i <= 4; i++ {
+		newPrimary = tablets[i%2]
+		out, err := utils.ErsWithVtctl(clusterInstance, newPrimary)
+		log.Infof("ERS-vtctl loop %d.  EmergencyReparentShard Output: %v", i, out)
+		require.NoError(t, err)
+		time.Sleep(2 * time.Second)
+		for _, tablet := range tablets {
+			if tablet.Alias != newPrimary.Alias {
+				utils.CheckReplicationStatus(context.Background(), t, tablet, true, true)
+			}
+		}
+	}
+}

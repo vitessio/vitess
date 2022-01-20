@@ -301,8 +301,11 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 }
 
 // ErsWithVtctl runs ERS via vtctl binary
-func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
+func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	if tab != nil {
+		args = append(args, "-new_primary", tab.Alias)
+	}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 
@@ -620,15 +623,16 @@ func SetReplicationSourceFailed(tablet *cluster.Vttablet, prsOut string) bool {
 // CheckReplicationStatus checks that the replication for sql and io threads is setup as expected
 func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sqlThreadRunning bool, ioThreadRunning bool) {
 	res := RunSQL(ctx, t, "show slave status;", tablet)
+	require.EqualValues(t, 1, len(res.Rows), "no replication status on %v", tablet.Alias)
 	if ioThreadRunning {
-		require.Equal(t, "Yes", res.Rows[0][10].ToString())
+		require.Equal(t, "Yes", res.Rows[0][10].ToString(), "io thread stopped on %v", tablet.Alias)
 	} else {
-		require.Equal(t, "No", res.Rows[0][10].ToString())
+		require.Equal(t, "No", res.Rows[0][10].ToString(), "io thread running on %v", tablet.Alias)
 	}
 
 	if sqlThreadRunning {
-		require.Equal(t, "Yes", res.Rows[0][11].ToString())
+		require.Equal(t, "Yes", res.Rows[0][11].ToString(), "sql thread stopped on %v", tablet.Alias)
 	} else {
-		require.Equal(t, "No", res.Rows[0][11].ToString())
+		require.Equal(t, "No", res.Rows[0][11].ToString(), "sql thread running on %v", tablet.Alias)
 	}
 }
