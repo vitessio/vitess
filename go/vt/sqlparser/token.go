@@ -120,6 +120,7 @@ var keywords = map[string]int{
 	"before":                   BEFORE,
 	"begin":                    BEGIN,
 	"between":                  BETWEEN,
+	"serial":                   SERIAL,
 	"bigint":                   BIGINT,
 	"binary":                   BINARY,
 	"bit":                      BIT,
