@@ -33,7 +33,7 @@ import (
 
 func TestDeleteUnsharded(t *testing.T) {
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Unsharded,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -66,7 +66,7 @@ func TestDeleteUnsharded(t *testing.T) {
 func TestDeleteEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -98,7 +98,7 @@ func TestDeleteEqual(t *testing.T) {
 func TestDeleteEqualMultiCol(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -134,7 +134,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -165,7 +165,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			Query:  "dummy_delete",
 			RoutingParameters: &RoutingParameters{
@@ -187,7 +187,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -273,7 +273,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -356,7 +356,7 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 func TestDeleteSharded(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -383,7 +383,7 @@ func TestDeleteSharded(t *testing.T) {
 func TestDeleteShardedStreaming(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -407,7 +407,7 @@ func TestDeleteShardedStreaming(t *testing.T) {
 func TestDeleteScatterOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -492,7 +492,7 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		DML: DML{
+		DML: &DML{
 			Opcode: In,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
