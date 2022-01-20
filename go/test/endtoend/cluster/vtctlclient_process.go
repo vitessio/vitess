@@ -42,6 +42,7 @@ type VtctlClientParams struct {
 	RequestContext string
 	SkipPreflight  bool
 	UUIDList       string
+	CallerId       string
 }
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
@@ -87,6 +88,10 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 	}
 	if params.SkipPreflight {
 		args = append(args, "-skip_preflight")
+	}
+
+	if params.CallerId != "" {
+		args = append(args, "-caller_id", params.CallerId)
 	}
 	args = append(args, Keyspace)
 	return vtctlclient.ExecuteCommandWithOutput(args...)
