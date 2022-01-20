@@ -175,6 +175,51 @@ func TestMain(m *testing.M) {
 			"-ddl_strategy", "gh-ost",
 		}
 
+		primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+		replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
+
+		tableACLConfigJSON := path.Join("/tmp", "table_acl_config.json")
+		f, _ := os.Create(tableACLConfigJSON)
+		vtStaticACLJSON := `{
+	"table_groups":
+	[
+	    {
+	        "name": "planetscale user groups",
+	        "table_names_or_prefixes":
+	        [
+	            "%"
+	        ],
+	        "readers":
+	        [
+	            "planetscale-reader",
+	            "planetscale-writer",
+	            "planetscale-admin",
+	            "root"
+	        ],
+	        "writers":
+	        [
+	            "planetscale-writer",
+	            "planetscale-writer-only",
+	            "planetscale-admin",
+	            "root"
+	        ],
+	        "admins":
+	        [
+	            "planetscale-admin",
+	            "root"
+	        ]
+	    }
+	]
+}`
+		f.WriteString(vtStaticACLJSON)
+		f.Close()
+
+		// start the tablets
+		for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
+			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-table-acl-config", tableACLConfigJSON, "-queryserver-config-strict-table-acl")
+			tablet.VttabletProcess.Setup()
+		}
+
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
