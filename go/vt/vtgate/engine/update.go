@@ -45,7 +45,7 @@ type VindexValues struct {
 
 // Update represents the instructions to perform an update.
 type Update struct {
-	DML
+	*DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string]*VindexValues

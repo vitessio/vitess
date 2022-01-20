@@ -146,13 +146,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*
 	replaceSubQuery(ctx, sel)
 	return &routeGen4{
 		eroute: &engine.Route{
-			Opcode:              op.RouteOpCode,
-			TableName:           strings.Join(tableNames, ", "),
-			Keyspace:            op.Keyspace,
-			Vindex:              vindex,
-			Values:              values,
-			SysTableTableName:   op.SysTableTableName,
-			SysTableTableSchema: op.SysTableTableSchema,
+			Opcode:    op.RouteOpCode,
+			TableName: strings.Join(tableNames, ", "),
+			RoutingParameters: &engine.RoutingParameters{
+				Keyspace:            op.Keyspace,
+				Vindex:              vindex,
+				Values:              values,
+				SysTableTableName:   op.SysTableTableName,
+				SysTableTableSchema: op.SysTableTableSchema,
+			},
 		},
 		Select:    sel,
 		tables:    op.TableID(),

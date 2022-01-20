@@ -36,7 +36,7 @@ import (
 
 func TestUpdateUnsharded(t *testing.T) {
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Unsharded,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -70,7 +70,7 @@ func TestUpdateUnsharded(t *testing.T) {
 func TestUpdateEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -101,7 +101,7 @@ func TestUpdateEqual(t *testing.T) {
 func TestUpdateEqualMultiCol(t *testing.T) {
 	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -127,7 +127,7 @@ func TestUpdateEqualMultiCol(t *testing.T) {
 func TestUpdateScatter(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -152,7 +152,7 @@ func TestUpdateScatter(t *testing.T) {
 
 	// works with multishard autocommit
 	upd = &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -184,7 +184,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -215,7 +215,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: &vindexes.Keyspace{
@@ -237,7 +237,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 func TestUpdateEqualChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -380,7 +380,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Equal,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -501,7 +501,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	// update t1 set c1 = 1, c2 = 2, c3 = 3
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: Scatter,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -613,7 +613,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 func TestUpdateIn(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: In,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -638,7 +638,7 @@ func TestUpdateIn(t *testing.T) {
 
 func TestUpdateInStreamExecute(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
-	upd := &Update{DML: DML{
+	upd := &Update{DML: &DML{
 		Opcode: In,
 		RoutingParameters: &RoutingParameters{
 			Keyspace: ks.Keyspace,
@@ -664,7 +664,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 
 func TestUpdateInMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
-	upd := &Update{DML: DML{
+	upd := &Update{DML: &DML{
 		Opcode: In,
 		RoutingParameters: &RoutingParameters{
 			Keyspace: ks.Keyspace,
@@ -690,7 +690,7 @@ func TestUpdateInMultiCol(t *testing.T) {
 func TestUpdateInChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: In,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,
@@ -819,7 +819,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		DML: DML{
+		DML: &DML{
 			Opcode: In,
 			RoutingParameters: &RoutingParameters{
 				Keyspace: ks.Keyspace,

@@ -39,9 +39,7 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	if err != nil {
 		return nil, err
 	}
-	eupd := &engine.Update{
-		DML: *dml,
-	}
+	eupd := &engine.Update{DML: dml}
 
 	if dml.Opcode == engine.Unsharded {
 		return eupd, nil

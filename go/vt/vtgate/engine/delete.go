@@ -38,7 +38,7 @@ var _ Primitive = (*Delete)(nil)
 
 // Delete represents the instructions to perform a delete.
 type Delete struct {
-	DML
+	*DML
 
 	// Delete does not take inputs
 	noInputs
@@ -289,7 +289,7 @@ func (del *Delete) description() PrimitiveDescription {
 	}
 }
 
-func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
+func addFieldsIfNotEmpty(dml *DML, other map[string]interface{}) {
 	if dml.Vindex != nil {
 		other["Vindex"] = dml.Vindex.String()
 	}

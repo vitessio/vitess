@@ -64,6 +64,11 @@ type DML struct {
 	txNeeded
 }
 
+// NewDML returns and empty initialized DML struct.
+func NewDML() *DML {
+	return &DML{RoutingParameters: &RoutingParameters{}}
+}
+
 var opcodeName = map[Opcode]string{
 	Unsharded:     "Unsharded",
 	Equal:         "Equal",
