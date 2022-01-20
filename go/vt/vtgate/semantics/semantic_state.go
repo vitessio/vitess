@@ -324,10 +324,31 @@ var _ evalengine.ConverterLookup = (*SemTable)(nil)
 
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
+// ColumnLookup implements the ConverterLookup interface
 func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
 
+// CollationIDLookup implements the ConverterLookup interface
 func (st *SemTable) CollationIDLookup(expr sqlparser.Expr) collations.ID {
 	return st.CollationFor(expr)
+}
+
+// SingleUnshardedKeyspace returns true if all tables in the query are in the same, unsharded keyspace
+func (st *SemTable) SingleUnshardedKeyspace() bool {
+	var name string
+	for _, table := range st.Tables {
+		this := table.GetVindexTable().Keyspace
+		if this.Sharded {
+			return false
+		}
+		if name == "" {
+			name = this.Name
+		} else {
+			if name != this.Name {
+				return false
+			}
+		}
+	}
+	return true
 }
