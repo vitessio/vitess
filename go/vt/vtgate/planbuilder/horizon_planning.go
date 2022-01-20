@@ -344,6 +344,11 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 				return aggregate.Col, false, nil
 			}
 		}
+		for _, key := range node.eaggr.GroupByKeys {
+			if sqlparser.EqualsExpr(key.Expr, expr.Expr) {
+				return key.KeyCol, false, nil
+			}
+		}
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
 	case *vindexFunc:
 		colsBefore := len(node.eVindexFunc.Cols)
