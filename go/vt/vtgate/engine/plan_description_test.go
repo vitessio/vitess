@@ -52,13 +52,15 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 func createRoute() *Route {
 	hash, _ := vindexes.NewHash("vindex name", nil)
 	return &Route{
-		Opcode:            SelectScatter,
-		Keyspace:          &vindexes.Keyspace{Name: "ks"},
-		TargetDestination: key.DestinationAllShards{},
-		Query:             "select all the things",
-		TableName:         "tableName",
-		FieldQuery:        "more query",
-		Vindex:            hash.(*vindexes.Hash),
+		Opcode: SelectScatter,
+		RoutingParameters: &RoutingParameters{
+			Keyspace:          &vindexes.Keyspace{Name: "ks"},
+			TargetDestination: key.DestinationAllShards{},
+			Vindex:            hash.(*vindexes.Hash),
+		},
+		Query:      "select all the things",
+		TableName:  "tableName",
+		FieldQuery: "more query",
 	}
 }
 

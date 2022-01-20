@@ -36,21 +36,8 @@ type DML struct {
 	// Opcode is the execution opcode.
 	Opcode Opcode
 
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
-
-	// TargetDestination specifies the destination to send the query to.
-	TargetDestination key.Destination
-
 	// Query specifies the query to be executed.
 	Query string
-
-	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
-
-	// Values specifies the vindex values to use for routing.
-	// For now, only one value is specified.
-	Values []evalengine.Expr
 
 	// KsidVindex is primary Vindex
 	KsidVindex vindexes.Vindex
@@ -70,6 +57,9 @@ type DML struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// RoutingParameters parameters required for query routing.
+	*RoutingParameters
 
 	txNeeded
 }

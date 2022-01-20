@@ -164,14 +164,16 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 		t.Run(tc.testName, func(t *testing.T) {
 			sel := &Route{
 				Opcode: SelectDBA,
-				Keyspace: &vindexes.Keyspace{
-					Name:    "ks",
-					Sharded: false,
+				RoutingParameters: &RoutingParameters{
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: false,
+					},
+					SysTableTableSchema: stringListToExprList(tc.tableSchema),
+					SysTableTableName:   tc.tableName,
 				},
-				Query:               "dummy_select",
-				FieldQuery:          "dummy_select_field",
-				SysTableTableSchema: stringListToExprList(tc.tableSchema),
-				SysTableTableName:   tc.tableName,
+				Query:      "dummy_select",
+				FieldQuery: "dummy_select_field",
 			}
 			vc := &loggingVCursor{
 				shards:  []string{"1"},

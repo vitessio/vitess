@@ -38,10 +38,13 @@ func TestUpdateUnsharded(t *testing.T) {
 	upd := &Update{
 		DML: DML{
 			Opcode: Unsharded,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: false,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: false,
+				},
 			},
+
 			Query: "dummy_update",
 		},
 	}
@@ -69,13 +72,15 @@ func TestUpdateEqual(t *testing.T) {
 	upd := &Update{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_update",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_update",
 		},
 	}
 
@@ -98,13 +103,15 @@ func TestUpdateEqualMultiCol(t *testing.T) {
 	upd := &Update{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			},
-			Query:  "dummy_update",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			Query: "dummy_update",
 		},
 	}
 
@@ -122,13 +129,15 @@ func TestUpdateScatter(t *testing.T) {
 	upd := &Update{
 		DML: DML{
 			Opcode: Scatter,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_update",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_update",
 		},
 	}
 
@@ -145,13 +154,15 @@ func TestUpdateScatter(t *testing.T) {
 	upd = &Update{
 		DML: DML{
 			Opcode: Scatter,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
 			Query:                "dummy_update",
-			Vindex:               vindex,
-			Values:               []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			MultiShardAutocommit: true,
 		},
 	}
@@ -175,13 +186,15 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	upd := &Update{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_update",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_update",
 		},
 	}
 
@@ -204,13 +217,15 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 	upd := &Update{
 		DML: DML{
 			Opcode: Equal,
-			Keyspace: &vindexes.Keyspace{
-				Name:    "ks",
-				Sharded: true,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			},
-			Query:  "dummy_update",
-			Vindex: vindex,
-			Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			Query: "dummy_update",
 		},
 	}
 
@@ -223,11 +238,13 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
 		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
+			Opcode: Equal,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
 			Query:            "dummy_update",
-			Vindex:           ks.Vindexes["hash"],
-			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1)},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
@@ -364,11 +381,13 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
 		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
+			Opcode: Equal,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["rg_vdx"],
+				Values:   []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+			},
 			Query:            "dummy_update",
-			Vindex:           ks.Vindexes["rg_vdx"],
-			Values:           []evalengine.Expr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 			Table:            ks.Tables["rg_tbl"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],
@@ -483,8 +502,10 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
 		DML: DML{
-			Opcode:           Scatter,
-			Keyspace:         ks.Keyspace,
+			Opcode: Scatter,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+			},
 			Query:            "dummy_update",
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
@@ -591,15 +612,18 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 
 func TestUpdateIn(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
-	upd := &Update{DML: DML{
-		Opcode:   In,
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_update",
-		Vindex:   ks.Vindexes["hash"],
-		Values: []evalengine.Expr{&evalengine.TupleExpr{
-			evalengine.NewLiteralInt(1),
-			evalengine.NewLiteralInt(2),
-		}}},
+	upd := &Update{
+		DML: DML{
+			Opcode: In,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values: []evalengine.Expr{&evalengine.TupleExpr{
+					evalengine.NewLiteralInt(1),
+					evalengine.NewLiteralInt(2),
+				}}},
+			Query: "dummy_update",
+		},
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
@@ -615,15 +639,16 @@ func TestUpdateIn(t *testing.T) {
 func TestUpdateInStreamExecute(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{DML: DML{
-		Opcode:   In,
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_update",
-		Vindex:   ks.Vindexes["hash"],
-		Values: []evalengine.Expr{&evalengine.TupleExpr{
-			evalengine.NewLiteralInt(1),
-			evalengine.NewLiteralInt(2),
-		}}},
-	}
+		Opcode: In,
+		RoutingParameters: &RoutingParameters{
+			Keyspace: ks.Keyspace,
+			Vindex:   ks.Vindexes["hash"],
+			Values: []evalengine.Expr{&evalengine.TupleExpr{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+			}}},
+		Query: "dummy_update",
+	}}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	err := upd.TryStreamExecute(vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -640,15 +665,17 @@ func TestUpdateInStreamExecute(t *testing.T) {
 func TestUpdateInMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{DML: DML{
-		Opcode:   In,
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_update",
-		Vindex:   ks.Vindexes["rg_vdx"],
-		Values: []evalengine.Expr{
-			&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
-			&evalengine.TupleExpr{evalengine.NewLiteralInt(3), evalengine.NewLiteralInt(4)},
-		}},
-	}
+		Opcode: In,
+		RoutingParameters: &RoutingParameters{
+			Keyspace: ks.Keyspace,
+			Vindex:   ks.Vindexes["rg_vdx"],
+			Values: []evalengine.Expr{
+				&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+				&evalengine.TupleExpr{evalengine.NewLiteralInt(3), evalengine.NewLiteralInt(4)},
+			},
+		},
+		Query: "dummy_update",
+	}}
 
 	vc := newDMLTestVCursor("-20", "20-")
 	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
@@ -664,14 +691,16 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
 		DML: DML{
-			Opcode:   In,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_update",
-			Vindex:   ks.Vindexes["hash"],
-			Values: []evalengine.Expr{&evalengine.TupleExpr{
-				evalengine.NewLiteralInt(1),
-				evalengine.NewLiteralInt(2),
-			}},
+			Opcode: In,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["hash"],
+				Values: []evalengine.Expr{&evalengine.TupleExpr{
+					evalengine.NewLiteralInt(1),
+					evalengine.NewLiteralInt(2),
+				}},
+			},
+			Query:            "dummy_update",
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"],
@@ -791,14 +820,16 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
 		DML: DML{
-			Opcode:   In,
-			Keyspace: ks.Keyspace,
-			Query:    "dummy_update",
-			Vindex:   ks.Vindexes["rg_vdx"],
-			Values: []evalengine.Expr{
-				&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
-				evalengine.NewLiteralInt(3),
+			Opcode: In,
+			RoutingParameters: &RoutingParameters{
+				Keyspace: ks.Keyspace,
+				Vindex:   ks.Vindexes["rg_vdx"],
+				Values: []evalengine.Expr{
+					&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+					evalengine.NewLiteralInt(3),
+				},
 			},
+			Query:            "dummy_update",
 			Table:            ks.Tables["rg_tbl"],
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["rg_vdx"],

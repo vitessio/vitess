@@ -114,11 +114,8 @@ func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 }
 
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	params := RoutingParameters{
-		opcode:   del.Opcode,
-		keyspace: del.Keyspace,
-	}
-	rss, _, err := params.findRoute(vcursor, bindVars)
+	del.opcode = del.Opcode
+	rss, _, err := del.findRoutingInfo(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -205,12 +202,8 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	params := RoutingParameters{
-		opcode:            del.Opcode,
-		keyspace:          del.Keyspace,
-		targetDestination: dest,
-	}
-	rss, _, err := params.findRoute(vcursor, bindVars)
+	del.opcode = del.Opcode
+	rss, _, err := del.findRoutingInfo(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
