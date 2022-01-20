@@ -129,7 +129,7 @@ func getBestVindexOption(exprs []sqlparser.Expr, index *vindexes.ColumnVindex) *
 			if !sqlparser.IsSimpleTuple(valExpr) {
 				continue
 			}
-			opcode = engine.In
+			opcode = engine.IN
 		default:
 			continue
 		}

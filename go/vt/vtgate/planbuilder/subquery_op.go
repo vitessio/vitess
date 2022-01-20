@@ -100,13 +100,13 @@ func canMergeSubqueryPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bo
 		return false
 	}
 	switch a.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectReference:
+	case engine.Unsharded, engine.Reference:
 		return a.eroute.Opcode == b.eroute.Opcode
-	case engine.SelectDBA:
+	case engine.DBA:
 		return canSelectDBAMerge(a, b)
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		// Check if they target the same shard.
-		if b.eroute.Opcode == engine.SelectEqualUnique &&
+		if b.eroute.Opcode == engine.EqualUnique &&
 			a.eroute.Vindex == b.eroute.Vindex &&
 			a.condition != nil &&
 			b.condition != nil &&

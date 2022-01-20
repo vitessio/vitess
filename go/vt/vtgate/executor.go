@@ -1757,7 +1757,7 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 		if !ok {
 			return false
 		}
-		return router.Opcode == engine.SelectScatter
+		return router.Opcode == engine.Scatter
 	}, plan.Instructions)
 
 	if badPrimitive == nil {

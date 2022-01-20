@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -35,37 +37,68 @@ type Opcode int
 
 // This is the list of Opcode values.
 const (
-	// None is used for queries which do not need routing
-	None = Opcode(iota)
 	// Unsharded is for routing a statement
 	// to an unsharded keyspace.
-	Unsharded
-	// Any is for routing a statement
-	// to any shard of a keyspace. e.g. - Reference tables
-	Any
-	// Equal is for routing a statement to a single shard.
+	Unsharded = Opcode(iota)
+	// EqualUnique is for routing a query to a single shard.
+	// Requires: A Unique Vindex, and a single Value.
+	EqualUnique
+	// Equal is for routing a query using a non-unique vindex.
 	// Requires: A Vindex, and a single Value.
 	Equal
-	// In is for routing a statement to a multi shard.
+	// IN is for routing a statement to a multi shard.
 	// Requires: A Vindex, and a multi Values.
-	In
+	IN
 	// MultiEqual is used for routing queries with IN with tuple clause
 	// Requires: A Vindex, and a multi Tuple Values.
 	MultiEqual
 	// Scatter is for routing a scattered statement.
 	Scatter
+	// Next is for fetching from a sequence.
+	Next
+	// DBA is used for routing DBA queries
+	// e.g: Select * from information_schema.tables where schema_name = "a"
+	DBA
+	// Reference is for fetching from a reference table.
+	Reference
+	// None is used for queries which do not need routing
+	None
 	// ByDestination is to route explicitly to a given target destination.
 	// Is used when the query explicitly sets a target destination:
 	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
-	// DBA is used for routing DBA queries
-	// e.g: Select * from information_schema.tables where schema_name = "a"
-	DBA
+	// NumOpcodes is the number of opcodes
+	NumOpcodes
 )
 
+var opName = map[Opcode]string{
+	Unsharded:     "Unsharded",
+	EqualUnique:   "EqualUnique",
+	Equal:         "Equal",
+	IN:            "IN",
+	MultiEqual:    "MultiEqual",
+	Scatter:       "Scatter",
+	DBA:           "DBA",
+	Next:          "Next",
+	Reference:     "Reference",
+	None:          "None",
+	ByDestination: "ByDestination",
+}
+
+// MarshalJSON serializes the Opcode as a JSON string.
+// It's used for testing and diagnostics.
+func (code Opcode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(opName[code])
+}
+
+// String returns a string presentation of this opcode
+func (code Opcode) String() string {
+	return opName[code]
+}
+
 type RoutingParameters struct {
-	// Required for - All
-	opcode Opcode
+	// Opcode is the execution opcode.
+	Opcode Opcode
 
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
@@ -86,18 +119,18 @@ type RoutingParameters struct {
 }
 
 func (rp *RoutingParameters) findRoutingInfo(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	switch rp.opcode {
+	switch rp.Opcode {
 	case DBA:
 		return rp.systemQuery(vcursor, bindVars)
-	case Unsharded:
+	case Unsharded, Next:
 		return rp.unsharded(vcursor, bindVars)
-	case Any:
+	case Reference:
 		return rp.anyShard(vcursor, bindVars)
 	case Scatter:
 		return rp.byDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
 		return rp.byDestination(vcursor, bindVars, rp.TargetDestination)
-	case Equal:
+	case Equal, EqualUnique:
 		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
 			return rp.paramsSelectEqualMultiCol(vcursor, bindVars)
@@ -108,7 +141,7 @@ func (rp *RoutingParameters) findRoutingInfo(vcursor VCursor, bindVars map[strin
 		return nil, nil, nil
 	default:
 		// Unreachable.
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported opcode: %v", rp.opcode)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported opcode: %v", rp.Opcode)
 	}
 }
 

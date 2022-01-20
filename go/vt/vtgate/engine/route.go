@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -45,10 +44,6 @@ var _ Primitive = (*Route)(nil)
 // Route represents the instructions to route a read query to
 // one or many vttablets.
 type Route struct {
-	// the fields are described in the RouteOpcode values comments.
-	// Opcode is the execution opcode.
-	Opcode RouteOpcode
-
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
@@ -89,20 +84,24 @@ type Route struct {
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
-func NewSimpleRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace) *Route {
+func NewSimpleRoute(opcode Opcode, keyspace *vindexes.Keyspace) *Route {
 	return &Route{
-		Opcode:            opcode,
-		RoutingParameters: &RoutingParameters{Keyspace: keyspace},
+		RoutingParameters: &RoutingParameters{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+		},
 	}
 }
 
 // NewRoute creates a Route.
-func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
+func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
 	return &Route{
-		Opcode:            opcode,
-		RoutingParameters: &RoutingParameters{Keyspace: keyspace},
-		Query:             query,
-		FieldQuery:        fieldQuery,
+		RoutingParameters: &RoutingParameters{
+			Opcode:   opcode,
+			Keyspace: keyspace,
+		},
+		Query:      query,
+		FieldQuery: fieldQuery,
 	}
 }
 
@@ -142,74 +141,9 @@ func (obp OrderByParams) String() string {
 	return val
 }
 
-// RouteOpcode is a number representing the opcode
-// for the Route primitve.
-type RouteOpcode int
-
-// This is the list of RouteOpcode values.
-const (
-	// SelectUnsharded is the opcode for routing a
-	// select statement to an unsharded database.
-	SelectUnsharded = RouteOpcode(iota)
-	// SelectEqualUnique is for routing a query to
-	// a single shard. Requires: A Unique Vindex, and
-	// a single Value.
-	SelectEqualUnique
-	// SelectEqual is for routing a query using a
-	// non-unique vindex. Requires: A Vindex, and
-	// a single Value.
-	SelectEqual
-	// SelectIN is for routing a query that has an IN
-	// clause using a Vindex. Requires: A Vindex,
-	// and a Values list.
-	SelectIN
-	// SelectMultiEqual is the opcode for routing a query
-	// based on multiple vindex input values, similar to
-	// SelectIN, but the query sent to each shard is the
-	// same.
-	SelectMultiEqual
-	// SelectScatter is for routing a scatter query
-	// to all shards of a keyspace.
-	SelectScatter
-	// SelectNext is for fetching from a sequence.
-	SelectNext
-	// SelectDBA is for executing a DBA statement.
-	SelectDBA
-	// SelectReference is for fetching from a reference table.
-	SelectReference
-	// SelectNone is used for queries that always return empty values
-	SelectNone
-	// NumRouteOpcodes is the number of opcodes
-	NumRouteOpcodes
-)
-
-var routeName = map[RouteOpcode]string{
-	SelectUnsharded:   "SelectUnsharded",
-	SelectEqualUnique: "SelectEqualUnique",
-	SelectEqual:       "SelectEqual",
-	SelectIN:          "SelectIN",
-	SelectMultiEqual:  "SelectMultiEqual",
-	SelectScatter:     "SelectScatter",
-	SelectNext:        "SelectNext",
-	SelectDBA:         "SelectDBA",
-	SelectReference:   "SelectReference",
-	SelectNone:        "SelectNone",
-}
-
 var (
 	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 )
-
-// MarshalJSON serializes the RouteOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code RouteOpcode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(routeName[code])
-}
-
-// String returns a string presentation of this opcode
-func (code RouteOpcode) String() string {
-	return routeName[code]
-}
 
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
@@ -229,31 +163,6 @@ func (route *Route) GetTableName() string {
 // SetTruncateColumnCount sets the truncate column count.
 func (route *Route) SetTruncateColumnCount(count int) {
 	route.TruncateColumnCount = count
-}
-
-// GetGenericOpcode gets the Opcode which is used for routing
-func (route *Route) GetGenericOpcode() Opcode {
-	switch route.Opcode {
-	case SelectDBA:
-		return DBA
-	case SelectUnsharded, SelectNext:
-		return Unsharded
-	case SelectReference:
-		return Any
-	case SelectScatter:
-		return Scatter
-	case SelectEqual, SelectEqualUnique:
-		return Equal
-	case SelectIN:
-		return In
-	case SelectMultiEqual:
-		return MultiEqual
-	case SelectNone:
-		return None
-	default:
-		// Unreachable.
-		return None
-	}
 }
 
 // TryExecute performs a non-streaming exec.
@@ -308,25 +217,24 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 }
 
 func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	route.opcode = route.GetGenericOpcode()
 	switch route.Opcode {
-	case SelectDBA, SelectUnsharded, SelectNext, SelectReference, SelectScatter, SelectEqual, SelectEqualUnique:
+	case DBA, Unsharded, Next, Reference, Scatter, Equal, EqualUnique:
 		return route.findRoutingInfo(vcursor, bindVars)
-	case SelectIN:
+	case IN:
 		switch route.Vindex.(type) {
 		case vindexes.MultiColumn:
 			return route.paramsSelectInMultiCol(vcursor, bindVars)
 		default:
 			return route.paramsSelectIn(vcursor, bindVars)
 		}
-	case SelectMultiEqual:
+	case MultiEqual:
 		switch route.Vindex.(type) {
 		case vindexes.MultiColumn:
 			return route.paramsSelectMultiEqualMultiCol(vcursor, bindVars)
 		default:
 			return route.paramsSelectMultiEqual(vcursor, bindVars)
 		}
-	case SelectNone:
+	case None:
 		return nil, nil, nil
 	default:
 		// Unreachable.
@@ -797,7 +705,7 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",
-		Variant:           routeName[route.Opcode],
+		Variant:           route.Opcode.String(),
 		Keyspace:          route.Keyspace,
 		TargetDestination: route.TargetDestination,
 		Other:             other,

@@ -5,7 +5,7 @@
   "Original": "SELECT c_discount, c_last, c_credit, w_tax FROM customer1 AS c JOIN warehouse1 AS w ON c_w_id=w_id WHERE w_id = 1 AND c_d_id = 15 AND c_id = 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -24,7 +24,7 @@
   "Original": "SELECT c_discount, c_last, c_credit, w_tax FROM customer1 AS c JOIN warehouse1 AS w ON c_w_id=w_id WHERE w_id = 1 AND c_d_id = 15 AND c_id = 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -46,7 +46,7 @@
   "Original": "SELECT d_next_o_id, d_tax FROM district1 WHERE d_w_id = 15 AND d_id = 95 FOR UPDATE",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -133,7 +133,7 @@ Gen4 plan same as above
   "Original": "SELECT i_price, i_name, i_data FROM item1 WHERE i_id = 9654",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -156,7 +156,7 @@ Gen4 plan same as above
   "Original": "SELECT s_quantity, s_data, s_dist_01 s_dist FROM stock1 WHERE s_i_id = 2198 AND s_w_id = 89 FOR UPDATE",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -247,7 +247,7 @@ Gen4 plan same as above
   "Original": "SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name FROM warehouse1 WHERE w_id = 998",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -294,7 +294,7 @@ Gen4 plan same as above
   "Original": "SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name FROM district1 WHERE d_w_id = 896 AND d_id = 9",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -317,7 +317,7 @@ Gen4 plan same as above
   "Original": "SELECT count(c_id) namecnt FROM customer1 WHERE c_w_id = 5 AND c_d_id= 1 AND c_last='last'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -340,7 +340,7 @@ Gen4 plan same as above
   "Original": "SELECT c_id FROM customer1 WHERE c_w_id = 8 AND c_d_id = 5 AND c_last='item_last' ORDER BY c_first",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -363,7 +363,7 @@ Gen4 plan same as above
   "Original": "SELECT c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since FROM customer1 WHERE c_w_id = 8965 AND c_d_id = 1 AND c_id = 9 FOR UPDATE",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -386,7 +386,7 @@ Gen4 plan same as above
   "Original": "SELECT c_data FROM customer1 WHERE c_w_id = 32 AND c_d_id=68 AND c_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -477,7 +477,7 @@ Gen4 plan same as above
   "Original": "SELECT count(c_id) namecnt FROM customer1 WHERE c_w_id = 870 AND c_d_id= 780 AND c_last='last'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -500,7 +500,7 @@ Gen4 plan same as above
   "Original": "SELECT c_balance, c_first, c_middle, c_id FROM customer1 WHERE c_w_id = 840 AND c_d_id= 1 AND c_last='test' ORDER BY c_first",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -523,7 +523,7 @@ Gen4 plan same as above
   "Original": "SELECT c_balance, c_first, c_middle, c_last FROM customer1 WHERE c_w_id = 15 AND c_d_id=5169 AND c_id=1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -546,7 +546,7 @@ Gen4 plan same as above
   "Original": "SELECT o_id, o_carrier_id, o_entry_d FROM orders1 WHERE o_w_id = 9894 AND o_d_id = 3 AND o_c_id = 159 ORDER BY o_id DESC",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -569,7 +569,7 @@ Gen4 plan same as above
   "Original": "SELECT ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d FROM order_line1 WHERE ol_w_id = 92 AND ol_d_id = 5  AND ol_o_id = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -592,7 +592,7 @@ Gen4 plan same as above
   "Original": "SELECT no_o_id FROM new_orders1 WHERE no_d_id = 689 AND no_w_id = 15 ORDER BY no_o_id ASC LIMIT 1 FOR UPDATE",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -639,7 +639,7 @@ Gen4 plan same as above
   "Original": "SELECT o_c_id FROM orders1 WHERE o_id = 6 AND o_d_id = 1983 AND o_w_id = 894605",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -710,7 +710,7 @@ Gen4 plan same as above
   "Original": "SELECT SUM(ol_amount) sm FROM order_line1 WHERE ol_o_id = 680 AND ol_d_id = 201 AND ol_w_id = 87",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -757,7 +757,7 @@ Gen4 plan same as above
   "Original": "SELECT d_next_o_id FROM district1 WHERE d_id = 6 AND d_w_id= 21",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -780,7 +780,7 @@ Gen4 plan same as above
   "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 12 AND s.s_quantity \u003c 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -799,7 +799,7 @@ Gen4 plan same as above
   "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 12 AND s.s_quantity \u003c 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -821,7 +821,7 @@ Gen4 plan same as above
   "Original": "SELECT DISTINCT ol_i_id FROM order_line1 WHERE ol_w_id = 1 AND ol_d_id = 156 AND ol_o_id \u003c 500 AND ol_o_id \u003e= 56",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -844,7 +844,7 @@ Gen4 plan same as above
   "Original": "SELECT count(*) FROM stock1 WHERE s_w_id = 1 AND s_i_id = 8 AND s_quantity \u003c 1000",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -882,7 +882,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -893,7 +893,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -916,7 +916,7 @@ Gen4 plan same as above
   "Original": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) \u003e 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true

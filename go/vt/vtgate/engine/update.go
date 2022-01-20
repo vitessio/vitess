@@ -54,17 +54,9 @@ type Update struct {
 	noInputs
 }
 
-var updName = map[Opcode]string{
-	Unsharded:     "UpdateUnsharded",
-	Equal:         "UpdateEqual",
-	In:            "UpdateIn",
-	Scatter:       "UpdateScatter",
-	ByDestination: "UpdateByDestination",
-}
-
 // RouteType returns a description of the query routing type used by the primitive
 func (upd *Update) RouteType() string {
-	return updName[upd.Opcode]
+	return upd.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
@@ -97,7 +89,7 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		default:
 			return upd.execUpdateEqual(vcursor, bindVars)
 		}
-	case In:
+	case IN:
 		return upd.execUpdateIn(vcursor, bindVars)
 	case Scatter:
 		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})

@@ -5,7 +5,7 @@
   "Original": "select id from user",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -24,7 +24,7 @@ Gen4 plan same as above
   "Original": "select id from user where someColumn = null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -43,7 +43,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -66,7 +66,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 5+5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -81,7 +81,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 5+5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -103,7 +103,7 @@ Gen4 plan same as above
   "Original": "select id from music where id = 5 and user_id = 4",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -126,7 +126,7 @@ Gen4 plan same as above
   "Original": "select id from user where costly = 'aa' and name = 'bb'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -149,7 +149,7 @@ Gen4 plan same as above
   "Original": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -172,7 +172,7 @@ Gen4 plan same as above
   "Original": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -195,7 +195,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -218,7 +218,7 @@ Gen4 plan same as above
   "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -241,7 +241,7 @@ Gen4 plan same as above
   "Original": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -264,7 +264,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -287,7 +287,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col, name) in (('aa', 'bb')) and id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -310,7 +310,7 @@ Gen4 plan same as above
   "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -333,7 +333,7 @@ Gen4 plan same as above
   "Original": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -356,7 +356,7 @@ Gen4 plan same as above
   "Original": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -379,7 +379,7 @@ Gen4 plan same as above
   "Original": "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -398,7 +398,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col1, name) in (select * from music where music.user_id=user.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -417,7 +417,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col1, name) in (('aa', 1+1))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -432,7 +432,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col1, name) in (('aa', 1+1))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -454,7 +454,7 @@ Gen4 plan same as above
   "Original": "select Id from user where 1 in ('aa', 'bb')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -473,7 +473,7 @@ Gen4 plan same as above
   "Original": "select id from user where name in (col, 'bb')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -492,7 +492,7 @@ Gen4 plan same as above
   "Original": "select id from user where name = :a",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -515,7 +515,7 @@ Gen4 plan same as above
   "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -538,7 +538,7 @@ Gen4 plan same as above
   "Original": "select id from user where name in ::list",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -561,7 +561,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -580,7 +580,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -602,7 +602,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -621,7 +621,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -643,7 +643,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -666,7 +666,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -685,7 +685,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -716,7 +716,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -731,7 +731,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -761,7 +761,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -776,7 +776,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -797,7 +797,7 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -828,7 +828,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -839,7 +839,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -873,7 +873,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -884,7 +884,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -910,7 +910,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -921,7 +921,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -941,7 +941,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = 5 and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -964,7 +964,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -987,7 +987,7 @@ Gen4 plan same as above
   "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1010,7 +1010,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1033,7 +1033,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1056,7 +1056,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1079,7 +1079,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1107,7 +1107,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1118,7 +1118,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1144,7 +1144,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1155,7 +1155,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1179,7 +1179,7 @@ Gen4 plan same as above
   "Original": "select col from route1 where id = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1211,7 +1211,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1222,7 +1222,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1252,7 +1252,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1263,7 +1263,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1296,7 +1296,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1307,7 +1307,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1337,7 +1337,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1348,7 +1348,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1378,7 +1378,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1389,7 +1389,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1416,7 +1416,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1427,7 +1427,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1460,7 +1460,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1471,7 +1471,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1501,7 +1501,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1512,7 +1512,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1536,7 +1536,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1555,7 +1555,7 @@ Gen4 plan same as above
   "Original": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1578,7 +1578,7 @@ Gen4 plan same as above
   "Original": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1601,7 +1601,7 @@ Gen4 plan same as above
   "Original": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1629,7 +1629,7 @@ Gen4 plan same as above
   "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1657,7 +1657,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1668,7 +1668,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1701,7 +1701,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1712,7 +1712,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1741,7 +1741,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1752,7 +1752,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1776,7 +1776,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1787,7 +1787,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1815,7 +1815,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1826,7 +1826,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1867,7 +1867,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1878,7 +1878,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1891,7 +1891,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1928,7 +1928,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1939,7 +1939,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1952,7 +1952,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1976,7 +1976,7 @@ Gen4 plan same as above
   "Original": "select col from user where id = (select id from route1 where route1.id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2003,7 +2003,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -2014,7 +2014,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2039,7 +2039,7 @@ Gen4 plan same as above
   "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2058,7 +2058,7 @@ Gen4 plan same as above
   "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2080,7 +2080,7 @@ Gen4 plan same as above
   "Original": "select id from user where database()",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2099,7 +2099,7 @@ Gen4 plan same as above
   "Original": "select id from music where id = null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2118,7 +2118,7 @@ Gen4 plan same as above
   "Original": "select id from music where id is null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2141,7 +2141,7 @@ Gen4 plan same as above
   "Original": "select id from music where id is not null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2160,7 +2160,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id = null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2179,7 +2179,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id IN (null)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2198,7 +2198,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id IN (null, 1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2221,7 +2221,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id NOT IN (null, 1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2240,7 +2240,7 @@ Gen4 plan same as above
   "Original": "select id from music where id NOT IN (null, 1, 2) and user_id = 4",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2267,7 +2267,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2290,7 +2290,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -2305,7 +2305,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectIN",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -2336,7 +2336,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2359,7 +2359,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -2374,7 +2374,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectIN",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -2400,7 +2400,7 @@ Gen4 plan same as above
   "Original": "select c2 from cfc_vindex_col where c1 like 'A%'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2422,7 +2422,7 @@ Gen4 plan same as above
   "Original": "select * from samecolvin where col = :col",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2445,7 +2445,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id \u003e 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2464,7 +2464,7 @@ Gen4 plan same as above
   "Original": "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -2479,7 +2479,7 @@ Gen4 plan same as above
   "Original": "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -2505,7 +2505,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -2516,7 +2516,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2546,7 +2546,7 @@ Gen4 plan same as above
   "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2565,7 +2565,7 @@ Gen4 plan same as above
   "Original": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -2584,7 +2584,7 @@ Gen4 plan same as above
   "Original": "select ref.col from ref where ref.col in (select ref.col from ref)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectReference",
+    "Variant": "Reference",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2603,7 +2603,7 @@ Gen4 plan same as above
   "Original": "select u1.col from user as u1 where u1.id = 5 and u1.name in (select u2.name from user u2 where u2.id = 5)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2626,7 +2626,7 @@ Gen4 plan same as above
   "Original": "select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2649,7 +2649,7 @@ Gen4 plan same as above
   "Original": "select u1.col from user as u1 where u1.id = 5 and not exists (select u2.name from user u2 where u2.id = 5)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2680,7 +2680,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2695,7 +2695,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2719,7 +2719,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2734,7 +2734,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2762,7 +2762,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2777,7 +2777,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2806,7 +2806,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2821,7 +2821,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2853,7 +2853,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2868,7 +2868,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2897,7 +2897,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2912,7 +2912,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -2936,7 +2936,7 @@ Gen4 plan same as above
   "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2951,7 +2951,7 @@ Gen4 plan same as above
   "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2969,7 +2969,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = user.col and user.col = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2984,7 +2984,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = user.col and user.col = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3015,7 +3015,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3026,7 +3026,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3043,7 +3043,7 @@ Gen4 plan same as above
   "Original": "select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3070,7 +3070,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3081,7 +3081,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3107,7 +3107,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3118,7 +3118,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3142,7 +3142,7 @@ Gen4 plan same as above
   "Original": "select col from user where id = (select id from route1 as a where a.id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3171,7 +3171,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3182,7 +3182,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -3227,7 +3227,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -3238,7 +3238,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -3273,7 +3273,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -3284,7 +3284,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -3317,7 +3317,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -3328,7 +3328,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -3351,7 +3351,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
   "Original": "select * from multicolvin where column_b = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3374,7 +3374,7 @@ Gen4 plan same as above
   "Original": "select * from multicolvin where column_b = 1 and column_c = 2",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3397,7 +3397,7 @@ Gen4 plan same as above
   "Original": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3420,7 +3420,7 @@ Gen4 plan same as above
   "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3439,7 +3439,7 @@ Gen4 plan same as above
   "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3461,7 +3461,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1 and colb = 2",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3476,7 +3476,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1 and colb = 2",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3499,7 +3499,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb = 2 and cola = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3514,7 +3514,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb = 2 and cola = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3537,7 +3537,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola in (1,2) and colb in (3,4)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3552,7 +3552,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola in (1,2) and colb in (3,4)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3575,7 +3575,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb in (3,4) and cola in (1,2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3590,7 +3590,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb in (3,4) and cola in (1,2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3613,7 +3613,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb = 1 and cola in (3,4)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3628,7 +3628,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb = 1 and cola in (3,4)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3651,7 +3651,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3666,7 +3666,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3689,7 +3689,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb = 4 and colb in (1,10) and cola in (5,6)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3704,7 +3704,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb = 4 and colb in (1,10) and cola in (5,6)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3727,7 +3727,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb in (1,10) and colb = 4 and cola in (5,6)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3742,7 +3742,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb in (1,10) and colb = 4 and cola in (5,6)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3765,7 +3765,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb in (1,2) and cola IN (3,4) and cola = 5 and colb = 6",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3780,7 +3780,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where colb in (1,2) and cola IN (3,4) and cola = 5 and colb = 6",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3803,7 +3803,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3818,7 +3818,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3842,7 +3842,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3857,7 +3857,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3879,7 +3879,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1 and colb in (2,3)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3894,7 +3894,7 @@ Gen4 plan same as above
   "Original": "select * from multicol_tbl where cola = 1 and colb in (2,3)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -3916,7 +3916,7 @@ Gen4 plan same as above
   "Original": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
