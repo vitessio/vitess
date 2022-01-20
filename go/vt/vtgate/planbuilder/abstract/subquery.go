@@ -54,8 +54,8 @@ func (s *SubQuery) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
+func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) (LogicalOperator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
 }
 
 // UnsolvedPredicates implements the Operator interface

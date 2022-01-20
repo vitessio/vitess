@@ -79,6 +79,11 @@ func (rb *routeGen4) ContainsTables() semantics.TableSet {
 	return rb.tables
 }
 
+// OutputColumns implements the logicalPlan interface
+func (rb *routeGen4) OutputColumns() []sqlparser.SelectExpr {
+	return sqlparser.GetFirstSelect(rb.Select).SelectExprs
+}
+
 // prepareTheAST does minor fixups of the SELECT struct before producing the query string
 func (rb *routeGen4) prepareTheAST() {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {

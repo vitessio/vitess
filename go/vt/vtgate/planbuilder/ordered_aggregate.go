@@ -335,3 +335,15 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
 	return oa.input.WireupGen4(semTable)
 }
+
+// OutputColumns implements the logicalPlan interface
+func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
+	outputCols := sqlparser.CloneSelectExprs(oa.input.OutputColumns())
+	for _, aggr := range oa.eaggr.Aggregates {
+		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewColIdent(aggr.Alias)}
+	}
+	if oa.eaggr.TruncateColumnCount > 0 {
+		return outputCols[:oa.eaggr.TruncateColumnCount]
+	}
+	return outputCols
+}
