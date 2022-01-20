@@ -17,12 +17,16 @@ limitations under the License.
 package planbuilder
 
 import (
+	"sort"
+	"strings"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -139,6 +143,17 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+		plan, err := unshardedShortcut(selStmt, ks, semTable)
+		if err != nil {
+			return nil, err
+		}
+		if err := plan.WireupGen4(semTable); err != nil {
+			return nil, err
+		}
+		return plan, err
+	}
+
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err
@@ -186,6 +201,56 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	}
 
 	return plan, nil
+}
+
+func unshardedShortcut(stmt sqlparser.SelectStatement, ks *vindexes.Keyspace, semTable *semantics.SemTable) (logicalPlan, error) {
+	// this method is used when the query we are handling has all tables in the same unsharded keyspace
+	sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case sqlparser.SelectExpr:
+			removeKeyspaceFromSelectExpr(node)
+		case sqlparser.TableName:
+			cursor.Replace(sqlparser.TableName{
+				Name: node.Name,
+			})
+		}
+		return true
+	}, nil)
+
+	tableNames, err := getTableNames(semTable)
+	if err != nil {
+		return nil, err
+	}
+	return &routeGen4{
+		eroute: &engine.Route{
+			Opcode:    engine.SelectUnsharded,
+			TableName: strings.Join(tableNames, ", "),
+			Keyspace:  ks,
+		},
+		Select: stmt,
+	}, nil
+}
+
+func getTableNames(semTable *semantics.SemTable) ([]string, error) {
+	tableNameMap := map[string]interface{}{}
+
+	for _, tableInfo := range semTable.Tables {
+		tblObj := tableInfo.GetVindexTable()
+		var name string
+		if tableInfo.IsInfSchema() {
+			name = "tableName"
+		} else {
+			name = sqlparser.String(tblObj.Name)
+		}
+		tableNameMap[name] = nil
+	}
+
+	var tableNames []string
+	for name := range tableNameMap {
+		tableNames = append(tableNames, name)
+	}
+	sort.Strings(tableNames)
+	return tableNames, nil
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
