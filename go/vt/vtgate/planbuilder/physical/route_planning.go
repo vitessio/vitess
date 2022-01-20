@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,8 +48,8 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
-		// case ctx.vschema.Planner() == Gen4Left2Right:
-		//	return leftToRightSolve(ctx, op)
+		case ctx.VSchema.Planner() == querypb.ExecuteOptions_Gen4Left2Right:
+			return leftToRightSolve(ctx, op)
 		default:
 			return greedySolve(ctx, op)
 		}
@@ -110,6 +112,28 @@ func greedySolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abs
 		return nil, err
 	}
 	return op, nil
+}
+
+func leftToRightSolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+	plans, err := seedOperatorList(ctx, qg)
+	if err != nil {
+		return nil, err
+	}
+
+	var acc abstract.PhysicalOperator
+	for _, plan := range plans {
+		if acc == nil {
+			acc = plan
+			continue
+		}
+		joinPredicates := qg.GetPredicates(acc.TableID(), plan.TableID())
+		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return acc, nil
 }
 
 // seedOperatorList returns a route for each table in the qg
