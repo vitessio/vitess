@@ -2474,7 +2474,21 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+    "Query": "select unsharded.id from unsharded where unsharded.`name` in (select `name` from unsharded_a)",
+    "Table": "unsharded, unsharded_a"
+  }
+}
 
 # in subquery the id will be scoped to local table as there is no qualifier associated with it.
 "select id from user where id in (select col from unsharded where col = id)"
@@ -3912,4 +3926,4 @@ Gen4 plan same as above
     "Table": "unsharded_a, unsharded_b"
   }
 }
-Gen4 error: expr cannot be converted, not supported: coalesce(unsharded_b.col, 4) = 5
+Gen4 plan same as above

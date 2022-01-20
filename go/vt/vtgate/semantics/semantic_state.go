@@ -334,21 +334,34 @@ func (st *SemTable) CollationIDLookup(expr sqlparser.Expr) collations.ID {
 	return st.CollationFor(expr)
 }
 
-// SingleUnshardedKeyspace returns true if all tables in the query are in the same, unsharded keyspace
-func (st *SemTable) SingleUnshardedKeyspace() bool {
-	var name string
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
+func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
+	var ks *vindexes.Keyspace
 	for _, table := range st.Tables {
-		this := table.GetVindexTable().Keyspace
-		if this.Sharded {
-			return false
+		vindexTable := table.GetVindexTable()
+		if vindexTable == nil || vindexTable.Type != "" {
+			// this is not a simple table access - can't shortcut
+			return nil
 		}
-		if name == "" {
-			name = this.Name
+		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		if !ok {
+			return nil
+		}
+		if name.Name.String() != vindexTable.Name.String() {
+			// this points to a table alias. safer to not shortcut
+			return nil
+		}
+		this := vindexTable.Keyspace
+		if this == nil || this.Sharded {
+			return nil
+		}
+		if ks == nil {
+			ks = this
 		} else {
-			if name != this.Name {
-				return false
+			if ks != this {
+				return nil
 			}
 		}
 	}
-	return true
+	return ks
 }

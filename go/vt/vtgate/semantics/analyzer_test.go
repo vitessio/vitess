@@ -1360,20 +1360,20 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string
-		unsharded bool
+		unsharded *vindexes.Keyspace
 	}{
 		{
 			query:     "select 1 from t, t1",
-			unsharded: false, // both tables are unsharded, but from different keyspaces
+			unsharded: nil, // both tables are unsharded, but from different keyspaces
 		}, {
 			query:     "select 1 from t2",
-			unsharded: false,
+			unsharded: nil,
 		}, {
 			query:     "select 1 from t, t2",
-			unsharded: false,
+			unsharded: nil,
 		}, {
 			query:     "select 1 from t as A, t as B",
-			unsharded: true,
+			unsharded: ks1,
 		},
 	}
 
@@ -1383,6 +1383,19 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 			assert.Equal(t, test.unsharded, semTable.SingleUnshardedKeyspace())
 		})
 	}
+}
+
+var ks1 = &vindexes.Keyspace{
+	Name:    "ks1",
+	Sharded: false,
+}
+var ks2 = &vindexes.Keyspace{
+	Name:    "ks2",
+	Sharded: false,
+}
+var ks3 = &vindexes.Keyspace{
+	Name:    "ks3",
+	Sharded: true,
 }
 
 func fakeSchemaInfo() *FakeSI {
@@ -1397,19 +1410,6 @@ func fakeSchemaInfo() *FakeSI {
 		Name: sqlparser.NewColIdent("name"),
 		Type: querypb.Type_VARCHAR,
 	}}
-
-	ks1 := &vindexes.Keyspace{
-		Name:    "ks1",
-		Sharded: false,
-	}
-	ks2 := &vindexes.Keyspace{
-		Name:    "ks2",
-		Sharded: false,
-	}
-	ks3 := &vindexes.Keyspace{
-		Name:    "ks3",
-		Sharded: true,
-	}
 
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
