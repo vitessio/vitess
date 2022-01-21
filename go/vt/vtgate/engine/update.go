@@ -27,11 +27,9 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Update)(nil)
@@ -89,20 +87,11 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 	switch upd.Opcode {
 	case Unsharded:
-		return upd.execUpdateUnsharded(vcursor, bindVars, rss)
+		return upd.execUnsharded(vcursor, bindVars, rss)
 	case Equal:
-		switch upd.Vindex.(type) {
-		case vindexes.MultiColumn:
-			return upd.execUpdateEqualMultiCol(vcursor, bindVars, rss)
-		default:
-			return upd.execUpdateEqual(vcursor, bindVars, rss)
-		}
-	case IN:
-		return upd.execUpdateIn(vcursor, bindVars, rss)
-	case Scatter:
-		return upd.execUpdateByDestination(vcursor, bindVars, rss)
-	case ByDestination:
-		return upd.execUpdateByDestination(vcursor, bindVars, rss)
+		return upd.execEqual(vcursor, bindVars, rss, upd.updateVindexEntries)
+	case IN, Scatter, ByDestination:
+		return upd.execMultiDestination(vcursor, bindVars, rss, upd.updateVindexEntries)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd.Opcode)
@@ -124,71 +113,6 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 
-func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	return execShard(vcursor, upd.Query, bindVars, rss[0], true, true /* canAutocommit */)
-}
-
-func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	if len(rss) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-	if len(rss) != 1 {
-		return nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
-	}
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, upd.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (upd *Update) execUpdateEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex mapped id to multi shards: %d", len(rss))
-	}
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, upd.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           upd.Query,
-			BindVariables: bindVars,
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
-}
-
-func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           upd.Query,
-			BindVariables: bindVars,
-		}
-	}
-
-	// update any owned vindexes
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
-}
-
 // updateVindexEntries performs an update when a vindex is being modified
 // by the statement.
 // Note: the commit order may be different from the DML order because it's possible
@@ -196,6 +120,9 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
 func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	if len(upd.ChangedVindexValues) == 0 {
+		return nil
+	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}

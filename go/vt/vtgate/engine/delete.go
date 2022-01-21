@@ -26,11 +26,9 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Delete)(nil)
@@ -79,20 +77,11 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 	switch del.Opcode {
 	case Unsharded:
-		return del.execDeleteUnsharded(vcursor, bindVars, rss)
+		return del.execUnsharded(vcursor, bindVars, rss)
 	case Equal:
-		switch del.Vindex.(type) {
-		case vindexes.MultiColumn:
-			return del.execDeleteEqualMultiCol(vcursor, bindVars, rss)
-		default:
-			return del.execDeleteEqual(vcursor, bindVars, rss)
-		}
-	case IN:
-		return del.execDeleteIn(vcursor, bindVars, rss)
-	case Scatter:
-		return del.execDeleteByDestination(vcursor, bindVars, rss)
-	case ByDestination:
-		return del.execDeleteByDestination(vcursor, bindVars, rss)
+		return del.execEqual(vcursor, bindVars, rss, del.deleteVindexEntries)
+	case IN, Scatter, ByDestination:
+		return del.execMultiDestination(vcursor, bindVars, rss, del.deleteVindexEntries)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", del.Opcode)
@@ -113,76 +102,13 @@ func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
 }
 
-func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
-}
-
-func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	if len(rss) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-	if len(rss) != 1 {
-		return nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
-	}
-	if del.OwnedVindexQuery != "" {
-		err := del.deleteVindexEntries(vcursor, bindVars, rss)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, del.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (del *Delete) execDeleteEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex mapped id to multi shards: %d", len(rss))
-	}
-	if del.OwnedVindexQuery != "" {
-		err := del.deleteVindexEntries(vcursor, bindVars, rss)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, del.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	if del.OwnedVindexQuery != "" {
-		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           del.Query,
-			BindVariables: bindVars,
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
-}
-
-func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           del.Query,
-			BindVariables: bindVars,
-		}
-	}
-	if len(del.Table.Owned) > 0 {
-		err := del.deleteVindexEntries(vcursor, bindVars, rss)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
-}
-
 // deleteVindexEntries performs an delete if table owns vindex.
 // Note: the commit order may be different from the DML order because it's possible
 // for DMLs to reuse existing transactions.
 func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	if del.OwnedVindexQuery == "" {
+		return nil
+	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}

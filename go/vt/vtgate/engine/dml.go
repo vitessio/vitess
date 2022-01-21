@@ -21,13 +21,14 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // DML contains the common elements between Update and Delete plans
@@ -63,6 +64,39 @@ type DML struct {
 // NewDML returns and empty initialized DML struct.
 func NewDML() *DML {
 	return &DML{RoutingParameters: &RoutingParameters{}}
+}
+
+func (dml *DML) execUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	return execShard(vcursor, dml.Query, bindVars, rss[0], true, true /* canAutocommit */)
+}
+
+func (dml *DML) execEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
+	if len(rss) == 0 {
+		return &sqltypes.Result{}, nil
+	}
+	if len(rss) != 1 {
+		return nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
+	}
+	err := dmlSpecialFunc(vcursor, bindVars, rss)
+	if err != nil {
+		return nil, err
+	}
+	return execShard(vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+}
+
+func (dml *DML) execMultiDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
+	err := dmlSpecialFunc(vcursor, bindVars, rss)
+	if err != nil {
+		return nil, err
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           dml.Query,
+			BindVariables: bindVars,
+		}
+	}
+	return execMultiShard(vcursor, rss, queries, dml.MultiShardAutocommit)
 }
 
 func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
