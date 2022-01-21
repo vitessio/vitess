@@ -48,7 +48,7 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
-		case ctx.VSchema.Planner() == querypb.ExecuteOptions_Gen4Left2Right:
+		case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
 			return leftToRightSolve(ctx, op)
 		default:
 			return greedySolve(ctx, op)
