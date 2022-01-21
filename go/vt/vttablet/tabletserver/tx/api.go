@@ -57,6 +57,9 @@ type (
 		Autocommit      bool
 		Conclusion      string
 		LogToFile       bool
+		// Redact query parameters in generic struct output such as .String()
+		// that may be logged or returned to the client
+		RedactQueries bool
 
 		Stats *servenv.TimingsWrapper
 	}
@@ -126,7 +129,7 @@ func (p *Properties) RecordQuery(query string) {
 func (p *Properties) InTransaction() bool { return p != nil }
 
 // String returns a printable version of the transaction
-func (p *Properties) String(redactQueries bool) string {
+func (p *Properties) String() string {
 	if p == nil {
 		return ""
 	}
@@ -134,7 +137,7 @@ func (p *Properties) String(redactQueries bool) string {
 	printQueries := func() string {
 		sb := strings.Builder{}
 		for _, query := range p.Queries {
-			if redactQueries {
+			if p.RedactQueries {
 				query, _ = sqlparser.RedactSQLQuery(query)
 			}
 			sb.WriteString(query)

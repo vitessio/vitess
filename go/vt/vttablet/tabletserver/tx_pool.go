@@ -159,6 +159,9 @@ func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveC
 		ImmediateCaller: immediateCaller,
 		Autocommit:      autocommit,
 		Stats:           tp.txStats,
+		// -queryserver-config-terse-errors controls whether or not messages about the tranasaction that are sent to logs and/or clients
+		// have their query parameters redacted.
+		RedactQueries: tp.env.Config().TerseErrors,
 	}
 }
 

@@ -175,13 +175,11 @@ func (sc *StatefulConnection) Renew() error {
 }
 
 // String returns a printable version of the connection info.
-// It will redact query parameters if the -queryserver-config-terse-errors
-// flag is enabled.
 func (sc *StatefulConnection) String() string {
 	return fmt.Sprintf(
 		"%v\t%s",
 		sc.ConnID,
-		sc.txProps.String(sc.env.Config().TerseErrors),
+		sc.txProps.String(),
 	)
 }
 
