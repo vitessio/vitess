@@ -164,6 +164,7 @@ func init() {
 
 	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	flag.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
+	flag.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Do not log potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -268,6 +269,7 @@ type TabletConfig struct {
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
+	SanitizeLogMessages     bool    `json:"-"`
 	StrictTableACL          bool    `json:"-"`
 	EnableTableACLDryRun    bool    `json:"-"`
 	TableACLExemptACL       string  `json:"-"`
