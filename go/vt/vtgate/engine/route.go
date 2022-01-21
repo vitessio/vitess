@@ -305,60 +305,6 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func generateRowColValues(bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
-	// gather values from all the column in the vindex
-	var multiColValues [][]sqltypes.Value
-	var lv []sqltypes.Value
-	isSingleVal := map[int]interface{}{}
-	env := evalengine.EnvWithBindVars(bindVars)
-	for colIdx, rvalue := range values {
-		result, err := env.Evaluate(rvalue)
-		if err != nil {
-			return nil, nil, err
-		}
-		lv = result.TupleValues()
-		if lv == nil {
-			v, err := env.Evaluate(rvalue)
-			if err != nil {
-				return nil, nil, err
-			}
-			isSingleVal[colIdx] = nil
-			lv = []sqltypes.Value{v.Value()}
-		}
-		multiColValues = append(multiColValues, lv)
-	}
-
-	/*
-		need to convert them into vindex keys
-		from: cola (1,2) colb (3,4,5)
-		to: keys (1,3) (1,4) (1,5) (2,3) (2,4) (2,5)
-
-		so that the vindex can map them into correct destination.
-	*/
-
-	var rowColValues [][]sqltypes.Value
-	for _, firstCol := range multiColValues[0] {
-		rowColValues = append(rowColValues, []sqltypes.Value{firstCol})
-	}
-	for idx := 1; idx < len(multiColValues); idx++ {
-		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
-	}
-	return rowColValues, isSingleVal, nil
-}
-
-// buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input
-// convert it into [1,2,4][1,2,5][1,3,4][1,3,5]
-// all combination of left and right side.
-func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqltypes.Value {
-	var allCombinations [][]sqltypes.Value
-	for _, firstPart := range left {
-		for _, secondPart := range right {
-			allCombinations = append(allCombinations, append(firstPart, secondPart))
-		}
-	}
-	return allCombinations
-}
-
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	var err error
 	// Since Result is immutable, we make a copy.
@@ -397,52 +343,6 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	})
 
 	return out, err
-}
-
-func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
-	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
-	if err != nil {
-		return nil, nil, err
-	}
-	var ksid []byte
-	switch d := destinations[0].(type) {
-	case key.DestinationKeyspaceID:
-		ksid = d
-	case key.DestinationNone:
-		return nil, nil, nil
-	default:
-		return nil, nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
-	}
-	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(rss) != 1 {
-		return nil, nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
-	}
-	return rss[0], ksid, nil
-}
-
-func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
-	autocommit := canAutocommit && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
-		{
-			Sql:           query,
-			BindVariables: bindVars,
-		},
-	}, rollbackOnError, autocommit)
-	return result, vterrors.Aggregate(errs)
-}
-
-func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb.BoundQuery {
-	queries := make([]*querypb.BoundQuery, len(bvs))
-	for i, bv := range bvs {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bv,
-		}
-	}
-	return queries
 }
 
 func (route *Route) description() PrimitiveDescription {
@@ -500,6 +400,28 @@ func (route *Route) description() PrimitiveDescription {
 		TargetDestination: route.TargetDestination,
 		Other:             other,
 	}
+}
+
+func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
+	autocommit := canAutocommit && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{
+		{
+			Sql:           query,
+			BindVariables: bindVars,
+		},
+	}, rollbackOnError, autocommit)
+	return result, vterrors.Aggregate(errs)
+}
+
+func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb.BoundQuery {
+	queries := make([]*querypb.BoundQuery, len(bvs))
+	for i, bv := range bvs {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           query,
+			BindVariables: bv,
+		}
+	}
+	return queries
 }
 
 func orderByToString(in interface{}) string {

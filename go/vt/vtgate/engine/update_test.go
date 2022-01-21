@@ -64,7 +64,7 @@ func TestUpdateUnsharded(t *testing.T) {
 
 	vc = &loggingVCursor{}
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `Keyspace does not have exactly one shard: []`)
+	require.EqualError(t, err, `Keyspace 'ks' does not have exactly one shard: []`)
 }
 
 func TestUpdateEqual(t *testing.T) {
@@ -88,7 +88,7 @@ func TestUpdateEqual(t *testing.T) {
 	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard ks.-20: dummy_update {} true true`,
 	})
 
@@ -204,10 +204,12 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
+		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 	})
 }
 
 func TestUpdateEqualNoScatter(t *testing.T) {
+	t.Skip("planner does not produces this plan anymore")
 	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
 		"table":      "lkp",
 		"from":       "from",
@@ -280,7 +282,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -301,7 +303,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -324,7 +326,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -360,7 +362,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -630,7 +632,7 @@ func TestUpdateIn(t *testing.T) {
 	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
 		// ResolveDestinations is hard-coded to return -20.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
@@ -656,7 +658,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 	})
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
 		// ResolveDestinations is hard-coded to return -20.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
@@ -737,7 +739,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -764,7 +766,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -788,7 +790,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		`ResolveDestinations sharded [type:INT64 value:"1" type:INT64 value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
