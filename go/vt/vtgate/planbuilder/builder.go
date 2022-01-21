@@ -104,10 +104,10 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) se
 	case Gen4CompareV3:
 		return gen4CompareV3Planner(query), nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
-		return gen4Planner(query), nil
+		return gen4Planner(query, planner), nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
-			primary:  gen4Planner(query),
+			primary:  gen4Planner(query, querypb.ExecuteOptions_Gen4),
 			fallback: v3planner(query),
 		}
 		return fp.plan, nil
