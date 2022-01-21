@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -216,32 +215,6 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	return route.sort(result)
 }
 
-func (route *Route) findRoute(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	switch route.Opcode {
-	case DBA, Unsharded, Next, Reference, Scatter, Equal, EqualUnique:
-		return route.findRoutingInfo(vcursor, bindVars)
-	case IN:
-		switch route.Vindex.(type) {
-		case vindexes.MultiColumn:
-			return route.paramsSelectInMultiCol(vcursor, bindVars)
-		default:
-			return route.paramsSelectIn(vcursor, bindVars)
-		}
-	case MultiEqual:
-		switch route.Vindex.(type) {
-		case vindexes.MultiColumn:
-			return route.paramsSelectMultiEqualMultiCol(vcursor, bindVars)
-		default:
-			return route.paramsSelectMultiEqual(vcursor, bindVars)
-		}
-	case None:
-		return nil, nil, nil
-	default:
-		// Unreachable.
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
-	}
-}
-
 func filterOutNilErrors(errs []error) []error {
 	var errors []error
 	for _, err := range errs {
@@ -332,101 +305,6 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func resolveShardsMultiCol(vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value, shardIdsNeeded bool) ([]*srvtopo.ResolvedShard, [][][]*querypb.Value, error) {
-	destinations, err := vindex.Map(vcursor, rowColValues)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// And use the Resolver to map to ResolvedShards.
-	rss, shardsValues, err := vcursor.ResolveDestinationsMultiCol(keyspace.Name, rowColValues, destinations)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if shardIdsNeeded {
-		return rss, buildMultiColumnVindexValues(shardsValues), nil
-	}
-	return rss, nil, nil
-}
-
-// buildMultiColumnVindexValues takes in the values resolved for each shard and transposes them
-// and eliminates duplicates, returning the values to be used for each column for a multi column
-// vindex in each shard.
-func buildMultiColumnVindexValues(shardsValues [][][]sqltypes.Value) [][][]*querypb.Value {
-	var shardsIds [][][]*querypb.Value
-	for _, shardValues := range shardsValues {
-		// shardValues -> [[0,1], [0,2], [0,3]]
-		// shardIds -> [[0,0,0], [1,2,3]]
-		// cols = 2
-		cols := len(shardValues[0])
-		shardIds := make([][]*querypb.Value, cols)
-		colValSeen := make([]map[string]interface{}, cols)
-		for _, values := range shardValues {
-			for colIdx, value := range values {
-				if colValSeen[colIdx] == nil {
-					colValSeen[colIdx] = map[string]interface{}{}
-				}
-				if _, found := colValSeen[colIdx][value.String()]; found {
-					continue
-				}
-				shardIds[colIdx] = append(shardIds[colIdx], sqltypes.ValueToProto(value))
-				colValSeen[colIdx][value.String()] = nil
-			}
-		}
-		shardsIds = append(shardsIds, shardIds)
-	}
-	return shardsIds
-}
-
-func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*querypb.Value, isSingleVal map[int]interface{}) []map[string]*querypb.BindVariable {
-	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
-	for i, shardVals := range mapVals {
-		newbv := make(map[string]*querypb.BindVariable, len(bv)+len(shardVals)-len(isSingleVal))
-		for k, v := range bv {
-			newbv[k] = v
-		}
-		for j, vals := range shardVals {
-			if _, found := isSingleVal[j]; found {
-				// this vindex column is non-tuple column hence listVal bind variable is not required to be set.
-				continue
-			}
-			newbv[ListVarName+strconv.Itoa(j)] = &querypb.BindVariable{
-				Type:   querypb.Type_TUPLE,
-				Values: vals,
-			}
-		}
-		shardVars[i] = newbv
-	}
-	return shardVars
-}
-
-func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	value, err := env.Evaluate(route.Values[0])
-	if err != nil {
-		return nil, nil, err
-	}
-	rss, values, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value.TupleValues())
-	if err != nil {
-		return nil, nil, err
-	}
-	return rss, shardVars(bindVars, values), nil
-}
-
-func (route *Route) paramsSelectInMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rowColValues, isSingleVal, err := generateRowColValues(bindVars, route.Values)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rss, mapVals, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, true /* shardIdsNeeded */)
-	if err != nil {
-		return nil, nil, err
-	}
-	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
-}
-
 func generateRowColValues(bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
 	// gather values from all the column in the vindex
 	var multiColValues [][]sqltypes.Value
@@ -479,78 +357,6 @@ func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqlt
 		}
 	}
 	return allCombinations
-}
-
-func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	value, err := env.Evaluate(route.Values[0])
-	if err != nil {
-		return nil, nil, err
-	}
-	rss, _, err := resolveShards(vcursor, route.Vindex.(vindexes.SingleColumn), route.Keyspace, value.TupleValues())
-	if err != nil {
-		return nil, nil, err
-	}
-	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
-	}
-	return rss, multiBindVars, nil
-}
-
-func (route *Route) paramsSelectMultiEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	var multiColValues [][]sqltypes.Value
-	env := evalengine.EnvWithBindVars(bindVars)
-	for _, rvalue := range route.Values {
-		v, err := env.Evaluate(rvalue)
-		if err != nil {
-			return nil, nil, err
-		}
-		multiColValues = append(multiColValues, v.TupleValues())
-	}
-
-	// transpose from multi col value to vindex keys with one value from each multi column values.
-	// [1,3]
-	// [2,4]
-	// [5,6]
-	// change
-	// [1,2,5]
-	// [3,4,6]
-
-	rowColValues := make([][]sqltypes.Value, len(multiColValues[0]))
-	for _, colValues := range multiColValues {
-		for row, colVal := range colValues {
-			rowColValues[row] = append(rowColValues[row], colVal)
-		}
-	}
-
-	rss, _, err := resolveShardsMultiCol(vcursor, route.Vindex.(vindexes.MultiColumn), route.Keyspace, rowColValues, false /* shardIdsNotNeeded */)
-	if err != nil {
-		return nil, nil, err
-	}
-	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
-	}
-	return rss, multiBindVars, nil
-}
-
-func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	// Convert vindexKeys to []*querypb.Value
-	ids := make([]*querypb.Value, len(vindexKeys))
-	for i, vik := range vindexKeys {
-		ids[i] = sqltypes.ValueToProto(vik)
-	}
-
-	// Map using the Vindex
-	destinations, err := vindex.Map(vcursor, vindexKeys)
-	if err != nil {
-		return nil, nil, err
-
-	}
-
-	// And use the Resolver to map to ResolvedShards.
-	return vcursor.ResolveDestinations(keyspace.Name, ids, destinations)
 }
 
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
@@ -637,22 +443,6 @@ func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb
 		}
 	}
 	return queries
-}
-
-func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) []map[string]*querypb.BindVariable {
-	shardVars := make([]map[string]*querypb.BindVariable, len(mapVals))
-	for i, vals := range mapVals {
-		newbv := make(map[string]*querypb.BindVariable, len(bv)+1)
-		for k, v := range bv {
-			newbv[k] = v
-		}
-		newbv[ListVarName] = &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: vals,
-		}
-		shardVars[i] = newbv
-	}
-	return shardVars
 }
 
 func (route *Route) description() PrimitiveDescription {
