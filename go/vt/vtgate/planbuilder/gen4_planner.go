@@ -27,9 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ selectPlanner = gen4Planner
+var _ selectPlanner = gen4Planner("apa")
 
-func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+func gen4Planner(query string) selectPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
