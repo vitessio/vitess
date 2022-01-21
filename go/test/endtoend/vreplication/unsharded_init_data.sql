@@ -11,7 +11,9 @@ insert into orders(oid, cid, mname, pid, price, qty) values(3, 2, 'monoprice', 2
 insert into customer2(cid, name, typ, sport) values(1, 'john',1,'football,baseball');
 insert into customer2(cid, name, typ, sport) values(2, 'paul','soho','cricket');
 insert into customer2(cid, name, typ, sport) values(3, 'ringo','enterprise','');
--- for testing edge case where inserted binary value is 15 bytes, field is 16, mysql adds a null while storing but binlog returns 15 bytes
-insert into tenant(tenant_id, name) values (x'02BD00987932461E8820C908E84BAE', 'abc');
+-- for testing edge cases:
+--   1. where inserted binary value is 15 bytes, field is 16, mysql adds a null while storing but binlog returns 15 bytes
+--   2. where mixed case, special characters, or reserved words are used in identifiers
+insert into `Lead`(`Lead-id`, name) values (x'02BD00987932461E8820C908E84BAE', 'abc');
 
 

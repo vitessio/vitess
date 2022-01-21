@@ -57,7 +57,7 @@ ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 // This is to support in-place upgrades from 13.0.x to 14.0.x
 func AlterReparentJournal() []string {
 	return []string{
-		"`ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL`",
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
 	}
 }
 

@@ -117,7 +117,8 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 	}
 
 	return &ClusterConfig{
-		hostname:            "localhost",
+		// The ipv4 loopback address is used with the mysql client so that tcp is used in the test ("localhost" causes the socket file to be used, which fails)
+		hostname:            "127.0.0.1",
 		topoPort:            etcdPort,
 		vtctldPort:          basePort,
 		vtctldGrpcPort:      basePort + 999,
