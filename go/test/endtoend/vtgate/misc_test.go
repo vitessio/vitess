@@ -571,10 +571,10 @@ func TestSQLSelectLimit(t *testing.T) {
 		*/
 
 		//	without order by the results are not deterministic for testing purpose. Checking row count only.
-		qr := utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
+		qr := utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
 		assert.Equal(t, 2, len(qr.Rows))
 
-		qr = utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
+		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
 		assert.Equal(t, 3, len(qr.Rows))
 	}
 }
@@ -650,7 +650,7 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `SELECT /* GEN4_COMPARE_ONLY_GEN4 */ 
+	utils.Exec(t, conn, `SELECT /*vt+ PLANNER=gen4 */ 
                     TABLE_SCHEMA,
                     TABLE_NAME
                 FROM
@@ -802,6 +802,6 @@ func TestFilterAfterLeftJoin(t *testing.T) {
 	utils.Exec(t, conn, "insert into t1 (id1,id2) values (2, 3)")
 	utils.Exec(t, conn, "insert into t1 (id1,id2) values (3, 2)")
 
-	query := "select /* GEN4_COMPARE_ONLY_GEN4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
+	query := "select /*vt+ PLANNER=gen4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
 	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(10)]]`)
 }
