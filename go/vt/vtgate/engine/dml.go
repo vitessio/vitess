@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -66,81 +65,6 @@ func NewDML() *DML {
 	return &DML{RoutingParameters: &RoutingParameters{}}
 }
 
-func resolveMultiValueShards(
-	vcursor VCursor,
-	keyspace *vindexes.Keyspace,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
-	values []evalengine.Expr,
-	vindex vindexes.Vindex,
-) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
-	var rss []*srvtopo.ResolvedShard
-	var err error
-	switch vindex.(type) {
-	case vindexes.SingleColumn:
-		rss, err = resolveSingleColVindex(vcursor, bindVars, keyspace, vindex, values)
-	case vindexes.MultiColumn:
-		rss, err = resolveMultiColVindex(vcursor, bindVars, keyspace, vindex, values)
-	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vindex type: %T", vindex)
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bindVars,
-		}
-	}
-	return rss, queries, nil
-}
-
-func resolveSingleColVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable, keyspace *vindexes.Keyspace, vindex vindexes.Vindex, values []evalengine.Expr) ([]*srvtopo.ResolvedShard, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	keys, err := env.Evaluate(values[0])
-	if err != nil {
-		return nil, err
-	}
-	rss, err := resolveMultiShard(vcursor, vindex.(vindexes.SingleColumn), keyspace, keys.TupleValues())
-	if err != nil {
-		return nil, err
-	}
-	return rss, nil
-}
-
-func resolveMultiColVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable, keyspace *vindexes.Keyspace, vindex vindexes.Vindex, values []evalengine.Expr) ([]*srvtopo.ResolvedShard, error) {
-	rowColValues, _, err := generateRowColValues(bindVars, values)
-	if err != nil {
-		return nil, err
-	}
-
-	rss, _, err := resolveShardsMultiCol(vcursor, vindex.(vindexes.MultiColumn), keyspace, rowColValues, false /* shardIdsNeeded */)
-	if err != nil {
-		return nil, err
-	}
-	return rss, nil
-}
-
-func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey []sqltypes.Value) ([]*srvtopo.ResolvedShard, error) {
-	destinations, err := vindex.Map(vcursor, vindexKey)
-	if err != nil {
-		return nil, err
-	}
-	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
-	if err != nil {
-		return nil, err
-	}
-	return rss, nil
-}
-
-func execMultiShard(vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {
-	autocommit := (len(rss) == 1 || multiShardAutoCommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
-	return result, vterrors.Aggregate(errs)
-}
-
 func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 	for _, rs := range rss {
 		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {
@@ -148,6 +72,12 @@ func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 		}
 	}
 	return nil
+}
+
+func execMultiShard(vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {
+	autocommit := (len(rss) == 1 || multiShardAutoCommit) && vcursor.AutocommitApproval()
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* rollbackOnError */, autocommit)
+	return result, vterrors.Aggregate(errs)
 }
 
 func resolveKeyspaceID(vcursor VCursor, vindex vindexes.Vindex, vindexKey []sqltypes.Value) ([]byte, error) {

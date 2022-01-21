@@ -95,7 +95,7 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return del.execDeleteByDestination(vcursor, bindVars, rss)
 	default:
 		// Unreachable.
-		return nil, fmt.Errorf("unsupported opcode: %v", del)
+		return nil, fmt.Errorf("unsupported opcode: %v", del.Opcode)
 	}
 }
 

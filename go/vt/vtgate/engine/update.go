@@ -26,7 +26,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -79,25 +78,34 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		defer cancel()
 	}
 
+	rss, _, err := upd.findRoute(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+
 	switch upd.Opcode {
 	case Unsharded:
-		return upd.execUpdateUnsharded(vcursor, bindVars)
+		return upd.execUpdateUnsharded(vcursor, bindVars, rss)
 	case Equal:
 		switch upd.Vindex.(type) {
 		case vindexes.MultiColumn:
-			return upd.execUpdateEqualMultiCol(vcursor, bindVars)
+			return upd.execUpdateEqualMultiCol(vcursor, bindVars, rss)
 		default:
-			return upd.execUpdateEqual(vcursor, bindVars)
+			return upd.execUpdateEqual(vcursor, bindVars, rss)
 		}
 	case IN:
-		return upd.execUpdateIn(vcursor, bindVars)
+		return upd.execUpdateIn(vcursor, bindVars, rss)
 	case Scatter:
-		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
+		return upd.execUpdateByDestination(vcursor, bindVars, rss)
 	case ByDestination:
-		return upd.execUpdateByDestination(vcursor, bindVars, upd.TargetDestination)
+		return upd.execUpdateByDestination(vcursor, bindVars, rss)
 	default:
 		// Unreachable.
-		return nil, fmt.Errorf("unsupported opcode: %v", upd)
+		return nil, fmt.Errorf("unsupported opcode: %v", upd.Opcode)
 	}
 }
 
@@ -116,73 +124,54 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 
-func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
+func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	return execShard(vcursor, upd.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
-func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	key, err := env.Evaluate(upd.Values[0])
-	if err != nil {
-		return nil, err
-	}
-	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex.(vindexes.SingleColumn), upd.Keyspace, key.Value())
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rs)
-	if err != nil {
-		return nil, err
-	}
-	if len(ksid) == 0 {
+func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	if len(rss) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs}); err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values, upd.Vindex)
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
+	if len(rss) != 1 {
+		return nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
 	}
 	if len(upd.ChangedVindexValues) != 0 {
 		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
 			return nil, err
 		}
 	}
+	return execShard(vcursor, upd.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+}
+
+func (upd *Update) execUpdateEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex mapped id to multi shards: %d", len(rss))
+	}
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, err
+		}
+	}
+	return execShard(vcursor, upd.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+}
+
+func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
+			return nil, err
+		}
+	}
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           upd.Query,
+			BindVariables: bindVars,
+		}
+	}
 	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
 }
 
-func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-
+func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
@@ -198,35 +187,6 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 		}
 	}
 	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
-}
-
-func (upd *Update) execUpdateEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	var rowValue []sqltypes.Value
-	for _, rvalue := range upd.Values {
-		v, err := env.Evaluate(rvalue)
-		if err != nil {
-			return nil, err
-		}
-		rowValue = append(rowValue, v.Value())
-	}
-	rss, _, err := resolveShardsMultiCol(vcursor, upd.Vindex.(vindexes.MultiColumn), upd.Keyspace, [][]sqltypes.Value{rowValue}, false /* shardIdsNeeded */)
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex mapped id to multi shards: %d", len(rss))
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, upd.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified

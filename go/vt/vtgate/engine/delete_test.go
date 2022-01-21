@@ -60,7 +60,7 @@ func TestDeleteUnsharded(t *testing.T) {
 
 	vc = &loggingVCursor{}
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, "cannot send query to multiple shards for un-sharded database: []")
+	require.EqualError(t, err, "Keyspace 'ks' does not have exactly one shard: []")
 }
 
 func TestDeleteEqual(t *testing.T) {
@@ -156,6 +156,34 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 	})
+}
+
+func TestDeleteEqualNoScatter(t *testing.T) {
+	t.Skip("planner does not produces this plan anymore")
+	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+		"table":      "lkp",
+		"from":       "from",
+		"to":         "toc",
+		"write_only": "true",
+	})
+	del := &Delete{
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
+			Query: "dummy_delete",
+		},
+	}
+
+	vc := newDMLTestVCursor("0")
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.EqualError(t, err, "cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
 func TestDeleteOwnedVindex(t *testing.T) {

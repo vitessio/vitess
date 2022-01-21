@@ -301,7 +301,7 @@ func (rp *RoutingParameters) unsharded(vcursor VCursor, bindVars map[string]*que
 		return nil, nil, err
 	}
 	if len(rss) != 1 {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace '%s' does not have exactly one shard: %v", rp.Keyspace.Name, rss)
 	}
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i := range multiBindVars {
@@ -547,4 +547,58 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 		shardVars[i] = newbv
 	}
 	return shardVars
+}
+
+func generateRowColValues(bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
+	// gather values from all the column in the vindex
+	var multiColValues [][]sqltypes.Value
+	var lv []sqltypes.Value
+	isSingleVal := map[int]interface{}{}
+	env := evalengine.EnvWithBindVars(bindVars)
+	for colIdx, rvalue := range values {
+		result, err := env.Evaluate(rvalue)
+		if err != nil {
+			return nil, nil, err
+		}
+		lv = result.TupleValues()
+		if lv == nil {
+			v, err := env.Evaluate(rvalue)
+			if err != nil {
+				return nil, nil, err
+			}
+			isSingleVal[colIdx] = nil
+			lv = []sqltypes.Value{v.Value()}
+		}
+		multiColValues = append(multiColValues, lv)
+	}
+
+	/*
+		need to convert them into vindex keys
+		from: cola (1,2) colb (3,4,5)
+		to: keys (1,3) (1,4) (1,5) (2,3) (2,4) (2,5)
+
+		so that the vindex can map them into correct destination.
+	*/
+
+	var rowColValues [][]sqltypes.Value
+	for _, firstCol := range multiColValues[0] {
+		rowColValues = append(rowColValues, []sqltypes.Value{firstCol})
+	}
+	for idx := 1; idx < len(multiColValues); idx++ {
+		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
+	}
+	return rowColValues, isSingleVal, nil
+}
+
+// buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input
+// convert it into [1,2,4][1,2,5][1,3,4][1,3,5]
+// all combination of left and right side.
+func buildRowColValues(left [][]sqltypes.Value, right []sqltypes.Value) [][]sqltypes.Value {
+	var allCombinations [][]sqltypes.Value
+	for _, firstPart := range left {
+		for _, secondPart := range right {
+			allCombinations = append(allCombinations, append(firstPart, secondPart))
+		}
+	}
+	return allCombinations
 }
