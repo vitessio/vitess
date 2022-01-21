@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/streamlog"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -127,7 +126,7 @@ func (p *Properties) RecordQuery(query string) {
 func (p *Properties) InTransaction() bool { return p != nil }
 
 // String returns a printable version of the transaction
-func (p *Properties) String() string {
+func (p *Properties) String(redactQueries bool) string {
 	if p == nil {
 		return ""
 	}
@@ -135,7 +134,7 @@ func (p *Properties) String() string {
 	printQueries := func() string {
 		sb := strings.Builder{}
 		for _, query := range p.Queries {
-			if *streamlog.RedactDebugUIQueries {
+			if redactQueries {
 				query, _ = sqlparser.RedactSQLQuery(query)
 			}
 			sb.WriteString(query)
