@@ -150,9 +150,9 @@ func (rp *RoutingParameters) findRoute(vcursor VCursor, bindVars map[string]*que
 	case MultiEqual:
 		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
-			return rp.paramsSelectMultiEqualMultiCol(vcursor, bindVars)
+			return rp.multiEqualMultiCol(vcursor, bindVars)
 		default:
-			return rp.paramsSelectMultiEqual(vcursor, bindVars)
+			return rp.multiEqual(vcursor, bindVars)
 		}
 	default:
 		// Unreachable.
@@ -387,7 +387,7 @@ func (rp *RoutingParameters) inMultiCol(vcursor VCursor, bindVars map[string]*qu
 	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
 }
 
-func (rp *RoutingParameters) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (rp *RoutingParameters) multiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	env := evalengine.EnvWithBindVars(bindVars)
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
@@ -404,7 +404,7 @@ func (rp *RoutingParameters) paramsSelectMultiEqual(vcursor VCursor, bindVars ma
 	return rss, multiBindVars, nil
 }
 
-func (rp *RoutingParameters) paramsSelectMultiEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (rp *RoutingParameters) multiEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	var multiColValues [][]sqltypes.Value
 	env := evalengine.EnvWithBindVars(bindVars)
 	for _, rvalue := range rp.Values {

@@ -84,7 +84,7 @@ func TestDeleteEqual(t *testing.T) {
 	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
 	})
 
@@ -154,34 +154,8 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} false`,
+		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationNone()`,
 	})
-}
-
-func TestDeleteEqualNoScatter(t *testing.T) {
-	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
-		"table":      "lkp",
-		"from":       "from",
-		"to":         "toc",
-		"write_only": "true",
-	})
-	del := &Delete{
-		DML: &DML{
-			RoutingParameters: &RoutingParameters{
-				Opcode: Equal,
-				Keyspace: &vindexes.Keyspace{
-					Name:    "ks",
-					Sharded: true,
-				},
-				Vindex: vindex,
-				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
-			},
-			Query: "dummy_delete",
-		},
-	}
-
-	vc := newDMLTestVCursor("0")
-	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, "cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
 func TestDeleteOwnedVindex(t *testing.T) {
@@ -216,7 +190,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -232,7 +206,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
@@ -255,7 +229,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
