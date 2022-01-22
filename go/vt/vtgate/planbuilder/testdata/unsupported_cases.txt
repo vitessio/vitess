@@ -454,7 +454,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -478,7 +478,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -523,7 +523,7 @@ Gen4 error: expr cannot be converted, not supported: count(ue.col) > 10
   "Original": "select 1 from user having count(id) = 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -542,7 +542,7 @@ Gen4 error: expr cannot be converted, not supported: count(id) = 10
   "Original": "select 1 from user having count(id) = 10 and name = 'a'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -592,7 +592,7 @@ Gen4 error: Column 'id' in field list is ambiguous
   "Original": "select id2 from (select id from user) as x (id2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true

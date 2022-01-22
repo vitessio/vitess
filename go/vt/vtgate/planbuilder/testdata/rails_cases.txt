@@ -41,7 +41,7 @@
                 "Inputs": [
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectScatter",
+                    "Variant": "Scatter",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
@@ -52,7 +52,7 @@
                   },
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectEqualUnique",
+                    "Variant": "EqualUnique",
                     "Keyspace": {
                       "Name": "user",
                       "Sharded": true
@@ -69,7 +69,7 @@
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -82,7 +82,7 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -99,7 +99,7 @@
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -129,7 +129,7 @@
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -158,7 +158,7 @@
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -169,7 +169,7 @@
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectEqualUnique",
+                "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -186,7 +186,7 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
