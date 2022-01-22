@@ -25,6 +25,12 @@ access to Vitess.
 8. Set up a cron job to remove docker volumes and images every week
    1. `crontab -e`
    2. Within the file add a line `8 5 * * 6 docker system prune -f --volumes --all`
+9. Vtorc, Cluster 14 and some other tests use multiple MySQL instances which are all brought up with asynchronous I/O setup in InnoDB. This sometimes leads to us hitting the Linux asynchronous I/O limit.
+To fix this we increase the default limit on the self-hosted runners by -
+   1. To set the aio-max-nr value, add the following line to the /etc/sysctl.conf file:
+      1. `fs.aio-max-nr = 1048576`
+   2. To activate the new setting, run the following command:
+      1. `sysctl -p /etc/sysctl.conf`
 
 ### Moving a test to a self-hosted runner
 Most of the code for running the tests is generated code by `make generate_ci_workflows` which uses the file `ci_workflow_gen.go`
