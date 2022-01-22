@@ -331,7 +331,7 @@ func (fs *fuzzStore) callStartReplication() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.StartReplication(context.Background(), tablet)
+	_ = fs.client.StartReplication(context.Background(), tablet, false)
 	return nil
 }
 

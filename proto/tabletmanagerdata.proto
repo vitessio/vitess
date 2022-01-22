@@ -318,6 +318,7 @@ message StopReplicationMinimumResponse {
 }
 
 message StartReplicationRequest {
+  bool semiSync = 1;
 }
 
 message StartReplicationResponse {

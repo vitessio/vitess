@@ -15700,6 +15700,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a StartReplicationRequest. */
     interface IStartReplicationRequest {
+
+        /** StartReplicationRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a StartReplicationRequest. */
@@ -15710,6 +15713,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IStartReplicationRequest);
+
+        /** StartReplicationRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new StartReplicationRequest instance using the specified properties.

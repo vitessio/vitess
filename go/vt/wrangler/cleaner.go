@@ -143,7 +143,7 @@ func RecordChangeTabletTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Tabl
 // into the specified Cleaner
 func RecordStartReplicationAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
 	cleaner.Record(StartReplicationActionName, topoproto.TabletAliasString(tablet.Alias), func(ctx context.Context, wr *Wrangler) error {
-		return wr.TabletManagerClient().StartReplication(ctx, tablet)
+		return wr.StartReplication(ctx, tablet)
 	})
 }
 

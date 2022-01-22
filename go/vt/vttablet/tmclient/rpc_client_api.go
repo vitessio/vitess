@@ -129,7 +129,7 @@ type TabletManagerClient interface {
 	StopReplicationMinimum(ctx context.Context, tablet *topodatapb.Tablet, stopPos string, waitTime time.Duration) (string, error)
 
 	// StartReplication starts the mysql replication
-	StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error
+	StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error
 
 	// StartReplicationUntilAfter starts replication until after the position specified
 	StartReplicationUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error

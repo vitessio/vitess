@@ -333,7 +333,7 @@ func (s *server) StartReplication(ctx context.Context, request *tabletmanagerdat
 	defer s.tm.HandleRPCPanic(ctx, "StartReplication", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.StartReplicationResponse{}
-	return response, s.tm.StartReplication(ctx)
+	return response, s.tm.StartReplication(ctx, request.GetSemiSync())
 }
 
 func (s *server) StartReplicationUntilAfter(ctx context.Context, request *tabletmanagerdatapb.StartReplicationUntilAfterRequest) (response *tabletmanagerdatapb.StartReplicationUntilAfterResponse, err error) {
