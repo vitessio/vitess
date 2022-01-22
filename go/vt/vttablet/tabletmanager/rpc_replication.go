@@ -477,7 +477,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	if tm.isPrimarySideSemiSyncEnabled() {
 		// If using semi-sync, we need to disable primary-side.
-		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionFalse); err != nil {
+		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionTrue); err != nil {
 			return nil, err
 		}
 		defer func() {
