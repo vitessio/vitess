@@ -902,7 +902,7 @@ func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync 
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 
-	if semiSync != SemiSyncActionTrue {
+	if semiSync == SemiSyncActionFalse {
 		log.Error("invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading.")
 	}
 	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
