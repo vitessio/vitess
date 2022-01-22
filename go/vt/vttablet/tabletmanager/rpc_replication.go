@@ -173,7 +173,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 
 // StartReplication will start the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
-func (tm *TabletManager) StartReplication(ctx context.Context) error {
+func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) error {
 	log.Infof("StartReplication")
 	if err := tm.lock(ctx); err != nil {
 		return err
@@ -193,7 +193,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context) error {
 		}
 	}()
 
-	if err := tm.fixSemiSync(tm.Tablet().Type, SemiSyncActionFalse); err != nil {
+	if err := tm.fixSemiSync(tm.Tablet().Type, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return err
 	}
 	return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())

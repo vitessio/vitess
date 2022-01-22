@@ -202,7 +202,7 @@ func (client *FakeTabletManagerClient) PrimaryStatus(ctx context.Context, tablet
 }
 
 // StartReplication is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	return nil
 }
 

@@ -182,6 +182,16 @@ func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatap
 	return wr.tmc.ChangeType(ctx, ti.Tablet, tabletType, semiSync)
 }
 
+// StartReplication is used to start replication on the specified tablet
+// It also finds out if the tablet should be sending semi-sync ACKs or not.
+func (wr *Wrangler) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+	semiSync, err := wr.shouldSendSemiSyncAck(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	return wr.TabletManagerClient().StartReplication(ctx, tablet, semiSync)
+}
+
 func (wr *Wrangler) shouldSendSemiSyncAck(ctx context.Context, tablet *topodatapb.Tablet) (bool, error) {
 	shard, err := wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {

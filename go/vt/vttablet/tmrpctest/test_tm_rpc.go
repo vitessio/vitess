@@ -822,7 +822,7 @@ func tmRPCTestStopReplicationMinimumPanic(ctx context.Context, t *testing.T, cli
 
 var testStartReplicationCalled = false
 
-func (fra *fakeRPCTM) StartReplication(ctx context.Context) error {
+func (fra *fakeRPCTM) StartReplication(ctx context.Context, semiSync bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -831,12 +831,12 @@ func (fra *fakeRPCTM) StartReplication(ctx context.Context) error {
 }
 
 func tmRPCTestStartReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.StartReplication(ctx, tablet)
+	err := client.StartReplication(ctx, tablet, false)
 	compareError(t, "StartReplication", err, true, testStartReplicationCalled)
 }
 
 func tmRPCTestStartReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.StartReplication(ctx, tablet)
+	err := client.StartReplication(ctx, tablet, false)
 	expectHandleRPCPanic(t, "StartReplication", true /*verbose*/, err)
 }
 
