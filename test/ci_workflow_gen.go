@@ -102,11 +102,11 @@ var (
 		"mysql80",
 		"vreplication_multicell",
 		"vreplication_cellalias",
+		"vtorc",
 	}
 
 	clusterSelfHostedList = []string{
 		"14",
-		"vtorc",
 	}
 	clusterDockerList = []string{
 		"vreplication_basic",
