@@ -309,7 +309,10 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 
 // ErsWithVtctl runs ERS via vtctl binary
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
-	args := []string{"-durability=semi_sync", "EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
+	if clusterInstance.VtctlMajorVersion >= 13 {
+		args = append([]string{"-durability=semi_sync"}, args...)
+	}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }
 
