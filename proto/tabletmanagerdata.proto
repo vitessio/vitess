@@ -161,6 +161,7 @@ message SetReadWriteResponse {
 
 message ChangeTypeRequest {
   topodata.TabletType tablet_type = 1;
+  bool semiSync = 2;
 }
 
 message ChangeTypeResponse {

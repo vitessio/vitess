@@ -124,7 +124,8 @@ func CreateTablet(
 	}
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY); err != nil {
+		// Semi-sync has to be set to false, since we have 1 single backing MySQL
+		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY /* semi-sync */, false); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
@@ -805,12 +806,12 @@ func (itmc *internalTabletManagerClient) SetReadWrite(ctx context.Context, table
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
+func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	t.tm.ChangeType(ctx, dbType)
+	t.tm.ChangeType(ctx, dbType, semiSync)
 	return nil
 }
 

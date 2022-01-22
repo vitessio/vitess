@@ -135,7 +135,7 @@ func RecordChangeTabletTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Tabl
 		}
 
 		// ask the tablet to make the change
-		return wr.tmc.ChangeType(ctx, ti.Tablet, to)
+		return wr.ChangeTabletType(ctx, ti.Tablet.Alias, to)
 	})
 }
 

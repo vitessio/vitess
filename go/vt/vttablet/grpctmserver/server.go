@@ -119,7 +119,7 @@ func (s *server) ChangeType(ctx context.Context, request *tabletmanagerdatapb.Ch
 	defer s.tm.HandleRPCPanic(ctx, "ChangeType", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ChangeTypeResponse{}
-	return response, s.tm.ChangeType(ctx, request.TabletType)
+	return response, s.tm.ChangeType(ctx, request.TabletType, request.GetSemiSync())
 }
 
 func (s *server) RefreshState(ctx context.Context, request *tabletmanagerdatapb.RefreshStateRequest) (response *tabletmanagerdatapb.RefreshStateResponse, err error) {

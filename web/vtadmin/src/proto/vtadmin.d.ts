@@ -12277,6 +12277,9 @@ export namespace tabletmanagerdata {
 
         /** ChangeTypeRequest tablet_type */
         tablet_type?: (topodata.TabletType|null);
+
+        /** ChangeTypeRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a ChangeTypeRequest. */
@@ -12290,6 +12293,9 @@ export namespace tabletmanagerdata {
 
         /** ChangeTypeRequest tablet_type. */
         public tablet_type: topodata.TabletType;
+
+        /** ChangeTypeRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new ChangeTypeRequest instance using the specified properties.

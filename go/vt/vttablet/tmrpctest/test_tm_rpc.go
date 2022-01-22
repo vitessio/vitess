@@ -373,7 +373,7 @@ func tmRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclien
 
 var testChangeTypeValue = topodatapb.TabletType_REPLICA
 
-func (fra *fakeRPCTM) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
+func (fra *fakeRPCTM) ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -382,14 +382,14 @@ func (fra *fakeRPCTM) ChangeType(ctx context.Context, tabletType topodatapb.Tabl
 }
 
 func tmRPCTestChangeType(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.ChangeType(ctx, tablet, testChangeTypeValue)
+	err := client.ChangeType(ctx, tablet, testChangeTypeValue, false)
 	if err != nil {
 		t.Errorf("ChangeType failed: %v", err)
 	}
 }
 
 func tmRPCTestChangeTypePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.ChangeType(ctx, tablet, testChangeTypeValue)
+	err := client.ChangeType(ctx, tablet, testChangeTypeValue, false)
 	expectHandleRPCPanic(t, "ChangeType", true /*verbose*/, err)
 }
 

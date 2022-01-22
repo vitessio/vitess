@@ -48,7 +48,7 @@ type RPCTM interface {
 
 	SetReadOnly(ctx context.Context, rdonly bool) error
 
-	ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error
+	ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error
 
 	Sleep(ctx context.Context, duration time.Duration)
 

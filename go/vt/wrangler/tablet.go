@@ -26,9 +26,12 @@ import (
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -171,8 +174,38 @@ func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatap
 		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", tabletAlias, ti.Type, tabletType)
 	}
 
+	semiSync, err := wr.shouldSendSemiSyncAck(ctx, ti.Tablet)
+	if err != nil {
+		return err
+	}
 	// and ask the tablet to make the change
-	return wr.tmc.ChangeType(ctx, ti.Tablet, tabletType)
+	return wr.tmc.ChangeType(ctx, ti.Tablet, tabletType, semiSync)
+}
+
+func (wr *Wrangler) shouldSendSemiSyncAck(ctx context.Context, tablet *topodatapb.Tablet) (bool, error) {
+	shard, err := wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return false, err
+	}
+
+	if !shard.HasPrimary() {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	shardPrimary, err := wr.ts.GetTablet(ctx, shard.PrimaryAlias)
+	if err != nil {
+		return false, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.PrimaryAlias), tablet.Keyspace, tablet.Shard, err)
+	}
+
+	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	}
+
+	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(tablet.Alias), tablet.Keyspace, tablet.Shard)
+	}
+
+	return reparentutil.ReplicaSemiSync(shardPrimary.Tablet, tablet), nil
 }
 
 // RefreshTabletState refreshes tablet state
