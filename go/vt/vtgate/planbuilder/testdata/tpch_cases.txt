@@ -35,7 +35,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -57,7 +57,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -134,7 +134,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -156,7 +156,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -169,7 +169,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -205,7 +205,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -218,7 +218,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -261,7 +261,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": true
@@ -286,7 +286,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
                     "Inputs": [
                       {
                         "OperatorType": "Route",
-                        "Variant": "SelectScatter",
+                        "Variant": "Scatter",
                         "Keyspace": {
                           "Name": "main",
                           "Sharded": true
@@ -297,7 +297,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
                       },
                       {
                         "OperatorType": "Route",
-                        "Variant": "SelectEqualUnique",
+                        "Variant": "EqualUnique",
                         "Keyspace": {
                           "Name": "main",
                           "Sharded": true
@@ -347,7 +347,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -376,7 +376,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                 "Inputs": [
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectIN",
+                    "Variant": "IN",
                     "Keyspace": {
                       "Name": "main",
                       "Sharded": true
@@ -392,7 +392,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                   },
                   {
                     "OperatorType": "Route",
-                    "Variant": "SelectEqualUnique",
+                    "Variant": "EqualUnique",
                     "Keyspace": {
                       "Name": "main",
                       "Sharded": true
@@ -409,7 +409,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectEqualUnique",
+                "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": true
@@ -455,7 +455,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "main",
               "Sharded": true
@@ -466,7 +466,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "main",
               "Sharded": true

@@ -1689,7 +1689,7 @@ Gen4 plan same as above
   "Original": "update user_extra set val = 1 where user_id in (1, 2)",
   "Instructions": {
     "OperatorType": "Update",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1894,7 +1894,7 @@ Gen4 plan same as above
   "Original": "delete from user_extra where user_id in (1, 2)",
   "Instructions": {
     "OperatorType": "Delete",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2006,7 +2006,7 @@ Gen4 plan same as above
   "Original": "update user set name = null where id in (1, 2, 3)",
   "Instructions": {
     "OperatorType": "Update",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2088,7 +2088,7 @@ Gen4 plan same as above
   "Original": "delete from user where id in (1, 2, 3)",
   "Instructions": {
     "OperatorType": "Delete",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2546,7 +2546,7 @@ Gen4 plan same as above
   "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 in (20, 21)",
   "Instructions": {
     "OperatorType": "Delete",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "zlookup_unique",
       "Sharded": true
@@ -2573,7 +2573,7 @@ Gen4 plan same as above
   "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
   "Instructions": {
     "OperatorType": "Update",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "zlookup_unique",
       "Sharded": true
@@ -2702,7 +2702,7 @@ Gen4 plan same as above
   "Original": "update multicol_tbl set x = 1 where colb IN (1,2) and cola = 1",
   "Instructions": {
     "OperatorType": "Update",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2727,7 +2727,7 @@ Gen4 plan same as above
   "Original": "update multicol_tbl set x = 1 where colb IN (1,2) and cola IN (3,4)",
   "Instructions": {
     "OperatorType": "Update",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2808,7 +2808,7 @@ Gen4 plan same as above
   "Original": "delete from multicol_tbl where colb IN (1,2) and cola = 1",
   "Instructions": {
     "OperatorType": "Delete",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -2836,7 +2836,7 @@ Gen4 plan same as above
   "Original": "delete from multicol_tbl where colb IN (1,2) and cola IN (3,4)",
   "Instructions": {
     "OperatorType": "Delete",
-    "Variant": "In",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true

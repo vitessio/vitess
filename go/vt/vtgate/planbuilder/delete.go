@@ -41,9 +41,7 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	if err != nil {
 		return nil, err
 	}
-	edel := &engine.Delete{
-		DML: *dml,
-	}
+	edel := &engine.Delete{DML: dml}
 
 	if dml.Opcode == engine.Unsharded {
 		return edel, nil
