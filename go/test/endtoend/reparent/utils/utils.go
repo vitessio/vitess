@@ -134,9 +134,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
 		"-queryserver_enable_online_ddl=false")
-	if enableSemiSync {
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-enable_semi_sync")
-	}
+
 	if clusterInstance.VtTabletMajorVersion >= 13 && clusterInstance.VtctlMajorVersion >= 13 {
 		// disabling active reparents on the tablet since we don't want the replication manager
 		// to fix replication if it is stopped. Some tests deliberately do that. Also, we don't want
