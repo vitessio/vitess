@@ -87,7 +87,7 @@ func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Exp
 	case sqlparser.NotLikeOp:
 		return &LikeExpr{BinaryCoercedExpr: coercedExpr, Negate: true}, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrConvertExprNotSupported, op.ToString())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
 	}
 }
 
@@ -120,6 +120,36 @@ func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup Conver
 		},
 		op:     logic,
 		opname: opname,
+	}, nil
+}
+
+func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup ConverterLookup) (Expr, error) {
+	expr, err := convertExpr(left, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	var check func(result *EvalResult) bool
+
+	switch op {
+	case sqlparser.IsNullOp:
+		check = func(er *EvalResult) bool { return er.null() }
+	case sqlparser.IsNotNullOp:
+		check = func(er *EvalResult) bool { return !er.null() }
+	case sqlparser.IsTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolTrue }
+	case sqlparser.IsNotTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolTrue }
+	case sqlparser.IsFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolFalse }
+	case sqlparser.IsNotFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolFalse }
+	}
+
+	return &IsExpr{
+		UnaryExpr: UnaryExpr{expr},
+		Op:        op,
+		Check:     check,
 	}, nil
 }
 
@@ -157,7 +187,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	switch node := e.(type) {
 	case *sqlparser.ColName:
 		if lookup == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: cannot lookup column", ErrConvertExprNotSupported)
+			return nil, vterrors.Wrap(convertNotSupported(e), "cannot lookup column")
 		}
 		idx, err := lookup.ColumnLookup(node)
 		if err != nil {
@@ -166,7 +196,11 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		collation := getCollation(node, lookup)
 		return NewColumn(idx, collation), nil
 	case *sqlparser.ComparisonExpr:
-		return convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
+		expr, err := convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
+		if err != nil {
+			return nil, convertNotSupported(e)
+		}
+		return expr, err
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
 		return NewBindVar(string(node), collation), nil
@@ -178,12 +212,12 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.IntVal:
 			return NewLiteralIntegralFromBytes(node.Bytes())
 		case sqlparser.FloatVal:
-			return NewLiteralRealFromBytes(node.Bytes())
+			return NewLiteralFloatFromBytes(node.Bytes())
 		case sqlparser.StrVal:
 			collation := getCollation(e, lookup)
 			return NewLiteralString(node.Bytes(), collation), nil
 		case sqlparser.HexNum:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: hexadecimal value: %s", ErrConvertExprNotSupported, node.Val)
+			return nil, convertNotSupported(e)
 		}
 	case sqlparser.BoolVal:
 		if node {
@@ -214,7 +248,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.DivOp:
 			op = &OpDivision{}
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
+			return nil, convertNotSupported(e)
 		}
 		left, err := convertExpr(node.Left, lookup)
 		if err != nil {
@@ -278,6 +312,12 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			panic("character set introducers are only supported for literals and arguments")
 		}
 		return expr, nil
+	case *sqlparser.IsExpr:
+		return convertIsExpr(node.Left, node.Right, lookup)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
+	return nil, convertNotSupported(e)
+}
+
+func convertNotSupported(e sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrConvertExprNotSupported, sqlparser.String(e))
 }

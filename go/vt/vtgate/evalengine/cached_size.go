@@ -214,6 +214,18 @@ func (cached *InExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *IsExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
+	size += cached.UnaryExpr.CachedSize(false)
+	return size
+}
 func (cached *LikeExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

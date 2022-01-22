@@ -56,31 +56,31 @@ func (v *Vindex) TableID() semantics.TableSet {
 const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // PushPredicate implements the Operator interface
-func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := semTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
 		}
 		// check if we already have a predicate
 		if v.OpCode != engine.VindexNone {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (multiple filters)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (multiple filters)")
 		}
 
 		// check LHS
 		comparison, ok := e.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not a comparison)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not a comparison)")
 		}
 		if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not equality)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not equality)")
 		}
 		colname, ok := comparison.Left.(*sqlparser.ColName)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not a column)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not a column)")
 		}
 		if !colname.Name.EqualString("id") {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not id)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not id)")
 		}
 
 		// check RHS
@@ -88,15 +88,15 @@ func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable
 		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
 			v.Value = comparison.Right
 		} else {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (rhs is not a value)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (rhs is not a value)")
 		}
 		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+": %v", err)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+": %v", err)
 		}
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}
-	return nil
+	return v, nil
 }
 
 // UnsolvedPredicates implements the Operator interface

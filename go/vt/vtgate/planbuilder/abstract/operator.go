@@ -42,7 +42,7 @@ type (
 		iLogical()
 
 		// PushPredicate pushes a predicate to the closest possible operator
-		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
+		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error)
 
 		// Compact will optimise the operator tree into a smaller but equivalent version
 		Compact(semTable *semantics.SemTable) (LogicalOperator, error)
@@ -104,7 +104,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			op := createJoin(lhs, rhs)
 			if tableExpr.Condition.On != nil {
-				err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), semTable)
+				op, err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), semTable)
 				if err != nil {
 					return nil, err
 				}
@@ -220,7 +220,7 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			err := op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(expr), semTable)
+			op, err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(expr), semTable)
 			if err != nil {
 				return nil, err
 			}
