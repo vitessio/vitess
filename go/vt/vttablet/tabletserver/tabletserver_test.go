@@ -1400,9 +1400,10 @@ func TestHandleExecTabletError(t *testing.T) {
 	}
 }
 
-func TestTerseErrorsNonSQLError(t *testing.T) {
+func TestSanitizedMessagesNonSQLError(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
+	config.SanitizeLogMessages = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1416,15 +1417,16 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	want := "tablet error"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
-	want = "Sql: \"select * from test_table\", BindVars: {}"
+	want = "Sql: \"select * from test_table\", BindVars: {[REDACTED]}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
 	}
 }
 
-func TestTerseErrorsBindVars(t *testing.T) {
+func TestSanitizedMessagesBindVars(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
+	config.SanitizeLogMessages = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1439,7 +1441,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		sqlErr,
 		nil,
 	)
-	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {}"
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
@@ -1450,9 +1452,10 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	}
 }
 
-func TestTerseErrorsNoBindVars(t *testing.T) {
+func TestSanitizedMessagesNoBindVars(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
+	config.SanitizeLogMessages = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1460,15 +1463,17 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	want := "sensitive message"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
-	want = "Sql: \"\", BindVars: {}"
+	want = "Sql: \"\", BindVars: {[REDACTED]}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log '%s', want '%s'", tl.getLog(0), want)
 	}
 }
 
-func TestTruncateErrors(t *testing.T) {
+func TestTruncateMessages(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = false
+	// Sanitize the log messages, which means that the bind vars are omitted
+	config.SanitizeLogMessages = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1520,9 +1525,10 @@ func TestTruncateErrors(t *testing.T) {
 	*sqlparser.TruncateErrLen = 0
 }
 
-func TestTerseErrors(t *testing.T) {
+func TestSanitizedMessages(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
+	config.SanitizeLogMessages = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1538,12 +1544,12 @@ func TestTerseErrors(t *testing.T) {
 		nil,
 	)
 
-	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	// Log should be truncated in same way as the error
+	// Log should be truncated and sanitized in the same way as the error
 	wantLog := wantErr
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
