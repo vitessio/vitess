@@ -1298,20 +1298,11 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 	logStats *tabletenv.LogStats,
 ) {
 	if x := recover(); x != nil {
-		var errorMessage string
-		if tsv.TerseErrors && len(bindVariables) != 0 {
-			errorMessage = fmt.Sprintf(
-				"Uncaught panic for %v:\n%v\n%s",
-				queryAsString(sql, nil),
-				x,
-				tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		} else {
-			errorMessage = fmt.Sprintf(
-				"Uncaught panic for %v:\n%v\n%s",
-				queryAsString(sql, bindVariables),
-				x,
-				tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		}
+		errorMessage := fmt.Sprintf(
+			"Uncaught panic for %v:\n%v\n%s",
+			queryAsString(sql, bindVariables, (tsv.Config().SanitizeLogMessages || tsv.TerseErrors)),
+			x,
+			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
 		log.Errorf(errorMessage)
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
@@ -1372,26 +1363,20 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, nil))
+			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, nil))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables))
+				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
 		}
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
-		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-			if logMethod != nil {
-				message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, nil))
-			}
-		} else {
-			if logMethod != nil {
-				message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables))
-			}
+		if logMethod != nil {
+			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 		}
 	}
 
@@ -1408,21 +1393,23 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 
 // truncateSQLAndBindVars calls TruncateForLog which:
 //  splits off trailing comments, truncates the query, and re-adds the trailing comments
-// appends quoted bindvar: value pairs in sorted order
+// and if sanitize is not false appends quoted bindvar:value pairs in sorted order
 // truncates the resulting string
-func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable) string {
+func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "BindVars: {")
-	var keys []string
-	for key := range bindVariables {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	var valString string
-	for _, key := range keys {
-		valString = fmt.Sprintf("%v", bindVariables[key])
-		fmt.Fprintf(buf, "%s: %q", key, valString)
+	if sanitize {
+		fmt.Fprintf(buf, "[REDACTED]")
+	} else {
+		var keys []string
+		for key := range bindVariables {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			fmt.Fprintf(buf, "%s: %q", key, fmt.Sprintf("%v", bindVariables[key]))
+		}
 	}
 	fmt.Fprintf(buf, "}")
 	bv := buf.String()
@@ -1855,20 +1842,27 @@ func (tsv *TabletServer) ConsolidatorMode() string {
 	return tsv.qe.consolidatorMode.Get()
 }
 
-// queryAsString returns a readable version of query+bind variables.
-func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) string {
+// queryAsString returns a readable normalized version of the query and if sanitize
+// is false it also includes the bind variables.
+func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	buf := &bytes.Buffer{}
+	// sql is the normalized query without the bind vars
 	fmt.Fprintf(buf, "Sql: %q", sql)
+	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
 	fmt.Fprintf(buf, ", BindVars: {")
-	var keys []string
-	for key := range bindVariables {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	var valString string
-	for _, key := range keys {
-		valString = fmt.Sprintf("%v", bindVariables[key])
-		fmt.Fprintf(buf, "%s: %q", key, valString)
+	if sanitize {
+		fmt.Fprintf(buf, "[REDACTED]")
+	} else {
+		var keys []string
+		for key := range bindVariables {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		var valString string
+		for _, key := range keys {
+			valString = fmt.Sprintf("%v", bindVariables[key])
+			fmt.Fprintf(buf, "%s: %q", key, valString)
+		}
 	}
 	fmt.Fprintf(buf, "}")
 	return buf.String()
