@@ -290,7 +290,7 @@ func (client *Client) SetReadWrite(ctx context.Context, tablet *topodatapb.Table
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
+func (client *Client) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -298,6 +298,7 @@ func (client *Client) ChangeType(ctx context.Context, tablet *topodatapb.Tablet,
 	defer closer.Close()
 	_, err = c.ChangeType(ctx, &tabletmanagerdatapb.ChangeTypeRequest{
 		TabletType: dbType,
+		SemiSync:   semiSync,
 	})
 	return err
 }

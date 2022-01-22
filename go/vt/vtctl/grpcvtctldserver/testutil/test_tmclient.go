@@ -261,7 +261,7 @@ type TabletManagerClient struct {
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType) error {
+func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType, semiSync bool) error {
 	if result, ok := fake.ChangeTabletTypeResult[topoproto.TabletAliasString(tablet.Alias)]; ok {
 		return result
 	}

@@ -63,7 +63,7 @@ type TabletManagerClient interface {
 	SetReadWrite(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// ChangeType asks the remote tablet to change its type
-	ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error
+	ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error
 
 	// Sleep will sleep for a duration (used for tests)
 	Sleep(ctx context.Context, tablet *topodatapb.Tablet, duration time.Duration) error
