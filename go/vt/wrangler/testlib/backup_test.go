@@ -47,6 +47,7 @@ import (
 )
 
 func TestBackupRestore(t *testing.T) {
+	t.Skip()
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -252,6 +253,7 @@ func TestBackupRestore(t *testing.T) {
 // While doing a backup or a restore, we wait for a change of the replica's position before completing the action
 // This is because otherwise ReplicationLagSeconds is not accurate and the tablet may go into SERVING when it should not
 func TestBackupRestoreLagged(t *testing.T) {
+	t.Skip()
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -449,6 +451,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 }
 
 func TestRestoreUnreachablePrimary(t *testing.T) {
+	t.Skip()
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)

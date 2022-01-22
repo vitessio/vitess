@@ -58,7 +58,7 @@ func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insert
 }
 
 func init() {
-	_ = reparentutil.SetDurabilityPolicy("none", nil)
+	_ = reparentutil.SetDurabilityPolicy("semi_sync", nil)
 }
 
 // TestVerticalSplitClone will run VerticalSplitClone in the combined

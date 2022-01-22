@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -44,6 +45,7 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+	_ = reparentutil.SetDurabilityPolicy("semi_sync", nil)
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -154,6 +156,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+	_ = reparentutil.SetDurabilityPolicy("semi_sync", nil)
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -279,6 +282,7 @@ func TestPlannedReparentInitialization(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+	_ = reparentutil.SetDurabilityPolicy("semi_sync", nil)
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())

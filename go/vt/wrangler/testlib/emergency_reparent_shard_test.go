@@ -44,7 +44,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
-	_ = reparentutil.SetDurabilityPolicy("none", nil)
+	_ = reparentutil.SetDurabilityPolicy("semi_sync", nil)
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
