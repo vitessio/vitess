@@ -1514,7 +1514,21 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "Query": "select id from unsharded union select id from unsharded_auto order by id asc limit 5",
+    "Table": "unsharded, unsharded_auto"
+  }
+}
 
 # unsharded union
 "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
@@ -1543,9 +1557,9 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select id from unsharded where 1 != 1 union all select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
-    "Query": "select id from unsharded union all select id from unsharded_auto union select id from unsharded_auto where id in (132)",
-    "Table": "unsharded"
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
+    "Table": "unsharded, unsharded_auto"
   }
 }
 
@@ -1566,7 +1580,21 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 error: nesting of unions at the right-hand side is not yet supported
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1",
+    "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded",
+    "Table": "unsharded, unsharded_auto"
+  }
+}
 
 # unsharded nested union with limit
 "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"

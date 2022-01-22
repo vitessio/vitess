@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -32,6 +30,7 @@ var _ logicalPlan = (*join)(nil)
 // It's used to build a normal join or a left join
 // operation.
 type join struct {
+	v3Plan
 	order         int
 	resultColumns []*resultColumn
 	weightStrings map[*resultColumn]int
@@ -151,15 +150,6 @@ func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
 	return jb.Left.Wireup(plan, jt)
 }
 
-// Wireup2 implements the logicalPlan interface
-func (jb *join) WireupGen4(semTable *semantics.SemTable) error {
-	err := jb.Right.WireupGen4(semTable)
-	if err != nil {
-		return err
-	}
-	return jb.Left.WireupGen4(semTable)
-}
-
 // SupplyVar implements the logicalPlan interface
 func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if !jb.isOnLeft(from) {
@@ -242,11 +232,6 @@ func (jb *join) Rewrite(inputs ...logicalPlan) error {
 	jb.Left = inputs[0]
 	jb.Right = inputs[1]
 	return nil
-}
-
-// Solves implements the logicalPlan interface
-func (jb *join) ContainsTables() semantics.TableSet {
-	return jb.Left.ContainsTables().Merge(jb.Right.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface

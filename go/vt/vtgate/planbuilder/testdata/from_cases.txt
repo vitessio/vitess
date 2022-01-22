@@ -218,21 +218,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select m1.col from unsharded as m1 join unsharded as m2",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
-    "Query": "select m1.col from unsharded as m1, unsharded as m2",
-    "Table": "unsharded"
-  }
-}
+Gen4 plan same as above
 
 # Multi-table, multi-chunk
 "select music.col from user join music"
@@ -865,7 +851,21 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a = m2.b where 1 != 1",
+    "Query": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a = m2.b",
+    "Table": "unsharded"
+  }
+}
 
 # Right join with a join LHS
 "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b"
@@ -894,8 +894,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select m1.col from unsharded as m3 left join (unsharded as m1, unsharded as m2) on m1.a = m2.b where 1 != 1",
-    "Query": "select m1.col from unsharded as m3 left join (unsharded as m1, unsharded as m2) on m1.a = m2.b",
+    "FieldQuery": "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a = m2.b where 1 != 1",
+    "Query": "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a = m2.b",
     "Table": "unsharded"
   }
 }
@@ -927,8 +927,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
-    "Query": "select m1.col from unsharded as m1, unsharded as m2",
+    "FieldQuery": "select m1.col from unsharded as m1 join unsharded as m2 where 1 != 1",
+    "Query": "select m1.col from unsharded as m1 join unsharded as m2",
     "Table": "unsharded"
   }
 }
@@ -3441,21 +3441,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select u1.a from unsharded u1 join unsharded u2 on database()",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select u1.a from unsharded as u1, unsharded as u2 where 1 != 1",
-    "Query": "select u1.a from unsharded as u1, unsharded as u2 where database()",
-    "Table": "unsharded"
-  }
-}
+Gen4 plan same as above
 
 # last_insert_id for dual
 "select last_insert_id()"
@@ -3749,21 +3735,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select m1.col from (unsharded as m1, unsharded as m2)",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
-    "Query": "select m1.col from unsharded as m1, unsharded as m2",
-    "Table": "unsharded"
-  }
-}
+Gen4 plan same as above
 
 # gen4 - optimise plan by merging user_extra and music first, and then querying for user info
 "select 1 from user u join user_extra ue on ue.id = u.id join music m on m.user_id = ue.user_id"

@@ -94,3 +94,13 @@ func (sq *simpleProjection) SupplyCol(col *sqlparser.ColName) (rc *resultColumn,
 	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
 	return rc, len(sq.resultColumns) - 1
 }
+
+// OutputColumns implements the logicalPlan interface
+func (sq *simpleProjection) OutputColumns() []sqlparser.SelectExpr {
+	exprs := make([]sqlparser.SelectExpr, 0, len(sq.eSimpleProj.Cols))
+	outputCols := sq.input.OutputColumns()
+	for _, colID := range sq.eSimpleProj.Cols {
+		exprs = append(exprs, outputCols[colID])
+	}
+	return exprs
+}

@@ -151,7 +151,7 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, op
 	if !proto.Equal(options, TestExecuteOptions) {
 		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
-	return beginTransactionID, nil, nil
+	return beginTransactionID, TestAlias, nil
 }
 
 // commitTransactionID is a test transaction id for Commit.
