@@ -174,7 +174,12 @@ func (wr *Wrangler) ChangeTabletType(ctx context.Context, tabletAlias *topodatap
 		return fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", tabletAlias, ti.Type, tabletType)
 	}
 
-	semiSync, err := wr.shouldSendSemiSyncAck(ctx, ti.Tablet)
+	// We should clone the tablet and change its type to the expected type before checking the durability rules
+	// Since we want to check the durability rules for the desired state and not before we make that change
+	expectedTablet := proto.Clone(ti.Tablet).(*topodatapb.Tablet)
+	expectedTablet.Type = tabletType
+	semiSync, err := wr.shouldSendSemiSyncAck(ctx, expectedTablet)
+
 	if err != nil {
 		return err
 	}

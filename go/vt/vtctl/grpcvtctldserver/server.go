@@ -282,7 +282,11 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), req.TabletAlias, tablet.Keyspace, tablet.Shard)
 	}
 
-	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.ReplicaSemiSync(shardPrimary.Tablet, tablet.Tablet))
+	// We should clone the tablet and change its type to the expected type before checking the durability rules
+	// Since we want to check the durability rules for the desired state and not before we make that change
+	expectedTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
+	expectedTablet.Type = req.DbType
+	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.ReplicaSemiSync(shardPrimary.Tablet, expectedTablet))
 	if err != nil {
 		return nil, err
 	}
