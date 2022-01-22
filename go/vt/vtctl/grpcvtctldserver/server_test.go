@@ -8138,6 +8138,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tmc: testutil.TabletManagerClient{
@@ -8164,6 +8172,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tmc: testutil.TabletManagerClient{
@@ -8191,6 +8207,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tmc: testutil.TabletManagerClient{
@@ -8218,6 +8242,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req:       &vtctldatapb.StartReplicationRequest{},
@@ -8234,7 +8266,9 @@ func TestStartReplication(t *testing.T) {
 			ts := memorytopo.NewServer(tt.cells...)
 			defer ts.Close()
 
-			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+			}, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})
