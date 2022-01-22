@@ -885,29 +885,12 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 }
 
 func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if !*enableSemiSync {
-		// Semi-sync handling is not enabled.
-		if semiSync == SemiSyncActionTrue {
-			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set")
-		}
-		return nil
-	}
-
-	// Only enable if we're eligible for becoming primary (REPLICA type).
-	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
-	if !isPrimaryEligible(tabletType) {
-		if semiSync == SemiSyncActionTrue {
-			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible")
-		}
+	if semiSync == SemiSyncActionTrue {
+		return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+	} else if semiSync == SemiSyncActionFalse {
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
-
-	if semiSync == SemiSyncActionFalse {
-		log.Error("invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading.")
-	}
-	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
-	// The primary-side needs to be off for a replica, or else it will get stuck.
-	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+	return nil
 }
 
 func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
