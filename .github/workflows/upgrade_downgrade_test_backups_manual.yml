@@ -1,0 +1,323 @@
+name: Upgrade Downgrade Testing Backups Manual
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Backups Manual')
+  cancel-in-progress: true
+
+jobs:
+  get_upgrade_downgrade_label:
+    if: github.repository == 'vitessio/vitess'
+    name: Get the Upgrade Downgrade pull request label
+    runs-on: ubuntu-latest
+    outputs:
+      hasLabel: ${{ steps.check_label.outputs.hasLabel }}
+
+    steps:
+      - name: Check Label for PR
+        if: github.event_name == 'pull_request'
+        uses: Dreamcodeio/pr-has-label-action@master
+        id: check_label
+        with:
+          label: Skip Upgrade Downgrade
+
+  get_latest_release:
+    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
+    name: Get latest release
+    runs-on: ubuntu-latest
+    needs:
+      - get_upgrade_downgrade_label
+    outputs:
+      latest_release: ${{ steps.set-outpout.outputs.matrix }}
+
+    steps:
+      - name: Check out to HEAD
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Get latest major release of Vitess
+        run: |
+          last_major_releases=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.0$' | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n1)
+          echo "latest_releases=$(echo "$last_major_releases" | awk ' BEGIN { ORS = ""; print "["; } { print "\/\@{\\\"project\\\":\\\"v"$0"\\\"}\/\@"; } END { print "]"; }' | sed "s^\/\@\/\@^, ^g;s^\/\@^^g")" >> $GITHUB_ENV
+
+      - name: Set output
+        id: set-outpout
+        run: |
+          echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
+
+  upgrade_downgrade_test:
+    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
+    name: Run Upgrade Downgrade Test
+    runs-on: ubuntu-latest
+    needs:
+      - get_upgrade_downgrade_label
+      - get_latest_release
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJSON(needs.get_latest_release.outputs.latest_release)}}
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17
+
+    - name: Set up python
+      uses: actions/setup-python@v2
+
+    - name: Tune the OS
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+    - name: Get base dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+        # install JUnit report formatter
+        go get -u github.com/vitessio/go-junit-report@HEAD
+
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get install -y gnupg2
+        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get update
+        sudo apt-get install percona-xtrabackup-24
+
+    # Checkout to the last release of Vitess
+    - name: Check out other version's code (${{ matrix.project }})
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ matrix.project }}
+
+    - name: Get dependencies for the last release
+      run: |
+        go mod download
+
+    - name: Building last release's binaries
+      timeout-minutes: 10
+      run: |
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-other/
+        cp -R bin /tmp/vitess-build-other/
+        rm -Rf bin/*
+
+    # Checkout to this build's commit
+    - name: Check out commit's code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies for this commit
+      run: |
+        go mod download
+
+    - name: Building the binaries for this commit
+      timeout-minutes: 10
+      run: |
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-current/
+        cp -R bin /tmp/vitess-build-current/
+
+    - name: Create the cluster with VTTablet N
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+        ./101_initial_cluster.sh
+        sleep 5
+        mysql < ../common/insert_commerce_data.sql
+        ./201_customer_tablets.sh
+        sleep 5
+        ./202_move_tables.sh
+        sleep 3
+        ./203_switch_reads.sh
+        ./204_switch_writes.sh
+        ./205_clean_commerce.sh
+        ./301_customer_sharded.sh
+        ./302_new_shards.sh
+        sleep 5
+        ./303_reshard.sh
+        sleep 3
+        ./304_switch_reads.sh
+        ./305_switch_writes.sh
+        sleep 5
+
+    - name: Take a backup of all the shards
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        vtctlclient BackupShard -allow_primary=true customer/-80
+        vtctlclient BackupShard -allow_primary=true customer/80-
+        vtctlclient BackupShard -allow_primary=true commerce/0
+
+    - name: Insert more data after the backup
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        echo "insert into customer(email) values('new_user_1@domain.com');" | mysql
+        echo "insert into product(sku, description, price) values('SKU-1009', 'description', 89);" | mysql
+        echo "insert into corder(customer_id, sku, price) values(1, 'SKU-1009', 100);" | mysql
+
+    - name: Stop tablets
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        for tablet in 100 200 300 400; do
+        	if vtctlclient -action_timeout 1s -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+        		# The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
+        		for i in 0 1 2; do
+        			uid=$(($tablet + $i))
+        			echo "Shutting down tablet zone1-$uid"
+        			CELL=zone1 TABLET_UID=$uid ./scripts/vttablet-down.sh
+        			echo "Shutting down mysql zone1-$uid"
+        			CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
+        			vtctlclient DeleteTablet -allow_primary=true zone1-$uid
+        			rm -Rf vtdataroot/vt_0000000$uid
+        		done
+        	fi
+        done
+
+    - name: Use VTTablet N-1
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        vttablet --version
+
+    - name: Start new tablets using version n-1 and restoring old backup made on version n
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        for i in 100 101 102; do
+        	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+        	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
+        done
+        sleep 5
+        vtctldclient InitShardPrimary --force commerce/0 zone1-100
+
+        for i in 300 301 302; do
+        	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+        	SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+        done
+        sleep 5
+        vtctldclient InitShardPrimary --force customer/-80 zone1-300
+
+        for i in 400 401 402; do
+        	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+        	SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+        done
+        sleep 5
+        vtctldclient InitShardPrimary --force customer/80- zone1-400
+
+    - name: Query the new tablets to make sure the data has been restored
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        echo "select count(sku) from product;" | mysql | grep 2
+        echo "select count(email) from customer;" | mysql | grep 5
+        echo "select count(sku) from corder;" | mysql | grep 5
+
+    - name: Insert more data before the backup
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        echo "insert into customer(email) values('new_user_2@domain.com');" | mysql
+        echo "insert into product(sku, description, price) values('SKU-1011', 'description', 111);" | mysql
+        echo "insert into corder(customer_id, sku, price) values(1, 'SKU-1011', 111);" | mysql
+
+    - name: Take a second backup of all the shards
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        vtctlclient BackupShard -allow_primary=true customer/-80
+        vtctlclient BackupShard -allow_primary=true customer/80-
+        vtctlclient BackupShard -allow_primary=true commerce/0
+
+    - name: Stop tablets
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        for tablet in 100 200 300 400; do
+        	if vtctlclient -action_timeout 1s -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+        		# The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
+        		for i in 0 1 2; do
+        			uid=$(($tablet + $i))
+        			echo "Shutting down tablet zone1-$uid"
+        			CELL=zone1 TABLET_UID=$uid ./scripts/vttablet-down.sh
+        			echo "Shutting down mysql zone1-$uid"
+        			CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
+        			vtctlclient DeleteTablet -allow_primary=true zone1-$uid
+        			rm -Rf vtdataroot/vt_0000000$uid
+        		done
+        	fi
+        done
+
+    - name: Use current version VTTablet, and other version VTBackup
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        vttablet --version
+
+    - name: Start new tablets using version n and restoring old backup made on version n-1
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        for i in 100 101 102; do
+        	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+        	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
+        done
+        sleep 5
+        vtctldclient InitShardPrimary --force commerce/0 zone1-100
+
+        for i in 300 301 302; do
+        	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+        	SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+        done
+        sleep 5
+        vtctldclient InitShardPrimary --force customer/-80 zone1-300
+
+        for i in 400 401 402; do
+        	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+        	SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+        done
+        sleep 5
+        vtctldclient InitShardPrimary --force customer/80- zone1-400
+
+    - name: Query the new tablets to make sure the data has been restored
+      run: |
+        source build.env
+        cd examples/local
+        source ./env.sh
+
+        echo "select count(sku) from product;" | mysql | grep 3
+        echo "select count(email) from customer;" | mysql | grep 6
+        echo "select count(sku) from corder;" | mysql | grep 6
