@@ -211,6 +211,7 @@ func TestWorkflowListStreams(t *testing.T) {
 		]
 	},
 	"MaxVReplicationLag": 0,
+	"MaxVReplicationTransactionLag": 0,
 	"ShardStatuses": {
 		"-80/zone1-0000000200": {
 			"PrimaryReplicationStatuses": [
@@ -235,6 +236,7 @@ func TestWorkflowListStreams(t *testing.T) {
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
+					"TimeHeartbeat": 1234,
 					"Message": "",
 					"Tags": "",
 					"CopyState": [
@@ -271,6 +273,7 @@ func TestWorkflowListStreams(t *testing.T) {
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
+					"TimeHeartbeat": 1234,
 					"Message": "",
 					"Tags": "",
 					"CopyState": [
@@ -292,6 +295,8 @@ func TestWorkflowListStreams(t *testing.T) {
 	// MaxVReplicationLag needs to be reset. This can't be determinable in this kind of a test because time.Now() is constantly shifting.
 	re := regexp.MustCompile(`"MaxVReplicationLag": \d+`)
 	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationLag": 0`)
+	re = regexp.MustCompile(`"MaxVReplicationTransactionLag": \d+`)
+	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
 	require.Equal(t, want, got)
 
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false)

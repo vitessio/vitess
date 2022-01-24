@@ -1566,12 +1566,12 @@ func TestMigrateFrozen(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|FROZEN||", bls1),
 	), nil)
-	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
 	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
@@ -1586,8 +1586,8 @@ func TestMigrateNoStreamsFound(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
-	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1615,7 +1615,7 @@ func TestMigrateDistinctSources(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls),
@@ -1644,7 +1644,7 @@ func TestMigrateMismatchedTables(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls)),
@@ -1664,7 +1664,7 @@ func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1703,7 +1703,7 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls1),
@@ -1719,7 +1719,7 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[1].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[1].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls3),
@@ -2039,8 +2039,8 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	// Temporarily set tablet types to RDONLY to test that SwitchWrites fails if no tablets of rdonly are available
 	invariants := make(map[string]*sqltypes.Result)
 	for i := range tme.targetShards {
-		invariants[fmt.Sprintf("%s-%d", vreplQueryks, i)] = tme.dbTargetClients[i].getInvariant(vreplQueryks)
-		tme.dbTargetClients[i].addInvariant(vreplQueryks, tme.dbTargetClients[i].getInvariant(vreplQueryks+"-rdonly"))
+		invariants[fmt.Sprintf("%s-%d", streamInfoKs, i)] = tme.dbTargetClients[i].getInvariant(streamInfoKs)
+		tme.dbTargetClients[i].addInvariant(streamInfoKs, tme.dbTargetClients[i].getInvariant(streamInfoKs+"-rdonly"))
 	}
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	require.Error(t, err)
@@ -2049,7 +2049,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	require.True(t, strings.Contains(err.Error(), "80-"))
 	require.False(t, strings.Contains(err.Error(), "40"))
 	for i := range tme.targetShards {
-		tme.dbTargetClients[i].addInvariant(vreplQueryks, invariants[fmt.Sprintf("%s-%d", vreplQueryks, i)])
+		tme.dbTargetClients[i].addInvariant(streamInfoKs, invariants[fmt.Sprintf("%s-%d", streamInfoKs, i)])
 	}
 
 	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)

@@ -64,7 +64,7 @@ type VReplicationWorkflowParams struct {
 	KeepRoutingRules                  bool
 	Timeout                           time.Duration
 	Direction                         workflow.TrafficSwitchDirection
-	MaxAllowedLagSeconds              int64
+	MaxAllowedTransactionLagSeconds   int64
 
 	// MoveTables specific
 	SourceKeyspace, Tables  string
@@ -474,8 +474,8 @@ func (vrw *VReplicationWorkflow) canSwitch(workflowName string) (reason string, 
 	if err != nil {
 		return "", err
 	}
-	if result.MaxVReplicationLag >= vrw.params.MaxAllowedLagSeconds {
-		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationLag, vrw.params.MaxAllowedLagSeconds), nil
+	if result.MaxVReplicationTransactionLag >= vrw.params.MaxAllowedTransactionLagSeconds {
+		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
 	}
 	for ksShard := range result.ShardStatuses {
 		statuses := result.ShardStatuses[ksShard].PrimaryReplicationStatuses

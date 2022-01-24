@@ -43,9 +43,16 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-const vreplQueryks = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks'"
-const vreplQueryks2 = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
-const vreplQueryks1 = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test_reverse' and db_name='vt_ks1'"
+const (
+	streamInfoQuery    = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_%s'"
+	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, message, tags from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'"
+)
+
+var (
+	streamInfoKs  = fmt.Sprintf(streamInfoQuery, "ks")
+	streamInfoKs1 = fmt.Sprintf(streamInfoQuery, "ks1")
+	streamInfoKs2 = fmt.Sprintf(streamInfoQuery, "ks2")
+)
 
 type testMigraterEnv struct {
 	ts              *topo.Server
@@ -188,7 +195,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			}
 			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 		}
-		tme.dbTargetClients[i].addInvariant(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
@@ -213,7 +220,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			}
 			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 		}
-		tme.dbSourceClients[i].addInvariant(vreplQueryks1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbSourceClients[i].addInvariant(streamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
@@ -333,12 +340,12 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY", j+1, bls))
 		}
-		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbTargetClients[i].addInvariant(streamInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
 		)
-		tme.dbTargetClients[i].addInvariant(vreplQueryks+"-rdonly", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbTargetClients[i].addInvariant(streamInfoKs+"-rdonly", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rowsRdOnly...),
@@ -347,7 +354,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 
 	tme.targetKeyspace = "ks"
 	for _, dbclient := range tme.dbSourceClients {
-		dbclient.addInvariant(vreplQueryks, &sqltypes.Result{})
+		dbclient.addInvariant(streamInfoKs, &sqltypes.Result{})
 	}
 	return tme
 }
