@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -84,12 +85,30 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	require.True(t, hasPrimary)
 }
 
+func expectExtInfo(t *testing.T, tme *testMigraterEnv, keyspace, state string, currentLag int64) {
+	now := int64(time.Now().Second())
+	lag := 1
+	rowTemplate := "1||1||%d|%s|vt_%s|%d|%d|0||"
+	row := fmt.Sprintf(rowTemplate, lag, state, keyspace, now, now-currentLag)
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|message|tags",
+		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|varchar|varchar"),
+		row)
+	for _, db := range tme.dbTargetClients {
+		log.Infof("added query for %d: %s", streamExtInfoQuery)
+		db.addQuery(streamExtInfoQuery, result, nil)
+	}
+	//tme.tmeDB.AddQuery(streamExtInfoQuery, result)
+	//log.Infof("added query: %s", streamExtInfoQuery)
+}
+
 func TestCopyProgress(t *testing.T) {
 	var err error
 	var wf *VReplicationWorkflow
 	ctx := context.Background()
+	workflowName := "test"
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
+		Workflow:       workflowName,
 		SourceKeyspace: "ks1",
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
@@ -120,6 +139,20 @@ func TestCopyProgress(t *testing.T) {
 	require.Equal(t, int64(400), (*cp)["t2"].TargetRowCount)
 	require.Equal(t, int64(4000), (*cp)["t2"].SourceTableSize)
 	require.Equal(t, int64(1000), (*cp)["t2"].TargetTableSize)
+
+	var lag int64
+	lag = 1
+	expectExtInfo(t, tme, "ks2", "Copying", lag)
+	reason, err := wf.canSwitch(workflowName)
+	require.NoError(t, err)
+	require.Contains(t, reason, cannotSwitchCopyIncomplete)
+
+	lag = 6
+	expectExtInfo(t, tme, "ks2", "Running", lag)
+	reason, err = wf.canSwitch(workflowName)
+	require.NoError(t, err)
+	require.Contains(t, reason, fmt.Sprintf(cannotSwitchHighLag, 5, lag))
+
 }
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
