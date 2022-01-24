@@ -196,6 +196,8 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 			v, err = sqltypes.NewValue(sqltypes.Int64, node.Bytes())
 		case FloatVal:
 			v, err = sqltypes.NewValue(sqltypes.Float64, node.Bytes())
+		case DecimalVal:
+			v, err = sqltypes.NewValue(sqltypes.Decimal, node.Bytes())
 		case HexNum:
 			v, err = sqltypes.NewValue(sqltypes.HexNum, node.Bytes())
 		case HexVal:

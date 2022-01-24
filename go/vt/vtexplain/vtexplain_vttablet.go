@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -24,8 +25,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -723,6 +722,8 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Tabl
 			colTypes = append(colTypes, querypb.Type_VARCHAR)
 		case sqlparser.FloatVal:
 			colTypes = append(colTypes, querypb.Type_FLOAT64)
+		case sqlparser.DecimalVal:
+			colTypes = append(colTypes, querypb.Type_DECIMAL)
 		default:
 			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
 		}
