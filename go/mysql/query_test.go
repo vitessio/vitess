@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 

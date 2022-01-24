@@ -19,8 +19,9 @@ package sqltypes
 import (
 	"reflect"
 
+	"google.golang.org/protobuf/proto"
+
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/golang/protobuf/proto"
 )
 
 // Result represents a query result.

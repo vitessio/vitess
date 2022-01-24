@@ -17,7 +17,7 @@ limitations under the License.
 // This package contains a shared time data structure
 
 syntax = "proto3";
-option go_package = "vitess.io/vitess/go/vt/proto/vttime";
+option go_package = "github.com/dolthub/vitess/go/vt/proto/vttime";
 
 package vttime;
 
