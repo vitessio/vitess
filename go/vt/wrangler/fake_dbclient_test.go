@@ -63,14 +63,16 @@ func (dbrs *dbResults) exhausted() bool {
 
 // fakeDBClient fakes a binlog_player.DBClient.
 type fakeDBClient struct {
+	name       string
 	queries    map[string]*dbResults
 	queriesRE  map[string]*dbResults
 	invariants map[string]*sqltypes.Result
 }
 
 // NewfakeDBClient returns a new DBClientMock.
-func newFakeDBClient() *fakeDBClient {
+func newFakeDBClient(name string) *fakeDBClient {
 	return &fakeDBClient{
+		name:      name,
 		queries:   make(map[string]*dbResults),
 		queriesRE: make(map[string]*dbResults),
 		invariants: map[string]*sqltypes.Result{
@@ -83,6 +85,9 @@ func newFakeDBClient() *fakeDBClient {
 }
 
 func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err error) {
+	if testMode == "debug" {
+		log.Infof("%s::addQuery %s\n\n", dc.id(), query)
+	}
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queries[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -92,6 +97,9 @@ func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err erro
 }
 
 func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err error) {
+	if testMode == "debug" {
+		log.Infof("%s::addQueryRE %s\n\n", dc.id(), query)
+	}
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queriesRE[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -106,6 +114,9 @@ func (dc *fakeDBClient) getInvariant(query string) *sqltypes.Result {
 
 // note: addInvariant will replace a previous result for a query with the provided one: this is used in the tests
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
+	if testMode == "debug" {
+		log.Infof("%s::addInvariant %s\n\n", dc.id(), query)
+	}
 	dc.invariants[query] = result
 }
 
@@ -138,12 +149,24 @@ func (dc *fakeDBClient) Rollback() error {
 func (dc *fakeDBClient) Close() {
 }
 
+func (dc *fakeDBClient) id() string {
+	return fmt.Sprintf("FakeDBClient(%s)", dc.name)
+}
+
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	qr, err = dc.executeFetch(query, maxrows)
 	if testMode == "debug" {
-		fmt.Printf("ExecuteFetch: %s\n", query)
+		log.Infof("%s::ExecuteFetch for >>>%s<<< returns >>>%v<<< error >>>%+v<<< ", dc.id(), query, qr, err)
 	}
+	if qr != nil && qr.Rows != nil {
+		qr.RowsAffected = uint64(len(qr.Rows))
+	}
+	return qr, err
+}
 
+// ExecuteFetch is part of the DBClient interface
+func (dc *fakeDBClient) executeFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	if dbrs := dc.queries[query]; dbrs != nil {
 		return dbrs.next(query)
 	}

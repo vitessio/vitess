@@ -395,7 +395,7 @@ func (tme *testMigraterEnv) stopTablets(t *testing.T) {
 
 func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 	for _, primary := range tme.sourcePrimaries {
-		dbclient := newFakeDBClient()
+		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbSourceClients = append(tme.dbSourceClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
@@ -404,7 +404,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 	}
 	for _, primary := range tme.targetPrimaries {
 		log.Infof("Adding as targetPrimary %s", primary.Tablet.Alias)
-		dbclient := newFakeDBClient()
+		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one

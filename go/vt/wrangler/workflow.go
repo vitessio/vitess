@@ -474,9 +474,6 @@ func (vrw *VReplicationWorkflow) canSwitch(workflowName string) (reason string, 
 	if err != nil {
 		return "", err
 	}
-	if result.MaxVReplicationTransactionLag >= vrw.params.MaxAllowedTransactionLagSeconds {
-		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
-	}
 	for ksShard := range result.ShardStatuses {
 		statuses := result.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
@@ -487,6 +484,9 @@ func (vrw *VReplicationWorkflow) canSwitch(workflowName string) (reason string, 
 				return cannotSwitchError, nil
 			}
 		}
+	}
+	if result.MaxVReplicationTransactionLag >= vrw.params.MaxAllowedTransactionLagSeconds {
+		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
 	}
 	return "", nil
 }

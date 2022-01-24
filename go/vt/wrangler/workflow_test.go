@@ -33,6 +33,8 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+var noResult = &sqltypes.Result{}
+
 func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
 	p := &VReplicationWorkflowParams{
 		Workflow:       "wf1",
@@ -86,20 +88,75 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 }
 
 func expectExtInfo(t *testing.T, tme *testMigraterEnv, keyspace, state string, currentLag int64) {
-	now := int64(time.Now().Second())
-	lag := 1
-	rowTemplate := "1||1||%d|%s|vt_%s|%d|%d|0||"
-	row := fmt.Sprintf(rowTemplate, lag, state, keyspace, now, now-currentLag)
-	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	now := int64(time.Now().UnixNano())
+	rowTemplate := "1|||||%s|vt_%s|%d|%d|0||"
+	row := fmt.Sprintf(rowTemplate, state, keyspace, now, now-(currentLag*1e9))
+	replicationResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|message|tags",
 		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|varchar|varchar"),
 		row)
+	copyStateResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"table|lastpk",
+		"varchar|varchar"),
+		"t1|pk1",
+	)
+
 	for _, db := range tme.dbTargetClients {
-		log.Infof("added query for %d: %s", streamExtInfoQuery)
-		db.addQuery(streamExtInfoQuery, result, nil)
+		db.addInvariant(streamExtInfoQuery, replicationResult)
+		copyStateQuery := "select table_name, lastpk from _vt.copy_state where vrepl_id = %d"
+		if state == "Copying" {
+			db.addInvariant(fmt.Sprintf(copyStateQuery, 1), copyStateResult)
+		} else {
+			db.addInvariant(fmt.Sprintf(copyStateQuery, 1), noResult)
+		}
 	}
-	//tme.tmeDB.AddQuery(streamExtInfoQuery, result)
-	//log.Infof("added query: %s", streamExtInfoQuery)
+}
+
+// TestCanSwitch validates the logic to determine if traffic can be switched or not
+func TestCanSwitch(t *testing.T) {
+	var wf *VReplicationWorkflow
+	ctx := context.Background()
+	workflowName := "test"
+	p := &VReplicationWorkflowParams{
+		Workflow:       workflowName,
+		SourceKeyspace: "ks1",
+		TargetKeyspace: "ks2",
+		Tables:         "t1,t2",
+		Cells:          "cell1,cell2",
+		TabletTypes:    "replica,rdonly,primary",
+		Timeout:        DefaultActionTimeout,
+	}
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	expectCopyProgressQueries(t, tme)
+
+	type testCase struct {
+		name                  string
+		state                 string
+		streamLag, allowedLag int64 /* seconds */
+		expectedReason        string
+	}
+
+	testCases := []testCase{
+		{"In Copy Phase", "Copying", 0, 0, cannotSwitchCopyIncomplete},
+		{"High Lag", "Running", 6, 5, cannotSwitchHighLag},
+		{"Acceptable Lag", "Running", 4, 5, ""},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expectExtInfo(t, tme, "ks2", tc.state, tc.streamLag)
+			p.MaxAllowedTransactionLagSeconds = tc.allowedLag
+			reason, err := wf.canSwitch(workflowName)
+			require.NoError(t, err)
+			expected := ""
+			if reason != "" {
+				expected = fmt.Sprintf(tc.expectedReason, tc.streamLag, tc.allowedLag)
+			}
+			require.Contains(t, expected, reason)
+		})
+	}
 }
 
 func TestCopyProgress(t *testing.T) {
@@ -139,20 +196,6 @@ func TestCopyProgress(t *testing.T) {
 	require.Equal(t, int64(400), (*cp)["t2"].TargetRowCount)
 	require.Equal(t, int64(4000), (*cp)["t2"].SourceTableSize)
 	require.Equal(t, int64(1000), (*cp)["t2"].TargetTableSize)
-
-	var lag int64
-	lag = 1
-	expectExtInfo(t, tme, "ks2", "Copying", lag)
-	reason, err := wf.canSwitch(workflowName)
-	require.NoError(t, err)
-	require.Contains(t, reason, cannotSwitchCopyIncomplete)
-
-	lag = 6
-	expectExtInfo(t, tme, "ks2", "Running", lag)
-	reason, err = wf.canSwitch(workflowName)
-	require.NoError(t, err)
-	require.Contains(t, reason, fmt.Sprintf(cannotSwitchHighLag, 5, lag))
-
 }
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {

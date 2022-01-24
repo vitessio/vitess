@@ -79,7 +79,7 @@ func (p vreplicationPlanner) exec(
 		return nil, err
 	}
 	if qr.RowsAffected == 0 {
-		log.Infof("no matching streams found for workflow %s, tablet %s, query %s", p.vx.workflow, primaryAlias, query)
+		log.Infof("no matching streams found for workflow %s, tablet %s, query %s, qr %+v", p.vx.workflow, primaryAlias, query, qr)
 	}
 	return qr, nil
 }

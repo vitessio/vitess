@@ -539,25 +539,25 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			// as the lag since there can be an actual event immediately after the heartbeat, but which has not yet
 			// been processed on the target
 			// We don't allow switching during the copy phase, so during this we just return a large lag.
-			lastTransactionTimestamp := time.Unix(status.TransactionTimestamp, 0)
-			lastHeartbeatTime := time.Unix(status.TimeHeartbeat, 0)
+			lastTransactionTimestamp := status.TransactionTimestamp
+			lastHeartbeatTime := status.TimeHeartbeat
 			if status.State != "Copying" {
 				rsr.MaxVReplicationTransactionLag = 0
-				if lastHeartbeatTime.After(lastTransactionTimestamp) /* no recent transactions, so all caught up */ {
+				if lastHeartbeatTime > lastTransactionTimestamp /* no recent transactions, so all caught up */ {
 					lastTransactionTimestamp = lastHeartbeatTime
 				}
 				if status.TransactionTimestamp == 0 /* no new events after copy */ {
 					lastTransactionTimestamp = lastHeartbeatTime
 				}
-				transactionReplicationLag := time.Since(lastTransactionTimestamp)
-				if transactionReplicationLag.Seconds() > float64(rsr.MaxVReplicationTransactionLag) {
-					rsr.MaxVReplicationTransactionLag = int64(transactionReplicationLag.Seconds())
+				transactionReplicationLag := time.Now().UnixNano() - lastTransactionTimestamp
+				transactionReplicationLag = transactionReplicationLag / 1e9
+				if transactionReplicationLag > rsr.MaxVReplicationTransactionLag {
+					rsr.MaxVReplicationTransactionLag = int64(transactionReplicationLag)
 				}
 			} else {
 				rsr.MaxVReplicationTransactionLag = math.MaxInt64
 			}
 		}
-
 		si, err := wr.ts.GetShard(ctx, keyspace, primary.Shard)
 		if err != nil {
 			return nil, err
