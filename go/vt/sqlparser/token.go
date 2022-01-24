@@ -37,7 +37,6 @@ type Tokenizer struct {
 	InStream             io.Reader
 	AllowComments        bool
 	SkipSpecialComments  bool
-	SkipToEnd            bool
 	lastChar             uint16
 	Position             int
 	OldPosition          int
@@ -550,10 +549,6 @@ func KeywordString(id int) string {
 // Lex returns the next token from the Tokenizer.
 // This function is used by go yacc.
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
-	if tkn.SkipToEnd {
-		return tkn.skipStatement()
-	}
-
 	typ, val := tkn.Scan()
 	for typ == COMMENT {
 		if tkn.AllowComments {
@@ -761,7 +756,6 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 
 // skipStatement scans until end of statement.
 func (tkn *Tokenizer) skipStatement() int {
-	tkn.SkipToEnd = false
 	for {
 		typ, _ := tkn.Scan()
 		if typ == 0 || typ == ';' || typ == LEX_ERROR {
@@ -1093,7 +1087,6 @@ func (tkn *Tokenizer) reset() {
 	tkn.specialComment = nil
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
-	tkn.SkipToEnd = false
 	bufLeft := len(tkn.buf) - tkn.bufPos
 	if len(tkn.queryBuf) > bufLeft {
 		tkn.queryBuf = tkn.queryBuf[len(tkn.queryBuf)-bufLeft:]

@@ -32,7 +32,7 @@ func TestQueryString(t *testing.T) {
 		},
 		SQL: "sql",
 	}
-	want := `{Database: "test_database", Charset: client:12 conn:34 server:56, SQL: "sql"}`
+	want := `{Database: "test_database", Charset: client:12  conn:34  server:56, SQL: "sql"}`
 	if got := input.String(); got != want {
 		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}
