@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
@@ -592,8 +592,8 @@ func TestBindVariablesFormat(t *testing.T) {
 		t.Fatalf("bind variable 'key_3': 'val_3' is not formatted")
 	}
 	if !strings.Contains(formattedStr, "key_4") ||
-		!strings.Contains(formattedStr, "values:<type:INT64 value:\"1\" > values:<type:INT64 value:\"2\" >") {
-		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted")
+		!strings.Contains(formattedStr, "key_4:type:TUPLE  values:{type:INT64  value:\"1\"}  values:{type:INT64  value:\"2\"}") {
+		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted: %s", formattedStr)
 	}
 
 	formattedStr = FormatBindVariables(bindVariables, false /* full */, false /* asJSON */)

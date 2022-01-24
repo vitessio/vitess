@@ -19,10 +19,11 @@ package sqltypes
 import (
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
 	"github.com/dolthub/vitess/go/vt/vterrors"
-	"github.com/golang/protobuf/proto"
 )
 
 func TestResult(t *testing.T) {

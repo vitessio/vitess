@@ -241,7 +241,7 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
 
 // Type Tokens
-%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
+%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC DEC FIXED PRECISION
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
 %token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING
@@ -2106,6 +2106,10 @@ int_type:
 | BIGINT
   {
     $$ = ColumnType{Type: string($1)}
+  }
+| SERIAL
+  {
+    $$ = ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
   }
 
 decimal_type:
@@ -5714,6 +5718,7 @@ non_reserved_keyword:
 | BEFORE
 | BEGIN
 | BIGINT
+| SERIAL
 | BIT
 | BLOB
 | BOOL
