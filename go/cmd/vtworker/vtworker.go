@@ -45,7 +45,7 @@ var (
 	cell                   = flag.String("cell", "", "cell to pick servers from")
 	commandDisplayInterval = flag.Duration("command_display_interval", time.Second, "Interval between each status update when vtworker is executing a single command from the command line")
 	username               = flag.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
-	durability             = flag.String("durability", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	durabilityPolicy       = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 )
 
 func init() {
@@ -80,7 +80,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := reparentutil.SetDurabilityPolicy(*durability, nil); err != nil {
+	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil); err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		exit.Return(1)
 	}

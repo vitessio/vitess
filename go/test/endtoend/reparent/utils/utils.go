@@ -86,7 +86,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-enable_semi_sync")
 		if clusterInstance.VtctlMajorVersion >= 13 {
-			clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+			clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 		}
 	}
 
@@ -311,7 +311,7 @@ func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.
 func ErsWithVtctl(clusterInstance *cluster.LocalProcessCluster) (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	if clusterInstance.VtctlMajorVersion >= 13 {
-		args = append([]string{"-durability=semi_sync"}, args...)
+		args = append([]string{"-durability_policy=semi_sync"}, args...)
 	}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
 }

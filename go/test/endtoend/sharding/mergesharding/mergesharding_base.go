@@ -107,7 +107,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Launch keyspace
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()

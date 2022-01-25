@@ -218,7 +218,7 @@ func setupVaultServer(t *testing.T, vs *VaultServer) (string, string) {
 func initializeClusterEarly(t *testing.T) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
