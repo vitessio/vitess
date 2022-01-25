@@ -134,6 +134,10 @@ jobs:
       run: |
         go mod download
 
+    - name: Run make minimaltools
+      run: |
+        make minimaltools
+
     - name: Building the binaries for this commit
       timeout-minutes: 10
       run: |
@@ -144,12 +148,12 @@ jobs:
 
     - name: Create the example Vitess cluster with all components using version N
       run: |
-        cd examples/local
+        source build.env ; cd examples/local
         ./backups/start_cluster.sh
 
     - name: Take a backup of all the shards
       run: |
-        cd examples/local
+        source build.env ; cd examples/local
         ./backups/take_backups.sh
 
     - name: Insert more data after the backup
@@ -162,7 +166,7 @@ jobs:
 
     - name: Stop tablets
       run: |
-        cd examples/local
+        source build.env ; cd examples/local
         ./backups/stop_tablets.sh
 
     - name: Use VTTablet N-1
@@ -175,7 +179,7 @@ jobs:
 
     - name: Start new tablets using version n-1 and restoring old backup made on version n
       run: |
-        cd examples/local
+        source build.env ; cd examples/local
         ./backups/restart_tablets.sh
 
     - name: Query the new tablets to make sure the data has been restored
@@ -196,12 +200,12 @@ jobs:
 
     - name: Take a second backup of all the shards
       run: |
-        cd examples/local
+        source build.env ; cd examples/local
         ./backups/take_backups.sh
 
     - name: Stop tablets
       run: |
-        cd examples/local
+        source build.env ; cd examples/local
         ./backups/stop_tablets.sh
 
     - name: Use current version VTTablet, and other version VTBackup
@@ -214,7 +218,7 @@ jobs:
 
     - name: Start new tablets using version n and restoring old backup made on version n-1
       run: |
-        cd examples/local
+        source build.env ; cd examples/local
         ./backups/restart_tablets.sh
 
     - name: Query the new tablets to make sure the data has been restored
