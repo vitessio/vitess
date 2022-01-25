@@ -87,10 +87,10 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	require.True(t, hasPrimary)
 }
 
-func expectExtInfo(t *testing.T, tme *testMigraterEnv, keyspace, state string, currentLag int64) {
-	now := int64(time.Now().Unix())
+func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state string, currentLag int64) {
+	now := time.Now().Unix()
 	rowTemplate := "1|||||%s|vt_%s|%d|%d|0||"
-	row := fmt.Sprintf(rowTemplate, state, keyspace, now, now-(currentLag*1e9))
+	row := fmt.Sprintf(rowTemplate, state, keyspace, now, now-currentLag)
 	replicationResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|message|tags",
 		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|varchar|varchar"),
@@ -146,7 +146,7 @@ func TestCanSwitch(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			expectExtInfo(t, tme, "ks2", tc.state, tc.streamLag)
+			expectCanSwitchQueries(t, tme, "ks2", tc.state, tc.streamLag)
 			p.MaxAllowedTransactionLagSeconds = tc.allowedLag
 			reason, err := wf.canSwitch(workflowName)
 			require.NoError(t, err)
