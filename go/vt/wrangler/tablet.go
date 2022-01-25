@@ -220,7 +220,7 @@ func (wr *Wrangler) shouldSendSemiSyncAck(ctx context.Context, tablet *topodatap
 		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(tablet.Alias), tablet.Keyspace, tablet.Shard)
 	}
 
-	return reparentutil.ReplicaSemiSync(shardPrimary.Tablet, tablet), nil
+	return reparentutil.IsReplicaSemiSync(shardPrimary.Tablet, tablet), nil
 }
 
 // RefreshTabletState refreshes tablet state

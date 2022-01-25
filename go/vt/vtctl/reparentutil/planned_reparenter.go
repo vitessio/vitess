@@ -227,7 +227,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer setSourceCancel()
 
-	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, ReplicaSemiSync(currentPrimary.Tablet, primaryElect)); err != nil {
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(currentPrimary.Tablet, primaryElect)); err != nil {
 		return "", vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
 	}
 
@@ -652,7 +652,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, ReplicaSemiSync(ev.NewPrimary, tablet)); err != nil {
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(ev.NewPrimary, tablet)); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
