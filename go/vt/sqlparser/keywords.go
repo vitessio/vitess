@@ -197,7 +197,7 @@ var keywords = []keyword{
 	{"date", DATE},
 	{"datetime", DATETIME},
 	{"dec", UNUSED},
-	{"decimal", DECIMAL},
+	{"decimal", DECIMAL_TYPE},
 	{"declare", UNUSED},
 	{"default", DEFAULT},
 	{"definer", DEFINER},
