@@ -532,11 +532,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && reparentutil.ReplicaSemiSync(primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && reparentutil.IsReplicaSemiSync(primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !reparentutil.ReplicaSemiSync(primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !reparentutil.IsReplicaSemiSync(primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
 			//

@@ -80,7 +80,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 		log.Errore(err)
 		return nil
 	}
-	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, ReplicaSemiSync(newPrimaryKey, oldPrimaryKey)); err != nil {
+	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(newPrimaryKey, oldPrimaryKey)); err != nil {
 		// This is best effort.
 		log.Errore(err)
 	}
