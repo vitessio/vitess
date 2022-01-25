@@ -44,14 +44,14 @@ import (
 )
 
 const (
-	streamInfoQuery    = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_%s'"
+	streamInfoQuery    = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
 	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, message, tags from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'"
 )
 
 var (
-	streamInfoKs  = fmt.Sprintf(streamInfoQuery, "ks")
-	streamInfoKs1 = fmt.Sprintf(streamInfoQuery, "ks1")
-	streamInfoKs2 = fmt.Sprintf(streamInfoQuery, "ks2")
+	streamInfoKs  = fmt.Sprintf(streamInfoQuery, "test", "ks")
+	streamInfoKs1 = fmt.Sprintf(streamInfoQuery, "test_reverse", "ks1")
+	streamInfoKs2 = fmt.Sprintf(streamInfoQuery, "test", "ks2")
 )
 
 type testMigraterEnv struct {
