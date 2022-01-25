@@ -111,7 +111,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS *topo.Server) {
 	}
 
 	for _, cell := range cells {
-		tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
+		tabletAliases, err := fromTS.GetTabletAliasesByCell(ctx, cell)
 		if err != nil {
 			log.Fatalf("GetTabletsByCell(%v): %v", cell, err)
 		} else {

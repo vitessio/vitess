@@ -118,6 +118,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -576,7 +577,7 @@ var commands = []commandGroup{
 			{
 				name:   "ListAllTablets",
 				method: commandListAllTablets,
-				params: "<cell name1>, <cell name2>, ...",
+				params: "[-keyspace=''] [-tablet_type=<PRIMARY,REPLICA,RDONLY>] [<cell name1>, <cell name2>, ...]",
 				help:   "Lists all tablets in an awk-friendly way.",
 			},
 			{
@@ -2998,19 +2999,28 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 }
 
 func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyspaceFilter := subFlags.String("keyspace", "", "Keyspace to filter on")
+	tabletTypeStr := subFlags.String("tablet_type", "", "Tablet type to filter on")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-
+	var tabletTypeFilter topodatapb.TabletType
+	if *tabletTypeStr != "" {
+		tabletTypeFilter = topodatapb.TabletType(topodata.TabletType_value[strings.ToUpper(*tabletTypeStr)])
+		if tabletTypeFilter == topodatapb.TabletType_UNKNOWN {
+			return fmt.Errorf("invalid tablet type of '%s' specified for -tablet_type", *tabletTypeStr)
+		}
+	}
 	var cells []string
-
 	if subFlags.NArg() == 1 {
 		cells = strings.Split(subFlags.Arg(0), ",")
 	}
 
 	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
-		Cells:  cells,
-		Strict: false,
+		Cells:      cells,
+		Strict:     false,
+		Keyspace:   *keyspaceFilter,
+		TabletType: tabletTypeFilter,
 	})
 
 	if err != nil {
