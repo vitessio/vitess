@@ -154,19 +154,16 @@ func (dc *fakeDBClient) id() string {
 }
 
 // ExecuteFetch is part of the DBClient interface
-func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
-	qr, err = dc.executeFetch(query, maxrows)
+func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	qr, err := dc.executeFetch(query, maxrows)
 	if testMode == "debug" {
 		log.Infof("%s::ExecuteFetch for >>>%s<<< returns >>>%v<<< error >>>%+v<<< ", dc.id(), query, qr, err)
-	}
-	if qr != nil && qr.Rows != nil {
-		qr.RowsAffected = uint64(len(qr.Rows))
 	}
 	return qr, err
 }
 
 // ExecuteFetch is part of the DBClient interface
-func (dc *fakeDBClient) executeFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+func (dc *fakeDBClient) executeFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	if dbrs := dc.queries[query]; dbrs != nil {
 		return dbrs.next(query)
 	}

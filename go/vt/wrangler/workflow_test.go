@@ -88,7 +88,7 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 }
 
 func expectExtInfo(t *testing.T, tme *testMigraterEnv, keyspace, state string, currentLag int64) {
-	now := int64(time.Now().UnixNano())
+	now := int64(time.Now().Unix())
 	rowTemplate := "1|||||%s|vt_%s|%d|%d|0||"
 	row := fmt.Sprintf(rowTemplate, state, keyspace, now, now-(currentLag*1e9))
 	replicationResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(

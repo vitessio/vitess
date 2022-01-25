@@ -476,6 +476,7 @@ func shouldIgnoreQuery(query string) bool {
 	queriesToIgnore := []string{
 		"_vt.vreplication_log", // ignore all selects, updates and inserts into this table
 		"@@session.sql_mode",   // ignore all selects, and sets of this variable
+		", time_heartbeat=",    // update of last heartbeat time, can happen out-of-band, so can't test for it
 	}
 	for _, q := range queriesToIgnore {
 		if strings.Contains(query, q) {

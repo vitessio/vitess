@@ -181,7 +181,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
 	tme.setPrimaryPositions()
-	now := time.Now().UnixNano()
+	now := time.Now().Unix()
 	for i, targetShard := range targetShards {
 		var streamInfoRows []string
 		var streamExtInfoRows []string
@@ -337,7 +337,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
 	tme.setPrimaryPositions()
-	now := time.Now().UnixNano()
+	now := time.Now().Unix()
 	for i, targetShard := range targetShards {
 		var rows, rowsRdOnly []string
 		var streamExtInfoRows []string
