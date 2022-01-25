@@ -4891,6 +4891,39 @@ func TestServeHTTP(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                  "multiple clusters with invalid json cookie and dynamic clusters",
+			enableDynamicClusters: true,
+			cookie:                `{"name "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		},
+		{
+			name:                  "no clusters with dynamic clusters",
+			enableDynamicClusters: true,
+			clusters:              []*cluster.Cluster{},
+			expected:              []*vtadminpb.Cluster{},
+		},
 	}
 
 	for _, tt := range tests {
