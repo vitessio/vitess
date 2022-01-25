@@ -73,6 +73,12 @@ type Conn interface {
 	// Can return ErrNoNode if the file doesn't exist.
 	Get(ctx context.Context, filePath string) ([]byte, Version, error)
 
+	// List returns the files with a key that contains the specified prefix.
+	// filePathPrefix is a path relative to the root directory of the cell.
+	// Returns no version/revision information (nil) for the individual keys.
+	// Can return ErrNoNode if there are no matches.
+	List(ctx context.Context, filePathPrefix string) ([][]byte, error)
+
 	// Delete deletes the provided file.
 	// If version is nil, it is an unconditional delete.
 	// If the last entry of a directory is deleted, using ListDir

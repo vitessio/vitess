@@ -3872,6 +3872,11 @@ func (m *GetTabletsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TabletType != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.TabletType))
+		i--
+		dAtA[i] = 0x30
+	}
 	if len(m.TabletAliases) > 0 {
 		for iNdEx := len(m.TabletAliases) - 1; iNdEx >= 0; iNdEx-- {
 			size, err := m.TabletAliases[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
@@ -8640,6 +8645,9 @@ func (m *GetTabletsRequest) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
+	}
+	if m.TabletType != 0 {
+		n += 1 + sov(uint64(m.TabletType))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -19071,6 +19079,25 @@ func (m *GetTabletsRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletType", wireType)
+			}
+			m.TabletType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TabletType |= topodata.TabletType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
