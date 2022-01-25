@@ -224,7 +224,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		api.Handler().ServeHTTP(w, r)
 		return
 	}
-
+	fmt.Printf("HERE\n")
 	dynamicAPI := &API{
 		clusters:   api.clusters,
 		clusterMap: api.clusterMap,
@@ -241,7 +241,6 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			var clusterJSON DynamicClusterJSON
 			err = json.Unmarshal(decoded, &clusterJSON)
-
 			if err == nil {
 				clusterID := clusterJSON.ClusterName
 				c, err := cluster.Config{
