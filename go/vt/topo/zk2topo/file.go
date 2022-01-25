@@ -90,7 +90,7 @@ func (zs *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Versio
 
 // List is part of the topo.Conn interface.
 func (zs *Server) List(ctx context.Context, filePathPrefix string) ([][]byte, error) {
-	return nil, fmt.Errorf("List not supported in ZK2 topo")
+	return nil, topo.NewError(topo.NoImplementation, "List not supported in ZK2 topo")
 }
 
 // Delete is part of the topo.Conn interface.

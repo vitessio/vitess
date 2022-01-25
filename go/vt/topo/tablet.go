@@ -19,6 +19,7 @@ package topo
 import (
 	"fmt"
 	"path"
+	"sort"
 	"sync"
 	"time"
 
@@ -293,6 +294,11 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 	}
 	listResults, err := cellConn.List(ctx, TabletsPath)
 	if err != nil || len(listResults) == 0 {
+		// Currently the ZooKeeper and Memory topo implementations do not support scans
+		// so we fall back to the more costly method of fetching the tablets one by one.
+		if IsErrType(err, NoImplementation) {
+			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias)
+		}
 		if IsErrType(err, NoNode) {
 			return nil, nil
 		}
@@ -307,6 +313,35 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 		}
 		// version is unused in this context
 		tablets[n] = &TabletInfo{Tablet: tablet, version: nil}
+	}
+
+	return tablets, nil
+}
+
+// GetTabletsIndividuallyByCell returns a sorted list of tablets for topo servers that do not directly support
+// the topoConn.List() functionality
+func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string) ([]*TabletInfo, error) {
+	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+	sort.Sort(topoproto.TabletAliasList(aliases))
+
+	tabletMap, err := ts.GetTabletMap(ctx, aliases)
+	if err != nil {
+		// we got another error than topo.ErrNoNode
+		return nil, err
+	}
+	tablets := make([]*TabletInfo, 0, len(aliases))
+	for _, tabletAlias := range aliases {
+		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
+		if !ok {
+			// tablet disappeared on us (GetTabletMap ignores
+			// topo.ErrNoNode), just echo a warning
+			log.Warningf("failed to load tablet %v", tabletAlias)
+		} else {
+			tablets = append(tablets, tabletInfo)
+		}
 	}
 
 	return tablets, nil
