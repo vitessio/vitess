@@ -118,7 +118,12 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) se
 }
 
 func getPlannerFromQuery(stmt sqlparser.SelectStatement) (plancontext.PlannerVersion, bool) {
-	d := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(stmt).Comments)
+	var d sqlparser.CommentDirectives
+
+	firstSelect := sqlparser.GetFirstSelect(stmt)
+	if firstSelect != nil {
+		d = sqlparser.ExtractCommentDirectives(firstSelect.Comments)
+	}
 	if d == nil {
 		return plancontext.PlannerVersion(0), false
 	}
