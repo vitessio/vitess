@@ -2,8 +2,6 @@
 set -ex
 
 vt_base_version='v7.0.2'
-orchestrator_version='3.2.3'
-pmm_client_version='1.17.4'
 
 docker pull vitess/base:$vt_base_version
 
@@ -62,12 +60,3 @@ docker tag vitess/logtail:$vt_base_version-buster vitess/logtail:$vt_base_versio
 docker push vitess/logtail:$vt_base_version-buster
 docker push vitess/logtail:$vt_base_version
 
-docker build --build-arg VT_BASE_VER=$vt_base_version --build-arg PMM_CLIENT_VER=$pmm_client_version -t vitess/pmm-client:v$pmm_client_version-buster pmm-client
-docker tag vitess/pmm-client:v$pmm_client_version-buster vitess/pmm-client:v$pmm_client_version
-docker push vitess/pmm-client:v$pmm_client_version-buster
-docker push vitess/pmm-client:v$pmm_client_version
-
-docker build --build-arg VT_BASE_VER=$vt_base_version --build-arg ORC_VER=$orchestrator_version -t vitess/orchestrator:v$orchestrator_version-buster orchestrator
-docker tag vitess/orchestrator:v$orchestrator_version-buster vitess/orchestrator:v$orchestrator_version
-docker push vitess/orchestrator:v$orchestrator_version-buster
-docker push vitess/orchestrator:v$orchestrator_version
