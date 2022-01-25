@@ -708,7 +708,7 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 				return nil, err
 			}
 			return num, nil
-		case sqlparser.FloatVal:
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
 			num, err := strconv.ParseFloat(expr.Val, 64)
 			if err != nil {
 				return nil, err

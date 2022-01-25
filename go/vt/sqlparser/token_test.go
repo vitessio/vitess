@@ -280,7 +280,7 @@ func TestIntegerAndID(t *testing.T) {
 		id: INTEGRAL,
 	}, {
 		in: "33.4",
-		id: FLOAT,
+		id: DECIMAL,
 	}, {
 		in: "0x33",
 		id: HEXNUM,
