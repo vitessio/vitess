@@ -675,7 +675,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 		return instance, log.Errore(err)
 	}
 
-	semiSync := ReplicaSemiSync(*primaryKey, *instanceKey)
+	semiSync := IsReplicaSemiSync(*primaryKey, *instanceKey)
 	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
 		return instance, log.Errore(err)
 	}

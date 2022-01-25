@@ -45,9 +45,9 @@ import (
 )
 
 var (
-	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
-	durability   = flag.String("durability", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	waitTime         = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	detachedMode     = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
+	durabilityPolicy = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 )
 
 func init() {
@@ -93,7 +93,7 @@ func main() {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
 
-	if err := reparentutil.SetDurabilityPolicy(*durability, nil); err != nil {
+	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil); err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		exit.Return(1)
 	}
