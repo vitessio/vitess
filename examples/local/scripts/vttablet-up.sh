@@ -34,6 +34,13 @@ if [[ "${uid: -1}" -gt 1 ]]; then
 fi
 
 echo "Starting vttablet for $alias..."
+
+touch $VTDATAROOT/$tablet_dir/vttablet.out
+
+echo "Starting printing vttablet output for $alias..."
+
+tail -f $VTDATAROOT/$tablet_dir/vttablet.out &
+
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \
