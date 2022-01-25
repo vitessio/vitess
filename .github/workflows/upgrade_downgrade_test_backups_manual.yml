@@ -149,16 +149,27 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
+    # We create a sharded Vitess cluster following the local example.
+    # We also insert a few rows in our three tables.
     - name: Create the example Vitess cluster with all components using version N
+      timeout-minutes: 10
       run: |
         source build.env ; cd examples/local
         ./backups/start_cluster.sh
 
+    # Taking a backup
     - name: Take a backup of all the shards
       run: |
         source build.env ; cd examples/local
         ./backups/take_backups.sh
 
+    # We insert more data in every table after the backup.
+    # When we restore the backup made in the previous step, we do not want to see the rows we are about to insert now.
+    # The initial number of rows for each table is:
+    #     - customer: 5
+    #     - product:  2
+    #     - corder:   5
+    # We shall see the same number of rows after restoring the backup.
     - name: Insert more data after the backup
       run: |
         source build.env ; cd examples/local ; source ./env.sh
@@ -167,12 +178,14 @@ jobs:
         echo "insert into product(sku, description, price) values('SKU-1009', 'description', 89);" | mysql
         echo "insert into corder(customer_id, sku, price) values(1, 'SKU-1009', 100);" | mysql
 
+    # Stop all the tablets and remove their data
     - name: Stop tablets
       run: |
         source build.env ; cd examples/local
         ./backups/stop_tablets.sh
 
-    - name: Use VTTablet N-1
+    # We downgrade: we use the version N-1 of vttablet
+    - name: Downgrade - Swap binaries, use VTTablet N-1
       run: |
         source build.env
 
@@ -180,20 +193,16 @@ jobs:
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
         vttablet --version
 
-    - name: Start new tablets using version n-1 and restoring old backup made on version n
+    # Starting the tablets again, they will automatically start restoring the last backup.
+    - name: Start new tablets and restore
       run: |
         source build.env ; cd examples/local
         ./backups/restart_tablets.sh
         # give enough time to the tablets to restore the backup
         sleep 60
 
-    - name: Check grep
-      run: |
-        source build.env ; cd examples/local ; source ./env.sh
-
-        echo "2" | grep 2
-
-    - name: Query the new tablets to make sure the data has been restored
+    # Count the number of rows in each table to make sure the restoration is successful.
+    - name: Assert the number of rows in every table
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -201,7 +210,8 @@ jobs:
         echo "select count(email) from customer;" | mysql | grep 5
         echo "select count(sku) from corder;" | mysql | grep 5
 
-    - name: Insert more data before the backup
+    # We insert one more row in every table.
+    - name: Insert more rows in the tables
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -209,17 +219,20 @@ jobs:
         echo "insert into product(sku, description, price) values('SKU-1011', 'description', 111);" | mysql
         echo "insert into corder(customer_id, sku, price) values(1, 'SKU-1011', 111);" | mysql
 
+    # Taking a second backup of the cluster.
     - name: Take a second backup of all the shards
       run: |
         source build.env ; cd examples/local
         ./backups/take_backups.sh
 
+    # Stopping the tablets so we can perform the upgrade.
     - name: Stop tablets
       run: |
         source build.env ; cd examples/local
         ./backups/stop_tablets.sh
 
-    - name: Use current version VTTablet, and other version VTBackup
+    # We upgrade: we swap binaries and use the version N of the tablet.
+    - name: Upgrade - Swap binaries, use VTTablet N
       run: |
         source build.env
 
@@ -227,14 +240,16 @@ jobs:
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
         vttablet --version
 
-    - name: Start new tablets using version n and restoring old backup made on version n-1
+    # Starting the tablets again and restoring the previous backup.
+    - name: Start new tablets and restore
       run: |
         source build.env ; cd examples/local
         ./backups/restart_tablets.sh
         # give enough time to the tablets to restore the backup
         sleep 60
 
-    - name: Query the new tablets to make sure the data has been restored
+    # We count the number of rows in every table to check that the restore step was successful.
+    - name: Assert the number of rows in every table
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
