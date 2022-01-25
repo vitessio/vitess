@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -131,7 +132,7 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_NAME",
 	ColumnLength: 192,
-	Charset:      CharacterSetUtf8,
+	Charset:      collations.CollationUtf8ID,
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "t.table_type",
@@ -141,13 +142,13 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_TYPE",
 	ColumnLength: 192,
-	Charset:      CharacterSetUtf8,
+	Charset:      collations.CollationUtf8ID,
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "unix_timestamp(t.create_time)",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
-	Charset:      CharacterSetBinary,
+	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 }, {
 	Name:         "t.table_comment",
@@ -157,19 +158,19 @@ var BaseShowTablesFields = []*querypb.Field{{
 	Database:     "information_schema",
 	OrgName:      "TABLE_COMMENT",
 	ColumnLength: 6144,
-	Charset:      CharacterSetUtf8,
+	Charset:      collations.CollationUtf8ID,
 	Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 }, {
 	Name:         "i.file_size",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
-	Charset:      CharacterSetBinary,
+	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 }, {
 	Name:         "i.allocated_size",
 	Type:         querypb.Type_INT64,
 	ColumnLength: 11,
-	Charset:      CharacterSetBinary,
+	Charset:      collations.CollationBinaryID,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 }}
 

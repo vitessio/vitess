@@ -123,32 +123,6 @@ func fetchCacheEnvironment(version collver) *Environment {
 	return env
 }
 
-// ResolveCollation returns the default collation that will be used for the given charset and collation.
-// Both charset and collation can be empty strings, in which case utf8mb4 will be used as a charset and its
-// default collation will be returned.
-func (env *Environment) ResolveCollation(charset, collation string) (Collation, error) {
-	// if there is no collation or charset, we default to utf8mb4
-	if collation == "" && charset == "" {
-		charset = "utf8mb4"
-	}
-
-	var coll Collation
-	if collation == "" {
-		// If there is no collation we will just use the charset's default collation
-		// otherwise we directly use the given collation.
-		coll = env.DefaultCollationForCharset(charset)
-	} else {
-		// Here we call the collations API to ensure the collation/charset exist
-		// and is supported by Vitess.
-		coll = env.LookupByName(collation)
-	}
-	if coll == nil {
-		// The given collation is most likely unknown or unsupported, we need to fail.
-		return nil, fmt.Errorf("cannot resolve collation: '%s'", collation)
-	}
-	return coll, nil
-}
-
 // NewEnvironment creates a collation Environment for the given MySQL version string.
 // The version string must be in the format that is sent by the server as the version packet
 // when opening a new MySQL connection
@@ -245,4 +219,33 @@ func Local() *Environment {
 		}
 	})
 	return defaultEnv
+}
+
+// DefaultConnectionCharset is the default 1-byte charset flag that will be sent in all
+// MySQL clients created by Vitess. This is hardcoded to `utf8mb4_0900_ai_ci` because
+// it's the default in MySQL 8.0+. Older versions of MySQL that do not support this
+// charset will automatically fall back to their built-in default.
+const DefaultConnectionCharset = CollationUtf8mb4ID
+
+// A few interesting character set values.
+// See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
+const (
+	CollationUtf8ID    = 33
+	CollationUtf8mb4ID = 255
+	CollationBinaryID  = 63
+)
+
+func ParseConnectionCharset(csname string) (uint8, error) {
+	switch strings.ToLower(csname) {
+	case "utf8mb4":
+		return CollationUtf8mb4ID, nil
+	case "utf8":
+		return CollationUtf8ID, nil
+	case "latin1":
+		return 8, nil
+	case "":
+		return DefaultConnectionCharset, nil
+	default:
+		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
+	}
 }

@@ -217,41 +217,29 @@ func (c *Conn) Ping() error {
 // allows us to make informed decisions around charset's default collation
 // depending on the MySQL/MariaDB version we are using.
 func setCollationForConnection(c *Conn, params *ConnParams) error {
+	if params.Collation == "" {
+		return nil
+	}
+
 	// Once we have done the initial handshake with MySQL, we receive the server version
 	// string. This string is critical as it enables the instantiation of a new collation
 	// environment variable.
 	// Certain MySQL or MariaDB versions might have different default collations for some
 	// charsets, so it is important to use a database-version-aware collation system/API.
-	env := collations.NewEnvironment(c.ServerVersion)
-	coll, err := env.ResolveCollation(params.Charset, params.Collation)
-	if err != nil {
-		return err
+	collation := collations.NewEnvironment(c.ServerVersion).LookupByName(params.Collation)
+	if collation == nil {
+		return fmt.Errorf("unknown/unsupported collation name specified for connection: %q", params.Collation)
 	}
 
 	// We send a query to MySQL to set the connection's collation.
 	// See: https://dev.mysql.com/doc/refman/8.0/en/charset-connection.html
-	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", coll.Name())
+	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", collation.Name())
 	if _, err := c.ExecuteFetch(querySetCollation, 1, false); err != nil {
 		return err
 	}
 
-	c.Collation = coll.ID()
+	c.CharacterSet = collation.ID()
 	return nil
-}
-
-// getHandshakeCharacterSet returns the collation ID of DefaultCollation in an
-// 8 bits integer which will be used to feed the handshake protocol's packet.
-func getHandshakeCharacterSet() (uint8, error) {
-	coll := collations.Local().LookupByName(DefaultCollation)
-	if coll == nil {
-		// theoretically, this should never happen from an end user perspective
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation ID for collation: '%s'", DefaultCollation)
-	}
-	if coll.ID() > 255 {
-		// same here, this should never happen
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "collation ID for '%s' will overflow, value: %d", DefaultCollation, coll.ID())
-	}
-	return uint8(coll.ID()), nil
 }
 
 // clientHandshake handles the client side of the handshake.
@@ -282,24 +270,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
 	}
 
-	// The MySQL handshake package uses the "character set" field to define
-	// which character set must be used. But, the value we give to this field
-	// correspond in fact to the collation ID. MySQL will then deduce what the
-	// character set for this collation ID is, and use it.
-	// Problem is, this field is 8-bits long meaning that the ID can range from
-	// 0 to 255, which is smaller than the range of IDs we support.
-	// If, for instance, we used the collation "utf8mb4_0900_as_ci" that has an
-	// ID equal to 305, the value would overflow when transformed into an 8 bits
-	// integer.
-	// To alleviate this issue, we use a default and safe collation for the handshake
-	// and once the connection is established, we will manually set the collation.
-	// The code below gets that default character set for the Handshake packet.
-	//
-	// Note: this character set might be different from the one we will use
-	// for the connection.
-	//
-	// See: https://dev.mysql.com/doc/internals/en/connection-phase-packets.html
-	characterSet, err := getHandshakeCharacterSet()
+	charset, err := collations.ParseConnectionCharset(params.Charset)
 	if err != nil {
 		return err
 	}
@@ -340,7 +311,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		}
 
 		// Send the SSLRequest packet.
-		if err := c.writeSSLRequest(capabilities, characterSet, params); err != nil {
+		if err := c.writeSSLRequest(capabilities, charset, params); err != nil {
 			return err
 		}
 
@@ -371,7 +342,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, characterSet, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, charset, params); err != nil {
 		return err
 	}
 
@@ -473,7 +444,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no character set")
 	}
-	c.CharacterSet = characterSet
+	c.CharacterSet = collations.ID(characterSet)
 
 	// Status flags. Ignored.
 	_, pos, ok = readUint16(data, pos)

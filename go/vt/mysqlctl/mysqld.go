@@ -26,6 +26,7 @@ package mysqlctl
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -41,8 +42,6 @@ import (
 	"time"
 
 	rice "github.com/GeertJohan/go.rice"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -663,7 +662,6 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// user is created yet.
 	params := &mysql.ConnParams{
 		Uname:      "root",
-		Charset:    "utf8mb4",
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {

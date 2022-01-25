@@ -233,15 +233,10 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 
-	var coll collations.Collation
-	env := collations.NewEnvironment(dbServerVersion)
-	if db == nil {
-		coll, err = env.ResolveCollation("", "")
-	} else {
-		coll, err = env.ResolveCollation(db.Charset, db.Collation)
-	}
-	if err != nil {
-		return nil, err
+	var coll collations.ID = collations.DefaultConnectionCharset
+	if db != nil && db.Collation != "" {
+		env := collations.NewEnvironment(dbServerVersion)
+		coll = env.LookupByName(db.Collation).ID()
 	}
 
 	return &topodatapb.Tablet{
@@ -258,7 +253,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		DbNameOverride:       *initDbNameOverride,
 		Tags:                 mergeTags(buildTags, initTags),
 		DbServerVersion:      dbServerVersion,
-		DefaultConnCollation: uint32(coll.ID()),
+		DefaultConnCollation: uint32(coll),
 	}, nil
 }
 
