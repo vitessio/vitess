@@ -80,13 +80,13 @@ func TestTabletManager_fixSemiSync(t *testing.T) {
 		{
 			name:                 "enableSemiSync=true(primary eligible),durabilitySemiSync=true",
 			tabletType:           topodata.TabletType_REPLICA,
-			semiSync:             SemiSyncActionTrue,
+			semiSync:             SemiSyncActionSet,
 			logOutput:            "",
 			shouldEnableSemiSync: true,
 		}, {
 			name:                 "enableSemiSync=true(primary eligible),durabilitySemiSync=false",
 			tabletType:           topodata.TabletType_REPLICA,
-			semiSync:             SemiSyncActionFalse,
+			semiSync:             SemiSyncActionUnset,
 			logOutput:            "invalid configuration - enabling semi sync even though not specified by durability policies.",
 			shouldEnableSemiSync: true,
 		}, {
@@ -98,13 +98,13 @@ func TestTabletManager_fixSemiSync(t *testing.T) {
 		}, {
 			name:                 "enableSemiSync=true(primary not-eligible),durabilitySemiSync=true",
 			tabletType:           topodata.TabletType_DRAINED,
-			semiSync:             SemiSyncActionTrue,
+			semiSync:             SemiSyncActionSet,
 			logOutput:            "invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible",
 			shouldEnableSemiSync: true,
 		}, {
 			name:                 "enableSemiSync=true(primary not-eligible),durabilitySemiSync=false",
 			tabletType:           topodata.TabletType_DRAINED,
-			semiSync:             SemiSyncActionFalse,
+			semiSync:             SemiSyncActionUnset,
 			logOutput:            "",
 			shouldEnableSemiSync: true,
 		}, {
@@ -116,13 +116,13 @@ func TestTabletManager_fixSemiSync(t *testing.T) {
 		}, {
 			name:                 "enableSemiSync=false,durabilitySemiSync=true",
 			tabletType:           topodata.TabletType_REPLICA,
-			semiSync:             SemiSyncActionTrue,
+			semiSync:             SemiSyncActionSet,
 			logOutput:            "invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set",
 			shouldEnableSemiSync: false,
 		}, {
 			name:                 "enableSemiSync=false,durabilitySemiSync=false",
 			tabletType:           topodata.TabletType_REPLICA,
-			semiSync:             SemiSyncActionFalse,
+			semiSync:             SemiSyncActionUnset,
 			logOutput:            "",
 			shouldEnableSemiSync: false,
 		}, {

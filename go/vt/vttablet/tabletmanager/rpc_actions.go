@@ -50,8 +50,8 @@ type SemiSyncAction int
 // Allowed values for SemiSyncAction
 const (
 	SemiSyncActionNone = SemiSyncAction(iota)
-	SemiSyncActionTrue
-	SemiSyncActionFalse
+	SemiSyncActionSet
+	SemiSyncActionUnset
 )
 
 // This file contains the implementations of RPCTM methods.
@@ -152,7 +152,7 @@ func (tm *TabletManager) IgnoreHealthError(ctx context.Context, pattern string) 
 
 func convertBoolToSemiSyncAction(semiSync bool) SemiSyncAction {
 	if semiSync {
-		return SemiSyncActionTrue
+		return SemiSyncActionSet
 	}
-	return SemiSyncActionFalse
+	return SemiSyncActionUnset
 }

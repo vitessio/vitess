@@ -477,13 +477,13 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	if tm.isPrimarySideSemiSyncEnabled() {
 		// If using semi-sync, we need to disable primary-side.
-		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionTrue); err != nil {
+		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 			return nil, err
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasPrimary {
 				// enable primary-side semi-sync again
-				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionTrue); err != nil {
+				if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
 					log.Warningf("fixSemiSync(PRIMARY) failed during revert: %v", err)
 				}
 			}
@@ -887,7 +887,7 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
 	if !*enableSemiSync {
 		// Semi-sync handling is not enabled.
-		if semiSync == SemiSyncActionTrue {
+		if semiSync == SemiSyncActionSet {
 			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set")
 		}
 		return nil
@@ -896,13 +896,13 @@ func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync 
 	// Only enable if we're eligible for becoming primary (REPLICA type).
 	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
 	if !isPrimaryEligible(tabletType) {
-		if semiSync == SemiSyncActionTrue {
+		if semiSync == SemiSyncActionSet {
 			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible")
 		}
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 
-	if semiSync == SemiSyncActionFalse {
+	if semiSync == SemiSyncActionUnset {
 		log.Error("invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading.")
 	}
 	// Always enable replica-side since it doesn't hurt to keep it on for a primary.

@@ -85,7 +85,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionFalse); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
 			return err
 		}
 		// Tell Orchestrator we're stopped on purpose for some Vitess task.
