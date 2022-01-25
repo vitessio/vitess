@@ -108,7 +108,7 @@ func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
 
 func initializeCluster(t *testing.T) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()

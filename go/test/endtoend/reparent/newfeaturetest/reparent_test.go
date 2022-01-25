@@ -37,7 +37,7 @@ func TestPRSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
@@ -254,7 +254,7 @@ func TestERSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)

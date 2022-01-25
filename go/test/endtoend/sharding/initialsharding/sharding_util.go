@@ -96,7 +96,7 @@ func ClusterWrapper(isMulti bool) (int, error) {
 	ClusterInstance = nil
 	ClusterInstance = cluster.NewCluster(cell, hostname)
 
-	ClusterInstance.VtctldExtraArgs = append(ClusterInstance.VtctldExtraArgs, "-durability=semi_sync")
+	ClusterInstance.VtctldExtraArgs = append(ClusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
 	if err := ClusterInstance.StartTopo(); err != nil {
 		return 1, err
