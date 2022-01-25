@@ -1504,6 +1504,9 @@ func IsAggregation(node SQLNode) bool {
 
 // GetFirstSelect gets the first select statement
 func GetFirstSelect(selStmt SelectStatement) *Select {
+	if selStmt == nil {
+		return nil
+	}
 	switch node := selStmt.(type) {
 	case *Select:
 		return node
