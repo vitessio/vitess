@@ -1131,7 +1131,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 	span.Annotate("cells", strings.Join(req.Cells, ","))
 	if req.TabletType != topodatapb.TabletType_UNKNOWN {
-		span.Annotate("tablet_type", req.TabletType)
+		span.Annotate("tablet_type", topodatapb.TabletType_name[int32(req.TabletType)])
 	}
 	span.Annotate("strict", req.Strict)
 
@@ -1240,9 +1240,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 					log.Infof("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err)
 					cancel()
 				}
-
 				rec.RecordError(fmt.Errorf("GetTabletsByCell(%s) failed: %w", cell, err))
-
 				return
 			}
 

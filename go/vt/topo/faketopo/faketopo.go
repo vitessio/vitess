@@ -18,7 +18,6 @@ package faketopo
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -257,7 +256,7 @@ func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Versi
 
 // List is part of the topo.Conn interface.
 func (f *FakeConn) List(ctx context.Context, filePathPrefix string) ([][]byte, error) {
-	return nil, fmt.Errorf("List not supported in fake topo")
+	return nil, topo.NewError(topo.NoImplementation, "List not supported in fake topo")
 }
 
 // Delete implements the Conn interface
