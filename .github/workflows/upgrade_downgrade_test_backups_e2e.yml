@@ -1,14 +1,15 @@
-name: Upgrade Downgrade Testing Backups End-To-End
+name: Upgrade Downgrade Testing - Backups - E2E
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Backups End-To-End')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - E2E')
   cancel-in-progress: true
 
 jobs:
   get_upgrade_downgrade_label:
+    timeout-minutes: 10
     if: github.repository == 'vitessio/vitess'
     name: Get the Upgrade Downgrade pull request label
     runs-on: ubuntu-latest
@@ -24,6 +25,7 @@ jobs:
           label: Skip Upgrade Downgrade
 
   get_latest_release:
+    timeout-minutes: 10
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
     name: Get latest release
     runs-on: ubuntu-latest
@@ -48,7 +50,8 @@ jobs:
         run: |
           echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
 
-  upgrade_downgrade_test:
+  upgrade_downgrade_test_e2e:
+    timeout-minutes: 60
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-18.04

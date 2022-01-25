@@ -1,14 +1,15 @@
-name: Upgrade Downgrade Testing Backups Manual
+name: Upgrade Downgrade Testing - Backups - Manual
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Backups Manual')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - Manual')
   cancel-in-progress: true
 
 jobs:
   get_upgrade_downgrade_label:
+    timeout-minutes: 10
     if: github.repository == 'vitessio/vitess'
     name: Get the Upgrade Downgrade pull request label
     runs-on: ubuntu-latest
@@ -24,6 +25,7 @@ jobs:
           label: Skip Upgrade Downgrade
 
   get_latest_release:
+    timeout-minutes: 10
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
     name: Get latest release
     runs-on: ubuntu-latest
@@ -49,6 +51,7 @@ jobs:
           echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
 
   upgrade_downgrade_test_manual:
+    timeout-minutes: 60
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
     name: Run Upgrade Downgrade Test Backup Manual
     runs-on: ubuntu-latest
