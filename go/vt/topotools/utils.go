@@ -37,11 +37,6 @@ func FindTabletByHostAndPort(tabletMap map[string]*topo.TabletInfo, addr, portNa
 	return nil, topo.NewError(topo.NoNode, addr+":"+portName)
 }
 
-// GetAllTablets returns a sorted list of tablets.
-func GetAllTablets(ctx context.Context, ts *topo.Server, cell string) ([]*topo.TabletInfo, error) {
-	return ts.GetTabletsByCell(ctx, cell)
-}
-
 // GetTabletMapForCell returns a map of TabletInfo keyed by alias as string
 func GetTabletMapForCell(ctx context.Context, ts *topo.Server, cell string) (map[string]*topo.TabletInfo, error) {
 	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
@@ -70,7 +65,7 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 	wg.Add(len(cells))
 	for i, cell := range cells {
 		go func(i int, cell string) {
-			results[i], errors[i] = GetAllTablets(ctx, ts, cell)
+			results[i], errors[i] = ts.GetTabletsByCell(ctx, cell)
 			wg.Done()
 		}(i, cell)
 	}
