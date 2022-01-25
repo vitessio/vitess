@@ -549,7 +549,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				if status.TransactionTimestamp == 0 /* no new events after copy */ {
 					lastTransactionTimestamp = lastHeartbeatTime
 				}
-				transactionReplicationLag := time.Now().UnixNano() - lastTransactionTimestamp
+				transactionReplicationLag := time.Now().Unix() - lastTransactionTimestamp
 				transactionReplicationLag = transactionReplicationLag / 1e9
 				if transactionReplicationLag > rsr.MaxVReplicationTransactionLag {
 					rsr.MaxVReplicationTransactionLag = int64(transactionReplicationLag)
