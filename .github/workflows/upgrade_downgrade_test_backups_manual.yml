@@ -48,8 +48,7 @@ jobs:
         run: |
           echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
 
-  upgrade_downgrade_test:
-    timeout-minutes: 60
+  upgrade_downgrade_test_manual:
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
     name: Run Upgrade Downgrade Test Backup Manual
     runs-on: ubuntu-latest
