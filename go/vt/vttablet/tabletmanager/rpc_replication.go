@@ -475,6 +475,8 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}
 	}()
 
+	// Here, we check if the primary side semi sync is enabled or not. If it isn't enabled then we do not need to take any action.
+	// If it is enabled then we should turn it off and revert in case of failure.
 	if tm.isPrimarySideSemiSyncEnabled() {
 		// If using semi-sync, we need to disable primary-side.
 		if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
