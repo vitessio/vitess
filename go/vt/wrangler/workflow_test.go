@@ -102,8 +102,8 @@ func expectExtInfo(t *testing.T, tme *testMigraterEnv, keyspace, state string, c
 	)
 
 	for _, db := range tme.dbTargetClients {
-		db.addInvariant(streamExtInfoQuery, replicationResult)
-		copyStateQuery := "select table_name, lastpk from _vt.copy_state where vrepl_id = %d"
+		db.addInvariant(streamExtInfoKs2, replicationResult)
+
 		if state == "Copying" {
 			db.addInvariant(fmt.Sprintf(copyStateQuery, 1), copyStateResult)
 		} else {

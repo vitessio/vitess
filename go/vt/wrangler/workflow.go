@@ -485,7 +485,7 @@ func (vrw *VReplicationWorkflow) canSwitch(workflowName string) (reason string, 
 			}
 		}
 	}
-	if result.MaxVReplicationTransactionLag >= vrw.params.MaxAllowedTransactionLagSeconds {
+	if result.MaxVReplicationTransactionLag > vrw.params.MaxAllowedTransactionLagSeconds {
 		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
 	}
 	return "", nil
