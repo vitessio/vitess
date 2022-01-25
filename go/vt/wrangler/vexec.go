@@ -534,25 +534,24 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			}
 
 			// MaxVReplicationTransactionLag estimates the actual lag between the source and the target
-			// If we are still processing source events it is the time between now and the timestamp of the last event
-			// If heartbeats are more recent than the last event timestamp the time since the last heartbeat is treated
-			// as the lag since there can be an actual event immediately after the heartbeat, but which has not yet
+			// If we are still processing source events it is the difference b/w current time and the timestamp of the last event
+			// If heartbeats are more recent than the last event, then the lag is the time since the last heartbeat as
+			// there can be an actual event immediately after the heartbeat, but which has not yet
 			// been processed on the target
-			// We don't allow switching during the copy phase, so during this we just return a large lag.
+			// We don't allow switching during the copy phase, so in that case we just return a large lag.
+			// All timestamps are in seconds since epoch
 			lastTransactionTimestamp := status.TransactionTimestamp
 			lastHeartbeatTime := status.TimeHeartbeat
 			if status.State != "Copying" {
-				rsr.MaxVReplicationTransactionLag = 0
-				if lastHeartbeatTime > lastTransactionTimestamp /* no recent transactions, so all caught up */ {
+				if lastTransactionTimestamp == 0 /* no new events after copy */ ||
+					lastHeartbeatTime > lastTransactionTimestamp /* no recent transactions, so all caught up */ {
+
 					lastTransactionTimestamp = lastHeartbeatTime
 				}
-				if status.TransactionTimestamp == 0 /* no new events after copy */ {
-					lastTransactionTimestamp = lastHeartbeatTime
-				}
-				transactionReplicationLag := time.Now().Unix() - lastTransactionTimestamp
-				transactionReplicationLag = transactionReplicationLag / 1e9
+				now := time.Now().Unix() /*seconds since epoch*/
+				transactionReplicationLag := now - lastTransactionTimestamp
 				if transactionReplicationLag > rsr.MaxVReplicationTransactionLag {
-					rsr.MaxVReplicationTransactionLag = int64(transactionReplicationLag)
+					rsr.MaxVReplicationTransactionLag = transactionReplicationLag
 				}
 			} else {
 				rsr.MaxVReplicationTransactionLag = math.MaxInt64
