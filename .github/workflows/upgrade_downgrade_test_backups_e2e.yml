@@ -129,15 +129,6 @@ jobs:
         mkdir -p /tmp/vitess-build-current/
         cp -R bin /tmp/vitess-build-current/
 
-    # Run test with components at version N
-    - name: Run backups tests (vttablet=N, vtbackup=N)
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
-        set -x
-        source build.env
-        eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
-
     # Swap binaries, use last release's VTTablet
     - name: Use last release's VTTablet
       run: |
