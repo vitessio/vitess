@@ -1,7 +1,3 @@
-## Enhancements
-
-- `vtctl/vtctlclient ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted: `vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce`
-
 ## Major Changes
 
 ### vtgate -gateway_implementation flag is deprecated (and ignored)
@@ -63,6 +59,14 @@ This command indicates that a migration executed with `-postpone-completion` is 
 
 ```shell
 $ vtctl ApplySchema -skip_preflight -sql "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete" commerce
+```
+
+### vtctl/vtctlclient ApplySchema: allow zero in date
+
+`vtctl/vtctlclient ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted:
+
+```shell
+vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce
 ```
 
 ### vtctl/vtctlclient ApplySchema -uuid_list

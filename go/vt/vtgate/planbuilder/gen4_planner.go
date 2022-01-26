@@ -22,9 +22,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -138,6 +137,10 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	}
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
+
+	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+		return unshardedShortcut(selStmt, ks, semTable)
+	}
 
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {

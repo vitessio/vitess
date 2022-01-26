@@ -708,7 +708,7 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 				return nil, err
 			}
 			return num, nil
-		case sqlparser.FloatVal:
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
 			num, err := strconv.ParseFloat(expr.Val, 64)
 			if err != nil {
 				return nil, err
@@ -1757,7 +1757,7 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 		if !ok {
 			return false
 		}
-		return router.Opcode == engine.SelectScatter
+		return router.Opcode == engine.Scatter
 	}, plan.Instructions)
 
 	if badPrimitive == nil {

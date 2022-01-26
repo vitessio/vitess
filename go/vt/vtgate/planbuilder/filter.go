@@ -34,8 +34,9 @@ type (
 	}
 
 	simpleConverterLookup struct {
-		ctx  *plancontext.PlanningContext
-		plan logicalPlan
+		ctx               *plancontext.PlanningContext
+		plan              logicalPlan
+		canPushProjection bool
 	}
 )
 
@@ -47,7 +48,7 @@ func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error
 	if err != nil {
 		return 0, err
 	}
-	if added {
+	if added && !s.canPushProjection {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column should not be pushed to projection while doing a column lookup")
 	}
 	return offset, nil

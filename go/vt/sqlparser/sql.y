@@ -184,7 +184,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -249,7 +249,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
+%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
@@ -1580,6 +1580,10 @@ INTEGRAL
   {
     $$ = NewFloatLiteral($1)
   }
+| DECIMAL
+  {
+    $$ = NewDecimalLiteral($1)
+  }
 
 
 text_literal:
@@ -1693,7 +1697,7 @@ REAL float_length_opt
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
-| DECIMAL decimal_length_opt
+| DECIMAL_TYPE decimal_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
@@ -4748,7 +4752,7 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1), Length: $2}
   }
-| DECIMAL decimal_length_opt
+| DECIMAL_TYPE decimal_length_opt
   {
     $$ = &ConvertType{Type: string($1)}
     $$.Length = $2.Length
@@ -5701,7 +5705,7 @@ non_reserved_keyword:
 | DATA
 | DATE
 | DATETIME
-| DECIMAL
+| DECIMAL_TYPE
 | DELAY_KEY_WRITE
 | DEFINER
 | DEFINITION

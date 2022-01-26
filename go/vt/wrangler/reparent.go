@@ -200,7 +200,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		}()
 		event.DispatchUpdate(ev, "starting external reparent")
 
-		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY); err != nil {
+		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY, reparentutil.SemiSyncAckers(tablet) > 0); err != nil {
 			log.Warningf("Error calling ChangeType on new primary %v: %v", topoproto.TabletAliasString(newPrimaryAlias), err)
 			return err
 		}

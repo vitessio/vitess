@@ -324,10 +324,44 @@ var _ evalengine.ConverterLookup = (*SemTable)(nil)
 
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
+// ColumnLookup implements the ConverterLookup interface
 func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
 
+// CollationIDLookup implements the ConverterLookup interface
 func (st *SemTable) CollationIDLookup(expr sqlparser.Expr) collations.ID {
 	return st.CollationFor(expr)
+}
+
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
+func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
+	var ks *vindexes.Keyspace
+	for _, table := range st.Tables {
+		vindexTable := table.GetVindexTable()
+		if vindexTable == nil || vindexTable.Type != "" {
+			// this is not a simple table access - can't shortcut
+			return nil
+		}
+		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		if !ok {
+			return nil
+		}
+		if name.Name.String() != vindexTable.Name.String() {
+			// this points to a table alias. safer to not shortcut
+			return nil
+		}
+		this := vindexTable.Keyspace
+		if this == nil || this.Sharded {
+			return nil
+		}
+		if ks == nil {
+			ks = this
+		} else {
+			if ks != this {
+				return nil
+			}
+		}
+	}
+	return ks
 }

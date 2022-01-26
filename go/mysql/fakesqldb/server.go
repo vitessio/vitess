@@ -47,6 +47,8 @@ const appendEntry = -1
 // closed, the client queries will return CRServerGone(2006) when sending
 // the data, as opposed to CRServerLost(2013) when reading the response.
 type DB struct {
+	mysql.UnimplementedHandler
+
 	// Fields set at construction time.
 
 	// t is our testing.TB instance
@@ -308,11 +310,6 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 	db.connections[c.ConnectionID] = c
 }
 
-// ConnectionReady is part of the mysql.Handler interface.
-func (db *DB) ConnectionReady(c *mysql.Conn) {
-
-}
-
 // ConnectionClosed is part of the mysql.Handler interface.
 func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	db.mu.Lock()
@@ -467,11 +464,6 @@ func (db *DB) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*query
 // ComStmtExecute is part of the mysql.Handler interface.
 func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
 	return nil
-}
-
-// ComResetConnection is part of the mysql.Handler interface.
-func (db *DB) ComResetConnection(c *mysql.Conn) {
-
 }
 
 //

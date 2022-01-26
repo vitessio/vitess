@@ -181,7 +181,7 @@ const statsHTML = `
 func findScatter(p engine.Primitive) bool {
 	switch v := p.(type) {
 	case *engine.Route:
-		return v.Opcode == engine.SelectScatter
+		return v.Opcode == engine.Scatter
 	default:
 		return false
 	}

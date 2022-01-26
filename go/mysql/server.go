@@ -125,6 +125,17 @@ type Handler interface {
 	ComResetConnection(c *Conn)
 }
 
+// UnimplementedHandler implemnts all of the optional callbacks so as to satisy
+// the Handler interface. Intended to be embedded into your custom Handler
+// implementation without needing to define every callback and to help be forwards
+// compatible when new functions are added.
+type UnimplementedHandler struct{}
+
+func (UnimplementedHandler) NewConnection(*Conn)      {}
+func (UnimplementedHandler) ConnectionReady(*Conn)    {}
+func (UnimplementedHandler) ConnectionClosed(*Conn)   {}
+func (UnimplementedHandler) ComResetConnection(*Conn) {}
+
 // Listener is the MySQL server protocol listener.
 type Listener struct {
 	// Construction parameters, set by NewListener.

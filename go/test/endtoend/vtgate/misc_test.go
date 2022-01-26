@@ -789,3 +789,19 @@ func TestCharsetIntro(t *testing.T) {
 	qr := utils.Exec(t, conn, "select id1 from t4 where id2 = _utf8mb4'xyz'")
 	require.EqualValues(t, 0, qr.RowsAffected)
 }
+
+func TestFilterAfterLeftJoin(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "delete from t1")
+	defer utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (1, 10)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (2, 3)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (3, 2)")
+
+	query := "select /* GEN4_COMPARE_ONLY_GEN4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(10)]]`)
+}
