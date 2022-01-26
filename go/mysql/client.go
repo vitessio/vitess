@@ -222,7 +222,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
 	}
 
-	charset, err := collations.ParseConnectionCharset(params.Charset)
+	charset, err := collations.Local().ParseConnectionCharset(params.Charset)
 	if err != nil {
 		return err
 	}
