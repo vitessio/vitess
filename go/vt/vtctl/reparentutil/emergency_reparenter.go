@@ -499,7 +499,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart)
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(newPrimaryTablet, ti.Tablet))
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -716,11 +716,11 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	if ev.ShardInfo.PrimaryAlias == nil {
 		erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", newPrimary.Alias)
 		// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
-		_, err = erp.tmc.InitPrimary(ctx, newPrimary)
+		_, err = erp.tmc.InitPrimary(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
 	} else {
 		erp.logger.Infof("starting promotion for the new primary - %v", newPrimary.Alias)
 		// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-		_, err = erp.tmc.PromoteReplica(ctx, newPrimary)
+		_, err = erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
 	}
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)

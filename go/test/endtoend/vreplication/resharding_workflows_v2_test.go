@@ -396,7 +396,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	testVSchemaForSequenceAfterMoveTables(t)
 
-	createMoveTablesWorkflow(t, "tenant")
+	createMoveTablesWorkflow(t, "Lead")
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "Following workflow(s) found in keyspace customer: wf1")
 

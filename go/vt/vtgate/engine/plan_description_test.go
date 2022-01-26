@@ -34,7 +34,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 
 	expected := PrimitiveDescription{
 		OperatorType:      "Route",
-		Variant:           "SelectScatter",
+		Variant:           "Scatter",
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]interface{}{
@@ -52,13 +52,15 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 func createRoute() *Route {
 	hash, _ := vindexes.NewHash("vindex name", nil)
 	return &Route{
-		Opcode:            SelectScatter,
-		Keyspace:          &vindexes.Keyspace{Name: "ks"},
-		TargetDestination: key.DestinationAllShards{},
-		Query:             "select all the things",
-		TableName:         "tableName",
-		FieldQuery:        "more query",
-		Vindex:            hash.(*vindexes.Hash),
+		RoutingParameters: &RoutingParameters{
+			Opcode:            Scatter,
+			Keyspace:          &vindexes.Keyspace{Name: "ks"},
+			TargetDestination: key.DestinationAllShards{},
+			Vindex:            hash.(*vindexes.Hash),
+		},
+		Query:      "select all the things",
+		TableName:  "tableName",
+		FieldQuery: "more query",
 	}
 }
 
@@ -90,7 +92,7 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 func getDescriptionFor(route *Route) PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType:      "Route",
-		Variant:           routeName[route.Opcode],
+		Variant:           route.Opcode.String(),
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]interface{}{

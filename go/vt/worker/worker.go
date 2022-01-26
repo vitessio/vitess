@@ -121,11 +121,9 @@ var (
 )
 
 const (
-	retryCategoryReadOnly        = "ReadOnly"
-	retryCategoryTimeoutError    = "TimeoutError"
-	retryCategoryConnectionError = "ConnectionError"
-	// Deprecated. TODO(deepthi): remove after v12.0
-	retryCategoryNoMasterAvailable  = "NoMasterAvailable"
+	retryCategoryReadOnly           = "ReadOnly"
+	retryCategoryTimeoutError       = "TimeoutError"
+	retryCategoryConnectionError    = "ConnectionError"
 	retryCategoryNoPrimaryAvailable = "NoPrimaryAvailable"
 )
 

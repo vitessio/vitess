@@ -162,6 +162,7 @@ message SetReadWriteResponse {
 
 message ChangeTypeRequest {
   topodata.TabletType tablet_type = 1;
+  bool semiSync = 2;
 }
 
 message ChangeTypeResponse {
@@ -321,6 +322,7 @@ message StopReplicationMinimumResponse {
 }
 
 message StartReplicationRequest {
+  bool semiSync = 1;
 }
 
 message StartReplicationResponse {
@@ -364,6 +366,7 @@ message VReplicationWaitForPosResponse {
 }
 
 message InitPrimaryRequest {
+  bool semiSync = 1;
 }
 
 message InitPrimaryResponse {
@@ -384,6 +387,7 @@ message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
   int64 time_created_ns = 3;
+  bool semiSync = 4;
 }
 
 message InitReplicaResponse {
@@ -401,6 +405,7 @@ message DemotePrimaryResponse {
 }
 
 message UndoDemotePrimaryRequest {
+  bool semiSync = 1;
 }
 
 message UndoDemotePrimaryResponse {
@@ -417,6 +422,7 @@ message SetReplicationSourceRequest {
   int64 time_created_ns = 2;
   bool force_start_replication = 3;
   string wait_position = 4;
+  bool semiSync = 5;
 }
 
 message SetReplicationSourceResponse {
@@ -445,6 +451,7 @@ message StopReplicationAndGetStatusResponse {
 }
 
 message PromoteReplicaRequest {
+  bool semiSync = 1;
 }
 
 message PromoteReplicaResponse {

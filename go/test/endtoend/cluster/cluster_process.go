@@ -603,10 +603,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
-		// version_upgrade test depends on using older binaries
-		// which means we cannot use the new PRIMARY tablet_type here
-		// TODO(deepthi): fix after v12.0
-		"MASTER,REPLICA",
+		"PRIMARY,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs,
