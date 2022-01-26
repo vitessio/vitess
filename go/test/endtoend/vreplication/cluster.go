@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/require"
 
@@ -27,6 +27,7 @@ var (
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
 	extraVTGateArgs       = []string{"-tablet_refresh_interval", "10ms"}
+	extraVtctldArgs       = []string{"-remote_operation_timeout", "600s", "-topo_etcd_lease_ttl", "120"}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -41,7 +42,7 @@ type ClusterConfig struct {
 	vtgatePort           int
 	vtgateGrpcPort       int
 	vtgateMySQLPort      int
-	vtgatePlannerVersion planbuilder.PlannerVersion
+	vtgatePlannerVersion plancontext.PlannerVersion
 	tabletTypes          string
 	tabletPortBase       int
 	tabletGrpcPortBase   int
@@ -116,7 +117,8 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 	}
 
 	return &ClusterConfig{
-		hostname:            "localhost",
+		// The ipv4 loopback address is used with the mysql client so that tcp is used in the test ("localhost" causes the socket file to be used, which fails)
+		hostname:            "127.0.0.1",
 		topoPort:            etcdPort,
 		vtctldPort:          basePort,
 		vtctldGrpcPort:      basePort + 999,
@@ -170,7 +172,7 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	vc.Vtctld = vtctld
 	require.NotNil(t, vc.Vtctld)
 	// use first cell as `-cell`
-	vc.Vtctld.Setup(cellNames[0])
+	vc.Vtctld.Setup(cellNames[0], extraVtctldArgs...)
 
 	vc.Vtctl = cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	require.NotNil(t, vc.Vtctl)
@@ -504,4 +506,25 @@ func (vc *VitessCluster) getPrimaryTablet(t *testing.T, ksName, shardName string
 	}
 	require.FailNow(t, "no primary found for %s:%s", ksName, shardName)
 	return nil
+}
+
+func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing.T), func(t *testing.T)) {
+	conn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	_, err := conn.ExecuteFetch("begin", 1000, false)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch(query, 1000, false)
+	require.NoError(t, err)
+
+	commit := func(t *testing.T) {
+		_, err = conn.ExecuteFetch("commit", 1000, false)
+		log.Infof("startQuery:commit:err: %+v", err)
+		conn.Close()
+		log.Infof("startQuery:after closing connection")
+	}
+	rollback := func(t *testing.T) {
+		defer conn.Close()
+		_, err = conn.ExecuteFetch("rollback", 1000, false)
+		log.Infof("startQuery:rollback:err: %+v", err)
+	}
+	return commit, rollback
 }

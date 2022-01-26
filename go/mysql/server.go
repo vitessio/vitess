@@ -94,6 +94,10 @@ type Handler interface {
 	// In particular, ServerStatusAutocommit might be set.
 	NewConnection(c *Conn)
 
+	// ConnectionReady is called after the connection handshake, but
+	// before we begin to process commands.
+	ConnectionReady(c *Conn)
+
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
@@ -120,6 +124,17 @@ type Handler interface {
 
 	ComResetConnection(c *Conn)
 }
+
+// UnimplementedHandler implemnts all of the optional callbacks so as to satisy
+// the Handler interface. Intended to be embedded into your custom Handler
+// implementation without needing to define every callback and to help be forwards
+// compatible when new functions are added.
+type UnimplementedHandler struct{}
+
+func (UnimplementedHandler) NewConnection(*Conn)      {}
+func (UnimplementedHandler) ConnectionReady(*Conn)    {}
+func (UnimplementedHandler) ConnectionClosed(*Conn)   {}
+func (UnimplementedHandler) ComResetConnection(*Conn) {}
 
 // Listener is the MySQL server protocol listener.
 type Listener struct {
@@ -469,6 +484,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
+
+	// Tell our handler that we're finished handshake and are ready to
+	// process commands.
+	l.handler.ConnectionReady(c)
 
 	for {
 		kontinue := c.handleNextCommand(l.handler)

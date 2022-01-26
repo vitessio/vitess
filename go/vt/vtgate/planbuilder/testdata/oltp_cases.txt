@@ -5,7 +5,7 @@
   "Original": "SELECT c FROM sbtest34 WHERE id=15",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -28,7 +28,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -52,7 +52,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -74,7 +74,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -94,7 +94,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -111,7 +111,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -137,7 +137,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -162,7 +162,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true

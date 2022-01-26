@@ -83,6 +83,7 @@ var (
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
+	mysql.UnimplementedHandler
 	mu sync.Mutex
 
 	vtg         *VTGate

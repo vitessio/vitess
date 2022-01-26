@@ -475,6 +475,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan in
 func shouldIgnoreQuery(query string) bool {
 	queriesToIgnore := []string{
 		"_vt.vreplication_log", // ignore all selects, updates and inserts into this table
+		"@@session.sql_mode",   // ignore all selects, and sets of this variable
 	}
 	for _, q := range queriesToIgnore {
 		if strings.Contains(query, q) {

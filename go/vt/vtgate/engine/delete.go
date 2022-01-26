@@ -25,36 +25,25 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Delete)(nil)
 
 // Delete represents the instructions to perform a delete.
 type Delete struct {
-	DML
+	*DML
 
 	// Delete does not take inputs
 	noInputs
 }
 
-var delName = map[DMLOpcode]string{
-	Unsharded:     "DeleteUnsharded",
-	Equal:         "DeleteEqual",
-	In:            "DeleteIn",
-	Scatter:       "DeleteScatter",
-	ByDestination: "DeleteByDestination",
-}
-
 // RouteType returns a description of the query routing type used by the primitive
 func (del *Delete) RouteType() string {
-	return delName[del.Opcode]
+	return del.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
@@ -77,20 +66,25 @@ func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		defer cancel()
 	}
 
+	rss, _, err := del.findRoute(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+
 	switch del.Opcode {
 	case Unsharded:
-		return del.execDeleteUnsharded(vcursor, bindVars)
+		return del.execUnsharded(vcursor, bindVars, rss)
 	case Equal:
-		return del.execDeleteEqual(vcursor, bindVars)
-	case In:
-		return del.execDeleteIn(vcursor, bindVars)
-	case Scatter:
-		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case ByDestination:
-		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
+		return del.execEqual(vcursor, bindVars, rss, del.deleteVindexEntries)
+	case IN, Scatter, ByDestination:
+		return del.execMultiDestination(vcursor, bindVars, rss, del.deleteVindexEntries)
 	default:
 		// Unreachable.
-		return nil, fmt.Errorf("unsupported opcode: %v", del)
+		return nil, fmt.Errorf("unsupported opcode: %v", del.Opcode)
 	}
 }
 
@@ -108,96 +102,13 @@ func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
 }
 
-func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
-}
-
-func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	key, err := env.Evaluate(del.Values[0])
-	if err != nil {
-		return nil, err
-	}
-	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key.Value())
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rs)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(ksid) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-	if del.OwnedVindexQuery != "" {
-		err = del.deleteVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, del.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex)
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-
-	if del.OwnedVindexQuery != "" {
-		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
-}
-
-func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           del.Query,
-			BindVariables: bindVars,
-		}
-	}
-	if len(del.Table.Owned) > 0 {
-		err = del.deleteVindexEntries(vcursor, bindVars, rss)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
-}
-
 // deleteVindexEntries performs an delete if table owns vindex.
 // Note: the commit order may be different from the DML order because it's possible
 // for DMLs to reuse existing transactions.
 func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	if del.OwnedVindexQuery == "" {
+		return nil
+	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
@@ -214,11 +125,11 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	}
 
 	for _, row := range subQueryResults.Rows {
-		colnum := 1
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0:del.KsidLength])
 		if err != nil {
 			return err
 		}
+		colnum := del.KsidLength
 		for _, colVindex := range del.Table.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
@@ -230,7 +141,6 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 				return err
 			}
 		}
-
 	}
 
 	return nil
@@ -256,12 +166,13 @@ func (del *Delete) description() PrimitiveDescription {
 	}
 }
 
-func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
+func addFieldsIfNotEmpty(dml *DML, other map[string]interface{}) {
 	if dml.Vindex != nil {
 		other["Vindex"] = dml.Vindex.String()
 	}
 	if dml.KsidVindex != nil {
 		other["KsidVindex"] = dml.KsidVindex.String()
+		other["KsidLength"] = dml.KsidLength
 	}
 	if len(dml.Values) > 0 {
 		s := []string{}

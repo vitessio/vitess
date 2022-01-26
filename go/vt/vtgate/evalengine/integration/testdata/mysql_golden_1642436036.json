@@ -1,0 +1,6 @@
+[
+    {
+        "Query": "SELECT null not in ('F', 0, 0, ('f' like 0) - 1)",
+        "Value": "NULL"
+    }
+]

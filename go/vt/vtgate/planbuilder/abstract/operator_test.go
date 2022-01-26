@@ -192,7 +192,7 @@ func (qt *QueryTable) testString() string {
 		where = " where " + strings.Join(preds, " and ")
 	}
 
-	return fmt.Sprintf("\t%v:%s%s%s", qt.TableID, sqlparser.String(qt.Table), alias, where)
+	return fmt.Sprintf("\t%v:%s%s%s", qt.ID, sqlparser.String(qt.Table), alias, where)
 }
 
 func (qg *QueryGraph) testString() string {

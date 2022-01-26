@@ -46,8 +46,9 @@ type (
 	}
 
 	// QueryTable is a single FROM table, including all predicates particular to this table
+	// This is to be used as an immutable data structure which is created in the logical Operator Tree
 	QueryTable struct {
-		TableID     semantics.TableSet
+		ID          semantics.TableSet
 		Alias       *sqlparser.AliasedTableExpr
 		Table       sqlparser.TableName
 		Predicates  []sqlparser.Expr
@@ -55,24 +56,26 @@ type (
 	}
 )
 
-var _ Operator = (*QueryGraph)(nil)
+var _ LogicalOperator = (*QueryGraph)(nil)
+
+func (*QueryGraph) iLogical() {}
 
 // PushPredicate implements the Operator interface
-func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(e, semTable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return qg, nil
 }
 
 // TableID implements the Operator interface
 func (qg *QueryGraph) TableID() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
-		ts = ts.Merge(table.TableID)
+		ts = ts.Merge(table.ID)
 	}
 	return ts
 }
@@ -148,7 +151,7 @@ func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 
 func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
 	for _, t := range qg.Tables {
-		if table == t.TableID {
+		if table == t.ID {
 			t.Predicates = append(t.Predicates, predicate)
 			return true
 		}
@@ -185,6 +188,6 @@ func (qg *QueryGraph) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (qg *QueryGraph) Compact(*semantics.SemTable) (Operator, error) {
+func (qg *QueryGraph) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	return qg, nil
 }

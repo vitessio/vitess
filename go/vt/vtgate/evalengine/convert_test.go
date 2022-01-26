@@ -65,7 +65,7 @@ func TestConvertSimplification(t *testing.T) {
 		{"42", ok("INT64(42)"), ok("INT64(42)")},
 		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
 		{"1.0e0 + (1 + 1) * 8.0e0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
-		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") LIKE VARBINARY(\"poke%\")"), ok("UINT64(1)")},
+		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") LIKE VARBINARY(\"poke%\")"), ok("INT64(1)")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
 			ok(`VARBINARY("foo") COLLATE utf8mb4_general_ci IN (VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz"))`),
@@ -140,6 +140,8 @@ func TestEvaluate(t *testing.T) {
 		expected   sqltypes.Value
 	}
 
+	True := sqltypes.NewInt64(1)
+	False := sqltypes.NewInt64(0)
 	tests := []testCase{{
 		expression: "42",
 		expected:   sqltypes.NewInt64(42),
@@ -172,40 +174,94 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewFloat64(2.2),
 	}, {
 		expression: "42 in (41, 42)",
-		expected:   sqltypes.NewInt64(1),
+		expected:   True,
 	}, {
 		expression: "42 in (41, 43)",
-		expected:   sqltypes.NewInt64(0),
+		expected:   False,
 	}, {
 		expression: "42 in (null, 41, 43)",
 		expected:   NULL,
 	}, {
 		expression: "(1,2) in ((1,2), (2,3))",
-		expected:   sqltypes.NewInt64(1),
+		expected:   True,
 	}, {
 		expression: "(1,2) = (1,2)",
-		expected:   sqltypes.NewUint64(1),
+		expected:   True,
 	}, {
 		expression: "1 = 'sad'",
-		expected:   sqltypes.NewUint64(0),
+		expected:   False,
 	}, {
 		expression: "(1,2) = (1,3)",
-		expected:   sqltypes.NewUint64(0),
+		expected:   False,
 	}, {
 		expression: "(1,2) = (1,null)",
 		expected:   NULL,
 	}, {
 		expression: "(1,2) in ((4,2), (2,3))",
-		expected:   sqltypes.NewInt64(0),
+		expected:   False,
 	}, {
 		expression: "(1,2) in ((1,null), (2,3))",
 		expected:   NULL,
 	}, {
 		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
-		expected:   sqltypes.NewUint64(1),
+		expected:   True,
 	}, {
 		expression: "(1,(1,2,3),(1,(1,NULL),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
 		expected:   NULL,
+	}, {
+		expression: "null is null",
+		expected:   True,
+	}, {
+		expression: "true is null",
+		expected:   False,
+	}, {
+		expression: "42 is null",
+		expected:   False,
+	}, {
+		expression: "null is not null",
+		expected:   False,
+	}, {
+		expression: "42 is not null",
+		expected:   True,
+	}, {
+		expression: "true is not null",
+		expected:   True,
+	}, {
+		expression: "null is true",
+		expected:   False,
+	}, {
+		expression: "42 is true",
+		expected:   True,
+	}, {
+		expression: "true is true",
+		expected:   True,
+	}, {
+		expression: "null is false",
+		expected:   False,
+	}, {
+		expression: "42 is false",
+		expected:   False,
+	}, {
+		expression: "false is false",
+		expected:   True,
+	}, {
+		expression: "null is not true",
+		expected:   True,
+	}, {
+		expression: "42 is not true",
+		expected:   False,
+	}, {
+		expression: "true is not true",
+		expected:   False,
+	}, {
+		expression: "null is not false",
+		expected:   True,
+	}, {
+		expression: "42 is not false",
+		expected:   True,
+	}, {
+		expression: "false is not false",
+		expected:   False,
 	}}
 
 	for _, test := range tests {

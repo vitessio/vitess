@@ -26,17 +26,19 @@ import (
 // SubQuery stores the information about subquery
 type SubQuery struct {
 	Inner []*SubQueryInner
-	Outer Operator
+	Outer LogicalOperator
 }
 
-var _ Operator = (*SubQuery)(nil)
+var _ LogicalOperator = (*SubQuery)(nil)
+
+func (*SubQuery) iLogical() {}
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
 	// Inner is the Operator inside the parenthesis of the subquery.
 	// i.e: select (select 1 union select 1), the Inner here would be
 	// of type Concatenate since we have a Union.
-	Inner Operator
+	Inner LogicalOperator
 
 	// ExtractedSubquery contains all information we need about this subquery
 	ExtractedSubquery *sqlparser.ExtractedSubquery
@@ -52,8 +54,8 @@ func (s *SubQuery) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
+func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) (LogicalOperator, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
 }
 
 // UnsolvedPredicates implements the Operator interface
@@ -90,6 +92,6 @@ func (s *SubQuery) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (s *SubQuery) Compact(*semantics.SemTable) (Operator, error) {
+func (s *SubQuery) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	return s, nil
 }
