@@ -361,14 +361,14 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 
 		// confirm that the backticking of table names in the routing rules works
-		backtickTables := []string{"Lead", "Lead-1"}
-		for _, backtickTable := range backtickTables {
+		tbls := []string{"Lead", "Lead-1"}
+		for _, tbl := range tbls {
 			output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-				"--host=127.0.0.1", "-e", fmt.Sprintf("select * from %s", backtickTable)})
+				"--host=127.0.0.1", "-e", fmt.Sprintf("select * from `%s`", tbl)})
 			if err != nil {
 				require.FailNow(t, output)
 			}
-			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update %s set name='xyz'", backtickTable))
+			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
 		}
 
 		vdiff(t, ksWorkflow, "")

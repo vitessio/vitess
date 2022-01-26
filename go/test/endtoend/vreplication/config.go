@@ -1,6 +1,6 @@
 package vreplication
 
-// The product, customer,Lead,Lead-1 tables are used to exercise and test most Workflow variants.
+// The product, customer, Lead, Lead-1 tables are used to exercise and test most Workflow variants.
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
