@@ -539,7 +539,7 @@ message GetTabletResponse {
 
 message GetTabletsRequest {
   // Keyspace is the name of the keyspace to return tablets for. Omit to return
-  // all tablets.
+  // tablets from all keyspaces.
   string keyspace = 1;
   // Shard is the name of the shard to return tablets for. This field is ignored
   // if Keyspace is not set.
@@ -557,7 +557,8 @@ message GetTabletsRequest {
   // for. If specified, Keyspace, Shard, and Cells are ignored, and tablets are
   // looked up by their respective aliases' Cells directly.
   repeated topodata.TabletAlias tablet_aliases = 5;
-  // TabletType is an optional tablet type to return
+  // tablet_type specifies the type of tablets to return. Omit to return all
+  // tablet types.
   topodata.TabletType tablet_type = 6;
 }
 

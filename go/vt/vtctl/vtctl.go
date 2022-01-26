@@ -577,7 +577,7 @@ var commands = []commandGroup{
 			{
 				name:   "ListAllTablets",
 				method: commandListAllTablets,
-				params: "[-keyspace=''] [-tablet_type=<PRIMARY,REPLICA,RDONLY>] [<cell name1>, <cell name2>, ...]",
+				params: "[-keyspace=''] [-tablet_type=<PRIMARY,REPLICA,RDONLY,SPARE>] [<cell_name1>,<cell_name2>,...]",
 				help:   "Lists all tablets in an awk-friendly way.",
 			},
 			{

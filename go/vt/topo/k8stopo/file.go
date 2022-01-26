@@ -240,7 +240,7 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([][]byte, err
 		return results, convertError(err, filePathPrefix)
 	}
 	nodes := nodeList.Items
-	if len(nodes) < 1 {
+	if len(nodes) == 0 {
 		return results, topo.NewError(topo.NoNode, filePathPrefix)
 	}
 	for _, node := range nodes {

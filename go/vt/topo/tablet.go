@@ -255,8 +255,8 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 }
 
 // GetTabletAliasesByCell returns all the tablet aliases in a cell.
-// It returns ErrNode if the cell doesn't exist.
-// It returns (nil, nil) if the cell exists, but there are no tablets.
+// It returns ErrNoNode if the cell doesn't exist.
+// It returns (nil, nil) if the cell exists, but there are no tablets in it.
 func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
 	// If the cell doesn't exist, this will return ErrNoNode.
 	conn, err := ts.ConnForCell(ctx, cell)
@@ -285,11 +285,12 @@ func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*t
 }
 
 // GetTabletsByCell returns all the tablets in the cell.
-// It returns ErrNode if the cell doesn't exist.
+// It returns ErrNoNode if the cell doesn't exist.
+// It returns (nil, nil) if the cell exists, but there are no tablets in it.
 func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*TabletInfo, error) {
+	// If the cell doesn't exist, this will return ErrNoNode.
 	cellConn, err := ts.ConnForCell(ctx, cellAlias)
 	if err != nil {
-		log.Errorf("Unable to get connection for cell %s", cellAlias)
 		return nil, err
 	}
 	listResults, err := cellConn.List(ctx, TabletsPath)
@@ -318,9 +319,12 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 	return tablets, nil
 }
 
-// GetTabletsIndividuallyByCell returns a sorted list of tablets for topo servers that do not directly support
-// the topoConn.List() functionality
+// GetTabletsIndividuallyByCell returns a sorted list of tablets for topo servers that do not
+// directly support the topoConn.List() functionality.
+// It returns ErrNoNode if the cell doesn't exist.
+// It returns (nil, nil) if the cell exists, but there are no tablets in it.
 func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string) ([]*TabletInfo, error) {
+	// If the cell doesn't exist, this will return ErrNoNode.
 	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
 	if err != nil {
 		return nil, err
