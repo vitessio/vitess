@@ -110,12 +110,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    # Count the number of rows in each table to make sure the restoration is successful.
-    - name: Assert the number of rows in every table
-      run: |
-        echo "a" | grep "a"
-        echo "a" | grep a
-
     # Checkout to the last release of Vitess
     - name: Checkout to the other version's code (${{ matrix.project }})
       uses: actions/checkout@v2
@@ -212,9 +206,9 @@ jobs:
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
-        echo "select count(sku) from product;" | mysql |2&>1 grep 2
-        echo "select count(email) from customer;" | mysql |2&>1 grep 5
-        echo "select count(sku) from corder;" | mysql |2&>1 grep 5
+        echo "select count(sku) from product;" | mysql 2>&1| grep 2
+        echo "select count(email) from customer;" | mysql 2>&1| grep 5
+        echo "select count(sku) from corder;" | mysql 2>&1| grep 5
 
     # We insert one more row in every table.
     - name: Insert more rows in the tables
@@ -259,9 +253,9 @@ jobs:
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
-        echo "select count(sku) from product;" | mysql |2&>1 grep 3
-        echo "select count(email) from customer;" | mysql |2&>1 grep 6
-        echo "select count(sku) from corder;" | mysql |2&>1 grep 6
+        echo "select count(sku) from product;" | mysql 2>&1| grep 3
+        echo "select count(email) from customer;" | mysql 2>&1| grep 6
+        echo "select count(sku) from corder;" | mysql 2>&1| grep 6
 
     - name: Stop the Vitess cluster
       if: always()

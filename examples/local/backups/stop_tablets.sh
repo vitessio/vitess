@@ -28,11 +28,9 @@ for tablet in 100 200 300 400; do
       CELL=zone1 TABLET_UID=$uid ./scripts/vttablet-down.sh
       echo "Shutting down mysql zone1-$uid"
       CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
-      echo "Removing tablet directory"
-      ls -l $VTDATAROOT/
+      echo "Removing tablet directory zone1-$uid"
       vtctlclient DeleteTablet -allow_primary=true zone1-$uid
       rm -Rf $VTDATAROOT/vt_0000000$uid
-      ls -l $VTDATAROOT/
     done
   fi
 done
