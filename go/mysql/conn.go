@@ -198,8 +198,8 @@ type Conn struct {
 	sequence uint8
 }
 
-// splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
-var splitStatementFunction func(blob string) (pieces []string, err error) = sqlparser.SplitStatementToPieces
+// splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
+var splitStatementFunction = sqlparser.SplitStatementToPieces
 
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
