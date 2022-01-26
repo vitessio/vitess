@@ -46,7 +46,6 @@ func TestInit(t *testing.T) {
 		Port:                       1,
 		Socket:                     "b",
 		Charset:                    "utf8mb4",
-		Collation:                  "utf8mb4_general_ci",
 		Flags:                      2,
 		Flavor:                     "flavor",
 		SslCa:                      "d",
@@ -82,7 +81,6 @@ func TestInit(t *testing.T) {
 		Pass:             "apppass",
 		UnixSocket:       "b",
 		Charset:          "utf8mb4",
-		Collation:        "utf8mb4_general_ci",
 		Flags:            2,
 		Flavor:           "flavor",
 		ConnectTimeoutMs: 250,
@@ -94,7 +92,6 @@ func TestInit(t *testing.T) {
 		Port:             1,
 		UnixSocket:       "b",
 		Charset:          "utf8mb4",
-		Collation:        "utf8mb4_general_ci",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -111,7 +108,6 @@ func TestInit(t *testing.T) {
 		Pass:             "dbapass",
 		UnixSocket:       "b",
 		Charset:          "utf8mb4",
-		Collation:        "utf8mb4_general_ci",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -148,7 +144,6 @@ func TestInit(t *testing.T) {
 		appParams: mysql.ConnParams{
 			UnixSocket: "socket",
 			Charset:    "utf8mb4",
-			Collation:  "", // should be transformed to the default collation for its charset
 		},
 		dbaParams: mysql.ConnParams{
 			Host:  "host",
@@ -236,7 +231,6 @@ func TestAccessors(t *testing.T) {
 		replParams:     mysql.ConnParams{},
 		DBName:         "db",
 		Charset:        "utf8",
-		Collation:      "utf8_general_ci",
 	}
 	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
