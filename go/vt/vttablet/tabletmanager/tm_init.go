@@ -234,9 +234,9 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 	}
 
 	var coll collations.ID = collations.DefaultConnectionCharset
-	if db != nil && db.Collation != "" {
+	if db != nil && db.Charset != "" {
 		env := collations.NewEnvironment(dbServerVersion)
-		coll = env.LookupByName(db.Collation).ID()
+		coll = env.LookupByName(db.Charset).ID()
 	}
 
 	return &topodatapb.Tablet{
