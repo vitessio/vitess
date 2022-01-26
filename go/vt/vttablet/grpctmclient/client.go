@@ -17,13 +17,13 @@ limitations under the License.
 package grpctmclient
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"sync"
 	"time"
-
-	"context"
+	"vitess.io/vitess/go/vt/callerid"
 
 	"google.golang.org/grpc"
 
@@ -425,9 +425,10 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 	defer closer.Close()
 
 	response, err := c.ExecuteQuery(ctx, &tabletmanagerdatapb.ExecuteQueryRequest{
-		Query:   query,
-		DbName:  topoproto.TabletDbName(tablet),
-		MaxRows: uint64(maxrows),
+		Query:    query,
+		DbName:   topoproto.TabletDbName(tablet),
+		MaxRows:  uint64(maxrows),
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 	})
 	if err != nil {
 		return nil, err
