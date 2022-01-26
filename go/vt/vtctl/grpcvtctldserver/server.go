@@ -177,6 +177,9 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	if req.CallerId != nil {
 		span.Annotate("caller_id", req.CallerId.Principal)
 		ctx = callerid.NewContext(ctx, req.CallerId, &querypb.VTGateCallerID{Username: req.CallerId.Principal})
+		log.Infof("Running Apply with caller_id: [%v], on keyspace : [%v]", req.CallerId.Principal, req.Keyspace)
+	} else {
+		log.Infof("Running Apply withOUT A CALLER on keyspace : [%v]", req.Keyspace)
 	}
 
 	executionUUID, err := schema.CreateUUID()

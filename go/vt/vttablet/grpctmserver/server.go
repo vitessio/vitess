@@ -17,7 +17,10 @@ limitations under the License.
 package grpctmserver
 
 import (
+	"fmt"
 	"time"
+	"vitess.io/vitess/go/vt/callerid"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"context"
 
@@ -200,6 +203,14 @@ func (s *server) UnlockTables(ctx context.Context, req *tabletmanagerdatapb.Unlo
 func (s *server) ExecuteQuery(ctx context.Context, request *tabletmanagerdatapb.ExecuteQueryRequest) (response *tabletmanagerdatapb.ExecuteQueryResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteQuery", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+
+	// Attach the callerID as the EffectiveCallerID.
+	if request.CallerId != nil {
+		ctx = callerid.NewContext(ctx, request.CallerId, &querypb.VTGateCallerID{Username: request.CallerId.Principal})
+		fmt.Printf("Running ExecuteQuery with caller_id: [%v]", request.CallerId.Principal)
+	} else {
+		fmt.Println("Running ExecuteQuery withOUT A CALLER")
+	}
 	response = &tabletmanagerdatapb.ExecuteQueryResponse{}
 	qr, err := s.tm.ExecuteQuery(ctx, request.Query, request.DbName, int(request.MaxRows))
 	if err != nil {

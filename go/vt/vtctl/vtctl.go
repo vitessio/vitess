@@ -3244,8 +3244,11 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	var cID *vtrpcpb.CallerID
 
 	if *callerID != "" {
+		log.Infof("Augmenting context with principal : [%v]", *callerID)
 		cID = &vtrpcpb.CallerID{Principal: *callerID}
 	}
+
+	log.Info("Calling ApplySchema on VtctldServer")
 	_, err = wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:                keyspace,
 		AllowLongUnavailability: *allowLongUnavailability,
