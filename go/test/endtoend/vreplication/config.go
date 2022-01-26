@@ -1,12 +1,12 @@
 package vreplication
 
-// The product, customer, and Lead tables are used to exercise and test most Workflow variants.
+// The product, customer,Lead,Lead-1 tables are used to exercise and test most Workflow variants.
 // We violate the NO_ZERO_DATES and NO_ZERO_IN_DATE sql_modes that are enabled by default in
 // MySQL 5.7+ and MariaDB 10.2+ to ensure that vreplication still works everywhere and the
 // permissive sql_mode now used in vreplication causes no unwanted side effects.
-// The Lead table also allows us to test several things:
+// The Lead and Lead-1 tables also allows us to test several things:
 //   1. Mixed case identifiers
-//   2. Column names with special characters in them, namely a dash
+//   2. Column and table names with special characters in them, namely a dash
 //   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 var (
 	initialProductSchema = `
@@ -20,6 +20,7 @@ create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) co
 create table customer2(cid int, name varbinary(128), typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid));
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `));
+create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `));
 `
 
 	initialProductVSchema = `
@@ -39,7 +40,8 @@ create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 da
 	"order_seq": {
 		"type": "sequence"
 	},
-	"Lead": {}
+	"Lead": {},
+	"Lead-1": {}
   }
 }
 `
@@ -84,6 +86,14 @@ create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 da
           "column_vindexes": [
 	        {
 	          "column": "Lead-id",
+	          "name": "bmd5"
+	        }
+	      ]
+		},
+	  "Lead-1": {
+          "column_vindexes": [
+	        {
+	          "column": "Lead",
 	          "name": "bmd5"
 	        }
 	      ]

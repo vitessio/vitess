@@ -1460,18 +1460,20 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 				sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
 				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
 			if removalType == workflow.DropTable {
-				ts.Logger().Infof("Dropping table %s.%s\n", source.GetPrimary().DbName(), tableName)
+				ts.Logger().Infof("%s: Dropping table %s.%s\n",
+					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 			} else {
 				renameName := getRenameFileName(tableName)
-				ts.Logger().Infof("Renaming table %s.%s to %s.%s\n", source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
+				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
+					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 			}
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
-				ts.Logger().Errorf("Error removing table %s: %v", tableName, err)
+				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
 				return err
 			}
-			ts.Logger().Infof("Removed table %s.%s\n", source.GetPrimary().DbName(), tableName)
+			ts.Logger().Infof("%s: Removed table %s.%s\n", source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 
 		}
 		return nil
@@ -1549,13 +1551,16 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 			query := fmt.Sprintf("drop table %s.%s",
 				sqlescape.EscapeID(sqlescape.UnescapeID(target.GetPrimary().DbName())),
 				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
-			ts.Logger().Infof("Dropping table %s.%s\n", target.GetPrimary().DbName(), tableName)
+			ts.Logger().Infof("%s: Dropping table %s.%s\n",
+				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
-				ts.Logger().Errorf("Error removing table %s: %v", tableName, err)
+				ts.Logger().Errorf("%s: Error removing table %s: %v",
+					target.GetPrimary().String(), tableName, err)
 				return err
 			}
-			ts.Logger().Infof("Removed table %s.%s\n", target.GetPrimary().DbName(), tableName)
+			ts.Logger().Infof("%s: Removed table %s.%s\n",
+				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
 
 		}
 		return nil
