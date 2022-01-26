@@ -17,7 +17,6 @@ limitations under the License.
 package grpctmserver
 
 import (
-	"fmt"
 	"time"
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -207,9 +206,6 @@ func (s *server) ExecuteQuery(ctx context.Context, request *tabletmanagerdatapb.
 	// Attach the callerID as the EffectiveCallerID.
 	if request.CallerId != nil {
 		ctx = callerid.NewContext(ctx, request.CallerId, &querypb.VTGateCallerID{Username: request.CallerId.Principal})
-		fmt.Printf("Running ExecuteQuery with caller_id: [%v]", request.CallerId.Principal)
-	} else {
-		fmt.Println("Running ExecuteQuery withOUT A CALLER")
 	}
 	response = &tabletmanagerdatapb.ExecuteQueryResponse{}
 	qr, err := s.tm.ExecuteQuery(ctx, request.Query, request.DbName, int(request.MaxRows))

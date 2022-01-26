@@ -3244,7 +3244,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	var cID *vtrpcpb.CallerID
 
 	if *callerID != "" {
-		log.Infof("Augmenting context with principal : [%v]", *callerID)
 		cID = &vtrpcpb.CallerID{Principal: *callerID}
 	}
 
