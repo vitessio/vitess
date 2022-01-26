@@ -236,7 +236,8 @@ const (
 )
 
 func ParseConnectionCharset(csname string) (uint8, error) {
-	switch strings.ToLower(csname) {
+	csname = strings.ToLower(csname)
+	switch csname {
 	case "utf8mb4":
 		return CollationUtf8mb4ID, nil
 	case "utf8":
@@ -246,6 +247,13 @@ func ParseConnectionCharset(csname string) (uint8, error) {
 	case "":
 		return DefaultConnectionCharset, nil
 	default:
+		for id, meta := range globalVersionInfo {
+			for _, alias := range meta.alias {
+				if alias == csname && id < 256 {
+					return uint8(id), nil
+				}
+			}
+		}
 		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
 	}
 }
