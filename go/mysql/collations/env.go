@@ -221,12 +221,6 @@ func Local() *Environment {
 	return defaultEnv
 }
 
-// DefaultConnectionCharset is the default 1-byte charset flag that will be sent in all
-// MySQL clients created by Vitess. This is hardcoded to `utf8mb4_0900_ai_ci` because
-// it's the default in MySQL 8.0+. Older versions of MySQL that do not support this
-// charset will automatically fall back to their built-in default.
-const DefaultConnectionCharset = CollationUtf8mb4ID
-
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
@@ -235,25 +229,29 @@ const (
 	CollationBinaryID  = 63
 )
 
-func ParseConnectionCharset(csname string) (uint8, error) {
-	csname = strings.ToLower(csname)
-	switch csname {
-	case "utf8mb4":
-		return CollationUtf8mb4ID, nil
-	case "utf8":
-		return CollationUtf8ID, nil
-	case "latin1":
-		return 8, nil
-	case "":
-		return DefaultConnectionCharset, nil
+func (env *Environment) DefaultConnectionCharset() uint8 {
+	switch env.version {
+	case collverMySQL80:
+		return CollationUtf8mb4ID
 	default:
-		for id, meta := range globalVersionInfo {
-			for _, alias := range meta.alias {
-				if alias == csname && id < 256 {
-					return uint8(id), nil
-				}
-			}
-		}
+		return 45
+	}
+}
+
+func (env *Environment) ParseConnectionCharset(csname string) (uint8, error) {
+	if csname == "" {
+		return env.DefaultConnectionCharset(), nil
+	}
+
+	var collid ID = 0
+	csname = strings.ToLower(csname)
+	if defaults, ok := env.byCharset[csname]; ok {
+		collid = defaults.Default.ID()
+	} else if coll, ok := env.byName[csname]; ok {
+		collid = coll.ID()
+	}
+	if collid == 0 || collid > 255 {
 		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
 	}
+	return uint8(collid), nil
 }

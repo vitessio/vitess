@@ -161,7 +161,7 @@ func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedC
 	if lookup != nil {
 		collation.Collation = lookup.CollationIDLookup(expr)
 	} else {
-		collation.Collation = collations.DefaultConnectionCharset
+		collation.Collation = collations.ID(collations.Local().DefaultConnectionCharset())
 	}
 	return collation
 }

@@ -592,7 +592,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	pos = writeUint16(data, pos, uint16(capabilities))
 
 	// Character set.
-	pos = writeByte(data, pos, collations.DefaultConnectionCharset)
+	pos = writeByte(data, pos, collations.Local().DefaultConnectionCharset())
 
 	// Status flag.
 	pos = writeUint16(data, pos, c.StatusFlags)

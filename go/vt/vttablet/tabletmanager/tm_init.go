@@ -233,12 +233,14 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 
-	var charset uint8 = collations.DefaultConnectionCharset
+	var charset uint8
 	if db != nil && db.Charset != "" {
-		charset, err = collations.ParseConnectionCharset(db.Charset)
+		charset, err = collations.Local().ParseConnectionCharset(db.Charset)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		charset = collations.Local().DefaultConnectionCharset()
 	}
 
 	return &topodatapb.Tablet{
