@@ -119,7 +119,7 @@ func TestConnectTimeout(t *testing.T) {
 	// properly returns the right error. To simulate exactly the
 	// right failure, try to dial a Unix socket that's just a temp file.
 	fd, err := os.CreateTemp("", "mysql")
-	require.NoError(t, err, "cannot create TemFile: %v", err)
+	require.NoError(t, err, "cannot create TempFile: %v", err)
 	name := fd.Name()
 	fd.Close()
 	params.UnixSocket = name
