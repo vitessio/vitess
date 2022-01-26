@@ -30,7 +30,7 @@ import (
 
 func TestTrivialERS(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -55,7 +55,7 @@ func TestTrivialERS(t *testing.T) {
 
 func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -97,7 +97,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 func TestReparentDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -133,7 +133,7 @@ func TestReparentDownPrimary(t *testing.T) {
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -164,4 +164,62 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 
 	// bring back the old primary as a replica, check that it catches up
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
+}
+
+func TestSemiSyncSetupCorrectly(t *testing.T) {
+	t.Run("semi-sync enabled", func(t *testing.T) {
+		defer cluster.PanicHandler(t)
+		clusterInstance := utils.SetupReparentCluster(t, true)
+		defer utils.TeardownCluster(clusterInstance)
+		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+		// Run forced reparent operation, this should proceed unimpeded.
+		out, err := utils.Ers(clusterInstance, tablets[1], "60s", "30s")
+		require.NoError(t, err, out)
+
+		utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[2], tablets[3]})
+
+		for _, tablet := range tablets {
+			utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
+		}
+
+		// Run forced reparent operation, this should proceed unimpeded.
+		out, err = utils.Prs(t, clusterInstance, tablets[0])
+		require.NoError(t, err, out)
+
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+		for _, tablet := range tablets {
+			utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
+		}
+	})
+
+	t.Run("semi-sync disabled", func(t *testing.T) {
+		defer cluster.PanicHandler(t)
+		clusterInstance := utils.SetupReparentCluster(t, false)
+		defer utils.TeardownCluster(clusterInstance)
+		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+		// Run forced reparent operation, this should proceed unimpeded.
+		out, err := utils.Ers(clusterInstance, tablets[1], "60s", "30s")
+		require.NoError(t, err, out)
+
+		utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0], tablets[2], tablets[3]})
+
+		for _, tablet := range tablets {
+			utils.CheckSemiSyncSetupCorrectly(t, tablet, "OFF")
+		}
+
+		// Run forced reparent operation, this should proceed unimpeded.
+		out, err = utils.Prs(t, clusterInstance, tablets[0])
+		require.NoError(t, err, out)
+
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+		for _, tablet := range tablets {
+			utils.CheckSemiSyncSetupCorrectly(t, tablet, "OFF")
+		}
+	})
 }

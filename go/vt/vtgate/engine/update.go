@@ -26,13 +26,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Update)(nil)
@@ -45,7 +42,7 @@ type VindexValues struct {
 
 // Update represents the instructions to perform an update.
 type Update struct {
-	DML
+	*DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string]*VindexValues
@@ -54,17 +51,9 @@ type Update struct {
 	noInputs
 }
 
-var updName = map[DMLOpcode]string{
-	Unsharded:     "UpdateUnsharded",
-	Equal:         "UpdateEqual",
-	In:            "UpdateIn",
-	Scatter:       "UpdateScatter",
-	ByDestination: "UpdateByDestination",
-}
-
 // RouteType returns a description of the query routing type used by the primitive
 func (upd *Update) RouteType() string {
-	return updName[upd.Opcode]
+	return upd.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
@@ -87,20 +76,25 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		defer cancel()
 	}
 
+	rss, _, err := upd.findRoute(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
+	}
+
 	switch upd.Opcode {
 	case Unsharded:
-		return upd.execUpdateUnsharded(vcursor, bindVars)
+		return upd.execUnsharded(vcursor, bindVars, rss)
 	case Equal:
-		return upd.execUpdateEqual(vcursor, bindVars)
-	case In:
-		return upd.execUpdateIn(vcursor, bindVars)
-	case Scatter:
-		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case ByDestination:
-		return upd.execUpdateByDestination(vcursor, bindVars, upd.TargetDestination)
+		return upd.execEqual(vcursor, bindVars, rss, upd.updateVindexEntries)
+	case IN, Scatter, ByDestination:
+		return upd.execMultiDestination(vcursor, bindVars, rss, upd.updateVindexEntries)
 	default:
 		// Unreachable.
-		return nil, fmt.Errorf("unsupported opcode: %v", upd)
+		return nil, fmt.Errorf("unsupported opcode: %v", upd.Opcode)
 	}
 }
 
@@ -119,90 +113,6 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 
-func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-	return execShard(vcursor, upd.Query, bindVars, rss[0], true, true /* canAutocommit */)
-}
-
-func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
-	key, err := env.Evaluate(upd.Values[0])
-	if err != nil {
-		return nil, err
-	}
-	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key.Value())
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rs)
-	if err != nil {
-		return nil, err
-	}
-	if len(ksid) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs}); err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values[0], upd.Vindex)
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
-}
-
-func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyPrimary(rss...)
-	if err != nil {
-		return nil, err
-	}
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           upd.Query,
-			BindVariables: bindVars,
-		}
-	}
-
-	// update any owned vindexes
-	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
-}
-
 // updateVindexEntries performs an update when a vindex is being modified
 // by the statement.
 // Note: the commit order may be different from the DML order because it's possible
@@ -210,6 +120,9 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
 func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	if len(upd.ChangedVindexValues) == 0 {
+		return nil
+	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
@@ -232,7 +145,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	env := evalengine.EnvWithBindVars(bindVars)
 
 	for _, row := range subQueryResult.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0:upd.KsidLength])
 		if err != nil {
 			return err
 		}

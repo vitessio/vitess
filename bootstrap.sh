@@ -110,7 +110,7 @@ install_protoc() {
 
   # This is how we'd download directly from source:
   # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
   unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
@@ -124,7 +124,7 @@ install_zookeeper() {
   zk="zookeeper-$version"
   # This is how we'd download directly from source:
   # wget "https://archive.apache.org/dist/zookeeper/$zk/$zk.tar.gz"
-  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/${zk}.tar.gz"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${zk}.tar.gz"
   tar -xzf "$zk.tar.gz"
   ant -f "$zk/build.xml" package
   ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
@@ -156,7 +156,7 @@ install_etcd() {
   # This is how we'd download directly from source:
   # download_url=https://github.com/etcd-io/etcd/releases/download
   # wget "$download_url/$version/$file"
-  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -190,7 +190,7 @@ install_k3s() {
   # This is how we'd download directly from source:
   # download_url=https://github.com/rancher/k3s/releases/download
   # wget -O  $dest "$download_url/$version/$file"
-  wget -O  $dest "${VITESS_RESOURCES_DOWNLOAD_URL}/$file-$version"
+  $VTROOT/tools/wget-retry -O $dest "${VITESS_RESOURCES_DOWNLOAD_URL}/$file-$version"
   chmod +x $dest
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
@@ -215,7 +215,7 @@ install_consul() {
   # This is how we'd download directly from source:
   # download_url=https://releases.hashicorp.com/consul
   # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
@@ -242,11 +242,11 @@ install_chromedriver() {
         ;;
       esac
       echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
-      wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      $VTROOT/tools/wget-retry https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
       unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
       rm chromedriver-v6.0.3-linux-arm64.zip
   else
-      curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+      $VTROOT/tools/wget-retry "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip"
       unzip -o -q chromedriver_linux64.zip -d "$dist"
       rm chromedriver_linux64.zip
   fi

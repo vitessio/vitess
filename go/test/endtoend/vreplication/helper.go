@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -53,7 +54,9 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	execQuery(t, conn, "use `"+database+"`;")
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
 	execQuery(t, conn, "commit")
@@ -285,4 +288,10 @@ func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	}
 	fmt.Printf("Routing Rules::%s:\n%s\n", msg, output)
 	return nil
+}
+
+func osExec(t *testing.T, command string, args []string) (string, error) {
+	cmd := exec.Command(command, args...)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
 }

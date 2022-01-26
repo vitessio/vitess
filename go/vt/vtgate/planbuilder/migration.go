@@ -24,9 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func buildAlterMigrationPlan(query string, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+func buildAlterMigrationPlan(query string, vschema plancontext.VSchema, enableOnlineDDL bool) (engine.Primitive, error) {
 	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
@@ -53,7 +54,7 @@ func buildAlterMigrationPlan(query string, vschema ContextVSchema, enableOnlineD
 	}, nil
 }
 
-func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema plancontext.VSchema, enableOnlineDDL bool) (engine.Primitive, error) {
 	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
@@ -81,7 +82,7 @@ func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vsc
 	}, nil
 }
 
-func buildShowMigrationLogsPlan(query string, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, enableOnlineDDL bool) (engine.Primitive, error) {
 	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}

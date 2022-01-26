@@ -76,18 +76,18 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 
 func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collations.ID) *SemTable {
 	return &SemTable{
-		Recursive:        a.binder.recursive,
-		Direct:           a.binder.direct,
-		ExprTypes:        a.typer.exprTypes,
-		Tables:           a.tables.Tables,
-		selectScope:      a.scoper.rScope,
-		ShardedError:     a.projErr,
-		Warning:          a.warning,
-		Comments:         statement.GetComments(),
-		SubqueryMap:      a.binder.subqueryMap,
-		SubqueryRef:      a.binder.subqueryRef,
-		ColumnEqualities: map[columnName][]sqlparser.Expr{},
-		DefaultCollation: coll,
+		Recursive:         a.binder.recursive,
+		Direct:            a.binder.direct,
+		ExprTypes:         a.typer.exprTypes,
+		Tables:            a.tables.Tables,
+		selectScope:       a.scoper.rScope,
+		NotSingleRouteErr: a.projErr,
+		Warning:           a.warning,
+		Comments:          statement.GetComments(),
+		SubqueryMap:       a.binder.subqueryMap,
+		SubqueryRef:       a.binder.subqueryRef,
+		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
+		DefaultCollation:  coll,
 	}
 }
 

@@ -439,6 +439,13 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	}
 
 	sql := change.SQL
+
+	// The session used is closed after applying the schema change so we do not need
+	// to worry about saving and restoring the session state here
+	if change.SQLMode != "" {
+		sql = fmt.Sprintf("SET @@session.sql_mode='%s';\n%s", change.SQLMode, sql)
+	}
+
 	if !change.AllowReplication {
 		sql = "SET sql_log_bin = 0;\n" + sql
 	}

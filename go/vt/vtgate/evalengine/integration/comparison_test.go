@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/mysql"
 )
 
 func perm(a []string, f func([]string)) {
@@ -36,6 +38,25 @@ func perm1(a []string, f func([]string), i int) {
 		a[i], a[j] = a[j], a[i]
 		perm1(a, f, i+1)
 		a[i], a[j] = a[j], a[i]
+	}
+}
+
+func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
+	t.Helper()
+
+	local, _, localErr := safeEvaluate(query)
+	if localErr != nil {
+		t.Errorf("local failure: %v", localErr)
+		return
+	}
+	remote, remoteErr := conn.ExecuteFetch(query, 1, false)
+	if remoteErr != nil {
+		t.Errorf("remote failure: %v", remoteErr)
+		return
+	}
+
+	if local.Value().String() != remote.Rows[0][0].String() {
+		t.Errorf("mismatch for query %q: local=%v, remote=%v", query, local.Value().String(), remote.Rows[0][0].String())
 	}
 }
 
@@ -56,22 +77,36 @@ func TestAllComparisons(t *testing.T) {
 			for i := 0; i < len(tuples); i++ {
 				for j := 0; j < len(tuples); j++ {
 					query := fmt.Sprintf("SELECT %s %s %s", tuples[i], op, tuples[j])
-					local, _, localErr := safeEvaluate(query)
-					if localErr != nil {
-						t.Errorf("local failure: %v", localErr)
-						continue
-					}
-					remote, remoteErr := conn.ExecuteFetch(query, 1, false)
-					if remoteErr != nil {
-						t.Errorf("remote failure: %v", remoteErr)
-						continue
-					}
-
-					if local.Value().String() != remote.Rows[0][0].String() {
-						t.Errorf("mismatch for query %q: local=%v, remote=%v", query, local.Value().String(), remote.Rows[0][0].String())
-					}
+					compareRemoteQuery(t, conn, query)
 				}
 			}
 		})
+	}
+}
+
+func TestAllIsStatements(t *testing.T) {
+	var left = []string{
+		"NULL", "TRUE", "FALSE",
+		`1`, `0`, `1.0`, `0.0`, `-1`, `666`,
+		`"1"`, `"0"`, `"1.0"`, `"0.0"`, `"-1"`, `"666"`,
+		`"POTATO"`, `""`, `" "`, `"    "`,
+	}
+	var right = []string{
+		"NULL",
+		"NOT NULL",
+		"TRUE",
+		"NOT TRUE",
+		"FALSE",
+		"NOT FALSE",
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, l := range left {
+		for _, r := range right {
+			query := fmt.Sprintf("SELECT %s IS %s", l, r)
+			compareRemoteQuery(t, conn, query)
+		}
 	}
 }

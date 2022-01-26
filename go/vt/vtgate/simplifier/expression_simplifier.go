@@ -120,28 +120,28 @@ type shrinker struct {
 }
 
 func (s *shrinker) Next() sqlparser.Expr {
-	// first we check if there is already something in the queue.
-	// note that we are doing a nil check and not a length check here.
-	// once something has been added to the queue, we are no longer
-	// going to add expressions to the queue
-	if s.queue != nil {
-		if len(s.queue) == 0 {
-			return nil
+	for {
+		// first we check if there is already something in the queue.
+		// note that we are doing a nil check and not a length check here.
+		// once something has been added to the queue, we are no longer
+		// going to add expressions to the queue
+		if s.queue != nil {
+			if len(s.queue) == 0 {
+				return nil
+			}
+			nxt := s.queue[0]
+			s.queue = s.queue[1:]
+			return nxt
 		}
-		nxt := s.queue[0]
-		s.queue = s.queue[1:]
-		return nxt
+		if s.fillQueue() {
+			continue
+		}
+		return nil
 	}
-
-	// we have yet to fill the queue. let's try that next
-	added := s.fillQueue()
-	if added {
-		return s.Next()
-	}
-	return nil
 }
 
 func (s *shrinker) fillQueue() bool {
+	before := len(s.queue)
 	switch e := s.orig.(type) {
 	case *sqlparser.ComparisonExpr:
 		s.queue = append(s.queue, e.Left, e.Right)
@@ -178,6 +178,33 @@ func (s *shrinker) fillQueue() bool {
 			if oneLess != half {
 				s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", oneLess)))
 			}
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
+			fval, err := strconv.ParseFloat(e.Val, 64)
+			if err != nil {
+				panic(err)
+			}
+
+			if e.Type == sqlparser.DecimalVal {
+				// if it's a decimal, try to simplify as float
+				fval := strconv.FormatFloat(fval, 'e', -1, 64)
+				s.queue = append(s.queue, sqlparser.NewFloatLiteral(fval))
+			}
+
+			// add the value as an integer
+			intval := int(fval)
+			s.queue = append(s.queue, sqlparser.NewIntLiteral(fmt.Sprintf("%d", intval)))
+
+			// we'll simplify by halving the current value and decreasing it by one
+			half := fval / 2
+			oneLess := fval - 1
+			if fval < 0 {
+				oneLess = fval + 1
+			}
+
+			s.queue = append(s.queue, sqlparser.NewFloatLiteral(fmt.Sprintf("%f", half)))
+			if oneLess != half {
+				s.queue = append(s.queue, sqlparser.NewFloatLiteral(fmt.Sprintf("%f", oneLess)))
+			}
 		default:
 			panic(fmt.Sprintf("unhandled literal type %v", e.Type))
 		}
@@ -198,12 +225,11 @@ func (s *shrinker) fillQueue() bool {
 			}
 			s.queue = append(s.queue, expr.Expr)
 		}
-		if s.queue == nil {
-			return false
-		}
 	case *sqlparser.ColName:
 		// we can try to replace the column with a literal value
 		s.queue = []sqlparser.Expr{sqlparser.NewIntLiteral("0")}
+	default:
+		return false
 	}
-	return true
+	return len(s.queue) > before
 }

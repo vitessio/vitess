@@ -34,7 +34,6 @@ type joinGen4 struct {
 	Opcode      engine.JoinOpcode
 	Cols        []int
 	Vars        map[string]int
-	Predicate   sqlparser.Expr
 
 	gen4Plan
 }
@@ -51,12 +50,11 @@ func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 // Primitive implements the logicalPlan interface
 func (j *joinGen4) Primitive() engine.Primitive {
 	return &engine.Join{
-		Left:    j.Left.Primitive(),
-		Right:   j.Right.Primitive(),
-		Cols:    j.Cols,
-		Vars:    j.Vars,
-		Opcode:  j.Opcode,
-		ASTPred: j.Predicate,
+		Left:   j.Left.Primitive(),
+		Right:  j.Right.Primitive(),
+		Cols:   j.Cols,
+		Vars:   j.Vars,
+		Opcode: j.Opcode,
 	}
 }
 
@@ -78,4 +76,9 @@ func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 // ContainsTables implements the logicalPlan interface
 func (j *joinGen4) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
+}
+
+// OutputColumns implements the logicalPlan interface
+func (j *joinGen4) OutputColumns() []sqlparser.SelectExpr {
+	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }

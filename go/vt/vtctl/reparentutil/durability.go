@@ -61,7 +61,7 @@ func init() {
 type durabler interface {
 	promotionRule(*topodatapb.Tablet) promotionrule.CandidatePromotionRule
 	semiSyncAckers(*topodatapb.Tablet) int
-	replicaSemiSync(primary, replica *topodatapb.Tablet) bool
+	isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool
 }
 
 func registerDurability(name string, newDurablerFunc newDurabler) {
@@ -101,12 +101,12 @@ func SemiSyncAckers(tablet *topodatapb.Tablet) int {
 	return curDurabilityPolicy.semiSyncAckers(tablet)
 }
 
-// ReplicaSemiSync returns the replica semi-sync setting from the tablet record.
+// IsReplicaSemiSync returns the replica semi-sync setting from the tablet record.
 // Prefer using this function if tablet record is available.
-func ReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+func IsReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	curDurabilityPolicyMutex.Lock()
 	defer curDurabilityPolicyMutex.Unlock()
-	return curDurabilityPolicy.replicaSemiSync(primary, replica)
+	return curDurabilityPolicy.isReplicaSemiSync(primary, replica)
 }
 
 //=======================================================================
@@ -126,7 +126,7 @@ func (d *durabilityNone) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 0
 }
 
-func (d *durabilityNone) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+func (d *durabilityNone) isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	return false
 }
 
@@ -148,7 +148,7 @@ func (d *durabilitySemiSync) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 1
 }
 
-func (d *durabilitySemiSync) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+func (d *durabilitySemiSync) isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	switch replica.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return true
@@ -175,7 +175,7 @@ func (d *durabilityCrossCell) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 1
 }
 
-func (d *durabilityCrossCell) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+func (d *durabilityCrossCell) isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	// Prevent panics.
 	if primary.Alias == nil || replica.Alias == nil {
 		return false
@@ -212,7 +212,7 @@ func (d *durabilitySpecified) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 0
 }
 
-func (d *durabilitySpecified) replicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+func (d *durabilitySpecified) isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	return false
 }
 
