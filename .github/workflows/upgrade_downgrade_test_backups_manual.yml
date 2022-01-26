@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   get_upgrade_downgrade_label:
-    timeout-minutes: 10
+    timeout-minutes: 5
     if: github.repository == 'vitessio/vitess'
     name: Get the Upgrade Downgrade pull request label
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
           label: Skip Upgrade Downgrade
 
   get_latest_release:
-    timeout-minutes: 10
+    timeout-minutes: 5
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
     name: Get latest release
     runs-on: ubuntu-latest
@@ -50,8 +50,9 @@ jobs:
         run: |
           echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
 
+  # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
-    timeout-minutes: 60
+    timeout-minutes: 40
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
     name: Run Upgrade Downgrade Test Backup Manual
     runs-on: ubuntu-latest
@@ -121,7 +122,7 @@ jobs:
         go mod download
 
     - name: Building last release's binaries
-      timeout-minutes: 10
+      timeout-minutes: 5
       run: |
         source build.env
         make build
@@ -142,7 +143,7 @@ jobs:
         make minimaltools
 
     - name: Building the binaries for this commit
-      timeout-minutes: 10
+      timeout-minutes: 5
       run: |
         source build.env
         make build
@@ -152,13 +153,14 @@ jobs:
     # We create a sharded Vitess cluster following the local example.
     # We also insert a few rows in our three tables.
     - name: Create the example Vitess cluster with all components using version N
-      timeout-minutes: 10
+      timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
         ./backups/start_cluster.sh
 
     # Taking a backup
     - name: Take a backup of all the shards
+      timeout-minutes: 2
       run: |
         source build.env ; cd examples/local
         ./backups/take_backups.sh
@@ -180,6 +182,7 @@ jobs:
 
     # Stop all the tablets and remove their data
     - name: Stop tablets
+      timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
         ./backups/stop_tablets.sh
@@ -195,6 +198,7 @@ jobs:
 
     # Starting the tablets again, they will automatically start restoring the last backup.
     - name: Start new tablets and restore
+      timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
         ./backups/restart_tablets.sh
@@ -221,12 +225,14 @@ jobs:
 
     # Taking a second backup of the cluster.
     - name: Take a second backup of all the shards
+      timeout-minutes: 2
       run: |
         source build.env ; cd examples/local
         ./backups/take_backups.sh
 
     # Stopping the tablets so we can perform the upgrade.
     - name: Stop tablets
+      timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
         ./backups/stop_tablets.sh
@@ -242,6 +248,7 @@ jobs:
 
     # Starting the tablets again and restoring the previous backup.
     - name: Start new tablets and restore
+      timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
         ./backups/restart_tablets.sh
