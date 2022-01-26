@@ -97,7 +97,7 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([][]byte, err
 		return [][]byte{}, err
 	}
 	pairs := resp.Kvs
-	if len(pairs) < 1 {
+	if len(pairs) == 0 {
 		return [][]byte{}, topo.NewError(topo.NoNode, nodePathPrefix)
 	}
 	results := make([][]byte, len(pairs))

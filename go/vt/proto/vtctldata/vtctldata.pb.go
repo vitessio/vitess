@@ -3794,7 +3794,7 @@ type GetTabletsRequest struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Keyspace is the name of the keyspace to return tablets for. Omit to return
-	// all tablets.
+	// tablets from all keyspaces.
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// Shard is the name of the shard to return tablets for. This field is ignored
 	// if Keyspace is not set.
@@ -3812,7 +3812,8 @@ type GetTabletsRequest struct {
 	// for. If specified, Keyspace, Shard, and Cells are ignored, and tablets are
 	// looked up by their respective aliases' Cells directly.
 	TabletAliases []*topodata.TabletAlias `protobuf:"bytes,5,rep,name=tablet_aliases,json=tabletAliases,proto3" json:"tablet_aliases,omitempty"`
-	// TabletType is an optional tablet type to return
+	// tablet_type specifies the type of tablets to return. Omit to return all
+	// tablet types.
 	TabletType topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
