@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"sync"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	vtenv "github.com/dolthub/vitess/go/vt/env"
@@ -63,13 +64,46 @@ var selectRowsResult = &sqltypes.Result{
 }
 
 type testHandler struct {
+	mu       sync.Mutex
 	lastConn *Conn
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
 }
 
+func (th *testHandler) LastConn() *Conn {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.lastConn
+}
+
+func (th *testHandler) Result() *sqltypes.Result {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.result
+}
+
+func (th *testHandler) SetErr(err error) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.err = err
+}
+
+func (th *testHandler) Err() error {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	return th.err
+}
+
+func (th *testHandler) SetWarnings(count uint16) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+	th.warnings = count
+}
+
 func (th *testHandler) NewConnection(c *Conn) {
+	th.mu.Lock()
+	defer th.mu.Unlock()
 	th.lastConn = c
 }
 
@@ -86,21 +120,21 @@ func (th *testHandler) ComMultiQuery(c *Conn, query string, callback func(res *s
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) error {
-	if th.result != nil {
+	if result := th.Result(); result != nil {
 		callback(th.result, false)
 		return nil
 	}
 
 	switch query {
 	case "error":
-		return th.err
+		return th.Err()
 	case "panic":
 		panic("test panic attack!")
 	case "select rows":
 		callback(selectRowsResult, false)
 	case "error after send":
 		callback(selectRowsResult, false)
-		return th.err
+		return th.Err()
 	case "insert":
 		callback(&sqltypes.Result{
 			RowsAffected: 123,
@@ -192,6 +226,8 @@ func (th *testHandler) ComResetConnection(c *Conn) {
 }
 
 func (th *testHandler) WarningCount(c *Conn) uint16 {
+	th.mu.Lock()
+	defer th.mu.Unlock()
 	return th.warnings
 }
 
@@ -423,9 +459,9 @@ func TestClientFoundRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundRows := th.lastConn.Capabilities & CapabilityClientFoundRows
+	foundRows := th.LastConn().Capabilities & CapabilityClientFoundRows
 	if foundRows != 0 {
-		t.Errorf("FoundRows flag: %x, second bit must be 0", th.lastConn.Capabilities)
+		t.Errorf("FoundRows flag: %x, second bit must be 0", th.LastConn().Capabilities)
 	}
 	c.Close()
 	if !c.IsClosed() {
@@ -438,9 +474,9 @@ func TestClientFoundRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundRows = th.lastConn.Capabilities & CapabilityClientFoundRows
+	foundRows = th.LastConn().Capabilities & CapabilityClientFoundRows
 	if foundRows == 0 {
-		t.Errorf("FoundRows flag: %x, second bit must be set", th.lastConn.Capabilities)
+		t.Errorf("FoundRows flag: %x, second bit must be set", th.LastConn().Capabilities)
 	}
 	c.Close()
 }
@@ -551,10 +587,10 @@ func TestServer(t *testing.T) {
 	initialConnAccept := connAccept.Get()
 	initialConnSlow := connSlow.Get()
 
-	l.SlowConnectWarnThreshold = time.Duration(time.Nanosecond * 1)
+	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
 
 	// Run an 'error' command.
-	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error")
+	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
 	output, ok := runMysql(t, params, "error")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
@@ -588,7 +624,7 @@ func TestServer(t *testing.T) {
 	}
 
 	// Set the slow connect threshold to something high that we don't expect to trigger
-	l.SlowConnectWarnThreshold = time.Duration(time.Second * 1)
+	l.SlowConnectWarnThreshold.Set(time.Duration(time.Second * 1))
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
@@ -625,7 +661,7 @@ func TestServer(t *testing.T) {
 	}
 
 	// Run a 'select rows' command with warnings
-	th.warnings = 13
+	th.SetWarnings(13)
 	output, ok = runMysql(t, params, "select rows")
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
@@ -636,11 +672,11 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "13 warnings") {
 		t.Errorf("Unexpected output for 'select rows': %v", output)
 	}
-	th.warnings = 0
+	th.SetWarnings(0)
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
-	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send")
+	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
 	output, ok = runMysql(t, params, "error after send")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
@@ -757,7 +793,7 @@ func TestClearTextServer(t *testing.T) {
 	// Run a 'select rows' command with results.  This should fail
 	// as clear text is not enabled by default on the client
 	// (except MariaDB).
-	l.AllowClearTextWithoutTLS = true
+	l.AllowClearTextWithoutTLS.Set(true)
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
 	if ok {
@@ -777,7 +813,7 @@ func TestClearTextServer(t *testing.T) {
 	}
 
 	// Now enable clear text plugin in client, but server requires SSL.
-	l.AllowClearTextWithoutTLS = false
+	l.AllowClearTextWithoutTLS.Set(false)
 	if !isMariaDB {
 		sql = enableCleartextPluginPrefix + sql
 	}
@@ -790,7 +826,7 @@ func TestClearTextServer(t *testing.T) {
 	}
 
 	// Now enable clear text plugin, it should now work.
-	l.AllowClearTextWithoutTLS = true
+	l.AllowClearTextWithoutTLS.Set(true)
 	output, ok = runMysql(t, params, sql)
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
@@ -826,7 +862,7 @@ func TestDialogServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
-	l.AllowClearTextWithoutTLS = true
+	l.AllowClearTextWithoutTLS.Set(true)
 	defer l.Close()
 	go l.Accept()
 
@@ -1129,7 +1165,7 @@ func TestErrorCodes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		th.err = NewSQLErrorFromError(test.err)
+		th.SetErr(NewSQLErrorFromError(test.err))
 		result, err := client.ExecuteFetch("error", 100, false)
 		if err == nil {
 			t.Fatalf("mysql should have failed but returned: %v", result)
