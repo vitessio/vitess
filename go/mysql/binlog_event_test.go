@@ -17,22 +17,24 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"testing"
 
 	binlogdatapb "github.com/dolthub/vitess/go/vt/proto/binlogdata"
 )
 
 func TestQueryString(t *testing.T) {
+	charset := &binlogdatapb.Charset{
+		Client: 12,
+		Conn:   34,
+		Server: 56,
+	}
 	input := Query{
 		Database: "test_database",
-		Charset: &binlogdatapb.Charset{
-			Client: 12,
-			Conn:   34,
-			Server: 56,
-		},
+		Charset: charset,
 		SQL: "sql",
 	}
-	want := `{Database: "test_database", Charset: client:12  conn:34  server:56, SQL: "sql"}`
+	want := fmt.Sprintf(`{Database: "test_database", Charset: %s, SQL: "sql"}`, charset.String())
 	if got := input.String(); got != want {
 		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}

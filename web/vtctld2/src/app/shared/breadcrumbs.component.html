@@ -1,7 +1,0 @@
-<md-card class="breadcrumbs">
-  <a md-button [routerLink]="route" [queryParams]="{}"><md-icon>{{icon}}</md-icon></a>
-  <span *ngFor="let crumb of crumbs">
-    <span class="breadcrumb-separator">{{separator}}</span>
-    <a md-button [routerLink]="route" [queryParams]="crumb.queryParams">{{crumb.name | uppercase}}</a>
-  </span>
-</md-card>
