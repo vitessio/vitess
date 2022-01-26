@@ -1456,7 +1456,9 @@ func getRenameFileName(tableName string) string {
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s", source.GetPrimary().DbName(), tableName)
+			query := fmt.Sprintf("drop table %s.%s",
+				sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
+				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
 			if removalType == workflow.DropTable {
 				ts.Logger().Infof("Dropping table %s.%s\n", source.GetPrimary().DbName(), tableName)
 			} else {
@@ -1544,7 +1546,9 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 	log.Infof("removeTargetTables")
 	err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		for _, tableName := range ts.Tables() {
-			query := fmt.Sprintf("drop table %s.%s", target.GetPrimary().DbName(), tableName)
+			query := fmt.Sprintf("drop table %s.%s",
+				sqlescape.EscapeID(sqlescape.UnescapeID(target.GetPrimary().DbName())),
+				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
 			ts.Logger().Infof("Dropping table %s.%s\n", target.GetPrimary().DbName(), tableName)
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
