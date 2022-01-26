@@ -149,6 +149,5 @@ func (ctl *Mysqlctl) Params(dbname string) mysql.ConnParams {
 		DbName:     dbname,
 		Uname:      "vt_dba",
 		UnixSocket: ctl.UnixSocket(),
-		Charset:    DefaultCharset,
 	}
 }
