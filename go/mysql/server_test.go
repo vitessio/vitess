@@ -247,8 +247,8 @@ func getHostPort(t *testing.T, a net.Addr) (string, int) {
 func TestConnectionFromListener(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -286,8 +286,8 @@ func TestConnectionFromListener(t *testing.T) {
 func TestConnectionWithoutSourceHost(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -318,9 +318,9 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 func TestConnectionWithSourceHost(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
+	authServer := NewAuthServerStatic("", "", 0)
 
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
@@ -355,9 +355,8 @@ func TestConnectionWithSourceHost(t *testing.T) {
 func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{
 			MysqlNativePassword: "*9E128DA0C64A6FCCCDCFBDD0FC0A2C967C6DB36F",
 			UserData:            "userData1",
@@ -392,9 +391,8 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 func TestConnectionUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
@@ -432,8 +430,8 @@ func TestConnectionUnixSocket(t *testing.T) {
 func TestClientFoundRows(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -489,8 +487,8 @@ func TestConnCounts(t *testing.T) {
 	user := "anotherNotYetConnectedUser1"
 	passwd := "password1"
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries[user] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries[user] = []*AuthServerStaticEntry{{
 		Password: passwd,
 		UserData: "userData1",
 	}}
@@ -561,8 +559,8 @@ func checkCountsForUser(t *testing.T, user string, expected int64) {
 func TestServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -767,8 +765,8 @@ func TestClearTextServer(t *testing.T) {
 
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -852,8 +850,8 @@ func TestClearTextServer(t *testing.T) {
 func TestDialogServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -896,8 +894,8 @@ func TestDialogServer(t *testing.T) {
 func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 	}}
 
@@ -998,8 +996,8 @@ func TestTLSServer(t *testing.T) {
 func TestTLSRequired(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 	}}
 
@@ -1088,8 +1086,8 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 func TestErrorCodes(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -1271,8 +1269,8 @@ func binaryPath(root, binary string) (string, error) {
 
 func TestListenerShutdown(t *testing.T) {
 	th := &testHandler{}
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}

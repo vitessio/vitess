@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"fmt"
 
 	"google.golang.org/protobuf/proto"
 
@@ -579,6 +580,17 @@ func TestBindVariablesFormat(t *testing.T) {
 		"key_4": tupleBindVar,
 	}
 
+	expectedTupleStr := (&querypb.BindVariable{
+		Type: querypb.Type_TUPLE,
+		Values: []*querypb.Value{{
+			Type:  querypb.Type_INT64,
+			Value: []byte("1"),
+		}, {
+			Type:  querypb.Type_INT64,
+			Value: []byte("2"),
+		}},
+	}).String()
+
 	formattedStr := FormatBindVariables(bindVariables, true /* full */, false /* asJSON */)
 	if !strings.Contains(formattedStr, "key_1") ||
 		!strings.Contains(formattedStr, "val_1") {
@@ -591,8 +603,7 @@ func TestBindVariablesFormat(t *testing.T) {
 	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "val_3") {
 		t.Fatalf("bind variable 'key_3': 'val_3' is not formatted")
 	}
-	if !strings.Contains(formattedStr, "key_4") ||
-		!strings.Contains(formattedStr, "key_4:type:TUPLE  values:{type:INT64  value:\"1\"}  values:{type:INT64  value:\"2\"}") {
+	if !strings.Contains(formattedStr, fmt.Sprintf("key_4:%s", expectedTupleStr)) {
 		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted: %s", formattedStr)
 	}
 

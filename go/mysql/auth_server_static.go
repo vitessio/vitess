@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -52,10 +51,19 @@ type AuthServerStatic struct {
 	// - MysqlDialog
 	// It defaults to MysqlNativePassword.
 	Method string
+
 	// This mutex helps us prevent data races between the multiple updates of Entries.
 	mu sync.Mutex
-	// Entries contains the users, passwords and user data.
-	Entries map[string][]*AuthServerStaticEntry
+
+	// entries contains the users, passwords and user data.
+	entries map[string][]*AuthServerStaticEntry
+
+	file           string
+	jsonConfig     string
+	reloadInterval time.Duration
+
+	sigChan chan os.Signal
+	ticker  *time.Ticker
 }
 
 // AuthServerStaticEntry stores the values for a given user.
@@ -92,85 +100,91 @@ func InitAuthServerStatic() {
 	}
 
 	// Create and register auth server.
-	RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
+	RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString, *mysqlAuthServerStaticReloadInterval)
 }
 
-// NewAuthServerStatic returns a new empty AuthServerStatic.
-func NewAuthServerStatic() *AuthServerStatic {
-	return &AuthServerStatic{
-		Method:  MysqlNativePassword,
-		Entries: make(map[string][]*AuthServerStaticEntry),
+// NewAuthServerStatic returns a new AuthServerStatic, reading from |file| or
+// |jsonConfig|. If |file| is specified, periodically reloads at
+// |reloadInterval| and listens for SIGHUP to reload on demand. The auth server
+// background processes can be stopped with |close()|.
+func NewAuthServerStatic(file, jsonConfig string, reloadInterval time.Duration) *AuthServerStatic {
+	a := &AuthServerStatic{
+		file:           file,
+		jsonConfig:     jsonConfig,
+		reloadInterval: reloadInterval,
+		Method:         MysqlNativePassword,
+		entries:        make(map[string][]*AuthServerStaticEntry),
 	}
+
+	a.reload()
+	a.installSignalHandlers()
+	return a
 }
 
 // RegisterAuthServerStaticFromParams creates and registers a new
 // AuthServerStatic, loaded for a JSON file or string. If file is set,
 // it uses file. Otherwise, load the string. It log.Exits out in case
 // of error.
-func RegisterAuthServerStaticFromParams(file, str string) {
-	authServerStatic := NewAuthServerStatic()
-
-	authServerStatic.loadConfigFromParams(file, str)
-
-	if len(authServerStatic.Entries) <= 0 {
+func RegisterAuthServerStaticFromParams(file, str string, reloadInterval time.Duration) {
+	authServerStatic := NewAuthServerStatic(file, str, reloadInterval)
+	if len(authServerStatic.entries) <= 0 {
 		log.Exitf("Failed to populate entries from file: %v", file)
 	}
-	authServerStatic.installSignalHandlers()
-
-	// And register the server.
 	RegisterAuthServerImpl("static", authServerStatic)
 }
 
-func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
-	jsonConfig := []byte(str)
-	if file != "" {
-		data, err := ioutil.ReadFile(file)
+func (a *AuthServerStatic) reload() {
+	jsonBytes := []byte(a.jsonConfig)
+	if a.file != "" {
+		data, err := os.ReadFile(a.file)
 		if err != nil {
 			log.Errorf("Failed to read mysql_auth_server_static_file file: %v", err)
 			return
 		}
-		jsonConfig = data
+		jsonBytes = data
 	}
 
 	entries := make(map[string][]*AuthServerStaticEntry)
-	if err := parseConfig(jsonConfig, &entries); err != nil {
+	if err := parseConfig(jsonBytes, &entries); err != nil {
 		log.Errorf("Error parsing auth server config: %v", err)
 		return
 	}
 
 	a.mu.Lock()
-	a.Entries = entries
+	a.entries = entries
 	a.mu.Unlock()
 }
 
 func (a *AuthServerStatic) installSignalHandlers() {
-	if *mysqlAuthServerStaticFile == "" {
+	if a.file == "" {
 		return
 	}
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP)
+	a.sigChan = make(chan os.Signal, 1)
+	signal.Notify(a.sigChan, syscall.SIGHUP)
 	go func() {
-		for range sigChan {
-			a.loadConfigFromParams(*mysqlAuthServerStaticFile, "")
+		for range a.sigChan {
+			a.reload()
 		}
 	}()
 
 	// If duration is set, it will reload configuration every interval
-	if *mysqlAuthServerStaticReloadInterval > 0 {
-		ticker := time.NewTicker(*mysqlAuthServerStaticReloadInterval)
+	if a.reloadInterval > 0 {
+		a.ticker = time.NewTicker(a.reloadInterval)
 		go func() {
-			for {
-				select {
-				case <-ticker.C:
-					if *mysqlAuthServerStaticReloadInterval <= 0 {
-						ticker.Stop()
-						return
-					}
-					sigChan <- syscall.SIGHUP
-				}
+			for range a.ticker.C {
+				a.sigChan <- syscall.SIGHUP
 			}
 		}()
+	}
+}
+
+func (a *AuthServerStatic) close() {
+	if a.ticker != nil {
+		a.ticker.Stop()
+	}
+	if a.sigChan != nil {
+		signal.Stop(a.sigChan)
 	}
 }
 
@@ -223,7 +237,7 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	a.mu.Lock()
-	entries, ok := a.Entries[user]
+	entries, ok := a.entries[user]
 	a.mu.Unlock()
 
 	if !ok {
@@ -258,7 +272,7 @@ func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) 
 	}
 
 	a.mu.Lock()
-	entries, ok := a.Entries[user]
+	entries, ok := a.entries[user]
 	a.mu.Unlock()
 
 	if !ok {
