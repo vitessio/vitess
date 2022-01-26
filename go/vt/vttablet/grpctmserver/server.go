@@ -18,6 +18,7 @@ package grpctmserver
 
 import (
 	"time"
+
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
