@@ -124,9 +124,9 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	materializeRollup(t)
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName, false)
 
-	// the Lead table was to test a specific case with binary sharding keys. Drop it now so that we don't
+	// the Lead and Lead-1 tables tested a specific case with binary sharding keys. Drop it now so that we don't
 	// have to update the rest of the tests
-	execVtgateQuery(t, vtgateConn, "customer", "drop table `Lead`")
+	execVtgateQuery(t, vtgateConn, "customer", "drop table `Lead`,`Lead-1`")
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
@@ -344,7 +344,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead"
+		tables := "customer,Lead,Lead-1"
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -361,12 +361,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 
 		// confirm that the backticking of table names in the routing rules works
-		output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
-			"--host=127.0.0.1", "-e", "select * from Lead"})
-		if err != nil {
-			require.FailNow(t, output)
+		backtickTables := []string{"Lead", "Lead-1"}
+		for _, backtickTable := range backtickTables {
+			output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
+				"--host=127.0.0.1", "-e", fmt.Sprintf("select * from %s", backtickTable)})
+			if err != nil {
+				require.FailNow(t, output)
+			}
+			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update %s set name='xyz'", backtickTable))
 		}
-		execVtgateQuery(t, vtgateConn, "product", "update Lead set name='xyz'")
 
 		vdiff(t, ksWorkflow, "")
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
