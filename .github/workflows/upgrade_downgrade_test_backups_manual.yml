@@ -206,9 +206,9 @@ jobs:
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
-        echo "select count(sku) from product;" | mysql | grep 2
-        echo "select count(email) from customer;" | mysql | grep 5
-        echo "select count(sku) from corder;" | mysql | grep 5
+        echo "select count(sku) from product;" | mysql
+        echo "select count(email) from customer;" | mysql
+        echo "select count(sku) from corder;" | mysql
 
     # We insert one more row in every table.
     - name: Insert more rows in the tables
@@ -253,6 +253,6 @@ jobs:
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
-        echo "select count(sku) from product;" | mysql | grep 3
-        echo "select count(email) from customer;" | mysql | grep 6
-        echo "select count(sku) from corder;" | mysql | grep 6
+        echo "select count(sku) from product;" | mysql |2&>1 grep 3
+        echo "select count(email) from customer;" | mysql |2&>1 grep 6
+        echo "select count(sku) from corder;" | mysql |2&>1 grep 6
