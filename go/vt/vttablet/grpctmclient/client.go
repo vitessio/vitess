@@ -23,6 +23,7 @@ import (
 	"io"
 	"sync"
 	"time"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"google.golang.org/grpc"
