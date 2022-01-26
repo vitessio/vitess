@@ -173,7 +173,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 
 const (
 	// DefaultCharset is the default charset used by MySQL instances
-	DefaultCharset = "utf8mb4_general_ci"
+	DefaultCharset = "utf8mb4"
 )
 
 // QueryServerArgs are the default arguments passed to all Vitess query servers
