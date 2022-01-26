@@ -19,10 +19,6 @@ jobs:
       run: |
         go mod download
 
-    - name: Run make minimaltools
-      run: |
-        make minimaltools
-
     - name: unit_race
       run: |
-        make unit_test_race
+        go test -race ./go/...

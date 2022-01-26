@@ -19,10 +19,6 @@ jobs:
       run: |
         go mod download
 
-    - name: Run make minimaltools
-      run: |
-        make minimaltools
-
     - name: check_make_parser
       run: |
         tools/check_make_parser.sh
