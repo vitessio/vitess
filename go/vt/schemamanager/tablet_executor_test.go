@@ -103,7 +103,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	sqls := []string{
@@ -192,7 +192,7 @@ func TestTabletExecutorDML(t *testing.T) {
 		},
 	})
 
-	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	executor.Open(ctx, "unsharded_keyspace")
