@@ -591,21 +591,6 @@ const (
 	SSQueryInterrupted = "70100"
 )
 
-// A few interesting character set values.
-// See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
-const (
-	DefaultCollation = "utf8mb4_general_ci"
-
-	// CharacterSetUtf8 is for UTF8.
-	CharacterSetUtf8 = 33
-
-	// CharacterSetUtf8mb4 is for 4-bytes UTF8.
-	CharacterSetUtf8mb4 = 45
-
-	// CharacterSetBinary is for binary. Use by integer fields for instance.
-	CharacterSetBinary = 63
-)
-
 // CharacterSetEncoding maps a charset name to a golang encoder.
 // golang does not support encoders for all MySQL charsets.
 // A charset not in this map is unsupported.

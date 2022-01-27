@@ -27,10 +27,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+func columnSize(cs collations.ID, size uint32) uint32 {
+	// utf8_general_ci results in smaller max column sizes because MySQL 5.7 is silly
+	if collations.Local().LookupByID(cs).Charset().Name() == "utf8" {
+		return size * 3 / 4
+	}
+	return size
+}
 
 // Test the SQL query part of the API.
 func TestQueries(t *testing.T) {
@@ -79,7 +88,7 @@ func TestQueries(t *testing.T) {
 				Database:     "vttest",
 				OrgName:      "id",
 				ColumnLength: 11,
-				Charset:      mysql.CharacterSetBinary,
+				Charset:      collations.CollationBinaryID,
 				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 					querypb.MySqlFlag_PRI_KEY_FLAG |
 					querypb.MySqlFlag_PART_KEY_FLAG |
@@ -92,8 +101,8 @@ func TestQueries(t *testing.T) {
 				OrgTable:     "a",
 				Database:     "vttest",
 				OrgName:      "name",
-				ColumnLength: 512,
-				Charset:      mysql.CharacterSetUtf8mb4,
+				ColumnLength: columnSize(conn.CharacterSet, 512),
+				Charset:      uint32(conn.CharacterSet),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -188,7 +197,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			Database:     "vttest",
 			OrgName:      "id",
 			ColumnLength: 11,
-			Charset:      mysql.CharacterSetBinary,
+			Charset:      collations.CollationBinaryID,
 			Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 				querypb.MySqlFlag_PRI_KEY_FLAG |
 				querypb.MySqlFlag_PART_KEY_FLAG |
@@ -201,8 +210,8 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			OrgTable:     "a",
 			Database:     "vttest",
 			OrgName:      "name",
-			ColumnLength: 512,
-			Charset:      mysql.CharacterSetUtf8mb4,
+			ColumnLength: columnSize(conn.CharacterSet, 512),
+			Charset:      uint32(conn.CharacterSet),
 		},
 	}
 	fields, err := conn.Fields()
