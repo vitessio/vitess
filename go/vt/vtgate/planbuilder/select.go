@@ -35,7 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+func buildSelectPlan(query string) selectPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
 		if sel.With != nil {
