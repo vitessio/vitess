@@ -26,16 +26,16 @@ done
 sleep 5
 vtctldclient InitShardPrimary --force commerce/0 zone1-100
 
-for i in 300 301 302; do
+for i in 200 201 202; do
   CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
   SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 sleep 5
-vtctldclient InitShardPrimary --force customer/-80 zone1-300
+vtctldclient InitShardPrimary --force customer/-80 zone1-200
 
-for i in 400 401 402; do
+for i in 300 301 302; do
   CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
   SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 sleep 5
-vtctldclient InitShardPrimary --force customer/80- zone1-400
+vtctldclient InitShardPrimary --force customer/80- zone1-300

@@ -19,6 +19,6 @@
 
 source ./env.sh
 
-vtctlclient BackupShard -allow_primary=true customer/-80
-vtctlclient BackupShard -allow_primary=true customer/80-
-vtctlclient BackupShard -allow_primary=true commerce/0
+vtctlclient BackupShard customer/-80
+vtctlclient BackupShard customer/80-
+vtctlclient BackupShard commerce/0
