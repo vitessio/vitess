@@ -653,7 +653,7 @@ var commands = []commandGroup{
 			{
 				name:   "OnlineDDL",
 				method: commandOnlineDDL,
-				params: "<keyspace> <command> [<migration_uuid>]",
+				params: "[-json] <keyspace> <command> [<migration_uuid>]",
 				help: "Operates on online DDL (migrations). Examples:" +
 					" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
 					" \nvtctl OnlineDDL test_keyspace show all" +
@@ -3268,6 +3268,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3311,7 +3312,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			}
 		}
 		query = fmt.Sprintf(`select
-				shard, mysql_schema, mysql_table, ddl_action, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status
+				*
 				from _vt.schema_migrations where %s`, condition)
 	case "retry":
 		if arg == "" {
@@ -3346,6 +3347,9 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
 	if err != nil {
 		return err
+	}
+	if *json {
+		return printJSON(wr.Logger(), qr)
 	}
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
