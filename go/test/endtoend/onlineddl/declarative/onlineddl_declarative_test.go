@@ -90,7 +90,7 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`
-	requestContext        = "1111-2222-3333"
+	migrationContext      = "1111-2222-3333"
 	createStatement1      = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
@@ -511,7 +511,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 			uuid = row.AsString("uuid", "")
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, RequestContext: requestContext, SkipPreflight: true})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, MigrationContext: migrationContext, SkipPreflight: true})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output
