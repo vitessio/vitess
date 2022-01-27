@@ -229,6 +229,11 @@ const (
 	CollationBinaryID  = 63
 )
 
+// DefaultConnectionCharset is the default charset that Vitess will use when negotiating a
+// charset in a MySQL connection handshake. Note that in this context, a 'charset' is equivalent
+// to a Collation ID, with the exception that it can only fit in 1 byte.
+// For MySQL 8.0+ environments, the default charset is `utf8mb4_0900_ai_ci`.
+// For older MySQL environments, the default charset is `utf8mb4_general_ci`.
 func (env *Environment) DefaultConnectionCharset() uint8 {
 	switch env.version {
 	case collverMySQL80:
@@ -238,6 +243,16 @@ func (env *Environment) DefaultConnectionCharset() uint8 {
 	}
 }
 
+// ParseConnectionCharset parses the given charset name and returns its numerical
+// identifier to be used in a MySQL connection handshake. The charset name can be:
+// - the name of a character set, in which case the default collation ID for the
+// character set is returned.
+// - the name of a collation, in which case the ID for the collation is returned,
+// UNLESS the collation itself has an ID greater than 255; such collations are not
+// supported because they cannot be negotiated in a single byte in our connection
+// handshake.
+// - empty, in which case the default connection charset for this MySQL version
+// is returned.
 func (env *Environment) ParseConnectionCharset(csname string) (uint8, error) {
 	if csname == "" {
 		return env.DefaultConnectionCharset(), nil
