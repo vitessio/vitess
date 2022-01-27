@@ -94,6 +94,12 @@ For example:
 vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 ```
 
+### PlannedReparentShard for cluster initialization
+For setting up the cluster and electing a primary for the first time, `PlannedReparentShard` should be used
+instead of `InitShardPrimary`. 
+
+If using a custom `init_db.sql` that omits `SET sql_log_bin = 0`, then `InitShardPrimary` must be used instead of `PlannedReparentShard`.
+
 ## Incompatible Changes
 ### Error message change when vttablet row limit exceeded:
 * In previous Vitess versions, if the vttablet row limit (-queryserver-config-max-result-size) was exceeded, an error like:
