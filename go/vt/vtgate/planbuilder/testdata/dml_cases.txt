@@ -3019,3 +3019,111 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# delete with routing using non-unique lookup vindex
+"delete from multicol_tbl where name = 'foo'"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where name = 'foo'",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' for update",
+    "Query": "delete from multicol_tbl where `name` = 'foo'",
+    "Table": "multicol_tbl",
+    "Values": [
+      "VARBINARY(\"foo\")"
+    ],
+    "Vindex": "name_muticoltbl_map"
+  }
+}
+Gen4 plan same as above
+
+# delete with routing using subsharding column
+"delete from multicol_tbl where cola = 1"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where cola = 1",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
+    "Query": "delete from multicol_tbl where cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# delete with routing using subsharding column with in query
+"delete from multicol_tbl where cola in (1,2)"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where cola in (1,2)",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola in (1, 2) for update",
+    "Query": "delete from multicol_tbl where cola in (1, 2)",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(2))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# delete with routing using subsharding column with in query as lower cost over lookup vindex
+"delete from multicol_tbl where name = 'foo' and cola = 2"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from multicol_tbl where name = 'foo' and cola = 2",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidLength": 2,
+    "KsidVindex": "multicolIdx",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
+    "Query": "delete from multicol_tbl where `name` = 'foo' and cola = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
