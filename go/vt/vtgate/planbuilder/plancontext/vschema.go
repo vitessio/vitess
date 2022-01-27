@@ -65,7 +65,7 @@ func PlannerNameToVersion(s string) (PlannerVersion, bool) {
 	case "gen4fallback":
 		return querypb.ExecuteOptions_Gen4WithFallback, true
 	case "gen4comparev3":
-		return querypb.ExecuteOptions_V3, true
+		return querypb.ExecuteOptions_Gen4CompareV3, true
 	}
 	return 0, false
 }
