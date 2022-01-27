@@ -144,7 +144,6 @@ func newVCursorImpl(
 	}
 
 	// we only support collations for the new TabletGateway implementation
-	collationEnv := collations.Local()
 	var connCollation collations.ID
 	if executor != nil {
 		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
@@ -152,11 +151,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		coll, err := collationEnv.ResolveCollation("", "")
-		if err != nil {
-			panic("should never happen: don't know how to resolve default collation")
-		}
-		connCollation = coll.ID()
+		connCollation = collations.ID(collations.Local().DefaultConnectionCharset())
 	}
 
 	return &vcursorImpl{

@@ -79,11 +79,6 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
-	// Collation is the default collation used by MySQL
-	// If Collation is set and Charset is not set, Collation will be used
-	// to define the value of Charset
-	Collation string
-
 	// PlannerVersion is the planner version to use for the vtgate.
 	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
 	PlannerVersion string
@@ -225,7 +220,9 @@ type LocalCluster struct {
 // This connection should be used for debug/introspection purposes; normal
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
-	return db.mysql.Params(db.DbName())
+	connParams := db.mysql.Params(db.DbName())
+	connParams.Charset = db.Config.Charset
+	return connParams
 }
 
 // MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used

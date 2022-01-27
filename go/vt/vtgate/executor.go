@@ -35,7 +35,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -1544,7 +1544,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 		fields[i] = &querypb.Field{
 			Name:    v,
 			Type:    sqltypes.VarChar,
-			Charset: mysql.CharacterSetUtf8,
+			Charset: collations.CollationUtf8ID,
 			Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 		}
 	}
