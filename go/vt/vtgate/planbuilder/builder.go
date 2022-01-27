@@ -20,8 +20,6 @@ import (
 	"errors"
 	"sort"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -94,51 +92,22 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) selectPlanner, stmt sqlparser.SelectStatement, query string) (selectPlanner, error) {
-	planner, ok := getPlannerFromQuery(stmt)
-	if !ok {
-		// if the query doesn't specify the planner, we check what the configuration is
-		planner = vschema.Planner()
-	}
-	switch planner {
+func getConfiguredPlanner(vschema plancontext.VSchema, v3planner selectPlanner) (selectPlanner, error) {
+	switch vschema.Planner() {
 	case Gen4CompareV3:
-		return gen4CompareV3Planner(query), nil
+		return gen4CompareV3Planner, nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
-		return gen4Planner(query, planner), nil
+		return gen4Planner, nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
-			primary:  gen4Planner(query, querypb.ExecuteOptions_Gen4),
-			fallback: v3planner(query),
+			primary:  gen4Planner,
+			fallback: v3planner,
 		}
 		return fp.plan, nil
 	default:
 		// default is v3 plan
-		return v3planner(query), nil
+		return v3planner, nil
 	}
-}
-
-func getPlannerFromQuery(stmt sqlparser.SelectStatement) (plancontext.PlannerVersion, bool) {
-	var d sqlparser.CommentDirectives
-
-	firstSelect := sqlparser.GetFirstSelect(stmt)
-	if firstSelect != nil {
-		d = sqlparser.ExtractCommentDirectives(firstSelect.Comments)
-	}
-	if d == nil {
-		return plancontext.PlannerVersion(0), false
-	}
-
-	val, ok := d[sqlparser.DirectiveQueryPlanner]
-	if !ok {
-		return plancontext.PlannerVersion(0), false
-	}
-
-	str, ok := val.(string)
-	if !ok {
-		log.Errorf("planner specified with unknown type %v", val)
-		return plancontext.PlannerVersion(0), false
-	}
-	return plancontext.PlannerNameToVersion(str)
 }
 
 func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error)) (engine.Primitive, error) {
@@ -148,16 +117,16 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 	return f(stmt, reservedVars, vschema)
 }
 
-type selectPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error)
+type selectPlanner func(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error)
 
 func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan)
 		if err != nil {
 			return nil, err
 		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner(query))
 	case *sqlparser.Insert:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
 	case *sqlparser.Update:
@@ -165,11 +134,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case *sqlparser.Delete:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
 	case *sqlparser.Union:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan)
 		if err != nil {
 			return nil, err
 		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner(query))
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterMigration:

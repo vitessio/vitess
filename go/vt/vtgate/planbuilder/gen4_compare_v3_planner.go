@@ -17,11 +17,17 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
+
+type commentDirective struct {
+	onlyV3, onlyGen4 bool
+}
 
 func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
 	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema) (engine.Primitive, error) {
@@ -31,10 +37,11 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		defer ctxVSchema.SetPlannerVersion(Gen4CompareV3)
 
 		// preliminary checks on the given statement
-		onlyGen4, hasOrderBy, err := preliminaryChecks(statement)
+		onlyGen4, hasOrderBy, comments, err := preliminaryChecks(statement)
 		if err != nil {
 			return nil, err
 		}
+		cd := parseComments(comments)
 
 		// plan statement using Gen4
 		gen4Primitive, gen4Err := planWithPlannerVersion(statement, vars, ctxVSchema, query, Gen4)
@@ -44,12 +51,16 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		// since lock primitives can imply the creation or deletion of locks,
 		// we want to execute them once using Gen4 to avoid the duplicated locks
 		// or double lock-releases.
-		if onlyGen4 || (gen4Primitive != nil && hasLockPrimitive(gen4Primitive)) {
+		if !cd.onlyV3 && (onlyGen4 || cd.onlyGen4) || (gen4Primitive != nil && hasLockPrimitive(gen4Primitive)) {
 			return gen4Primitive, gen4Err
 		}
 
 		// get V3's plan
 		v3Primitive, v3Err := planWithPlannerVersion(statement, vars, ctxVSchema, query, V3)
+
+		if cd.onlyV3 && !cd.onlyGen4 && !onlyGen4 {
+			return v3Primitive, v3Err
+		}
 
 		// check potential errors from Gen4 and V3
 		err = engine.CompareV3AndGen4Errors(v3Err, gen4Err)
@@ -65,11 +76,26 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 	}
 }
 
-func preliminaryChecks(statement sqlparser.Statement) (bool, bool, error) {
+func parseComments(comments []string) commentDirective {
+	cd := commentDirective{}
+	for _, comment := range comments {
+		if strings.Contains(comment, "GEN4_COMPARE_ONLY_V3") {
+			cd.onlyV3 = true
+		}
+		if strings.Contains(comment, "GEN4_COMPARE_ONLY_GEN4") {
+			cd.onlyGen4 = true
+		}
+	}
+	return cd
+}
+
+func preliminaryChecks(statement sqlparser.Statement) (bool, bool, []string, error) {
 	var onlyGen4, hasOrderBy bool
+	var comments []string
 	switch s := statement.(type) {
 	case *sqlparser.Union:
 		hasOrderBy = len(s.OrderBy) > 0
+		comments = s.GetComments()
 
 		// walk through the union and search for select statements that have
 		// a next val select expression, in which case we need to only use
@@ -83,10 +109,11 @@ func preliminaryChecks(statement sqlparser.Statement) (bool, bool, error) {
 			return true, nil
 		}, s)
 		if err != nil {
-			return false, false, err
+			return false, false, nil, err
 		}
 	case *sqlparser.Select:
 		hasOrderBy = len(s.OrderBy) > 0
+		comments = s.GetComments()
 
 		for _, expr := range s.SelectExprs {
 			// we are not executing the plan a second time if the query is a select next val,
@@ -98,7 +125,7 @@ func preliminaryChecks(statement sqlparser.Statement) (bool, bool, error) {
 			}
 		}
 	}
-	return onlyGen4, hasOrderBy, nil
+	return onlyGen4, hasOrderBy, comments, nil
 }
 
 func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema, query string, version plancontext.PlannerVersion) (engine.Primitive, error) {

@@ -367,9 +367,19 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
-	if done {
-		return version
+	switch strings.ToLower(*plannerVersion) {
+	case "v3":
+		return planbuilder.V3
+	case "gen4":
+		return planbuilder.Gen4
+	case "gen4greedy", "greedy":
+		return planbuilder.Gen4GreedyOnly
+	case "left2right":
+		return planbuilder.Gen4Left2Right
+	case "gen4fallback":
+		return planbuilder.Gen4WithFallback
+	case "gen4comparev3":
+		return planbuilder.Gen4CompareV3
 	}
 
 	log.Warning("unknown planner version configured. using the default")

@@ -17,7 +17,6 @@ limitations under the License.
 package plancontext
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -33,17 +32,15 @@ type PlanningContext struct {
 	// map below
 	JoinPredicates map[sqlparser.Expr][]sqlparser.Expr
 	SkipPredicates map[sqlparser.Expr]interface{}
-	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 }
 
-func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema, version querypb.ExecuteOptions_PlannerVersion) *PlanningContext {
+func NewPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema VSchema) *PlanningContext {
 	ctx := &PlanningContext{
 		ReservedVars:   reservedVars,
 		SemTable:       semTable,
 		VSchema:        vschema,
 		JoinPredicates: map[sqlparser.Expr][]sqlparser.Expr{},
 		SkipPredicates: map[sqlparser.Expr]interface{}{},
-		PlannerVersion: version,
 	}
 	return ctx
 }
