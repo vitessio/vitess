@@ -100,6 +100,23 @@ instead of `InitShardPrimary`.
 
 If using a custom `init_db.sql` that omits `SET sql_log_bin = 0`, then `InitShardPrimary` must be used instead of `PlannedReparentShard`.
 
+### Durability Policy flag
+A new flag has been added to vtctl, vtctld and vtworker binaries which allows the users to set the durability policies.
+If semi-sync is being used then `-durability_policy` should be set to `semi_sync` and `-enable_semi_sync` should be set in vttablets. 
+If semi-sync is not being used then `-durability_policy` should be set to `none`.
+
+This flag is currently being used only to log discrepancies. In case the user notices any logs that look like the following, they should create an issue and report it -
+```
+invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set
+```
+```
+invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible
+```
+If the following log is noticed when all the components are upgraded, then it should also be reported -
+```
+invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading
+```
+
 ## Incompatible Changes
 ### Error message change when vttablet row limit exceeded:
 * In previous Vitess versions, if the vttablet row limit (-queryserver-config-max-result-size) was exceeded, an error like:
