@@ -1478,17 +1478,17 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		return nil, nil, ErrMigrationNotFound
 	}
 	onlineDDL = &schema.OnlineDDL{
-		Keyspace:       row["keyspace"].ToString(),
-		Table:          row["mysql_table"].ToString(),
-		Schema:         row["mysql_schema"].ToString(),
-		SQL:            row["migration_statement"].ToString(),
-		UUID:           row["migration_uuid"].ToString(),
-		Strategy:       schema.DDLStrategy(row["strategy"].ToString()),
-		Options:        row["options"].ToString(),
-		Status:         schema.OnlineDDLStatus(row["migration_status"].ToString()),
-		Retries:        row.AsInt64("retries", 0),
-		TabletAlias:    row["tablet"].ToString(),
-		RequestContext: row["migration_context"].ToString(),
+		Keyspace:         row["keyspace"].ToString(),
+		Table:            row["mysql_table"].ToString(),
+		Schema:           row["mysql_schema"].ToString(),
+		SQL:              row["migration_statement"].ToString(),
+		UUID:             row["migration_uuid"].ToString(),
+		Strategy:         schema.DDLStrategy(row["strategy"].ToString()),
+		Options:          row["options"].ToString(),
+		Status:           schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Retries:          row.AsInt64("retries", 0),
+		TabletAlias:      row["tablet"].ToString(),
+		MigrationContext: row["migration_context"].ToString(),
 	}
 	return onlineDDL, row, nil
 }
@@ -2020,13 +2020,13 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 // getCompletedMigrationByContextAndSQL chceks if there exists a completed migration with exact same
 // context and SQL as given migration. If so, it returns its UUID.
 func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onlineDDL *schema.OnlineDDL) (completedUUID string, err error) {
-	if onlineDDL.RequestContext == "" {
+	if onlineDDL.MigrationContext == "" {
 		// only applies to migrations with an explicit context
 		return "", nil
 	}
 	query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsByContextAndSQL,
 		sqltypes.StringBindVariable(e.keyspace),
-		sqltypes.StringBindVariable(onlineDDL.RequestContext),
+		sqltypes.StringBindVariable(onlineDDL.MigrationContext),
 		sqltypes.StringBindVariable(onlineDDL.SQL),
 	)
 	if err != nil {
@@ -2081,7 +2081,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		if completedUUID != "" {
 			// Yep. We mark this migration as implicitly complete, and we're done with it!
 			_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("duplicate DDL as %s for migration context %s", completedUUID, onlineDDL.RequestContext))
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("duplicate DDL as %s for migration context %s", completedUUID, onlineDDL.MigrationContext))
 			return nil
 		}
 	}
@@ -3230,7 +3230,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
 		sqltypes.StringBindVariable(onlineDDL.Options),
 		sqltypes.StringBindVariable(actionStr),
-		sqltypes.StringBindVariable(onlineDDL.RequestContext),
+		sqltypes.StringBindVariable(onlineDDL.MigrationContext),
 		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
@@ -3268,8 +3268,8 @@ func (e *Executor) SubmitMigration(
 				if err != nil {
 					return nil, err
 				}
-				if pendingOnlineDDL.RequestContext != onlineDDL.RequestContext {
-					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.RequestContext)
+				if pendingOnlineDDL.MigrationContext != onlineDDL.MigrationContext {
+					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
 				}
 			}
 		}
