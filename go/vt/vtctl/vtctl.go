@@ -653,7 +653,7 @@ var commands = []commandGroup{
 			{
 				name:   "OnlineDDL",
 				method: commandOnlineDDL,
-				params: "<keyspace> <command> [<migration_uuid>]",
+				params: "[-json] <keyspace> <command> [<migration_uuid>]",
 				help: "Operates on online DDL (migrations). Examples:" +
 					" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
 					" \nvtctl OnlineDDL test_keyspace show all" +
