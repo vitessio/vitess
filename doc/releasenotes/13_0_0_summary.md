@@ -94,6 +94,10 @@ For example:
 vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 ```
 
+### vtctl/vtctlclient OnlineDDL -json
+
+The command now accepts an optional `-json` flag. With this flag, the output is a valid JSON listing all columns and rows.
+
 ## Incompatible Changes
 
 ## Deprecations
