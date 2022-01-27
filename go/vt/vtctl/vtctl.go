@@ -3248,7 +3248,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	log.Info("Calling ApplySchema on VtctldServer")
-	_, err = wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
+	resp, err = wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:                keyspace,
 		AllowLongUnavailability: *allowLongUnavailability,
 		DdlStrategy:             *ddlStrategy,
@@ -3260,7 +3260,15 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		CallerId:                cID,
 	})
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	for _, uuid := range resp.UuidList {
+		wr.Logger().Printf("%s\n", uuid)
+	}
+
+	return nil
 }
 
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
