@@ -111,18 +111,18 @@ const (
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace       string          `json:"keyspace,omitempty"`
-	Table          string          `json:"table,omitempty"`
-	Schema         string          `json:"schema,omitempty"`
-	SQL            string          `json:"sql,omitempty"`
-	UUID           string          `json:"uuid,omitempty"`
-	Strategy       DDLStrategy     `json:"strategy,omitempty"`
-	Options        string          `json:"options,omitempty"`
-	RequestTime    int64           `json:"time_created,omitempty"`
-	RequestContext string          `json:"context,omitempty"`
-	Status         OnlineDDLStatus `json:"status,omitempty"`
-	TabletAlias    string          `json:"tablet,omitempty"`
-	Retries        int64           `json:"retries,omitempty"`
+	Keyspace         string          `json:"keyspace,omitempty"`
+	Table            string          `json:"table,omitempty"`
+	Schema           string          `json:"schema,omitempty"`
+	SQL              string          `json:"sql,omitempty"`
+	UUID             string          `json:"uuid,omitempty"`
+	Strategy         DDLStrategy     `json:"strategy,omitempty"`
+	Options          string          `json:"options,omitempty"`
+	RequestTime      int64           `json:"time_created,omitempty"`
+	MigrationContext string          `json:"context,omitempty"`
+	Status           OnlineDDLStatus `json:"status,omitempty"`
+	TabletAlias      string          `json:"tablet,omitempty"`
+	Retries          int64           `json:"retries,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -181,12 +181,12 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 }
 
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
-func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string, providedUUID string) (onlineDDLs [](*OnlineDDL), err error) {
+func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string) (onlineDDLs [](*OnlineDDL), err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
 		if err := onlineDDLStatementSanity(sql, ddlStmt); err != nil {
 			return err
 		}
-		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, requestContext, providedUUID)
+		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, migrationContext, providedUUID)
 		if err != nil {
 			return err
 		}
@@ -217,7 +217,7 @@ func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, 
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string, providedUUID string) (onlineDDL *OnlineDDL, err error) {
+func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string) (onlineDDL *OnlineDDL, err error) {
 	if ddlStrategySetting == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "NewOnlineDDL: found nil DDLStrategySetting")
 	}
@@ -244,7 +244,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			comments = sqlparser.Comments{
 				fmt.Sprintf(`/*vt+ uuid=%s context=%s table=%s strategy=%s options=%s */`,
 					encodeDirective(onlineDDLUUID),
-					encodeDirective(requestContext),
+					encodeDirective(migrationContext),
 					encodeDirective(table),
 					encodeDirective(string(ddlStrategySetting.Strategy)),
 					encodeDirective(ddlStrategySetting.Options),
@@ -282,15 +282,15 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 	}
 
 	return &OnlineDDL{
-		Keyspace:       keyspace,
-		Table:          table,
-		SQL:            sql,
-		UUID:           onlineDDLUUID,
-		Strategy:       ddlStrategySetting.Strategy,
-		Options:        ddlStrategySetting.Options,
-		RequestTime:    time.Now().UnixNano(),
-		RequestContext: requestContext,
-		Status:         OnlineDDLStatusRequested,
+		Keyspace:         keyspace,
+		Table:            table,
+		SQL:              sql,
+		UUID:             onlineDDLUUID,
+		Strategy:         ddlStrategySetting.Strategy,
+		Options:          ddlStrategySetting.Options,
+		RequestTime:      time.Now().UnixNano(),
+		MigrationContext: migrationContext,
+		Status:           OnlineDDLStatusRequested,
 	}, nil
 }
 
@@ -358,7 +358,7 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	} else {
 		return nil, err
 	}
-	if onlineDDL.RequestContext, err = decodeDirective("context"); err != nil {
+	if onlineDDL.MigrationContext, err = decodeDirective("context"); err != nil {
 		return nil, err
 	}
 	return onlineDDL, nil
