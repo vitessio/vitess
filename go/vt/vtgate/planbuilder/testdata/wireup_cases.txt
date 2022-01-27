@@ -1435,7 +1435,7 @@
   "Original": "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1475,7 +1475,7 @@ Gen4 plan same as above
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1486,7 +1486,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -1499,7 +1499,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
