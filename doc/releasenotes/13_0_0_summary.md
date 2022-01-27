@@ -95,5 +95,29 @@ vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 ```
 
 ## Incompatible Changes
+### Error message change when vttablet row limit exceeded:
+* In previous Vitess versions, if the vttablet row limit (-queryserver-config-max-result-size) was exceeded, an error like:
+  ```shell
+  ERROR 10001 (HY000): target: unsharded.0.master: vttablet: rpc error: code = ResourceExhausted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  would be reported to the client.
+  ```
+  To avoid confusion, the error mapping has been changed to report the error as similar to:
+  ```shell
+  ERROR 10001 (HY000): target: unsharded.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  instead
+  ```
+* Because of this error code change, the vttablet metric:
+  `vttablet_errors{error_code="ABORTED"}`
+  will be incremented upon this type of error, instead of the previous metric:
+  `vttablet_errors{error_code="RESOURCE_EXHAUSTED"}`
+* In addition, the vttablet error message logged is now different.
+  Previously, a (misleading;  due to the PoolFull) error was logged:
+  ```shell
+  E0112 09:48:25.420641  278125 tabletserver.go:1368] PoolFull: Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  ```
+  Post-change, a more accurate warning is logged instead:
+  ```shell
+  W0112 09:38:59.169264   35943 tabletserver.go:1503] Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  ```
 
 ## Deprecations
