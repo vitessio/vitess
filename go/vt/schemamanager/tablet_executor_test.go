@@ -23,6 +23,7 @@ import (
 	"context"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
