@@ -93,6 +93,18 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 	return nil
 }
 
+func shouldInclude(table string, excludes []string) bool {
+	if schema.IsInternalOperationTableName(table) {
+		return false
+	}
+	for _, t := range excludes {
+		if t == table {
+			return false
+		}
+	}
+	return true
+}
+
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
@@ -147,34 +159,29 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		} else {
 			if allTables {
-				var excludeTablesList []string
-				excludeTables = strings.TrimSpace(excludeTables)
-				if excludeTables != "" {
-					excludeTablesList = strings.Split(excludeTables, ",")
-				}
-				err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
-				if err != nil {
-					return err
-				}
-				if len(excludeTablesList) > 0 {
-					for _, ksTable := range ksTables {
-						exclude := false
-						for _, table := range excludeTablesList {
-							if ksTable == table {
-								exclude = true
-								break
-							}
-						}
-						if !exclude {
-							tables = append(tables, ksTable)
-						}
-					}
-				} else {
-					tables = ksTables
-				}
+				tables = ksTables
 			} else {
 				return fmt.Errorf("no tables to move")
 			}
+		}
+		var excludeTablesList []string
+		excludeTables = strings.TrimSpace(excludeTables)
+		if excludeTables != "" {
+			excludeTablesList = strings.Split(excludeTables, ",")
+			err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
+			if err != nil {
+				return err
+			}
+		}
+		var tables2 []string
+		for _, t := range tables {
+			if shouldInclude(t, excludeTablesList) {
+				tables2 = append(tables2, t)
+			}
+		}
+		tables = tables2
+		if len(tables) == 0 {
+			return fmt.Errorf("no tables to move")
 		}
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
