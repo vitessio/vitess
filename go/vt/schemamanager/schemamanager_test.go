@@ -134,7 +134,11 @@ func TestSchemaManagerRun(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerRun", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
 
 	ctx := context.Background()
-	_, err := Run(ctx, controller, executor)
+	resp, err := Run(ctx, controller, executor)
+
+	if len(resp.UUIDs) > 0 {
+		t.Fatalf("response should contain an empty list of UUIDs, found %v", len(resp.UUIDs))
+	}
 
 	if err != nil {
 		t.Fatalf("schema change should success but get error: %v", err)
@@ -179,7 +183,10 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
 
 	ctx := context.Background()
-	_, err := Run(ctx, controller, executor)
+	resp, err := Run(ctx, controller, executor)
+	if len(resp.UUIDs) > 0 {
+		t.Fatalf("response should contain an empty list of UUIDs, found %v", len(resp.UUIDs))
+	}
 
 	if err == nil || !strings.Contains(err.Error(), "schema change failed") {
 		t.Fatalf("schema change should fail, but got err: %v", err)
