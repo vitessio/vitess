@@ -105,7 +105,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARBINARY value:\"routedTable\"} false false"},
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"routedTable\"} false false"},
 	}, {
 		testName:    "both schema and table predicates - not routed",
 		tableSchema: []string{"schema"},
@@ -114,7 +114,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARBINARY value:\"table\"} false false"},
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" table_name: type:VARCHAR value:\"table\"} false false"},
 	}, {
 		testName:    "multiple schema and table predicates",
 		tableSchema: []string{"schema", "schema", "schema"},
@@ -125,7 +125,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			"FindTable(`schema`.`table`)",
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARBINARY value:\"table\" t2: type:VARBINARY value:\"table\" t3: type:VARBINARY value:\"table\"} false false"},
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARCHAR value:\"table\" t2: type:VARCHAR value:\"table\" t3: type:VARCHAR value:\"table\"} false false"},
 	}, {
 		testName:  "table name predicate - routed table",
 		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
@@ -133,7 +133,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard routedKeyspace.1: dummy_select {table_name: type:VARBINARY value:\"routedTable\"} false false"},
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {table_name: type:VARCHAR value:\"routedTable\"} false false"},
 	}, {
 		testName:  "table name predicate - not routed",
 		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
@@ -141,7 +141,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard ks.1: dummy_select {table_name: type:VARBINARY value:\"tableName\"} false false"},
+			"ExecuteMultiShard ks.1: dummy_select {table_name: type:VARCHAR value:\"tableName\"} false false"},
 	}, {
 		testName:    "schema predicate",
 		tableSchema: []string{"myKeyspace"},
@@ -616,7 +616,7 @@ func TestSelectLike(t *testing.T) {
 	// range 0c-0d hits 2 shards ks.-0c80 ks.0c80-0d;
 	// note that 0c-0d should not hit ks.0d-40
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARBINARY value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
+		`ResolveDestinations ks [type:VARCHAR value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
 		`ExecuteMultiShard ks.-0c80: dummy_select {} ks.0c80-0d: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
@@ -627,7 +627,7 @@ func TestSelectLike(t *testing.T) {
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARBINARY value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
+		`ResolveDestinations ks [type:VARCHAR value:"a%"] Destinations:DestinationKeyRange(0c-0d)`,
 		`StreamExecuteMulti dummy_select ks.-0c80: {} ks.0c80-0d: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
@@ -646,7 +646,7 @@ func TestSelectLike(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARBINARY value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
+		`ResolveDestinations ks [type:VARCHAR value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
 		`ExecuteMultiShard ks.0c80-0d: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
@@ -657,7 +657,7 @@ func TestSelectLike(t *testing.T) {
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [type:VARBINARY value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
+		`ResolveDestinations ks [type:VARCHAR value:"ab%"] Destinations:DestinationKeyRange(0c92-0c93)`,
 		`StreamExecuteMulti dummy_select ks.0c80-0d: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)

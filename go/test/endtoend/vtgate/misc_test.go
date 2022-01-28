@@ -285,15 +285,15 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
 
 	utils.Exec(t, conn, "set workload='olap'")
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLAP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLAP")]]`)
 
 	utils.Exec(t, conn, "set workload='oltp'")
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
 }
 
 func TestFoundRowsOnDualQueries(t *testing.T) {
@@ -528,7 +528,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	assert.Equal(t, `Tables_in_ks`, fmt.Sprintf("%v", qr.Fields[0].Name))
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
-	assert.Equal(t, `[[VARBINARY("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
