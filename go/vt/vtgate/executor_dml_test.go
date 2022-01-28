@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,8 +30,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -115,7 +114,7 @@ func TestUpdateEqual(t *testing.T) {
 		{
 			Sql: "delete from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 			BindVariables: map[string]*querypb.BindVariable{
-				"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
+				"lastname":    sqltypes.StringBindVariable("foo"),
 				"name":        sqltypes.Int32BindVariable(1),
 				"keyspace_id": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 			},
@@ -123,8 +122,8 @@ func TestUpdateEqual(t *testing.T) {
 		{
 			Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
 			BindVariables: map[string]*querypb.BindVariable{
-				"name_0":        sqltypes.BytesBindVariable([]byte("myname")),
-				"lastname_0":    sqltypes.BytesBindVariable([]byte("mylastname")),
+				"name_0":        sqltypes.StringBindVariable("myname"),
+				"lastname_0":    sqltypes.StringBindVariable("mylastname"),
 				"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 			},
 		},
@@ -805,7 +804,7 @@ func TestInsertSharded(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"_name_0": sqltypes.StringBindVariable("myname"),
 			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}}
@@ -814,7 +813,7 @@ func TestInsertSharded(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
@@ -832,7 +831,7 @@ func TestInsertSharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(3),
 			"__seq0":  sqltypes.Int64BindVariable(3),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname2")),
+			"_name_0": sqltypes.StringBindVariable("myname2"),
 		},
 	}}
 	assertQueries(t, sbc2, wantQueries)
@@ -840,7 +839,7 @@ func TestInsertSharded(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname2")),
+			"name_0":    sqltypes.StringBindVariable("myname2"),
 			"user_id_0": sqltypes.Uint64BindVariable(3),
 		},
 	}}
@@ -855,8 +854,8 @@ func TestInsertSharded(t *testing.T) {
 		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_id_0":       sqltypes.Int64BindVariable(2),
-			"_name_0":     sqltypes.BytesBindVariable([]byte("myname")),
-			"_lastname_0": sqltypes.BytesBindVariable([]byte("mylastname")),
+			"_name_0":     sqltypes.StringBindVariable("myname"),
+			"_lastname_0": sqltypes.StringBindVariable("mylastname"),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -878,7 +877,7 @@ func TestInsertSharded(t *testing.T) {
 			"__seq0":  sqltypes.Int64BindVariable(1),
 			"vtg1":    sqltypes.Int64BindVariable(1),
 			"vtg2":    sqltypes.Int64BindVariable(2),
-			"vtg3":    sqltypes.BytesBindVariable([]byte("myname")),
+			"vtg3":    sqltypes.StringBindVariable("myname"),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -958,7 +957,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"_name_0": sqltypes.StringBindVariable("myname"),
 			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}}
@@ -967,7 +966,7 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0) on duplicate key update `name` = values(`name`), user_id = values(user_id)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
@@ -1195,7 +1194,7 @@ func TestInsertComments(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"_name_0": sqltypes.StringBindVariable("myname"),
 			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}}
@@ -1204,7 +1203,7 @@ func TestInsertComments(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
@@ -1228,7 +1227,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"__seq0":  sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"_name_0": sqltypes.StringBindVariable("myname"),
 		},
 	}}
 	assertQueries(t, sbc, wantQueries)
@@ -1238,7 +1237,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}, {
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
@@ -1506,10 +1505,10 @@ func TestMultiInsertSharded(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 1, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname1")),
+			"_name_0": sqltypes.StringBindVariable("myname1"),
 			"__seq0":  sqltypes.Int64BindVariable(1),
 			"_Id_1":   sqltypes.Int64BindVariable(3),
-			"_name_1": sqltypes.BytesBindVariable([]byte("myname3")),
+			"_name_1": sqltypes.StringBindVariable("myname3"),
 			"__seq1":  sqltypes.Int64BindVariable(3),
 		},
 	}}
@@ -1518,10 +1517,10 @@ func TestMultiInsertSharded(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_1, 3, :_name_1)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname1")),
+			"_name_0": sqltypes.StringBindVariable("myname1"),
 			"__seq0":  sqltypes.Int64BindVariable(1),
 			"_Id_1":   sqltypes.Int64BindVariable(3),
-			"_name_1": sqltypes.BytesBindVariable([]byte("myname3")),
+			"_name_1": sqltypes.StringBindVariable("myname3"),
 			"__seq1":  sqltypes.Int64BindVariable(3),
 		},
 	}}
@@ -1531,9 +1530,9 @@ func TestMultiInsertSharded(t *testing.T) {
 	wantQueries1 = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname1")),
+			"name_0":    sqltypes.StringBindVariable("myname1"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
-			"name_1":    sqltypes.BytesBindVariable([]byte("myname3")),
+			"name_1":    sqltypes.StringBindVariable("myname3"),
 			"user_id_1": sqltypes.Uint64BindVariable(3),
 		},
 	}}
@@ -1549,10 +1548,10 @@ func TestMultiInsertSharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"__seq0":  sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname1")),
+			"_name_0": sqltypes.StringBindVariable("myname1"),
 			"_Id_1":   sqltypes.Int64BindVariable(2),
 			"__seq1":  sqltypes.Int64BindVariable(2),
-			"_name_1": sqltypes.BytesBindVariable([]byte("myname2")),
+			"_name_1": sqltypes.StringBindVariable("myname2"),
 		},
 	}}
 
@@ -1561,9 +1560,9 @@ func TestMultiInsertSharded(t *testing.T) {
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname1")),
+			"name_0":    sqltypes.StringBindVariable("myname1"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
-			"name_1":    sqltypes.BytesBindVariable([]byte("myname2")),
+			"name_1":    sqltypes.StringBindVariable("myname2"),
 			"user_id_1": sqltypes.Uint64BindVariable(2),
 		},
 	}}
@@ -1579,22 +1578,22 @@ func TestMultiInsertSharded(t *testing.T) {
 		Sql: "insert into user2(id, `name`, lastname) values (:_id_0, :_name_0, :_lastname_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_id_0":       sqltypes.Int64BindVariable(2),
-			"_name_0":     sqltypes.BytesBindVariable([]byte("myname")),
-			"_lastname_0": sqltypes.BytesBindVariable([]byte("mylastname")),
+			"_name_0":     sqltypes.StringBindVariable("myname"),
+			"_lastname_0": sqltypes.StringBindVariable("mylastname"),
 			"_id_1":       sqltypes.Int64BindVariable(3),
-			"_name_1":     sqltypes.BytesBindVariable([]byte("myname2")),
-			"_lastname_1": sqltypes.BytesBindVariable([]byte("mylastname2")),
+			"_name_1":     sqltypes.StringBindVariable("myname2"),
+			"_lastname_1": sqltypes.StringBindVariable("mylastname2"),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0), (:name_1, :lastname_1, :keyspace_id_1)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":        sqltypes.BytesBindVariable([]byte("myname")),
-			"lastname_0":    sqltypes.BytesBindVariable([]byte("mylastname")),
+			"name_0":        sqltypes.StringBindVariable("myname"),
+			"lastname_0":    sqltypes.StringBindVariable("mylastname"),
 			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
-			"name_1":        sqltypes.BytesBindVariable([]byte("myname2")),
-			"lastname_1":    sqltypes.BytesBindVariable([]byte("mylastname2")),
+			"name_1":        sqltypes.StringBindVariable("myname2"),
+			"lastname_1":    sqltypes.StringBindVariable("mylastname2"),
 			"keyspace_id_1": sqltypes.BytesBindVariable([]byte("N\xb1\x90ɢ\xfa\x16\x9c")),
 		},
 	}}
