@@ -35,7 +35,6 @@ type TabletManagerClient interface {
 	ChangeType(ctx context.Context, in *tabletmanagerdata.ChangeTypeRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ChangeTypeResponse, error)
 	RefreshState(ctx context.Context, in *tabletmanagerdata.RefreshStateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(ctx context.Context, in *tabletmanagerdata.RunHealthCheckRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RunHealthCheckResponse, error)
-	IgnoreHealthError(ctx context.Context, in *tabletmanagerdata.IgnoreHealthErrorRequest, opts ...grpc.CallOption) (*tabletmanagerdata.IgnoreHealthErrorResponse, error)
 	ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(ctx context.Context, in *tabletmanagerdata.PreflightSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error)
@@ -203,15 +202,6 @@ func (c *tabletManagerClient) RefreshState(ctx context.Context, in *tabletmanage
 func (c *tabletManagerClient) RunHealthCheck(ctx context.Context, in *tabletmanagerdata.RunHealthCheckRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RunHealthCheckResponse, error) {
 	out := new(tabletmanagerdata.RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/RunHealthCheck", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *tabletManagerClient) IgnoreHealthError(ctx context.Context, in *tabletmanagerdata.IgnoreHealthErrorRequest, opts ...grpc.CallOption) (*tabletmanagerdata.IgnoreHealthErrorResponse, error) {
-	out := new(tabletmanagerdata.IgnoreHealthErrorResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/IgnoreHealthError", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -644,7 +634,6 @@ type TabletManagerServer interface {
 	ChangeType(context.Context, *tabletmanagerdata.ChangeTypeRequest) (*tabletmanagerdata.ChangeTypeResponse, error)
 	RefreshState(context.Context, *tabletmanagerdata.RefreshStateRequest) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(context.Context, *tabletmanagerdata.RunHealthCheckRequest) (*tabletmanagerdata.RunHealthCheckResponse, error)
-	IgnoreHealthError(context.Context, *tabletmanagerdata.IgnoreHealthErrorRequest) (*tabletmanagerdata.IgnoreHealthErrorResponse, error)
 	ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(context.Context, *tabletmanagerdata.PreflightSchemaRequest) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error)
@@ -754,9 +743,6 @@ func (UnimplementedTabletManagerServer) RefreshState(context.Context, *tabletman
 }
 func (UnimplementedTabletManagerServer) RunHealthCheck(context.Context, *tabletmanagerdata.RunHealthCheckRequest) (*tabletmanagerdata.RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
-}
-func (UnimplementedTabletManagerServer) IgnoreHealthError(context.Context, *tabletmanagerdata.IgnoreHealthErrorRequest) (*tabletmanagerdata.IgnoreHealthErrorResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method IgnoreHealthError not implemented")
 }
 func (UnimplementedTabletManagerServer) ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchema not implemented")
@@ -1067,24 +1053,6 @@ func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TabletManagerServer).RunHealthCheck(ctx, req.(*tabletmanagerdata.RunHealthCheckRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TabletManager_IgnoreHealthError_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.IgnoreHealthErrorRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).IgnoreHealthError(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/IgnoreHealthError",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).IgnoreHealthError(ctx, req.(*tabletmanagerdata.IgnoreHealthErrorRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1861,10 +1829,6 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _TabletManager_RunHealthCheck_Handler,
-		},
-		{
-			MethodName: "IgnoreHealthError",
-			Handler:    _TabletManager_IgnoreHealthError_Handler,
 		},
 		{
 			MethodName: "ReloadSchema",

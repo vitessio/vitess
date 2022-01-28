@@ -179,13 +179,6 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
-message IgnoreHealthErrorRequest {
-  string pattern = 1;
-}
-
-message IgnoreHealthErrorResponse {
-}
-
 message ReloadSchemaRequest {
   // wait_position allows scheduling a schema reload to occur after a
   // given DDL has replicated to this server, by specifying a replication

@@ -246,10 +246,11 @@ var commands = []commandGroup{
 				help:   "Runs a health check on a remote tablet.",
 			},
 			{
-				name:   "IgnoreHealthError",
-				method: commandIgnoreHealthError,
-				params: "<tablet alias> <ignore regexp>",
-				help:   "Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything.",
+				name:       "IgnoreHealthError",
+				method:     commandIgnoreHealthError,
+				params:     "<tablet alias> <ignore regexp>",
+				help:       "Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything.",
+				deprecated: true,
 			},
 			{
 				name:   "Sleep",
@@ -1287,22 +1288,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("the <tablet alias> and <ignore regexp> arguments are required for the IgnoreHealthError command")
-	}
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	pattern := subFlags.Arg(1)
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	return wr.TabletManagerClient().IgnoreHealthError(ctx, tabletInfo.Tablet, pattern)
+	return fmt.Errorf("this command is no longer relevant and has been deprecated")
 }
 
 func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
