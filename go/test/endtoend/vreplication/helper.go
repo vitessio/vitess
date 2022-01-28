@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/schema"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -90,6 +91,24 @@ func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, quer
 			require.FailNow(t, "query %s.%s did not execute in time", database, query)
 		}
 	}
+}
+
+func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, database string) {
+	t.Logf("Checking that no internal tables exist in target keyspace: %s", database)
+	qr := execVtgateQuery(t, conn, database, "show tables")
+	require.NotNil(t, qr)
+	require.NotNil(t, qr.Rows)
+	found := false
+	for _, row := range qr.Rows {
+		t.Logf("Found table: %s", row[0].ToString())
+		if schema.IsInternalOperationTableName(row[0].ToString()) {
+			t.Logf("Found internal table in target keyspace: %s! Table name: %s", database, row[0].ToString())
+			found = true
+			break
+		}
+	}
+	require.Equal(t, false, found)
+	t.Logf("Found no internal tables in target keyspace: %s!", database)
 }
 
 func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
