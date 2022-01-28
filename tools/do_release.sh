@@ -20,25 +20,25 @@ if [ "$VTROOT" != "" ]; then
 fi
 
 if [ "$RELEASE_VERSION" == "" ]; then
-		echo "Set the env var RELEASE_VERSION with the release version"
-		exit 1
+  echo "Set the env var RELEASE_VERSION with the release version"
+  exit 1
 fi
 
 if [ "$DEV_VERSION" == "" ]; then
-		echo "Set the env var DEV_VERSION with the version the dev branch should have after release"
-		exit 1
+  echo "Set the env var DEV_VERSION with the version the dev branch should have after release"
+  exit 1
 fi
 
 if [ "$VTOP_VERSION" == "" ]; then
-		echo "Warning: The VTOP_VERSION env var is not set, the Docker tag of the vitess-operator image will not be changed."
-		echo -n "If you wish to continue anyhow press enter, otherwise CTRL+C to cancel."
-    read line
+  echo "Warning: The VTOP_VERSION env var is not set, the Docker tag of the vitess-operator image will not be changed."
+  echo -n "If you wish to continue anyhow press enter, otherwise CTRL+C to cancel."
+  read line
 fi
 
 if [ "$GODOC_RELEASE_VERSION" == "" ]; then
-		echo "Warning: The GODOC_RELEASE_VERSION env var is not set, no go doc tag will be created."
-		echo -n "If you wish to continue anyhow press enter, otherwise CTRL+C to cancel."
-    read line
+  echo "Warning: The GODOC_RELEASE_VERSION env var is not set, no go doc tag will be created."
+  echo -n "If you wish to continue anyhow press enter, otherwise CTRL+C to cancel."
+  read line
 fi
 
 function updateVersionGo () {
@@ -100,8 +100,8 @@ if [ "$GODOC_RELEASE_VERSION" != "" ]; then
   echo "Two git tags were created, you can push them with:"
   echo "   git push upstream v$RELEASE_VERSION && git push upstream v$GODOC_RELEASE_VERSION"
 else
-	echo "One git tag was created, you can push it with:"
-	echo "   git push upstream v$RELEASE_VERSION"
+  echo "One git tag was created, you can push it with:"
+  echo "   git push upstream v$RELEASE_VERSION"
 fi
 
 echo "The git branch has also been updated. You need to push it and get it merged"
