@@ -346,7 +346,6 @@ func TestSemiSync(t *testing.T) {
 			if utils.IsSemiSyncSetupCorrectly(t, replica1, "ON") &&
 				utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF") &&
 				utils.IsPrimarySemiSyncSetupCorrectly(t, primary, "ON") {
-				time.Sleep(1 * time.Minute)
 				return
 			}
 			log.Warningf("semi sync settings not fixed yet")
