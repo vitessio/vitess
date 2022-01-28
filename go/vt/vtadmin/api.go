@@ -306,6 +306,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/set_read_only", httpAPI.Adapt(vtadminhttp.SetReadOnly)).Name("API.SetReadOnly").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/set_read_only", httpAPI.Adapt(vtadminhttp.SetReadWrite)).Name("API.SetReadOnly").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
