@@ -107,8 +107,10 @@ If using a custom `init_db.sql` that omits `SET sql_log_bin = 0`, then `InitShar
 
 ### Durability Policy flag
 A new flag has been added to vtctl, vtctld and vtworker binaries which allows the users to set the durability policies.
+
+If semi-sync is not being used then `-durability_policy` should be set to `none`. This is also the default option.
+
 If semi-sync is being used then `-durability_policy` should be set to `semi_sync` and `-enable_semi_sync` should be set in vttablets. 
-If semi-sync is not being used then `-durability_policy` should be set to `none`.
 
 ## Incompatible Changes
 ### Error message change when vttablet row limit exceeded:
