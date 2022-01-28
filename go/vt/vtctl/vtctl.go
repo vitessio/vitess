@@ -87,8 +87,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	"math"
 	"os"
 	"sort"
@@ -96,6 +94,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
