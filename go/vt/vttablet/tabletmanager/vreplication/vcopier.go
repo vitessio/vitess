@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/schema"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/bytes2"
@@ -70,6 +72,9 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
 		prefix := ""
 		for name := range plan.TargetTables {
+			if schema.IsInternalOperationTableName(name) {
+				continue
+			}
 			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
 			prefix = ", "
 		}
