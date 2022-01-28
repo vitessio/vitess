@@ -127,7 +127,7 @@
 			"Manual": false,
 			"Shard": "19",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_backups"]
 		},
 		"backup_transform": {
 			"File": "unused.go",
@@ -136,7 +136,7 @@
 			"Manual": false,
 			"Shard": "19",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_backups"]
 		},
 		"backup_transform_mysqlctld": {
 			"File": "unused.go",
