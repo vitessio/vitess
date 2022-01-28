@@ -74,6 +74,14 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 	return bytes, ver, err
 }
 
+// List is part of the Conn interface
+func (st *fakeConn) List(ctx context.Context, filePathPrefix string) (bytes []KVInfo, err error) {
+	if filePathPrefix == "error" {
+		return bytes, fmt.Errorf("Dummy error")
+	}
+	return bytes, err
+}
+
 // Delete is part of the Conn interface
 func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version) (err error) {
 	if st.readOnly {
