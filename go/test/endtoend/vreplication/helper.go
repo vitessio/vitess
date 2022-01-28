@@ -94,7 +94,7 @@ func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, quer
 }
 
 func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, database string) {
-	t.Logf("Checking that no internal tables exist in target keyspace: %s", database)
+	t.Logf("Checking that no internal tables exist in keyspace: %s", database)
 	qr := execVtgateQuery(t, conn, database, "show tables")
 	require.NotNil(t, qr)
 	require.NotNil(t, qr.Rows)
@@ -102,13 +102,13 @@ func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, database string) {
 	for _, row := range qr.Rows {
 		t.Logf("Found table: %s", row[0].ToString())
 		if schema.IsInternalOperationTableName(row[0].ToString()) {
-			t.Logf("Found internal table in target keyspace: %s! Table name: %s", database, row[0].ToString())
+			t.Logf("Found internal table in keyspace: %s! Table name: %s", database, row[0].ToString())
 			found = true
 			break
 		}
 	}
 	require.Equal(t, false, found)
-	t.Logf("Found no internal tables in target keyspace: %s!", database)
+	t.Logf("Found no internal tables in keyspace: %s!", database)
 }
 
 func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
