@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@bugsnag/js": "^7.10.1",
-    "@craco/craco": "^6.4.0",
     "@headlessui/react": "^1.4.2",
     "@testing-library/user-event": "^12.6.0",
     "@types/classnames": "^2.2.11",
@@ -44,10 +43,10 @@
     "web-vitals": "^0.2.4"
   },
   "scripts": {
-    "local": "REACT_APP_VTADMIN_API_ADDRESS=\"http://localhost:14200\" REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" craco start",
-    "start": "craco start",
-    "build": "craco build",
-    "test": "craco test",
+    "local": "REACT_APP_VTADMIN_API_ADDRESS=\"http://localhost:14200\" REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" react-scripts start",
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
     "lint:fix": "npm run lint:eslint:fix && npm run lint:prettier:fix && npm run lint:stylelint:fix",
     "lint:eslint": "eslint --ext js,ts,tsx src",
