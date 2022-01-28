@@ -232,10 +232,10 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 }
 
 // List is part of the topo.Conn interface.
-func (s *Server) List(ctx context.Context, filePathPrefix string) ([][]byte, error) {
+func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	nodeList, err := s.resourceClient.List(ctx, metav1.ListOptions{})
 
-	results := [][]byte{}
+	results := []topo.KVInfo{}
 	if err != nil {
 		return results, convertError(err, filePathPrefix)
 	}
@@ -245,7 +245,11 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([][]byte, err
 	}
 	for _, node := range nodes {
 		if strings.HasPrefix(node.Data.Value, filePathPrefix) {
-			results = append(results, []byte(node.Data.Value))
+			results = append(results, topo.KVInfo{
+				Key:     []byte(node.Data.Key),
+				Value:   []byte(node.Data.Value),
+				Version: KubernetesVersion(node.GetResourceVersion()),
+			})
 		}
 	}
 

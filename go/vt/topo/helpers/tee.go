@@ -143,7 +143,7 @@ func (c *TeeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Versio
 }
 
 // List is part of the topo.Conn interface.
-func (c *TeeConn) List(ctx context.Context, filePathPrefix string) ([][]byte, error) {
+func (c *TeeConn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	return c.primary.List(ctx, filePathPrefix)
 }
 

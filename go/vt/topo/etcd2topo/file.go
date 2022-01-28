@@ -89,20 +89,22 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 }
 
 // List is part of the topo.Conn interface.
-func (s *Server) List(ctx context.Context, filePathPrefix string) ([][]byte, error) {
+func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	nodePathPrefix := path.Join(s.root, filePathPrefix)
 
 	resp, err := s.cli.Get(ctx, nodePathPrefix, clientv3.WithPrefix())
 	if err != nil {
-		return [][]byte{}, err
+		return []topo.KVInfo{}, err
 	}
 	pairs := resp.Kvs
 	if len(pairs) == 0 {
-		return [][]byte{}, topo.NewError(topo.NoNode, nodePathPrefix)
+		return []topo.KVInfo{}, topo.NewError(topo.NoNode, nodePathPrefix)
 	}
-	results := make([][]byte, len(pairs))
+	results := make([]topo.KVInfo, len(pairs))
 	for n := range pairs {
-		results[n] = pairs[n].Value
+		results[n].Key = pairs[n].Key
+		results[n].Value = pairs[n].Value
+		results[n].Version = EtcdVersion(pairs[n].ModRevision)
 	}
 
 	return results, nil

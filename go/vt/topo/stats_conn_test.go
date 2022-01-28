@@ -75,7 +75,7 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 }
 
 // List is part of the Conn interface
-func (st *fakeConn) List(ctx context.Context, filePathPrefix string) (bytes [][]byte, err error) {
+func (st *fakeConn) List(ctx context.Context, filePathPrefix string) (bytes []KVInfo, err error) {
 	if filePathPrefix == "error" {
 		return bytes, fmt.Errorf("Dummy error")
 	}
