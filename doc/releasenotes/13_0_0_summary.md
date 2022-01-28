@@ -80,6 +80,10 @@ vtctlclient OnlineDDL ApplySchema -sql "drop table t1, drop table t2" -uuid_list
 Vitess will assign each migration with given UUID in order of appearance.
 It is the user's responsibility to ensure given UUIDs are globally unique. If the user submits a migration with an already existing UUID, that migration never gets scheduled nor executed.
 
+### vtctl/vtctlclient ApplySchema -migration_context
+
+`-migration_context` flag is synonymous to `-request_context`. Either will work. We will encourage use of `-migration_context` as it is more consistent with output of `SHOW VITESS_MIGRATIONS ...` which includes the `migration_context` column.
+
 ### vtctl/vtctlclient OnlineDDL ... complete
 
 Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl` or `vtctlclient`:
@@ -93,6 +97,10 @@ For example:
 ```shell
 vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 ```
+
+### vtctl/vtctlclient OnlineDDL -json
+
+The command now accepts an optional `-json` flag. With this flag, the output is a valid JSON listing all columns and rows.
 
 ### PlannedReparentShard for cluster initialization
 For setting up the cluster and electing a primary for the first time, `PlannedReparentShard` should be used
