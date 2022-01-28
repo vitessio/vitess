@@ -309,11 +309,10 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 	tablets := make([]*TabletInfo, len(listResults))
 	for n := range listResults {
 		tablet := &topodatapb.Tablet{}
-		if err := proto.Unmarshal(listResults[n], tablet); err != nil {
+		if err := proto.Unmarshal(listResults[n].Value, tablet); err != nil {
 			return nil, err
 		}
-		// version is unused in this context
-		tablets[n] = &TabletInfo{Tablet: tablet, version: nil}
+		tablets[n] = &TabletInfo{Tablet: tablet, version: listResults[n].Version}
 	}
 
 	return tablets, nil

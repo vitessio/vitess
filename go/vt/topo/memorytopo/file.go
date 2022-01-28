@@ -157,7 +157,7 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 }
 
 // List is part of the topo.Conn interface.
-func (c *Conn) List(ctx context.Context, filePathPrefix string) ([][]byte, error) {
+func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
 	return nil, topo.NewError(topo.NoImplementation, "List not supported in memory topo")
 }
 
