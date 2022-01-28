@@ -272,8 +272,6 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
-		Charset:    "utf8mb4",
-		Collation:  "utf8mb4_general_ci",
 	})
 }
 
@@ -283,7 +281,6 @@ func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
-		Charset:    "utf8",
 	})
 }
 

@@ -34,6 +34,7 @@ if [[ "${uid: -1}" -gt 1 ]]; then
 fi
 
 echo "Starting vttablet for $alias..."
+
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \

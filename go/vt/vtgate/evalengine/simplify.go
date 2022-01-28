@@ -76,13 +76,14 @@ func (expr *BinaryExpr) simplify() error {
 }
 
 func (expr *LikeExpr) simplify() error {
-	if err := expr.BinaryCoercedExpr.simplify(); err != nil {
+	if err := expr.BinaryExpr.simplify(); err != nil {
 		return err
 	}
 
 	lit2, _ := expr.Right.(*Literal)
-	if lit2 != nil && lit2.Val.textual() && expr.MergedCollation.Valid() {
-		coll := collations.Local().LookupByID(expr.MergedCollation.Collation)
+	if lit2 != nil && lit2.Val.textual() {
+		expr.MatchCollation = lit2.Val.collation().Collation
+		coll := collations.Local().LookupByID(expr.MatchCollation)
 		expr.Match = coll.Wildcard(lit2.Val.bytes(), 0, 0, 0)
 	}
 	return nil
@@ -141,30 +142,6 @@ func (inexpr *InExpr) simplify() error {
 			inexpr.Hashed[hash] = i
 		}
 	}
-	return nil
-}
-
-func (expr *BinaryCoercedExpr) simplify() error {
-	var err error
-
-	if err = expr.BinaryExpr.simplify(); err != nil {
-		return err
-	}
-
-	lit1, _ := expr.Left.(*Literal)
-	lit2, _ := expr.Right.(*Literal)
-
-	if lit1 != nil && expr.CoerceLeft != nil {
-		b, _ := expr.CoerceLeft(nil, lit1.Val.bytes())
-		lit1.Val.replaceBytes(b, expr.MergedCollation)
-		expr.CoerceLeft = nil
-	}
-	if lit2 != nil && expr.CoerceRight != nil {
-		b, _ := expr.CoerceRight(nil, lit2.Val.bytes())
-		lit2.Val.replaceBytes(b, expr.MergedCollation)
-		expr.CoerceRight = nil
-	}
-
 	return nil
 }
 

@@ -87,43 +87,6 @@ func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
 	return collations.ID(d)
 }
 
-func TestTypes(t *testing.T) {
-	var conn = mysqlconn(t)
-	defer conn.Close()
-
-	var queries = []string{
-		"1 > 3",
-		"3 > 1",
-		"-1 > -1",
-		"1 = 1",
-		"-1 = 1",
-		"1 IN (1, -2, 3)",
-		"1 LIKE 1",
-		"-1 LIKE -1",
-		"-1 LIKE 1",
-		`"foo" IN ("bar", "FOO", "baz")`,
-		`'pokemon' LIKE 'poke%'`,
-		`(1, 2) = (1, 2)`,
-		`1 = 'sad'`,
-		`(1, 2) = (1, 3)`,
-	}
-
-	for _, query := range queries {
-		query = "SELECT " + query
-		remote, err := conn.ExecuteFetch(query, 1, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		local, _, err := safeEvaluate(query)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if local.Value().String() != remote.Rows[0][0].String() {
-			t.Errorf("mismatch for query %q: local=%v, remote=%v", query, local.Value().String(), remote.Rows[0][0].String())
-		}
-	}
-}
-
 var fuzzMaxTime = flag.Duration("fuzz-duration", 30*time.Second, "maximum time to fuzz for")
 var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
 var fuzzSeed = flag.Int64("fuzz-seed", time.Now().Unix(), "RNG seed when generating fuzz expressions")
@@ -167,7 +130,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
 				err = fmt.Errorf("PANIC: %v", r)
 			}
 		}()
-		expr, err = evalengine.ConvertEx(astExpr, dummyCollation(45), true)
+		expr, err = evalengine.ConvertEx(astExpr, dummyCollation(8), true)
 		return
 	}()
 
@@ -321,29 +284,33 @@ type mismatch struct {
 	evaluated           bool
 }
 
-func (cr *mismatch) Error() string {
-	if cr.localErr != nil {
-		if cr.remoteErr == nil {
-			return fmt.Sprintf("%v (eval=%v); mysql response: %s", cr.localErr, cr.evaluated, cr.remoteVal)
+func compareResult(localErr, remoteErr error, localVal, remoteVal string, evaluated bool) string {
+	if localErr != nil {
+		if remoteErr == nil {
+			return fmt.Sprintf("%v (eval=%v); mysql response: %s", localErr, evaluated, remoteVal)
 		}
-		if !errorsMatch(cr.remoteErr, cr.localErr) {
-			return fmt.Sprintf("mismatch in errors: eval=%s; mysql response: %s", cr.localErr.Error(), cr.remoteErr.Error())
+		if !errorsMatch(remoteErr, localErr) {
+			return fmt.Sprintf("mismatch in errors: eval=%s; mysql response: %s", localErr.Error(), remoteErr.Error())
 		}
 		return ""
 	}
 
-	if cr.remoteErr != nil {
+	if remoteErr != nil {
 		for _, ke := range knownErrors {
-			if ke.MatchString(cr.remoteErr.Error()) {
+			if ke.MatchString(remoteErr.Error()) {
 				return ""
 			}
 		}
-		return fmt.Sprintf("%v (eval=%v); mysql failed with: %s", cr.localVal, cr.evaluated, cr.remoteErr.Error())
+		return fmt.Sprintf("%v (eval=%v); mysql failed with: %s", localVal, evaluated, remoteErr.Error())
 	}
 
-	if cr.localVal != cr.remoteVal {
-		return fmt.Sprintf("different results:%s (eval=%v); mysql response: %s", cr.localVal, cr.evaluated, cr.remoteVal)
+	if localVal != remoteVal {
+		return fmt.Sprintf("different results:%s (eval=%v); mysql response: %s", localVal, evaluated, remoteVal)
 	}
 
 	return ""
+}
+
+func (cr *mismatch) Error() string {
+	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, cr.evaluated)
 }

@@ -161,7 +161,6 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		return err
 	}
 
-	se.dbCreationFailed = false
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
 	return nil
