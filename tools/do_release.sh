@@ -14,6 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -euo pipefail
+
+ROOT=$(pwd)
+if [ "$VTROOT" != "" ]; then
+    ROOT=$VTROOT
+fi
+
 if [ "$RELEASE_VERSION" == "" ]; then
 		echo "Set the env var RELEASE_VERSION with the release version"
 		exit 1
@@ -24,6 +31,38 @@ if [ "$DEV_VERSION" == "" ]; then
 		exit 1
 fi
 
+if [ "$VTOP_VERSION" == "" ]; then
+		echo "Warning: The VTOP_VERSION env var is not set, the Docker tag of the vitess-operator image will not be changed."
+		echo -n "If you wish to continue anyhow press enter, otherwise CTRL+C to cancel."
+    read line
+fi
+
+if [ "$GODOC_RELEASE_VERSION" == "" ]; then
+		echo "Warning: The GODOC_RELEASE_VERSION env var is not set, no go doc tag will be created."
+		echo -n "If you wish to continue anyhow press enter, otherwise CTRL+C to cancel."
+    read line
+fi
+
+function updateVersionGo () {
+  echo package servenv > $ROOT/go/vt/servenv/version.go
+  echo  >> $ROOT/go/vt/servenv/version.go
+  echo "const versionName = \"$1)\"" >> $ROOT/go/vt/servenv/version.go
+}
+
+function updateJava () {
+  cd $ROOT/java
+  mvn versions:set -DnewVersion=$1
+}
+
+function updateVitessOperatorExample () {
+  vtop_example_files=$(find $ROOT/examples/operator -name "*.yaml")
+  sed -i.bak -E 's/vitess\/lite:(.*)/vitess\/lite:$RELEASE_VERSION/g' $vtop_example_files
+  if [ "$VTOP_VERSION" != "" ]; then
+  		sed -i.bak -E 's/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$VTOP_VERSION/g' $vtop_example_files
+  fi
+  rm -f $(find $ROOT/examples/operator -name "*.yaml.bak")
+}
+
 git_status_output=$(git status --porcelain)
 if [ "$git_status_output" == "" ]; then
   	echo so much clean
@@ -33,24 +72,29 @@ else
     echo so much win
 fi
 
-cd java && mvn versions:set -DnewVersion=$RELEASE_VERSION
-echo package servenv > go/vt/servenv/version.go
-echo  >> go/vt/servenv/version.go
-echo const versionName = \"$RELEASE_VERSION\" >> go/vt/servenv/version.go
+# Preparing the release commit
+updateVitessOperatorExample
+updateJava $RELEASE_VERSION
+updateVersionGo $RELEASE_VERSION
+
+## Wait for release notes to be injected in the code base
 echo -n Pausing so relase notes can be added. Press enter to continue
 read line
+
+## Create the commit for this release and tag it
 git add --all
 git commit -n -s -m "Release commit for $RELEASE_VERSION"
 git tag -m Version\ $RELEASE_VERSION v$RELEASE_VERSION
 
+## Also tag the commit with the GoDoc tag if needed
 if [ "$GODOC_RELEASE_VERSION" != "" ]; then
     git tag -a v$GODOC_RELEASE_VERSION -m "Tagging $RELEASE_VERSION also as $GODOC_RELEASE_VERSION for godoc/go modules"
 fi
 
-cd java && mvn versions:set -DnewVersion=$DEV_VERSION
-echo package servenv > go/vt/servenv/version.go
-echo  >> go/vt/servenv/version.go
-echo const versionName = \"$DEV_VERSION)\" >> go/vt/servenv/version.go
+# Preparing the "dev mode" commit
+updateJava $DEV_VERSION
+updateVersionGo $DEV_VERSION
+
 git add --all
 git commit -n -s -m "Back to dev mode"
 echo "Release preparations successful"
