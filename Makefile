@@ -328,6 +328,9 @@ release: docker_base
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
+do_release_2:
+	./tools/do_release.sh
+
 do_release:
 ifndef RELEASE_VERSION
 		echo "Set the env var RELEASE_VERSION with the release version"
