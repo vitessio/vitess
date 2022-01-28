@@ -53,12 +53,12 @@ function updateJava () {
 }
 
 function updateVitessOperatorExample () {
-  vtop_example_files=$(find $ROOT/examples/operator -name "*.yaml")
-  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:$RELEASE_VERSION/g" $vtop_example_files
+  vtop_example_files=$(find -E $ROOT/examples/operator -regex ".*.(md|yaml)")
+  sed -i.bak -E "s/vitess\/lite:(.*)(-mysql80)?/vitess\/lite:$RELEASE_VERSION/g" $vtop_example_files
   if [ "$VTOP_VERSION" != "" ]; then
   		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$VTOP_VERSION/g" $vtop_example_files
   fi
-  rm -f $(find $ROOT/examples/operator -name "*.yaml.bak")
+  rm -f $(find -E $ROOT/examples/operator -regex ".*.(md|yaml).bak")
 }
 
 git_status_output=$(git status --porcelain)
