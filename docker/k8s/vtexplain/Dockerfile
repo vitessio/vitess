@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG VT_BASE_VER=latest
-ARG DEBIAN_VER=buster-slim
+ARG DEBIAN_VER=stable-slim
 
 FROM vitess/base:${VT_BASE_VER} AS base
 
