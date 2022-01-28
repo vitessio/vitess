@@ -291,6 +291,8 @@ func TestCircularReplication(t *testing.T) {
 
 // TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
 func TestSemiSync(t *testing.T) {
+	// stop any vtorc instance running due to a previous test.
+	utils.StopVtorc(t, clusterInfo)
 	newCluster := utils.SetupNewClusterSemiSync(t)
 	utils.StartVtorc(t, newCluster, nil, "test_config_semi_sync.json")
 	defer func() {
