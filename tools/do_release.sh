@@ -54,9 +54,9 @@ function updateJava () {
 
 function updateVitessOperatorExample () {
   vtop_example_files=$(find $ROOT/examples/operator -name "*.yaml")
-  sed -i.bak -E 's/vitess\/lite:(.*)/vitess\/lite:$RELEASE_VERSION/g' $vtop_example_files
+  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:$RELEASE_VERSION/g" $vtop_example_files
   if [ "$VTOP_VERSION" != "" ]; then
-  		sed -i.bak -E 's/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$VTOP_VERSION/g' $vtop_example_files
+  		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$VTOP_VERSION/g" $vtop_example_files
   fi
   rm -f $(find $ROOT/examples/operator -name "*.yaml.bak")
 }
@@ -67,7 +67,6 @@ if [ "$git_status_output" == "" ]; then
 else
     echo cannot do release with dirty git state
     exit 1
-    echo so much win
 fi
 
 # Preparing the release commit
@@ -98,11 +97,11 @@ git commit -n -s -m "Back to dev mode"
 echo "Release preparations successful"
 
 if [ "$GODOC_RELEASE_VERSION" != "" ]; then
-	echo "One git tag was created, you can push it with:"
-	echo "   git push upstream v$RELEASE_VERSION"
-else
   echo "Two git tags were created, you can push them with:"
   echo "   git push upstream v$RELEASE_VERSION && git push upstream v$GODOC_RELEASE_VERSION"
+else
+	echo "One git tag was created, you can push it with:"
+	echo "   git push upstream v$RELEASE_VERSION"
 fi
 
 echo "The git branch has also been updated. You need to push it and get it merged"
