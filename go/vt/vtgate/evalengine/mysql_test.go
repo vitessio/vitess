@@ -118,24 +118,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT ((NULL, ("foo" >= -1), "FOO", NULL), "fOo", ("foo" < ("fOo", -1, "FOO", 0)), NULL) <=> (0, "foo", 0, NULL)`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
-}
-
-func TestDebug2(t *testing.T) {
-	// Debug
-	eval, err := testSingle(t, `SELECT ((("FOO" / "FOO") + -1) + (("foo", ((NULL, -1, 1, 1) * -1), ("foo", 0, NULL, NULL), "fOo") >= "foo")) + "fOo"`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
-}
-
-func TestDebug3(t *testing.T) {
-	// Debug
-	eval, err := testSingle(t, `SELECT (0, ("fOo" NOT LIKE ((NULL LIKE "foo"), "foo", -1, NULL)), "foo", "fOo") <=> "fOo"`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
-}
-
-func TestDebug4(t *testing.T) {
-	// Debug
-	eval, err := testSingle(t, `SELECT ("foo", (("foo" >= "fOo"), 0, ((1, (NULL >= "foo"), (1 LIKE "fOo"), "fOo"), "fOo", (-1 <=> "FOO"), 1), NULL), 0, 1) != ("FOO", ("FOO", 1, NULL, -1), 1, (NULL != NULL))`)
+	eval, err := testSingle(t, `SELECT LEAST(0.0,'foobar')`)
 	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }

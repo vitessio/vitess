@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -62,14 +61,14 @@ func makeboolean2(b, isNull bool) boolean {
 	return makeboolean(b)
 }
 
-func (b boolean) not() boolean {
-	switch b {
+func (left boolean) not() boolean {
+	switch left {
 	case boolFalse:
 		return boolTrue
 	case boolTrue:
 		return boolFalse
 	default:
-		return b
+		return left
 	}
 }
 
@@ -135,10 +134,6 @@ func (n *NotExpr) typeof(*ExpressionEnv) querypb.Type {
 	return querypb.Type_UINT64
 }
 
-func (n *NotExpr) collation() collations.TypedCollation {
-	return collationNumeric
-}
-
 func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var left, right EvalResult
 	left.init(env, l.Left)
@@ -151,10 +146,6 @@ func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 
 func (l *LogicalExpr) typeof(env *ExpressionEnv) querypb.Type {
 	return querypb.Type_UINT64
-}
-
-func (n *LogicalExpr) collation() collations.TypedCollation {
-	return collationNumeric
 }
 
 // IsExpr represents the IS expression in MySQL.
@@ -175,8 +166,4 @@ func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 
 func (i *IsExpr) typeof(env *ExpressionEnv) querypb.Type {
 	return querypb.Type_INT64
-}
-
-func (i *IsExpr) collation() collations.TypedCollation {
-	return collationNumeric
 }
