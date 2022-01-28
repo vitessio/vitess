@@ -3254,10 +3254,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		*migrationContext = *requestContext
 	}
 
-	if *migrationContext == "" {
-		*migrationContext = fmt.Sprintf("vtctl:%s", executionUUID)
-	}
-
 	log.Info("Calling ApplySchema on VtctldServer")
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:                keyspace,
