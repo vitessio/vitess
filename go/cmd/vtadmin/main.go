@@ -159,6 +159,7 @@ func main() {
 			"address for a tablet. Currently used to make passthrough "+
 			"requests to /debug/vars endpoints.",
 	)
+	rootCmd.Flags().BoolVar(&httpOpts.EnableDynamicClusters, "http-enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies")
 
 	// rbac flags
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "rbac.yaml", "")
