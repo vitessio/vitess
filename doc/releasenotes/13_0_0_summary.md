@@ -98,7 +98,12 @@ vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 For setting up the cluster and electing a primary for the first time, `PlannedReparentShard` should be used
 instead of `InitShardPrimary`. 
 
-If using a custom `init_db.sql` that omits `SET sql_log_bin = 0`, then `InitShardPrimary` must be used instead of `PlannedReparentShard`.
+`InitShardPrimary` is a forceful command and copies over the executed gtid set from the new primary to all the other replicas. So, if the user
+isn't careful, it can lead to some replicas not being setup correctly and lead to errors in replication and recovery later.
+`PlannedReparentShard` is a safer alternative and does not change the executed gtid set on the replicas forcefully. It is the preferred alternate to initialize
+the cluster.
+
+If using a custom `init_db.sql` that omits `SET sql_log_bin = 0`, then `InitShardPrimary` should still be used instead of `PlannedReparentShard`.
 
 ### Durability Policy flag
 A new flag has been added to vtctl, vtctld and vtworker binaries which allows the users to set the durability policies.
