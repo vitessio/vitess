@@ -270,20 +270,6 @@ func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.Bin
 	return client.server.StreamExecute(client.ctx, client.target, query, bindvars, 0, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, sendFunc)
 }
 
-// ExecuteBatch executes a batch of queries.
-func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
-	return client.server.ExecuteBatch(
-		client.ctx,
-		client.target,
-		queries,
-		asTransaction,
-		client.transactionID,
-		&querypb.ExecuteOptions{
-			IncludedFields: querypb.ExecuteOptions_ALL,
-		},
-	)
-}
-
 // MessageStream streams messages from the message table.
 func (client *QueryClient) MessageStream(name string, callback func(*sqltypes.Result) error) (err error) {
 	return client.server.MessageStream(client.ctx, client.target, name, callback)

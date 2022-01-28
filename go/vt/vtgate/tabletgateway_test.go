@@ -45,19 +45,6 @@ func TestTabletGatewayExecute(t *testing.T) {
 	})
 }
 
-func TestTabletGatewayExecuteBatch(t *testing.T) {
-	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := tg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
-		return err
-	})
-	testTabletGatewayTransact(t, func(tg *TabletGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := tg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
-		return err
-	})
-}
-
 func TestTabletGatewayExecuteStream(t *testing.T) {
 	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
 		err := tg.StreamExecute(context.Background(), target, "query", nil, 0, 0, nil, func(qr *sqltypes.Result) error {

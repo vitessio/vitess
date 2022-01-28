@@ -120,30 +120,6 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	return sqltypes.Proto3ToResult(er.Result), nil
 }
 
-// ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, tabletconn.ConnClosed
-	}
-
-	req := &querypb.ExecuteBatchRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Queries:           queries,
-		AsTransaction:     asTransaction,
-		TransactionId:     transactionID,
-		Options:           options,
-	}
-	ebr, err := conn.c.ExecuteBatch(ctx, req)
-	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(err)
-	}
-	return sqltypes.Proto3ToResults(ebr.Results), nil
-}
-
 // StreamExecute executes the query and streams results back through callback.
 func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	// All streaming clients should follow the code pattern below.
