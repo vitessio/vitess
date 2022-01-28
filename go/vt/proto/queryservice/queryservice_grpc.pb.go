@@ -23,9 +23,6 @@ type QueryClient interface {
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
 	Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error)
-	// ExecuteBatch executes a list of queries, and returns the result
-	// for each query.
-	ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRequest, opts ...grpc.CallOption) (*query.ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query. Use this method if the
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
@@ -93,15 +90,6 @@ func NewQueryClient(cc grpc.ClientConnInterface) QueryClient {
 func (c *queryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error) {
 	out := new(query.ExecuteResponse)
 	err := c.cc.Invoke(ctx, "/queryservice.Query/Execute", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *queryClient) ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRequest, opts ...grpc.CallOption) (*query.ExecuteBatchResponse, error) {
-	out := new(query.ExecuteBatchResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/ExecuteBatch", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -547,9 +535,6 @@ type QueryServer interface {
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
 	Execute(context.Context, *query.ExecuteRequest) (*query.ExecuteResponse, error)
-	// ExecuteBatch executes a list of queries, and returns the result
-	// for each query.
-	ExecuteBatch(context.Context, *query.ExecuteBatchRequest) (*query.ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query. Use this method if the
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
@@ -613,9 +598,6 @@ type UnimplementedQueryServer struct {
 
 func (UnimplementedQueryServer) Execute(context.Context, *query.ExecuteRequest) (*query.ExecuteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Execute not implemented")
-}
-func (UnimplementedQueryServer) ExecuteBatch(context.Context, *query.ExecuteBatchRequest) (*query.ExecuteBatchResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ExecuteBatch not implemented")
 }
 func (UnimplementedQueryServer) StreamExecute(*query.StreamExecuteRequest, Query_StreamExecuteServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamExecute not implemented")
@@ -719,24 +701,6 @@ func _Query_Execute_Handler(srv interface{}, ctx context.Context, dec func(inter
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(QueryServer).Execute(ctx, req.(*query.ExecuteRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(query.ExecuteBatchRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).ExecuteBatch(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/queryservice.Query/ExecuteBatch",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).ExecuteBatch(ctx, req.(*query.ExecuteBatchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1228,10 +1192,6 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Execute",
 			Handler:    _Query_Execute_Handler,
-		},
-		{
-			MethodName: "ExecuteBatch",
-			Handler:    _Query_ExecuteBatch_Handler,
 		},
 		{
 			MethodName: "Begin",
