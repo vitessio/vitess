@@ -227,15 +227,6 @@ func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Targ
 	return qr, transactionID, alias, err
 }
 
-func (ws *wrappedService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
-	err = ws.wrapper(ctx, target, ws.impl, "BeginExecuteBatch", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		var innerErr error
-		qrs, transactionID, alias, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
-		return canRetry(ctx, innerErr), innerErr
-	})
-	return qrs, transactionID, alias, err
-}
-
 // BeginStreamExecute implements the QueryService interface
 func (ws *wrappedService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	inDedicatedConn := reservedID != 0

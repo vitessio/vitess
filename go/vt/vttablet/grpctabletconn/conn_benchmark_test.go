@@ -85,10 +85,6 @@ func (b *BenchmarkService) BeginExecute(ctx context.Context, target *querypb.Tar
 	panic("should not be called")
 }
 
-func (b *BenchmarkService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	panic("should not be called")
-}
-
 // BeginStreamExecute combines Begin and StreamExecute.
 func (b *BenchmarkService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
 	panic("BenchmarkService does not implement BeginStreamExecute")

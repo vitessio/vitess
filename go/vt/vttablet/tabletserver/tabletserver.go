@@ -1035,19 +1035,6 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	return key, tableName.String()
 }
 
-// BeginExecuteBatch combines Begin and ExecuteBatch.
-func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	// TODO(mberlin): Integrate hot row protection here as we did for BeginExecute()
-	// and ExecuteBatch(asTransaction=true).
-	transactionID, alias, err := tsv.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, alias, err
-}
-
 // MessageStream streams messages from the requested table.
 func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	return tsv.execRequest(

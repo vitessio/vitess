@@ -592,18 +592,6 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 	return result, transactionID, nil, err
 }
 
-// BeginExecuteBatch combines Begin and ExecuteBatch.
-func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, _, err := f.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	// TODO(deepthi): what alias should we actually return here?
-	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, nil, err
-}
-
 // BeginStreamExecute combines Begin and StreamExecute.
 func (f *FakeQueryService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
 	panic("FakeQueryService does not implement BeginStreamExecute")
