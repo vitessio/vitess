@@ -2905,7 +2905,7 @@ Gen4 plan same as above
     "Query": "update multicol_tbl set x = 42 where `name` = 'foo'",
     "Table": "multicol_tbl",
     "Values": [
-      "VARBINARY(\"foo\")"
+      "VARCHAR(\"foo\")"
     ],
     "Vindex": "name_muticoltbl_map"
   }
@@ -3040,7 +3040,7 @@ Gen4 plan same as above
     "Query": "delete from multicol_tbl where `name` = 'foo'",
     "Table": "multicol_tbl",
     "Values": [
-      "VARBINARY(\"foo\")"
+      "VARCHAR(\"foo\")"
     ],
     "Vindex": "name_muticoltbl_map"
   }
