@@ -140,6 +140,12 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	reshardMerchant2to3SplitMerge(t)
 	reshardMerchant3to1Merge(t)
 
+	query := `create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id));`
+	customerKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+	_, err := customerKs.Shards["-80"].Tablets["zone1-200"].Vttablet.QueryTablet(query, "customer", true)
+	require.NoError(t, err)
+	_, err = customerKs.Shards["80-"].Tablets["zone1-300"].Vttablet.QueryTablet(query, "customer", true)
+	require.NoError(t, err)
 	insertMoreCustomers(t, 16)
 	reshardCustomer2to4Split(t, nil, "")
 	expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
