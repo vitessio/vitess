@@ -8,6 +8,7 @@ package vreplication
 //   1. Mixed case identifiers
 //   2. Column and table names with special characters in them, namely a dash
 //   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
+// The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplciation
 var (
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid));
@@ -21,7 +22,18 @@ create table customer2(cid int, name varbinary(128), typ enum('individual','soho
 create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `));
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `));
+create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id));
 `
+
+	// These should always be ignored in vreplication
+	internalSchema = `
+ create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
+ create table _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id int, val varbinary(128), primary key(id));
+ create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id));
+ create table _vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_29990915120410(id int, val varbinary(128), primary key(id));
+ create table _vt_DROP_2bce8bcef73211ea87e9f875a4d24e90_20200915120410(id int, val varbinary(128), primary key(id));
+ create table _vt_HOLD_4abe6bcef73211ea87e9f875a4d24e90_20220115120410(id int, val varbinary(128), primary key(id));
+ `
 
 	initialProductVSchema = `
 {
