@@ -57,22 +57,6 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	}, nil
 }
 
-// ExecuteBatch is part of the queryservice.QueryServer interface
-func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchRequest) (response *querypb.ExecuteBatchResponse, err error) {
-	defer q.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.EffectiveCallerId,
-		request.ImmediateCallerId,
-	)
-	results, err := q.server.ExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.TransactionId, request.Options)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	return &querypb.ExecuteBatchResponse{
-		Results: sqltypes.ResultsToProto3(results),
-	}, nil
-}
-
 // StreamExecute is part of the queryservice.QueryServer interface
 func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream queryservicepb.Query_StreamExecuteServer) (err error) {
 	defer q.server.HandlePanic(&err)

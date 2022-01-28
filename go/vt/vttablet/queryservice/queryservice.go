@@ -82,8 +82,6 @@ type QueryService interface {
 	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 	// StreamExecute for query execution with streaming
 	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
-	// Currently always called with transactionID = 0
-	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error)
 
 	// Combo methods, they also return the transactionID from the
 	// Begin part. If err != nil, the transactionID may still be
