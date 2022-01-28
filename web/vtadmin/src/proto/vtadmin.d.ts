@@ -13879,6 +13879,9 @@ export namespace tabletmanagerdata {
 
         /** ExecuteQueryRequest max_rows */
         max_rows?: (number|Long|null);
+
+        /** ExecuteQueryRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents an ExecuteQueryRequest. */
@@ -13898,6 +13901,9 @@ export namespace tabletmanagerdata {
 
         /** ExecuteQueryRequest max_rows. */
         public max_rows: (number|Long);
+
+        /** ExecuteQueryRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new ExecuteQueryRequest instance using the specified properties.
@@ -29881,6 +29887,234 @@ export namespace vtctldata {
 
         /**
          * Converts this ApplyRoutingRulesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplySchemaRequest. */
+    interface IApplySchemaRequest {
+
+        /** ApplySchemaRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ApplySchemaRequest allow_long_unavailability */
+        allow_long_unavailability?: (boolean|null);
+
+        /** ApplySchemaRequest sql */
+        sql?: (string[]|null);
+
+        /** ApplySchemaRequest ddl_strategy */
+        ddl_strategy?: (string|null);
+
+        /** ApplySchemaRequest uuid_list */
+        uuid_list?: (string[]|null);
+
+        /** ApplySchemaRequest request_context */
+        request_context?: (string|null);
+
+        /** ApplySchemaRequest wait_replicas_timeout */
+        wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** ApplySchemaRequest skip_preflight */
+        skip_preflight?: (boolean|null);
+
+        /** ApplySchemaRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
+    }
+
+    /** Represents an ApplySchemaRequest. */
+    class ApplySchemaRequest implements IApplySchemaRequest {
+
+        /**
+         * Constructs a new ApplySchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplySchemaRequest);
+
+        /** ApplySchemaRequest keyspace. */
+        public keyspace: string;
+
+        /** ApplySchemaRequest allow_long_unavailability. */
+        public allow_long_unavailability: boolean;
+
+        /** ApplySchemaRequest sql. */
+        public sql: string[];
+
+        /** ApplySchemaRequest ddl_strategy. */
+        public ddl_strategy: string;
+
+        /** ApplySchemaRequest uuid_list. */
+        public uuid_list: string[];
+
+        /** ApplySchemaRequest request_context. */
+        public request_context: string;
+
+        /** ApplySchemaRequest wait_replicas_timeout. */
+        public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** ApplySchemaRequest skip_preflight. */
+        public skip_preflight: boolean;
+
+        /** ApplySchemaRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
+
+        /**
+         * Creates a new ApplySchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplySchemaRequest instance
+         */
+        public static create(properties?: vtctldata.IApplySchemaRequest): vtctldata.ApplySchemaRequest;
+
+        /**
+         * Encodes the specified ApplySchemaRequest message. Does not implicitly {@link vtctldata.ApplySchemaRequest.verify|verify} messages.
+         * @param message ApplySchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplySchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplySchemaRequest message, length delimited. Does not implicitly {@link vtctldata.ApplySchemaRequest.verify|verify} messages.
+         * @param message ApplySchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplySchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplySchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplySchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplySchemaRequest;
+
+        /**
+         * Decodes an ApplySchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplySchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplySchemaRequest;
+
+        /**
+         * Verifies an ApplySchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplySchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplySchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplySchemaRequest;
+
+        /**
+         * Creates a plain object from an ApplySchemaRequest message. Also converts values to other types if specified.
+         * @param message ApplySchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplySchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplySchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ApplySchemaResponse. */
+    interface IApplySchemaResponse {
+
+        /** ApplySchemaResponse uuid_list */
+        uuid_list?: (string[]|null);
+    }
+
+    /** Represents an ApplySchemaResponse. */
+    class ApplySchemaResponse implements IApplySchemaResponse {
+
+        /**
+         * Constructs a new ApplySchemaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IApplySchemaResponse);
+
+        /** ApplySchemaResponse uuid_list. */
+        public uuid_list: string[];
+
+        /**
+         * Creates a new ApplySchemaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplySchemaResponse instance
+         */
+        public static create(properties?: vtctldata.IApplySchemaResponse): vtctldata.ApplySchemaResponse;
+
+        /**
+         * Encodes the specified ApplySchemaResponse message. Does not implicitly {@link vtctldata.ApplySchemaResponse.verify|verify} messages.
+         * @param message ApplySchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IApplySchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplySchemaResponse message, length delimited. Does not implicitly {@link vtctldata.ApplySchemaResponse.verify|verify} messages.
+         * @param message ApplySchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IApplySchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplySchemaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplySchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ApplySchemaResponse;
+
+        /**
+         * Decodes an ApplySchemaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplySchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ApplySchemaResponse;
+
+        /**
+         * Verifies an ApplySchemaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplySchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplySchemaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ApplySchemaResponse;
+
+        /**
+         * Creates a plain object from an ApplySchemaResponse message. Also converts values to other types if specified.
+         * @param message ApplySchemaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ApplySchemaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplySchemaResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
