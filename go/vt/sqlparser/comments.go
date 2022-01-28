@@ -41,6 +41,8 @@ const (
 	DirectiveAllowScatter = "ALLOW_SCATTER"
 	// DirectiveAllowHashJoin lets the planner use hash join if possible
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
+	// DirectiveQueryPlanner lets the user specify per query which planner should be used
+	DirectiveQueryPlanner = "PLANNER"
 )
 
 func isNonSpace(r rune) bool {

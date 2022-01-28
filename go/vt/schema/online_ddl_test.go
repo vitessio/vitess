@@ -343,7 +343,7 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, IsOnlineDDLUUID(o2.UUID))
 			assert.Equal(t, o1.UUID, o2.UUID)
-			assert.Equal(t, migrationContext, o2.RequestContext)
+			assert.Equal(t, migrationContext, o2.MigrationContext)
 			assert.Equal(t, "t", o2.Table)
 			assert.Equal(t, strategySetting.Strategy, o2.Strategy)
 			assert.Equal(t, strategySetting.Options, o2.Options)

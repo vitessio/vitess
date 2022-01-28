@@ -130,7 +130,7 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, tmClient tmcli
 		"options":             sqltypes.StringBindVariable(onlineDDL.Options),
 		"ddl_action":          sqltypes.StringBindVariable(actionStr),
 		"requested_timestamp": sqltypes.Int64BindVariable(onlineDDL.RequestTimeSeconds()),
-		"migration_context":   sqltypes.StringBindVariable(onlineDDL.RequestContext),
+		"migration_context":   sqltypes.StringBindVariable(onlineDDL.MigrationContext),
 		"migration_status":    sqltypes.StringBindVariable(string(onlineDDL.Status)),
 	}
 
