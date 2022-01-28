@@ -472,33 +472,6 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, conn.tablet.Alias, nil
 }
 
-// BeginExecuteBatch starts a transaction and runs an ExecuteBatch.
-func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, 0, nil, tabletconn.ConnClosed
-	}
-
-	req := &querypb.BeginExecuteBatchRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Queries:           queries,
-		AsTransaction:     asTransaction,
-		Options:           options,
-	}
-
-	reply, err := conn.c.BeginExecuteBatch(ctx, req)
-	if err != nil {
-		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
-	}
-	if reply.Error != nil {
-		return nil, reply.TransactionId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
-	}
-	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, conn.tablet.Alias, nil
-}
-
 // BeginStreamExecute starts a transaction and runs an Execute.
 func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()

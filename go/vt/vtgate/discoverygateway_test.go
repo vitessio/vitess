@@ -98,14 +98,6 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	})
 }
 
-func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
-		return err
-	})
-}
-
 func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"

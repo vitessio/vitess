@@ -390,16 +390,6 @@ func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target
 	return result, transactionID, alias, err
 }
 
-// BeginExecuteBatch is part of the QueryService interface.
-func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := sbc.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	results, err := sbc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, alias, err
-}
-
 // BeginStreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
 	transactionID, alias, err := sbc.begin(ctx, target, preQueries, reservedID, options)

@@ -95,14 +95,6 @@ func TestTabletGatewayBeginExecute(t *testing.T) {
 	})
 }
 
-func TestTabletGatewayBeginExecuteBatch(t *testing.T) {
-	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, _, err := tg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
-		return err
-	})
-}
-
 func TestTabletGatewayShuffleTablets(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	tg := NewTabletGateway(context.Background(), hc, nil, "local")

@@ -2436,49 +2436,6 @@ func setDBName(db *fakesqldb.DB, tsv *TabletServer, s string) {
 	db.SetName("databaseInMysql")
 }
 
-func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) {
-	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	setDBName(db, tsv, "databaseInMysql")
-	defer tsv.StopService()
-	defer db.Close()
-
-	executeSQL := "select * from test_table limit 1000"
-	executeSQLResult := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Type:     sqltypes.VarBinary,
-				Database: "databaseInMysql",
-			},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarBinary("row01")},
-		},
-	}
-	db.AddQuery(executeSQL, executeSQLResult)
-	target := tsv.sm.target
-
-	// Test BeginExecuteBatch Method
-	results, transactionID, _, err := tsv.BeginExecuteBatch(ctx, target, []*querypb.BoundQuery{
-		{
-			Sql:           executeSQL,
-			BindVariables: nil,
-		},
-		{
-			Sql:           executeSQL,
-			BindVariables: nil,
-		},
-	}, false, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-	require.NoError(t, err)
-	for _, res := range results {
-		for _, field := range res.Fields {
-			require.Equal(t, "keyspaceName", field.Database)
-		}
-	}
-	_, err = tsv.Commit(ctx, target, transactionID)
-	require.NoError(t, err)
-}
-
 func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
 	setDBName(db, tsv, "databaseInMysql")
