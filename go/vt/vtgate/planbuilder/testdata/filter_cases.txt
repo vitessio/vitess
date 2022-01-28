@@ -135,7 +135,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
     "Table": "`user`",
     "Values": [
-      "VARBINARY(\"bb\")"
+      "VARCHAR(\"bb\")"
     ],
     "Vindex": "name_user_map"
   }
@@ -158,7 +158,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"aa\"), VARBINARY(\"bb\"))"
+      "(VARCHAR(\"aa\"), VARCHAR(\"bb\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -181,7 +181,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"aa\"), VARBINARY(\"cc\"))"
+      "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -204,7 +204,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"bb\"), VARBINARY(\"dd\"))"
+      "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -227,7 +227,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"bb\"), VARBINARY(\"dd\"))"
+      "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -250,7 +250,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"aa\"), VARBINARY(\"cc\"))"
+      "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -273,7 +273,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"dd\"))"
+      "(VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -319,7 +319,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"bb\"), VARBINARY(\"dd\"))"
+      "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -342,7 +342,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"bb\"), VARBINARY(\"ee\"))"
+      "(VARCHAR(\"bb\"), VARCHAR(\"ee\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -365,7 +365,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
     "Table": "`user`",
     "Values": [
-      "(VARBINARY(\"aa\"), VARBINARY(\"dd\"))"
+      "(VARCHAR(\"aa\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -996,7 +996,7 @@ Gen4 plan same as above
     "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
     "Table": "`user`",
     "Values": [
-      "VARBINARY(\"aa\")"
+      "VARCHAR(\"aa\")"
     ],
     "Vindex": "name_user_map"
   }
@@ -1019,7 +1019,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
     "Table": "`user`",
     "Values": [
-      "VARBINARY(\"aa\")"
+      "VARCHAR(\"aa\")"
     ],
     "Vindex": "name_user_map"
   }
@@ -1587,7 +1587,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
     "Table": "`user`",
     "Values": [
-      "VARBINARY(\"aa\")"
+      "VARCHAR(\"aa\")"
     ],
     "Vindex": "user_index"
   }
@@ -2409,7 +2409,7 @@ Gen4 plan same as above
     "Query": "select c2 from cfc_vindex_col where c1 like 'A%'",
     "Table": "cfc_vindex_col",
     "Values": [
-      "VARBINARY(\"A%\")"
+      "VARCHAR(\"A%\")"
     ],
     "Vindex": "cfc"
   }
@@ -3833,7 +3833,6 @@ Gen4 plan same as above
     "Vindex": "multicolIdx"
   }
 }
-
 
 # multi column vindex, partial vindex with SelectEqual
 "select * from multicol_tbl where cola = 1"
