@@ -93,6 +93,25 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 	return nil
 }
 
+func shouldInclude(table string, excludes []string) bool {
+	// We filter out internal tables in the mysqlctl.GetSchema API call to ignore them
+	// in most cases. In this case, however, the table list can come from the user via
+	// the -tables flag so we need to filter out internal table names here in case a
+	// user has explcility specified some.
+	// This could happen if there's some automated tooling that creates the list of
+	// tables to explicitly specify.
+	// But given that this should never be done in practice, we ignore the request.
+	if schema.IsInternalOperationTableName(table) {
+		return false
+	}
+	for _, t := range excludes {
+		if t == table {
+			return false
+		}
+	}
+	return true
+}
+
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
@@ -147,34 +166,29 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		} else {
 			if allTables {
-				var excludeTablesList []string
-				excludeTables = strings.TrimSpace(excludeTables)
-				if excludeTables != "" {
-					excludeTablesList = strings.Split(excludeTables, ",")
-				}
-				err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
-				if err != nil {
-					return err
-				}
-				if len(excludeTablesList) > 0 {
-					for _, ksTable := range ksTables {
-						exclude := false
-						for _, table := range excludeTablesList {
-							if ksTable == table {
-								exclude = true
-								break
-							}
-						}
-						if !exclude {
-							tables = append(tables, ksTable)
-						}
-					}
-				} else {
-					tables = ksTables
-				}
+				tables = ksTables
 			} else {
 				return fmt.Errorf("no tables to move")
 			}
+		}
+		var excludeTablesList []string
+		excludeTables = strings.TrimSpace(excludeTables)
+		if excludeTables != "" {
+			excludeTablesList = strings.Split(excludeTables, ",")
+			err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
+			if err != nil {
+				return err
+			}
+		}
+		var tables2 []string
+		for _, t := range tables {
+			if shouldInclude(t, excludeTablesList) {
+				tables2 = append(tables2, t)
+			}
+		}
+		tables = tables2
+		if len(tables) == 0 {
+			return fmt.Errorf("no tables to move")
 		}
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
@@ -277,12 +291,6 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 	for _, table := range tables {
 		found := false
 
-		// Skip Vitess internal tables
-		if schema.IsInternalOperationTableName(table) {
-			log.Infof("found internal table %s, ignoring in materialization schema validation", table)
-			continue
-		}
-
 		for _, ksTable := range ksTables {
 			if table == ksTable {
 				found = true
@@ -317,14 +325,14 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	sourceSchema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
 	if err != nil {
 		return nil, err
 	}
 	log.Infof("got table schemas from source primary %v.", primary)
 
 	var sourceTables []string
-	for _, td := range schema.TableDefinitions {
+	for _, td := range sourceSchema.TableDefinitions {
 		sourceTables = append(sourceTables, td.Name)
 	}
 	return sourceTables, nil
@@ -522,11 +530,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil {
-		if schema.IsInternalOperationTableName(sourceTableName) {
-			log.Infof("found internal table %s, ignoring in materialization", sourceTableName)
-		} else {
-			return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
-		}
+		return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
 	}
 	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
 		// For a conflict, the vindex name and column should match.

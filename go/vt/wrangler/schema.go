@@ -217,9 +217,7 @@ func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards
 			}
 			for _, tableDef := range primarySchema.TableDefinitions {
 				if _, ok := vschm.Tables[tableDef.Name]; !ok {
-					if schema.IsInternalOperationTableName(tableDef.Name) {
-						log.Infof("found internal table %s, ignoring in vschema validation", tableDef.Name)
-					} else {
+					if !schema.IsInternalOperationTableName(tableDef.Name) {
 						notFoundTables = append(notFoundTables, tableDef.Name)
 					}
 				}

@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -102,6 +103,9 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	// Get per-table schema concurrently.
 	tableNames := make([]string, 0, len(tds))
 	for _, td := range tds {
+		if schema.IsInternalOperationTableName(td.Name) {
+			continue
+		}
 		tableNames = append(tableNames, td.Name)
 
 		wg.Add(1)
