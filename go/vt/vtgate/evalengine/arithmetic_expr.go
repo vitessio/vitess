@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -45,10 +44,6 @@ var _ ArithmeticOp = (*OpAddition)(nil)
 var _ ArithmeticOp = (*OpSubstraction)(nil)
 var _ ArithmeticOp = (*OpMultiplication)(nil)
 var _ ArithmeticOp = (*OpDivision)(nil)
-
-func (b *ArithmeticExpr) collation() collations.TypedCollation {
-	return collationNumeric
-}
 
 func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var left, right EvalResult

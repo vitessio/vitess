@@ -116,6 +116,19 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 	return bytes, version, err
 }
 
+// List is part of the Conn interface
+func (st *StatsConn) List(ctx context.Context, filePathPrefix string) ([]KVInfo, error) {
+	startTime := time.Now()
+	statsKey := []string{"List", st.cell}
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	bytes, err := st.conn.List(ctx, filePathPrefix)
+	if err != nil {
+		topoStatsConnErrors.Add(statsKey, int64(1))
+		return bytes, err
+	}
+	return bytes, err
+}
+
 // Delete is part of the Conn interface
 func (st *StatsConn) Delete(ctx context.Context, filePath string, version Version) error {
 	statsKey := []string{"Delete", st.cell}

@@ -48,7 +48,7 @@ type legacyTabletInfo struct {
 // the tablets in a cell, and starts refreshing.
 func NewLegacyCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, tr LegacyTabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *LegacyTopologyWatcher {
 	return NewLegacyTopologyWatcher(ctx, topoServer, tr, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *LegacyTopologyWatcher) ([]*topodatapb.TabletAlias, error) {
-		return tw.topoServer.GetTabletsByCell(ctx, tw.cell)
+		return tw.topoServer.GetTabletAliasesByCell(ctx, tw.cell)
 	})
 }
 

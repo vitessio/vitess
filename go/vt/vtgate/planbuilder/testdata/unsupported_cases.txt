@@ -68,11 +68,6 @@ Gen4 plan same as above
 "unsupported: cross-shard left join and column expressions"
 Gen4 plan same as above
 
-# left join where clauses #2
-"select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.col, 4) = 5"
-"unsupported: cross-shard left join and where clause"
-Gen4 error: expr cannot be converted, not supported: coalesce(user_extra.col, 4) = 5
-
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
@@ -551,7 +546,7 @@ Gen4 error: expr cannot be converted, not supported: count(id) = 10
     "Query": "select 1 from `user` having count(id) = 10 and `name` = 'a'",
     "Table": "`user`",
     "Values": [
-      "VARBINARY(\"a\")"
+      "VARCHAR(\"a\")"
     ],
     "Vindex": "name_user_map"
   }

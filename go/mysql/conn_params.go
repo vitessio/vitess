@@ -29,7 +29,6 @@ type ConnParams struct {
 	DbName     string `json:"dbname"`
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
-	Collation  string `json:"collation"`
 	Flags      uint64 `json:"flags"`
 	Flavor     string `json:"flavor,omitempty"`
 

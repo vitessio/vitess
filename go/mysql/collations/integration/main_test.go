@@ -71,6 +71,7 @@ func TestMain(m *testing.M) {
 				},
 			},
 			OnlyMySQL: true,
+			Charset:   "utf8mb4",
 		}
 		cluster := vttest.LocalCluster{
 			Config: cfg,

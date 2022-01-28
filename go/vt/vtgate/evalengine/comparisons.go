@@ -17,8 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -27,21 +25,16 @@ import (
 )
 
 type (
-	BinaryCoercedExpr struct {
-		BinaryExpr
-		CoerceLeft, CoerceRight collations.Coercion
-		MergedCollation         collations.TypedCollation
-	}
-
 	ComparisonExpr struct {
-		BinaryCoercedExpr
+		BinaryExpr
 		Op ComparisonOp
 	}
 
 	LikeExpr struct {
-		BinaryCoercedExpr
-		Negate bool
-		Match  collations.WildcardPattern
+		BinaryExpr
+		Negate         bool
+		Match          collations.WildcardPattern
+		MatchCollation collations.ID
 	}
 
 	InExpr struct {
@@ -104,29 +97,6 @@ func (compareNullSafeEQ) String() string { return "<=>" }
 func (compareNullSafeEQ) compare(left, right *EvalResult) (boolean, error) {
 	cmp, err := evalCompareNullSafe(left, right)
 	return makeboolean(cmp), err
-}
-
-func (c *BinaryCoercedExpr) collation() collations.TypedCollation {
-	// the collation of a binary operation is always integer, not the shared collation
-	// between the two subexpressions
-	return collationNumeric
-}
-
-func (c *BinaryCoercedExpr) coerce() error {
-	var err error
-
-	leftColl := c.Left.collation()
-	rightColl := c.Right.collation()
-
-	if leftColl.Valid() && rightColl.Valid() {
-		env := collations.Local()
-		c.MergedCollation, c.CoerceLeft, c.CoerceRight, err =
-			env.MergeCollations(leftColl, rightColl, collations.CoercionOptions{
-				ConvertToSuperset:   true,
-				ConvertWithCoercion: true,
-			})
-	}
-	return err
 }
 
 func evalResultsAreStrings(l, r *EvalResult) bool {
@@ -386,12 +356,8 @@ func (i *InExpr) typeof(env *ExpressionEnv) querypb.Type {
 	return -1
 }
 
-func (i *InExpr) collation() collations.TypedCollation {
-	return collationNumeric
-}
-
 func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
-	if l.Match != nil {
+	if l.Match != nil && l.MatchCollation == coll {
 		return l.Match.Match(left)
 	}
 	fullColl := collations.Local().LookupByID(coll)
@@ -404,6 +370,10 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	left.init(env, l.Left)
 	right.init(env, l.Right)
 
+	if err := mergeCollations(&left, &right); err != nil {
+		throwEvalError(err)
+	}
+
 	var matched bool
 	var leftcoll = left.collation()
 	var rightcoll = right.collation()
@@ -411,24 +381,15 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	switch {
 	case left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE:
 		panic("failed to typecheck tuples")
-
 	case left.null() || right.null():
 		result.setNull()
 		return
-
 	case left.textual() && right.textual():
-		if leftcoll.Collation != rightcoll.Collation {
-			panic(fmt.Sprintf("LikeOp: did not coerce, left=%d right=%d",
-				leftcoll.Collation, rightcoll.Collation))
-		}
 		matched = l.matchWildcard(left.bytes(), right.bytes(), rightcoll.Collation)
-
 	case right.textual():
 		matched = l.matchWildcard(left.value().Raw(), right.bytes(), rightcoll.Collation)
-
 	case left.textual():
 		matched = l.matchWildcard(left.bytes(), right.value().Raw(), leftcoll.Collation)
-
 	default:
 		matched = l.matchWildcard(left.value().Raw(), right.value().Raw(), collations.CollationBinaryID)
 	}
@@ -441,8 +402,4 @@ func (l *LikeExpr) typeof(env *ExpressionEnv) querypb.Type {
 	// TODO: make this less aggressive
 	// return querypb.Type_UINT64, nil
 	return -1
-}
-
-func (l *LikeExpr) collation() collations.TypedCollation {
-	return collationNumeric
 }

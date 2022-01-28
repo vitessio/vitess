@@ -432,13 +432,13 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64},
 			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64},
-			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
-			{Name: "@@workload", Type: sqltypes.VarBinary},
-			{Name: "@@read_after_write_gtid", Type: sqltypes.VarBinary},
+			{Name: "@@transaction_mode", Type: sqltypes.VarChar},
+			{Name: "@@workload", Type: sqltypes.VarChar},
+			{Name: "@@read_after_write_gtid", Type: sqltypes.VarChar},
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64},
-			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
-			{Name: "@@ddl_strategy", Type: sqltypes.VarBinary},
-			{Name: "@@socket", Type: sqltypes.VarBinary},
+			{Name: "@@session_track_gtids", Type: sqltypes.VarChar},
+			{Name: "@@ddl_strategy", Type: sqltypes.VarChar},
+			{Name: "@@socket", Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
@@ -447,14 +447,14 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
-			sqltypes.NewVarBinary("UNSPECIFIED"),
-			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarChar("UNSPECIFIED"),
+			sqltypes.NewVarChar(""),
 			// these have been set at the beginning of the test
-			sqltypes.NewVarBinary("a fine gtid"),
+			sqltypes.NewVarChar("a fine gtid"),
 			sqltypes.NewFloat64(13),
-			sqltypes.NewVarBinary("own_gtid"),
-			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarChar("own_gtid"),
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar(""),
 		}},
 	}
 	require.NoError(t, err)
@@ -516,10 +516,10 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@foo", Type: sqltypes.VarBinary},
+			{Name: "@foo", Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("bar"),
+			sqltypes.NewVarChar("bar"),
 		}},
 	}
 	utils.MustMatch(t, wantResult, result, "Mismatch")
@@ -670,10 +670,10 @@ func TestSelectDatabase(t *testing.T) {
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "database()", Type: sqltypes.VarBinary},
+			{Name: "database()", Type: sqltypes.VarChar},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("TestExecutor@primary"),
+			sqltypes.NewVarChar("TestExecutor@primary"),
 		}},
 	}
 	require.NoError(t, err)
@@ -711,15 +711,15 @@ func TestSelectBindvars(t *testing.T) {
 	// Test with StringBindVariable
 	sql = "select id from user where name in (:name1, :name2)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
-		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
-		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
+		"name1": sqltypes.StringBindVariable("foo1"),
+		"name2": sqltypes.StringBindVariable("foo2"),
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id from `user` where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
-			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
+			"name1":  sqltypes.StringBindVariable("foo1"),
+			"name2":  sqltypes.StringBindVariable("foo2"),
 			"__vals": sqltypes.TestBindVariable([]interface{}{"foo1", "foo2"}),
 		},
 	}}
@@ -775,7 +775,7 @@ func TestSelectBindvars(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("nonexistent")})
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarChar("nonexistent")})
 	require.NoError(t, err)
 	wantLookupQueries := []*querypb.BoundQuery{{
 		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
@@ -847,7 +847,7 @@ func TestSelectEqual(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarChar("foo")})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
@@ -1061,7 +1061,7 @@ func TestSelectIN(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarChar("foo")})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
@@ -1106,7 +1106,7 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
+	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarChar("foo")})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
