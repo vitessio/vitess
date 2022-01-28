@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { UseMutationResult } from 'react-query';
 import { useHistory, useParams } from 'react-router-dom';
 import { useDeleteTablet, useReparentTablet, useStartReplication, useStopReplication } from '../../../hooks/api';
 import { vtadmin } from '../../../proto/vtadmin';
@@ -6,6 +7,7 @@ import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
 import { success, warn } from '../../Snackbar';
 import { TextInput } from '../../TextInput';
+import DangerAction from './DangerAction';
 
 interface AdvancedProps {
     tablet: vtadmin.Tablet | undefined;
@@ -180,8 +182,73 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
             </div>
             <div className="my-8">
                 <h3 className="mb-4">Danger</h3>
-                <div className="border border-danger rounded-lg p-8">
-                    <div className="flex justify-between items-center">
+                <div className="border border-danger rounded-lg">
+                    <div className="border-red-400 border-b w-full" />
+                    <DangerAction
+                        title="Set Read-Only"
+                        documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
+                        primaryDescription={
+                            <div>
+                                This will disable writing on the primary tablet {alias}. Use with caution.
+                            </div>
+                        }
+                        description={
+                            <div>
+                                Set tablet <span className="font-bold">{alias}</span> to read-only.
+                            </div>
+                        }
+                        action="set tablet to read-only"
+                        mutation={deleteTabletMutation as UseMutationResult}
+                        loadingText="Setting..."
+                        loadedText="Set to read-only"
+                        primary={primary}
+                        alias={alias}
+                    />
+                    <div className="border-red-400 border-b w-full" />
+                    <DangerAction
+                        title="Set Read-Write"
+                        documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
+                        primaryDescription={
+                            <div>
+                                This will re-enable writing on the primary tablet {alias}. Use with caution.
+                            </div>
+                        }
+                        description={
+                            <div>
+                                Set tablet <span className="font-bold">{alias}</span> to read-write.
+                            </div>
+                        }
+                        action="set tablet to read-only"
+                        mutation={deleteTabletMutation as UseMutationResult}
+                        loadingText="Setting..."
+                        loadedText="Set to read-write"
+                        primary={primary}
+                        alias={alias}
+                    />
+                    <DangerAction
+                        title="Delete Tablet"
+                        documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
+                        primaryDescription={
+                            <div>
+                                Tablet {alias} is the primary tablet. Flag{' '}
+                                <span className="font-mono bg-red-100 p-1 text-sm">-allow_master=true</span> will be applied
+                                in order to delete the primary tablet.
+                            </div>
+                        }
+                        description={
+                            <div>
+                                Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from the
+                                topology, but vttablet and MySQL won't be touched.
+                            </div>
+                        }
+                        action="delete the tablet"
+                        mutation={deleteTabletMutation as UseMutationResult}
+                        loadingText="Deleting..."
+                        loadedText="Delete"
+                        primary={primary}
+                        alias={alias}
+                    />
+                    {/* <div className="flex justify-between items-center">
                         <p className="text-base font-bold m-0 text-gray-900">Delete Tablet</p>
                         <a
                             href="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
@@ -220,7 +287,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                         onClick={() => deleteTabletMutation.mutate()}
                     >
                         {deleteTabletMutation.isLoading ? 'Deleting...' : 'Delete'}
-                    </button>
+                    </button> */}
                 </div>
             </div>
         </div>
