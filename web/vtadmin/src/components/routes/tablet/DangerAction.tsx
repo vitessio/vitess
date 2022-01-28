@@ -42,10 +42,10 @@ const DangerAction: React.FC<DangerActionProps> = ({ title, description, action,
             </p>
             {
                 primary && (
-                    <p className="text-danger">
+                    <div className="text-danger flex items-center">
                         <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
                         {primaryDescription}
-                    </p>
+                    </div>
                 )
             }
 

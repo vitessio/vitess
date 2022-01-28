@@ -225,6 +225,7 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                         primary={primary}
                         alias={alias}
                     />
+                    <div className="border-red-400 border-b w-full" />
                     <DangerAction
                         title="Delete Tablet"
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
