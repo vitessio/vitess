@@ -96,6 +96,10 @@ service VTAdmin {
     rpc ReparentTablet(ReparentTabletRequest) returns (ReparentTabletResponse) {};
     // RunHealthCheck runs a health check on the tablet
     rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
+    // SetReadOnly will set the tablet to read only mode
+    rpc SetReadOnly(SetReadOnlyRequest) returns (SetReadOnlyResponse) {};
+    // SetReadWrite will set the tablet to read-write mode
+    rpc SetReadWrite(SetReadWriteRequest) returns (SetReadWriteResponse) {};
     // StartReplication will run the underlying database command to start replication on a tablet
     rpc StartReplication(StartReplicationRequest) returns (StartReplicationResponse) {};
     // StopReplication will run th underlying database command to stop replication on a tablet
@@ -474,6 +478,24 @@ message RunHealthCheckRequest {
 
 message RunHealthCheckResponse {
     string status = 1;
+}
+
+message SetReadOnlyRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message SetReadOnlyResponse {
+
+}
+
+message SetReadWriteRequest {
+    string alias = 1;
+    repeated string cluster_ids = 2;
+}
+
+message SetReadWriteResponse {
+    
 }
 
 message StartReplicationRequest {

@@ -6,7 +6,6 @@ import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
 import { success, warn } from '../../Snackbar';
-import { TextInput } from '../../TextInput';
 import DangerAction from './DangerAction';
 
 interface AdvancedProps {
@@ -22,7 +21,6 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
     const { clusterID, alias } = useParams<RouteParams>();
     const history = useHistory();
     const primary = isPrimary(tablet);
-    const [typedAlias, setTypedAlias] = useState('');
 
     const deleteTabletMutation = useDeleteTablet(
         { alias, clusterID },
