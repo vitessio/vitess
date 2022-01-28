@@ -55,8 +55,6 @@ type QueryClient interface {
 	ReadTransaction(ctx context.Context, in *query.ReadTransactionRequest, opts ...grpc.CallOption) (*query.ReadTransactionResponse, error)
 	// BeginExecute executes a begin and the specified SQL query.
 	BeginExecute(ctx context.Context, in *query.BeginExecuteRequest, opts ...grpc.CallOption) (*query.BeginExecuteResponse, error)
-	// BeginExecuteBatch executes a begin and a list of queries.
-	BeginExecuteBatch(ctx context.Context, in *query.BeginExecuteBatchRequest, opts ...grpc.CallOption) (*query.BeginExecuteBatchResponse, error)
 	// BeginStreamExecute executes a begin and the specified SQL query.
 	BeginStreamExecute(ctx context.Context, in *query.BeginStreamExecuteRequest, opts ...grpc.CallOption) (Query_BeginStreamExecuteClient, error)
 	// MessageStream streams messages from a message table.
@@ -244,15 +242,6 @@ func (c *queryClient) ReadTransaction(ctx context.Context, in *query.ReadTransac
 func (c *queryClient) BeginExecute(ctx context.Context, in *query.BeginExecuteRequest, opts ...grpc.CallOption) (*query.BeginExecuteResponse, error) {
 	out := new(query.BeginExecuteResponse)
 	err := c.cc.Invoke(ctx, "/queryservice.Query/BeginExecute", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *queryClient) BeginExecuteBatch(ctx context.Context, in *query.BeginExecuteBatchRequest, opts ...grpc.CallOption) (*query.BeginExecuteBatchResponse, error) {
-	out := new(query.BeginExecuteBatchResponse)
-	err := c.cc.Invoke(ctx, "/queryservice.Query/BeginExecuteBatch", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -590,8 +579,6 @@ type QueryServer interface {
 	ReadTransaction(context.Context, *query.ReadTransactionRequest) (*query.ReadTransactionResponse, error)
 	// BeginExecute executes a begin and the specified SQL query.
 	BeginExecute(context.Context, *query.BeginExecuteRequest) (*query.BeginExecuteResponse, error)
-	// BeginExecuteBatch executes a begin and a list of queries.
-	BeginExecuteBatch(context.Context, *query.BeginExecuteBatchRequest) (*query.BeginExecuteBatchResponse, error)
 	// BeginStreamExecute executes a begin and the specified SQL query.
 	BeginStreamExecute(*query.BeginStreamExecuteRequest, Query_BeginStreamExecuteServer) error
 	// MessageStream streams messages from a message table.
@@ -668,9 +655,6 @@ func (UnimplementedQueryServer) ReadTransaction(context.Context, *query.ReadTran
 }
 func (UnimplementedQueryServer) BeginExecute(context.Context, *query.BeginExecuteRequest) (*query.BeginExecuteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginExecute not implemented")
-}
-func (UnimplementedQueryServer) BeginExecuteBatch(context.Context, *query.BeginExecuteBatchRequest) (*query.BeginExecuteBatchResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BeginExecuteBatch not implemented")
 }
 func (UnimplementedQueryServer) BeginStreamExecute(*query.BeginStreamExecuteRequest, Query_BeginStreamExecuteServer) error {
 	return status.Errorf(codes.Unimplemented, "method BeginStreamExecute not implemented")
@@ -994,24 +978,6 @@ func _Query_BeginExecute_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Query_BeginExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(query.BeginExecuteBatchRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(QueryServer).BeginExecuteBatch(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/queryservice.Query/BeginExecuteBatch",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueryServer).BeginExecuteBatch(ctx, req.(*query.BeginExecuteBatchRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Query_BeginStreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(query.BeginStreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1314,10 +1280,6 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BeginExecute",
 			Handler:    _Query_BeginExecute_Handler,
-		},
-		{
-			MethodName: "BeginExecuteBatch",
-			Handler:    _Query_BeginExecuteBatch_Handler,
 		},
 		{
 			MethodName: "MessageAck",
