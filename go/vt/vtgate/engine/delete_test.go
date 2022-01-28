@@ -541,3 +541,40 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 }
+
+func TestDeleteEqualSubshard(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	del := &Delete{
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
+			Query: "dummy_delete",
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "20-"}
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} ks.20-: dummy_delete {} true false`,
+	})
+
+	vc.Rewind()
+	// as it is single shard so autocommit should be allowed.
+	vc.shardForKsid = []string{"-20"}
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
+		`ExecuteMultiShard ks.-20: dummy_delete {} true true`,
+	})
+}

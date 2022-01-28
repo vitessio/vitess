@@ -879,6 +879,43 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 	})
 }
 
+func TestUpdateEqualSubshard(t *testing.T) {
+	vindex, _ := vindexes.NewRegionExperimental("", map[string]string{"region_bytes": "1"})
+	upd := &Update{
+		DML: &DML{
+			RoutingParameters: &RoutingParameters{
+				Opcode: Equal,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				Vindex: vindex,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)},
+			},
+			Query: "dummy_update",
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "20-"}
+	_, err := upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
+		`ExecuteMultiShard ks.-20: dummy_update {} ks.20-: dummy_update {} true false`,
+	})
+
+	vc.Rewind()
+	// as it is single shard so autocommit should be allowed.
+	vc.shardForKsid = []string{"-20"}
+	_, err = upd.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
+		`ExecuteMultiShard ks.-20: dummy_update {} true true`,
+	})
+}
+
 func buildTestVSchema() *vindexes.VSchema {
 	invschema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
