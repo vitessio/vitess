@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -euo pipefail
-
 ROOT=$(pwd)
 if [ "$VTROOT" != "" ]; then
     ROOT=$VTROOT
