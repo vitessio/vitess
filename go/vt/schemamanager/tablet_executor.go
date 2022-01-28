@@ -17,11 +17,10 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
@@ -37,7 +36,7 @@ import (
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
-	requestContext       string
+	migrationContext     string
 	ts                   *topo.Server
 	tmc                  tmclient.TabletManagerClient
 	logger               logutil.Logger
@@ -52,7 +51,7 @@ type TabletExecutor struct {
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
-func NewTabletExecutor(requestContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration) *TabletExecutor {
+func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration) *TabletExecutor {
 	return &TabletExecutor{
 		ts:                   ts,
 		tmc:                  tmc,
@@ -60,7 +59,7 @@ func NewTabletExecutor(requestContext string, ts *topo.Server, tmc tmclient.Tabl
 		isClosed:             true,
 		allowBigSchemaChange: false,
 		waitReplicasTimeout:  waitReplicasTimeout,
-		requestContext:       requestContext,
+		migrationContext:     migrationContext,
 	}
 }
 
@@ -275,7 +274,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		if exec.isOnlineSchemaDDL(stmt) {
-			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext, providedUUID)
+			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.migrationContext, providedUUID)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
 				return err
@@ -291,7 +290,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 		}
 	case *sqlparser.RevertMigration:
 		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext, providedUUID)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.migrationContext, providedUUID)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return err
