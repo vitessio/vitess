@@ -296,7 +296,7 @@ func TestSemiSync(t *testing.T) {
 	newCluster := utils.SetupNewClusterSemiSync(t)
 	utils.StartVtorc(t, newCluster, nil, "test_config_semi_sync.json")
 	defer func() {
-		utils.StopVtorc(t, clusterInfo)
+		utils.StopVtorc(t, newCluster)
 		newCluster.ClusterInstance.Teardown()
 	}()
 	keyspace := &newCluster.ClusterInstance.Keyspaces[0]
@@ -340,7 +340,7 @@ func TestSemiSync(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("timedout waiting for semi sync settings to be fixed")
+			require.Fail(t, "timed out waiting for semi sync settings to be fixed")
 			return
 		default:
 			if utils.IsSemiSyncSetupCorrectly(t, replica1, "ON") &&

@@ -247,7 +247,7 @@ func StartVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []stri
 	workingDir := os.Getenv("PWD")
 	idx := strings.Index(workingDir, "vtorc")
 	if idx == -1 {
-		t.Fatalf("SetupVttabletsAndVtorc should only be used from a package inside the vtorc directory")
+		require.Fail(t, "SetupVttabletsAndVtorc should only be used from a package inside the vtorc directory")
 	}
 
 	pathToConfig := path.Join(workingDir[:idx], "vtorc", "utils", configFileName)
@@ -787,7 +787,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 			log.Infof("Starting MySql for tablet %v", tablet.Alias)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
-				t.Fatalf("Error starting start mysql: %v", err)
+				require.NoError(t, err, "Error starting start mysql: %v", err)
 			}
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 		}
@@ -796,7 +796,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			t.Fatalf("Error starting mysql: %v", err)
+			require.NoError(t, err, "Error starting mysql: %v", err)
 		}
 	}
 
