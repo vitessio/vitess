@@ -94,10 +94,11 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 }
 
 func shouldInclude(table string, excludes []string) bool {
-	// We filter out internal tables in the mysqlctl.GetSchema API call to ignore them
-	// in most cases. In this case, however, the table list can come from the user via
-	// the -tables flag so we need to filter out internal table names here in case a
-	// user has explcility specified some.
+	// We filter out internal tables elsewhere when processing SchemaDefinition
+	// structures built from the GetSchema database related API calls. In this
+	// case, however, the table list comes from the user via the -tables flag
+	// so we need to filter out internal table names here in case a user has
+	// explcility specified some.
 	// This could happen if there's some automated tooling that creates the list of
 	// tables to explicitly specify.
 	// But given that this should never be done in practice, we ignore the request.
@@ -289,6 +290,9 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 	// validate that tables provided are present in the source keyspace
 	var missingTables []string
 	for _, table := range tables {
+		if schema.IsInternalOperationTableName(table) {
+			continue
+		}
 		found := false
 
 		for _, ksTable := range ksTables {
@@ -333,7 +337,9 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 
 	var sourceTables []string
 	for _, td := range sourceSchema.TableDefinitions {
-		sourceTables = append(sourceTables, td.Name)
+		if !schema.IsInternalOperationTableName(td.Name) {
+			sourceTables = append(sourceTables, td.Name)
+		}
 	}
 	return sourceTables, nil
 }

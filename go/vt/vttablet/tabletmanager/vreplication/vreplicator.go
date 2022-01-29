@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -270,6 +271,9 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type, extra from information_schema.columns where table_schema=%s and table_name=%s;"
 	colInfoMap := make(map[string][]*ColumnInfo)
 	for _, td := range schema.TableDefinitions {
+		if vtschema.IsInternalOperationTableName(td.Name) {
+			continue
+		}
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
 		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
 		if err != nil {

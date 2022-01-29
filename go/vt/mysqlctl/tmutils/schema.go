@@ -237,6 +237,9 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 	sqlStrings = append(sqlStrings, createDatabaseSQL)
 
 	for _, td := range sd.TableDefinitions {
+		if schema.IsInternalOperationTableName(td.Name) {
+			continue
+		}
 		if td.Type == TableView {
 			createViewSQL = append(createViewSQL, td.Schema)
 		} else {
