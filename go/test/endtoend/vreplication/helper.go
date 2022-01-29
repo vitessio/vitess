@@ -100,11 +100,9 @@ func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, database string) {
 	require.NotNil(t, qr.Rows)
 	found := false
 	for _, row := range qr.Rows {
-		t.Logf("Found table: %s", row[0].ToString())
 		if schema.IsInternalOperationTableName(row[0].ToString()) {
 			t.Logf("Found internal table in keyspace: %s! Table name: %s", database, row[0].ToString())
 			found = true
-			break
 		}
 	}
 	require.Equal(t, false, found)
