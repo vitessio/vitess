@@ -1121,6 +1121,72 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
 }
 
+// SetReadOnly sets the tablet to read only mode
+func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyRequest) (*vtadminpb.SetReadOnlyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.SetReadOnly")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tablet.Tablet.Alias,
+		Writable:    false,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error setting tablet to read-only: %w", err)
+	}
+
+	return &vtadminpb.SetReadOnlyResponse{}, nil
+}
+
+// SetReadOnly sets the tablet to read only mode
+func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteRequest) (*vtadminpb.SetReadWriteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.SetReadWrite")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tablet.Tablet.Alias,
+		Writable:    true,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error setting tablet to read-only: %w", err)
+	}
+
+	return &vtadminpb.SetReadWriteResponse{}, nil
+}
+
 // StartReplication starts replication on the specified tablet.
 func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplicationRequest) (*vtadminpb.StartReplicationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.StartReplication")
