@@ -438,16 +438,16 @@ func testPartialSwitches(t *testing.T) {
 	nextState = wrangler.WorkflowStateReadsSwitched
 	checkStates(t, currentState, nextState)
 
-	//tstWorkflowSwitchReads(t, "", "")
-	//checkStates(t, nextState, nextState) //idempotency
+	tstWorkflowSwitchReads(t, "", "")
+	checkStates(t, nextState, nextState) //idempotency
 
 	tstWorkflowSwitchWrites(t)
 	currentState = nextState
 	nextState = wrangler.WorkflowStateAllSwitched
 	checkStates(t, currentState, nextState)
 
-	//tstWorkflowSwitchWrites(t)
-	//checkStates(t, nextState, nextState) //idempotency
+	tstWorkflowSwitchWrites(t)
+	checkStates(t, nextState, nextState) //idempotency
 
 	keyspace := "product"
 	if currentWorkflowType == wrangler.ReshardWorkflow {
@@ -485,6 +485,7 @@ func testRestOfWorkflow(t *testing.T) {
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
+	// this function is called for both MoveTables and Reshard, so the reverse workflows exist in different keyspaces
 	keyspace := "product"
 	if currentWorkflowType == wrangler.ReshardWorkflow {
 		keyspace = "customer"
