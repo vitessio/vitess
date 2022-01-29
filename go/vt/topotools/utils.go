@@ -18,14 +18,11 @@ package topotools
 
 import (
 	"reflect"
-	"sort"
 	"sync"
 
 	"context"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -40,37 +37,9 @@ func FindTabletByHostAndPort(tabletMap map[string]*topo.TabletInfo, addr, portNa
 	return nil, topo.NewError(topo.NoNode, addr+":"+portName)
 }
 
-// GetAllTablets returns a sorted list of tablets.
-func GetAllTablets(ctx context.Context, ts *topo.Server, cell string) ([]*topo.TabletInfo, error) {
-	aliases, err := ts.GetTabletsByCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-	sort.Sort(topoproto.TabletAliasList(aliases))
-
-	tabletMap, err := ts.GetTabletMap(ctx, aliases)
-	if err != nil {
-		// we got another error than topo.ErrNoNode
-		return nil, err
-	}
-	tablets := make([]*topo.TabletInfo, 0, len(aliases))
-	for _, tabletAlias := range aliases {
-		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
-		if !ok {
-			// tablet disappeared on us (GetTabletMap ignores
-			// topo.ErrNoNode), just echo a warning
-			log.Warningf("failed to load tablet %v", tabletAlias)
-		} else {
-			tablets = append(tablets, tabletInfo)
-		}
-	}
-
-	return tablets, nil
-}
-
 // GetTabletMapForCell returns a map of TabletInfo keyed by alias as string
 func GetTabletMapForCell(ctx context.Context, ts *topo.Server, cell string) (map[string]*topo.TabletInfo, error) {
-	aliases, err := ts.GetTabletsByCell(ctx, cell)
+	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +65,7 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 	wg.Add(len(cells))
 	for i, cell := range cells {
 		go func(i int, cell string) {
-			results[i], errors[i] = GetAllTablets(ctx, ts, cell)
+			results[i], errors[i] = ts.GetTabletsByCell(ctx, cell)
 			wg.Done()
 		}(i, cell)
 	}

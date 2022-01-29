@@ -19,6 +19,7 @@ package topo
 import (
 	"fmt"
 	"path"
+	"sort"
 	"sync"
 	"time"
 
@@ -253,6 +254,102 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 	}, nil
 }
 
+// GetTabletAliasesByCell returns all the tablet aliases in a cell.
+// It returns ErrNoNode if the cell doesn't exist.
+// It returns (nil, nil) if the cell exists, but there are no tablets in it.
+func (ts *Server) GetTabletAliasesByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
+	// If the cell doesn't exist, this will return ErrNoNode.
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+
+	// List the directory, and parse the aliases
+	children, err := conn.ListDir(ctx, TabletsPath, false /*full*/)
+	if err != nil {
+		if IsErrType(err, NoNode) {
+			// directory doesn't exist, empty list, no error.
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	result := make([]*topodatapb.TabletAlias, len(children))
+	for i, child := range children {
+		result[i], err = topoproto.ParseTabletAlias(child.Name)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+// GetTabletsByCell returns all the tablets in the cell.
+// It returns ErrNoNode if the cell doesn't exist.
+// It returns (nil, nil) if the cell exists, but there are no tablets in it.
+func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*TabletInfo, error) {
+	// If the cell doesn't exist, this will return ErrNoNode.
+	cellConn, err := ts.ConnForCell(ctx, cellAlias)
+	if err != nil {
+		return nil, err
+	}
+	listResults, err := cellConn.List(ctx, TabletsPath)
+	if err != nil || len(listResults) == 0 {
+		// Currently the ZooKeeper and Memory topo implementations do not support scans
+		// so we fall back to the more costly method of fetching the tablets one by one.
+		if IsErrType(err, NoImplementation) {
+			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias)
+		}
+		if IsErrType(err, NoNode) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	tablets := make([]*TabletInfo, len(listResults))
+	for n := range listResults {
+		tablet := &topodatapb.Tablet{}
+		if err := proto.Unmarshal(listResults[n].Value, tablet); err != nil {
+			return nil, err
+		}
+		tablets[n] = &TabletInfo{Tablet: tablet, version: listResults[n].Version}
+	}
+
+	return tablets, nil
+}
+
+// GetTabletsIndividuallyByCell returns a sorted list of tablets for topo servers that do not
+// directly support the topoConn.List() functionality.
+// It returns ErrNoNode if the cell doesn't exist.
+// It returns (nil, nil) if the cell exists, but there are no tablets in it.
+func (ts *Server) GetTabletsIndividuallyByCell(ctx context.Context, cell string) ([]*TabletInfo, error) {
+	// If the cell doesn't exist, this will return ErrNoNode.
+	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+	sort.Sort(topoproto.TabletAliasList(aliases))
+
+	tabletMap, err := ts.GetTabletMap(ctx, aliases)
+	if err != nil {
+		// we got another error than topo.ErrNoNode
+		return nil, err
+	}
+	tablets := make([]*TabletInfo, 0, len(aliases))
+	for _, tabletAlias := range aliases {
+		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
+		if !ok {
+			// tablet disappeared on us (GetTabletMap ignores
+			// topo.ErrNoNode), just echo a warning
+			log.Warningf("failed to load tablet %v", tabletAlias)
+		} else {
+			tablets = append(tablets, tabletInfo)
+		}
+	}
+
+	return tablets, nil
+}
+
 // UpdateTablet updates the tablet data only - not associated replication paths.
 // It also uses a span, and sends the event.
 func (ts *Server) UpdateTablet(ctx context.Context, ti *TabletInfo) error {
@@ -443,36 +540,6 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 	}
 	wg.Wait()
 	return tabletMap, someError
-}
-
-// GetTabletsByCell returns all the tablets in a cell.
-// It returns ErrNode if the cell doesn't exist.
-// It returns (nil, nil) if the cell exists, but there are no tablets.
-func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodatapb.TabletAlias, error) {
-	// If the cell doesn't exist, this will return ErrNoNode.
-	conn, err := ts.ConnForCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-
-	// List the directory, and parse the aliases
-	children, err := conn.ListDir(ctx, TabletsPath, false /*full*/)
-	if err != nil {
-		if IsErrType(err, NoNode) {
-			// directory doesn't exist, empty list, no error.
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	result := make([]*topodatapb.TabletAlias, len(children))
-	for i, child := range children {
-		result[i], err = topoproto.ParseTabletAlias(child.Name)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
 }
 
 // ParseServingTabletType parses the tablet type into the enum, and makes sure

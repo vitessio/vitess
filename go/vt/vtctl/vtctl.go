@@ -576,7 +576,7 @@ var commands = []commandGroup{
 			{
 				name:   "ListAllTablets",
 				method: commandListAllTablets,
-				params: "<cell name1>, <cell name2>, ...",
+				params: "[-keyspace=''] [-tablet_type=<PRIMARY,REPLICA,RDONLY,SPARE>] [<cell_name1>,<cell_name2>,...]",
 				help:   "Lists all tablets in an awk-friendly way.",
 			},
 			{
@@ -2998,19 +2998,29 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 }
 
 func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
+	keyspaceFilter := subFlags.String("keyspace", "", "Keyspace to filter on")
+	tabletTypeStr := subFlags.String("tablet_type", "", "Tablet type to filter on")
+	var err error
+	if err = subFlags.Parse(args); err != nil {
 		return err
 	}
-
+	var tabletTypeFilter topodatapb.TabletType
+	if *tabletTypeStr != "" {
+		tabletTypeFilter, err = parseTabletType(*tabletTypeStr, topoproto.AllTabletTypes)
+		if err != nil {
+			return err
+		}
+	}
 	var cells []string
-
 	if subFlags.NArg() == 1 {
 		cells = strings.Split(subFlags.Arg(0), ",")
 	}
 
 	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
-		Cells:  cells,
-		Strict: false,
+		Cells:      cells,
+		Strict:     false,
+		Keyspace:   *keyspaceFilter,
+		TabletType: tabletTypeFilter,
 	})
 
 	if err != nil {

@@ -110,9 +110,9 @@ func deleteShardCell(ctx context.Context, ts *topo.Server, keyspace string, shar
 		// Therefore we read all the tablets for that cell, and if we find any
 		// in our shard, we'll either abort or try to delete them, depending on
 		// whether recursive=true.
-		aliases, err = ts.GetTabletsByCell(ctx, cell)
+		aliases, err = ts.GetTabletAliasesByCell(ctx, cell)
 		if err != nil {
-			return fmt.Errorf("GetTabletsByCell(%v) failed: %w", cell, err)
+			return fmt.Errorf("GetTabletAliasesByCell(%v) failed: %w", cell, err)
 		}
 	case err == nil:
 		// If a ShardReplication object exists, we trust it to have all the
