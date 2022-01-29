@@ -254,6 +254,11 @@ func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Versi
 	return res.contents, memorytopo.NodeVersion(res.version), nil
 }
 
+// List is part of the topo.Conn interface.
+func (f *FakeConn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
+	return nil, topo.NewError(topo.NoImplementation, "List not supported in fake topo")
+}
+
 // Delete implements the Conn interface
 func (f *FakeConn) Delete(ctx context.Context, filePath string, version topo.Version) error {
 	panic("implement me")

@@ -170,3 +170,20 @@ func (i *IsExpr) format(w *formatter, depth int) {
 		w.WriteString(" IS NOT FALSE")
 	}
 }
+
+func (c *CallExpression) format(w *formatter, depth int) {
+	w.Indent(depth)
+	w.WriteString(strings.ToUpper(c.Method))
+	w.WriteByte('(')
+	for i, expr := range c.Arguments {
+		if i > 0 {
+			w.WriteString(", ")
+		}
+		expr.format(w, depth+1)
+		if !c.Aliases[i].IsEmpty() {
+			w.WriteString(" AS ")
+			w.WriteString(c.Aliases[i].String())
+		}
+	}
+	w.WriteByte(')')
+}

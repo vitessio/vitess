@@ -93,7 +93,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 			// tablets for that cell, and if we find any
 			// in our keyspace / shard, either abort or
 			// try to delete them.
-			aliases, err = wr.ts.GetTabletsByCell(ctx, cell)
+			aliases, err = wr.ts.GetTabletAliasesByCell(ctx, cell)
 			if err != nil {
 				return fmt.Errorf("GetTabletsByCell(%v) failed: %v", cell, err)
 			}

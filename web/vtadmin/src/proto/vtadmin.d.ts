@@ -35078,6 +35078,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest tablet_aliases */
         tablet_aliases?: (topodata.ITabletAlias[]|null);
+
+        /** GetTabletsRequest tablet_type */
+        tablet_type?: (topodata.TabletType|null);
     }
 
     /** Represents a GetTabletsRequest. */
@@ -35103,6 +35106,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest tablet_aliases. */
         public tablet_aliases: topodata.ITabletAlias[];
+
+        /** GetTabletsRequest tablet_type. */
+        public tablet_type: topodata.TabletType;
 
         /**
          * Creates a new GetTabletsRequest instance using the specified properties.
