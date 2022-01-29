@@ -73,6 +73,12 @@ type Conn interface {
 	// Can return ErrNoNode if the file doesn't exist.
 	Get(ctx context.Context, filePath string) ([]byte, Version, error)
 
+	// List returns KV pairs, along with metadata like the version, for
+	// entries where the key contains the specified prefix.
+	// filePathPrefix is a path relative to the root directory of the cell.
+	// Can return ErrNoNode if there are no matches.
+	List(ctx context.Context, filePathPrefix string) ([]KVInfo, error)
+
 	// Delete deletes the provided file.
 	// If version is nil, it is an unconditional delete.
 	// If the last entry of a directory is deleted, using ListDir
@@ -268,6 +274,18 @@ type WatchData struct {
 	// - ErrInterrupted if 'cancel' was called.
 	// - any other platform-specific error.
 	Err error
+}
+
+// KVInfo is a structure that contains a generic key/value pair from
+// the topo server, along with important metadata about it.
+// This should be used to provide multiple entries in List like calls
+// that return N KVs based on a key prefix, so that you don't lose
+// information or context you would otherwise have when using Get for
+// a single key.
+type KVInfo struct {
+	Key     []byte
+	Value   []byte
+	Version Version // version - used to prevent stomping concurrent writes
 }
 
 // LeaderParticipation is the object returned by NewLeaderParticipation.

@@ -102,6 +102,10 @@ vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 
 The command now accepts an optional `-json` flag. With this flag, the output is a valid JSON listing all columns and rows.
 
+## vtadmin-web updated to node v16.13.0 (LTS)
+
+Building vtadmin-web now requires node >= v16.13.0 (LTS). Upgrade notes are given in https://github.com/vitessio/vitess/pull/9136. 
+
 ### PlannedReparentShard for cluster initialization
 For setting up the cluster and electing a primary for the first time, `PlannedReparentShard` should be used
 instead of `InitShardPrimary`. 

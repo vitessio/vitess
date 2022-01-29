@@ -1130,6 +1130,9 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	defer span.Finish()
 
 	span.Annotate("cells", strings.Join(req.Cells, ","))
+	if req.TabletType != topodatapb.TabletType_UNKNOWN {
+		span.Annotate("tablet_type", topodatapb.TabletType_name[int32(req.TabletType)])
+	}
 	span.Annotate("strict", req.Strict)
 
 	// It is possible that an old primary has not yet updated its type in the
@@ -1231,15 +1234,13 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		go func(cell string) {
 			defer wg.Done()
 
-			tablets, err := topotools.GetAllTablets(ctx, s.ts, cell)
+			tablets, err := s.ts.GetTabletsByCell(ctx, cell)
 			if err != nil {
 				if req.Strict {
 					log.Infof("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err)
 					cancel()
 				}
-
-				rec.RecordError(fmt.Errorf("GetAllTablets(cell = %s) failed: %w", cell, err))
-
+				rec.RecordError(fmt.Errorf("GetTabletsByCell(%s) failed: %w", cell, err))
 				return
 			}
 
@@ -1264,6 +1265,9 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 	for _, tablet := range allTablets {
 		if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
+			continue
+		}
+		if req.TabletType != 0 && tablet.Type != req.TabletType {
 			continue
 		}
 
@@ -2627,7 +2631,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 
 			for _, cell := range cellSet.List() {
 				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-				aliases, err := s.ts.GetTabletsByCell(getTabletsByCellCtx, cell)
+				aliases, err := s.ts.GetTabletAliasesByCell(getTabletsByCellCtx, cell)
 				getTabletsByCellCancel() // don't defer in a loop
 
 				if err != nil {

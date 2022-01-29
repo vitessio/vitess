@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -260,6 +261,11 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 	}
 
+	charsets := make([]collations.ID, len(flds))
+	for i, fld := range flds {
+		charsets[i] = collations.ID(fld.Charset)
+	}
+
 	err = send(&binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
 		Pkfields: pkfields,
@@ -305,7 +311,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			lastpk[i] = mysqlrow[pk]
 		}
 		// Reuse the vstreamer's filter.
-		ok, err := rs.plan.filter(mysqlrow, filtered)
+		ok, err := rs.plan.filter(mysqlrow, filtered, charsets)
 		if err != nil {
 			return err
 		}
