@@ -50,6 +50,7 @@ var (
 		"11",
 		"12",
 		"13",
+		"14",
 		"15",
 		"16",
 		"17",
@@ -105,10 +106,8 @@ var (
 		"vtorc",
 	}
 
-	clusterSelfHostedList = []string{
-		"14",
-	}
-	clusterDockerList = []string{
+	clusterSelfHostedList []string
+	clusterDockerList     = []string{
 		"vreplication_basic",
 		"vreplication_v2",
 	}
