@@ -56,6 +56,7 @@ var (
 
 	streamExtInfoKs2        = fmt.Sprintf(streamExtInfoQuery, "ks2", "test")
 	reverseStreamExtInfoKs2 = fmt.Sprintf(streamExtInfoQuery, "ks2", "test_reverse")
+	reverseStreamExtInfoKs1 = fmt.Sprintf(streamExtInfoQuery, "ks1", "test_reverse")
 	streamExtInfoKs         = fmt.Sprintf(streamExtInfoQuery, "ks", "test")
 )
 
@@ -236,6 +237,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
 		}
+		log.Infof(">>>>>>>>>>>>> Invariant: %s", reverseStreamExtInfoKs1)
 		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),

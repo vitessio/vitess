@@ -37,23 +37,6 @@ const (
 
 // region Move Tables Public API
 
-// VReplicationWorkflow stores various internal objects for a workflow
-type VReplicationWorkflow struct {
-	workflowType VReplicationWorkflowType
-	ctx          context.Context
-	wr           *Wrangler
-	params       *VReplicationWorkflowParams
-	ts           *trafficSwitcher
-	ws           *workflow.State
-}
-
-func (vrw *VReplicationWorkflow) String() string {
-	s := ""
-	s += fmt.Sprintf("Parameters: %+v\n", vrw.params)
-	s += fmt.Sprintf("State: %+v", vrw.CachedState())
-	return s
-}
-
 // VReplicationWorkflowParams stores args and options passed to a VReplicationWorkflow command
 type VReplicationWorkflowParams struct {
 	WorkflowType                      VReplicationWorkflowType
@@ -79,6 +62,23 @@ type VReplicationWorkflowParams struct {
 	ExternalCluster string
 }
 
+// VReplicationWorkflow stores various internal objects for a workflow
+type VReplicationWorkflow struct {
+	workflowType VReplicationWorkflowType
+	ctx          context.Context
+	wr           *Wrangler
+	params       *VReplicationWorkflowParams
+	ts           *trafficSwitcher
+	ws           *workflow.State
+}
+
+func (vrw *VReplicationWorkflow) String() string {
+	s := ""
+	s += fmt.Sprintf("Parameters: %+v\n", vrw.params)
+	s += fmt.Sprintf("State: %+v", vrw.CachedState())
+	return s
+}
+
 // NewVReplicationWorkflow sets up a MoveTables or Reshard workflow based on options provided, deduces the state of the
 // workflow from the persistent state stored in the vreplication table and the topo
 func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VReplicationWorkflowType,
@@ -101,10 +101,16 @@ func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VR
 	return vrw, nil
 }
 
+func (vrw *VReplicationWorkflow) reloadState() (*workflow.State, error) {
+	var err error
+	vrw.ts, vrw.ws, err = vrw.wr.getWorkflowState(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow)
+	return vrw.ws, err
+}
+
 // CurrentState reloads and returns a human readable workflow state
 func (vrw *VReplicationWorkflow) CurrentState() string {
 	var err error
-	vrw.ts, vrw.ws, err = vrw.wr.getWorkflowState(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow)
+	vrw.ws, err = vrw.reloadState()
 	if err != nil {
 		return err.Error()
 	}
@@ -258,11 +264,13 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction workflow.TrafficSwitchD
 	vrw.params.Direction = direction
 
 	workflowName := vrw.params.Workflow
+	keyspace := vrw.params.TargetKeyspace
 	if vrw.params.Direction == workflow.DirectionBackward {
 		workflowName = workflow.ReverseWorkflowName(workflowName)
+		keyspace = vrw.params.SourceKeyspace
 	}
 
-	reason, err := vrw.canSwitch(workflowName)
+	reason, err := vrw.canSwitch(keyspace, workflowName)
 	if err != nil {
 		return nil, err
 	}
@@ -467,10 +475,21 @@ const (
 	cannotSwitchError          = "workflow has errors"
 	cannotSwitchCopyIncomplete = "copy is still in progress"
 	cannotSwitchHighLag        = "replication lag %ds is higher than allowed lag %ds"
+	cannotSwitchFrozen         = "workflow is frozen"
 )
 
-func (vrw *VReplicationWorkflow) canSwitch(workflowName string) (reason string, err error) {
-	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, vrw.params.TargetKeyspace)
+func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reason string, err error) {
+	ws, err := vrw.reloadState()
+	if err != nil {
+		return "", err
+	}
+	if vrw.params.Direction == workflow.DirectionForward && ws.WritesSwitched ||
+		vrw.params.Direction == workflow.DirectionBackward && !ws.WritesSwitched {
+		log.Infof("writes already switched no need to check lag")
+		return "", nil
+	}
+	log.Infof("state:%s, direction %d, switched %t", vrw.CachedState(), vrw.params.Direction, ws.WritesSwitched)
+	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace)
 	if err != nil {
 		return "", err
 	}
@@ -484,6 +503,9 @@ func (vrw *VReplicationWorkflow) canSwitch(workflowName string) (reason string, 
 				return cannotSwitchError, nil
 			}
 		}
+	}
+	if result.Frozen {
+		return cannotSwitchFrozen, nil
 	}
 	if result.MaxVReplicationTransactionLag > vrw.params.MaxAllowedTransactionLagSeconds {
 		return fmt.Sprintf(cannotSwitchHighLag, result.MaxVReplicationTransactionLag, vrw.params.MaxAllowedTransactionLagSeconds), nil
