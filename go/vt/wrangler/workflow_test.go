@@ -37,12 +37,13 @@ var noResult = &sqltypes.Result{}
 
 func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
 	p := &VReplicationWorkflowParams{
-		Workflow:       "wf1",
-		SourceKeyspace: "sourceks",
-		TargetKeyspace: "targetks",
-		Tables:         "customer,corder",
-		Cells:          cells,
-		TabletTypes:    tabletTypes,
+		Workflow:                        "wf1",
+		SourceKeyspace:                  "sourceks",
+		TargetKeyspace:                  "targetks",
+		Tables:                          "customer,corder",
+		Cells:                           cells,
+		TabletTypes:                     tabletTypes,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	mtwf := &VReplicationWorkflow{
 		workflowType: MoveTablesWorkflow,
@@ -148,7 +149,7 @@ func TestCanSwitch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			expectCanSwitchQueries(t, tme, "ks2", tc.state, tc.streamLag)
 			p.MaxAllowedTransactionLagSeconds = tc.allowedLag
-			reason, err := wf.canSwitch(workflowName)
+			reason, err := wf.canSwitch("ks2", workflowName)
 			require.NoError(t, err)
 			expected := ""
 			if reason != "" {
@@ -236,16 +237,19 @@ func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
 	}
 }
 
+const defaultMaxAllowedTransactionLagSeconds = 30
+
 func TestMoveTablesV2(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
-		SourceKeyspace: "ks1",
-		TargetKeyspace: "ks2",
-		Tables:         "t1,t2",
-		Cells:          "cell1,cell2",
-		TabletTypes:    "REPLICA,RDONLY,PRIMARY",
-		Timeout:        DefaultActionTimeout,
+		Workflow:                        "test",
+		SourceKeyspace:                  "ks1",
+		TargetKeyspace:                  "ks2",
+		Tables:                          "t1,t2",
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "REPLICA,RDONLY,PRIMARY",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
@@ -284,13 +288,14 @@ func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Serv
 func TestMoveTablesV2Complete(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
-		SourceKeyspace: "ks1",
-		TargetKeyspace: "ks2",
-		Tables:         "t1,t2",
-		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
-		Timeout:        DefaultActionTimeout,
+		Workflow:                        "test",
+		SourceKeyspace:                  "ks1",
+		TargetKeyspace:                  "ks2",
+		Tables:                          "t1,t2",
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "replica,rdonly,primary",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
@@ -332,13 +337,14 @@ func testReverse(t *testing.T, wf *VReplicationWorkflow) error {
 func TestMoveTablesV2Partial(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
-		SourceKeyspace: "ks1",
-		TargetKeyspace: "ks2",
-		Tables:         "t1,t2",
-		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
-		Timeout:        DefaultActionTimeout,
+		Workflow:                        "test",
+		SourceKeyspace:                  "ks1",
+		TargetKeyspace:                  "ks2",
+		Tables:                          "t1,t2",
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "replica,rdonly,primary",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
@@ -388,13 +394,14 @@ func TestMoveTablesV2Partial(t *testing.T) {
 func TestMoveTablesV2Cancel(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
-		SourceKeyspace: "ks1",
-		TargetKeyspace: "ks2",
-		Tables:         "t1,t2",
-		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
-		Timeout:        DefaultActionTimeout,
+		Workflow:                        "test",
+		SourceKeyspace:                  "ks1",
+		TargetKeyspace:                  "ks2",
+		Tables:                          "t1,t2",
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "replica,rdonly,primary",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
@@ -426,14 +433,15 @@ func TestReshardV2(t *testing.T) {
 	sourceShards := []string{"-40", "40-"}
 	targetShards := []string{"-80", "80-"}
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
-		SourceKeyspace: "ks",
-		TargetKeyspace: "ks",
-		SourceShards:   sourceShards,
-		TargetShards:   targetShards,
-		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
-		Timeout:        DefaultActionTimeout,
+		Workflow:                        "test",
+		SourceKeyspace:                  "ks",
+		TargetKeyspace:                  "ks",
+		SourceShards:                    sourceShards,
+		TargetShards:                    targetShards,
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "replica,rdonly,primary",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
 	defer tme.stopTablets(t)
@@ -460,14 +468,15 @@ func TestVRWSchemaValidation(t *testing.T) {
 	sourceShards := []string{"-80", "80-"}
 	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
-		SourceKeyspace: "ks",
-		TargetKeyspace: "ks",
-		SourceShards:   sourceShards,
-		TargetShards:   targetShards,
-		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
-		Timeout:        DefaultActionTimeout,
+		Workflow:                        "test",
+		SourceKeyspace:                  "ks",
+		TargetKeyspace:                  "ks",
+		SourceShards:                    sourceShards,
+		TargetShards:                    targetShards,
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "replica,rdonly,primary",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	schm := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
@@ -496,14 +505,15 @@ func TestReshardV2Cancel(t *testing.T) {
 	sourceShards := []string{"-40", "40-"}
 	targetShards := []string{"-80", "80-"}
 	p := &VReplicationWorkflowParams{
-		Workflow:       "test",
-		SourceKeyspace: "ks",
-		TargetKeyspace: "ks",
-		SourceShards:   sourceShards,
-		TargetShards:   targetShards,
-		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,primary",
-		Timeout:        DefaultActionTimeout,
+		Workflow:                        "test",
+		SourceKeyspace:                  "ks",
+		TargetKeyspace:                  "ks",
+		SourceShards:                    sourceShards,
+		TargetShards:                    targetShards,
+		Cells:                           "cell1,cell2",
+		TabletTypes:                     "replica,rdonly,primary",
+		Timeout:                         DefaultActionTimeout,
+		MaxAllowedTransactionLagSeconds: defaultMaxAllowedTransactionLagSeconds,
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
 	defer tme.stopTablets(t)
@@ -613,6 +623,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
 		dbclient.addInvariant("select * from _vt.vreplication where id = 2", runningResult(2))
 		dbclient.addInvariant("insert into _vt.resharding_journal", noResult)
+		dbclient.addInvariant(reverseStreamExtInfoKs1, noResult)
 	}
 	state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"pos|state|message",

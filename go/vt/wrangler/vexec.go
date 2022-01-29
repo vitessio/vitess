@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -347,7 +349,8 @@ type ReplicationStatusResult struct {
 	MaxVReplicationLag int64
 	// MaxVReplicationTransactionLag represents the lag between the current time and the timestamp of the last transaction seen across all shards.
 	MaxVReplicationTransactionLag int64
-
+	// Frozen is true workflow has been deemed complete and is in a limbo "frozen" state (Message=="FROZEN")
+	Frozen bool
 	// Statuses is a map of <shard>/<primary tablet alias> : ShardReplicationStatus (for the given shard).
 	ShardStatuses map[string]*ShardReplicationStatus
 }
@@ -524,6 +527,10 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			sourceKeyspace = sk
 			sourceShards.Insert(status.Bls.Shard)
 			rsrStatus = append(rsrStatus, status)
+
+			if status.Message == workflow2.Frozen {
+				rsr.Frozen = true
+			}
 
 			// MaxVReplicationLag is the time since the last event was processed from the source
 			// The last event can be an actual binlog event or a heartbeat in case no binlog events occur within (default) 1 second
