@@ -27,7 +27,6 @@ import (
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -136,9 +135,6 @@ func (uvs *uvstreamer) buildTablePlan() error {
 	tables := uvs.se.GetSchema()
 	for range tables {
 		for _, rule := range uvs.filter.Rules {
-			if vtschema.IsInternalOperationTableName(rule.Match) {
-				continue
-			}
 			if !strings.HasPrefix(rule.Match, "/") {
 				_, ok := tables[rule.Match]
 				if !ok {
@@ -148,9 +144,6 @@ func (uvs *uvstreamer) buildTablePlan() error {
 		}
 	}
 	for tableName := range tables {
-		if vtschema.IsInternalOperationTableName(tableName) {
-			continue
-		}
 		rule, err := matchTable(tableName, uvs.filter, tables)
 		if err != nil {
 			return err

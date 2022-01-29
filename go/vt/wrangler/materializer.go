@@ -329,17 +329,15 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	sourceSchema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
 	if err != nil {
 		return nil, err
 	}
 	log.Infof("got table schemas from source primary %v.", primary)
 
 	var sourceTables []string
-	for _, td := range sourceSchema.TableDefinitions {
-		if !schema.IsInternalOperationTableName(td.Name) {
-			sourceTables = append(sourceTables, td.Name)
-		}
+	for _, td := range schema.TableDefinitions {
+		sourceTables = append(sourceTables, td.Name)
 	}
 	return sourceTables, nil
 }
@@ -536,7 +534,9 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil {
-		return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
+		if !schema.IsInternalOperationTableName(sourceTableName) {
+			return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
+		}
 	}
 	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
 		// For a conflict, the vindex name and column should match.
