@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -71,9 +70,6 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
 		prefix := ""
 		for name := range plan.TargetTables {
-			if schema.IsInternalOperationTableName(name) {
-				continue
-			}
 			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
 			prefix = ", "
 		}

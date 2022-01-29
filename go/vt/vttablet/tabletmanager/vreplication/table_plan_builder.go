@@ -132,9 +132,6 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		stats:         stats,
 	}
 	for tableName := range colInfoMap {
-		if schema.IsInternalOperationTableName(tableName) {
-			continue
-		}
 		lastpk, ok := copyState[tableName]
 		if ok && lastpk == nil {
 			// Don't replicate uncopied tables.
