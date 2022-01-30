@@ -84,7 +84,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	}
 
 	// Create a TLS server listener.
-	listener, err := tls.Listen("tcp", ":0", serverConfig)
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
 	if err != nil {
 		t.Fatalf("Listen failed: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestNumberOfCertsWithCombining(t *testing.T) {
 
 func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Config) {
 	// Create a TLS server listener.
-	listener, err := tls.Listen("tcp", ":0", serverConfig)
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
 	if err != nil {
 		t.Fatalf("Listen failed: %v", err)
 	}
