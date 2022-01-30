@@ -817,6 +817,10 @@ func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sq
 	panic("implement me")
 }
 
+func (t testRun) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
+	panic("implement me")
+}
+
 func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
 	if strings.Contains(query, "error") {
 		return t.err
