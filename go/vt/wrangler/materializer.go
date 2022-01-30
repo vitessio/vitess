@@ -98,7 +98,7 @@ func shouldInclude(table string, excludes []string) bool {
 	// structures built from the GetSchema database related API calls. In this
 	// case, however, the table list comes from the user via the -tables flag
 	// so we need to filter out internal table names here in case a user has
-	// explcility specified some.
+	// explicitly specified some.
 	// This could happen if there's some automated tooling that creates the list of
 	// tables to explicitly specify.
 	// But given that this should never be done in practice, we ignore the request.
