@@ -28,11 +28,18 @@ import (
 // binlogEvent.
 type mysql56BinlogEvent struct {
 	binlogEvent
+	semiSyncAckRequested bool
 }
 
 // NewMysql56BinlogEvent creates a BinlogEvent from given byte array
 func NewMysql56BinlogEvent(buf []byte) BinlogEvent {
-	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf)}
+	buf, ackRequested := isSemiSyncAckRequested(buf)
+	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: ackRequested}
+}
+
+// IsSemiSyncAckRequested implements BinlogEvent.IsSemiSyncAckRequested().
+func (ev mysql56BinlogEvent) IsSemiSyncAckRequested() bool {
+	return ev.semiSyncAckRequested
 }
 
 // IsGTID implements BinlogEvent.IsGTID().

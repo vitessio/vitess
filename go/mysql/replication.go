@@ -68,6 +68,25 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	return nil
 }
 
+// SendSemiSyncAck sends an ACK to the source, in response to binlog events
+// the source has tagged with a SEMI_SYNC_ACK_REQ
+// see https://dev.mysql.com/doc/internals/en/semi-sync-ack-packet.html
+func (c *Conn) SendSemiSyncAck(binlogFilename string, binlogPos uint64) error {
+	c.sequence = 0
+	length := 1 + // ComSemiSyncAck
+		8 + // binlog-pos
+		len(binlogFilename) // binlog-filename
+	data, pos := c.startEphemeralPacketWithHeader(length)
+	pos = writeByte(data, pos, ComSemiSyncAck)
+	pos = writeUint64(data, pos, binlogPos)
+	_ = writeEOFString(data, pos, binlogFilename)
+	if err := c.writeEphemeralPacket(); err != nil {
+		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
+	}
+	return nil
+
+}
+
 // SemiSyncExtensionLoaded checks if the semisync extension has been loaded.
 // It should work for both MariaDB and MySQL.
 func (c *Conn) SemiSyncExtensionLoaded() bool {
