@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -93,20 +94,16 @@ func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, quer
 	}
 }
 
-func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, database string) {
-	t.Logf("Checking that no internal tables exist in keyspace: %s", database)
-	qr := execVtgateQuery(t, conn, database, "show tables")
+// verifyNoInternalTables can e.g. be used to confirm that no internal tables were
+// copied from a source to a target during a MoveTables or Reshard operation.
+func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {
+	qr := execVtgateQuery(t, conn, keyspaceShard, "show tables")
 	require.NotNil(t, qr)
 	require.NotNil(t, qr.Rows)
-	found := false
 	for _, row := range qr.Rows {
-		if schema.IsInternalOperationTableName(row[0].ToString()) {
-			t.Logf("Found internal table in keyspace: %s! Table name: %s", database, row[0].ToString())
-			found = true
-		}
+		tableName := row[0].ToString()
+		assert.False(t, schema.IsInternalOperationTableName(tableName), "found internal table %s in shard %s", tableName, keyspaceShard)
 	}
-	require.Equal(t, false, found)
-	t.Logf("Found no internal tables in keyspace: %s!", database)
 }
 
 func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
