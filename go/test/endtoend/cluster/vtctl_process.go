@@ -83,7 +83,7 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 	)
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
-	return filterResultWhenRunsForCoverage(string(resultByte)), err
+	return filterResultForWarning(filterResultWhenRunsForCoverage(string(resultByte))), err
 }
 
 // ExecuteCommand executes any vtctlclient command
