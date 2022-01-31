@@ -30,7 +30,6 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // DBAction is used to tell ChangeTabletType whether to call SetReadOnly on change to
@@ -143,11 +142,6 @@ func (tm *TabletManager) RefreshState(ctx context.Context) error {
 // RunHealthCheck will manually run the health check on the tablet.
 func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 	tm.QueryServiceControl.BroadcastHealth()
-}
-
-// IgnoreHealthError sets the regexp for health check errors to ignore.
-func (tm *TabletManager) IgnoreHealthError(ctx context.Context, pattern string) error {
-	return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "deprecated")
 }
 
 func convertBoolToSemiSyncAction(semiSync bool) SemiSyncAction {

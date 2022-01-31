@@ -70,21 +70,10 @@ func (dml *DML) execUnsharded(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return execShard(vcursor, dml.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
 
-func (dml *DML) execEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
+func (dml *DML) execMultiDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
 	if len(rss) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	if len(rss) != 1 {
-		return nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
-	}
-	err := dmlSpecialFunc(vcursor, bindVars, rss)
-	if err != nil {
-		return nil, err
-	}
-	return execShard(vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (dml *DML) execMultiDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
 	err := dmlSpecialFunc(vcursor, bindVars, rss)
 	if err != nil {
 		return nil, err

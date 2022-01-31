@@ -12788,180 +12788,6 @@ export namespace tabletmanagerdata {
         public toJSON(): { [k: string]: any };
     }
 
-    /** Properties of an IgnoreHealthErrorRequest. */
-    interface IIgnoreHealthErrorRequest {
-
-        /** IgnoreHealthErrorRequest pattern */
-        pattern?: (string|null);
-    }
-
-    /** Represents an IgnoreHealthErrorRequest. */
-    class IgnoreHealthErrorRequest implements IIgnoreHealthErrorRequest {
-
-        /**
-         * Constructs a new IgnoreHealthErrorRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.IIgnoreHealthErrorRequest);
-
-        /** IgnoreHealthErrorRequest pattern. */
-        public pattern: string;
-
-        /**
-         * Creates a new IgnoreHealthErrorRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns IgnoreHealthErrorRequest instance
-         */
-        public static create(properties?: tabletmanagerdata.IIgnoreHealthErrorRequest): tabletmanagerdata.IgnoreHealthErrorRequest;
-
-        /**
-         * Encodes the specified IgnoreHealthErrorRequest message. Does not implicitly {@link tabletmanagerdata.IgnoreHealthErrorRequest.verify|verify} messages.
-         * @param message IgnoreHealthErrorRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IIgnoreHealthErrorRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified IgnoreHealthErrorRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.IgnoreHealthErrorRequest.verify|verify} messages.
-         * @param message IgnoreHealthErrorRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IIgnoreHealthErrorRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an IgnoreHealthErrorRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns IgnoreHealthErrorRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.IgnoreHealthErrorRequest;
-
-        /**
-         * Decodes an IgnoreHealthErrorRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns IgnoreHealthErrorRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.IgnoreHealthErrorRequest;
-
-        /**
-         * Verifies an IgnoreHealthErrorRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an IgnoreHealthErrorRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns IgnoreHealthErrorRequest
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.IgnoreHealthErrorRequest;
-
-        /**
-         * Creates a plain object from an IgnoreHealthErrorRequest message. Also converts values to other types if specified.
-         * @param message IgnoreHealthErrorRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.IgnoreHealthErrorRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this IgnoreHealthErrorRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of an IgnoreHealthErrorResponse. */
-    interface IIgnoreHealthErrorResponse {
-    }
-
-    /** Represents an IgnoreHealthErrorResponse. */
-    class IgnoreHealthErrorResponse implements IIgnoreHealthErrorResponse {
-
-        /**
-         * Constructs a new IgnoreHealthErrorResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.IIgnoreHealthErrorResponse);
-
-        /**
-         * Creates a new IgnoreHealthErrorResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns IgnoreHealthErrorResponse instance
-         */
-        public static create(properties?: tabletmanagerdata.IIgnoreHealthErrorResponse): tabletmanagerdata.IgnoreHealthErrorResponse;
-
-        /**
-         * Encodes the specified IgnoreHealthErrorResponse message. Does not implicitly {@link tabletmanagerdata.IgnoreHealthErrorResponse.verify|verify} messages.
-         * @param message IgnoreHealthErrorResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.IIgnoreHealthErrorResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified IgnoreHealthErrorResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.IgnoreHealthErrorResponse.verify|verify} messages.
-         * @param message IgnoreHealthErrorResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.IIgnoreHealthErrorResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an IgnoreHealthErrorResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns IgnoreHealthErrorResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.IgnoreHealthErrorResponse;
-
-        /**
-         * Decodes an IgnoreHealthErrorResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns IgnoreHealthErrorResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.IgnoreHealthErrorResponse;
-
-        /**
-         * Verifies an IgnoreHealthErrorResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an IgnoreHealthErrorResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns IgnoreHealthErrorResponse
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.IgnoreHealthErrorResponse;
-
-        /**
-         * Creates a plain object from an IgnoreHealthErrorResponse message. Also converts values to other types if specified.
-         * @param message IgnoreHealthErrorResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.IgnoreHealthErrorResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this IgnoreHealthErrorResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
     /** Properties of a ReloadSchemaRequest. */
     interface IReloadSchemaRequest {
 
@@ -35312,6 +35138,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest tablet_aliases */
         tablet_aliases?: (topodata.ITabletAlias[]|null);
+
+        /** GetTabletsRequest tablet_type */
+        tablet_type?: (topodata.TabletType|null);
     }
 
     /** Represents a GetTabletsRequest. */
@@ -35337,6 +35166,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest tablet_aliases. */
         public tablet_aliases: topodata.ITabletAlias[];
+
+        /** GetTabletsRequest tablet_type. */
+        public tablet_type: topodata.TabletType;
 
         /**
          * Creates a new GetTabletsRequest instance using the specified properties.

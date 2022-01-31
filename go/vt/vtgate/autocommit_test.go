@@ -17,11 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -95,15 +94,15 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
 		Sql: "delete from name_lastname_keyspace_id_map where `name` = :name and lastname = :lastname and keyspace_id = :keyspace_id",
 		BindVariables: map[string]*querypb.BindVariable{
-			"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
+			"lastname":    sqltypes.StringBindVariable("foo"),
 			"name":        sqltypes.Int32BindVariable(1),
 			"keyspace_id": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 		},
 	}, {
 		Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":        sqltypes.BytesBindVariable([]byte("myname")),
-			"lastname_0":    sqltypes.BytesBindVariable([]byte("mylastname")),
+			"name_0":        sqltypes.StringBindVariable("myname"),
+			"lastname_0":    sqltypes.StringBindVariable("mylastname"),
 			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 		},
 	}})
@@ -264,7 +263,7 @@ func TestAutocommitInsertLookup(t *testing.T) {
 	assertQueries(t, sbclookup, []*querypb.BoundQuery{{
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name_0":    sqltypes.BytesBindVariable([]byte("myname")),
+			"name_0":    sqltypes.StringBindVariable("myname"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}})
@@ -274,7 +273,7 @@ func TestAutocommitInsertLookup(t *testing.T) {
 		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
+			"_name_0": sqltypes.StringBindVariable("myname"),
 			"__seq0":  sqltypes.Int64BindVariable(1),
 		},
 	}})

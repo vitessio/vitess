@@ -430,7 +430,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			if cell == "" {
 				return nil, errors.New("cell param required")
 			}
-			return ts.GetTabletsByCell(ctx, cell)
+			return ts.GetTabletAliasesByCell(ctx, cell)
 		}
 
 		// Get tablet health.

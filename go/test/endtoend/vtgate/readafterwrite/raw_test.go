@@ -147,9 +147,9 @@ func TestRAWSettings(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	assertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARBINARY("") FLOAT64(0) VARBINARY("off")]]`)
+	assertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("") FLOAT64(0) VARCHAR("off")]]`)
 	exec(t, conn, `set read_after_write_gtid = 'some-gtid:1', read_after_write_timeout = 0.2, session_track_gtids = own_gtid`)
-	assertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARBINARY("some-gtid:1") FLOAT64(0.2) VARBINARY("own_gtid")]]`)
+	assertMatches(t, conn, `select @@read_after_write_gtid, @@read_after_write_timeout, @@session_track_gtids`, `[[VARCHAR("some-gtid:1") FLOAT64(0.2) VARCHAR("own_gtid")]]`)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {

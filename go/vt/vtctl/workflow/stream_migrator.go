@@ -634,9 +634,7 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	if !ok {
-		if schema.IsInternalOperationTableName(rule.Match) {
-			log.Infof("found internal table %s, ignoring in rule templatizing", rule.Match)
-		} else {
+		if !schema.IsInternalOperationTableName(rule.Match) {
 			return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
 		}
 	}
