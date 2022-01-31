@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -285,4 +287,69 @@ func TestCircularReplication(t *testing.T) {
 	require.NoError(t, err)
 	// check that the writes still succeed
 	utils.VerifyWritesSucceed(t, clusterInfo, primary, []*cluster.Vttablet{replica}, 10*time.Second)
+}
+
+// TestSemiSync tests that semi-sync is setup correctly by vtorc if it is incorrectly set
+func TestSemiSync(t *testing.T) {
+	// stop any vtorc instance running due to a previous test.
+	utils.StopVtorc(t, clusterInfo)
+	newCluster := utils.SetupNewClusterSemiSync(t)
+	utils.StartVtorc(t, newCluster, nil, "test_config_semi_sync.json")
+	defer func() {
+		utils.StopVtorc(t, newCluster)
+		newCluster.ClusterInstance.Teardown()
+	}()
+	keyspace := &newCluster.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	primary := utils.ShardPrimaryTablet(t, newCluster, keyspace, shard0)
+	assert.NotNil(t, primary, "should have elected a primary")
+
+	var replica1, replica2, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == primary.Alias {
+			continue
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		} else {
+			if replica1 == nil {
+				replica1 = tablet
+			} else {
+				replica2 = tablet
+			}
+		}
+	}
+
+	assert.NotNil(t, replica1, "could not find any replica tablet")
+	assert.NotNil(t, replica2, "could not find the second replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// check that the replication is setup correctly
+	utils.CheckReplication(t, newCluster, primary, []*cluster.Vttablet{rdonly, replica1, replica2}, 10*time.Second)
+
+	_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", replica1, "")
+	require.NoError(t, err)
+	_, err = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 1", rdonly, "")
+	require.NoError(t, err)
+	_, err = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_master_enabled = 0", primary, "")
+	require.NoError(t, err)
+
+	timeout := time.After(20 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			require.Fail(t, "timed out waiting for semi sync settings to be fixed")
+			return
+		default:
+			if utils.IsSemiSyncSetupCorrectly(t, replica1, "ON") &&
+				utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF") &&
+				utils.IsPrimarySemiSyncSetupCorrectly(t, primary, "ON") {
+				return
+			}
+			log.Warningf("semi sync settings not fixed yet")
+			time.Sleep(1 * time.Second)
+		}
+	}
 }

@@ -365,6 +365,11 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 func testReshardV2Workflow(t *testing.T) {
 	currentWorkflowType = wrangler.ReshardWorkflow
 
+	// create internal tables on the original customer shards that should be
+	// ignored and not show up on the new shards
+	execMultipleQueries(t, vtgateConn, targetKs+"/-80", internalSchema)
+	execMultipleQueries(t, vtgateConn, targetKs+"/80-", internalSchema)
+
 	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
 	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
 	if !strings.Contains(lastOutput, "Workflow started successfully") {
@@ -372,6 +377,11 @@ func testReshardV2Workflow(t *testing.T) {
 	}
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
+
+	// Verify that we've properly ignored any internal operational tables
+	// and that they were not copied to the new target shards
+	verifyNoInternalTables(t, vtgateConn, targetKs+"/-40")
+	verifyNoInternalTables(t, vtgateConn, targetKs+"/c0-")
 
 	testRestOfWorkflow(t)
 }
@@ -381,12 +391,18 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
-	createMoveTablesWorkflow(t, "customer")
+	// The purge table should get skipped/ignored
+	// If it's not then we'll get an error as the table doesn't exist in the vschema
+	createMoveTablesWorkflow(t, "customer,_vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431")
 	if !strings.Contains(lastOutput, "Workflow started successfully") {
 		t.Fail()
 	}
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
+
+	// Verify that we've properly ignored any internal operational tables
+	// and that they were not copied to the new target keyspace
+	verifyNoInternalTables(t, vtgateConn, targetKs)
 
 	testRestOfWorkflow(t)
 
