@@ -7,7 +7,7 @@ The following is the full list, alphabetically ordered.
 * Andrew Mason ([amason](https://github.com/ajm188)) amason@slack-corp.com
 * Anthony Yeh ([enisoc](https://github.com/enisoc)) enisoc@enisoc.dev
 * Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) dan.kozlowski@gmail.com
-* David Weitzman ([dweitzman](https://github.com/dweitzman)) dweitzman@pinterest.com
+* David Weitzman ([dweitzman](https://github.com/dweitzman)) dweitzman@gmail.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) frouioui@planetscale.com
