@@ -1539,6 +1539,8 @@ var (
 	}, {
 		input: "alter view a as select * from t",
 	}, {
+		input: "alter /*vt+ strategy=online */ view a as select * from t",
+	}, {
 		input: "alter algorithm = merge definer = m@172.0.1.01 sql security definer view a as select * from t with local check option",
 	}, {
 		input:  "rename table a to b",
