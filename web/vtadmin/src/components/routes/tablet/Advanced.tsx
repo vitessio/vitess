@@ -1,7 +1,14 @@
 import React from 'react';
 import { UseMutationResult } from 'react-query';
 import { useHistory, useParams } from 'react-router-dom';
-import { useDeleteTablet, useReparentTablet, useSetReadOnly, useSetReadWrite, useStartReplication, useStopReplication } from '../../../hooks/api';
+import {
+    useDeleteTablet,
+    useReparentTablet,
+    useSetReadOnly,
+    useSetReadWrite,
+    useStartReplication,
+    useStopReplication,
+} from '../../../hooks/api';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
@@ -47,21 +54,21 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
         { alias, clusterID },
         {
             onSuccess: () => {
-                success(`Successfully set tablet ${alias} to read-only`)
+                success(`Successfully set tablet ${alias} to read-only`);
             },
-            onError: (error) => warn(`There was an error setting tablet ${alias} to read-only: ${error}`)
+            onError: (error) => warn(`There was an error setting tablet ${alias} to read-only: ${error}`),
         }
-    )
+    );
 
     const setReadWriteMutation = useSetReadWrite(
         { alias, clusterID },
         {
             onSuccess: () => {
-                success(`Successfully set tablet ${alias} to read-write`)
+                success(`Successfully set tablet ${alias} to read-write`);
             },
-            onError: (error) => warn(`There was an error setting tablet ${alias} to read-write: ${error}`)
+            onError: (error) => warn(`There was an error setting tablet ${alias} to read-write: ${error}`),
         }
-    )
+    );
 
     const startReplicationMutation = useStartReplication(
         { alias, clusterID },
@@ -246,21 +253,22 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                                 alias={alias}
                             />
                             <div className="border-red-400 border-b w-full" />
-                        </div>)}
+                        </div>
+                    )}
                     <DangerAction
                         title="Delete Tablet"
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
                         primaryDescription={
                             <div>
                                 Tablet {alias} is the primary tablet. Flag{' '}
-                                <span className="font-mono bg-red-100 p-1 text-sm">-allow_master=true</span> will be applied
-                                in order to delete the primary tablet.
+                                <span className="font-mono bg-red-100 p-1 text-sm">-allow_master=true</span> will be
+                                applied in order to delete the primary tablet.
                             </div>
                         }
                         description={
                             <div>
-                                Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from the
-                                topology, but vttablet and MySQL won't be touched.
+                                Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from
+                                the topology, but vttablet and MySQL won't be touched.
                             </div>
                         }
                         action="delete the tablet"
