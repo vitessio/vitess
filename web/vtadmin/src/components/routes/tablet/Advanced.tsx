@@ -270,46 +270,6 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
                         primary={primary}
                         alias={alias}
                     />
-                    {/* <div className="flex justify-between items-center">
-                        <p className="text-base font-bold m-0 text-gray-900">Delete Tablet</p>
-                        <a
-                            href="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-gray-900 ml-1 inline-block"
-                        >
-                            <span className="text-sm font-semibold text-gray-900">Documentation</span>
-                            <Icon icon={Icons.open} className="ml-1 h-6 w-6 text-gray-900 fill-current inline" />
-                        </a>
-                    </div>
-                    <p className="text-base mt-0">
-                        Delete tablet <span className="font-bold">{alias}</span>. Doing so will remove it from the
-                        topology, but vttablet and MySQL won't be touched.
-                    </p>
-                    {primary && (
-                        <p className="text-danger">
-                            <Icon icon={Icons.alertFail} className="fill-current text-danger inline mr-2" />
-                            Tablet {alias} is the primary tablet. Flag{' '}
-                            <span className="font-mono bg-red-100 p-1 text-sm">-allow_master=true</span> will be applied
-                            in order to delete the primary tablet.
-                        </p>
-                    )}
-
-                    <p className="text-base">Please type the tablet's alias to delete the tablet:</p>
-                    <div className="w-1/3">
-                        <TextInput
-                            placeholder="zone-xxx"
-                            value={typedAlias}
-                            onChange={(e) => setTypedAlias(e.target.value)}
-                        />
-                    </div>
-                    <button
-                        className="btn btn-secondary btn-danger mt-4"
-                        disabled={typedAlias !== alias || deleteTabletMutation.isLoading}
-                        onClick={() => deleteTabletMutation.mutate()}
-                    >
-                        {deleteTabletMutation.isLoading ? 'Deleting...' : 'Delete'}
-                    </button> */}
                 </div>
             </div>
         </div>

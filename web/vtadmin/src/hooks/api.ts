@@ -179,7 +179,7 @@ export const useReparentTablet = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>(() => {
         return setReadWrite(params);
-    }, options);
+}, options);
 };
 
 /**

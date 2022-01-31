@@ -60,7 +60,10 @@ const DangerAction: React.FC<DangerActionProps> = ({ title, description, action,
             <button
                 className="btn btn-secondary btn-danger mt-4"
                 disabled={typedAlias !== alias || mutation.isLoading}
-                onClick={() => (mutation as Mutation).mutate()}
+                onClick={() => {
+                    (mutation as Mutation).mutate()
+                    setTypedAlias('')
+                }}
             >
                 {mutation.isLoading ? loadingText : loadedText}
             </button>
