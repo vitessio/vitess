@@ -30,32 +30,22 @@ type CallExpression struct {
 	Arguments TupleExpr
 	Aliases   []sqlparser.ColIdent
 	Method    string
-	Call      func([]EvalResult, *EvalResult)
+	Call      func(*ExpressionEnv, []EvalResult, *EvalResult)
 }
 
 func (c *CallExpression) typeof(*ExpressionEnv) querypb.Type {
 	return -1
 }
 
-func (c *CallExpression) constant() bool {
-	return c.Arguments.constant()
-}
-
-func (c *CallExpression) simplify() error {
-	return c.Arguments.simplify()
-}
-
-var _ Expr = (*CallExpression)(nil)
-
 func (c *CallExpression) eval(env *ExpressionEnv, result *EvalResult) {
 	var args []EvalResult = make([]EvalResult, len(c.Arguments))
 	for i, arg := range c.Arguments {
 		args[i].init(env, arg)
 	}
-	c.Call(args, result)
+	c.Call(env, args, result)
 }
 
-func builtinFuncCoalesce(args []EvalResult, result *EvalResult) {
+func builtinFuncCoalesce(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	for _, arg := range args {
 		if !arg.null() {
 			*result = arg
@@ -226,16 +216,29 @@ func throwArgError(fname string) {
 	panic(evalError{fmt.Errorf("Incorrect parameter count in the call to native function '%s'", fname)})
 }
 
-func builtinFuncLeast(args []EvalResult, result *EvalResult) {
+func builtinFuncLeast(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	if len(args) < 2 {
 		throwArgError("LEAST")
 	}
 	getMultiComparisonFunc(args)(args, result, -1)
 }
 
-func builtinFuncGreatest(args []EvalResult, result *EvalResult) {
+func builtinFuncGreatest(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	if len(args) < 2 {
 		throwArgError("GREATEST")
 	}
 	getMultiComparisonFunc(args)(args, result, 1)
+}
+
+func builtinFuncCollation(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	if len(args) != 1 {
+		throwArgError("COLLATION")
+	}
+
+	coll := collations.Local().LookupByID(args[0].collation().Collation)
+	result.setString(coll.Name(), collations.TypedCollation{
+		Collation:    env.DefaultCollation,
+		Coercibility: collations.CoerceImplicit,
+		Repertoire:   collations.RepertoireASCII,
+	})
 }
