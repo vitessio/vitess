@@ -294,10 +294,10 @@ export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams)
 
 export interface SetReadOnlyParams {
     clusterID?: string;
-    alias: string
+    alias: string;
 }
 
-export const setReadOnly = async ({ clusterID, alias }:SetReadOnlyParams) => {
+export const setReadOnly = async ({ clusterID, alias }: SetReadOnlyParams) => {
     const { result } = await vtfetch(`/api/tablet/${alias}/set_read_only?cluster=${clusterID}`, { method: 'put' });
     const err = pb.SetReadOnlyResponse.verify(result);
     if (err) throw Error(err);
@@ -307,10 +307,10 @@ export const setReadOnly = async ({ clusterID, alias }:SetReadOnlyParams) => {
 
 export interface SetReadWriteParams {
     clusterID?: string;
-    alias: string
+    alias: string;
 }
 
-export const setReadWrite = async ({ clusterID, alias }:SetReadWriteParams) => {
+export const setReadWrite = async ({ clusterID, alias }: SetReadWriteParams) => {
     const { result } = await vtfetch(`/api/tablet/${alias}/set_read_write?cluster=${clusterID}`, { method: 'put' });
     const err = pb.SetReadWriteResponse.verify(result);
     if (err) throw Error(err);

@@ -161,7 +161,7 @@ export const useReparentTablet = (
 /**
  * useSetReadOnly sets the tablet to read only
  */
- export const useSetReadOnly = (
+export const useSetReadOnly = (
     params: Parameters<typeof setReadOnly>[0],
     options: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
 ) => {
@@ -173,13 +173,13 @@ export const useReparentTablet = (
 /**
  * useSetReadWrite sets the tablet to read only
  */
- export const useSetReadWrite = (
+export const useSetReadWrite = (
     params: Parameters<typeof setReadWrite>[0],
     options: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
 ) => {
     return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>(() => {
         return setReadWrite(params);
-}, options);
+    }, options);
 };
 
 /**
