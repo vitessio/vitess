@@ -95,6 +95,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/textutil"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -1002,7 +1004,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.PortMap["grpc"] = int32(*grpcPort)
 	}
 
-	return wr.InitTablet(ctx, tablet, *allowPrimaryOverride, *createShardAndKeyspace, *allowUpdate)
+	return wr.TopoServer().InitTablet(ctx, tablet, *allowPrimaryOverride, *createShardAndKeyspace, *allowUpdate)
 }
 
 func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3251,13 +3253,14 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	log.Info("Calling ApplySchema on VtctldServer")
+
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:                keyspace,
 		AllowLongUnavailability: *allowLongUnavailability,
 		DdlStrategy:             *ddlStrategy,
-		Sql:                     strings.Split(change, ","),
+		Sql:                     textutil.SplitDelimitedList(change),
 		SkipPreflight:           *skipPreflight,
-		UuidList:                strings.Split(*uuidList, ","),
+		UuidList:                textutil.SplitDelimitedList(*uuidList),
 		RequestContext:          *migrationContext,
 		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
 		CallerId:                cID,

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -86,8 +85,7 @@ func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
 }
 
 // SetUUIDList sets a (possibly empty) list of provided UUIDs for schema migrations
-func (exec *TabletExecutor) SetUUIDList(commaDelimitedUUIDs string) error {
-	uuids := textutil.SplitDelimitedList(commaDelimitedUUIDs)
+func (exec *TabletExecutor) SetUUIDList(uuids []string) error {
 	uuidsMap := map[string]bool{}
 	for _, uuid := range uuids {
 		if !schema.IsOnlineDDLUUID(uuid) {
