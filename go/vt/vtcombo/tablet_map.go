@@ -805,15 +805,6 @@ func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tab
 	return nil
 }
 
-func (itmc *internalTabletManagerClient) IgnoreHealthError(ctx context.Context, tablet *topodatapb.Tablet, pattern string) error {
-	t, ok := tabletMap[tablet.Alias.Uid]
-	if !ok {
-		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
-	}
-	t.tm.IgnoreHealthError(ctx, pattern)
-	return nil
-}
-
 func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
