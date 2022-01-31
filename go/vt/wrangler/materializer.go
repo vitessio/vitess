@@ -93,6 +93,26 @@ func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace strin
 	return nil
 }
 
+func shouldInclude(table string, excludes []string) bool {
+	// We filter out internal tables elsewhere when processing SchemaDefinition
+	// structures built from the GetSchema database related API calls. In this
+	// case, however, the table list comes from the user via the -tables flag
+	// so we need to filter out internal table names here in case a user has
+	// explicitly specified some.
+	// This could happen if there's some automated tooling that creates the list of
+	// tables to explicitly specify.
+	// But given that this should never be done in practice, we ignore the request.
+	if schema.IsInternalOperationTableName(table) {
+		return false
+	}
+	for _, t := range excludes {
+		if t == table {
+			return false
+		}
+	}
+	return true
+}
+
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
@@ -147,34 +167,29 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		} else {
 			if allTables {
-				var excludeTablesList []string
-				excludeTables = strings.TrimSpace(excludeTables)
-				if excludeTables != "" {
-					excludeTablesList = strings.Split(excludeTables, ",")
-				}
-				err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
-				if err != nil {
-					return err
-				}
-				if len(excludeTablesList) > 0 {
-					for _, ksTable := range ksTables {
-						exclude := false
-						for _, table := range excludeTablesList {
-							if ksTable == table {
-								exclude = true
-								break
-							}
-						}
-						if !exclude {
-							tables = append(tables, ksTable)
-						}
-					}
-				} else {
-					tables = ksTables
-				}
+				tables = ksTables
 			} else {
 				return fmt.Errorf("no tables to move")
 			}
+		}
+		var excludeTablesList []string
+		excludeTables = strings.TrimSpace(excludeTables)
+		if excludeTables != "" {
+			excludeTablesList = strings.Split(excludeTables, ",")
+			err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
+			if err != nil {
+				return err
+			}
+		}
+		var tables2 []string
+		for _, t := range tables {
+			if shouldInclude(t, excludeTablesList) {
+				tables2 = append(tables2, t)
+			}
+		}
+		tables = tables2
+		if len(tables) == 0 {
+			return fmt.Errorf("no tables to move")
 		}
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
@@ -275,13 +290,10 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 	// validate that tables provided are present in the source keyspace
 	var missingTables []string
 	for _, table := range tables {
-		found := false
-
-		// Skip Vitess internal tables
 		if schema.IsInternalOperationTableName(table) {
-			log.Infof("found internal table %s, ignoring in materialization schema validation", table)
 			continue
 		}
+		found := false
 
 		for _, ksTable := range ksTables {
 			if table == ksTable {
@@ -522,9 +534,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil {
-		if schema.IsInternalOperationTableName(sourceTableName) {
-			log.Infof("found internal table %s, ignoring in materialization", sourceTableName)
-		} else {
+		if !schema.IsInternalOperationTableName(sourceTableName) {
 			return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
 		}
 	}

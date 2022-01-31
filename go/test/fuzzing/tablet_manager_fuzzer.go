@@ -33,7 +33,7 @@ func initTesting() {
 	testing.Init()
 }
 
-func FuzzTabletManager_ExecuteFetchAsDba(data []byte) int {
+func FuzzTabletManagerExecuteFetchAsDba(data []byte) int {
 	fuzzInitter.Do(initTesting)
 	t := &testing.T{}
 	ctx := context.Background()

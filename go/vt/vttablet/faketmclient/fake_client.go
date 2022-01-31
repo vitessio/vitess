@@ -132,11 +132,6 @@ func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, table
 	return nil
 }
 
-// IgnoreHealthError is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) IgnoreHealthError(ctx context.Context, tablet *topodatapb.Tablet, pattern string) error {
-	return nil
-}
-
 // ReloadSchema is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	return nil
