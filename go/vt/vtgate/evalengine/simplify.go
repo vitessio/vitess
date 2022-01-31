@@ -173,7 +173,11 @@ func (c *CallExpression) simplify(lookup ConverterLookup) error {
 func simplifyExpr(e Expr, lookup ConverterLookup) (Expr, error) {
 	if e.constant() {
 		var env ExpressionEnv
-		env.DefaultCollation = lookup.DefaultCollation()
+		if lookup != nil {
+			env.DefaultCollation = lookup.DefaultCollation()
+		} else {
+			env.DefaultCollation = collations.Default()
+		}
 
 		res, err := env.Evaluate(e)
 		if err != nil {
