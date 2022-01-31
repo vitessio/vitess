@@ -58,8 +58,6 @@ type RPCTM interface {
 
 	RunHealthCheck(ctx context.Context)
 
-	IgnoreHealthError(ctx context.Context, pattern string) error
-
 	ReloadSchema(ctx context.Context, waitPosition string) error
 
 	PreflightSchema(ctx context.Context, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error)
