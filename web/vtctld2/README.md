@@ -52,8 +52,10 @@ make web_build
 
 This will regenerate a bunch of files in the `web/vtctld2/dist/` directory, as well as update the embedded files in `rice-box.go`. Make sure you commit these generated files to your branch when opening your pull request.
 
-To verify your changes, run Vitess locally. It is recommended to [use Docker](https://vitess.io/docs/get-started/local-docker/), which will make the vtctld UI accessible at `http://localhost:15000/app`.
-
+To then verify your changes using the built files:
+- Rebuild the vtctld with `make build`
+- Run Vitess locally following the [Local Install guide](https://vitess.io/docs/get-started/local/) 
+- Verify your changes on `http://localhost:15000/app`
 
 ## Troubleshooting
 
