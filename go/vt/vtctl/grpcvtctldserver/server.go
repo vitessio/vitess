@@ -229,6 +229,10 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		executor,
 	)
 
+	if err != nil {
+		return &vtctldatapb.ApplySchemaResponse{}, nil
+	}
+
 	return &vtctldatapb.ApplySchemaResponse{
 		UuidList: execResult.UUIDs,
 	}, err
