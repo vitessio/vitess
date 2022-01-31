@@ -363,10 +363,11 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	return nil, convertNotSupported(e)
 }
 
-var builtinFunctions = map[string]func([]EvalResult, *EvalResult){
-	"coalesce": builtinFuncCoalesce,
-	"greatest": builtinFuncGreatest,
-	"least":    builtinFuncLeast,
+var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult){
+	"coalesce":  builtinFuncCoalesce,
+	"greatest":  builtinFuncGreatest,
+	"least":     builtinFuncLeast,
+	"collation": builtinFuncCollation,
 }
 
 func convertNotSupported(e sqlparser.Expr) error {

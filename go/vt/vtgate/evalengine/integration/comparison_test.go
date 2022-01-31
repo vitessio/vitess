@@ -187,6 +187,10 @@ func TestLikeComparison(t *testing.T) {
 func TestCollationOperations(t *testing.T) {
 	var cases = []string{
 		"COLLATION('foobar')",
+		"COLLATION(_latin1 'foobar')",
+		"COLLATION(_utf8mb4 'foobar' COLLATE utf8mb4_general_ci)",
+		"COLLATION('foobar' COLLATE utf8mb4_general_ci)",
+		"COLLATION(_latin1 'foobar' COLLATE utf8mb4_general_ci)",
 	}
 
 	var conn = mysqlconn(t)
