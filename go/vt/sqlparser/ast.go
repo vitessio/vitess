@@ -1145,7 +1145,7 @@ func (node *CreateTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *CreateView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
@@ -1155,7 +1155,7 @@ func (node *DropTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *DropView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
