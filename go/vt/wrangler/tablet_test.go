@@ -44,7 +44,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 		Shard: "80-C0",
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 		Shard: "0",
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
