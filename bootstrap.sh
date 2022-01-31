@@ -254,7 +254,7 @@ install_chromedriver() {
 
 install_all() {
   # protoc
-  protoc_ver=3.6.1
+  protoc_ver=3.19.4
   install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
   # zk
