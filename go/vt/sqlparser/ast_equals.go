@@ -1458,7 +1458,8 @@ func EqualsRefOfCreateView(a, b *CreateView) bool {
 		a.IsReplace == b.IsReplace &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
