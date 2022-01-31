@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { UseMutationResult } from 'react-query';
 import { useHistory, useParams } from 'react-router-dom';
-import { useDeleteTablet, useReparentTablet, useStartReplication, useStopReplication } from '../../../hooks/api';
+import { useDeleteTablet, useReparentTablet, useSetReadOnly, useSetReadWrite, useStartReplication, useStopReplication } from '../../../hooks/api';
 import { vtadmin } from '../../../proto/vtadmin';
 import { isPrimary } from '../../../util/tablets';
 import { Icon, Icons } from '../../Icon';
@@ -42,6 +42,26 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
             onError: (error) => warn(`There was an error reparenting tablet: ${error}`),
         }
     );
+
+    const setReadOnlyMutation = useSetReadOnly(
+        { alias, clusterID },
+        {
+            onSuccess: () => {
+                success(`Successfully set tablet ${alias} to read-only`)
+            },
+            onError: (error) => warn(`There was an error setting tablet ${alias} to read-only: ${error}`)
+        }
+    )
+
+    const setReadWriteMutation = useSetReadWrite(
+        { alias, clusterID },
+        {
+            onSuccess: () => {
+                success(`Successfully set tablet ${alias} to read-write`)
+            },
+            onError: (error) => warn(`There was an error setting tablet ${alias} to read-write: ${error}`)
+        }
+    )
 
     const startReplicationMutation = useStartReplication(
         { alias, clusterID },
@@ -181,49 +201,52 @@ const Advanced: React.FC<AdvancedProps> = ({ tablet }) => {
             <div className="my-8">
                 <h3 className="mb-4">Danger</h3>
                 <div className="border border-danger rounded-lg">
-                    <div className="border-red-400 border-b w-full" />
-                    <DangerAction
-                        title="Set Read-Only"
-                        documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
-                        primaryDescription={
-                            <div>
-                                This will disable writing on the primary tablet {alias}. Use with caution.
-                            </div>
-                        }
-                        description={
-                            <div>
-                                Set tablet <span className="font-bold">{alias}</span> to read-only.
-                            </div>
-                        }
-                        action="set tablet to read-only"
-                        mutation={deleteTabletMutation as UseMutationResult}
-                        loadingText="Setting..."
-                        loadedText="Set to read-only"
-                        primary={primary}
-                        alias={alias}
-                    />
-                    <div className="border-red-400 border-b w-full" />
-                    <DangerAction
-                        title="Set Read-Write"
-                        documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
-                        primaryDescription={
-                            <div>
-                                This will re-enable writing on the primary tablet {alias}. Use with caution.
-                            </div>
-                        }
-                        description={
-                            <div>
-                                Set tablet <span className="font-bold">{alias}</span> to read-write.
-                            </div>
-                        }
-                        action="set tablet to read-only"
-                        mutation={deleteTabletMutation as UseMutationResult}
-                        loadingText="Setting..."
-                        loadedText="Set to read-write"
-                        primary={primary}
-                        alias={alias}
-                    />
-                    <div className="border-red-400 border-b w-full" />
+                    {primary && (
+                        <div>
+                            <div className="border-red-400 border-b w-full" />
+                            <DangerAction
+                                title="Set Read-Only"
+                                documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadonly"
+                                primaryDescription={
+                                    <div>
+                                        This will disable writing on the primary tablet {alias}. Use with caution.
+                                    </div>
+                                }
+                                description={
+                                    <div>
+                                        Set tablet <span className="font-bold">{alias}</span> to read-only.
+                                    </div>
+                                }
+                                action="set tablet to read-only"
+                                mutation={setReadOnlyMutation as UseMutationResult}
+                                loadingText="Setting..."
+                                loadedText="Set to read-only"
+                                primary={primary}
+                                alias={alias}
+                            />
+                            <div className="border-red-400 border-b w-full" />
+                            <DangerAction
+                                title="Set Read-Write"
+                                documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#setreadwrite"
+                                primaryDescription={
+                                    <div>
+                                        This will re-enable writing on the primary tablet {alias}. Use with caution.
+                                    </div>
+                                }
+                                description={
+                                    <div>
+                                        Set tablet <span className="font-bold">{alias}</span> to read-write.
+                                    </div>
+                                }
+                                action="set tablet to read-only"
+                                mutation={setReadWriteMutation as UseMutationResult}
+                                loadingText="Setting..."
+                                loadedText="Set to read-write"
+                                primary={primary}
+                                alias={alias}
+                            />
+                            <div className="border-red-400 border-b w-full" />
+                        </div>)}
                     <DangerAction
                         title="Delete Tablet"
                         documentationLink="https://vitess.io/docs/reference/programs/vtctl/tablets/#deletetablet"

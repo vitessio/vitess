@@ -292,6 +292,32 @@ export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams)
     return pb.RunHealthCheckResponse.create(result);
 };
 
+export interface SetReadOnlyParams {
+    clusterID?: string;
+    alias: string
+}
+
+export const setReadOnly = async ({ clusterID, alias }:SetReadOnlyParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/set_read_only?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.SetReadOnlyResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.SetReadOnlyResponse.create(result);
+};
+
+export interface SetReadWriteParams {
+    clusterID?: string;
+    alias: string
+}
+
+export const setReadWrite = async ({ clusterID, alias }:SetReadWriteParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/set_read_write?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.SetReadWriteResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.SetReadWriteResponse.create(result);
+};
+
 export interface StartReplicationParams {
     clusterID?: string;
     alias: string;
