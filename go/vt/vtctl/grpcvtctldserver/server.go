@@ -225,7 +225,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 
 	execResult, err := schemamanager.Run(
 		ctx,
-		schemamanager.NewPlainController(strings.Join(req.Sql, ","), req.Keyspace),
+		schemamanager.NewPlainController(req.Sql, req.Keyspace),
 		executor,
 	)
 
