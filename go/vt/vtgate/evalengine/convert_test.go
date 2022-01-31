@@ -20,7 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -35,16 +34,6 @@ import (
 These tests should in theory live in the sqltypes package but they live here so we can
 exercise both expression conversion and evaluation in the same test file
 */
-
-type dummyCollation collations.ID
-
-func (d dummyCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
-	panic("not supported")
-}
-
-func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
-	return collations.ID(d)
-}
 
 func TestConvertSimplification(t *testing.T) {
 	type ast struct {
@@ -107,7 +96,7 @@ func TestConvertSimplification(t *testing.T) {
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := ConvertEx(astExpr, dummyCollation(45), false)
+			converted, err := ConvertEx(astExpr, DefaultCollation(45), false)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -121,7 +110,7 @@ func TestConvertSimplification(t *testing.T) {
 				t.Errorf("mismatch (simplify=false): got %s, expected %s", FormatExpr(converted), tc.converted.literal)
 			}
 
-			simplified, err := ConvertEx(astExpr, dummyCollation(45), true)
+			simplified, err := ConvertEx(astExpr, DefaultCollation(45), true)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
@@ -274,7 +263,7 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, dummyCollation(45))
+			sqltypesExpr, err := Convert(astExpr, DefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := EnvWithBindVars(
@@ -283,7 +272,7 @@ func TestEvaluate(t *testing.T) {
 					"string_bind_variable": sqltypes.StringBindVariable("bar"),
 					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-				})
+				}, 0)
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)
@@ -318,7 +307,7 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, dummyCollation(45))
+			sqltypesExpr, err := Convert(astExpr, DefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 

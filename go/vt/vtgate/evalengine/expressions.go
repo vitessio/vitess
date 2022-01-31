@@ -32,8 +32,9 @@ type (
 	// ExpressionEnv contains the environment that the expression
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
-		BindVars map[string]*querypb.BindVariable
-		Row      []sqltypes.Value
+		BindVars      map[string]*querypb.BindVariable
+		Row           []sqltypes.Value
+		ConnCollation collations.ID
 	}
 
 	// Expr is the interface that all evaluating expressions must implement
@@ -246,12 +247,15 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (ty querypb.Type, err error) {
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return EnvWithBindVars(map[string]*querypb.BindVariable{})
+	return EnvWithBindVars(map[string]*querypb.BindVariable{}, collations.Unknown)
 }
 
 // EnvWithBindVars returns an expression environment with no current row, but with bindvars
-func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
-	return &ExpressionEnv{BindVars: bindVars}
+func EnvWithBindVars(bindVars map[string]*querypb.BindVariable, coll collations.ID) *ExpressionEnv {
+	if coll == collations.Unknown {
+		coll = collations.ID(collations.Local().DefaultConnectionCharset())
+	}
+	return &ExpressionEnv{BindVars: bindVars, ConnCollation: coll}
 }
 
 // NullExpr is just what you are lead to believe
