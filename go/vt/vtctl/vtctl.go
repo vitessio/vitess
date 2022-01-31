@@ -3258,7 +3258,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		Keyspace:                keyspace,
 		AllowLongUnavailability: *allowLongUnavailability,
 		DdlStrategy:             *ddlStrategy,
-		Sql:                     textutil.SplitDelimitedList(change),
+		Sql:                     strings.Split(change, ","),
 		SkipPreflight:           *skipPreflight,
 		UuidList:                textutil.SplitDelimitedList(*uuidList),
 		RequestContext:          *migrationContext,
