@@ -34,31 +34,16 @@ var collationNumeric = collations.TypedCollation{
 	Repertoire:   collations.RepertoireASCII,
 }
 
+var collationBinary = collations.TypedCollation{
+	Collation:    collations.CollationBinaryID,
+	Coercibility: collations.CoerceExplicit,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.init(env, c.Inner)
 	if err := collations.Local().EnsureCollate(out.collation().Collation, c.TypedCollation.Collation); err != nil {
 		throwEvalError(vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error()))
 	}
 	out.replaceCollation(c.TypedCollation)
-}
-
-func (c *CollateExpr) collation() collations.TypedCollation {
-	return c.TypedCollation
-}
-
-func (t TupleExpr) collation() collations.TypedCollation {
-	// a Tuple does not have a collation, but an individual collation for every element of the tuple
-	return collations.TypedCollation{}
-}
-
-func (l *Literal) collation() collations.TypedCollation {
-	return l.Val.collation()
-}
-
-func (bv *BindVariable) collation() collations.TypedCollation {
-	return bv.coll
-}
-
-func (c *Column) collation() collations.TypedCollation {
-	return c.coll
 }

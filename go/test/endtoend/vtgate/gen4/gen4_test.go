@@ -362,7 +362,6 @@ func TestSubShardVindex(t *testing.T) {
 		exp:      `[[INT64(109) VARBINARY("28") VARCHAR("28") VARCHAR("shard-20c0-")]]`,
 	}}
 
-	defer utils.ExecAllowError(t, conn, `delete from multicol_tbl`)
 	uid := 1
 	// insert data in all shards to know where the query fan-out
 	for _, s := range shardedKsShards {
@@ -377,6 +376,7 @@ func TestSubShardVindex(t *testing.T) {
 	require.NoError(t, err)
 	defer newConn.Close()
 
+	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
 	for _, workload := range []string{"olap", "oltp"} {
 		utils.Exec(t, newConn, fmt.Sprintf(`set workload = %s`, workload))
 		for _, tcase := range tcases {
@@ -385,5 +385,61 @@ func TestSubShardVindex(t *testing.T) {
 				assert.Equal(t, tcase.exp, fmt.Sprintf("%v", utils.Exec(t, newConn, sql).Rows))
 			})
 		}
+	}
+}
+
+func TestSubShardVindexDML(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcases := []struct {
+		regionID       int
+		shardsAffected int
+	}{{
+		regionID:       140, // shard--19a0
+		shardsAffected: 1,
+	}, {
+		regionID:       412, // shard--19a0 and shard-19a0-20
+		shardsAffected: 2,
+	}, {
+		regionID:       24, // shard-19a0-20
+		shardsAffected: 1,
+	}, {
+		regionID:       89, // shard-20-20c0 and shard-20c0-
+		shardsAffected: 2,
+	}, {
+		regionID:       109, // shard-20c0-
+		shardsAffected: 1,
+	}}
+
+	uid := 1
+	// insert data in all shards to know where the query fan-out
+	for _, s := range shardedKsShards {
+		utils.Exec(t, conn, fmt.Sprintf("use `%s:%s`", shardedKs, s))
+		for _, tcase := range tcases {
+			utils.Exec(t, conn, fmt.Sprintf("insert into multicol_tbl(cola,colb,colc,msg) values(%d,_binary '%d','%d','shard-%s')", tcase.regionID, uid, uid, s))
+			uid++
+		}
+	}
+
+	newConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer newConn.Close()
+
+	defer utils.ExecAllowError(t, newConn, `delete from multicol_tbl`)
+	for _, tcase := range tcases {
+		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
+			qr := utils.Exec(t, newConn, fmt.Sprintf("update multicol_tbl set msg = 'bar' where cola = %d", tcase.regionID))
+			assert.EqualValues(t, tcase.shardsAffected, qr.RowsAffected)
+		})
+	}
+
+	for _, tcase := range tcases {
+		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
+			qr := utils.Exec(t, newConn, fmt.Sprintf("delete from multicol_tbl where cola = %d", tcase.regionID))
+			assert.EqualValues(t, tcase.shardsAffected, qr.RowsAffected)
+		})
 	}
 }

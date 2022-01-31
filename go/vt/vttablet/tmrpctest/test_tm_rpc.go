@@ -480,16 +480,6 @@ func (fra *fakeRPCTM) RunHealthCheck(ctx context.Context) {
 	}
 }
 
-var testIgnoreHealthErrorValue = ".*"
-
-func (fra *fakeRPCTM) IgnoreHealthError(ctx context.Context, pattern string) error {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "IgnoreHealthError pattern", pattern, testIgnoreHealthErrorValue)
-	return nil
-}
-
 func tmRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RunHealthCheck(ctx, tablet)
 	if err != nil {
@@ -500,18 +490,6 @@ func tmRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclient.
 func tmRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RunHealthCheck(ctx, tablet)
 	expectHandleRPCPanic(t, "RunHealthCheck", false /*verbose*/, err)
-}
-
-func tmRPCTestIgnoreHealthError(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.IgnoreHealthError(ctx, tablet, testIgnoreHealthErrorValue)
-	if err != nil {
-		t.Errorf("IgnoreHealthError failed: %v", err)
-	}
-}
-
-func tmRPCTestIgnoreHealthErrorPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.IgnoreHealthError(ctx, tablet, testIgnoreHealthErrorValue)
-	expectHandleRPCPanic(t, "IgnoreHealthError", false /*verbose*/, err)
 }
 
 var testReloadSchemaCalled = false
@@ -1319,7 +1297,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestExecuteHook(ctx, t, client, tablet)
 	tmRPCTestRefreshState(ctx, t, client, tablet)
 	tmRPCTestRunHealthCheck(ctx, t, client, tablet)
-	tmRPCTestIgnoreHealthError(ctx, t, client, tablet)
 	tmRPCTestReloadSchema(ctx, t, client, tablet)
 	tmRPCTestPreflightSchema(ctx, t, client, tablet)
 	tmRPCTestApplySchema(ctx, t, client, tablet)
@@ -1375,7 +1352,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestExecuteHookPanic(ctx, t, client, tablet)
 	tmRPCTestRefreshStatePanic(ctx, t, client, tablet)
 	tmRPCTestRunHealthCheckPanic(ctx, t, client, tablet)
-	tmRPCTestIgnoreHealthErrorPanic(ctx, t, client, tablet)
 	tmRPCTestReloadSchemaPanic(ctx, t, client, tablet)
 	tmRPCTestPreflightSchemaPanic(ctx, t, client, tablet)
 	tmRPCTestApplySchemaPanic(ctx, t, client, tablet)

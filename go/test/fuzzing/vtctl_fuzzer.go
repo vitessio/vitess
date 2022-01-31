@@ -179,15 +179,15 @@ func Fuzz(data []byte) int {
 		// Index of command in getCommandType():
 		commandIndex := int(commandPart[command]) % 68
 		vtCommand := getCommandType(commandIndex)
-		command_slice := []string{vtCommand}
+		commandSlice := []string{vtCommand}
 		args := strings.Split(string(restOfArray[from:to]), " ")
 
 		// Add params to the command
 		for i := range args {
-			command_slice = append(command_slice, args[i])
+			commandSlice = append(commandSlice, args[i])
 		}
 
-		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), command_slice)
+		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), commandSlice)
 		command++
 	}
 

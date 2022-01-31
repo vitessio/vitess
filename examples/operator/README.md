@@ -8,8 +8,15 @@ minikube start --cpus=8 --memory=11000 --disk-size=50g --kubernetes-version=v1.1
 kubectl apply -f operator.yaml
 
 # Bring up initial cluster and commerce keyspace
-# NOTE: If you are using MySQL 8, update images section with `-mysql80` tag.
-# Example: `vtctld: vitess/lite:v12.0.0-mysql80` 
+# NOTE: If you are using MySQL 8, update the images section to use mysql80 images
+# Example:
+#  images:
+#    vtctld: vitess/lite:mysql80
+#    vtgate: vitess/lite:mysql80
+#    vttablet: vitess/lite:mysql80
+#    vtbackup: vitess/lite:mysql80
+#    mysqld:
+#      mysql80Compatible: vitess/lite:mysql80
 
 kubectl apply -f 101_initial_cluster.yaml
 

@@ -88,9 +88,7 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	switch upd.Opcode {
 	case Unsharded:
 		return upd.execUnsharded(vcursor, bindVars, rss)
-	case Equal:
-		return upd.execEqual(vcursor, bindVars, rss, upd.updateVindexEntries)
-	case IN, Scatter, ByDestination:
+	case Equal, IN, Scatter, ByDestination:
 		return upd.execMultiDestination(vcursor, bindVars, rss, upd.updateVindexEntries)
 	default:
 		// Unreachable.
