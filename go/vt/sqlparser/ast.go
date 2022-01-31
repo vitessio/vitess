@@ -499,6 +499,7 @@ type (
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
+		Comments    Comments
 	}
 
 	// AlterView represents a ALTER VIEW query

@@ -1574,7 +1574,7 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateView) Format(buf *TrackedBuffer) {
-	buf.WriteString("create")
+	buf.astPrintf(node, "create %v", node.Comments)
 	if node.IsReplace {
 		buf.WriteString(" or replace")
 	}
