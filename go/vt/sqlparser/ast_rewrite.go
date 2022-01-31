@@ -686,6 +686,11 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}) {
 		return false
 	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

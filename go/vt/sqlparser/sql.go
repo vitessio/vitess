@@ -9911,7 +9911,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:2628
 		{
-			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName.ToViewName(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].str, Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
+			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs), Algorithm: yyDollar[3].str, Definer: yyDollar[4].str, Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 490:

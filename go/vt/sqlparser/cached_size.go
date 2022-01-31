@@ -211,7 +211,7 @@ func (cached *AlterView) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(160)
 	}
 	// field ViewName vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.ViewName.CachedSize(false)
@@ -234,6 +234,13 @@ func (cached *AlterView) CachedSize(alloc bool) int64 {
 	}
 	// field CheckOption string
 	size += hack.RuntimeAllocSize(int64(len(cached.CheckOption)))
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
+		for _, elem := range cached.Comments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
 	return size
 }
 func (cached *AlterVschema) CachedSize(alloc bool) int64 {

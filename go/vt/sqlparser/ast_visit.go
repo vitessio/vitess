@@ -501,6 +501,9 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {

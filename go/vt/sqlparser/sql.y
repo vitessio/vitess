@@ -2626,7 +2626,7 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $7.ToViewName(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &AlterView{ViewName: $7.ToViewName(), Comments: Comments($2), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 | alter_database_prefix table_id_opt create_options
   {

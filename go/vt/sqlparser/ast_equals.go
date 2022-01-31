@@ -1104,7 +1104,8 @@ func EqualsRefOfAlterView(a, b *AlterView) bool {
 		a.CheckOption == b.CheckOption &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterVschema does deep equals between the two objects.

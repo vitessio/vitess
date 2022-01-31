@@ -512,6 +512,7 @@ type (
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
+		Comments    Comments
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -1160,7 +1161,7 @@ func (node *DropView) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *AlterView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments for RevertMigration, does not implement DDLStatement
@@ -1192,8 +1193,7 @@ func (node *CreateTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *CreateView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
@@ -1203,14 +1203,12 @@ func (node *DropTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *DropView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
 func (node *AlterView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetToTables implements the DDLStatement interface
