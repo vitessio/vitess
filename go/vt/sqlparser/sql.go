@@ -10550,7 +10550,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3033
 		{
-			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), IfExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), Comments: Comments(yyDollar[2].strs), IfExists: yyDollar[4].booleanUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 561:

@@ -3031,7 +3031,7 @@ drop_statement:
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: $5, IfExists: $4}
+    $$ = &DropView{FromTables: $5, Comments: Comments($2), IfExists: $4}
   }
 | DROP comment_opt database_or_schema exists_opt table_id
   {

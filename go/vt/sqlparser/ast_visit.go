@@ -1033,6 +1033,9 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 	if err := VisitTableNames(in.FromTables, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfExistsExpr(in *ExistsExpr, f Visit) error {

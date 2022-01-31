@@ -927,13 +927,20 @@ func (cached *DropView) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(64)
 	}
 	// field FromTables vitess.io/vitess/go/vt/sqlparser.TableNames
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.FromTables)) * int64(32))
 		for _, elem := range cached.FromTables {
 			size += elem.CachedSize(false)
+		}
+	}
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))
+		for _, elem := range cached.Comments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	return size

@@ -1576,18 +1576,18 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 func (node *CreateView) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "create %v", node.Comments)
 	if node.IsReplace {
-		buf.WriteString(" or replace")
+		buf.WriteString("or replace ")
 	}
 	if node.Algorithm != "" {
-		buf.astPrintf(node, " algorithm = %s", node.Algorithm)
+		buf.astPrintf(node, "algorithm = %s ", node.Algorithm)
 	}
 	if node.Definer != "" {
-		buf.astPrintf(node, " definer = %s", node.Definer)
+		buf.astPrintf(node, "definer = %s ", node.Definer)
 	}
 	if node.Security != "" {
-		buf.astPrintf(node, " sql security %s", node.Security)
+		buf.astPrintf(node, "sql security %s ", node.Security)
 	}
-	buf.astPrintf(node, " view %v", node.ViewName)
+	buf.astPrintf(node, "view %v", node.ViewName)
 	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
 	if node.CheckOption != "" {
 		buf.astPrintf(node, " with %s check option", node.CheckOption)
@@ -1641,11 +1641,12 @@ func (node *DropTable) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DropView) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "drop %v", node.Comments)
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.astPrintf(node, "drop view%s %v", exists, node.FromTables)
+	buf.astPrintf(node, "view%s %v", exists, node.FromTables)
 }
 
 // Format formats the AlterTable node.
