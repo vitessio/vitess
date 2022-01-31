@@ -327,6 +327,8 @@ func TestExtractCommentDirectives(t *testing.T) {
 				"create " + testCase.input + " table if not exists t (id int primary key)",
 				"alter " + testCase.input + " table t add column c int not null",
 				"create " + testCase.input + " view v as select * from t",
+				"create " + testCase.input + " or replace view v as select * from t",
+				"drop " + testCase.input + " view v",
 			}
 			for _, sql := range sqls {
 				t.Run(sql, func(t *testing.T) {
@@ -346,6 +348,8 @@ func TestExtractCommentDirectives(t *testing.T) {
 					case *CreateTable:
 						comments = s.Comments
 					case *CreateView:
+						comments = s.Comments
+					case *DropView:
 						comments = s.Comments
 					default:
 						t.Errorf("Unexpected statement type %+v", s)

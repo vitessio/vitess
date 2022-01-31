@@ -1574,7 +1574,8 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 		return false
 	}
 	return a.IfExists == b.IfExists &&
-		EqualsTableNames(a.FromTables, b.FromTables)
+		EqualsTableNames(a.FromTables, b.FromTables) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.

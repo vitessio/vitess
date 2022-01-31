@@ -476,6 +476,7 @@ type (
 	DropView struct {
 		FromTables TableNames
 		IfExists   bool
+		Comments   Comments
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
