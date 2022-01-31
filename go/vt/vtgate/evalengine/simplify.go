@@ -50,33 +50,33 @@ func (expr *UnaryExpr) constant() bool {
 	return expr.Inner.constant()
 }
 
-func (expr *Literal) simplify(_ ConverterLookup) error {
+func (expr *Literal) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *BindVariable) simplify(_ ConverterLookup) error {
+func (expr *BindVariable) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *Column) simplify(_ ConverterLookup) error {
+func (expr *Column) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *BinaryExpr) simplify(lookup ConverterLookup) error {
+func (expr *BinaryExpr) simplify(env *ExpressionEnv) error {
 	var err error
-	expr.Left, err = simplifyExpr(expr.Left, lookup)
+	expr.Left, err = simplifyExpr(env, expr.Left)
 	if err != nil {
 		return err
 	}
-	expr.Right, err = simplifyExpr(expr.Right, lookup)
+	expr.Right, err = simplifyExpr(env, expr.Right)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (expr *LikeExpr) simplify(lookup ConverterLookup) error {
-	if err := expr.BinaryExpr.simplify(lookup); err != nil {
+func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
+	if err := expr.BinaryExpr.simplify(env); err != nil {
 		return err
 	}
 
@@ -89,8 +89,8 @@ func (expr *LikeExpr) simplify(lookup ConverterLookup) error {
 	return nil
 }
 
-func (inexpr *InExpr) simplify(lookup ConverterLookup) error {
-	if err := inexpr.BinaryExpr.simplify(lookup); err != nil {
+func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
+	if err := inexpr.BinaryExpr.simplify(env); err != nil {
 		return err
 	}
 
@@ -145,10 +145,10 @@ func (inexpr *InExpr) simplify(lookup ConverterLookup) error {
 	return nil
 }
 
-func (expr TupleExpr) simplify(lookup ConverterLookup) error {
+func (expr TupleExpr) simplify(env *ExpressionEnv) error {
 	var err error
 	for i, subexpr := range expr {
-		expr[i], err = simplifyExpr(subexpr, lookup)
+		expr[i], err = simplifyExpr(env, subexpr)
 		if err != nil {
 			return err
 		}
@@ -156,9 +156,9 @@ func (expr TupleExpr) simplify(lookup ConverterLookup) error {
 	return nil
 }
 
-func (expr *UnaryExpr) simplify(lookup ConverterLookup) error {
+func (expr *UnaryExpr) simplify(env *ExpressionEnv) error {
 	var err error
-	expr.Inner, err = simplifyExpr(expr.Inner, lookup)
+	expr.Inner, err = simplifyExpr(env, expr.Inner)
 	return err
 }
 
@@ -166,26 +166,19 @@ func (c *CallExpression) constant() bool {
 	return c.Arguments.constant()
 }
 
-func (c *CallExpression) simplify(lookup ConverterLookup) error {
-	return c.Arguments.simplify(lookup)
+func (c *CallExpression) simplify(env *ExpressionEnv) error {
+	return c.Arguments.simplify(env)
 }
 
-func simplifyExpr(e Expr, lookup ConverterLookup) (Expr, error) {
+func simplifyExpr(env *ExpressionEnv, e Expr) (Expr, error) {
 	if e.constant() {
-		var env ExpressionEnv
-		if lookup != nil {
-			env.DefaultCollation = lookup.DefaultCollation()
-		} else {
-			env.DefaultCollation = collations.Default()
-		}
-
 		res, err := env.Evaluate(e)
 		if err != nil {
 			return nil, err
 		}
 		return &Literal{Val: res}, nil
 	}
-	if err := e.simplify(lookup); err != nil {
+	if err := e.simplify(env); err != nil {
 		return nil, err
 	}
 	return e, nil

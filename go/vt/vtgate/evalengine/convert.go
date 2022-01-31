@@ -166,7 +166,13 @@ func ConvertEx(e sqlparser.Expr, lookup ConverterLookup, simplify bool) (Expr, e
 		return nil, err
 	}
 	if simplify {
-		expr, err = simplifyExpr(expr, lookup)
+		var staticEnv ExpressionEnv
+		if lookup != nil {
+			staticEnv.DefaultCollation = lookup.DefaultCollation()
+		} else {
+			staticEnv.DefaultCollation = collations.Default()
+		}
+		expr, err = simplifyExpr(&staticEnv, expr)
 	}
 	return expr, err
 }
