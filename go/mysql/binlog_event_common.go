@@ -49,11 +49,6 @@ import (
 //   http://dev.mysql.com/doc/internals/en/event-header-fields.html
 type binlogEvent []byte
 
-const (
-	semiSyncIndicator    byte = 0xef
-	semiSyncAckRequested byte = 0x01
-)
-
 // dataBytes returns the event bytes without header prefix and without checksum suffix
 func (ev binlogEvent) dataBytes(f BinlogFormat) []byte {
 	data := ev.Bytes()[f.HeaderLength:]
