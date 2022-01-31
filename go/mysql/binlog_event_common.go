@@ -58,9 +58,11 @@ const (
 // the 1st is a semi-sync indicator, the 2nd specifies whether the source expects an ACK for this event
 // see https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
 func isSemiSyncAckRequested(buf []byte) ([]byte, bool) {
-	ackRequested := false
+	if len(buf) < 2 {
+		return buf, false
+	}
 	if buf[0] == semiSyncIndicator {
-		ackRequested = (buf[1] == semiSyncAckRequested)
+		ackRequested := (buf[1] == semiSyncAckRequested)
 		return buf[2:], ackRequested
 	}
 	return buf, false
