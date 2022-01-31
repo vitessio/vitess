@@ -29,7 +29,8 @@ import (
 type (
 	ConverterLookup interface {
 		ColumnLookup(col *sqlparser.ColName) (int, error)
-		CollationIDLookup(expr sqlparser.Expr) collations.ID
+		CollationForExpr(expr sqlparser.Expr) collations.ID
+		DefaultCollation() collations.ID
 	}
 )
 
@@ -149,13 +150,12 @@ func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup Conv
 
 func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedCollation {
 	collation := collations.TypedCollation{
+		Collation:    lookup.CollationForExpr(expr),
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireUnicode,
 	}
-	if lookup != nil {
-		collation.Collation = lookup.CollationIDLookup(expr)
-	} else {
-		collation.Collation = collations.ID(collations.Local().DefaultConnectionCharset())
+	if collation.Collation == collations.Unknown {
+		collation.Collation = lookup.DefaultCollation()
 	}
 	return collation
 }
@@ -166,7 +166,7 @@ func ConvertEx(e sqlparser.Expr, lookup ConverterLookup, simplify bool) (Expr, e
 		return nil, err
 	}
 	if simplify {
-		expr, err = simplifyExpr(expr)
+		expr, err = simplifyExpr(expr, lookup)
 	}
 	return expr, err
 }

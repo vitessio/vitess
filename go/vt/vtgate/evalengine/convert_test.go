@@ -96,7 +96,7 @@ func TestConvertSimplification(t *testing.T) {
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := ConvertEx(astExpr, DefaultCollation(45), false)
+			converted, err := ConvertEx(astExpr, LookupDefaultCollation(45), false)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -110,7 +110,7 @@ func TestConvertSimplification(t *testing.T) {
 				t.Errorf("mismatch (simplify=false): got %s, expected %s", FormatExpr(converted), tc.converted.literal)
 			}
 
-			simplified, err := ConvertEx(astExpr, DefaultCollation(45), true)
+			simplified, err := ConvertEx(astExpr, LookupDefaultCollation(45), true)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
@@ -263,7 +263,7 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, DefaultCollation(45))
+			sqltypesExpr, err := Convert(astExpr, LookupDefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := EnvWithBindVars(
@@ -307,12 +307,12 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, DefaultCollation(45))
+			sqltypesExpr, err := Convert(astExpr, LookupDefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
 			// When
-			r, err := noenv.Evaluate(sqltypesExpr)
+			r, err := EmptyExpressionEnv().Evaluate(sqltypesExpr)
 
 			// Then
 			require.NoError(t, err)
