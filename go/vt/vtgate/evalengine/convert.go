@@ -150,12 +150,16 @@ func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup Conv
 
 func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedCollation {
 	collation := collations.TypedCollation{
-		Collation:    lookup.CollationForExpr(expr),
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireUnicode,
 	}
-	if collation.Collation == collations.Unknown {
-		collation.Collation = lookup.DefaultCollation()
+	if lookup != nil {
+		collation.Collation = lookup.CollationForExpr(expr)
+		if collation.Collation == collations.Unknown {
+			collation.Collation = lookup.DefaultCollation()
+		}
+	} else {
+		collation.Collation = collations.Default()
 	}
 	return collation
 }
