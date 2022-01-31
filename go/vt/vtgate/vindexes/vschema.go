@@ -715,7 +715,7 @@ func ChooseVindexForType(typ querypb.Type) (string, error) {
 
 // FindBestColVindex finds the best ColumnVindex for VReplication.
 func FindBestColVindex(table *Table) (*ColumnVindex, error) {
-	if len(table.ColumnVindexes) == 0 {
+	if table.ColumnVindexes == nil || len(table.ColumnVindexes) == 0 {
 		return nil, fmt.Errorf("table %s has no vindex", table.Name.String())
 	}
 	var result *ColumnVindex
