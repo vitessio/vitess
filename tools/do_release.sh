@@ -52,12 +52,14 @@ function updateJava () {
   mvn versions:set -DnewVersion=$1
 }
 
+# First argument is the Release Version (for instance: v12.0.0)
+# Second argument is the Vitess Operator version
 function updateVitessOperatorExample () {
   vtop_example_files=$(find -E $ROOT/examples/operator -name "*.yaml")
-  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:$RELEASE_VERSION/g" $vtop_example_files
-  sed -i.bak -E "s/vitess\/lite:(.*)-mysql80/vitess\/lite:$RELEASE_VERSION-mysql80/g" $(find -E $ROOT/examples/operator -name "*.md")
-  if [ "$VTOP_VERSION" != "" ]; then
-  		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$VTOP_VERSION/g" $vtop_example_files
+  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:$1/g" $vtop_example_files
+  sed -i.bak -E "s/vitess\/lite:(.*)-mysql80/vitess\/lite:$1-mysql80/g" $(find -E $ROOT/examples/operator -name "*.md")
+  if [ "$2" != "" ]; then
+  		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$2/g" $vtop_example_files
   fi
   rm -f $(find -E $ROOT/examples/operator -regex ".*.(md|yaml).bak")
 }
@@ -71,7 +73,7 @@ else
 fi
 
 # Preparing the release commit
-updateVitessOperatorExample
+updateVitessOperatorExample $RELEASE_VERSION $VTOP_VERSION
 updateJava $RELEASE_VERSION
 updateVersionGo $RELEASE_VERSION
 
