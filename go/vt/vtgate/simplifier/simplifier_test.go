@@ -115,7 +115,7 @@ func TestSimplifyEvalEngineExpr(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		res, err := (*evalengine.ExpressionEnv)(nil).Evaluate(local)
+		res, err := evalengine.EmptyExpressionEnv().Evaluate(local)
 		if err != nil {
 			return false
 		}
