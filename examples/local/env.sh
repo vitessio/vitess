@@ -79,5 +79,5 @@ alias vtctlclient="command vtctlclient -server localhost:15999 -log_dir ${VTDATA
 alias vtctldclient="command vtctldclient --server localhost:15999"
 
 # Make sure aliases are expanded in non-interactive shell
-# shopt -s expand_aliases
+shopt -s expand_aliases
 
