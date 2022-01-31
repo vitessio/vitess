@@ -31,10 +31,14 @@ type mariadbBinlogEvent struct {
 	semiSyncAckRequested bool
 }
 
+// NewMariadbBinlogEventWithSemiSyncInfo creates a BinlogEvent instance from given byte array
+func NewMariadbBinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) BinlogEvent {
+	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}
+}
+
 // NewMariadbBinlogEvent creates a BinlogEvent instance from given byte array
 func NewMariadbBinlogEvent(buf []byte) BinlogEvent {
-	buf, ackRequested := isSemiSyncAckRequested(buf)
-	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: ackRequested}
+	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
 // IsSemiSyncAckRequested implements BinlogEvent.IsSemiSyncAckRequested().

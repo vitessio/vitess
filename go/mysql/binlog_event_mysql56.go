@@ -31,10 +31,14 @@ type mysql56BinlogEvent struct {
 	semiSyncAckRequested bool
 }
 
+// NewMysql56BinlogEventWithSemiSyncInfo creates a BinlogEvent from given byte array
+func NewMysql56BinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) BinlogEvent {
+	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}
+}
+
 // NewMysql56BinlogEvent creates a BinlogEvent from given byte array
 func NewMysql56BinlogEvent(buf []byte) BinlogEvent {
-	buf, ackRequested := isSemiSyncAckRequested(buf)
-	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: ackRequested}
+	return mysql56BinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
 // IsSemiSyncAckRequested implements BinlogEvent.IsSemiSyncAckRequested().

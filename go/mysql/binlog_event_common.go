@@ -54,20 +54,6 @@ const (
 	semiSyncAckRequested byte = 0x01
 )
 
-// isSemiSyncAckRequested examines the given buffer. If semi sync is enables, then the event is preceded by two bytes,
-// the 1st is a semi-sync indicator, the 2nd specifies whether the source expects an ACK for this event
-// see https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
-func isSemiSyncAckRequested(buf []byte) ([]byte, bool) {
-	if len(buf) < 2 {
-		return buf, false
-	}
-	if buf[0] == semiSyncIndicator {
-		ackRequested := (buf[1] == semiSyncAckRequested)
-		return buf[2:], ackRequested
-	}
-	return buf, false
-}
-
 // dataBytes returns the event bytes without header prefix and without checksum suffix
 func (ev binlogEvent) dataBytes(f BinlogFormat) []byte {
 	data := ev.Bytes()[f.HeaderLength:]
