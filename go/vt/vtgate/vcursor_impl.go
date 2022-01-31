@@ -144,7 +144,6 @@ func newVCursorImpl(
 	}
 
 	// we only support collations for the new TabletGateway implementation
-	collationEnv := collations.Local()
 	var connCollation collations.ID
 	if executor != nil {
 		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
@@ -152,11 +151,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		coll, err := collationEnv.ResolveCollation("", "")
-		if err != nil {
-			panic("should never happen: don't know how to resolve default collation")
-		}
-		connCollation = coll.ID()
+		connCollation = collations.ID(collations.Local().DefaultConnectionCharset())
 	}
 
 	return &vcursorImpl{
@@ -367,19 +362,9 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	switch strings.ToLower(*plannerVersion) {
-	case "v3":
-		return planbuilder.V3
-	case "gen4":
-		return planbuilder.Gen4
-	case "gen4greedy", "greedy":
-		return planbuilder.Gen4GreedyOnly
-	case "left2right":
-		return planbuilder.Gen4Left2Right
-	case "gen4fallback":
-		return planbuilder.Gen4WithFallback
-	case "gen4comparev3":
-		return planbuilder.Gen4CompareV3
+	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
+	if done {
+		return version
 	}
 
 	log.Warning("unknown planner version configured. using the default")

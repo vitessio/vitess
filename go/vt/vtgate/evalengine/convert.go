@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -60,34 +61,27 @@ func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Exp
 		}, nil
 	}
 
-	coercedExpr := BinaryCoercedExpr{
-		BinaryExpr: binaryExpr,
-	}
-	if err := coercedExpr.coerce(); err != nil {
-		return nil, err
-	}
-
 	switch op {
 	case sqlparser.EqualOp:
-		return &ComparisonExpr{coercedExpr, compareEQ{}}, nil
+		return &ComparisonExpr{binaryExpr, compareEQ{}}, nil
 	case sqlparser.NotEqualOp:
-		return &ComparisonExpr{coercedExpr, compareNE{}}, nil
+		return &ComparisonExpr{binaryExpr, compareNE{}}, nil
 	case sqlparser.LessThanOp:
-		return &ComparisonExpr{coercedExpr, compareLT{}}, nil
+		return &ComparisonExpr{binaryExpr, compareLT{}}, nil
 	case sqlparser.LessEqualOp:
-		return &ComparisonExpr{coercedExpr, compareLE{}}, nil
+		return &ComparisonExpr{binaryExpr, compareLE{}}, nil
 	case sqlparser.GreaterThanOp:
-		return &ComparisonExpr{coercedExpr, compareGT{}}, nil
+		return &ComparisonExpr{binaryExpr, compareGT{}}, nil
 	case sqlparser.GreaterEqualOp:
-		return &ComparisonExpr{coercedExpr, compareGE{}}, nil
+		return &ComparisonExpr{binaryExpr, compareGE{}}, nil
 	case sqlparser.NullSafeEqualOp:
-		return &ComparisonExpr{coercedExpr, compareNullSafeEQ{}}, nil
+		return &ComparisonExpr{binaryExpr, compareNullSafeEQ{}}, nil
 	case sqlparser.LikeOp:
-		return &LikeExpr{BinaryCoercedExpr: coercedExpr}, nil
+		return &LikeExpr{BinaryExpr: binaryExpr}, nil
 	case sqlparser.NotLikeOp:
-		return &LikeExpr{BinaryCoercedExpr: coercedExpr, Negate: true}, nil
+		return &LikeExpr{BinaryExpr: binaryExpr, Negate: true}, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrConvertExprNotSupported, op.ToString())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, op.ToString())
 	}
 }
 
@@ -123,6 +117,36 @@ func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup Conver
 	}, nil
 }
 
+func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup ConverterLookup) (Expr, error) {
+	expr, err := convertExpr(left, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	var check func(result *EvalResult) bool
+
+	switch op {
+	case sqlparser.IsNullOp:
+		check = func(er *EvalResult) bool { return er.null() }
+	case sqlparser.IsNotNullOp:
+		check = func(er *EvalResult) bool { return !er.null() }
+	case sqlparser.IsTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolTrue }
+	case sqlparser.IsNotTrueOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolTrue }
+	case sqlparser.IsFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() == boolFalse }
+	case sqlparser.IsNotFalseOp:
+		check = func(er *EvalResult) bool { return er.truthy() != boolFalse }
+	}
+
+	return &IsExpr{
+		UnaryExpr: UnaryExpr{expr},
+		Op:        op,
+		Check:     check,
+	}, nil
+}
+
 func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedCollation {
 	collation := collations.TypedCollation{
 		Coercibility: collations.CoerceCoercible,
@@ -131,8 +155,7 @@ func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedC
 	if lookup != nil {
 		collation.Collation = lookup.CollationIDLookup(expr)
 	} else {
-		sysdefault, _ := collations.Local().ResolveCollation("", "")
-		collation.Collation = sysdefault.ID()
+		collation.Collation = collations.ID(collations.Local().DefaultConnectionCharset())
 	}
 	return collation
 }
@@ -157,7 +180,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	switch node := e.(type) {
 	case *sqlparser.ColName:
 		if lookup == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: cannot lookup column", ErrConvertExprNotSupported)
+			return nil, vterrors.Wrap(convertNotSupported(e), "cannot lookup column")
 		}
 		idx, err := lookup.ColumnLookup(node)
 		if err != nil {
@@ -166,7 +189,11 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		collation := getCollation(node, lookup)
 		return NewColumn(idx, collation), nil
 	case *sqlparser.ComparisonExpr:
-		return convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
+		expr, err := convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
+		if err != nil {
+			return nil, convertNotSupported(e)
+		}
+		return expr, err
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
 		return NewBindVar(string(node), collation), nil
@@ -178,12 +205,14 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.IntVal:
 			return NewLiteralIntegralFromBytes(node.Bytes())
 		case sqlparser.FloatVal:
-			return NewLiteralRealFromBytes(node.Bytes())
+			return NewLiteralFloatFromBytes(node.Bytes())
+		case sqlparser.DecimalVal:
+			return NewLiteralDecimalFromBytes(node.Bytes())
 		case sqlparser.StrVal:
 			collation := getCollation(e, lookup)
 			return NewLiteralString(node.Bytes(), collation), nil
-		case sqlparser.HexNum:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: hexadecimal value: %s", ErrConvertExprNotSupported, node.Val)
+		case sqlparser.HexVal:
+			return NewLiteralBinaryFromHex(node.Bytes())
 		}
 	case sqlparser.BoolVal:
 		if node {
@@ -214,7 +243,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.DivOp:
 			op = &OpDivision{}
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
+			return nil, convertNotSupported(e)
 		}
 		left, err := convertExpr(node.Left, lookup)
 		if err != nil {
@@ -265,19 +294,81 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		coll := collations.Local().DefaultCollationForCharset(node.CharacterSet[1:])
-		if coll == nil {
-			panic(fmt.Sprintf("unknown character set: %s", node.CharacterSet))
+		var collation collations.ID
+
+		// TODO: case insensitive
+		if node.CharacterSet == "_binary" {
+			collation = collations.CollationBinaryID
+		} else {
+			defaultCollation := collations.Local().DefaultCollationForCharset(node.CharacterSet[1:])
+			if defaultCollation == nil {
+				panic(fmt.Sprintf("unknown character set: %s", node.CharacterSet))
+			}
+			collation = defaultCollation.ID()
 		}
+
 		switch lit := expr.(type) {
 		case *Literal:
-			lit.Val.replaceCollationID(coll.ID())
+			switch collation {
+			case collations.CollationBinaryID:
+				lit.Val.type_ = querypb.Type_VARBINARY
+				lit.Val.collation_ = collationBinary
+			default:
+				lit.Val.type_ = querypb.Type_VARCHAR
+				lit.Val.replaceCollationID(collation)
+			}
 		case *BindVariable:
-			lit.coll.Collation = coll.ID()
+			switch collation {
+			case collations.CollationBinaryID:
+				lit.coerceType = querypb.Type_VARBINARY
+				lit.coll = collationBinary
+			default:
+				lit.coerceType = querypb.Type_VARCHAR
+				lit.coll.Collation = collation
+			}
 		default:
 			panic("character set introducers are only supported for literals and arguments")
 		}
 		return expr, nil
+	case *sqlparser.IsExpr:
+		return convertIsExpr(node.Left, node.Right, lookup)
+	case *sqlparser.FuncExpr:
+		method := node.Name.Lowered()
+		call, ok := builtinFunctions[method]
+		if !ok {
+			break
+		}
+
+		var args TupleExpr
+		var aliases []sqlparser.ColIdent
+		for _, expr := range node.Exprs {
+			aliased, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				return nil, convertNotSupported(e)
+			}
+			convertedExpr, err := convertExpr(aliased.Expr, lookup)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, convertedExpr)
+			aliases = append(aliases, aliased.As)
+		}
+		return &CallExpression{
+			Arguments: args,
+			Aliases:   aliases,
+			Method:    method,
+			Call:      call,
+		}, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
+	return nil, convertNotSupported(e)
+}
+
+var builtinFunctions = map[string]func([]EvalResult, *EvalResult){
+	"coalesce": builtinFuncCoalesce,
+	"greatest": builtinFuncGreatest,
+	"least":    builtinFuncLeast,
+}
+
+func convertNotSupported(e sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrConvertExprNotSupported, sqlparser.String(e))
 }

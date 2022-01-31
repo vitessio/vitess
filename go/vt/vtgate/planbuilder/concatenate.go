@@ -21,10 +21,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type concatenate struct {
+	v3Plan
 	lhs, rhs logicalPlan
 	order    int
 }
@@ -52,14 +52,6 @@ func (c *concatenate) Wireup(plan logicalPlan, jt *jointab) error {
 		return err
 	}
 	return c.rhs.Wireup(plan, jt)
-}
-
-func (c *concatenate) WireupGen4(semTable *semantics.SemTable) error {
-	err := c.lhs.WireupGen4(semTable)
-	if err != nil {
-		return err
-	}
-	return c.rhs.WireupGen4(semTable)
 }
 
 func (c *concatenate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
@@ -91,10 +83,6 @@ func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
 	c.lhs = inputs[0]
 	c.rhs = inputs[1]
 	return nil
-}
-
-func (c *concatenate) ContainsTables() semantics.TableSet {
-	return c.lhs.ContainsTables().Merge(c.rhs.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface

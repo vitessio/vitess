@@ -1,7 +1,3 @@
-## Enhancements
-
-- `vtctl/vtctlclient ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted: `vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce`
-
 ## Major Changes
 
 ### vtgate -gateway_implementation flag is deprecated (and ignored)
@@ -65,6 +61,14 @@ This command indicates that a migration executed with `-postpone-completion` is 
 $ vtctl ApplySchema -skip_preflight -sql "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete" commerce
 ```
 
+### vtctl/vtctlclient ApplySchema: allow zero in date
+
+`vtctl/vtctlclient ApplySchema` now respects `-allow-zero-in-date` for `direct` strategy. For example, the following statement is now accepted:
+
+```shell
+vtctlclient ApplySchema -skip_preflight -ddl_strategy='direct -allow-zero-in-date' -sql "create table if not exists t2(id int primary key, dt datetime default '0000-00-00 00:00:00')" commerce
+```
+
 ### vtctl/vtctlclient ApplySchema -uuid_list
 
 `vtctlient ApplySchema` now support a new optional `-uuid_list` flag. It is possible for the user to explicitly specify the UUIDs for given migration(s). UUIDs must be in a specific format. If given, number of UUIDs must match the number of DDL statements. Example:
@@ -75,6 +79,10 @@ vtctlclient OnlineDDL ApplySchema -sql "drop table t1, drop table t2" -uuid_list
 
 Vitess will assign each migration with given UUID in order of appearance.
 It is the user's responsibility to ensure given UUIDs are globally unique. If the user submits a migration with an already existing UUID, that migration never gets scheduled nor executed.
+
+### vtctl/vtctlclient ApplySchema -migration_context
+
+`-migration_context` flag is synonymous to `-request_context`. Either will work. We will encourage use of `-migration_context` as it is more consistent with output of `SHOW VITESS_MIGRATIONS ...` which includes the `migration_context` column.
 
 ### vtctl/vtctlclient OnlineDDL ... complete
 
@@ -89,6 +97,14 @@ For example:
 ```shell
 vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
 ```
+
+### vtctl/vtctlclient OnlineDDL -json
+
+The command now accepts an optional `-json` flag. With this flag, the output is a valid JSON listing all columns and rows.
+
+## vtadmin-web updated to node v16.13.0 (LTS)
+
+Building vtadmin-web now requires node >= v16.13.0 (LTS). Upgrade notes are given in https://github.com/vitessio/vitess/pull/9136. 
 
 ## Incompatible Changes
 

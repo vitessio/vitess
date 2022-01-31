@@ -38,10 +38,10 @@ type VtctlClientProcess struct {
 
 // VtctlClientParams encapsulated params to provide if non-default
 type VtctlClientParams struct {
-	DDLStrategy    string
-	RequestContext string
-	SkipPreflight  bool
-	UUIDList       string
+	DDLStrategy      string
+	MigrationContext string
+	SkipPreflight    bool
+	UUIDList         string
 }
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
@@ -76,8 +76,8 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 		"ApplySchema",
 		"-sql", SQL,
 	}
-	if params.RequestContext != "" {
-		args = append(args, "-request_context", params.RequestContext)
+	if params.MigrationContext != "" {
+		args = append(args, "-migration_context", params.MigrationContext)
 	}
 	if params.DDLStrategy != "" {
 		args = append(args, "-ddl_strategy", params.DDLStrategy)

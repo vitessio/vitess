@@ -12277,6 +12277,9 @@ export namespace tabletmanagerdata {
 
         /** ChangeTypeRequest tablet_type */
         tablet_type?: (topodata.TabletType|null);
+
+        /** ChangeTypeRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a ChangeTypeRequest. */
@@ -12290,6 +12293,9 @@ export namespace tabletmanagerdata {
 
         /** ChangeTypeRequest tablet_type. */
         public tablet_type: topodata.TabletType;
+
+        /** ChangeTypeRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new ChangeTypeRequest instance using the specified properties.
@@ -13327,6 +13333,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest after_schema */
         after_schema?: (tabletmanagerdata.ISchemaDefinition|null);
+
+        /** ApplySchemaRequest sql_mode */
+        sql_mode?: (string|null);
     }
 
     /** Represents an ApplySchemaRequest. */
@@ -13352,6 +13361,9 @@ export namespace tabletmanagerdata {
 
         /** ApplySchemaRequest after_schema. */
         public after_schema?: (tabletmanagerdata.ISchemaDefinition|null);
+
+        /** ApplySchemaRequest sql_mode. */
+        public sql_mode: string;
 
         /**
          * Creates a new ApplySchemaRequest instance using the specified properties.
@@ -15688,6 +15700,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a StartReplicationRequest. */
     interface IStartReplicationRequest {
+
+        /** StartReplicationRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a StartReplicationRequest. */
@@ -15698,6 +15713,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IStartReplicationRequest);
+
+        /** StartReplicationRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new StartReplicationRequest instance using the specified properties.
@@ -16738,6 +16756,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of an InitPrimaryRequest. */
     interface IInitPrimaryRequest {
+
+        /** InitPrimaryRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents an InitPrimaryRequest. */
@@ -16748,6 +16769,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IInitPrimaryRequest);
+
+        /** InitPrimaryRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new InitPrimaryRequest instance using the specified properties.
@@ -17113,6 +17137,9 @@ export namespace tabletmanagerdata {
 
         /** InitReplicaRequest time_created_ns */
         time_created_ns?: (number|Long|null);
+
+        /** InitReplicaRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents an InitReplicaRequest. */
@@ -17132,6 +17159,9 @@ export namespace tabletmanagerdata {
 
         /** InitReplicaRequest time_created_ns. */
         public time_created_ns: (number|Long);
+
+        /** InitReplicaRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new InitReplicaRequest instance using the specified properties.
@@ -17470,6 +17500,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of an UndoDemotePrimaryRequest. */
     interface IUndoDemotePrimaryRequest {
+
+        /** UndoDemotePrimaryRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents an UndoDemotePrimaryRequest. */
@@ -17480,6 +17513,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IUndoDemotePrimaryRequest);
+
+        /** UndoDemotePrimaryRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new UndoDemotePrimaryRequest instance using the specified properties.
@@ -17818,6 +17854,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest wait_position */
         wait_position?: (string|null);
+
+        /** SetReplicationSourceRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a SetReplicationSourceRequest. */
@@ -17840,6 +17879,9 @@ export namespace tabletmanagerdata {
 
         /** SetReplicationSourceRequest wait_position. */
         public wait_position: string;
+
+        /** SetReplicationSourceRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new SetReplicationSourceRequest instance using the specified properties.
@@ -18358,6 +18400,9 @@ export namespace tabletmanagerdata {
 
     /** Properties of a PromoteReplicaRequest. */
     interface IPromoteReplicaRequest {
+
+        /** PromoteReplicaRequest semiSync */
+        semiSync?: (boolean|null);
     }
 
     /** Represents a PromoteReplicaRequest. */
@@ -18368,6 +18413,9 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IPromoteReplicaRequest);
+
+        /** PromoteReplicaRequest semiSync. */
+        public semiSync: boolean;
 
         /**
          * Creates a new PromoteReplicaRequest instance using the specified properties.
@@ -35030,6 +35078,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest tablet_aliases */
         tablet_aliases?: (topodata.ITabletAlias[]|null);
+
+        /** GetTabletsRequest tablet_type */
+        tablet_type?: (topodata.TabletType|null);
     }
 
     /** Represents a GetTabletsRequest. */
@@ -35055,6 +35106,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest tablet_aliases. */
         public tablet_aliases: topodata.ITabletAlias[];
+
+        /** GetTabletsRequest tablet_type. */
+        public tablet_type: topodata.TabletType;
 
         /**
          * Creates a new GetTabletsRequest instance using the specified properties.
@@ -43087,6 +43141,12 @@ export namespace binlogdata {
 
         /** VEvent last_p_k_event */
         last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace */
+        keyspace?: (string|null);
+
+        /** VEvent shard */
+        shard?: (string|null);
     }
 
     /** Represents a VEvent. */
@@ -43130,6 +43190,12 @@ export namespace binlogdata {
 
         /** VEvent last_p_k_event. */
         public last_p_k_event?: (binlogdata.ILastPKEvent|null);
+
+        /** VEvent keyspace. */
+        public keyspace: string;
+
+        /** VEvent shard. */
+        public shard: string;
 
         /**
          * Creates a new VEvent instance using the specified properties.

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,8 +48,8 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 	switch op := opTree.(type) {
 	case *abstract.QueryGraph:
 		switch {
-		// case ctx.vschema.Planner() == Gen4Left2Right:
-		//	return leftToRightSolve(ctx, op)
+		case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
+			return leftToRightSolve(ctx, op)
 		default:
 			return greedySolve(ctx, op)
 		}
@@ -78,6 +80,15 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		return optimizeVindex(ctx, op)
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
+	case *abstract.Filter:
+		src, err := CreatePhysicalOperator(ctx, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		return &Filter{
+			Source:     src,
+			Predicates: op.Predicates,
+		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
@@ -101,6 +112,28 @@ func greedySolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abs
 		return nil, err
 	}
 	return op, nil
+}
+
+func leftToRightSolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
+	plans, err := seedOperatorList(ctx, qg)
+	if err != nil {
+		return nil, err
+	}
+
+	var acc abstract.PhysicalOperator
+	for _, plan := range plans {
+		if acc == nil {
+			acc = plan
+			continue
+		}
+		joinPredicates := qg.GetPredicates(acc.TableID(), plan.TableID())
+		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return acc, nil
 }
 
 // seedOperatorList returns a route for each table in the qg
@@ -162,30 +195,30 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
-		plan.RouteOpCode = engine.SelectNext
+		plan.RouteOpCode = engine.Next
 	case vschemaTable.Type == vindexes.TypeReference:
-		plan.RouteOpCode = engine.SelectReference
+		plan.RouteOpCode = engine.Reference
 	case !vschemaTable.Keyspace.Sharded:
-		plan.RouteOpCode = engine.SelectUnsharded
+		plan.RouteOpCode = engine.Unsharded
 	case vschemaTable.Pinned != nil:
 		// Pinned tables have their keyspace ids already assigned.
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
-		plan.RouteOpCode = engine.SelectEqualUnique
+		plan.RouteOpCode = engine.EqualUnique
 		vindex, _ := vindexes.NewBinary("binary", nil)
 		plan.Selected = &VindexOption{
 			Ready:       true,
 			Values:      []evalengine.Expr{evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})},
 			ValueExprs:  nil,
 			Predicates:  nil,
-			OpCode:      engine.SelectEqualUnique,
+			OpCode:      engine.EqualUnique,
 			FoundVindex: vindex,
 			Cost: Cost{
-				OpCode: engine.SelectEqualUnique,
+				OpCode: engine.EqualUnique,
 			},
 		}
 	default:
-		plan.RouteOpCode = engine.SelectScatter
+		plan.RouteOpCode = engine.Scatter
 	}
 	for _, predicate := range table.Predicates {
 		err = plan.UpdateRoutingLogic(ctx, predicate)
@@ -210,7 +243,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *abstract.Quer
 		},
 	}
 	r := &Route{
-		RouteOpCode: engine.SelectDBA,
+		RouteOpCode: engine.DBA,
 		Source:      src,
 		Keyspace:    ks,
 	}
@@ -436,13 +469,13 @@ func tryMerge(
 	}
 
 	switch aRoute.RouteOpCode {
-	case engine.SelectUnsharded, engine.SelectDBA:
+	case engine.Unsharded, engine.DBA:
 		if aRoute.RouteOpCode == bRoute.RouteOpCode {
 			return merger(aRoute, bRoute)
 		}
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		// if they are already both being sent to the same shard, we can merge
-		if bRoute.RouteOpCode == engine.SelectEqualUnique {
+		if bRoute.RouteOpCode == engine.EqualUnique {
 			aVdx := aRoute.SelectedVindex()
 			bVdx := bRoute.SelectedVindex()
 			aExpr := aRoute.VindexExpressions()
@@ -453,7 +486,7 @@ func tryMerge(
 			return nil, nil
 		}
 		fallthrough
-	case engine.SelectScatter, engine.SelectIN:
+	case engine.Scatter, engine.IN:
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
@@ -526,14 +559,14 @@ func leaves(op abstract.Operator) (sources []abstract.Operator) {
 
 func tryMergeReferenceTable(aRoute, bRoute *Route, merger mergeFunc) (*Route, error) {
 	// if either side is a reference table, we can just merge it and use the opcode of the other side
-	var opCode engine.RouteOpcode
+	var opCode engine.Opcode
 	var selected *VindexOption
 
 	switch {
-	case aRoute.RouteOpCode == engine.SelectReference:
+	case aRoute.RouteOpCode == engine.Reference:
 		selected = bRoute.Selected
 		opCode = bRoute.RouteOpCode
-	case bRoute.RouteOpCode == engine.SelectReference:
+	case bRoute.RouteOpCode == engine.Reference:
 		selected = aRoute.Selected
 		opCode = aRoute.RouteOpCode
 	default:

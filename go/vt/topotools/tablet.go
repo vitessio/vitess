@@ -126,7 +126,7 @@ func DoCellsHaveRdonlyTablets(ctx context.Context, ts *topo.Server, cells []stri
 	}
 
 	for _, cell := range cells {
-		tablets, err := GetAllTablets(ctx, ts, cell)
+		tablets, err := ts.GetTabletsByCell(ctx, cell)
 		if err != nil {
 			return false, err
 		}

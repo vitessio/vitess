@@ -68,11 +68,6 @@ Gen4 plan same as above
 "unsupported: cross-shard left join and column expressions"
 Gen4 plan same as above
 
-# left join where clauses #2
-"select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.col, 4) = 5"
-"unsupported: cross-shard left join and where clause"
-Gen4 plan same as above
-
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
@@ -454,7 +449,7 @@ Gen4 plan same as above
   "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "DBA",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -478,7 +473,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -510,11 +505,11 @@ Gen4 plan same as above
 # TODO this should be planned without using OA and MS
 "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4 error: expr cannot be converted, not supported: count(u.`name`) = 3
 
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
-Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4 error: expr cannot be converted, not supported: count(ue.col) > 10
 
 # aggregation filtering by having on a route with no group by
 "select 1 from user having count(id) = 10"
@@ -523,7 +518,7 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
   "Original": "select 1 from user having count(id) = 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -533,7 +528,7 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
     "Table": "`user`"
   }
 }
-Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4 error: expr cannot be converted, not supported: count(id) = 10
 
 # aggregation filtering by having on a route with no group by with non-unique vindex filter
 "select 1 from user having count(id) = 10 and name = 'a'"
@@ -542,7 +537,7 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
   "Original": "select 1 from user having count(id) = 10 and name = 'a'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -551,12 +546,12 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
     "Query": "select 1 from `user` having count(id) = 10 and `name` = 'a'",
     "Table": "`user`",
     "Values": [
-      "VARBINARY(\"a\")"
+      "VARCHAR(\"a\")"
     ],
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
+Gen4 error: expr cannot be converted, not supported: count(id) = 10
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
@@ -592,7 +587,7 @@ Gen4 error: Column 'id' in field list is ambiguous
   "Original": "select id2 from (select id from user) as x (id2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -636,7 +631,7 @@ Gen4 plan same as above
 # Equal filter with hexadecimal value
 "select count(*) a from user having a = 0x01"
 "unsupported: filtering on results of aggregates"
-Gen4 error: expr cannot be converted, not supported: hexadecimal value: 0x01
+Gen4 error: expr cannot be converted, not supported: a = 0x01
 
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"

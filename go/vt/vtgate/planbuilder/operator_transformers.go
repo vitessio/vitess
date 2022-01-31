@@ -55,6 +55,29 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op abstract.Physic
 		return transformCorrelatedSubQueryPlan(ctx, op)
 	case *physical.Derived:
 		return transformDerivedPlan(ctx, op)
+	case *physical.Filter:
+		plan, err := transformToLogicalPlan(ctx, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		scl := &simpleConverterLookup{
+			canPushProjection: true,
+			ctx:               ctx,
+			plan:              plan,
+		}
+		ast := sqlparser.AndExpressions(op.Predicates...)
+		predicate, err := evalengine.Convert(ast, scl)
+		if err != nil {
+			return nil, err
+		}
+
+		return &filter{
+			logicalPlanCommon: newBuilderCommon(plan),
+			efilter: &engine.Filter{
+				Predicate:    predicate,
+				ASTPredicate: ast,
+			},
+		}, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformToLogicalPlan)", op)
@@ -123,13 +146,15 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *physical.Route) (*
 	replaceSubQuery(ctx, sel)
 	return &routeGen4{
 		eroute: &engine.Route{
-			Opcode:              op.RouteOpCode,
-			TableName:           strings.Join(tableNames, ", "),
-			Keyspace:            op.Keyspace,
-			Vindex:              vindex,
-			Values:              values,
-			SysTableTableName:   op.SysTableTableName,
-			SysTableTableSchema: op.SysTableTableSchema,
+			TableName: strings.Join(tableNames, ", "),
+			RoutingParameters: &engine.RoutingParameters{
+				Opcode:              op.RouteOpCode,
+				Keyspace:            op.Keyspace,
+				Vindex:              vindex,
+				Values:              values,
+				SysTableTableName:   op.SysTableTableName,
+				SysTableTableSchema: op.SysTableTableSchema,
+			},
 		},
 		Select:    sel,
 		tables:    op.TableID(),
@@ -455,32 +480,32 @@ func canMergeUnionPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bool 
 		return false
 	}
 	switch a.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectReference:
+	case engine.Unsharded, engine.Reference:
 		return a.eroute.Opcode == b.eroute.Opcode
-	case engine.SelectDBA:
+	case engine.DBA:
 		return canSelectDBAMerge(a, b)
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		// Check if they target the same shard.
-		if b.eroute.Opcode == engine.SelectEqualUnique &&
+		if b.eroute.Opcode == engine.EqualUnique &&
 			a.eroute.Vindex == b.eroute.Vindex &&
 			a.condition != nil &&
 			b.condition != nil &&
 			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
 			return true
 		}
-	case engine.SelectScatter:
-		return b.eroute.Opcode == engine.SelectScatter
-	case engine.SelectNext:
+	case engine.Scatter:
+		return b.eroute.Opcode == engine.Scatter
+	case engine.Next:
 		return false
 	}
 	return false
 }
 
 func canSelectDBAMerge(a, b *routeGen4) bool {
-	if a.eroute.Opcode != engine.SelectDBA {
+	if a.eroute.Opcode != engine.DBA {
 		return false
 	}
-	if b.eroute.Opcode != engine.SelectDBA {
+	if b.eroute.Opcode != engine.DBA {
 		return false
 	}
 

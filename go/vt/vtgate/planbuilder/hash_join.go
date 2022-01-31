@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -88,4 +89,21 @@ func (hj *hashJoin) Rewrite(inputs ...logicalPlan) error {
 // ContainsTables implements the logicalPlan interface
 func (hj *hashJoin) ContainsTables() semantics.TableSet {
 	return hj.Left.ContainsTables().Merge(hj.Right.ContainsTables())
+}
+
+// OutputColumns implements the logicalPlan interface
+func (hj *hashJoin) OutputColumns() []sqlparser.SelectExpr {
+	return getOutputColumnsFromJoin(hj.Cols, hj.Left.OutputColumns(), hj.Right.OutputColumns())
+}
+
+func getOutputColumnsFromJoin(ints []int, lhs []sqlparser.SelectExpr, rhs []sqlparser.SelectExpr) (cols []sqlparser.SelectExpr) {
+	for _, col := range ints {
+		if col < 0 {
+			col *= -1
+			cols = append(cols, lhs[col-1])
+		} else {
+			cols = append(cols, rhs[col-1])
+		}
+	}
+	return
 }

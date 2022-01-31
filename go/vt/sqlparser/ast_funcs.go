@@ -138,6 +138,7 @@ type ValType int
 const (
 	StrVal = ValType(iota)
 	IntVal
+	DecimalVal
 	FloatVal
 	HexNum
 	HexVal
@@ -435,6 +436,10 @@ func NewStrLiteral(in string) *Literal {
 // NewIntLiteral builds a new IntVal.
 func NewIntLiteral(in string) *Literal {
 	return &Literal{Type: IntVal, Val: in}
+}
+
+func NewDecimalLiteral(in string) *Literal {
+	return &Literal{Type: DecimalVal, Val: in}
 }
 
 // NewFloatLiteral builds a new FloatVal.
@@ -1447,13 +1452,14 @@ const (
 
 // handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
 func handleUnaryMinus(expr Expr) Expr {
-	if num, ok := expr.(*Literal); ok && (num.Type == IntVal || num.Type == FloatVal) {
+	if num, ok := expr.(*Literal); ok && (num.Type == IntVal || num.Type == FloatVal || num.Type == DecimalVal) {
 		// Handle double negative
 		if num.Val[0] == '-' {
 			num.Val = num.Val[1:]
 			return num
 		}
-		return NewIntLiteral("-" + num.Val)
+		num.Val = "-" + num.Val
+		return num
 	}
 	if unaryExpr, ok := expr.(*UnaryExpr); ok && unaryExpr.Operator == UMinusOp {
 		return unaryExpr.Expr
@@ -1504,6 +1510,9 @@ func IsAggregation(node SQLNode) bool {
 
 // GetFirstSelect gets the first select statement
 func GetFirstSelect(selStmt SelectStatement) *Select {
+	if selStmt == nil {
+		return nil
+	}
 	switch node := selStmt.(type) {
 	case *Select:
 		return node

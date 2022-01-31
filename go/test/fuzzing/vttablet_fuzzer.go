@@ -298,7 +298,7 @@ func (fs *fuzzStore) callInitMaster() error {
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.InitMaster(context.Background(), tablet)
+	_, _ = fs.client.InitMaster(context.Background(), tablet, false)
 	return nil
 }
 
@@ -331,7 +331,7 @@ func (fs *fuzzStore) callStartReplication() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.StartReplication(context.Background(), tablet)
+	_ = fs.client.StartReplication(context.Background(), tablet, false)
 	return nil
 }
 
@@ -419,7 +419,7 @@ func (fs *fuzzStore) callUndoDemotePrimary() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.UndoDemotePrimary(context.Background(), tablet)
+	_ = fs.client.UndoDemotePrimary(context.Background(), tablet, false)
 	return nil
 }
 
@@ -441,7 +441,7 @@ func (fs *fuzzStore) callPromoteReplica() error {
 	if err != nil {
 		return err
 	}
-	_, _ = fs.client.PromoteReplica(context.Background(), tablet)
+	_, _ = fs.client.PromoteReplica(context.Background(), tablet, false)
 	return nil
 }
 
@@ -562,7 +562,7 @@ func (fs *fuzzStore) callSetMaster() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.SetMaster(context.Background(), tablet, parent, int64(timeCreatedNS), pos, false)
+	_ = fs.client.SetMaster(context.Background(), tablet, parent, int64(timeCreatedNS), pos, false, false)
 	return nil
 }
 
@@ -585,7 +585,7 @@ func (fs *fuzzStore) callInitReplica() error {
 	if err != nil {
 		return err
 	}
-	_ = fs.client.InitReplica(context.Background(), tablet, parent, replicationPosition, int64(timeCreatedNS))
+	_ = fs.client.InitReplica(context.Background(), tablet, parent, replicationPosition, int64(timeCreatedNS), false)
 	return nil
 }
 
@@ -692,7 +692,7 @@ func FuzzGRPCTMServer(data []byte) int {
 	t := &testing.T{}
 
 	// Listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0
 	}

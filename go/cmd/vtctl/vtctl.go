@@ -45,9 +45,9 @@ import (
 )
 
 var (
-	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
-	durability   = flag.String("durability", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	waitTime         = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	detachedMode     = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
+	durabilityPolicy = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 )
 
 func init() {
@@ -85,6 +85,8 @@ func main() {
 	args := servenv.ParseFlagsWithArgs("vtctl")
 	action := args[0]
 
+	log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
+
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
@@ -93,7 +95,7 @@ func main() {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
 
-	if err := reparentutil.SetDurabilityPolicy(*durability, nil); err != nil {
+	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil); err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		exit.Return(1)
 	}

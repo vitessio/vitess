@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -86,4 +87,13 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 
 func (ms *mergeSort) WireupGen4(semTable *semantics.SemTable) error {
 	return ms.input.WireupGen4(semTable)
+}
+
+// OutputColumns implements the logicalPlan interface
+func (ms *mergeSort) OutputColumns() []sqlparser.SelectExpr {
+	outputCols := ms.input.OutputColumns()
+	if ms.truncateColumnCount > 0 {
+		return outputCols[:ms.truncateColumnCount]
+	}
+	return outputCols
 }

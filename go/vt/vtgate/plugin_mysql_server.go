@@ -83,6 +83,7 @@ var (
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
+	mysql.UnimplementedHandler
 	mu sync.Mutex
 
 	vtg         *VTGate
@@ -101,8 +102,6 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 	defer vh.mu.Unlock()
 	vh.connections[c] = true
 }
-
-func (vh *vtgateHandler) ConnectionReady(_ *mysql.Conn) {}
 
 func (vh *vtgateHandler) numConnections() int {
 	vh.mu.Lock()

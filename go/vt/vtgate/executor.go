@@ -35,7 +35,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -708,7 +708,7 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 				return nil, err
 			}
 			return num, nil
-		case sqlparser.FloatVal:
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
 			num, err := strconv.ParseFloat(expr.Val, 64)
 			if err != nil {
 				return nil, err
@@ -1544,7 +1544,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 		fields[i] = &querypb.Field{
 			Name:    v,
 			Type:    sqltypes.VarChar,
-			Charset: mysql.CharacterSetUtf8,
+			Charset: collations.CollationUtf8ID,
 			Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 		}
 	}
@@ -1757,7 +1757,7 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 		if !ok {
 			return false
 		}
-		return router.Opcode == engine.SelectScatter
+		return router.Opcode == engine.Scatter
 	}, plan.Instructions)
 
 	if badPrimitive == nil {

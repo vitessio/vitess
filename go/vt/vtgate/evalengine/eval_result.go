@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"strconv"
@@ -46,23 +47,23 @@ type (
 		// Must not be accessed directly: call EvalResult.typeof() instead.
 		// For most expression types, this is known ahead of time and calling typeof() does not require
 		// an evaluation, so the type of an expression can be known without evaluating it.
-		type_ querypb.Type
+		type_ querypb.Type //nolint
 		// collation_ is the collation of this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.collation() instead.
-		collation_ collations.TypedCollation
+		collation_ collations.TypedCollation //nolint
 		// numeric_ is the numeric value of this result. It may be uninitialized.
 		// Must not be accessed directly: call one of the numeric getters for EvalResult instead.
-		numeric_ uint64
+		numeric_ uint64 //nolint
 		// bytes_ is the raw byte value this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.bytes() instead.
-		bytes_ []byte
+		bytes_ []byte //nolint
 		// tuple_ is the list of all results contained in this result, if the result is a tuple.
 		// It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.tuple() instead.
-		tuple_ *[]EvalResult
+		tuple_ *[]EvalResult //nolint
 		// decimal_ is the numeric decimal for this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.decimal() instead.
-		decimal_ *decimalResult
+		decimal_ *decimalResult //nolint
 	}
 
 	decimalResult struct {
@@ -147,7 +148,7 @@ func (er *EvalResult) string() string {
 }
 
 func (er *EvalResult) value() sqltypes.Value {
-	return er.toSQLValue(er.typeof())
+	return sqltypes.MakeTrusted(er.typeof(), er.toRawBytes())
 }
 
 func (er *EvalResult) null() bool {
@@ -181,6 +182,12 @@ func (er *EvalResult) setRaw(typ querypb.Type, raw []byte, coll collations.Typed
 	er.type_ = typ
 	er.bytes_ = raw
 	er.collation_ = coll
+}
+
+func (er *EvalResult) setRawNumeric(typ querypb.Type, u uint64) {
+	er.type_ = typ
+	er.numeric_ = u
+	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setInt64(i int64) {
@@ -296,7 +303,7 @@ func (er *EvalResult) Value() sqltypes.Value {
 	if er.expr != nil {
 		panic("did not resolve EvalResult after evaluation")
 	}
-	return er.toSQLValue(er.type_)
+	return er.value()
 }
 
 // TupleValues allows for retrieval of the value we expose for public consumption
@@ -344,7 +351,7 @@ func (er *EvalResult) ToBooleanStrict() (bool, error) {
 		return intToBool(er.uint64())
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return intToBool(er.uint64())
-	case sqltypes.VarBinary:
+	case sqltypes.VarBinary, sqltypes.VarChar:
 		lower := strings.ToLower(er.string())
 		switch lower {
 		case "on":
@@ -355,7 +362,7 @@ func (er *EvalResult) ToBooleanStrict() (bool, error) {
 			return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'%s' is not a boolean", lower)
 		}
 	}
-	return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "is not a boolean")
+	return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'%s' is not a boolean", er.string())
 }
 
 func (er *EvalResult) textual() bool {
@@ -363,7 +370,7 @@ func (er *EvalResult) textual() bool {
 	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt)
 }
 
-func (er *EvalResult) nonzero() boolean {
+func (er *EvalResult) truthy() boolean {
 	switch er.type_ {
 	case sqltypes.Null:
 		return boolNULL
@@ -373,12 +380,51 @@ func (er *EvalResult) nonzero() boolean {
 		return makeboolean(er.float64() != 0.0)
 	case sqltypes.Decimal:
 		return makeboolean(!er.decimal().num.IsZero())
-	case sqltypes.VarBinary:
+	case sqltypes.VarBinary, sqltypes.VarChar:
 		return makeboolean(parseStringToFloat(er.string()) != 0.0)
 	case querypb.Type_TUPLE:
 		panic("did not typecheck tuples")
 	default:
 		return boolTrue
+	}
+}
+
+func formatMySQLFloat(typ querypb.Type, f float64) []byte {
+	format := byte('g')
+	if typ == sqltypes.Decimal {
+		format = 'f'
+	}
+
+	// the float printer in MySQL does not add a positive sign before
+	// the exponent for positive exponents, but the Golang printer does
+	// do that, and there's no way to customize it, so we must strip the
+	// redundant positive sign manually
+	// e.g. 1.234E+56789 -> 1.234E56789
+	fstr := strconv.AppendFloat(nil, f, format, -1, 64)
+	if idx := bytes.IndexByte(fstr, 'e'); idx >= 0 {
+		if fstr[idx+1] == '+' {
+			fstr = append(fstr[:idx+1], fstr[idx+2:]...)
+		}
+	}
+
+	return fstr
+}
+
+func (er *EvalResult) toRawBytes() []byte {
+	switch er.typeof() {
+	case sqltypes.Int64, sqltypes.Int32:
+		return strconv.AppendInt(nil, er.int64(), 10)
+	case sqltypes.Uint64, sqltypes.Uint32:
+		return strconv.AppendUint(nil, er.uint64(), 10)
+	case sqltypes.Float64, sqltypes.Float32:
+		return formatMySQLFloat(sqltypes.Float64, er.float64())
+	case sqltypes.Decimal:
+		dec := er.decimal()
+		return dec.num.FormatCustom(dec.frac, roundingModeFormat)
+	case sqltypes.Null:
+		return nil
+	default:
+		return er.bytes()
 	}
 }
 
@@ -407,11 +453,7 @@ func (er *EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 		case sqltypes.Uint64, sqltypes.Uint32:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, er.uint64(), 10))
 		case sqltypes.Float64, sqltypes.Float32:
-			format := byte('g')
-			if resultType == sqltypes.Decimal {
-				format = 'f'
-			}
-			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, er.float64(), format, -1, 64))
+			return sqltypes.MakeTrusted(resultType, formatMySQLFloat(resultType, er.float64()))
 		case sqltypes.Decimal:
 			dec := er.decimal()
 			return sqltypes.MakeTrusted(resultType, dec.num.FormatCustom(dec.frac, roundingModeFormat))
@@ -575,29 +617,16 @@ func (er *EvalResult) setBindVar1(typ querypb.Type, value []byte, collation coll
 			throwEvalError(err)
 		}
 		er.setDecimal(dec)
-	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
-		er.setRaw(sqltypes.VarBinary, value, collation)
+	case sqltypes.VarChar, sqltypes.Text:
+		er.setRaw(sqltypes.VarChar, value, collation)
+	case sqltypes.VarBinary:
+		er.setRaw(sqltypes.VarBinary, value, collationBinary)
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
 		er.setRaw(typ, value, collationNumeric)
 	case sqltypes.Null:
 		er.setNull()
 	default:
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", typ.String()))
-	}
-}
-
-func (er *EvalResult) setBindVar(val *querypb.BindVariable, collation collations.TypedCollation) {
-	switch val.Type {
-	case querypb.Type_TUPLE:
-		tuple := make([]EvalResult, len(val.Values))
-		for i, value := range val.Values {
-			t := &tuple[i]
-			t.setBindVar1(value.Type, value.Value, collations.TypedCollation{})
-		}
-		er.setTuple(tuple)
-
-	default:
-		er.setBindVar1(val.Type, val.Value, collation)
 	}
 }
 

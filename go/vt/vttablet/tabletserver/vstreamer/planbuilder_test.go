@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/require"
@@ -614,7 +615,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 	}, {
 		name:       "greater",
 		inFilter:   "select * from t1 where val > 'abc'",
-		outFilters: []Filter{{Opcode: GreaterThan, ColNum: 1, Value: sqltypes.NewVarBinary("abc")}},
+		outFilters: []Filter{{Opcode: GreaterThan, ColNum: 1, Value: sqltypes.NewVarChar("abc")}},
 	}, {
 		name:       "greater-than",
 		inFilter:   "select * from t1 where id >= 1",
@@ -623,7 +624,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 		name:     "less-than-with-and",
 		inFilter: "select * from t1 where id < 2 and val <= 'xyz'",
 		outFilters: []Filter{{Opcode: LessThan, ColNum: 0, Value: sqltypes.NewInt64(2)},
-			{Opcode: LessThanEqual, ColNum: 1, Value: sqltypes.NewVarBinary("xyz")},
+			{Opcode: LessThanEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 		},
 	}, {
 		name:     "vindex-and-operators",
@@ -641,7 +642,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 				},
 			},
 			{Opcode: Equal, ColNum: 0, Value: sqltypes.NewInt64(2)},
-			{Opcode: NotEqual, ColNum: 1, Value: sqltypes.NewVarBinary("xyz")},
+			{Opcode: NotEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 		},
 	}}
 
@@ -691,7 +692,7 @@ func TestCompare(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run("", func(t *testing.T) {
-			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue)
+			got, err := compare(tc.opcode, tc.columnValue, tc.filterValue, collations.CollationUtf8mb4ID)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, got)
 		})

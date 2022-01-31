@@ -37,6 +37,7 @@ func TestPRSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
@@ -107,7 +108,7 @@ func TestPRSForInitialization(t *testing.T) {
 // TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary
 func TestERSPromoteRdonly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -135,7 +136,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 // TestERSPreventCrossCellPromotion tests that we promote a replica in the same cell as the previous primary if prevent cross cell promotion flag is set
 func TestERSPreventCrossCellPromotion(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -158,7 +159,7 @@ func TestERSPreventCrossCellPromotion(t *testing.T) {
 // caught up to it by pulling transactions from it
 func TestPullFromRdonly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -218,22 +219,34 @@ func TestPullFromRdonly(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestTwoReplicasNoReplicationStatus checks that ERS is able to fix
-// two replicas which do not have any replication status
-func TestTwoReplicasNoReplicationStatus(t *testing.T) {
+// TestNoReplicationStatusAndReplicationStopped checks that ERS is able to fix
+// replicas which do not have any replication status and also succeeds if the replication
+// is stopped on the primary elect.
+func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE; RESET SLAVE ALL`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE; RESET SLAVE ALL`)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
 	require.NoError(t, err)
-
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[3].Alias, `STOP SLAVE SQL_THREAD;`)
+	require.NoError(t, err)
+	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
+	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
+	// Failover to tablets[3]
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, out)
+	// Verify that the tablet has the inserted value
+	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+	require.NoError(t, err)
+	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
+	utils.ConfirmReplication(t, tablets[3], tablets[:1])
+	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
+	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
 }
 
 // TestERSForInitialization tests whether calling ERS in the beginning sets up the cluster properly or not
@@ -241,6 +254,7 @@ func TestERSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)

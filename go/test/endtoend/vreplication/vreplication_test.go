@@ -57,8 +57,12 @@ var (
 
 // for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
 // we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
-const openTxQuery = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
-const deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
+const (
+	openTxQuery       = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
+	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
+
+	merchantKeyspace = "merchant-type"
+)
 
 func init() {
 	defaultRdonly = 0
@@ -118,12 +122,11 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	materializeRollup(t)
-
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName, false)
 
-	// the tenant table was to test a specific case with binary sharding keys. Drop it now so that we don't
+	// the Lead and Lead-1 tables tested a specific case with binary sharding keys. Drop it now so that we don't
 	// have to update the rest of the tests
-	execVtgateQuery(t, vtgateConn, "customer", "drop table tenant")
+	execVtgateQuery(t, vtgateConn, "customer", "drop table `Lead`,`Lead-1`")
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
@@ -341,7 +344,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,tenant"
+		tables := "customer,Lead,Lead-1"
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -356,7 +359,18 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
-		execVtgateQuery(t, vtgateConn, "product", "update tenant set name='xyz'")
+
+		// confirm that the backticking of table names in the routing rules works
+		tbls := []string{"Lead", "Lead-1"}
+		for _, tbl := range tbls {
+			output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
+				"--host=127.0.0.1", "-e", fmt.Sprintf("select * from `%s`", tbl)})
+			if err != nil {
+				require.FailNow(t, output)
+			}
+			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
+		}
+
 		vdiff(t, ksWorkflow, "")
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
@@ -485,7 +499,7 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 
 func reshardMerchant2to3SplitMerge(t *testing.T) {
 	t.Run("reshardMerchant2to3SplitMerge", func(t *testing.T) {
-		ksName := "merchant"
+		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
 		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryRunResultsSwitchWritesM2m3, nil, "")
 		validateCount(t, vtgateConn, ksName, "merchant", 2)
@@ -505,16 +519,18 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		}
 
 		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
-			output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
+			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
+			output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetShard", ksShard)
 			if err != nil {
 				t.Fatalf("GetShard merchant failed for: %s: %v", shard, err)
 			}
-			assert.NotContains(t, output, "node doesn't exist", "GetShard failed for valid shard merchant:"+shard)
-			assert.Contains(t, output, "primary_alias", "GetShard failed for valid shard merchant:"+shard)
+			assert.NotContains(t, output, "node doesn't exist", "GetShard failed for valid shard "+ksShard)
+			assert.Contains(t, output, "primary_alias", "GetShard failed for valid shard "+ksShard)
 		}
 
 		for _, shard := range strings.Split("-40,40-c0,c0-", ",") {
-			expectNumberOfStreams(t, vtgateConn, "reshardMerchant2to3SplitMerge", "m2m3", "merchant:"+shard, 0)
+			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
+			expectNumberOfStreams(t, vtgateConn, "reshardMerchant2to3SplitMerge", "m2m3", ksShard, 0)
 		}
 
 		var found bool
@@ -529,7 +545,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 
 func reshardMerchant3to1Merge(t *testing.T) {
 	t.Run("reshardMerchant3to1Merge", func(t *testing.T) {
-		ksName := "merchant"
+		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
 		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts, nil, nil, "")
 		validateCount(t, vtgateConn, ksName, "merchant", 3)
@@ -635,33 +651,41 @@ func shardMerchant(t *testing.T) {
 		workflow := "p2m"
 		cell := defaultCell.Name
 		sourceKs := "product"
-		targetKs := "merchant"
+		targetKs := merchantKeyspace
 		tables := "merchant"
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "merchant", "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400); err != nil {
+		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "merchant", "-80"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "-80"), 1); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "merchant", "80-"), 1); err != nil {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "80-"), 1); err != nil {
 			t.Fatal(err)
 		}
 		moveTables(t, cell, workflow, sourceKs, targetKs, tables)
-		merchantKs := vc.Cells[defaultCell.Name].Keyspaces["merchant"]
+		merchantKs := vc.Cells[defaultCell.Name].Keyspaces[merchantKeyspace]
 		merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet
 		merchantTab2 := merchantKs.Shards["80-"].Tablets["zone1-500"].Vttablet
 		catchup(t, merchantTab1, workflow, "MoveTables")
 		catchup(t, merchantTab2, workflow, "MoveTables")
 
-		vdiff(t, "merchant.p2m", "")
+		vdiff(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
+		printRoutingRules(t, vc, "After merchant movetables")
+
+		// confirm that the backticking of keyspaces in the routing rules works
+		output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
+			fmt.Sprintf("--host=%s", vc.ClusterConfig.hostname), "-e", "select * from merchant"})
+		if err != nil {
+			require.FailNow(t, output)
+		}
 		dropSources(t, ksWorkflow)
 
-		validateCountInTablet(t, merchantTab1, "merchant", "merchant", 1)
-		validateCountInTablet(t, merchantTab2, "merchant", "merchant", 1)
-		validateCount(t, vtgateConn, "merchant", "merchant", 2)
+		validateCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
+		validateCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
+		validateCount(t, vtgateConn, merchantKeyspace, "merchant", 2)
 	})
 }
 
@@ -844,29 +868,29 @@ func materializeMerchantSales(t *testing.T) {
 	t.Run("materializeMerchantSales", func(t *testing.T) {
 		workflow := "msales"
 		materialize(t, materializeMerchantSalesSpec)
-		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "primary")
+		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
-		validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "msales", 1)
-		validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "msales", 1)
-		validateCount(t, vtgateConn, "merchant", "msales", 2)
+		validateCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "msales", 1)
+		validateCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "msales", 1)
+		validateCount(t, vtgateConn, merchantKeyspace, "msales", 2)
 	})
 }
 
 func materializeMerchantOrders(t *testing.T) {
 	t.Run("materializeMerchantOrders", func(t *testing.T) {
 		workflow := "morders"
-		keyspace := "merchant"
+		keyspace := merchantKeyspace
 		applyVSchema(t, merchantOrdersVSchema, keyspace)
 		materialize(t, materializeMerchantOrdersSpec)
-		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "primary")
+		merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, merchantKeyspace, "primary")
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
-		validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "morders", 2)
-		validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "morders", 1)
-		validateCount(t, vtgateConn, "merchant", "morders", 3)
+		validateCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "morders", 2)
+		validateCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "morders", 1)
+		validateCount(t, vtgateConn, merchantKeyspace, "morders", 3)
 	})
 }
 

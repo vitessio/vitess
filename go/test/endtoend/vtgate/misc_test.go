@@ -285,15 +285,15 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
 
 	utils.Exec(t, conn, "set workload='olap'")
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLAP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLAP")]]`)
 
 	utils.Exec(t, conn, "set workload='oltp'")
 
-	utils.AssertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
 }
 
 func TestFoundRowsOnDualQueries(t *testing.T) {
@@ -528,7 +528,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	assert.Equal(t, `Tables_in_ks`, fmt.Sprintf("%v", qr.Fields[0].Name))
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
-	assert.Equal(t, `[[VARBINARY("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
@@ -571,10 +571,10 @@ func TestSQLSelectLimit(t *testing.T) {
 		*/
 
 		//	without order by the results are not deterministic for testing purpose. Checking row count only.
-		qr := utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
+		qr := utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
 		assert.Equal(t, 2, len(qr.Rows))
 
-		qr = utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
+		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
 		assert.Equal(t, 3, len(qr.Rows))
 	}
 }
@@ -650,7 +650,7 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `SELECT /* GEN4_COMPARE_ONLY_GEN4 */ 
+	utils.Exec(t, conn, `SELECT /*vt+ PLANNER=gen4 */ 
                     TABLE_SCHEMA,
                     TABLE_NAME
                 FROM
@@ -788,4 +788,20 @@ func TestCharsetIntro(t *testing.T) {
 	utils.Exec(t, conn, "delete from t4 where id2 = _utf8'xyz'")
 	qr := utils.Exec(t, conn, "select id1 from t4 where id2 = _utf8mb4'xyz'")
 	require.EqualValues(t, 0, qr.RowsAffected)
+}
+
+func TestFilterAfterLeftJoin(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "delete from t1")
+	defer utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (1, 10)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (2, 3)")
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (3, 2)")
+
+	query := "select /*vt+ PLANNER=gen4 */ A.id1, A.id2 from t1 as A left join t1 as B on A.id1 = B.id2 WHERE B.id1 IS NULL"
+	utils.AssertMatches(t, conn, query, `[[INT64(1) INT64(10)]]`)
 }

@@ -29,6 +29,7 @@ import (
 type VtctlProcess struct {
 	Name               string
 	Binary             string
+	LogDir             string
 	TopoImplementation string
 	TopoGlobalAddress  string
 	TopoGlobalRoot     string
@@ -68,6 +69,7 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
 func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
 	args = append([]string{
+		"-log_dir", vtctl.LogDir,
 		"-enable_queries",
 		"-topo_implementation", vtctl.TopoImplementation,
 		"-topo_global_server_address", vtctl.TopoGlobalAddress,
@@ -81,7 +83,7 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 	)
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
-	return filterResultWhenRunsForCoverage(string(resultByte)), err
+	return filterResultForWarning(filterResultWhenRunsForCoverage(string(resultByte))), err
 }
 
 // ExecuteCommand executes any vtctlclient command

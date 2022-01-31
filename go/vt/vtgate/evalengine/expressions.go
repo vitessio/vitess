@@ -17,7 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
-	"bytes"
+	"encoding/hex"
 	"strconv"
 	"unicode/utf8"
 
@@ -40,7 +40,6 @@ type (
 	Expr interface {
 		eval(env *ExpressionEnv, result *EvalResult)
 		typeof(env *ExpressionEnv) querypb.Type
-		collation() collations.TypedCollation
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify() error
@@ -51,8 +50,9 @@ type (
 	}
 
 	BindVariable struct {
-		Key  string
-		coll collations.TypedCollation
+		Key        string
+		coll       collations.TypedCollation
+		coerceType querypb.Type
 	}
 
 	Column struct {
@@ -88,7 +88,7 @@ var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
 
-var noenv *ExpressionEnv = nil
+var noenv *ExpressionEnv
 
 type evalError struct {
 	error
@@ -107,9 +107,8 @@ func throwCardinalityError(expected int) {
 func (env *ExpressionEnv) cardinality(expr Expr) int {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		val := expr.bvar(env)
-		if val.Type == querypb.Type_TUPLE {
-			return len(val.Values)
+		if expr.typeof(env) == querypb.Type_TUPLE {
+			return len(expr.bvar(env).Values)
 		}
 		return 1
 
@@ -130,7 +129,7 @@ func (env *ExpressionEnv) ensureCardinality(expr Expr, expected int) {
 func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.bvar(env).Type == querypb.Type_TUPLE {
+		if expr.typeof(env) == querypb.Type_TUPLE {
 			return nil, 1
 		}
 	case TupleExpr:
@@ -210,6 +209,9 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		for _, subexpr := range expr {
 			env.typecheck(subexpr)
 		}
+
+	case *IsExpr:
+		env.ensureCardinality(expr.Inner, 1)
 	}
 }
 
@@ -302,17 +304,19 @@ func NewLiteralFloat(val float64) Expr {
 	return lit
 }
 
-// NewLiteralRealFromBytes returns a float literal expression from a slice of bytes
-func NewLiteralRealFromBytes(val []byte) (Expr, error) {
+// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	lit := &Literal{}
-	if bytes.IndexByte(val, 'e') >= 0 || bytes.IndexByte(val, 'E') >= 0 {
-		fval, err := strconv.ParseFloat(string(val), 64)
-		if err != nil {
-			return nil, err
-		}
-		lit.Val.setFloat(fval)
-		return lit, nil
+	fval, err := strconv.ParseFloat(string(val), 64)
+	if err != nil {
+		return nil, err
 	}
+	lit.Val.setFloat(fval)
+	return lit, nil
+}
+
+func NewLiteralDecimalFromBytes(val []byte) (Expr, error) {
+	lit := &Literal{}
 	dec, err := newDecimalString(string(val))
 	if err != nil {
 		return nil, err
@@ -331,15 +335,26 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) Expr {
 		}
 	}
 	lit := &Literal{}
-	lit.Val.setRaw(sqltypes.VarBinary, val, collation)
+	lit.Val.setRaw(sqltypes.VarChar, val, collation)
 	return lit
+}
+
+func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
+	raw := make([]byte, hex.DecodedLen(len(val)))
+	if _, err := hex.Decode(raw, val); err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(sqltypes.VarBinary, raw, collationBinary)
+	return lit, nil
 }
 
 // NewBindVar returns a bind variable
 func NewBindVar(key string, collation collations.TypedCollation) Expr {
 	return &BindVariable{
-		Key:  key,
-		coll: collation,
+		Key:        key,
+		coll:       collation,
+		coerceType: -1,
 	}
 }
 
@@ -387,11 +402,30 @@ func (bv *BindVariable) bvar(env *ExpressionEnv) *querypb.BindVariable {
 
 // eval implements the Expr interface
 func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
-	result.setBindVar(bv.bvar(env), bv.coll)
+	bvar := bv.bvar(env)
+	typ := bvar.Type
+	if bv.coerceType >= 0 {
+		typ = bv.coerceType
+	}
+
+	switch typ {
+	case querypb.Type_TUPLE:
+		tuple := make([]EvalResult, len(bvar.Values))
+		for i, value := range bvar.Values {
+			tuple[i].setBindVar1(value.Type, value.Value, collations.TypedCollation{})
+		}
+		result.setTuple(tuple)
+
+	default:
+		result.setBindVar1(typ, bvar.Value, bv.coll)
+	}
 }
 
 // typeof implements the Expr interface
 func (bv *BindVariable) typeof(env *ExpressionEnv) querypb.Type {
+	if bv.coerceType >= 0 {
+		return bv.coerceType
+	}
 	return bv.bvar(env).Type
 }
 

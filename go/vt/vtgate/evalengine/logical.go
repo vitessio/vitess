@@ -17,8 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
@@ -61,14 +61,14 @@ func makeboolean2(b, isNull bool) boolean {
 	return makeboolean(b)
 }
 
-func (b boolean) not() boolean {
-	switch b {
+func (left boolean) not() boolean {
+	switch left {
 	case boolFalse:
 		return boolTrue
 	case boolTrue:
 		return boolFalse
 	default:
-		return b
+		return left
 	}
 }
 
@@ -127,15 +127,11 @@ func (left boolean) xor(right boolean) boolean {
 func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var inner EvalResult
 	inner.init(env, n.Inner)
-	out.setBoolean(inner.nonzero().not())
+	out.setBoolean(inner.truthy().not())
 }
 
 func (n *NotExpr) typeof(*ExpressionEnv) querypb.Type {
 	return querypb.Type_UINT64
-}
-
-func (n *NotExpr) collation() collations.TypedCollation {
-	return collationNumeric
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
@@ -145,13 +141,29 @@ func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	if left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
 		panic("did not typecheck tuples")
 	}
-	out.setBoolean(l.op(left.nonzero(), right.nonzero()))
+	out.setBoolean(l.op(left.truthy(), right.truthy()))
 }
 
 func (l *LogicalExpr) typeof(env *ExpressionEnv) querypb.Type {
 	return querypb.Type_UINT64
 }
 
-func (n *LogicalExpr) collation() collations.TypedCollation {
-	return collationNumeric
+// IsExpr represents the IS expression in MySQL.
+// boolean_primary IS [NOT] {TRUE | FALSE | NULL}
+type IsExpr struct {
+	UnaryExpr
+	Op    sqlparser.IsExprOperator
+	Check func(*EvalResult) bool
+}
+
+var _ Expr = (*IsExpr)(nil)
+
+func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	var in EvalResult
+	in.init(env, i.Inner)
+	result.setBool(i.Check(&in))
+}
+
+func (i *IsExpr) typeof(env *ExpressionEnv) querypb.Type {
+	return querypb.Type_INT64
 }

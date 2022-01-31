@@ -503,7 +503,17 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_REPLICA,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.ChangeTabletTypeRequest{
@@ -519,14 +529,18 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_REPLICA,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
 				},
 				AfterTablet: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_RDONLY,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_RDONLY,
 				},
 				WasDryRun: false,
 			},
@@ -541,7 +555,17 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_REPLICA,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.ChangeTabletTypeRequest{
@@ -558,14 +582,18 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_REPLICA,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
 				},
 				AfterTablet: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_RDONLY,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_RDONLY,
 				},
 				WasDryRun: true,
 			},
@@ -580,7 +608,17 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  200,
 					},
-					Type: topodatapb.TabletType_REPLICA,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.ChangeTabletTypeRequest{
@@ -602,7 +640,17 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_REPLICA,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.ChangeTabletTypeRequest{
@@ -624,7 +672,9 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_PRIMARY,
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.ChangeTabletTypeRequest{
@@ -651,7 +701,9 @@ func TestChangeTabletType(t *testing.T) {
 				TopoServer: ts,
 			}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
 
-			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+			}, tt.tablets...)
 
 			resp, err := vtctld.ChangeTabletType(ctx, tt.req)
 			if tt.shouldErr {
@@ -699,8 +751,21 @@ func TestChangeTabletType(t *testing.T) {
 				Cell: "zone1",
 				Uid:  100,
 			},
-			Type: topodatapb.TabletType_REPLICA,
+			Keyspace: "ks",
+			Shard:    "0",
+			Type:     topodatapb.TabletType_REPLICA,
 		}, nil)
+		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Keyspace: "ks",
+			Shard:    "0",
+			Type:     topodatapb.TabletType_PRIMARY,
+		}, &testutil.AddTabletOptions{
+			AlsoSetShardPrimary: true,
+		})
 
 		_, err := vtctld.ChangeTabletType(ctx, &vtctldatapb.ChangeTabletTypeRequest{
 			TabletAlias: &topodatapb.TabletAlias{
@@ -8073,6 +8138,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tmc: testutil.TabletManagerClient{
@@ -8099,6 +8172,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tmc: testutil.TabletManagerClient{
@@ -8126,6 +8207,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			tmc: testutil.TabletManagerClient{
@@ -8153,6 +8242,14 @@ func TestStartReplication(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req:       &vtctldatapb.StartReplicationRequest{},
@@ -8169,7 +8266,9 @@ func TestStartReplication(t *testing.T) {
 			ts := memorytopo.NewServer(tt.cells...)
 			defer ts.Close()
 
-			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+			}, tt.tablets...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})

@@ -26,7 +26,9 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -71,6 +73,10 @@ type LocalProcessCluster struct {
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
 	VtctldHTTPPort  int
+
+	// major version numbers
+	VtTabletMajorVersion int
+	VtctlMajorVersion    int
 
 	// standalone executable
 	VtctlclientProcess VtctlClientProcess
@@ -212,6 +218,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 			log.Error(err)
 			return
 		}
+		cluster.VtctlProcess.LogDir = cluster.TmpDirectory
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
@@ -597,10 +604,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
-		// version_upgrade test depends on using older binaries
-		// which means we cannot use the new PRIMARY tablet_type here
-		// TODO(deepthi): fix after v12.0
-		"MASTER,REPLICA",
+		"PRIMARY,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs,
@@ -627,8 +631,40 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
 
+	err := cluster.populateVersionInfo()
+	if err != nil {
+		log.Errorf("Error populating version information - %v", err)
+	}
+
 	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
+}
+
+// populateVersionInfo is used to populate the version information for the binaries used to setup the cluster.
+func (cluster *LocalProcessCluster) populateVersionInfo() error {
+	var err error
+	cluster.VtTabletMajorVersion, err = getMajorVersion("vttablet")
+	if err != nil {
+		return err
+	}
+	cluster.VtctlMajorVersion, err = getMajorVersion("vtctl")
+	return err
+}
+
+func getMajorVersion(binaryName string) (int, error) {
+	version, err := exec.Command(binaryName, "--version").Output()
+	if err != nil {
+		return 0, err
+	}
+	versionRegex := regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	v := versionRegex.FindStringSubmatch(string(version))
+	if len(v) != 4 {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	return strconv.Atoi(v[1])
 }
 
 // RestartVtgate starts vtgate with updated configs
@@ -696,6 +732,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 	}
 
 	var mysqlctlProcessList []*exec.Cmd
+	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
@@ -704,6 +741,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 						log.Errorf("Error in mysqlctl teardown: %v", err)
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
+						mysqlctlTabletUIDs = append(mysqlctlTabletUIDs, tablet.MysqlctlProcess.TabletUID)
 					}
 				}
 				if tablet.MysqlctldProcess.TabletUID > 0 {
@@ -719,11 +757,11 @@ func (cluster *LocalProcessCluster) Teardown() {
 		}
 	}
 
-	for _, proc := range mysqlctlProcessList {
-		if err := proc.Wait(); err != nil {
-			log.Errorf("Error in mysqlctl teardown wait: %v", err)
-		}
-	}
+	// On the CI it was noticed that MySQL shutdown hangs sometimes and
+	// on local investigation it was waiting on SEMI_SYNC acks for an internal command
+	// of Vitess even after closing the socket file.
+	// To prevent this process for hanging for 5 minutes, we will add a 30-second timeout.
+	cluster.waitForMySQLProcessToExit(mysqlctlProcessList, mysqlctlTabletUIDs)
 
 	if err := cluster.VtctldProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtctld teardown: %v", err)
@@ -737,6 +775,49 @@ func (cluster *LocalProcessCluster) Teardown() {
 	os.Setenv("VTDATAROOT", cluster.OriginalVTDATAROOT)
 
 	cluster.teardownCompleted = true
+}
+
+func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessList []*exec.Cmd, mysqlctlTabletUIDs []int) {
+	wg := sync.WaitGroup{}
+	for i, cmd := range mysqlctlProcessList {
+		wg.Add(1)
+		go func(cmd *exec.Cmd, tabletUID int) {
+			defer func() {
+				wg.Done()
+			}()
+			exit := make(chan error)
+			go func() {
+				exit <- cmd.Wait()
+			}()
+			select {
+			case <-time.After(30 * time.Second):
+				break
+			case err := <-exit:
+				if err == nil {
+					return
+				}
+				log.Errorf("Error in mysqlctl teardown wait: %v", err)
+				break
+			}
+			pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tabletUID))
+			pidBytes, err := os.ReadFile(pidFile)
+			if err != nil {
+				// We can't read the file which means the PID file does not exist
+				// The server must have stopped
+				return
+			}
+			pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+			if err != nil {
+				log.Errorf("Error in conversion to integer: %v", err)
+				return
+			}
+			err = syscall.Kill(pid, syscall.SIGKILL)
+			if err != nil {
+				log.Errorf("Error in killing process: %v", err)
+			}
+		}(cmd, mysqlctlTabletUIDs[i])
+	}
+	wg.Wait()
 }
 
 // StartVtworker starts a vtworker

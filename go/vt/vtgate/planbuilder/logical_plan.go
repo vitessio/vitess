@@ -85,6 +85,9 @@ type logicalPlan interface {
 	// ContainsTables keeps track which query tables are being solved by this logical plan
 	// This is only applicable for plans that have been built with the Gen4 planner
 	ContainsTables() semantics.TableSet
+
+	// OutputColumns shows the columns that this plan will produce
+	OutputColumns() []sqlparser.SelectExpr
 }
 
 // gen4Plan implements a few methods from logicalPlan that are unused by Gen4.
@@ -123,6 +126,21 @@ func (*gen4Plan) SupplyCol(*sqlparser.ColName) (rc *resultColumn, colNumber int)
 // SupplyWeightString implements the logicalPlan interface
 func (*gen4Plan) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
 	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// v3Plan implements methods that are only used by gen4
+type v3Plan struct{}
+
+func (*v3Plan) WireupGen4(*semantics.SemTable) error {
+	panic("[BUG]: should not be called. This is a V3 primitive")
+}
+
+func (*v3Plan) ContainsTables() semantics.TableSet {
+	panic("[BUG]: should not be called. This is a V3 primitive")
+}
+
+func (*v3Plan) OutputColumns() []sqlparser.SelectExpr {
+	panic("[BUG]: should not be called. This is a V3 primitive")
 }
 
 type planVisitor func(logicalPlan) (bool, logicalPlan, error)
@@ -224,9 +242,14 @@ func (bc *logicalPlanCommon) Inputs() []logicalPlan {
 	return []logicalPlan{bc.input}
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (bc *logicalPlanCommon) ContainsTables() semantics.TableSet {
 	return bc.input.ContainsTables()
+}
+
+// OutputColumns implements the logicalPlan interface
+func (bc *logicalPlanCommon) OutputColumns() []sqlparser.SelectExpr {
+	return bc.input.OutputColumns()
 }
 
 //-------------------------------------------------------------------------
