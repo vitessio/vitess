@@ -43,7 +43,7 @@ type (
 		typeof(env *ExpressionEnv) querypb.Type
 		format(buf *formatter, depth int)
 		constant() bool
-		simplify(lookup ConverterLookup) error
+		simplify(env *ExpressionEnv) error
 	}
 
 	Literal struct {
