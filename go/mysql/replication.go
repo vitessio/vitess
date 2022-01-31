@@ -21,6 +21,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const (
+	semiSyncIndicator    byte = 0xef
+	semiSyncAckRequested byte = 0x01
+)
+
 // This file contains the methods related to replication.
 
 // WriteComBinlogDump writes a ComBinlogDump command.
