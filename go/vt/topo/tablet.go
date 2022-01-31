@@ -17,13 +17,14 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"sort"
 	"sync"
 	"time"
 
-	"context"
+	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -540,6 +541,74 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 	}
 	wg.Wait()
 	return tabletMap, someError
+}
+
+// InitTablet creates or updates a tablet. If no parent is specified
+// in the tablet, and the tablet has a replica type, we will find the
+// appropriate parent. If createShardAndKeyspace is true and the
+// parent keyspace or shard don't exist, they will be created.  If
+// allowUpdate is true, and a tablet with the same ID exists, just update it.
+// If a tablet is created as primary, and there is already a different
+// primary in the shard, allowPrimaryOverride must be set.
+func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, allowPrimaryOverride, createShardAndKeyspace, allowUpdate bool) error {
+	shard, kr, err := ValidateShardName(tablet.Shard)
+	if err != nil {
+		return err
+	}
+	tablet.Shard = shard
+	tablet.KeyRange = kr
+
+	// get the shard, possibly creating it
+	var si *ShardInfo
+
+	if createShardAndKeyspace {
+		// create the parent keyspace and shard if needed
+		si, err = ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
+	} else {
+		si, err = ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+		if IsErrType(err, NoNode) {
+			return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
+		}
+	}
+
+	// get the shard, checks a couple things
+	if err != nil {
+		return fmt.Errorf("cannot get (or create) shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
+	}
+	if !key.KeyRangeEqual(si.KeyRange, tablet.KeyRange) {
+		return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
+	}
+	if tablet.Type == topodatapb.TabletType_PRIMARY && si.HasPrimary() && !topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) && !allowPrimaryOverride {
+		// InitTablet is deprecated, so the flag has not been renamed
+		return fmt.Errorf("creating this tablet would override old primary %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.PrimaryAlias), tablet.Keyspace, tablet.Shard)
+	}
+
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
+		// we update primary_term_start_time even if the primary hasn't changed
+		// because that means a new primary term with the same primary
+		tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
+	}
+
+	err = ts.CreateTablet(ctx, tablet)
+	if IsErrType(err, NodeExists) && allowUpdate {
+		// Try to update then
+		oldTablet, err := ts.GetTablet(ctx, tablet.Alias)
+		if err != nil {
+			return fmt.Errorf("failed reading existing tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		}
+
+		// Check we have the same keyspace / shard, and if not,
+		// require the allowDifferentShard flag.
+		if oldTablet.Keyspace != tablet.Keyspace || oldTablet.Shard != tablet.Shard {
+			return fmt.Errorf("old tablet has shard %v/%v. Cannot override with shard %v/%v. Delete and re-add tablet if you want to change the tablet's keyspace/shard", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
+		}
+		oldTablet.Tablet = proto.Clone(tablet).(*topodatapb.Tablet)
+		if err := ts.UpdateTablet(ctx, oldTablet); err != nil {
+			return fmt.Errorf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		}
+		return nil
+	}
+	return err
 }
 
 // ParseServingTabletType parses the tablet type into the enum, and makes sure

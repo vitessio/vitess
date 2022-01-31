@@ -17,12 +17,15 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
 
-	"context"
-
 	"github.com/stretchr/testify/assert"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -50,32 +53,29 @@ func TestTabletExecutorOpen(t *testing.T) {
 	}
 }
 
-// TODO: had this comment this out because it was causing an import cycle.
-// need to rewrite this test which depends on InitTablet in wrangler.
-//func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
-//	ctx := context.Background()
-//	ts := memorytopo.NewServer("test_cell")
-//	wr := wrangler.New(logutil.NewConsoleLogger(), ts, newFakeTabletManagerClient())
-//	tablet := &topodatapb.Tablet{
-//		Alias: &topodatapb.TabletAlias{
-//			Cell: "test_cell",
-//			Uid:  1,
-//		},
-//		Keyspace: "test_keyspace",
-//		Shard:    "0",
-//		Type:     topodatapb.TabletType_REPLICA,
-//	}
-//	// This will create the Keyspace, Shard and Tablet record.
-//	// Since this is a replica tablet, the Shard will have no primary.
-//	if err := wr.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
-//		t.Fatalf("InitTablet failed: %v", err)
-//	}
-//	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
-//	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
-//		t.Fatalf("executor.Open() = '%v', want error", err)
-//	}
-//	executor.Close()
-//}
+func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("test_cell")
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "test_cell",
+			Uid:  1,
+		},
+		Keyspace: "test_keyspace",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+	// This will create the Keyspace, Shard and Tablet record.
+	// Since this is a replica tablet, the Shard will have no primary.
+	if err := ts.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+		t.Fatalf("InitTablet failed: %v", err)
+	}
+	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
+		t.Fatalf("executor.Open() = '%v', want error", err)
+	}
+	executor.Close()
+}
 
 func TestTabletExecutorValidate(t *testing.T) {
 	fakeTmc := newFakeTabletManagerClient()

@@ -218,7 +218,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	}
 
 	if len(req.UuidList) > 0 {
-		if err := executor.SetUUIDList(strings.Join(req.UuidList, ",")); err != nil {
+		if err := executor.SetUUIDList(req.UuidList); err != nil {
 			return resp, vterrors.Wrapf(err, "invalid UuidList: %s", req.UuidList)
 		}
 	}
