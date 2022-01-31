@@ -234,6 +234,10 @@ func serveGRPC() {
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(GRPCServer, healthServer)
 
+	for service := range GRPCServer.GetServiceInfo() {
+		healthServer.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+	}
+
 	// listen on the port
 	log.Infof("Listening for gRPC calls on port %v", *GRPCPort)
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *GRPCPort))
