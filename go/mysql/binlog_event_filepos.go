@@ -28,10 +28,14 @@ type filePosBinlogEvent struct {
 	semiSyncAckRequested bool
 }
 
+// newFilePosBinlogEventWithSemiSyncInfo creates a BinlogEvent from given byte array
+func newFilePosBinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) *filePosBinlogEvent {
+	return &filePosBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}
+}
+
 // newFilePosBinlogEvent creates a BinlogEvent from given byte array
 func newFilePosBinlogEvent(buf []byte) *filePosBinlogEvent {
-	buf, ackRequested := isSemiSyncAckRequested(buf)
-	return &filePosBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: ackRequested}
+	return &filePosBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
 func (*filePosBinlogEvent) GTID(BinlogFormat) (GTID, bool, error) {

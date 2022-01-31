@@ -193,6 +193,11 @@ type Conn struct {
 
 	// Packet encoding variables.
 	sequence uint8
+
+	// ExpectSemiSyncIndicator is applicable when the connection is used for replication (ComBinlogDump).
+	// When 'true', events are assumed to be padded with 2-byte semi-sync information
+	// See https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
+	ExpectSemiSyncIndicator bool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.

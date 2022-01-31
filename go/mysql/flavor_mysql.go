@@ -236,7 +236,12 @@ func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	case ErrPacket:
 		return nil, ParseErrorPacket(result)
 	}
-	return NewMysql56BinlogEvent(result[1:]), nil
+	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(result[1:])
+	if err != nil {
+		return nil, err
+	}
+	ev := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+	return ev, nil
 }
 
 // enableBinlogPlaybackCommand is part of the Flavor interface.
