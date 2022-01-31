@@ -355,7 +355,10 @@ func TestBinlogEventIntVarBadID(t *testing.T) {
 }
 
 func TestBinlogEventIsSemiSyncNoAckQuery(t *testing.T) {
-	input := newFilePosBinlogEvent(googleSemiSyncNoAckQueryEvent)
+	c := Conn{ExpectSemiSyncIndicator: true}
+	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(googleSemiSyncNoAckQueryEvent)
+	assert.NoError(t, err)
+	input := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 	assert.False(t, input.IsSemiSyncAckRequested())
 
@@ -366,13 +369,25 @@ func TestBinlogEventIsSemiSyncNoAckQuery(t *testing.T) {
 }
 
 func TestBinlogEventIsNotSemiSyncAckXID(t *testing.T) {
-	input := newFilePosBinlogEvent(googleXIDEvent)
+	{
+		input := newFilePosBinlogEvent(googleXIDEvent)
+		assert.False(t, input.IsSemiSyncAckRequested())
+	}
 
-	assert.False(t, input.IsSemiSyncAckRequested())
+	{
+		c := Conn{ExpectSemiSyncIndicator: false}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(googleXIDEvent)
+		assert.NoError(t, err)
+		input := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+		assert.False(t, input.IsSemiSyncAckRequested())
+	}
 }
 
 func TestBinlogEventIsSemiSyncAckXID(t *testing.T) {
-	input := newFilePosBinlogEvent(googleSemiSyncAckXIDEvent)
+	c := Conn{ExpectSemiSyncIndicator: true}
+	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(googleSemiSyncAckXIDEvent)
+	assert.NoError(t, err)
+	input := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
 	assert.True(t, input.IsSemiSyncAckRequested())
 
