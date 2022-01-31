@@ -133,12 +133,31 @@ func TestMysql56ParsePosition(t *testing.T) {
 }
 
 func TestMysql56SemiSyncAck(t *testing.T) {
-	assert.False(t, mysql56QueryEvent.IsSemiSyncAckRequested())
-	assert.True(t, mysql56QueryEvent.IsQuery())
+	{
+		c := Conn{ExpectSemiSyncIndicator: false}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56QueryEvent.Bytes())
+		assert.NoError(t, err)
+		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
-	assert.False(t, mysql56SemiSyncNoAckQueryEvent.IsSemiSyncAckRequested())
-	assert.True(t, mysql56SemiSyncNoAckQueryEvent.IsQuery())
+		assert.False(t, e.IsSemiSyncAckRequested())
+		assert.True(t, e.IsQuery())
+	}
+	{
+		c := Conn{ExpectSemiSyncIndicator: true}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56SemiSyncNoAckQueryEvent.Bytes())
+		assert.NoError(t, err)
+		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 
-	assert.True(t, mysql56SemiSyncAckQueryEvent.IsSemiSyncAckRequested())
-	assert.True(t, mysql56SemiSyncAckQueryEvent.IsQuery())
+		assert.False(t, e.IsSemiSyncAckRequested())
+		assert.True(t, e.IsQuery())
+	}
+	{
+		c := Conn{ExpectSemiSyncIndicator: true}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mysql56SemiSyncAckQueryEvent.Bytes())
+		assert.NoError(t, err)
+		e := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+
+		assert.True(t, e.IsSemiSyncAckRequested())
+		assert.True(t, e.IsQuery())
+	}
 }

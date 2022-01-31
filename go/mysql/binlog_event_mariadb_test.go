@@ -205,17 +205,29 @@ func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
 
 func TestMariaDBSemiSyncAck(t *testing.T) {
 	{
-		e := NewMariadbBinlogEvent(mariadbInsertEvent)
+		c := Conn{ExpectSemiSyncIndicator: false}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mariadbInsertEvent)
+		assert.NoError(t, err)
+		e := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+
 		assert.False(t, e.IsSemiSyncAckRequested())
 		assert.True(t, e.IsQuery())
 	}
 	{
-		e := NewMariadbBinlogEvent(mariadbSemiSyncNoAckInsertEvent)
+		c := Conn{ExpectSemiSyncIndicator: true}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mariadbSemiSyncNoAckInsertEvent)
+		assert.NoError(t, err)
+		e := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+
 		assert.False(t, e.IsSemiSyncAckRequested())
 		assert.True(t, e.IsQuery())
 	}
 	{
-		e := NewMariadbBinlogEvent(mariadbSemiSyncAckInsertEvent)
+		c := Conn{ExpectSemiSyncIndicator: true}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(mariadbSemiSyncAckInsertEvent)
+		assert.NoError(t, err)
+		e := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+
 		assert.True(t, e.IsSemiSyncAckRequested())
 		assert.True(t, e.IsQuery())
 	}
