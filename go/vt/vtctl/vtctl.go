@@ -3252,13 +3252,18 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		*migrationContext = *requestContext
 	}
 
+	parts, err := sqlparser.SplitStatementToPieces(change)
+	if err != nil {
+		return err
+	}
+
 	log.Info("Calling ApplySchema on VtctldServer")
 
 	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:                keyspace,
 		AllowLongUnavailability: *allowLongUnavailability,
 		DdlStrategy:             *ddlStrategy,
-		Sql:                     strings.Split(change, ","),
+		Sql:                     parts,
 		SkipPreflight:           *skipPreflight,
 		UuidList:                textutil.SplitDelimitedList(*uuidList),
 		RequestContext:          *migrationContext,
