@@ -130,5 +130,5 @@ func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) col
 }
 
 func (f *notImplementedSchemaInfoConverter) DefaultCollation() collations.ID {
-	return collations.ID(collations.Local().DefaultConnectionCharset())
+	return collations.Default()
 }

@@ -151,7 +151,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		connCollation = collations.ID(collations.Local().DefaultConnectionCharset())
+		connCollation = collations.Default()
 	}
 
 	return &vcursorImpl{

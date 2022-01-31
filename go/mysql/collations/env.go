@@ -270,3 +270,10 @@ func (env *Environment) ParseConnectionCharset(csname string) (uint8, error) {
 	}
 	return uint8(collid), nil
 }
+
+// Default returns the default collation for this Vitess process.
+// This is based on the local collation environment, which is based on the user's configured
+// MySQL version for this Vitess deployment.
+func Default() ID {
+	return ID(Local().DefaultConnectionCharset())
+}

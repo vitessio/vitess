@@ -255,7 +255,7 @@ func EmptyExpressionEnv() *ExpressionEnv {
 // EnvWithBindVars returns an expression environment with no current row, but with bindvars
 func EnvWithBindVars(bindVars map[string]*querypb.BindVariable, coll collations.ID) *ExpressionEnv {
 	if coll == collations.Unknown {
-		coll = collations.ID(collations.Local().DefaultConnectionCharset())
+		coll = collations.Default()
 	}
 	return &ExpressionEnv{BindVars: bindVars, DefaultCollation: coll}
 }
