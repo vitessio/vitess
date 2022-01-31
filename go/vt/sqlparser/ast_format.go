@@ -1609,17 +1609,17 @@ func (node *UnlockTables) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AlterView) Format(buf *TrackedBuffer) {
-	buf.WriteString("alter")
+	buf.astPrintf(node, "alter %v", node.Comments)
 	if node.Algorithm != "" {
-		buf.astPrintf(node, " algorithm = %s", node.Algorithm)
+		buf.astPrintf(node, "algorithm = %s ", node.Algorithm)
 	}
 	if node.Definer != "" {
-		buf.astPrintf(node, " definer = %s", node.Definer)
+		buf.astPrintf(node, "definer = %s ", node.Definer)
 	}
 	if node.Security != "" {
-		buf.astPrintf(node, " sql security %s", node.Security)
+		buf.astPrintf(node, "sql security %s ", node.Security)
 	}
-	buf.astPrintf(node, " view %v", node.ViewName)
+	buf.astPrintf(node, "view %v", node.ViewName)
 	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
 	if node.CheckOption != "" {
 		buf.astPrintf(node, " with %s check option", node.CheckOption)

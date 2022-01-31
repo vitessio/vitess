@@ -2119,20 +2119,24 @@ func (node *UnlockTables) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *AlterView) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("alter")
+	buf.WriteString("alter ")
+	node.Comments.formatFast(buf)
 	if node.Algorithm != "" {
-		buf.WriteString(" algorithm = ")
+		buf.WriteString("algorithm = ")
 		buf.WriteString(node.Algorithm)
+		buf.WriteByte(' ')
 	}
 	if node.Definer != "" {
-		buf.WriteString(" definer = ")
+		buf.WriteString("definer = ")
 		buf.WriteString(node.Definer)
+		buf.WriteByte(' ')
 	}
 	if node.Security != "" {
-		buf.WriteString(" sql security ")
+		buf.WriteString("sql security ")
 		buf.WriteString(node.Security)
+		buf.WriteByte(' ')
 	}
-	buf.WriteString(" view ")
+	buf.WriteString("view ")
 	node.ViewName.formatFast(buf)
 	node.Columns.formatFast(buf)
 	buf.WriteString(" as ")
