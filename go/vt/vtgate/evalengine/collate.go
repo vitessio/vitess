@@ -49,12 +49,16 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.replaceCollation(c.TypedCollation)
 }
 
-type DefaultCollation collations.ID
+type LookupDefaultCollation collations.ID
 
-func (d DefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
+func (d LookupDefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 }
 
-func (d DefaultCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
+func (d LookupDefaultCollation) CollationForExpr(_ sqlparser.Expr) collations.ID {
+	return collations.Unknown
+}
+
+func (d LookupDefaultCollation) DefaultCollation() collations.ID {
 	return collations.ID(d)
 }

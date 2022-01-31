@@ -644,7 +644,7 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupB
 			return err
 		}
 		if groupExpr.DistinctAggrIndex == 0 {
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: ctx.SemTable.CollationFor(groupExpr.Inner)})
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: ctx.SemTable.CollationForExpr(groupExpr.Inner)})
 		} else {
 			if wsOffset != -1 {
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
@@ -788,7 +788,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []abstract
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
-			CollationID:     ctx.SemTable.CollationFor(order.Inner.Expr),
+			CollationID:     ctx.SemTable.CollationForExpr(order.Inner.Expr),
 		})
 	}
 	return plan, nil
@@ -985,7 +985,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext
 			WeightStringCol:   weightStringOffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
-			CollationID:       ctx.SemTable.CollationFor(order.Inner.Expr),
+			CollationID:       ctx.SemTable.CollationForExpr(order.Inner.Expr),
 		})
 	}
 	return ms, nil
@@ -1053,7 +1053,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 		for _, aggrParam := range currPlan.eaggr.Aggregates {
 			if sqlparser.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
-				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationFor(expr)})
+				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationForExpr(expr)})
 				break
 			}
 		}
@@ -1085,7 +1085,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 			inner = sqlparser.NewColName(aliasExpr.As.String())
 			ctx.SemTable.CopyDependencies(aliasExpr.Expr, inner)
 		}
-		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationFor(inner)}
+		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationForExpr(inner)}
 		_, wOffset, err := wrapAndPushExpr(ctx, aliasExpr.Expr, aliasExpr.Expr, plan)
 		if err != nil {
 			return nil, err

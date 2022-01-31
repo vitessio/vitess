@@ -119,7 +119,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
 				err = fmt.Errorf("PANIC: %v", r)
 			}
 		}()
-		expr, err = evalengine.ConvertEx(astExpr, evalengine.DefaultCollation(255), true)
+		expr, err = evalengine.ConvertEx(astExpr, evalengine.LookupDefaultCollation(255), true)
 		return
 	}()
 
@@ -133,7 +133,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
 					err = fmt.Errorf("PANIC: %v", r)
 				}
 			}()
-			eval, err = (*evalengine.ExpressionEnv)(nil).Evaluate(local)
+			eval, err = evalengine.EnvWithBindVars(nil, 255).Evaluate(local)
 			return
 		}()
 	}

@@ -35,8 +35,12 @@ func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (in
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not yet supported")
 }
 
-func (f *notImplementedSchemaInfoConverter) CollationIDLookup(sqlparser.Expr) collations.ID {
-	return 0
+func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {
+	return collations.Unknown
+}
+
+func (f *notImplementedSchemaInfoConverter) DefaultCollation() collations.ID {
+	return collations.ID(collations.Local().DefaultConnectionCharset())
 }
 
 func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route, reservedVars *sqlparser.ReservedVars) error {

@@ -32,9 +32,9 @@ type (
 	// ExpressionEnv contains the environment that the expression
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
-		BindVars      map[string]*querypb.BindVariable
-		Row           []sqltypes.Value
-		ConnCollation collations.ID
+		BindVars         map[string]*querypb.BindVariable
+		Row              []sqltypes.Value
+		DefaultCollation collations.ID
 	}
 
 	// Expr is the interface that all evaluating expressions must implement
@@ -43,7 +43,7 @@ type (
 		typeof(env *ExpressionEnv) querypb.Type
 		format(buf *formatter, depth int)
 		constant() bool
-		simplify() error
+		simplify(lookup ConverterLookup) error
 	}
 
 	Literal struct {
@@ -88,8 +88,7 @@ var _ Expr = (TupleExpr)(nil)
 var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
-
-var noenv *ExpressionEnv
+var _ Expr = (*CallExpression)(nil)
 
 type evalError struct {
 	error
@@ -217,6 +216,9 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 }
 
 func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
+	if env == nil {
+		panic("ExpressionEnv == nil")
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			if ee, ok := r.(evalError); ok {
@@ -255,7 +257,7 @@ func EnvWithBindVars(bindVars map[string]*querypb.BindVariable, coll collations.
 	if coll == collations.Unknown {
 		coll = collations.ID(collations.Local().DefaultConnectionCharset())
 	}
-	return &ExpressionEnv{BindVars: bindVars, ConnCollation: coll}
+	return &ExpressionEnv{BindVars: bindVars, DefaultCollation: coll}
 }
 
 // NullExpr is just what you are lead to believe

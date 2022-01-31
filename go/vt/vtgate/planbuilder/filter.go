@@ -54,8 +54,12 @@ func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error
 	return offset, nil
 }
 
-func (s *simpleConverterLookup) CollationIDLookup(expr sqlparser.Expr) collations.ID {
-	return s.ctx.SemTable.CollationFor(expr)
+func (s *simpleConverterLookup) CollationForExpr(expr sqlparser.Expr) collations.ID {
+	return s.ctx.SemTable.CollationForExpr(expr)
+}
+
+func (s *simpleConverterLookup) DefaultCollation() collations.ID {
+	return s.ctx.SemTable.Collation
 }
 
 // newFilter builds a new filter.
