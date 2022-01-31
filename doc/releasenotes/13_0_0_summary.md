@@ -140,7 +140,49 @@ rows.
 Building vtadmin-web now requires node >= v16.13.0 (LTS). Upgrade notes are given
 in https://github.com/vitessio/vitess/pull/9136.
 
+### PlannedReparentShard for cluster initialization
+For setting up the cluster and electing a primary for the first time, `PlannedReparentShard` should be used
+instead of `InitShardPrimary`. 
+
+`InitShardPrimary` is a forceful command and copies over the executed gtid set from the new primary to all the other replicas. So, if the user
+isn't careful, it can lead to some replicas not being setup correctly and lead to errors in replication and recovery later.
+`PlannedReparentShard` is a safer alternative and does not change the executed gtid set on the replicas forcefully. It is the preferred alternate to initialize
+the cluster.
+
+If using a custom `init_db.sql` that omits `SET sql_log_bin = 0`, then `InitShardPrimary` should still be used instead of `PlannedReparentShard`.
+
+### Durability Policy flag
+A new flag has been added to vtctl, vtctld and vtworker binaries which allows the users to set the durability policies.
+
+If semi-sync is not being used then `-durability_policy` should be set to `none`. This is also the default option.
+
+If semi-sync is being used then `-durability_policy` should be set to `semi_sync` and `-enable_semi_sync` should be set in vttablets. 
+
 ## Incompatible Changes
+### Error message change when vttablet row limit exceeded:
+* In previous Vitess versions, if the vttablet row limit (-queryserver-config-max-result-size) was exceeded, an error like:
+  ```shell
+  ERROR 10001 (HY000): target: unsharded.0.master: vttablet: rpc error: code = ResourceExhausted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  would be reported to the client.
+  ```
+  To avoid confusion, the error mapping has been changed to report the error as similar to:
+  ```shell
+  ERROR 10001 (HY000): target: unsharded.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  instead
+  ```
+* Because of this error code change, the vttablet metric:
+  `vttablet_errors{error_code="ABORTED"}`
+  will be incremented upon this type of error, instead of the previous metric:
+  `vttablet_errors{error_code="RESOURCE_EXHAUSTED"}`
+* In addition, the vttablet error message logged is now different.
+  Previously, a (misleading;  due to the PoolFull) error was logged:
+  ```shell
+  E0112 09:48:25.420641  278125 tabletserver.go:1368] PoolFull: Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  ```
+  Post-change, a more accurate warning is logged instead:
+  ```shell
+  W0112 09:38:59.169264   35943 tabletserver.go:1503] Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
+  ```
 
 ### Column types for textual queries now match MySQL's behavior
 
