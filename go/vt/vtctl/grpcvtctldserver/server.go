@@ -230,7 +230,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	)
 
 	if err != nil {
-		return &vtctldatapb.ApplySchemaResponse{}, nil
+		return &vtctldatapb.ApplySchemaResponse{}, err
 	}
 
 	return &vtctldatapb.ApplySchemaResponse{

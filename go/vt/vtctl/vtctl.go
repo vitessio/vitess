@@ -3272,6 +3272,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	})
 
 	if err != nil {
+		wr.Logger().Errorf("%w\n", err)
 		return err
 	}
 
