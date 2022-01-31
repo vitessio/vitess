@@ -57,7 +57,7 @@ type noopVCursor struct {
 
 // ConnCollation implements VCursor
 func (t *noopVCursor) ConnCollation() collations.ID {
-	panic("implement me")
+	return collations.CollationUtf8mb4ID
 }
 
 func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -257,7 +257,7 @@ func (t *noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query stri
 }
 
 func (t *noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	panic("unimplemented")
+	return nil, nil, nil
 }
 
 func (t *noopVCursor) ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {

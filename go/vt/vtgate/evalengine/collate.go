@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -46,4 +47,14 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 		throwEvalError(vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error()))
 	}
 	out.replaceCollation(c.TypedCollation)
+}
+
+type DefaultCollation collations.ID
+
+func (d DefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
+}
+
+func (d DefaultCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
+	return collations.ID(d)
 }

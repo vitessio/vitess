@@ -38,9 +38,9 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 		return nil, err
 	}
 
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	if wantfields {
-		err := p.addFields(result, bindVars)
+		err := p.addFields(env, result)
 		if err != nil {
 			return nil, err
 		}
@@ -68,9 +68,9 @@ func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*quer
 		return err
 	}
 
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	if wantields {
-		err = p.addFields(result, bindVars)
+		err = p.addFields(env, result)
 		if err != nil {
 			return err
 		}
@@ -97,15 +97,15 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
-	err = p.addFields(qr, bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	err = p.addFields(env, qr)
 	if err != nil {
 		return nil, err
 	}
 	return qr, nil
 }
 
-func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) error {
-	env := evalengine.EnvWithBindVars(bindVars)
+func (p *Projection) addFields(env *evalengine.ExpressionEnv, qr *sqltypes.Result) error {
 	for i, col := range p.Cols {
 		q, err := env.TypeOf(p.Exprs[i])
 		if err != nil {

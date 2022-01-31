@@ -184,6 +184,19 @@ func TestLikeComparison(t *testing.T) {
 	}
 }
 
+func TestCollationOperations(t *testing.T) {
+	var cases = []string{
+		"COLLATION('foobar')",
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, expr := range cases {
+		compareRemoteQuery(t, conn, "SELECT "+expr)
+	}
+}
+
 func TestTypes(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
