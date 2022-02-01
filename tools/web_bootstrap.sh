@@ -21,10 +21,10 @@ set -euo pipefail
 
 web_dir="$VTROOT/web/vtctld2"
 
-TARGET_NODE_VERSION="v8.0.0"
+TARGET_NODE_VERSION="v8.17.0"
 node_version=$(node -v)
 
-TARGET_NPM_VERSION="5.0.0"
+TARGET_NPM_VERSION="6.13.4"
 npm_version=$(npm -v)
 
 if [[ -z ${node_version+x} || -z ${npm_version+x} ]]; then 
