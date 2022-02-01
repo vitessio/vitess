@@ -11,15 +11,15 @@ This project was generated with [angular-cli](https://github.com/angular/angular
 You will need (very old!) installations of npm and node to run the front-end dev server. To check your versions:
 
 ```bash
-node -v # v8.0.0 required
-npm -v # 5.0.0 required
+node -v # v8.17.0 required
+npm -v # 6.13.4 required
 ```
 
 Using a node version manager like [nvm](https://github.com/nvm-sh/nvm) is strongly recommended, as the versions required by this project are several years out of date.
 
 1. Install nvm using the [installation guide](https://github.com/nvm-sh/nvm#installing-and-updating).
-1. Install node (and npm): `nvm install 8.0.0`
-1. In the shell you're using for vtctld UI development: `nvm use 8.0.0`
+1. Install node (and npm): `nvm install 8.17.0`
+1. In the shell you're using for vtctld UI development: `nvm use 8.17.0`
 
 ### Starting the dev server
 
@@ -52,8 +52,10 @@ make web_build
 
 This will regenerate a bunch of files in the `web/vtctld2/dist/` directory, as well as update the embedded files in `rice-box.go`. Make sure you commit these generated files to your branch when opening your pull request.
 
-To verify your changes, run Vitess locally. It is recommended to [use Docker](https://vitess.io/docs/get-started/local-docker/), which will make the vtctld UI accessible at `http://localhost:15000/app`.
-
+To then verify your changes using the built files:
+- Rebuild the vtctld with `make build`
+- Run Vitess locally following the [Local Install guide](https://vitess.io/docs/get-started/local/) 
+- Verify your changes on `http://localhost:15000/app`
 
 ## Troubleshooting
 
