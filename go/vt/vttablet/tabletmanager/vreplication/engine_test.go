@@ -494,16 +494,28 @@ func TestCreateDBAndTable(t *testing.T) {
 
 	expectDDLs := func() {
 		t.Helper()
-		dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN db_name.*", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication MODIFY source.*", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD KEY.*", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN rows_copied.*", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN tags.*", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
-		dbClient.ExpectRequestRE("create table if not exists _vt.copy_state.*", &sqltypes.Result{}, nil)
+		ddls := []string{
+			"CREATE DATABASE IF NOT EXISTS _vt",
+			"DROP TABLE IF EXISTS _vt.blp_checkpoint",
+		}
+		for _, ddl := range ddls {
+			dbClient.ExpectRequest(ddl, &sqltypes.Result{}, nil)
+		}
+
+		ddls = []string{
+			"CREATE TABLE IF NOT EXISTS _vt.vreplication.*",
+			"ALTER TABLE _vt.vreplication ADD COLUMN db_name.*",
+			"ALTER TABLE _vt.vreplication MODIFY source.*",
+			"ALTER TABLE _vt.vreplication ADD KEY.*",
+			"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied.*",
+			"ALTER TABLE _vt.vreplication ADD COLUMN tags.*",
+			"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat.*",
+			"create table if not exists _vt.resharding_journal.*",
+			"create table if not exists _vt.copy_state.*",
+		}
+		for _, ddl := range ddls {
+			dbClient.ExpectRequestRE(ddl, &sqltypes.Result{}, nil)
+		}
 	}
 	expectDDLs()
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)

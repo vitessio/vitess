@@ -66,7 +66,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 			*vreplicationHeartbeatUpdateInterval = tcase.interval
 			for _, tcount := range tcase.counts {
 				vp.numAccumulatedHeartbeats = tcount.count
-				require.Equal(t, tcount.mustUpdate, vp.mustUpdateCurrentTime())
+				require.Equal(t, tcount.mustUpdate, vp.mustUpdateHeartbeat())
 			}
 		})
 	}

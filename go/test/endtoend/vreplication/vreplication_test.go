@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -62,6 +64,7 @@ const (
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
 
 	merchantKeyspace = "merchant-type"
+	maxWait          = 10 * time.Second
 )
 
 func init() {
@@ -933,9 +936,35 @@ func verifyClusterHealth(t *testing.T, cluster *VitessCluster) {
 	iterateTablets(t, cluster, checkTabletHealth)
 }
 
+const acceptableLagSeconds = 5
+
+func waitForLowLag(t *testing.T, keyspace, workflow string) {
+	var lagSeconds int64
+	waitDuration := 500 * time.Millisecond
+	duration := maxWait
+	for duration > 0 {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", keyspace, workflow), "Show")
+		require.NoError(t, err)
+		lagSeconds, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
+
+		require.NoError(t, err)
+		if lagSeconds <= acceptableLagSeconds {
+			log.Infof("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			break
+		} else {
+			log.Infof("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+		}
+		time.Sleep(waitDuration)
+		duration -= waitDuration
+	}
+
+	if duration <= 0 {
+		t.Fatalf("waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+	}
+}
+
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
-	const MaxWait = 10 * time.Second
-	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
+	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), maxWait)
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {

@@ -19,6 +19,11 @@ package reshard
 import (
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/buger/jsonparser"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,12 +33,42 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
+const (
+	maxWait              = 10 * time.Second
+	acceptableLagSeconds = 5
+)
+
+func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspace, workflow string) {
+	var lagSeconds int64
+	waitDuration := 500 * time.Millisecond
+	duration := maxWait
+	for duration > 0 {
+		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Workflow", fmt.Sprintf("%s.%s", keyspace, workflow), "Show")
+		require.NoError(t, err)
+		lagSeconds, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
+
+		require.NoError(t, err)
+		if lagSeconds <= acceptableLagSeconds {
+			log.Infof("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+			break
+		} else {
+			log.Infof("waitForLowLag too high for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+		}
+		time.Sleep(waitDuration)
+		duration -= waitDuration
+	}
+
+	if duration <= 0 {
+		t.Fatalf("waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+	}
+}
+
 func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName string, reads, writes buffer.QueryEngine) {
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
 	err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false)
 	require.NoError(t, err)
-
-	workflow := keyspaceName + ".buf2buf"
+	workflowName := "buf2buf"
+	workflow := fmt.Sprintf("%s.%s", keyspaceName, "buf2buf")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "-source_shards", "0", "-target_shards", "-80,80-", "Create", workflow)
 	require.NoError(t, err)
@@ -42,6 +77,7 @@ func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 	reads.ExpectQueries(25)
 	writes.ExpectQueries(25)
 
+	waitForLowLag(t, clusterInstance, keyspaceName, workflowName)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "-tablet_types=rdonly,replica", "SwitchTraffic", workflow)
 	require.NoError(t, err)
 

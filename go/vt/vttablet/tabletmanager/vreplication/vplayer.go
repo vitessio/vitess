@@ -251,8 +251,8 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) updateCurrentTime(tm int64) error {
-	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, tm)
+func (vp *vplayer) updateHeartbeat(tm int64) error {
+	update, err := binlogplayer.GenerateUpdateHeartbeat(vp.vr.id, tm)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (vp *vplayer) updateCurrentTime(tm int64) error {
 	return nil
 }
 
-func (vp *vplayer) mustUpdateCurrentTime() bool {
+func (vp *vplayer) mustUpdateHeartbeat() bool {
 	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
@@ -270,11 +270,11 @@ func (vp *vplayer) mustUpdateCurrentTime() bool {
 func (vp *vplayer) recordHeartbeat() error {
 	tm := time.Now().Unix()
 	vp.vr.stats.RecordHeartbeat(tm)
-	if !vp.mustUpdateCurrentTime() {
+	if !vp.mustUpdateHeartbeat() {
 		return nil
 	}
 	vp.numAccumulatedHeartbeats = 0
-	return vp.updateCurrentTime(tm)
+	return vp.updateHeartbeat(tm)
 }
 
 // applyEvents is the main thread that applies the events. It has the following use
@@ -402,6 +402,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				}
 			}
 		}
+
 		if sbm >= 0 {
 			vp.vr.stats.ReplicationLagSeconds.Set(sbm)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
