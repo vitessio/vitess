@@ -72,6 +72,7 @@ type ExecuteResult struct {
 	SuccessShards  []ShardResult
 	CurSQLIndex    int
 	Sqls           []string
+	UUIDs          []string
 	ExecutorErr    string
 	TotalTimeSpent time.Duration
 }
@@ -93,48 +94,48 @@ type ShardResult struct {
 }
 
 // Run applies schema changes on Vitess through VtGate.
-func Run(ctx context.Context, controller Controller, executor Executor) error {
+func Run(ctx context.Context, controller Controller, executor Executor) (execResult *ExecuteResult, err error) {
 	if err := controller.Open(ctx); err != nil {
 		log.Errorf("failed to open data sourcer: %v", err)
-		return err
+		return execResult, err
 	}
 	defer controller.Close()
 	sqls, err := controller.Read(ctx)
 	if err != nil {
 		log.Errorf("failed to read data from data sourcer: %v", err)
 		controller.OnReadFail(ctx, err)
-		return err
+		return execResult, err
 	}
 	controller.OnReadSuccess(ctx)
 	if len(sqls) == 0 {
-		return nil
+		return execResult, nil
 	}
 	keyspace := controller.Keyspace()
 	if err := executor.Open(ctx, keyspace); err != nil {
 		log.Errorf("failed to open executor: %v", err)
-		return err
+		return execResult, err
 	}
 	defer executor.Close()
 	if err := executor.Validate(ctx, sqls); err != nil {
 		log.Errorf("validation fail: %v", err)
 		controller.OnValidationFail(ctx, err)
-		return err
+		return execResult, err
 	}
 
 	if err := controller.OnValidationSuccess(ctx); err != nil {
-		return err
+		return execResult, err
 	}
 
-	result := executor.Execute(ctx, sqls)
+	execResult = executor.Execute(ctx, sqls)
 
-	if err := controller.OnExecutorComplete(ctx, result); err != nil {
-		return err
+	if err := controller.OnExecutorComplete(ctx, execResult); err != nil {
+		return execResult, err
 	}
-	if result.ExecutorErr != "" || len(result.FailedShards) > 0 {
-		out, _ := json.MarshalIndent(result, "", "  ")
-		return fmt.Errorf("schema change failed, ExecuteResult: %v", string(out))
+	if execResult.ExecutorErr != "" || len(execResult.FailedShards) > 0 {
+		out, _ := json.MarshalIndent(execResult, "", "  ")
+		return execResult, fmt.Errorf("schema change failed, ExecuteResult: %v", string(out))
 	}
-	return nil
+	return execResult, nil
 }
 
 // RegisterControllerFactory register a control factory.

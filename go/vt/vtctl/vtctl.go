@@ -95,6 +95,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/textutil"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -108,7 +110,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -1003,7 +1004,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.PortMap["grpc"] = int32(*grpcPort)
 	}
 
-	return wr.InitTablet(ctx, tablet, *allowPrimaryOverride, *createShardAndKeyspace, *allowUpdate)
+	return wr.TopoServer().InitTablet(ctx, tablet, *allowPrimaryOverride, *createShardAndKeyspace, *allowUpdate)
 }
 
 func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3224,6 +3225,8 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	requestContext := subFlags.String("request_context", "", "synonym for -migration_context")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	skipPreflight := subFlags.Bool("skip_preflight", false, "Skip pre-apply schema checks, and directly forward schema change query to shards")
+
+	callerID := subFlags.String("caller_id", "", "This is the effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3236,37 +3239,48 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	executionUUID, err := schema.CreateUUID()
-	if err != nil {
-		return err
+
+	var cID *vtrpcpb.CallerID
+
+	if *callerID != "" {
+		cID = &vtrpcpb.CallerID{Principal: *callerID}
 	}
+
 	if *migrationContext == "" {
 		// -request_context is a legacy flag name
 		// we now prefer to use -migration_context, but we also keep backwards compatibility
 		*migrationContext = *requestContext
 	}
-	if *migrationContext == "" {
-		*migrationContext = fmt.Sprintf("vtctl:%s", executionUUID)
-	}
-	executor := schemamanager.NewTabletExecutor(*migrationContext, wr, *waitReplicasTimeout)
-	if *allowLongUnavailability {
-		executor.AllowBigSchemaChange()
-	}
-	if *skipPreflight {
-		executor.SkipPreflight()
-	}
-	if err := executor.SetDDLStrategy(*ddlStrategy); err != nil {
-		return err
-	}
-	if err := executor.SetUUIDList(*uuidList); err != nil {
+
+	parts, err := sqlparser.SplitStatementToPieces(change)
+	if err != nil {
 		return err
 	}
 
-	return schemamanager.Run(
-		ctx,
-		schemamanager.NewPlainController(change, keyspace),
-		executor,
-	)
+	log.Info("Calling ApplySchema on VtctldServer")
+
+	resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
+		Keyspace:                keyspace,
+		AllowLongUnavailability: *allowLongUnavailability,
+		DdlStrategy:             *ddlStrategy,
+		Sql:                     parts,
+		SkipPreflight:           *skipPreflight,
+		UuidList:                textutil.SplitDelimitedList(*uuidList),
+		RequestContext:          *migrationContext,
+		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
+		CallerId:                cID,
+	})
+
+	if err != nil {
+		wr.Logger().Errorf("%s\n", err.Error())
+		return err
+	}
+
+	for _, uuid := range resp.UuidList {
+		wr.Logger().Printf("%s\n", uuid)
+	}
+
+	return nil
 }
 
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
