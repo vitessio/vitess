@@ -1154,7 +1154,7 @@ func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyReque
 	return &vtadminpb.SetReadOnlyResponse{}, nil
 }
 
-// SetReadOnly sets the tablet to read only mode
+// SetReadWrite sets the tablet to read-write mode
 func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteRequest) (*vtadminpb.SetReadWriteResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.SetReadWrite")
 	defer span.Finish()

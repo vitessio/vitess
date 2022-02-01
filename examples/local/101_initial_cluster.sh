@@ -18,7 +18,6 @@
 # required for a single shard deployment.
 
 source ./env.sh
-vtctld_grpc_port=15999
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
