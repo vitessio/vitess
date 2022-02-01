@@ -217,6 +217,8 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.StrVal:
 			collation := getCollation(e, lookup)
 			return NewLiteralString(node.Bytes(), collation), nil
+		case sqlparser.HexNum:
+			return NewLiteralBinaryFromHexNum(node.Bytes())
 		case sqlparser.HexVal:
 			return NewLiteralBinaryFromHex(node.Bytes())
 		}
@@ -317,10 +319,10 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case *Literal:
 			switch collation {
 			case collations.CollationBinaryID:
-				lit.Val.type_ = querypb.Type_VARBINARY
+				lit.Val.type_ = int16(querypb.Type_VARBINARY)
 				lit.Val.collation_ = collationBinary
 			default:
-				lit.Val.type_ = querypb.Type_VARCHAR
+				lit.Val.type_ = int16(querypb.Type_VARCHAR)
 				lit.Val.replaceCollationID(collation)
 			}
 		case *BindVariable:
