@@ -1,6 +1,6 @@
 name: Feature Request
 description: If you have something you think Vitess could improve or add support for.
-title: ""
+title: "Feature Request: "
 labels: ["Type: Feature Request", "Needs Triage"]
 body:
   - type: markdown

@@ -1,6 +1,6 @@
 name: Question
 description: If you have a question, please check out our other community resources instead of opening an issue.
-title: ""
+title: "Question: "
 labels: ["Type: Question", "Needs Triage"]
 body:
   - type: markdown
