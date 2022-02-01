@@ -197,7 +197,7 @@ func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType to
 		},
 	}
 	env.tablets[id] = newTestVDiffTablet(tablet)
-	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
