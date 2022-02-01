@@ -141,24 +141,6 @@ func evalResultsAreDateAndNumeric(l, r *EvalResult) bool {
 	return sqltypes.IsDate(ltype) && sqltypes.IsNumber(rtype) || sqltypes.IsNumber(ltype) && sqltypes.IsDate(rtype)
 }
 
-func evalCoerceAndCompare(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
-	if lVal.collation().Collation != rVal.collation().Collation {
-		if err := mergeCollations(lVal, rVal); err != nil {
-			return 0, false, err
-		}
-	}
-	return evalCompareAll(lVal, rVal, fulleq)
-}
-
-func evalCoerceAndCompareNullSafe(lVal, rVal *EvalResult) (bool, error) {
-	if lVal.collation().Collation != rVal.collation().Collation {
-		if err := mergeCollations(lVal, rVal); err != nil {
-			return false, err
-		}
-	}
-	return evalCompareNullSafe(lVal, rVal)
-}
-
 func compareAsTuples(lVal, rVal *EvalResult) bool {
 	left := lVal.typeof() == querypb.Type_TUPLE
 	right := rVal.typeof() == querypb.Type_TUPLE
@@ -187,7 +169,7 @@ func evalCompareMany(left, right []EvalResult, fulleq bool) (int, bool, error) {
 	var seenNull bool
 	for idx, lResult := range left {
 		rResult := right[idx]
-		n, isNull, err := evalCoerceAndCompare(&lResult, &rResult, fulleq)
+		n, isNull, err := evalCompareAll(&lResult, &rResult, fulleq)
 		if err != nil {
 			return 0, false, err
 		}
@@ -264,7 +246,7 @@ func evalCompareTuplesNullSafe(lVal, rVal *EvalResult) (bool, error) {
 	}
 	for idx, lResult := range left {
 		rResult := &right[idx]
-		res, err := evalCoerceAndCompareNullSafe(&lResult, rResult)
+		res, err := evalCompareNullSafe(&lResult, rResult)
 		if err != nil {
 			return false, err
 		}
@@ -317,7 +299,7 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 		}
 		if idx, ok := i.Hashed[hash]; ok {
 			var numeric int
-			numeric, foundNull, err = evalCoerceAndCompare(&left, &righttuple[idx], true)
+			numeric, foundNull, err = evalCompareAll(&left, &righttuple[idx], true)
 			if err != nil {
 				throwEvalError(err)
 			}
@@ -325,7 +307,7 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 		}
 	} else {
 		for _, rtuple := range righttuple {
-			numeric, isNull, err := evalCoerceAndCompare(&left, &rtuple, true)
+			numeric, isNull, err := evalCompareAll(&left, &rtuple, true)
 			if err != nil {
 				throwEvalError(err)
 			}
@@ -370,14 +352,12 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	left.init(env, l.Left)
 	right.init(env, l.Right)
 
-	if err := mergeCollations(&left, &right); err != nil {
+	coll, err := mergeCollations(&left, &right)
+	if err != nil {
 		throwEvalError(err)
 	}
 
 	var matched bool
-	var leftcoll = left.collation()
-	var rightcoll = right.collation()
-
 	switch {
 	case left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE:
 		panic("failed to typecheck tuples")
@@ -385,11 +365,11 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 		result.setNull()
 		return
 	case left.textual() && right.textual():
-		matched = l.matchWildcard(left.bytes(), right.bytes(), rightcoll.Collation)
+		matched = l.matchWildcard(left.bytes(), right.bytes(), coll)
 	case right.textual():
-		matched = l.matchWildcard(left.value().Raw(), right.bytes(), rightcoll.Collation)
+		matched = l.matchWildcard(left.value().Raw(), right.bytes(), coll)
 	case left.textual():
-		matched = l.matchWildcard(left.bytes(), right.value().Raw(), leftcoll.Collation)
+		matched = l.matchWildcard(left.bytes(), right.value().Raw(), coll)
 	default:
 		matched = l.matchWildcard(left.value().Raw(), right.value().Raw(), collations.CollationBinaryID)
 	}

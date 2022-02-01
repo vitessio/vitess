@@ -79,7 +79,7 @@ func (g *gencase) expr() string {
 var fuzzMaxTime = flag.Duration("fuzz-duration", 30*time.Second, "maximum time to fuzz for")
 var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
 var fuzzSeed = flag.Int64("fuzz-seed", time.Now().Unix(), "RNG seed when generating fuzz expressions")
-var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\d+)\) during query: (.*?)`)
+var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\w+)\) during query: (.*?)`)
 
 var knownErrors = []*regexp.Regexp{
 	regexp.MustCompile(`value is out of range in '(.*?)'`),
@@ -89,7 +89,7 @@ var knownErrors = []*regexp.Regexp{
 func errorsMatch(remote, local error) bool {
 	rem := extractError.FindStringSubmatch(remote.Error())
 	if rem == nil {
-		panic("could not extract error message")
+		panic(fmt.Sprintf("could not extract error message: %q", remote.Error()))
 	}
 
 	remoteMessage := rem[1]
