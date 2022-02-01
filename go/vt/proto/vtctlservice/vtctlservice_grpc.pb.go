@@ -144,6 +144,8 @@ type VtctldClient interface {
 	AddCellsAlias(ctx context.Context, in *vtctldata.AddCellsAliasRequest, opts ...grpc.CallOption) (*vtctldata.AddCellsAliasResponse, error)
 	// ApplyRoutingRules applies the VSchema routing rules.
 	ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error)
+	// ApplySchema applies a schema to a keyspace.
+	ApplySchema(ctx context.Context, in *vtctldata.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
@@ -370,6 +372,15 @@ func (c *vtctldClient) AddCellsAlias(ctx context.Context, in *vtctldata.AddCells
 func (c *vtctldClient) ApplyRoutingRules(ctx context.Context, in *vtctldata.ApplyRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldata.ApplyRoutingRulesResponse, error) {
 	out := new(vtctldata.ApplyRoutingRulesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplyRoutingRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ApplySchema(ctx context.Context, in *vtctldata.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error) {
+	out := new(vtctldata.ApplySchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ApplySchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -923,6 +934,8 @@ type VtctldServer interface {
 	AddCellsAlias(context.Context, *vtctldata.AddCellsAliasRequest) (*vtctldata.AddCellsAliasResponse, error)
 	// ApplyRoutingRules applies the VSchema routing rules.
 	ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error)
+	// ApplySchema applies a schema to a keyspace.
+	ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
@@ -1133,6 +1146,9 @@ func (UnimplementedVtctldServer) AddCellsAlias(context.Context, *vtctldata.AddCe
 }
 func (UnimplementedVtctldServer) ApplyRoutingRules(context.Context, *vtctldata.ApplyRoutingRulesRequest) (*vtctldata.ApplyRoutingRulesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyRoutingRules not implemented")
+}
+func (UnimplementedVtctldServer) ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
 }
 func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyVSchema not implemented")
@@ -1374,6 +1390,24 @@ func _Vtctld_ApplyRoutingRules_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ApplyRoutingRules(ctx, req.(*vtctldata.ApplyRoutingRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ApplySchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ApplySchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ApplySchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ApplySchema(ctx, req.(*vtctldata.ApplySchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2458,6 +2492,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyRoutingRules",
 			Handler:    _Vtctld_ApplyRoutingRules_Handler,
+		},
+		{
+			MethodName: "ApplySchema",
+			Handler:    _Vtctld_ApplySchema_Handler,
 		},
 		{
 			MethodName: "ApplyVSchema",

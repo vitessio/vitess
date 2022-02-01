@@ -27,6 +27,7 @@ import "topodata.proto";
 import "replicationdata.proto";
 import "logutil.proto";
 import "vttime.proto";
+import "vtrpc.proto";
 
 //
 // Data structures
@@ -179,13 +180,6 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
-message IgnoreHealthErrorRequest {
-  string pattern = 1;
-}
-
-message IgnoreHealthErrorResponse {
-}
-
 message ReloadSchemaRequest {
   // wait_position allows scheduling a schema reload to occur after a
   // given DDL has replicated to this server, by specifying a replication
@@ -236,6 +230,9 @@ message ExecuteQueryRequest {
   bytes query = 1;
   string db_name = 2;
   uint64 max_rows = 3;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 4;
 }
 
 message ExecuteQueryResponse {

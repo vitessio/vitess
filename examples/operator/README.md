@@ -11,12 +11,12 @@ kubectl apply -f operator.yaml
 # NOTE: If you are using MySQL 8, update the images section to use mysql80 images
 # Example:
 #  images:
-#    vtctld: vitess/lite:v12.0.0-mysql80
-#    vtgate: vitess/lite:v12.0.0-mysql80
-#    vttablet: vitess/lite:v12.0.0-mysql80
-#    vtbackup: vitess/lite:v12.0.0-mysql80
+#    vtctld: vitess/lite:mysql80
+#    vtgate: vitess/lite:mysql80
+#    vttablet: vitess/lite:mysql80
+#    vtbackup: vitess/lite:mysql80
 #    mysqld:
-#      mysql80Compatible: vitess/lite:v12.0.0-mysql80
+#      mysql80Compatible: vitess/lite:mysql80
 
 kubectl apply -f 101_initial_cluster.yaml
 

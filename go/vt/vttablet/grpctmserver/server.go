@@ -19,6 +19,9 @@ package grpctmserver
 import (
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"context"
 
 	"google.golang.org/grpc"
@@ -137,13 +140,6 @@ func (s *server) RunHealthCheck(ctx context.Context, request *tabletmanagerdatap
 	return response, nil
 }
 
-func (s *server) IgnoreHealthError(ctx context.Context, request *tabletmanagerdatapb.IgnoreHealthErrorRequest) (response *tabletmanagerdatapb.IgnoreHealthErrorResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "IgnoreHealthError", request, response, false /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.IgnoreHealthErrorResponse{}
-	return response, s.tm.IgnoreHealthError(ctx, request.Pattern)
-}
-
 func (s *server) ReloadSchema(ctx context.Context, request *tabletmanagerdatapb.ReloadSchemaRequest) (response *tabletmanagerdatapb.ReloadSchemaResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ReloadSchema", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -200,6 +196,11 @@ func (s *server) UnlockTables(ctx context.Context, req *tabletmanagerdatapb.Unlo
 func (s *server) ExecuteQuery(ctx context.Context, request *tabletmanagerdatapb.ExecuteQueryRequest) (response *tabletmanagerdatapb.ExecuteQueryResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteQuery", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+
+	// Attach the callerID as the EffectiveCallerID.
+	if request.CallerId != nil {
+		ctx = callerid.NewContext(ctx, request.CallerId, &querypb.VTGateCallerID{Username: request.CallerId.Principal})
+	}
 	response = &tabletmanagerdatapb.ExecuteQueryResponse{}
 	qr, err := s.tm.ExecuteQuery(ctx, request.Query, request.DbName, int(request.MaxRows))
 	if err != nil {

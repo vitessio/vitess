@@ -17,13 +17,14 @@ limitations under the License.
 package grpctmclient
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"sync"
 	"time"
 
-	"context"
+	"vitess.io/vitess/go/vt/callerid"
 
 	"google.golang.org/grpc"
 
@@ -325,19 +326,6 @@ func (client *Client) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tab
 	return err
 }
 
-// IgnoreHealthError is part of the tmclient.TabletManagerClient interface.
-func (client *Client) IgnoreHealthError(ctx context.Context, tablet *topodatapb.Tablet, pattern string) error {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return err
-	}
-	defer closer.Close()
-	_, err = c.IgnoreHealthError(ctx, &tabletmanagerdatapb.IgnoreHealthErrorRequest{
-		Pattern: pattern,
-	})
-	return err
-}
-
 // ReloadSchema is part of the tmclient.TabletManagerClient interface.
 func (client *Client) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
@@ -426,9 +414,10 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 	defer closer.Close()
 
 	response, err := c.ExecuteQuery(ctx, &tabletmanagerdatapb.ExecuteQueryRequest{
-		Query:   query,
-		DbName:  topoproto.TabletDbName(tablet),
-		MaxRows: uint64(maxrows),
+		Query:    query,
+		DbName:   topoproto.TabletDbName(tablet),
+		MaxRows:  uint64(maxrows),
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 	})
 	if err != nil {
 		return nil, err
