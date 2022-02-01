@@ -108,7 +108,7 @@ func (ev binlogEvent) Length() uint32 {
 	return binary.LittleEndian.Uint32(ev.Bytes()[9 : 9+4])
 }
 
-// nextPosition the nextPosition field from the header
+// NextPosition returns the nextPosition field from the header
 func (ev binlogEvent) NextPosition() uint32 {
 	return binary.LittleEndian.Uint32(ev.Bytes()[13 : 13+4])
 }
