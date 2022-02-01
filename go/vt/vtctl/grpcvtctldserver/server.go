@@ -35,8 +35,13 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/schema"
+
+	"vitess.io/vitess/go/vt/schemamanager"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -55,6 +60,7 @@ import (
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -152,6 +158,84 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	}
 
 	return resp, nil
+}
+
+// ApplySchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("skip_preflight", req.SkipPreflight)
+	span.Annotate("ddl_strategy", req.DdlStrategy)
+
+	if len(req.Sql) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Sql must be a non-empty array")
+	}
+
+	// Attach the callerID as the EffectiveCallerID.
+	if req.CallerId != nil {
+		span.Annotate("caller_id", req.CallerId.Principal)
+		ctx = callerid.NewContext(ctx, req.CallerId, &querypb.VTGateCallerID{Username: req.CallerId.Principal})
+	}
+
+	executionUUID, err := schema.CreateUUID()
+	if err != nil {
+		return resp, vterrors.Wrapf(err, "unable to create execution UUID")
+	}
+
+	requestContext := req.RequestContext
+	if requestContext == "" {
+		requestContext = fmt.Sprintf("vtctl:%s", executionUUID)
+	}
+
+	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "unable to parse WaitReplicasTimeout into a valid duration")
+	} else if !ok {
+		waitReplicasTimeout = time.Second * 30
+	}
+
+	m := sync.RWMutex{}
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
+		logstream = append(logstream, e)
+	})
+
+	executor := schemamanager.NewTabletExecutor(requestContext, s.ts, s.tmc, logger, waitReplicasTimeout)
+	if req.AllowLongUnavailability {
+		executor.AllowBigSchemaChange()
+	}
+	if req.SkipPreflight {
+		executor.SkipPreflight()
+	}
+
+	if err := executor.SetDDLStrategy(req.DdlStrategy); err != nil {
+		return resp, vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)
+	}
+
+	if len(req.UuidList) > 0 {
+		if err := executor.SetUUIDList(req.UuidList); err != nil {
+			return resp, vterrors.Wrapf(err, "invalid UuidList: %s", req.UuidList)
+		}
+	}
+
+	execResult, err := schemamanager.Run(
+		ctx,
+		schemamanager.NewPlainController(req.Sql, req.Keyspace),
+		executor,
+	)
+
+	if err != nil {
+		return &vtctldatapb.ApplySchemaResponse{}, err
+	}
+
+	return &vtctldatapb.ApplySchemaResponse{
+		UuidList: execResult.UUIDs,
+	}, err
 }
 
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.

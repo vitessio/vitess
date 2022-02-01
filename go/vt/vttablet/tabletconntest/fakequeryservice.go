@@ -553,33 +553,6 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 	},
 }
 
-// ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	if f.HasError {
-		return nil, f.TabletError
-	}
-	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	if !proto.Equal(
-		&querypb.ExecuteBatchRequest{Queries: queries},
-		&querypb.ExecuteBatchRequest{Queries: ExecuteBatchQueries},
-	) {
-		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, ExecuteBatchQueries)
-	}
-	if !proto.Equal(options, TestExecuteOptions) {
-		f.t.Errorf("invalid ExecuteBatch.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
-	}
-	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
-	if !asTransaction {
-		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, TestAsTransaction)
-	}
-	if transactionID != f.ExpectedTransactionID {
-		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, f.ExpectedTransactionID)
-	}
-	return ExecuteBatchQueryResultList, nil
-}
-
 // BeginExecute combines Begin and Execute.
 func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, _ []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, _, err := f.Begin(ctx, target, options)
@@ -590,18 +563,6 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 	// TODO(deepthi): what alias should we actually return here?
 	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	return result, transactionID, nil, err
-}
-
-// BeginExecuteBatch combines Begin and ExecuteBatch.
-func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, _, err := f.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	// TODO(deepthi): what alias should we actually return here?
-	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, nil, err
 }
 
 // BeginStreamExecute combines Begin and StreamExecute.

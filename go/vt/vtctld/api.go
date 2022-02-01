@@ -633,15 +633,16 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		if err != nil {
 			return err
 		}
-		migrationContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
-		executor := schemamanager.NewTabletExecutor(migrationContext, wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
 
+		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
+		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
 		if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
 			return fmt.Errorf("error setting DDL strategy: %v", err)
 		}
 
-		return schemamanager.Run(ctx,
+		_, err = schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
+		return err
 	})
 
 	// Features

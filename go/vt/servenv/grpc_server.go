@@ -26,11 +26,13 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"vitess.io/vitess/go/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 
@@ -227,6 +229,14 @@ func serveGRPC() {
 
 	// register reflection to support list calls :)
 	reflection.Register(GRPCServer)
+
+	// register health service to support health checks
+	healthServer := health.NewServer()
+	healthpb.RegisterHealthServer(GRPCServer, healthServer)
+
+	for service := range GRPCServer.GetServiceInfo() {
+		healthServer.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
+	}
 
 	// listen on the port
 	log.Infof("Listening for gRPC calls on port %v", *GRPCPort)

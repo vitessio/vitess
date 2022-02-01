@@ -13,10 +13,11 @@
 # limitations under the License.
 
 ARG VT_BASE_VER=latest
+ARG DEBIAN_VER=stable-slim
 
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
-FROM debian:buster-slim
+FROM debian:${DEBIAN_VER}
 
 RUN apt-get update && \
    apt-get upgrade -qq && \
