@@ -83,6 +83,10 @@ type VTAdminClient interface {
 	ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error)
 	// RunHealthCheck runs a health check on the tablet
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
+	// SetReadOnly will set the tablet to read only mode
+	SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error)
+	// SetReadWrite will set the tablet to read-write mode
+	SetReadWrite(ctx context.Context, in *SetReadWriteRequest, opts ...grpc.CallOption) (*SetReadWriteResponse, error)
 	// StartReplication will run the underlying database command to start replication on a tablet
 	StartReplication(ctx context.Context, in *StartReplicationRequest, opts ...grpc.CallOption) (*StartReplicationResponse, error)
 	// StopReplication will run th underlying database command to stop replication on a tablet
@@ -342,6 +346,24 @@ func (c *vTAdminClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRe
 	return out, nil
 }
 
+func (c *vTAdminClient) SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error) {
+	out := new(SetReadOnlyResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/SetReadOnly", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) SetReadWrite(ctx context.Context, in *SetReadWriteRequest, opts ...grpc.CallOption) (*SetReadWriteResponse, error) {
+	out := new(SetReadWriteResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/SetReadWrite", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) StartReplication(ctx context.Context, in *StartReplicationRequest, opts ...grpc.CallOption) (*StartReplicationResponse, error) {
 	out := new(StartReplicationResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/StartReplication", in, out, opts...)
@@ -437,6 +459,10 @@ type VTAdminServer interface {
 	ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error)
 	// RunHealthCheck runs a health check on the tablet
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
+	// SetReadOnly will set the tablet to read only mode
+	SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error)
+	// SetReadWrite will set the tablet to read-write mode
+	SetReadWrite(context.Context, *SetReadWriteRequest) (*SetReadWriteResponse, error)
 	// StartReplication will run the underlying database command to start replication on a tablet
 	StartReplication(context.Context, *StartReplicationRequest) (*StartReplicationResponse, error)
 	// StopReplication will run th underlying database command to stop replication on a tablet
@@ -530,6 +556,12 @@ func (UnimplementedVTAdminServer) ReparentTablet(context.Context, *ReparentTable
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVTAdminServer) SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetReadOnly not implemented")
+}
+func (UnimplementedVTAdminServer) SetReadWrite(context.Context, *SetReadWriteRequest) (*SetReadWriteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetReadWrite not implemented")
 }
 func (UnimplementedVTAdminServer) StartReplication(context.Context, *StartReplicationRequest) (*StartReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartReplication not implemented")
@@ -1039,6 +1071,42 @@ func _VTAdmin_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_SetReadOnly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetReadOnlyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).SetReadOnly(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/SetReadOnly",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).SetReadOnly(ctx, req.(*SetReadOnlyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_SetReadWrite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetReadWriteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).SetReadWrite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/SetReadWrite",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).SetReadWrite(ctx, req.(*SetReadWriteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_StartReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartReplicationRequest)
 	if err := dec(in); err != nil {
@@ -1207,6 +1275,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _VTAdmin_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "SetReadOnly",
+			Handler:    _VTAdmin_SetReadOnly_Handler,
+		},
+		{
+			MethodName: "SetReadWrite",
+			Handler:    _VTAdmin_SetReadWrite_Handler,
 		},
 		{
 			MethodName: "StartReplication",

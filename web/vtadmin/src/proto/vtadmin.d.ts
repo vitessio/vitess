@@ -401,6 +401,34 @@ export namespace vtadmin {
         public runHealthCheck(request: vtadmin.IRunHealthCheckRequest): Promise<vtadmin.RunHealthCheckResponse>;
 
         /**
+         * Calls SetReadOnly.
+         * @param request SetReadOnlyRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and SetReadOnlyResponse
+         */
+        public setReadOnly(request: vtadmin.ISetReadOnlyRequest, callback: vtadmin.VTAdmin.SetReadOnlyCallback): void;
+
+        /**
+         * Calls SetReadOnly.
+         * @param request SetReadOnlyRequest message or plain object
+         * @returns Promise
+         */
+        public setReadOnly(request: vtadmin.ISetReadOnlyRequest): Promise<vtadmin.SetReadOnlyResponse>;
+
+        /**
+         * Calls SetReadWrite.
+         * @param request SetReadWriteRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and SetReadWriteResponse
+         */
+        public setReadWrite(request: vtadmin.ISetReadWriteRequest, callback: vtadmin.VTAdmin.SetReadWriteCallback): void;
+
+        /**
+         * Calls SetReadWrite.
+         * @param request SetReadWriteRequest message or plain object
+         * @returns Promise
+         */
+        public setReadWrite(request: vtadmin.ISetReadWriteRequest): Promise<vtadmin.SetReadWriteResponse>;
+
+        /**
          * Calls StartReplication.
          * @param request StartReplicationRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and StartReplicationResponse
@@ -633,6 +661,20 @@ export namespace vtadmin {
          * @param [response] RunHealthCheckResponse
          */
         type RunHealthCheckCallback = (error: (Error|null), response?: vtadmin.RunHealthCheckResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#setReadOnly}.
+         * @param error Error, if any
+         * @param [response] SetReadOnlyResponse
+         */
+        type SetReadOnlyCallback = (error: (Error|null), response?: vtadmin.SetReadOnlyResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#setReadWrite}.
+         * @param error Error, if any
+         * @param [response] SetReadWriteResponse
+         */
+        type SetReadWriteCallback = (error: (Error|null), response?: vtadmin.SetReadWriteResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#startReplication}.
@@ -6352,6 +6394,366 @@ export namespace vtadmin {
 
         /**
          * Converts this RunHealthCheckResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetReadOnlyRequest. */
+    interface ISetReadOnlyRequest {
+
+        /** SetReadOnlyRequest alias */
+        alias?: (string|null);
+
+        /** SetReadOnlyRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a SetReadOnlyRequest. */
+    class SetReadOnlyRequest implements ISetReadOnlyRequest {
+
+        /**
+         * Constructs a new SetReadOnlyRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ISetReadOnlyRequest);
+
+        /** SetReadOnlyRequest alias. */
+        public alias: string;
+
+        /** SetReadOnlyRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new SetReadOnlyRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetReadOnlyRequest instance
+         */
+        public static create(properties?: vtadmin.ISetReadOnlyRequest): vtadmin.SetReadOnlyRequest;
+
+        /**
+         * Encodes the specified SetReadOnlyRequest message. Does not implicitly {@link vtadmin.SetReadOnlyRequest.verify|verify} messages.
+         * @param message SetReadOnlyRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ISetReadOnlyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetReadOnlyRequest message, length delimited. Does not implicitly {@link vtadmin.SetReadOnlyRequest.verify|verify} messages.
+         * @param message SetReadOnlyRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ISetReadOnlyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetReadOnlyRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetReadOnlyRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.SetReadOnlyRequest;
+
+        /**
+         * Decodes a SetReadOnlyRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetReadOnlyRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.SetReadOnlyRequest;
+
+        /**
+         * Verifies a SetReadOnlyRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetReadOnlyRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetReadOnlyRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.SetReadOnlyRequest;
+
+        /**
+         * Creates a plain object from a SetReadOnlyRequest message. Also converts values to other types if specified.
+         * @param message SetReadOnlyRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.SetReadOnlyRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetReadOnlyRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetReadOnlyResponse. */
+    interface ISetReadOnlyResponse {
+    }
+
+    /** Represents a SetReadOnlyResponse. */
+    class SetReadOnlyResponse implements ISetReadOnlyResponse {
+
+        /**
+         * Constructs a new SetReadOnlyResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ISetReadOnlyResponse);
+
+        /**
+         * Creates a new SetReadOnlyResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetReadOnlyResponse instance
+         */
+        public static create(properties?: vtadmin.ISetReadOnlyResponse): vtadmin.SetReadOnlyResponse;
+
+        /**
+         * Encodes the specified SetReadOnlyResponse message. Does not implicitly {@link vtadmin.SetReadOnlyResponse.verify|verify} messages.
+         * @param message SetReadOnlyResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ISetReadOnlyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetReadOnlyResponse message, length delimited. Does not implicitly {@link vtadmin.SetReadOnlyResponse.verify|verify} messages.
+         * @param message SetReadOnlyResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ISetReadOnlyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetReadOnlyResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetReadOnlyResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.SetReadOnlyResponse;
+
+        /**
+         * Decodes a SetReadOnlyResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetReadOnlyResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.SetReadOnlyResponse;
+
+        /**
+         * Verifies a SetReadOnlyResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetReadOnlyResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetReadOnlyResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.SetReadOnlyResponse;
+
+        /**
+         * Creates a plain object from a SetReadOnlyResponse message. Also converts values to other types if specified.
+         * @param message SetReadOnlyResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.SetReadOnlyResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetReadOnlyResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetReadWriteRequest. */
+    interface ISetReadWriteRequest {
+
+        /** SetReadWriteRequest alias */
+        alias?: (string|null);
+
+        /** SetReadWriteRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a SetReadWriteRequest. */
+    class SetReadWriteRequest implements ISetReadWriteRequest {
+
+        /**
+         * Constructs a new SetReadWriteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ISetReadWriteRequest);
+
+        /** SetReadWriteRequest alias. */
+        public alias: string;
+
+        /** SetReadWriteRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new SetReadWriteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetReadWriteRequest instance
+         */
+        public static create(properties?: vtadmin.ISetReadWriteRequest): vtadmin.SetReadWriteRequest;
+
+        /**
+         * Encodes the specified SetReadWriteRequest message. Does not implicitly {@link vtadmin.SetReadWriteRequest.verify|verify} messages.
+         * @param message SetReadWriteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ISetReadWriteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetReadWriteRequest message, length delimited. Does not implicitly {@link vtadmin.SetReadWriteRequest.verify|verify} messages.
+         * @param message SetReadWriteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ISetReadWriteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetReadWriteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetReadWriteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.SetReadWriteRequest;
+
+        /**
+         * Decodes a SetReadWriteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetReadWriteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.SetReadWriteRequest;
+
+        /**
+         * Verifies a SetReadWriteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetReadWriteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetReadWriteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.SetReadWriteRequest;
+
+        /**
+         * Creates a plain object from a SetReadWriteRequest message. Also converts values to other types if specified.
+         * @param message SetReadWriteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.SetReadWriteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetReadWriteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetReadWriteResponse. */
+    interface ISetReadWriteResponse {
+    }
+
+    /** Represents a SetReadWriteResponse. */
+    class SetReadWriteResponse implements ISetReadWriteResponse {
+
+        /**
+         * Constructs a new SetReadWriteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ISetReadWriteResponse);
+
+        /**
+         * Creates a new SetReadWriteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetReadWriteResponse instance
+         */
+        public static create(properties?: vtadmin.ISetReadWriteResponse): vtadmin.SetReadWriteResponse;
+
+        /**
+         * Encodes the specified SetReadWriteResponse message. Does not implicitly {@link vtadmin.SetReadWriteResponse.verify|verify} messages.
+         * @param message SetReadWriteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ISetReadWriteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetReadWriteResponse message, length delimited. Does not implicitly {@link vtadmin.SetReadWriteResponse.verify|verify} messages.
+         * @param message SetReadWriteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ISetReadWriteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetReadWriteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetReadWriteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.SetReadWriteResponse;
+
+        /**
+         * Decodes a SetReadWriteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetReadWriteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.SetReadWriteResponse;
+
+        /**
+         * Verifies a SetReadWriteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetReadWriteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetReadWriteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.SetReadWriteResponse;
+
+        /**
+         * Creates a plain object from a SetReadWriteResponse message. Also converts values to other types if specified.
+         * @param message SetReadWriteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.SetReadWriteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetReadWriteResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
