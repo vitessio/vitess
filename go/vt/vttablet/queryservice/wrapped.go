@@ -205,18 +205,6 @@ func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Tar
 	})
 }
 
-func (ws *wrappedService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
-	inTransaction := transactionID != 0
-	err = ws.wrapper(ctx, target, ws.impl, "ExecuteBatch", inTransaction, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-		// You cannot retry if you're in a transaction.
-		retryable := canRetry(ctx, innerErr) && !inTransaction
-		return retryable, innerErr
-	})
-	return qrs, err
-}
-
 func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	inDedicatedConn := reservedID != 0
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", inDedicatedConn, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
@@ -225,15 +213,6 @@ func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Targ
 		return canRetry(ctx, innerErr) && !inDedicatedConn, innerErr
 	})
 	return qr, transactionID, alias, err
-}
-
-func (ws *wrappedService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
-	err = ws.wrapper(ctx, target, ws.impl, "BeginExecuteBatch", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		var innerErr error
-		qrs, transactionID, alias, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
-		return canRetry(ctx, innerErr), innerErr
-	})
-	return qrs, transactionID, alias, err
 }
 
 // BeginStreamExecute implements the QueryService interface
