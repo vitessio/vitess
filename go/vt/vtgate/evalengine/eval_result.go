@@ -725,7 +725,8 @@ func (er *EvalResult) makeNumeric() {
 		for i, b := range raw {
 			number[8-len(raw)+i] = b
 		}
-		er.setUint64(binary.BigEndian.Uint64(number[:]))
+		u := binary.BigEndian.Uint64(number[:])
+		er.setFloat(float64(u))
 		return
 	}
 	if ival, err := strconv.ParseInt(er.string(), 10, 64); err == nil {
@@ -737,6 +738,26 @@ func (er *EvalResult) makeNumeric() {
 		return
 	}
 	er.setFloat(0)
+}
+
+func (er *EvalResult) negateNumeric() {
+	er.makeNumeric()
+	switch er.typeof() {
+	case querypb.Type_INT8, querypb.Type_INT16, querypb.Type_INT32, querypb.Type_INT64:
+		er.setInt64(-er.int64())
+	case querypb.Type_UINT8, querypb.Type_UINT16, querypb.Type_UINT32, querypb.Type_UINT64:
+		u := er.uint64()
+		if u > math.MaxInt64 {
+			er.setFloat(-float64(u))
+		} else {
+			er.setInt64(-int64(u))
+		}
+	case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
+		er.setFloat(-er.float64())
+	case querypb.Type_DECIMAL:
+		dec := er.decimal()
+		dec.num.SetSignbit(!dec.num.Signbit())
+	}
 }
 
 func (er *EvalResult) coerceDecimalToFloat() (float64, bool) {

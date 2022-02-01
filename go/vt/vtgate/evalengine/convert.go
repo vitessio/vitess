@@ -361,12 +361,22 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			args = append(args, convertedExpr)
 			aliases = append(aliases, aliased.As)
 		}
-		return &CallExpression{
+		return &CallExpr{
 			Arguments: args,
 			Aliases:   aliases,
 			Method:    method,
 			Call:      call,
 		}, nil
+	case *sqlparser.UnaryExpr:
+		expr, err := convertExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+
+		switch node.Operator {
+		case sqlparser.UMinusOp:
+			return &NegateExpr{UnaryExpr: UnaryExpr{expr}}, nil
+		}
 	}
 	return nil, convertNotSupported(e)
 }

@@ -68,10 +68,6 @@ type (
 		TypedCollation collations.TypedCollation
 	}
 
-	UnaryExpr struct {
-		Inner Expr
-	}
-
 	BinaryExpr struct {
 		Left, Right Expr
 	}
@@ -88,7 +84,7 @@ var _ Expr = (TupleExpr)(nil)
 var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
-var _ Expr = (*CallExpression)(nil)
+var _ Expr = (*CallExpr)(nil)
 
 type evalError struct {
 	error
@@ -399,10 +395,6 @@ func NewTupleExpr(exprs ...Expr) TupleExpr {
 		tupleExpr = append(tupleExpr, f)
 	}
 	return tupleExpr
-}
-
-func (c *UnaryExpr) typeof(env *ExpressionEnv) querypb.Type {
-	return c.Inner.typeof(env)
 }
 
 // eval implements the Expr interface

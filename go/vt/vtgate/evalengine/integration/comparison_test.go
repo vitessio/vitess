@@ -227,6 +227,26 @@ func TestCollationOperations(t *testing.T) {
 	}
 }
 
+func TestNegateArithmetic(t *testing.T) {
+	var cases = []string{
+		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
+		`X'00'`, `X'1234'`, `X'ff'`,
+		`0x00`, `0x1`, `0x1234`,
+		`0xff`, `0xffff`, `0xffffffff`, `0xffffffffffffffff`,
+		strconv.FormatUint(math.MaxUint64, 10),
+		strconv.FormatUint(math.MaxInt64, 10),
+		strconv.FormatInt(math.MinInt64, 10),
+		`'foobar'`, `'FOOBAR'`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, rhs := range cases {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT - %s", rhs))
+	}
+}
+
 func TestHexArithmetic(t *testing.T) {
 	var cases = []string{
 		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
@@ -241,6 +261,9 @@ func TestHexArithmetic(t *testing.T) {
 	for _, lhs := range cases {
 		for _, rhs := range cases {
 			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s + %s", lhs, rhs))
+
+			// compare with negative values too
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%s + -%s", lhs, rhs))
 		}
 	}
 }
