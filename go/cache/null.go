@@ -45,6 +45,16 @@ func (n *nullCache) Len() int {
 	return 0
 }
 
+// Hits returns number of cache hits since creation
+func (n *nullCache) Hits() int64 {
+	return 0
+}
+
+// Hits returns number of cache misses since creation
+func (n *nullCache) Misses() int64 {
+	return 0
+}
+
 // Capacity returns the capacity of the nullCache, which is always 0
 func (n *nullCache) UsedCapacity() int64 {
 	return 0

@@ -403,6 +403,22 @@ func (c *Cache) Evictions() int64 {
 	return int64(c.Metrics.KeysEvicted())
 }
 
+// Hits returns the number of cache hits
+func (c *Cache) Hits() int64 {
+	if c == nil || c.Metrics == nil {
+		return 0
+	}
+	return int64(c.Metrics.Hits())
+}
+
+// Misses returns the number of cache misses
+func (c *Cache) Misses() int64 {
+	if c == nil || c.Metrics == nil {
+		return 0
+	}
+	return int64(c.Metrics.Misses())
+}
+
 // ForEach yields all the values currently stored in the cache to the given callback.
 // The callback may return `false` to stop the iteration early.
 func (c *Cache) ForEach(forEach func(interface{}) bool) {
