@@ -935,7 +935,11 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		}
 	}()
 
-	_, _, position, _ := c.parseComBinlogDumpGTID(data)
+	_, _, position, err := c.parseComBinlogDumpGTID(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		kontinue = false
+	}
 	handler.ComBinlogDumpGTID(c, position.GTIDSet)
 
 	return true
