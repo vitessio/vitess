@@ -227,6 +227,24 @@ func TestCollationOperations(t *testing.T) {
 	}
 }
 
+func TestHexArithmetic(t *testing.T) {
+	var cases = []string{
+		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
+		`X'00'`, `X'1234'`, `X'ff'`,
+		`0x00`, `0x1`, `0x1234`,
+		`0xff`, `0xffff`, `0xffffffff`, `0xffffffffffffffff`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, lhs := range cases {
+		for _, rhs := range cases {
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s + %s", lhs, rhs))
+		}
+	}
+}
+
 func TestTypes(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
@@ -257,5 +275,26 @@ func TestTypes(t *testing.T) {
 
 	for _, query := range queries {
 		compareRemoteQuery(t, conn, "SELECT "+query)
+	}
+}
+
+func TestFloatFormatting(t *testing.T) {
+	var floats = []string{
+		`18446744073709551615`,
+		`9223372036854775807`,
+		`0xff`, `0xffff`, `0xffffffff`, `0xffffffffffffffff`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, f := range floats {
+		query := fmt.Sprintf("SELECT %s + 0.0e0", f)
+		compareRemoteQuery(t, conn, query)
+	}
+
+	for i := 0; i < 64; i++ {
+		query := fmt.Sprintf("SELECT %d + 0.0e0", uint64(1)<<i)
+		compareRemoteQuery(t, conn, query)
 	}
 }
