@@ -1,6 +1,6 @@
 name: Bug Report
 description: You're experiencing an issue with Vitess that is different than the documented behavior.
-title: ""
+title: "Bug Report: "
 labels: ["Type: Bug", "Needs Triage"]
 body:
   - type: textarea
@@ -9,7 +9,6 @@ body:
       label: Overview of the Issue
       description: A paragraph or two about the issue you're experiencing.
       placeholder: Tell us what you see!
-      value: ""
     validations:
       required: true
 
@@ -17,8 +16,9 @@ body:
     id: reproduction-steps
     attributes:
       label: Reproduction Steps
-      description: A paragraph or two about the issue you're experiencing.
-      placeholder: |
+      description: |
+        A paragraph or two about the issue you're experiencing.
+        Example:
         1. Deploy the following `vschema`:
           ```javascript
           {
@@ -45,7 +45,6 @@ body:
             ```
         3. Run `SELECT...`
         4. View error
-      value: ""
       render: markdown
     validations:
       required: true
@@ -54,14 +53,13 @@ body:
     id: binary-version
     attributes:
       label: Binary Version
-      description: Tell us which version of Vitess you're using.
-      placeholder: |
-        example:
+      description: |
+        Tell us which version of Vitess you're using.
+        Example:
         ```sh
         giaquinti@workspace:~$ vtgate --version
         Version: a95cf5d (Git branch 'HEAD') built on Fri May 18 16:54:26 PDT 2018 by giaquinti@workspace using go1.10 linux/amd64
         ```
-      value: ""
       render: shell
     validations:
       required: true
@@ -70,12 +68,12 @@ body:
     id: os-and-env
     attributes:
       label: Operating System and Environment details
-      description: OS, Architecture, and any other information you can provide about the environment.
-      placeholder: |
+      description: |
+        OS, Architecture, and any other information you can provide about the environment.
+        Example:
         - Operating system (output of `cat /etc/os-release`)
         - Kernel version (output of `uname -sr`)
         - Architecture (output of `uname -m`)
-      value: ""
       render: shell
     validations:
       required: true
