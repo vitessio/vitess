@@ -434,3 +434,7 @@ this flag should be updated to remove the flag as it will be deleted in the next
 #### Query Serving
  * Fuzzing: Add more fuzzers #9249
 
+
+The release includes 1351 commits (excluding merges)
+
+Thanks to all our contributors: @Anders-PlanetScale, @GuptaManan100, @Johnny-Three, @Juneezee, @ajm188, @aquarapid, @askdba, @bnu0, @carsonoid, @choo-stripe, @dbussink, @dctrwatson, @deepthi, @demmer, @dependabot[bot], @derekperkins, @doeg, @eeSeeGee, @falun, @fatih, @frouioui, @hallaroo, @harshit-gangal, @ilikeorangutans, @mattlord, @rafael, @ritwizsinha, @rohit-nayak-ps, @sahutd, @shlomi-noach, @sonne5, @systay, @tdakkota, @tokikanno, @utk9, @vmg
