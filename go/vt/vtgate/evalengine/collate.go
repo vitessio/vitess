@@ -62,3 +62,43 @@ func (d LookupDefaultCollation) CollationForExpr(_ sqlparser.Expr) collations.ID
 func (d LookupDefaultCollation) DefaultCollation() collations.ID {
 	return collations.ID(d)
 }
+
+func mergeCollations(left, right *EvalResult) (collations.ID, error) {
+	lc := left.collation()
+	rc := right.collation()
+	if lc.Collation == rc.Collation {
+		return lc.Collation, nil
+	}
+
+	lt := left.textual()
+	rt := right.textual()
+	if !lt || !rt {
+		if lt {
+			return lc.Collation, nil
+		}
+		if rt {
+			return rc.Collation, nil
+		}
+		return collations.CollationBinaryID, nil
+	}
+
+	env := collations.Local()
+	mc, coerceLeft, coerceRight, err := env.MergeCollations(lc, rc, collations.CoercionOptions{
+		ConvertToSuperset:   true,
+		ConvertWithCoercion: true,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	if coerceLeft != nil {
+		left.bytes_, _ = coerceLeft(nil, left.bytes())
+	}
+	if coerceRight != nil {
+		right.bytes_, _ = coerceRight(nil, right.bytes())
+	}
+
+	left.replaceCollation(mc)
+	right.replaceCollation(mc)
+	return mc.Collation, nil
+}
