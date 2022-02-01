@@ -714,14 +714,19 @@ func (er *EvalResult) makeNumeric() {
 		return
 	}
 	if er.typeof() == querypb.Type_VARBINARY && er.hasFlag(flagHex) {
-		if raw := er.bytes(); len(raw) <= 8 {
-			var number [8]byte
-			for i, b := range raw {
-				number[8-len(raw)+i] = b
-			}
-			er.setUint64(binary.BigEndian.Uint64(number[:]))
+		raw := er.bytes()
+		if len(raw) > 8 {
+			// overflow
+			er.setFloat(0)
 			return
 		}
+
+		var number [8]byte
+		for i, b := range raw {
+			number[8-len(raw)+i] = b
+		}
+		er.setUint64(binary.BigEndian.Uint64(number[:]))
+		return
 	}
 	if ival, err := strconv.ParseInt(er.string(), 10, 64); err == nil {
 		er.setInt64(ival)
