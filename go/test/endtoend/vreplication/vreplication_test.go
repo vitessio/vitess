@@ -948,7 +948,7 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 		lagSeconds, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
 
 		require.NoError(t, err)
-		if lagSeconds < acceptableLagSeconds {
+		if lagSeconds <= acceptableLagSeconds {
 			log.Infof("waitForLowLag acceptable for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
 			break
 		} else {

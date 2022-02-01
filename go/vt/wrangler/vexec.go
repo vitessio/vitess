@@ -345,11 +345,16 @@ type ReplicationStatusResult struct {
 	SourceLocation ReplicationLocation
 	// TargetLocation represents the keyspace and shards that we are vreplicating into.
 	TargetLocation ReplicationLocation
-	// MaxVReplicationLag represents the maximum vreplication lag seen across all shards.
+	// MaxVReplicationLag represents the lag between the current time and the last time an event was seen from the
+	// source shards. This defines the "liveness" of the source streams. This will be high only if one of the source streams
+	// is no longer running (say, due to a network partition , primary not being available, or a vstreamer failure)
+	// MaxVReplicationTransactionLag (see below) represents the "mysql" replication lag, i.e. how far behind we are in
+	// terms of data replication from the source to the target.
 	MaxVReplicationLag int64
-	// MaxVReplicationTransactionLag represents the lag between the current time and the timestamp of the last transaction seen across all shards.
+	// MaxVReplicationTransactionLag represents the lag across all shards, between the current time and the timestamp
+	// of the last transaction OR heartbeat timestamp (if there have been no writes to replicate from the source).
 	MaxVReplicationTransactionLag int64
-	// Frozen is true workflow has been deemed complete and is in a limbo "frozen" state (Message=="FROZEN")
+	// Frozen is true if this workflow has been deemed complete and is in a limbo "frozen" state (Message=="FROZEN")
 	Frozen bool
 	// Statuses is a map of <shard>/<primary tablet alias> : ShardReplicationStatus (for the given shard).
 	ShardStatuses map[string]*ShardReplicationStatus
@@ -549,7 +554,9 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			// All timestamps are in seconds since epoch
 			lastTransactionTimestamp := status.TransactionTimestamp
 			lastHeartbeatTime := status.TimeHeartbeat
-			if status.State != "Copying" {
+			if status.State == "Copying" {
+				rsr.MaxVReplicationTransactionLag = math.MaxInt64
+			} else {
 				if lastTransactionTimestamp == 0 /* no new events after copy */ ||
 					lastHeartbeatTime > lastTransactionTimestamp /* no recent transactions, so all caught up */ {
 
@@ -560,8 +567,6 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				if transactionReplicationLag > rsr.MaxVReplicationTransactionLag {
 					rsr.MaxVReplicationTransactionLag = transactionReplicationLag
 				}
-			} else {
-				rsr.MaxVReplicationTransactionLag = math.MaxInt64
 			}
 		}
 		si, err := wr.ts.GetShard(ctx, keyspace, primary.Shard)
