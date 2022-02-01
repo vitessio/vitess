@@ -29,7 +29,8 @@ import (
 type (
 	ConverterLookup interface {
 		ColumnLookup(col *sqlparser.ColName) (int, error)
-		CollationIDLookup(expr sqlparser.Expr) collations.ID
+		CollationForExpr(expr sqlparser.Expr) collations.ID
+		DefaultCollation() collations.ID
 	}
 )
 
@@ -153,9 +154,12 @@ func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedC
 		Repertoire:   collations.RepertoireUnicode,
 	}
 	if lookup != nil {
-		collation.Collation = lookup.CollationIDLookup(expr)
+		collation.Collation = lookup.CollationForExpr(expr)
+		if collation.Collation == collations.Unknown {
+			collation.Collation = lookup.DefaultCollation()
+		}
 	} else {
-		collation.Collation = collations.ID(collations.Local().DefaultConnectionCharset())
+		collation.Collation = collations.Default()
 	}
 	return collation
 }
@@ -166,7 +170,13 @@ func ConvertEx(e sqlparser.Expr, lookup ConverterLookup, simplify bool) (Expr, e
 		return nil, err
 	}
 	if simplify {
-		expr, err = simplifyExpr(expr)
+		var staticEnv ExpressionEnv
+		if lookup != nil {
+			staticEnv.DefaultCollation = lookup.DefaultCollation()
+		} else {
+			staticEnv.DefaultCollation = collations.Default()
+		}
+		expr, err = simplifyExpr(&staticEnv, expr)
 	}
 	return expr, err
 }
@@ -363,10 +373,11 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	return nil, convertNotSupported(e)
 }
 
-var builtinFunctions = map[string]func([]EvalResult, *EvalResult){
-	"coalesce": builtinFuncCoalesce,
-	"greatest": builtinFuncGreatest,
-	"least":    builtinFuncLeast,
+var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult){
+	"coalesce":  builtinFuncCoalesce,
+	"greatest":  builtinFuncGreatest,
+	"least":     builtinFuncLeast,
+	"collation": builtinFuncCollation,
 }
 
 func convertNotSupported(e sqlparser.Expr) error {

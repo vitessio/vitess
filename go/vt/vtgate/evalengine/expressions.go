@@ -32,8 +32,9 @@ type (
 	// ExpressionEnv contains the environment that the expression
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
-		BindVars map[string]*querypb.BindVariable
-		Row      []sqltypes.Value
+		BindVars         map[string]*querypb.BindVariable
+		Row              []sqltypes.Value
+		DefaultCollation collations.ID
 	}
 
 	// Expr is the interface that all evaluating expressions must implement
@@ -42,7 +43,7 @@ type (
 		typeof(env *ExpressionEnv) querypb.Type
 		format(buf *formatter, depth int)
 		constant() bool
-		simplify() error
+		simplify(env *ExpressionEnv) error
 	}
 
 	Literal struct {
@@ -87,8 +88,7 @@ var _ Expr = (TupleExpr)(nil)
 var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
-
-var noenv *ExpressionEnv
+var _ Expr = (*CallExpression)(nil)
 
 type evalError struct {
 	error
@@ -216,6 +216,9 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 }
 
 func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
+	if env == nil {
+		panic("ExpressionEnv == nil")
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			if ee, ok := r.(evalError); ok {
@@ -246,12 +249,15 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (ty querypb.Type, err error) {
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return EnvWithBindVars(map[string]*querypb.BindVariable{})
+	return EnvWithBindVars(map[string]*querypb.BindVariable{}, collations.Unknown)
 }
 
 // EnvWithBindVars returns an expression environment with no current row, but with bindvars
-func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
-	return &ExpressionEnv{BindVars: bindVars}
+func EnvWithBindVars(bindVars map[string]*querypb.BindVariable, coll collations.ID) *ExpressionEnv {
+	if coll == collations.Unknown {
+		coll = collations.Default()
+	}
+	return &ExpressionEnv{BindVars: bindVars, DefaultCollation: coll}
 }
 
 // NullExpr is just what you are lead to believe

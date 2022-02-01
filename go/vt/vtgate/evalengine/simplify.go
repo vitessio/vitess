@@ -50,33 +50,33 @@ func (expr *UnaryExpr) constant() bool {
 	return expr.Inner.constant()
 }
 
-func (expr *Literal) simplify() error {
+func (expr *Literal) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *BindVariable) simplify() error {
+func (expr *BindVariable) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *Column) simplify() error {
+func (expr *Column) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *BinaryExpr) simplify() error {
+func (expr *BinaryExpr) simplify(env *ExpressionEnv) error {
 	var err error
-	expr.Left, err = simplifyExpr(expr.Left)
+	expr.Left, err = simplifyExpr(env, expr.Left)
 	if err != nil {
 		return err
 	}
-	expr.Right, err = simplifyExpr(expr.Right)
+	expr.Right, err = simplifyExpr(env, expr.Right)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (expr *LikeExpr) simplify() error {
-	if err := expr.BinaryExpr.simplify(); err != nil {
+func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
+	if err := expr.BinaryExpr.simplify(env); err != nil {
 		return err
 	}
 
@@ -89,8 +89,8 @@ func (expr *LikeExpr) simplify() error {
 	return nil
 }
 
-func (inexpr *InExpr) simplify() error {
-	if err := inexpr.BinaryExpr.simplify(); err != nil {
+func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
+	if err := inexpr.BinaryExpr.simplify(env); err != nil {
 		return err
 	}
 
@@ -145,10 +145,10 @@ func (inexpr *InExpr) simplify() error {
 	return nil
 }
 
-func (expr TupleExpr) simplify() error {
+func (expr TupleExpr) simplify(env *ExpressionEnv) error {
 	var err error
 	for i, subexpr := range expr {
-		expr[i], err = simplifyExpr(subexpr)
+		expr[i], err = simplifyExpr(env, subexpr)
 		if err != nil {
 			return err
 		}
@@ -156,21 +156,29 @@ func (expr TupleExpr) simplify() error {
 	return nil
 }
 
-func (expr *UnaryExpr) simplify() error {
+func (expr *UnaryExpr) simplify(env *ExpressionEnv) error {
 	var err error
-	expr.Inner, err = simplifyExpr(expr.Inner)
+	expr.Inner, err = simplifyExpr(env, expr.Inner)
 	return err
 }
 
-func simplifyExpr(e Expr) (Expr, error) {
+func (c *CallExpression) constant() bool {
+	return c.Arguments.constant()
+}
+
+func (c *CallExpression) simplify(env *ExpressionEnv) error {
+	return c.Arguments.simplify(env)
+}
+
+func simplifyExpr(env *ExpressionEnv, e Expr) (Expr, error) {
 	if e.constant() {
-		res, err := noenv.Evaluate(e)
+		res, err := env.Evaluate(e)
 		if err != nil {
 			return nil, err
 		}
 		return &Literal{Val: res}, nil
 	}
-	if err := e.simplify(); err != nil {
+	if err := e.simplify(env); err != nil {
 		return nil, err
 	}
 	return e, nil

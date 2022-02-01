@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
@@ -43,8 +42,6 @@ type (
 		operators  []string
 		primitives []string
 	}
-
-	dummyCollation collations.ID
 )
 
 var rhsOfIs = []string{
@@ -77,14 +74,6 @@ func (g *gencase) expr() string {
 		rhs = rhsOfIs[g.rand.Intn(len(rhsOfIs))]
 	}
 	return fmt.Sprintf("%s %s %s", g.arg(false), op, rhs)
-}
-
-func (d dummyCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
-	panic("not supported")
-}
-
-func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
-	return collations.ID(d)
 }
 
 var fuzzMaxTime = flag.Duration("fuzz-duration", 30*time.Second, "maximum time to fuzz for")
@@ -130,7 +119,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
 				err = fmt.Errorf("PANIC: %v", r)
 			}
 		}()
-		expr, err = evalengine.ConvertEx(astExpr, dummyCollation(8), true)
+		expr, err = evalengine.ConvertEx(astExpr, evalengine.LookupDefaultCollation(255), true)
 		return
 	}()
 
@@ -144,7 +133,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
 					err = fmt.Errorf("PANIC: %v", r)
 				}
 			}()
-			eval, err = (*evalengine.ExpressionEnv)(nil).Evaluate(local)
+			eval, err = evalengine.EnvWithBindVars(nil, 255).Evaluate(local)
 			return
 		}()
 	}

@@ -118,7 +118,7 @@ func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 	if len(input.Rows) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	env.Row = input.Rows[0]
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(vcursor, env)

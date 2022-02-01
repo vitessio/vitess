@@ -373,7 +373,7 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *physical.Union) []col
 		if !ok {
 			return nil
 		}
-		typ := ctx.SemTable.CollationFor(aliasedE.Expr)
+		typ := ctx.SemTable.CollationForExpr(aliasedE.Expr)
 		colls = append(colls, typ)
 	}
 	return colls
