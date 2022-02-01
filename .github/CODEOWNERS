@@ -9,8 +9,8 @@ bootstrap.sh @deepthi
 /examples/region_sharding @deepthi
 /java/ @harshit-gangal @pH14
 /go/cache @vmg
-/go/cmd/vtadmin @ajm188 @doeg
-/go/cmd/vtctldclient @ajm188 @doeg
+/go/cmd/vtadmin @ajm188 @doeg @notfelineit
+/go/cmd/vtctldclient @ajm188 @doeg @notfelineit
 /go/mysql @harshit-gangal @systay
 /go/protoutil @ajm188
 /go/test/endtoend/onlineddl @shlomi-noach
@@ -19,19 +19,19 @@ bootstrap.sh @deepthi
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
 /go/vt/orchestrator @deepthi @shlomi-noach
-/go/vt/proto/vtadmin @ajm188 @doeg
+/go/vt/proto/vtadmin @ajm188 @doeg @notfelineit
 /go/vt/schema @shlomi-noach
 /go/vt/servenv @deepthi
 /go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
 /go/vt/srvtopo @rafael
 /go/vt/topo @deepthi @rafael
-/go/vt/vtadmin @ajm188 @doeg @rohit-nayak-ps
+/go/vt/vtadmin @ajm188 @doeg @notfelineit @rohit-nayak-ps
 /go/vt/vtctl @deepthi
-/go/vt/vtctl/vtctl.go @ajm188 @doeg
-/go/vt/vtctl/grpcvtctldclient @ajm188 @doeg
-/go/vt/vtctl/grpcvtctldserver @ajm188 @doeg
-/go/vt/vtctl/vtctldclient @ajm188 @doeg
-/go/vt/vtctld @ajm188 @doeg @rohit-nayak-ps @deepthi
+/go/vt/vtctl/vtctl.go @ajm188 @doeg @notfelineit
+/go/vt/vtctl/grpcvtctldclient @ajm188 @doeg @notfelineit
+/go/vt/vtctl/grpcvtctldserver @ajm188 @doeg @notfelineit
+/go/vt/vtctl/vtctldclient @ajm188 @doeg @notfelineit
+/go/vt/vtctld @ajm188 @deepthi @doeg @notfelineit @rohit-nayak-ps
 /go/vt/vtgate @harshit-gangal @systay @frouioui
 /go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps
@@ -40,8 +40,8 @@ bootstrap.sh @deepthi
 /go/vt/wrangler @deepthi @rohit-nayak-ps
 /go/vt/workflow @rohit-nayak-ps
 /helm/ @derekperkins @dkhenry
-/proto/vtadmin.proto @ajm188 @doeg
-/proto/vtctldata.proto @ajm188 @doeg
-/proto/vtctlservice.proto @ajm188 @doeg
-/web/vtadmin @ajm188 @doeg
-/web/vtctld2 @rohit-nayak-ps
+/proto/vtadmin.proto @ajm188 @doeg @notfelineit
+/proto/vtctldata.proto @ajm188 @doeg @notfelineit
+/proto/vtctlservice.proto @ajm188 @doeg @notfelineit
+/web/vtadmin @ajm188 @doeg @notfelineit
+/web/vtctld2 @doeg @notfelineit @rohit-nayak-ps
