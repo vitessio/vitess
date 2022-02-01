@@ -64,6 +64,7 @@ type (
 		GetOptLike() *OptLike
 		GetIfExists() bool
 		GetIfNotExists() bool
+		GetIsReplace() bool
 		GetTableSpec() *TableSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
@@ -992,6 +993,46 @@ func (node *DropTable) GetIfNotExists() bool {
 
 // GetIfNotExists implements the DDLStatement interface
 func (node *DropView) GetIfNotExists() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *RenameTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *TruncateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateView) GetIsReplace() bool {
+	return node.IsReplace
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterView) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropView) GetIsReplace() bool {
 	return false
 }
 
