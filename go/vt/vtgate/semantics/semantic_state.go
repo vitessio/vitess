@@ -95,7 +95,7 @@ type (
 
 		// DefaultCollation is the default collation for this query, which is usually
 		// inherited from the connection's default collation.
-		DefaultCollation collations.ID
+		Collation collations.ID
 
 		Warning string
 	}
@@ -214,13 +214,17 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	return nil
 }
 
-// CollationFor returns the collation name of expressions in the query
-func (st *SemTable) CollationFor(e sqlparser.Expr) collations.ID {
+// CollationForExpr returns the collation name of expressions in the query
+func (st *SemTable) CollationForExpr(e sqlparser.Expr) collations.ID {
 	typ, found := st.ExprTypes[e]
 	if found {
 		return typ.Collation
 	}
-	return st.DefaultCollation
+	return collations.Unknown
+}
+
+func (st *SemTable) DefaultCollation() collations.ID {
+	return st.Collation
 }
 
 // dependencies return the table dependencies of the expression. This method finds table dependencies recursively
@@ -327,11 +331,6 @@ var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column 
 // ColumnLookup implements the ConverterLookup interface
 func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
-}
-
-// CollationIDLookup implements the ConverterLookup interface
-func (st *SemTable) CollationIDLookup(expr sqlparser.Expr) collations.ID {
-	return st.CollationFor(expr)
 }
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace

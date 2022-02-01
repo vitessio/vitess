@@ -184,6 +184,12 @@ func (er *EvalResult) setRaw(typ querypb.Type, raw []byte, coll collations.Typed
 	er.collation_ = coll
 }
 
+func (er *EvalResult) setString(str string, coll collations.TypedCollation) {
+	er.type_ = sqltypes.VarChar
+	er.bytes_ = []byte(str)
+	er.collation_ = coll
+}
+
 func (er *EvalResult) setRawNumeric(typ querypb.Type, u uint64) {
 	er.type_ = typ
 	er.numeric_ = u

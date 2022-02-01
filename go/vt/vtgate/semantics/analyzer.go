@@ -87,7 +87,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collatio
 		SubqueryMap:       a.binder.subqueryMap,
 		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
-		DefaultCollation:  coll,
+		Collation:         coll,
 	}
 }
 

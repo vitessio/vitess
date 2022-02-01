@@ -180,7 +180,7 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(vcursor VCursor, bindVars map[
 		return defaultRoute()
 	}
 
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	var specifiedKS string
 	for _, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
@@ -323,7 +323,7 @@ func (rp *RoutingParameters) byDestination(vcursor VCursor, bindVars map[string]
 }
 
 func (rp *RoutingParameters) equal(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
@@ -340,7 +340,7 @@ func (rp *RoutingParameters) equal(vcursor VCursor, bindVars map[string]*querypb
 }
 
 func (rp *RoutingParameters) equalMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	var rowValue []sqltypes.Value
 	for _, rvalue := range rp.Values {
 		v, err := env.Evaluate(rvalue)
@@ -362,7 +362,7 @@ func (rp *RoutingParameters) equalMultiCol(vcursor VCursor, bindVars map[string]
 }
 
 func (rp *RoutingParameters) in(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
@@ -375,7 +375,7 @@ func (rp *RoutingParameters) in(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 func (rp *RoutingParameters) inMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rowColValues, isSingleVal, err := generateRowColValues(bindVars, rp.Values)
+	rowColValues, isSingleVal, err := generateRowColValues(vcursor, bindVars, rp.Values)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -388,7 +388,7 @@ func (rp *RoutingParameters) inMultiCol(vcursor VCursor, bindVars map[string]*qu
 }
 
 func (rp *RoutingParameters) multiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
@@ -406,7 +406,7 @@ func (rp *RoutingParameters) multiEqual(vcursor VCursor, bindVars map[string]*qu
 
 func (rp *RoutingParameters) multiEqualMultiCol(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	var multiColValues [][]sqltypes.Value
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	for _, rvalue := range rp.Values {
 		v, err := env.Evaluate(rvalue)
 		if err != nil {
@@ -549,12 +549,12 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 	return shardVars
 }
 
-func generateRowColValues(bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
+func generateRowColValues(vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]interface{}, error) {
 	// gather values from all the column in the vindex
 	var multiColValues [][]sqltypes.Value
 	var lv []sqltypes.Value
 	isSingleVal := map[int]interface{}{}
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	for colIdx, rvalue := range values {
 		result, err := env.Evaluate(rvalue)
 		if err != nil {
