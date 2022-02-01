@@ -62,6 +62,32 @@ func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 }
 
 func TestAllComparisons(t *testing.T) {
+	var elems = []string{"NULL", "-1", "0", "1",
+		`'foo'`, `'bar'`, `'FOO'`, `'BAR'`,
+		`'foo' collate utf8mb4_as_cs`, // invalid collation for testing error messages
+		`'foo' collate utf8mb4_cs_as`,
+		`'FOO' collate utf8mb4_cs_as`,
+		`_latin1 'foo'`,
+		`_latin1 'FOO'`,
+	}
+	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, op := range operators {
+		t.Run(op, func(t *testing.T) {
+			for i := 0; i < len(elems); i++ {
+				for j := 0; j < len(elems); j++ {
+					query := fmt.Sprintf("SELECT %s %s %s", elems[i], op, elems[j])
+					compareRemoteQuery(t, conn, query)
+				}
+			}
+		})
+	}
+}
+
+func TestAllTupleComparisons(t *testing.T) {
 	var elems = []string{"NULL", "-1", "0", "1"}
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 
