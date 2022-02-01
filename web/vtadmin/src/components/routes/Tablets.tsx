@@ -35,7 +35,6 @@ import { TabletLink } from '../links/TabletLink';
 import { ExternalTabletLink } from '../links/ExternalTabletLink';
 import { ShardLink } from '../links/ShardLink';
 import InfoDropdown from './tablets/InfoDropdown';
-import ChangeDropdown from './tablets/ChangeDropdown';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -89,7 +88,6 @@ export const Tablets = () => {
                     </DataCell>
                     <DataCell>
                         <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
-                        <ChangeDropdown />
                     </DataCell>
                 </tr>
             ));

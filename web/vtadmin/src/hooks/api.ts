@@ -49,6 +49,8 @@ import {
     reparentTablet,
     startReplication,
     stopReplication,
+    setReadOnly,
+    setReadWrite,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -153,6 +155,30 @@ export const useReparentTablet = (
 ) => {
     return useMutation<Awaited<ReturnType<typeof reparentTablet>>, Error>(() => {
         return reparentTablet(params);
+    }, options);
+};
+
+/**
+ * useSetReadOnly sets the tablet to read only
+ */
+export const useSetReadOnly = (
+    params: Parameters<typeof setReadOnly>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof setReadOnly>>, Error>(() => {
+        return setReadOnly(params);
+    }, options);
+};
+
+/**
+ * useSetReadWrite sets the tablet to read only
+ */
+export const useSetReadWrite = (
+    params: Parameters<typeof setReadWrite>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>(() => {
+        return setReadWrite(params);
     }, options);
 };
 
