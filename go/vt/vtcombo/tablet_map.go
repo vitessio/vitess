@@ -451,30 +451,6 @@ func (itc *internalTabletConn) Execute(
 	return reply, nil
 }
 
-// ExecuteBatch is part of queryservice.QueryService
-// We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ExecuteBatch(
-	ctx context.Context,
-	target *querypb.Target,
-	queries []*querypb.BoundQuery,
-	asTransaction bool,
-	transactionID int64,
-	options *querypb.ExecuteOptions,
-) ([]sqltypes.Result, error) {
-	q := make([]*querypb.BoundQuery, len(queries))
-	for i, query := range queries {
-		q[i] = &querypb.BoundQuery{
-			Sql:           query.Sql,
-			BindVariables: sqltypes.CopyBindVariables(query.BindVariables),
-		}
-	}
-	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, target, q, asTransaction, transactionID, options)
-	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
-	}
-	return results, nil
-}
-
 // StreamExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) StreamExecute(
@@ -583,22 +559,6 @@ func (itc *internalTabletConn) BeginExecute(
 	bindVars = sqltypes.CopyBindVariables(bindVars)
 	result, transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginExecute(ctx, target, preQueries, query, bindVars, reserveID, options)
 	return result, transactionID, tabletAlias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
-}
-
-// BeginExecuteBatch is part of queryservice.QueryService
-func (itc *internalTabletConn) BeginExecuteBatch(
-	ctx context.Context,
-	target *querypb.Target,
-	queries []*querypb.BoundQuery,
-	asTransaction bool,
-	options *querypb.ExecuteOptions,
-) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := itc.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	results, err := itc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, alias, err
 }
 
 // BeginStreamExecute is part of queryservice.QueryService
