@@ -52,7 +52,10 @@ Used to set primary positions to provide/validate gtids.
 `go/vt/wrangler/fake_dbclient_test.go`
 
 This defines a mock db which is limited in scope to the vreplication engine. All queries that it mocks are related to
-the `_vt` database only.
+the `_vt` database only. The queries specified serve to validate that the expected set of queries were generated. When
+updating/adding tests, you will need to tell each test what queries are valid. For queries that can happen often and
+asynchronously, like updating heartbeats or setting gtid positions, we have the mechanism to ignore them or return a
+fixed result.
 
 ### Pain points / Possible improvements
 
@@ -61,7 +64,7 @@ the `_vt` database only.
 * sequence of queries matters. This was introduced for precise testing of logic when VReplication was first invented and
   many moving parts had to be validated. Do we still need this or can we switch to a query map based mock?
 
-Another option is to use a db server with a mysql API, ideally an in-memory one so that we can test based on actual data.
-We won't have to define the queries each time they change. We can of course just setup a regular mysql server.
+Another option is to use a db server with a mysql API, ideally an in-memory one so that we can test based on actual
+data. We won't have to define the queries each time they change. We can of course just setup a regular mysql server.
 This is done in e2e tests, but it might be unacceptable for unit tests.  
 
