@@ -2,7 +2,7 @@ package servenv
 
 import "flag"
 
-const versionName = "13.0.0-rc1"
+const versionName = "13.0.0-SNAPSHOT"
 
 // MySQLServerVersion is what Vitess will present as it's version during the connection handshake,
 // and as the value to the @@version system variable. If nothing is provided, Vitess will report itself as
