@@ -110,6 +110,22 @@ func (r RowNamedValues) AsBool(fieldName string, def bool) bool {
 	return def
 }
 
+// ToBytes returns the named field as a byte array
+func (r RowNamedValues) ToBytes(fieldName string) ([]byte, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToBytes()
+	}
+	return nil, ErrNoSuchField
+}
+
+// AsBytes returns the named field as a byte array, or default value if nonexistent/error
+func (r RowNamedValues) AsBytes(fieldName string, def []byte) []byte {
+	if v, err := r.ToBytes(fieldName); err == nil {
+		return v
+	}
+	return def
+}
+
 // NamedResult represents a query result with named values as opposed to ordinal values.
 type NamedResult struct {
 	Fields       []*querypb.Field `json:"fields"`

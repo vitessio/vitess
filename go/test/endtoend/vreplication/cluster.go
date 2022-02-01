@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	debug = false // set to true for local debugging: this uses the local env vtdataroot and does not teardown clusters
+	debugMode = false // set to true for local debugging: this uses the local env vtdataroot and does not teardown clusters
 
 	originalVtdataroot    string
 	vtdataroot            string
@@ -93,7 +93,7 @@ type Tablet struct {
 
 func setTempVtDataRoot() string {
 	dirSuffix := 100000 + rand.Intn(999999-100000) // 6 digits
-	if debug {
+	if debugMode {
 		vtdataroot = originalVtdataroot
 	} else {
 		vtdataroot = path.Join(originalVtdataroot, fmt.Sprintf("vreple2e_%d", dirSuffix))
@@ -139,12 +139,12 @@ func init() {
 	// for local debugging set this variable so that each run uses VTDATAROOT instead of a random dir
 	// and also does not teardown the cluster for inspecting logs and the databases
 	if os.Getenv("VREPLICATION_E2E_DEBUG") != "" {
-		debug = true
+		debugMode = true
 	}
 	rand.Seed(time.Now().UTC().UnixNano())
 	originalVtdataroot = os.Getenv("VTDATAROOT")
 	var mainVtDataRoot string
-	if debug {
+	if debugMode {
 		mainVtDataRoot = originalVtdataroot
 	} else {
 		mainVtDataRoot = setTempVtDataRoot()
@@ -458,7 +458,7 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
 func (vc *VitessCluster) TearDown(t testing.TB) {
-	if debug {
+	if debugMode {
 		return
 	}
 	done := make(chan bool)

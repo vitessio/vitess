@@ -120,8 +120,8 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, output)
 	}
-	fmt.Printf("----------\n%+v\n%s----------\n", args, output)
 	return nil
+
 }
 
 func tstWorkflowSwitchReads(t *testing.T, tabletTypes, cells string) {
@@ -303,6 +303,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	require.NoError(t, err)
 
 	waitForWorkflowToStart(t, "customer.wf2")
+	waitForLowLag(t, "customer", "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
 		"", workflowActionSwitchTraffic, "", "", "")
@@ -336,6 +337,8 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		"customer2", workflowActionCreate, "", "", "")
 	require.NoError(t, err)
 	waitForWorkflowToStart(t, "product.wf3")
+
+	waitForLowLag(t, "product", "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
 		"", workflowActionSwitchTraffic, "", "", "")
 	require.NoError(t, err)
@@ -446,6 +449,11 @@ func testPartialSwitches(t *testing.T) {
 	tstWorkflowSwitchWrites(t)
 	checkStates(t, nextState, nextState) //idempotency
 
+	keyspace := "product"
+	if currentWorkflowType == wrangler.ReshardWorkflow {
+		keyspace = "customer"
+	}
+	waitForLowLag(t, keyspace, "wf1_reverse")
 	tstWorkflowReverseReads(t, "replica,rdonly", "zone1")
 	currentState = nextState
 	nextState = "Reads partially switched. Replica switched in cells: zone2. Rdonly switched in cells: zone2. Writes Switched"
@@ -466,6 +474,7 @@ func testRestOfWorkflow(t *testing.T) {
 	testPartialSwitches(t)
 
 	// test basic forward and reverse flows
+	waitForLowLag(t, "customer", "wf1")
 	tstWorkflowSwitchReads(t, "", "")
 	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 	validateReadsRouteToTarget(t, "replica")
@@ -476,6 +485,12 @@ func testRestOfWorkflow(t *testing.T) {
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
+	// this function is called for both MoveTables and Reshard, so the reverse workflows exist in different keyspaces
+	keyspace := "product"
+	if currentWorkflowType == wrangler.ReshardWorkflow {
+		keyspace = "customer"
+	}
+	waitForLowLag(t, keyspace, "wf1_reverse")
 	tstWorkflowReverseReads(t, "", "")
 	checkStates(t, wrangler.WorkflowStateAllSwitched, wrangler.WorkflowStateWritesSwitched)
 	validateReadsRouteToSource(t, "replica")
@@ -486,15 +501,18 @@ func testRestOfWorkflow(t *testing.T) {
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
+	waitForLowLag(t, "customer", "wf1")
 	tstWorkflowSwitchWrites(t)
 	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateWritesSwitched)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
+	waitForLowLag(t, keyspace, "wf1_reverse")
 	tstWorkflowReverseWrites(t)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
+	waitForLowLag(t, "customer", "wf1")
 	tstWorkflowSwitchReads(t, "", "")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToSource(t)
@@ -506,6 +524,7 @@ func testRestOfWorkflow(t *testing.T) {
 	tstWorkflowSwitchReadsAndWrites(t)
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
+	waitForLowLag(t, keyspace, "wf1_reverse")
 	tstWorkflowReverseReadsAndWrites(t)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
@@ -516,6 +535,7 @@ func testRestOfWorkflow(t *testing.T) {
 	require.Contains(t, err.Error(), wrangler.ErrWorkflowNotFullySwitched)
 
 	// fully switch and complete
+	waitForLowLag(t, "customer", "wf1")
 	tstWorkflowSwitchReadsAndWrites(t)
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
