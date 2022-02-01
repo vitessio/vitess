@@ -33,6 +33,8 @@ type Cache interface {
 
 	Len() int
 	Evictions() int64
+	Hits() int64
+	Misses() int64
 	UsedCapacity() int64
 	MaxCapacity() int64
 	SetCapacity(int64)

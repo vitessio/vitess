@@ -151,6 +151,12 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
 			return e.plans.Evictions()
 		})
+		stats.NewCounterFunc("QueryPlanCacheHits", "Query plan cache hits", func() int64 {
+			return e.plans.Hits()
+		})
+		stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
+			return e.plans.Misses()
+		})
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
 		http.Handle(pathVSchema, e)

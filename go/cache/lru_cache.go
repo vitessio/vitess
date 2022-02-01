@@ -46,6 +46,8 @@ type LRUCache struct {
 	size      int64
 	capacity  int64
 	evictions int64
+	hits      int64
+	misses    int64
 }
 
 // Item is what is stored in the cache
@@ -79,9 +81,11 @@ func (lru *LRUCache) Get(key string) (v interface{}, ok bool) {
 
 	element := lru.table[key]
 	if element == nil {
+		lru.misses++
 		return nil, false
 	}
 	lru.moveToFront(element)
+	lru.hits++
 	return element.Value.(*entry).value, true
 }
 
@@ -168,6 +172,20 @@ func (lru *LRUCache) Evictions() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.evictions
+}
+
+// Hits returns number of cache hits since creation
+func (lru *LRUCache) Hits() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.hits
+}
+
+// Misses returns number of cache misses since creation
+func (lru *LRUCache) Misses() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.misses
 }
 
 // ForEach yields all the values for the cache, ordered from most recently
