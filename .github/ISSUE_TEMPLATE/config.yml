@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Vitess Slack
+    url: https://vitess.io/slack/
+    about: Please ask and answer questions here.
+  - name: Vitess Documentation
+    url: https://vitess.io/docs/
+    about: Read the documentation here.
