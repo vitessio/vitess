@@ -1883,6 +1883,8 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 		}
 	case sqlparser.AlterStr:
 		{
+
+			// TODO(shlomi) if VIEW, handle differently
 			if err := e.ExecuteWithVReplication(ctx, onlineDDL, revertMigration); err != nil {
 				return err
 			}
@@ -1904,6 +1906,8 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	if err != nil {
 		return "", err
 	}
+	// Is this CREATE TABLE or CREATE VIEW?
+	_, isCreateView := ddlStmt.(*sqlparser.CreateView)
 	comparisonTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
 		return "", err
@@ -1974,40 +1978,80 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		}
 		defer db.Close()
 
-		// Read existing table
-		existingTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, onlineDDL.Table, flavor)
-		if err != nil {
-			return err
-		}
-		// Read comparison table
-		comparisonTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, comparisonTableName, flavor)
-		if err != nil {
-			return err
-		}
-		// We created the comparison tablein same schema as original table, but under different name (because obviously we can't have
-		// two tables with identical name in same schema). It is our preference to create the table in the same schema.
-		// unfortunately, tengo does not allow comparing tables with different names. After asking tengo to read table info, we cheat
-		// and override the name of the table:
-		comparisonTable.Name = existingTable.Name
-		// We also override `.CreateStatement` (output of SHOW CREATE TABLE), because tengo has a validation, where if it doesn't
-		// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
-		comparisonTable.CreateStatement, err = schema.ReplaceTableNameInCreateTableStatement(comparisonTable.CreateStatement, existingTable.Name)
-		if err != nil {
-			return err
-		}
-		// Diff the two tables
-		diff := tengo.NewAlterTable(existingTable, comparisonTable)
-		if diff == nil {
-			// No change. alterClause remains empty
-			return nil
-		}
-		mods := tengo.StatementModifiers{
-			AllowUnsafe: true,
-			NextAutoInc: tengo.NextAutoIncIfIncreased,
-		}
-		alterClause, err = diff.Clauses(mods)
-		if err != nil {
-			return err
+		if isCreateView {
+			// CREATE VIEW
+			// Read existing view
+			existingView, err := tengo.QuerySchemaView(ctx, db, e.dbName, onlineDDL.Table)
+			if err != nil {
+				return err
+			}
+			// Read comparison view
+			comparisonView, err := tengo.QuerySchemaView(ctx, db, e.dbName, comparisonTableName)
+			if err != nil {
+				return err
+			}
+			// We created the comparison view in same schema as original table, but under different name (because obviously we can't have
+			// two views with identical name in same schema). It is our preference to create the table in the same schema.
+			// unfortunately, tengo does not allow comparing views with different names. After asking tengo to read table info, we cheat
+			// and override the name of the view:
+			comparisonView.Name = existingView.Name
+			// We also override `.CreateStatement` (output of SHOW CREATE VIEW), because tengo has a validation, where if it doesn't
+			// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
+			comparisonView.CreateStatement, err = schema.ReplaceViewNameInCreateViewStatement(comparisonView.CreateStatement, existingView.Name)
+			if err != nil {
+				return err
+			}
+			// Diff the two views
+			diff := tengo.NewAlterView(existingView, comparisonView)
+			if diff == nil {
+				// No change. alterClause remains empty
+				return nil
+			}
+			mods := tengo.StatementModifiers{
+				AllowUnsafe: true,
+				NextAutoInc: tengo.NextAutoIncIfIncreased,
+			}
+			alterClause, err = diff.Statement(mods)
+			if err != nil {
+				return err
+			}
+		} else {
+			// CREATE TABLE
+			// Read existing table
+			existingTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, onlineDDL.Table, flavor)
+			if err != nil {
+				return err
+			}
+			// Read comparison table
+			comparisonTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, comparisonTableName, flavor)
+			if err != nil {
+				return err
+			}
+			// We created the comparison tablein same schema as original table, but under different name (because obviously we can't have
+			// two tables with identical name in same schema). It is our preference to create the table in the same schema.
+			// unfortunately, tengo does not allow comparing tables with different names. After asking tengo to read table info, we cheat
+			// and override the name of the table:
+			comparisonTable.Name = existingTable.Name
+			// We also override `.CreateStatement` (output of SHOW CREATE TABLE), because tengo has a validation, where if it doesn't
+			// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
+			comparisonTable.CreateStatement, err = schema.ReplaceTableNameInCreateTableStatement(comparisonTable.CreateStatement, existingTable.Name)
+			if err != nil {
+				return err
+			}
+			// Diff the two tables
+			diff := tengo.NewAlterTable(existingTable, comparisonTable)
+			if diff == nil {
+				// No change. alterClause remains empty
+				return nil
+			}
+			mods := tengo.StatementModifiers{
+				AllowUnsafe: true,
+				NextAutoInc: tengo.NextAutoIncIfIncreased,
+			}
+			alterClause, err = diff.Clauses(mods)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}(); err != nil {
@@ -2123,6 +2167,9 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				}
 				if ddlStmt.GetIfNotExists() {
 					return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. IF NOT EXISTS does not work in declarative mode for migration %v", onlineDDL.UUID))
+				}
+				if ddlStmt.GetIsReplace() {
+					return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. OR REPLACE does not work in declarative mode for migration %v", onlineDDL.UUID))
 				}
 			}
 			exists, err := e.tableExists(ctx, onlineDDL.Table)
@@ -2241,43 +2288,57 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 					}
 				}
 			}
+			if ddlStmt.GetIsReplace() {
+				// This is a CREATE OR REPLACE VIEW
+				// TODO(shlomi): special treatement here
+				failMigration(err)
+			}
 			if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 				failMigration(err)
 			}
 			return nil
 		}()
 	case sqlparser.AlterDDLAction:
-		switch onlineDDL.Strategy {
-		case schema.DDLStrategyOnline:
-			go func() {
-				e.migrationMutex.Lock()
-				defer e.migrationMutex.Unlock()
+		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+		if err != nil {
+			return failMigration(err)
+		}
+		if _, isAlterView := ddlStmt.(*sqlparser.AlterView); isAlterView {
+			// Same treatment for all online strategies
+		} else {
+			// if TABLE then proceeed:
+			switch onlineDDL.Strategy {
+			case schema.DDLStrategyOnline:
+				go func() {
+					e.migrationMutex.Lock()
+					defer e.migrationMutex.Unlock()
 
-				if err := e.ExecuteWithVReplication(ctx, onlineDDL, nil); err != nil {
-					failMigration(err)
-				}
-			}()
-		case schema.DDLStrategyGhost:
-			go func() {
-				e.migrationMutex.Lock()
-				defer e.migrationMutex.Unlock()
+					if err := e.ExecuteWithVReplication(ctx, onlineDDL, nil); err != nil {
+						failMigration(err)
+					}
+				}()
+			case schema.DDLStrategyGhost:
+				go func() {
+					e.migrationMutex.Lock()
+					defer e.migrationMutex.Unlock()
 
-				if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
-					failMigration(err)
-				}
-			}()
-		case schema.DDLStrategyPTOSC:
-			go func() {
-				e.migrationMutex.Lock()
-				defer e.migrationMutex.Unlock()
+					if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
+						failMigration(err)
+					}
+				}()
+			case schema.DDLStrategyPTOSC:
+				go func() {
+					e.migrationMutex.Lock()
+					defer e.migrationMutex.Unlock()
 
-				if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
-					failMigration(err)
+					if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+						failMigration(err)
+					}
+				}()
+			default:
+				{
+					return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
 				}
-			}()
-		default:
-			{
-				return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
 			}
 		}
 	case sqlparser.RevertDDLAction:
