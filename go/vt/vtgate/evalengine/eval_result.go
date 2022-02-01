@@ -17,7 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
-	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
@@ -30,6 +30,11 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/ftoa"
+)
+
+const (
+	flagHex = 1 << iota
 )
 
 type (
@@ -47,7 +52,8 @@ type (
 		// Must not be accessed directly: call EvalResult.typeof() instead.
 		// For most expression types, this is known ahead of time and calling typeof() does not require
 		// an evaluation, so the type of an expression can be known without evaluating it.
-		type_ querypb.Type //nolint
+		type_  int16  //nolint
+		flags_ uint16 //nolint
 		// collation_ is the collation of this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.collation() instead.
 		collation_ collations.TypedCollation //nolint
@@ -77,7 +83,7 @@ type (
 func (er *EvalResult) init(env *ExpressionEnv, expr Expr) {
 	er.expr = expr
 	er.env = env
-	er.type_ = expr.typeof(env)
+	er.type_ = int16(expr.typeof(env))
 }
 
 const typecheckEval = false
@@ -91,7 +97,9 @@ func (er *EvalResult) resolve() {
 			before := er.type_
 			er.expr.eval(er.env, er)
 			if er.type_ != before {
-				panic(fmt.Sprintf("did not pre-compute the right type: %v before evaluation, %v after", before.String(), er.type_.String()))
+				panic(fmt.Sprintf("did not pre-compute the right type: %v before evaluation, %v after",
+					querypb.Type(before).String(),
+					querypb.Type(er.type_).String()))
 			}
 		} else {
 			er.expr.eval(er.env, er)
@@ -104,7 +112,12 @@ func (er *EvalResult) typeof() querypb.Type {
 	if er.type_ < 0 {
 		er.resolve()
 	}
-	return er.type_
+	return querypb.Type(er.type_)
+}
+
+func (er *EvalResult) hasFlag(f uint16) bool {
+	er.resolve()
+	return (er.flags_ & f) != 0
 }
 
 func (er *EvalResult) collation() collations.TypedCollation {
@@ -156,13 +169,13 @@ func (er *EvalResult) null() bool {
 }
 
 func (er *EvalResult) setNull() {
-	er.type_ = sqltypes.Null
+	er.type_ = int16(sqltypes.Null)
 	er.collation_ = collationNull
 }
 
 func (er *EvalResult) setBool(b bool) {
 	er.collation_ = collationNumeric
-	er.type_ = sqltypes.Int64
+	er.type_ = int16(sqltypes.Int64)
 	if b {
 		er.numeric_ = 1
 	} else {
@@ -179,49 +192,49 @@ func (er *EvalResult) setBoolean(b boolean) {
 }
 
 func (er *EvalResult) setRaw(typ querypb.Type, raw []byte, coll collations.TypedCollation) {
-	er.type_ = typ
+	er.type_ = int16(typ)
 	er.bytes_ = raw
 	er.collation_ = coll
 }
 
 func (er *EvalResult) setString(str string, coll collations.TypedCollation) {
-	er.type_ = sqltypes.VarChar
+	er.type_ = int16(sqltypes.VarChar)
 	er.bytes_ = []byte(str)
 	er.collation_ = coll
 }
 
 func (er *EvalResult) setRawNumeric(typ querypb.Type, u uint64) {
-	er.type_ = typ
+	er.type_ = int16(typ)
 	er.numeric_ = u
 	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setInt64(i int64) {
-	er.type_ = sqltypes.Int64
+	er.type_ = int16(sqltypes.Int64)
 	er.numeric_ = uint64(i)
 	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setUint64(u uint64) {
-	er.type_ = sqltypes.Uint64
+	er.type_ = int16(sqltypes.Uint64)
 	er.numeric_ = u
 	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setFloat(f float64) {
-	er.type_ = sqltypes.Float64
+	er.type_ = int16(sqltypes.Float64)
 	er.numeric_ = math.Float64bits(f)
 	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setDecimal(dec *decimalResult) {
-	er.type_ = sqltypes.Decimal
+	er.type_ = int16(sqltypes.Decimal)
 	er.decimal_ = dec
 	er.collation_ = collationNumeric
 }
 
 func (er *EvalResult) setTuple(t []EvalResult) {
-	er.type_ = querypb.Type_TUPLE
+	er.type_ = int16(querypb.Type_TUPLE)
 	er.tuple_ = &t
 	er.collation_ = collations.TypedCollation{}
 }
@@ -352,7 +365,7 @@ func (er *EvalResult) ToBooleanStrict() (bool, error) {
 		}
 	}
 
-	switch er.type_ {
+	switch er.typeof() {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 		return intToBool(er.uint64())
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
@@ -377,7 +390,7 @@ func (er *EvalResult) textual() bool {
 }
 
 func (er *EvalResult) truthy() boolean {
-	switch er.type_ {
+	switch er.typeof() {
 	case sqltypes.Null:
 		return boolNULL
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64, sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
@@ -400,20 +413,7 @@ func formatMySQLFloat(typ querypb.Type, f float64) []byte {
 	if typ == sqltypes.Decimal {
 		format = 'f'
 	}
-
-	// the float printer in MySQL does not add a positive sign before
-	// the exponent for positive exponents, but the Golang printer does
-	// do that, and there's no way to customize it, so we must strip the
-	// redundant positive sign manually
-	// e.g. 1.234E+56789 -> 1.234E56789
-	fstr := strconv.AppendFloat(nil, f, format, -1, 64)
-	if idx := bytes.IndexByte(fstr, 'e'); idx >= 0 {
-		if fstr[idx+1] == '+' {
-			fstr = append(fstr[:idx+1], fstr[idx+2:]...)
-		}
-	}
-
-	return fstr
+	return ftoa.FormatFloat(nil, f, format)
 }
 
 func (er *EvalResult) toRawBytes() []byte {
@@ -712,6 +712,16 @@ func (er *EvalResult) makeNumeric() {
 	if er.numeric() {
 		er.resolve()
 		return
+	}
+	if er.typeof() == querypb.Type_VARBINARY && er.hasFlag(flagHex) {
+		if raw := er.bytes(); len(raw) <= 8 {
+			var number [8]byte
+			for i, b := range raw {
+				number[8-len(raw)+i] = b
+			}
+			er.setUint64(binary.BigEndian.Uint64(number[:]))
+			return
+		}
 	}
 	if ival, err := strconv.ParseInt(er.string(), 10, 64); err == nil {
 		er.setInt64(ival)
