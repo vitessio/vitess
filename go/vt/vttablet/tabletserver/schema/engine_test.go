@@ -92,7 +92,7 @@ func TestOpenAndReload(t *testing.T) {
 		"int64"),
 		"1427325877",
 	))
-	assert.EqualValues(t, firstReadRowsValue, se.innoDbReadRowsGauge.Get())
+	assert.EqualValues(t, firstReadRowsValue, se.innoDbReadRowsCounter.Get())
 
 	// Modify test_table_03
 	// Add test_table_04
@@ -167,7 +167,7 @@ func TestOpenAndReload(t *testing.T) {
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 
-	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsGauge.Get())
+	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
 
 	want["test_table_03"] = &Table{
 		Name: sqlparser.NewTableIdent("test_table_03"),
