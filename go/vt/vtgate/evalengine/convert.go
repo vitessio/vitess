@@ -199,11 +199,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		collation := getCollation(node, lookup)
 		return NewColumn(idx, collation), nil
 	case *sqlparser.ComparisonExpr:
-		expr, err := convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
-		if err != nil {
-			return nil, convertNotSupported(e)
-		}
-		return expr, err
+		return convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
 		return NewBindVar(string(node), collation), nil

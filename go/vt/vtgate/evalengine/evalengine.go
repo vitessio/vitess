@@ -320,29 +320,6 @@ func compareDateAndString(l, r *EvalResult) (int, error) {
 	return compareGoTimes(lTime, rTime)
 }
 
-func mergeCollations(left, right *EvalResult) error {
-	if !left.textual() || !right.textual() {
-		return nil
-	}
-	env := collations.Local()
-	tc, coerceLeft, coerceRight, err := env.MergeCollations(left.collation(), right.collation(), collations.CoercionOptions{
-		ConvertToSuperset:   true,
-		ConvertWithCoercion: true,
-	})
-	if err != nil {
-		return err
-	}
-	if coerceLeft != nil {
-		left.bytes_, _ = coerceLeft(nil, left.bytes())
-	}
-	if coerceRight != nil {
-		right.bytes_, _ = coerceRight(nil, right.bytes())
-	}
-	left.replaceCollation(tc)
-	right.replaceCollation(tc)
-	return nil
-}
-
 func compareGoTimes(lTime, rTime time.Time) (int, error) {
 	if lTime.Before(rTime) {
 		return -1, nil
@@ -356,10 +333,11 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 // More on string collations coercibility on MySQL documentation:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
 func compareStrings(l, r *EvalResult) int {
-	if l.collation().Collation != r.collation().Collation {
-		panic("compareStrings: did not coerce")
+	coll, err := mergeCollations(l, r)
+	if err != nil {
+		throwEvalError(err)
 	}
-	collation := collations.Local().LookupByID(l.collation().Collation)
+	collation := collations.Local().LookupByID(coll)
 	if collation == nil {
 		panic("unknown collation after coercion")
 	}
