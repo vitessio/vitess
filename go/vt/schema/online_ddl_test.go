@@ -319,7 +319,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 				sql = strings.ReplaceAll(sql, "\n", "")
 				sql = strings.ReplaceAll(sql, "\t", "")
 				sqls = append(sqls, sql)
-				assert.Equal(t, expect.isView, onlineDDL.IsView)
+				assert.Equal(t, expect.isView, onlineDDL.IsView())
 			}
 			assert.Equal(t, expect.sqls, sqls)
 		})
