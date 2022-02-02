@@ -49,6 +49,13 @@ import (
 //   http://dev.mysql.com/doc/internals/en/event-header-fields.html
 type binlogEvent []byte
 
+// dataBytes returns the event bytes without header prefix and without checksum suffix
+func (ev binlogEvent) dataBytes(f BinlogFormat) []byte {
+	data := ev.Bytes()[f.HeaderLength:]
+	data = data[0 : len(data)-4]
+	return data
+}
+
 // IsValid implements BinlogEvent.IsValid().
 func (ev binlogEvent) IsValid() bool {
 	bufLen := len(ev.Bytes())
@@ -101,6 +108,11 @@ func (ev binlogEvent) Length() uint32 {
 	return binary.LittleEndian.Uint32(ev.Bytes()[9 : 9+4])
 }
 
+// NextPosition returns the nextPosition field from the header
+func (ev binlogEvent) NextPosition() uint32 {
+	return binary.LittleEndian.Uint32(ev.Bytes()[13 : 13+4])
+}
+
 // IsFormatDescription implements BinlogEvent.IsFormatDescription().
 func (ev binlogEvent) IsFormatDescription() bool {
 	return ev.Type() == eFormatDescriptionEvent
@@ -119,6 +131,11 @@ func (ev binlogEvent) IsRotate() bool {
 // IsXID implements BinlogEvent.IsXID().
 func (ev binlogEvent) IsXID() bool {
 	return ev.Type() == eXIDEvent
+}
+
+// IsStop implements BinlogEvent.IsStop().
+func (ev binlogEvent) IsStop() bool {
+	return ev.Type() == eStopEvent
 }
 
 // IsIntVar implements BinlogEvent.IsIntVar().
@@ -336,4 +353,12 @@ func (ev binlogEvent) TableID(f BinlogFormat) uint64 {
 		uint64(ev[pos+3])<<24 |
 		uint64(ev[pos+4])<<32 |
 		uint64(ev[pos+5])<<40
+}
+
+func (ev binlogEvent) NextLogFile(f BinlogFormat) (string, uint64, error) {
+	data := ev.dataBytes(f)
+	pos := 0
+	logPos, pos, _ := readUint64(data, pos)
+	logFile := string(data[pos:])
+	return logFile, logPos, nil
 }

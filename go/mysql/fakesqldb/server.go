@@ -463,6 +463,11 @@ func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback
 	return nil
 }
 
+// ComBinlogDumpGTID is part of the mysql.Handler interface.
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+	return nil
+}
+
 //
 // Methods to add expected queries and results.
 //

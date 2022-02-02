@@ -155,8 +155,8 @@ const (
 	//eUnknownEvent           = 0
 	// Unused
 	//eStartEventV3           = 1
-	eQueryEvent = 2
-	//eStopEvent              = 3
+	eQueryEvent  = 2
+	eStopEvent   = 3
 	eRotateEvent = 4
 	eIntVarEvent = 5
 	// Unused

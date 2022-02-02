@@ -44,6 +44,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"github.com/google/uuid"
 )
@@ -335,6 +336,11 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 	return uint16(len(vh.session(c).GetWarnings()))
+}
+
+// ComBinlogDumpGTID is part of the mysql.Handler interface.
+func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComBinlogDumpGTID")
 }
 
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {

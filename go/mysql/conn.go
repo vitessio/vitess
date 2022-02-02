@@ -193,6 +193,11 @@ type Conn struct {
 
 	// Packet encoding variables.
 	sequence uint8
+
+	// ExpectSemiSyncIndicator is applicable when the connection is used for replication (ComBinlogDump).
+	// When 'true', events are assumed to be padded with 2-byte semi-sync information
+	// See https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
+	ExpectSemiSyncIndicator bool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
@@ -906,7 +911,8 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
-
+	case ComBinlogDumpGTID:
+		return c.handleComBinlogDumpGTID(handler, data)
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -914,6 +920,27 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			return false
 		}
 	}
+
+	return true
+}
+
+func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
+	defer c.recycleReadPacket()
+
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	_, _, position, err := c.parseComBinlogDumpGTID(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		kontinue = false
+	}
+	handler.ComBinlogDumpGTID(c, position.GTIDSet)
 
 	return true
 }

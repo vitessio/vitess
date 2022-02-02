@@ -213,6 +213,9 @@ const (
 	// ComBinlogDump is COM_BINLOG_DUMP.
 	ComBinlogDump = 0x12
 
+	// ComSemiSyncAck is SEMI_SYNC_ACK.
+	ComSemiSyncAck = 0xef
+
 	// ComPrepare is COM_PREPARE.
 	ComPrepare = 0x16
 
@@ -419,6 +422,7 @@ const (
 	ErNoReferencedRow2              = 1452
 	ErSPNotVarArg                   = 1414
 	ERInnodbReadOnly                = 1874
+	ERMasterFatalReadingBinlog      = 1236
 
 	// already exists
 	ERTableExists    = 1050

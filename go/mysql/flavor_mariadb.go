@@ -233,5 +233,10 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	case ErrPacket:
 		return nil, ParseErrorPacket(result)
 	}
-	return NewMariadbBinlogEvent(result[1:]), nil
+	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(result[1:])
+	if err != nil {
+		return nil, err
+	}
+	ev := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+	return ev, nil
 }
