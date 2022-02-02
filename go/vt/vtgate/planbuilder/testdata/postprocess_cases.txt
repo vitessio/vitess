@@ -2223,3 +2223,35 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "Table": "unsharded"
   }
 }
+
+# Equal filter with hexadecimal value
+"select count(*) a from user having a = 0x01"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a = 0x01",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a = 0x01",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
