@@ -709,8 +709,8 @@ func (er *EvalResult) makeFloat() {
 }
 
 func (er *EvalResult) makeNumeric() {
+	er.resolve()
 	if er.numeric() {
-		er.resolve()
 		return
 	}
 	if er.typeof() == querypb.Type_VARBINARY && er.hasFlag(flagHex) {
@@ -726,7 +726,7 @@ func (er *EvalResult) makeNumeric() {
 			number[8-len(raw)+i] = b
 		}
 		u := binary.BigEndian.Uint64(number[:])
-		er.setFloat(float64(u))
+		er.setUint64(u)
 		return
 	}
 	if ival, err := strconv.ParseInt(er.string(), 10, 64); err == nil {
@@ -744,11 +744,22 @@ func (er *EvalResult) negateNumeric() {
 	er.makeNumeric()
 	switch er.typeof() {
 	case querypb.Type_INT8, querypb.Type_INT16, querypb.Type_INT32, querypb.Type_INT64:
-		er.setInt64(-er.int64())
+		i := er.int64()
+		if i == math.MinInt64 {
+			dec := newDecimalInt64(i)
+			dec.num.SetSignbit(false)
+			er.setDecimal(dec)
+		} else {
+			er.setInt64(-i)
+		}
 	case querypb.Type_UINT8, querypb.Type_UINT16, querypb.Type_UINT32, querypb.Type_UINT64:
 		u := er.uint64()
-		if u > math.MaxInt64 {
+		if er.hasFlag(flagHex) {
 			er.setFloat(-float64(u))
+		} else if u > math.MaxInt64+1 {
+			dec := newDecimalUint64(u)
+			dec.num.SetSignbit(true)
+			er.setDecimal(dec)
 		} else {
 			er.setInt64(-int64(u))
 		}

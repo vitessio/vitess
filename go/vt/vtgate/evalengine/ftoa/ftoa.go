@@ -33,6 +33,10 @@ func max(a, b int) int {
 // - consider 15 as the minimum exponent size to switch from 'f' to 'e'
 // - do not print a '+' after the 'e' for positive exponents when formatting as 'e'
 func FormatFloat(dst []byte, val float64, fmt byte) []byte {
+	if val == -0.0 {
+		val = 0.0
+	}
+
 	bits := math.Float64bits(val)
 	neg := bits>>(float64Expbits+float64Mantbits) != 0
 	exp := int(bits>>float64Mantbits) & (1<<float64Expbits - 1)
@@ -88,10 +92,11 @@ func formatDigits(dst []byte, neg bool, digs decimalSlice, prec int, fmt byte) [
 	case 'f':
 		return fmtF(dst, neg, digs, prec)
 	case 'g', 'G':
-		// trailing fractional zeros in 'e' form will be trimmed.
-		eprec := mysqlLargeExponent
+		minExp := -4
+		maxExp := mysqlLargeExponent
+
 		exp := digs.dp - 1
-		if exp < -4 || exp >= eprec {
+		if exp < minExp || exp >= maxExp {
 			if prec > digs.nd {
 				prec = digs.nd
 			}

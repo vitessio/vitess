@@ -76,7 +76,8 @@ func getMultiComparisonFunc(args []EvalResult) multiComparisonFunc {
 		In all other cases, the arguments are compared as binary strings.
 	*/
 
-	for _, arg := range args {
+	for i := range args {
+		arg := &args[i]
 		switch arg.typeof() {
 		case querypb.Type_NULL_TYPE:
 			return func(args []EvalResult, result *EvalResult, cmp int) {
