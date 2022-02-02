@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"strconv"
@@ -25,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/ftoa"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func perm(a []string, f func([]string)) {
@@ -45,8 +46,6 @@ func perm1(a []string, f func([]string), i int) {
 	}
 }
 
-var debug = false
-
 func normalize(v sqltypes.Value) string {
 	typ := v.Type()
 	if typ == sqltypes.Null {
@@ -64,10 +63,13 @@ func normalize(v sqltypes.Value) string {
 		if err != nil {
 			panic(err)
 		}
-		return fmt.Sprintf("%v(%s)", typ, ftoa.FormatFloat(nil, f, 'g'))
+		return fmt.Sprintf("%v(%s)", typ, evalengine.FormatFloat(typ, f))
 	}
 	return fmt.Sprintf("%v(%s)", typ, v.Raw())
 }
+
+var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
+var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
 
 func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
@@ -80,11 +82,15 @@ func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 		localVal = local.Value().String()
 	}
 	if remoteErr == nil {
-		remoteVal = normalize(remote.Rows[0][0])
+		if *debugNormalize {
+			remoteVal = normalize(remote.Rows[0][0])
+		} else {
+			remoteVal = remote.Rows[0][0].String()
+		}
 	}
 	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, evaluated); diff != "" {
 		t.Errorf("%s\nquery: %s", diff, query)
-	} else if debug {
+	} else if *debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, query)
 	}
 }
@@ -256,6 +262,7 @@ func TestCollationOperations(t *testing.T) {
 }
 
 func TestNegateArithmetic(t *testing.T) {
+	*debugPrintAll = true
 	var cases = []string{
 		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
 		`X'00'`, `X'1234'`, `X'ff'`,
