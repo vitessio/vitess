@@ -2487,7 +2487,6 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				if createViewStmt, isCreateView := ddlStmt.(*sqlparser.CreateView); isCreateView {
 					// Rewrite as CREATE OR REPLACE
 					// this will be handled later on.
-					// It will in fact be then rewritten as ALTER
 					createViewStmt.IsReplace = true
 					onlineDDL.SQL = sqlparser.String(createViewStmt)
 				} else {
