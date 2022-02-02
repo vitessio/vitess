@@ -1400,10 +1400,72 @@ func TestHandleExecTabletError(t *testing.T) {
 	}
 }
 
-func TestSanitizedMessagesNonSQLError(t *testing.T) {
+func TestTerseErrors(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
+	config.SanitizeLogMessages = false
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	tl := newTestLogger()
+	defer tl.Close()
+
+	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
+	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
+	err := tsv.convertAndLogError(
+		ctx,
+		sql,
+		map[string]*querypb.BindVariable{"vtg1": sqltypes.StringBindVariable("this is kinda long eh")},
+		sqlErr,
+		nil,
+	)
+
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
+	}
+
+	// Log should be truncated in same way as the error
+	wantLog := wantErr
+	if wantLog != tl.getLog(0) {
+		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
+	}
+}
+
+func TestSanitizeLogMessages(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	config.TerseErrors = false
 	config.SanitizeLogMessages = true
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	tl := newTestLogger()
+	defer tl.Close()
+
+	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
+	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr.Query = "select * from test_table where xyz = 'this is pretty rad my doo, getting swole'"
+	err := tsv.convertAndLogError(
+		ctx,
+		sql,
+		map[string]*querypb.BindVariable{"vtg1": sqltypes.StringBindVariable("this is pretty rad my doo, getting swole")},
+		sqlErr,
+		nil,
+	)
+
+	// Error is not sanitized, nor truncated
+	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is pretty rad my doo, getting swole\\\"\"}"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
+	}
+
+	// But the log message is sanitized
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
+	if wantLog != tl.getLog(0) {
+		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
+	}
+}
+
+func TestTerseErrorsNonSQLError(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	config.TerseErrors = true
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1423,7 +1485,30 @@ func TestSanitizedMessagesNonSQLError(t *testing.T) {
 	}
 }
 
-func TestSanitizedMessagesBindVars(t *testing.T) {
+func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	config.TerseErrors = false
+	config.SanitizeLogMessages = true
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	tl := newTestLogger()
+	defer tl.Close()
+	err := tsv.convertAndLogError(
+		ctx,
+		"select * from test_table where a = :a",
+		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(5)},
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
+		nil,
+	)
+	want := "tablet error"
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), want)
+	want = "Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}"
+	if !strings.Contains(tl.getLog(0), want) {
+		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
+	}
+}
+
+func TestSanitizeMessagesBindVars(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	config.SanitizeLogMessages = true
@@ -1452,7 +1537,7 @@ func TestSanitizedMessagesBindVars(t *testing.T) {
 	}
 }
 
-func TestSanitizedMessagesNoBindVars(t *testing.T) {
+func TestSanitizeMessagesNoBindVars(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
 	config.SanitizeLogMessages = true
@@ -1523,37 +1608,6 @@ func TestTruncateMessages(t *testing.T) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
 	*sqlparser.TruncateErrLen = 0
-}
-
-func TestSanitizedMessages(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
-	config.TerseErrors = true
-	config.SanitizeLogMessages = true
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
-	tl := newTestLogger()
-	defer tl.Close()
-
-	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
-	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
-	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
-	err := tsv.convertAndLogError(
-		ctx,
-		sql,
-		map[string]*querypb.BindVariable{"vtg1": sqltypes.StringBindVariable("this is kinda long eh")},
-		sqlErr,
-		nil,
-	)
-
-	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("error got '%v', want '%s'", err, wantErr)
-	}
-
-	// Log should be truncated and sanitized in the same way as the error
-	wantLog := wantErr
-	if wantLog != tl.getLog(0) {
-		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
-	}
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
