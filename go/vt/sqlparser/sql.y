@@ -1346,7 +1346,7 @@ NULL
    }
 | '-' NUM_literal
    {
-   	$$ = handleUnaryMinus($2)
+   	$$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
    }
 
 literal:
@@ -4291,7 +4291,7 @@ function_call_keyword
   }
 | '-' simple_expr %prec UNARY
   {
-	$$ = handleUnaryMinus($2)
+	$$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
   }
 | '~' simple_expr %prec UNARY
   {
