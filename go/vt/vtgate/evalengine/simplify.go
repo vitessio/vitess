@@ -170,7 +170,19 @@ func (c *CallExpr) simplify(env *ExpressionEnv) error {
 	return c.Arguments.simplify(env)
 }
 
+func pruneExpr(e Expr) Expr {
+	switch node := e.(type) {
+	case *NegateExpr:
+		if inner, ok := node.Inner.(*NegateExpr); ok {
+			return pruneExpr(inner.Inner)
+		}
+	}
+	return e
+}
+
 func simplifyExpr(env *ExpressionEnv, e Expr) (Expr, error) {
+	// e = pruneExpr(e)
+
 	if e.constant() {
 		res, err := env.Evaluate(e)
 		if err != nil {

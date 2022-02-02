@@ -52,7 +52,7 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := ConvertEx(astExpr, LookupDefaultCollation(255), false)
+	converted, err := ConvertEx(astExpr, LookupDefaultCollation(255), true)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return EvalResult{}, errKnownBadQuery
@@ -118,6 +118,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `select - 0.0`)
+	eval, err := testSingle(t, `SELECT LEAST(0,-1.0)`)
 	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }

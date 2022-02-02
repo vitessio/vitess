@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"encoding/hex"
+	"math"
 	"strconv"
 	"unicode/utf8"
 
@@ -266,21 +267,19 @@ func init() {
 // NewLiteralIntegralFromBytes returns a literal expression.
 // It tries to return an int64, but if the value is too large, it tries with an uint64
 func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
-	str := string(val)
-	ival, err := strconv.ParseInt(str, 10, 64)
-	if err == nil {
-		return NewLiteralInt(ival), nil
+	if val[0] == '-' {
+		panic("NewLiteralIntegralFromBytes: negative value")
 	}
 
-	// let's try with uint if we overflowed
-	numError, ok := err.(*strconv.NumError)
-	if !ok || numError.Err != strconv.ErrRange {
-		return nil, err
-	}
-
-	uval, err := strconv.ParseUint(str, 0, 64)
+	uval, err := strconv.ParseUint(string(val), 10, 64)
 	if err != nil {
+		if numError, ok := err.(*strconv.NumError); ok && numError.Err == strconv.ErrRange {
+			return NewLiteralDecimalFromBytes(val)
+		}
 		return nil, err
+	}
+	if uval <= math.MaxInt64 {
+		return NewLiteralInt(int64(uval)), nil
 	}
 	return NewLiteralUint(uval), nil
 }

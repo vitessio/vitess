@@ -7896,7 +7896,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1348
 		{
-			yyLOCAL = handleUnaryMinus(yyDollar[2].exprUnion())
+			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 195:
@@ -12621,7 +12621,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:4293
 		{
-			yyLOCAL = handleUnaryMinus(yyDollar[2].exprUnion())
+			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 843:
