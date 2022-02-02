@@ -1417,7 +1417,7 @@ func TestSanitizedMessagesNonSQLError(t *testing.T) {
 	want := "tablet error"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
-	want = "Sql: \"select * from test_table\", BindVars: {[REDACTED]}"
+	want = "Sql: \"select * from test_table\", BindVars: {}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
 	}
@@ -1463,7 +1463,7 @@ func TestSanitizedMessagesNoBindVars(t *testing.T) {
 	want := "sensitive message"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
-	want = "Sql: \"\", BindVars: {[REDACTED]}"
+	want = "Sql: \"\", BindVars: {}"
 	if !strings.Contains(tl.getLog(0), want) {
 		t.Errorf("error log '%s', want '%s'", tl.getLog(0), want)
 	}
@@ -1496,8 +1496,8 @@ func TestTruncateMessages(t *testing.T) {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	// but log *is* truncated
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {vtg1: \"type:VARCHAR value:\\\"t [TRUNCATED]"
+	// but log *is* truncated, and sanitized
+	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {[REDACTED]}"
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
@@ -1517,8 +1517,8 @@ func TestTruncateMessages(t *testing.T) {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	// Log not truncated, since our limit is large enough now
-	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
+	// Log not truncated, since our limit is large enough now, but it is still sanitized
+	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
 	if wantLog != tl.getLog(1) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
