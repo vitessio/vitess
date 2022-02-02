@@ -181,8 +181,7 @@ func (f *formatter) format(x *Big, format format, e byte, rounding RoundingMode)
 		return
 	}
 
-	isZero := x.isZero()
-	if isZero && o == Go {
+	if x.isZero() && o == Go {
 		// Go mode prints zeros different than GDA.
 		if f.width == noWidth {
 			f.WriteByte('0')
@@ -194,7 +193,7 @@ func (f *formatter) format(x *Big, format format, e byte, rounding RoundingMode)
 	}
 
 	neg := x.Signbit()
-	if neg && !isZero {
+	if neg {
 		f.WriteByte('-')
 	} else if f.sign != 0 {
 		f.WriteByte(f.sign)
