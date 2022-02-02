@@ -2425,7 +2425,16 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// This DROP is declarative, meaning it may:
 			// - actually DROP a table, if that table exists, or
 			// - Implicitly do nothing, if the table does not exist
-
+			{
+				// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
+				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+				if err != nil {
+					return failMigration(err)
+				}
+				if ddlStmt.GetIfExists() {
+					return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. IF EXISTS does not work in declarative mode for migration %v", onlineDDL.UUID))
+				}
+			}
 			exists, err := e.tableExists(ctx, onlineDDL.Table)
 			if err != nil {
 				return failMigration(err)
@@ -2444,19 +2453,18 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// - ALTER the table, if it exists and is different, or
 			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
 
-			{
-				// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
-				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
-				if err != nil {
-					return failMigration(err)
-				}
-				if ddlStmt.GetIfNotExists() {
-					return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. IF NOT EXISTS does not work in declarative mode for migration %v", onlineDDL.UUID))
-				}
-				if ddlStmt.GetIsReplace() {
-					return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. OR REPLACE does not work in declarative mode for migration %v", onlineDDL.UUID))
-				}
+			// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+			if err != nil {
+				return failMigration(err)
 			}
+			if ddlStmt.GetIfNotExists() {
+				return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. IF NOT EXISTS does not work in declarative mode for migration %v", onlineDDL.UUID))
+			}
+			if ddlStmt.GetIsReplace() {
+				return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. OR REPLACE does not work in declarative mode for migration %v", onlineDDL.UUID))
+			}
+
 			exists, err := e.tableExists(ctx, onlineDDL.Table)
 			if err != nil {
 				return failMigration(err)
@@ -2476,8 +2484,17 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.AlterStr); err != nil {
 					return failMigration(err)
 				}
-				ddlAction = sqlparser.AlterDDLAction
-				onlineDDL.SQL = fmt.Sprintf("ALTER TABLE `%s` %s", onlineDDL.Table, alterClause)
+				if createViewStmt, isCreateView := ddlStmt.(*sqlparser.CreateView); isCreateView {
+					// Rewrite as CREATE OR REPLACE
+					// this will be handled later on.
+					// It will in fact be then rewritten as ALTER
+					createViewStmt.IsReplace = true
+					onlineDDL.SQL = sqlparser.String(createViewStmt)
+				} else {
+					// a TABLE
+					ddlAction = sqlparser.AlterDDLAction
+					onlineDDL.SQL = fmt.Sprintf("ALTER TABLE `%s` %s", onlineDDL.Table, alterClause)
+				}
 				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, alterClause)
 			} else {
 				{
