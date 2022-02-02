@@ -134,6 +134,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationIsView = `UPDATE _vt.schema_migrations
+			SET is_view=%a
+		WHERE
+			migration_uuid=%a
+`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
 			started_timestamp =IFNULL(started_timestamp,  NOW()),
 			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
@@ -361,6 +366,7 @@ const (
 			removed_unique_keys,
 			migration_context,
 			retain_artifacts_seconds,
+			is_view,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
