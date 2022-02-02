@@ -669,13 +669,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 
-	// come up with temporary name for swap table
-	swapTable, err := schema.CreateUUID()
+	// A bit early on, we create the table swap query. We do so here and not at cut-over time
+	// just because there might just be an error, and we prefer to bail out now, and not
+	// proceeed with all the locks involved in the cut-over operation
+	swapQuery, _, err := e.generateSwapTablesStatement(ctx, onlineDDL.Table, vreplTable)
 	if err != nil {
 		return err
 	}
-	swapTable = strings.Replace(swapTable, "-", "", -1)
-	swapTable = fmt.Sprintf("_swap_%s", swapTable)
 
 	// Preparation is complete. We proceed to cut-over.
 
@@ -769,17 +769,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			}
 		} else {
 			// Normal (non-testing) alter table
-			parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
-				onlineDDL.Table, swapTable,
-				vreplTable, onlineDDL.Table,
-				swapTable, vreplTable,
-			)
 			conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 			if err != nil {
 				return err
 			}
 			defer conn.Close()
-			if _, err = conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			if _, err = conn.ExecuteFetch(swapQuery, 0, false); err != nil {
 				return err
 			}
 		}
@@ -1489,7 +1484,6 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		Retries:          row.AsInt64("retries", 0),
 		TabletAlias:      row["tablet"].ToString(),
 		MigrationContext: row["migration_context"].ToString(),
-		IsView:           row.AsBool("is_view", false),
 	}
 	return onlineDDL, row, nil
 }
@@ -1704,6 +1698,9 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 			if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
 				return err
 			}
+			if err := e.updateMigrationIsView(ctx, onlineDDL.UUID, row.AsBool("is_view", false)); err != nil {
+				return err
+			}
 			if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertedMigration.Table); err != nil {
 				return err
 			}
@@ -1884,8 +1881,30 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 		}
 	case sqlparser.AlterStr:
 		{
-
-			// TODO(shlomi) if VIEW, handle differently
+			if row.AsBool("is_view", false) {
+				artifacts := row["artifacts"].ToString()
+				artifactTables := textutil.SplitDelimitedList(artifacts)
+				if len(artifactTables) > 1 {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot run migration %s reverting %s: found %d artifact tables, expected maximum 1", onlineDDL.UUID, revertMigration.UUID, len(artifactTables))
+				}
+				if len(artifactTables) == 0 {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot run migration %s reverting %s: found %d artifact tables, expected 1", onlineDDL.UUID, revertMigration.UUID, len(artifactTables))
+				}
+				for _, artifactTable := range artifactTables {
+					if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
+						return err
+					}
+					onlineDDL.SQL, _, err = e.generateSwapTablesStatement(ctx, onlineDDL.Table, artifactTable)
+					if err != nil {
+						return err
+					}
+					if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			// Real table
 			if err := e.ExecuteWithVReplication(ctx, onlineDDL, revertMigration); err != nil {
 				return err
 			}
@@ -2210,6 +2229,22 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 	return nil
 }
 
+// generateSwapTablesStatement creates a RENAME statement that swaps two tables, with assistance
+// of temporary third table. It returns the name of generated third table, though normally
+// that table should not exist before & after operation, only _during_ operation time.
+func (e *Executor) generateSwapTablesStatement(ctx context.Context, tableName1, tableName2 string) (query string, swapTableName string, err error) {
+	swapTableName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return "", swapTableName, err
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+		tableName1, swapTableName,
+		tableName2, tableName1,
+		swapTableName, tableName2,
+	)
+	return parsed.Query, swapTableName, nil
+}
+
 func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
 
 	artifactViewName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
@@ -2262,16 +2297,11 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	}
 
 	// view created in requested format, but under different name. We now swap the views
-	swapTable, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	swapQuery, _, err := e.generateSwapTablesStatement(ctx, onlineDDL.Table, artifactViewName)
 	if err != nil {
 		return err
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
-		onlineDDL.Table, swapTable,
-		artifactViewName, onlineDDL.Table,
-		swapTable, artifactViewName,
-	)
-	if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+	if _, err := conn.ExecuteFetch(swapQuery, 0, false); err != nil {
 		return err
 	}
 	// Make sure this is considered as an ALTER.
@@ -2314,7 +2344,7 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 		return nil
 	}
 
-	// if TABLE then proceeed:
+	// This is a real TABLE
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline:
 		go func() {
@@ -3305,6 +3335,18 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 	return err
 }
 
+func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isView bool) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationIsView,
+		sqltypes.BoolBindVariable(isView),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
 // retryMigrationWhere retries a migration based on a given WHERE clause
 func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
@@ -3427,7 +3469,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
 		sqltypes.BoolBindVariable(e.allowConcurrentMigration(onlineDDL)),
 		sqltypes.StringBindVariable(revertedUUID),
-		sqltypes.BoolBindVariable(onlineDDL.IsView),
+		sqltypes.BoolBindVariable(onlineDDL.IsView()),
 	)
 	if err != nil {
 		return nil, err
