@@ -128,3 +128,33 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		t.Errorf("ComBinlogDumpGTID returned unexpected data:\n%v\nwas expecting:\n%v", data, expectedData)
 	}
 }
+
+func TestSendSemiSyncAck(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Write ComBinlogDumpGTID packet, read it, compare.
+	logName := "moofarm"
+	logPos := uint64(1852)
+	if err := cConn.SendSemiSyncAck(logName, logPos); err != nil {
+		t.Fatalf("SendSemiSyncAck failed: %v", err)
+	}
+
+	data, err := sConn.ReadPacket()
+	if err != nil {
+		t.Fatalf("sConn.ReadPacket - SendSemiSyncAck failed: %v", err)
+	}
+
+	expectedData := []byte{
+		ComSemiSyncAck,
+		0x3c, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // log pos
+		'm', 'o', 'o', 'f', 'a', 'r', 'm', // binlog-filename
+	}
+	if !reflect.DeepEqual(data, expectedData) {
+		t.Errorf("SendSemiSyncAck returned unexpected data:\n%v\nwas expecting:\n%v", data, expectedData)
+	}
+}

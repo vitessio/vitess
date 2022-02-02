@@ -64,6 +64,10 @@ func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData,
 	return nil
 }
 
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+	return nil
+}
+
 func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
 }
