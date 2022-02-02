@@ -1896,6 +1896,35 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 	return nil
 }
 
+// func (e *Executor) createArtifactView(ctx context.Context, createViewSQL string) (atrifactName string, err error) {
+// 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(createViewSQL)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	if _, ok := ddlStmt.(*sqlparser.CreateView); !ok {
+// 		return "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("not a CREATE VIEW statement: %v", createViewSQL))
+
+// 	}
+// 	atrifactName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+// 	if err != nil {
+// 		return atrifactName, err
+// 	}
+// 	ddlStmt.SetTable("", atrifactName)
+// 	modifiedCreateSQL := sqlparser.String(ddlStmt)
+
+// 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+// 	if err != nil {
+// 		return atrifactName, err
+// 	}
+// 	defer conn.Close()
+
+// 	if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
+// 		return atrifactName, err
+// 	}
+
+// 	return atrifactName, nil
+// }
+
 // evaluateDeclarativeDiff is called for -declarative CREATE statements, where the table already exists. The function generates a SQL diff, which can be:
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
@@ -1941,7 +1970,6 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 			// Nothing bad happens for not checking the error code. The table is GC/HOLD. If we
 			// can't drop it now, it still gets collected later by tablegc mechanism
 		}()
-
 	}
 
 	// Compare the existing (to be potentially migrated) table with the declared (newly created) table:
@@ -2096,6 +2124,167 @@ func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDD
 	return err
 }
 
+func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	failMigration := func(err error) error {
+		return e.failMigration(ctx, onlineDDL, err)
+	}
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	// Drop statement.
+	// Normally, we're going to modify DROP to RENAME (see later on). But if table name is
+	// already a GC-lifecycle table, then we don't put it through yet another GC lifecycle,
+	// we just drop it.
+	if schema.IsGCTableName(onlineDDL.Table) {
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return failMigration(err)
+		}
+		return nil
+	}
+
+	// We transform a DROP TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
+
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return failMigration(err)
+	}
+
+	var toTableName string
+	onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), newGCTableRetainTime())
+	if err != nil {
+		return failMigration(err)
+	}
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, toTableName); err != nil {
+		return err
+	}
+
+	acceptableErrorCodes := []int{}
+	if ddlStmt.GetIfExists() {
+		acceptableErrorCodes = acceptableDropTableIfExistsErrorCodes
+	}
+	acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, acceptableErrorCodes...)
+	if err != nil {
+		return failMigration(err)
+	}
+	if acceptableErrCodeFound {
+		// Table did not exist after all. There is no artifact
+		if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	failMigration := func(err error) error {
+		return e.failMigration(ctx, onlineDDL, err)
+	}
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return failMigration(err)
+	}
+	// we create a dummy artifact. Its existence means the table was created by this migration.
+	// It will be read by the revert operation.
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryArtifactTableName); err != nil {
+		return err
+	}
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return failMigration(err)
+	}
+	if ddlStmt.GetIfNotExists() {
+		// This is a CREATE TABLE IF NOT EXISTS
+		// We want to know if the table actually exists before running this migration.
+		// If so, then the operation is noop, and when we revert the migration, we also do a noop.
+		exists, err := e.tableExists(ctx, onlineDDL.Table)
+		if err != nil {
+			return failMigration(err)
+		}
+		if exists {
+			// the table already exists. This CREATE TABLE IF NOT EXISTS statement is a noop.
+			// We therefore clear the artifact field. A revert operation will use this as a hint.
+			if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
+				return failMigration(err)
+			}
+		}
+	}
+	if ddlStmt.GetIsReplace() {
+		// // This is a CREATE OR REPLACE VIEW
+		// // TODO(shlomi): special treatement here
+		// exists, err := e.tableExists(ctx, onlineDDL.Table)
+		// if err != nil {
+		// 	return failMigration(err)
+		// }
+		// if exists {
+		// 	// the view already exists. This CREATE OR REPLACE VIEW statement should
+		// 	// "backup" the existing view as an artifact.
+		// 	artifact, err := e.createArtifactView(ctx, onlineDDL.SQL)
+		// 	if err != nil {
+		// 		return failMigration(err)
+		// 	}
+		// }
+		failMigration(err)
+	}
+	if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+		return failMigration(err)
+	}
+	return nil
+}
+
+func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	failMigration := func(err error) error {
+		return e.failMigration(ctx, onlineDDL, err)
+	}
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return failMigration(err)
+	}
+	if _, isAlterView := ddlStmt.(*sqlparser.AlterView); isAlterView {
+		// Same treatment for all online strategies
+		return failMigration(err)
+	}
+
+	// if TABLE then proceeed:
+	switch onlineDDL.Strategy {
+	case schema.DDLStrategyOnline:
+		go func() {
+			e.migrationMutex.Lock()
+			defer e.migrationMutex.Unlock()
+
+			if err := e.ExecuteWithVReplication(ctx, onlineDDL, nil); err != nil {
+				failMigration(err)
+			}
+		}()
+	case schema.DDLStrategyGhost:
+		go func() {
+			e.migrationMutex.Lock()
+			defer e.migrationMutex.Unlock()
+
+			if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
+	case schema.DDLStrategyPTOSC:
+		go func() {
+			e.migrationMutex.Lock()
+			defer e.migrationMutex.Unlock()
+
+			if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
+	default:
+		{
+			return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
+		}
+	}
+	return nil
+}
+
 // executeMigration executes a single migration. It analyzes the migration type:
 // - is it declarative?
 // - is it CREATE / DROP / ALTER?
@@ -2207,140 +2396,14 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	switch ddlAction {
 	case sqlparser.DropDDLAction:
 		go func() error {
-			e.migrationMutex.Lock()
-			defer e.migrationMutex.Unlock()
-
-			// Drop statement.
-			// Normally, we're going to modify DROP to RENAME (see later on). But if table name is
-			// already a GC-lifecycle table, then we don't put it through yet another GC lifecycle,
-			// we just drop it.
-			if schema.IsGCTableName(onlineDDL.Table) {
-				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
-					return failMigration(err)
-				}
-				return nil
-			}
-
-			// We transform a DROP TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
-
-			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
-			if err != nil {
-				return failMigration(err)
-			}
-
-			var toTableName string
-			onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), newGCTableRetainTime())
-			if err != nil {
-				return failMigration(err)
-			}
-			if err := e.updateArtifacts(ctx, onlineDDL.UUID, toTableName); err != nil {
-				return err
-			}
-
-			acceptableErrorCodes := []int{}
-			if ddlStmt.GetIfExists() {
-				acceptableErrorCodes = acceptableDropTableIfExistsErrorCodes
-			}
-			acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, acceptableErrorCodes...)
-			if err != nil {
-				return failMigration(err)
-			}
-			if acceptableErrCodeFound {
-				// Table did not exist after all. There is no artifact
-				if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
-					return err
-				}
-			}
-
-			return nil
+			return e.executeDropDDLActionMigration(ctx, onlineDDL)
 		}()
 	case sqlparser.CreateDDLAction:
 		go func() error {
-			e.migrationMutex.Lock()
-			defer e.migrationMutex.Unlock()
-
-			sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-			if err != nil {
-				return failMigration(err)
-			}
-			// we create a dummy artifact. Its existence means the table was created by this migration.
-			// It will be read by the revert operation.
-			if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryArtifactTableName); err != nil {
-				return err
-			}
-			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
-			if err != nil {
-				return failMigration(err)
-			}
-			if ddlStmt.GetIfNotExists() {
-				// This is a CREATE TABLE IF NOT EXISTS
-				// We want to know if the table actually exists before running this migration.
-				// If so, then the operation is noop, and when we revert the migration, we also do a noop.
-				exists, err := e.tableExists(ctx, onlineDDL.Table)
-				if err != nil {
-					return failMigration(err)
-				}
-				if exists {
-					// the table already exists. This CREATE TABLE IF NOT EXISTS statement is a noop.
-					// We therefore clear the artifact field. A revert operation will use this as a hint.
-					if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
-						return failMigration(err)
-					}
-				}
-			}
-			if ddlStmt.GetIsReplace() {
-				// This is a CREATE OR REPLACE VIEW
-				// TODO(shlomi): special treatement here
-				failMigration(err)
-			}
-			if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
-				failMigration(err)
-			}
-			return nil
+			return e.executeCreateDDLActionMigration(ctx, onlineDDL)
 		}()
 	case sqlparser.AlterDDLAction:
-		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
-		if err != nil {
-			return failMigration(err)
-		}
-		if _, isAlterView := ddlStmt.(*sqlparser.AlterView); isAlterView {
-			// Same treatment for all online strategies
-		} else {
-			// if TABLE then proceeed:
-			switch onlineDDL.Strategy {
-			case schema.DDLStrategyOnline:
-				go func() {
-					e.migrationMutex.Lock()
-					defer e.migrationMutex.Unlock()
-
-					if err := e.ExecuteWithVReplication(ctx, onlineDDL, nil); err != nil {
-						failMigration(err)
-					}
-				}()
-			case schema.DDLStrategyGhost:
-				go func() {
-					e.migrationMutex.Lock()
-					defer e.migrationMutex.Unlock()
-
-					if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
-						failMigration(err)
-					}
-				}()
-			case schema.DDLStrategyPTOSC:
-				go func() {
-					e.migrationMutex.Lock()
-					defer e.migrationMutex.Unlock()
-
-					if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
-						failMigration(err)
-					}
-				}()
-			default:
-				{
-					return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
-				}
-			}
-		}
+		return e.executeAlterDDLActionMigration(ctx, onlineDDL)
 	case sqlparser.RevertDDLAction:
 		go func() {
 			e.migrationMutex.Lock()
