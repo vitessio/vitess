@@ -2307,6 +2307,7 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 			_, err := e.executeDirectly(ctx, onlineDDL)
 			return failMigration(err)
 		}
+		// OK, view exists
 		if err := e.executeAlterViewOnline(ctx, onlineDDL); err != nil {
 			return failMigration(err)
 		}
