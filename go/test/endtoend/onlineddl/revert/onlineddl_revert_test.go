@@ -298,6 +298,26 @@ func TestSchemaChange(t *testing.T) {
 		checkTable(t, viewName, true)
 		testRevertedUUID(t, uuid, "")
 	})
+	t.Run("revert CREATE PR REPLACE VIEW where view exists", func(t *testing.T) {
+		// Restore original view
+		revertedUUID := uuids[len(uuids)-1]
+		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewName, true)
+		checkMigratedTable(t, viewName, "success_create")
+		testRevertedUUID(t, uuid, revertedUUID)
+	})
+	t.Run("revert revert CREATE PR REPLACE VIEW where view exists", func(t *testing.T) {
+		// View was dropped (renamed) so it will now be restored
+		revertedUUID := uuids[len(uuids)-1]
+		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewName, true)
+		checkMigratedTable(t, viewName, "success_replace")
+		testRevertedUUID(t, uuid, revertedUUID)
+	})
 
 	// ALTER VIEW
 	t.Run("ALTER VIEW where view exists", func(t *testing.T) {
@@ -307,6 +327,26 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, viewName, true)
 		testRevertedUUID(t, uuid, "")
+	})
+	t.Run("revert ALTER VIEW where view exists", func(t *testing.T) {
+		// Restore original view
+		revertedUUID := uuids[len(uuids)-1]
+		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewName, true)
+		checkMigratedTable(t, viewName, "success_replace")
+		testRevertedUUID(t, uuid, revertedUUID)
+	})
+	t.Run("revert revert ALTER VIEW where view exists", func(t *testing.T) {
+		// View was dropped (renamed) so it will now be restored
+		revertedUUID := uuids[len(uuids)-1]
+		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewName, true)
+		checkMigratedTable(t, viewName, "success_alter")
+		testRevertedUUID(t, uuid, revertedUUID)
 	})
 
 	// DROP VIEW
