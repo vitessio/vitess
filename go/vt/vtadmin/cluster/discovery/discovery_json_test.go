@@ -98,7 +98,6 @@ func TestJSONDiscoverVTGate(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			disco := &JSONDiscovery{}
 			err := disco.parseConfig(tt.contents)
 			require.NoError(t, err)
