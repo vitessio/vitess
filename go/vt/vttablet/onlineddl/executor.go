@@ -1489,6 +1489,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		Retries:          row.AsInt64("retries", 0),
 		TabletAlias:      row["tablet"].ToString(),
 		MigrationContext: row["migration_context"].ToString(),
+		IsView:           row.AsBool("is_view", false),
 	}
 	return onlineDDL, row, nil
 }
@@ -1896,35 +1897,6 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 	return nil
 }
 
-// func (e *Executor) createArtifactView(ctx context.Context, createViewSQL string) (atrifactName string, err error) {
-// 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(createViewSQL)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	if _, ok := ddlStmt.(*sqlparser.CreateView); !ok {
-// 		return "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("not a CREATE VIEW statement: %v", createViewSQL))
-
-// 	}
-// 	atrifactName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
-// 	if err != nil {
-// 		return atrifactName, err
-// 	}
-// 	ddlStmt.SetTable("", atrifactName)
-// 	modifiedCreateSQL := sqlparser.String(ddlStmt)
-
-// 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
-// 	if err != nil {
-// 		return atrifactName, err
-// 	}
-// 	defer conn.Close()
-
-// 	if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
-// 		return atrifactName, err
-// 	}
-
-// 	return atrifactName, nil
-// }
-
 // evaluateDeclarativeDiff is called for -declarative CREATE statements, where the table already exists. The function generates a SQL diff, which can be:
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
@@ -2183,6 +2155,29 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return failMigration(err)
+	}
+	if _, isCreateView := ddlStmt.(*sqlparser.CreateView); isCreateView {
+		if ddlStmt.GetIsReplace() {
+			// This is a CREATE OR REPLACE VIEW
+			exists, err := e.tableExists(ctx, onlineDDL.Table)
+			if err != nil {
+				return failMigration(err)
+			}
+			if exists {
+				// the view already exists. This CREATE OR REPLACE VIEW statement should
+				// actually turn into an ALTER
+				if err := e.executeAlterViewOnline(ctx, onlineDDL); err != nil {
+					return failMigration(err)
+				}
+				return nil
+			}
+		}
+	}
+	// from now on, whether a VIEW or a TABLE, they get the same treatment
+
 	sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
 		return failMigration(err)
@@ -2192,10 +2187,7 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryArtifactTableName); err != nil {
 		return err
 	}
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
-	if err != nil {
-		return failMigration(err)
-	}
+
 	if ddlStmt.GetIfNotExists() {
 		// This is a CREATE TABLE IF NOT EXISTS
 		// We want to know if the table actually exists before running this migration.
@@ -2212,26 +2204,85 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 			}
 		}
 	}
-	if ddlStmt.GetIsReplace() {
-		// // This is a CREATE OR REPLACE VIEW
-		// // TODO(shlomi): special treatement here
-		// exists, err := e.tableExists(ctx, onlineDDL.Table)
-		// if err != nil {
-		// 	return failMigration(err)
-		// }
-		// if exists {
-		// 	// the view already exists. This CREATE OR REPLACE VIEW statement should
-		// 	// "backup" the existing view as an artifact.
-		// 	artifact, err := e.createArtifactView(ctx, onlineDDL.SQL)
-		// 	if err != nil {
-		// 		return failMigration(err)
-		// 	}
-		// }
-		failMigration(err)
-	}
 	if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 		return failMigration(err)
 	}
+	return nil
+}
+
+func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+
+	artifactViewName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return err
+	}
+	stmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return err
+	}
+	switch viewStmt := stmt.(type) {
+	case *sqlparser.CreateView:
+		stmt.SetTable("", artifactViewName)
+	case *sqlparser.AlterView:
+		// consolidate the logic. We treat ALTER like we treat CREATE OR REPLACE
+		// it actually easier for us to issue a CREATE OR REPLACE, because it
+		// actually creates a view...
+		stmt = &sqlparser.CreateView{
+			Algorithm:   viewStmt.Algorithm,
+			Definer:     viewStmt.Definer,
+			Security:    viewStmt.Security,
+			Columns:     viewStmt.Columns,
+			Select:      viewStmt.Select,
+			CheckOption: viewStmt.CheckOption,
+			IsReplace:   true,
+			Comments:    viewStmt.Comments,
+		}
+		stmt.SetTable("", artifactViewName)
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "executeAlterViewOnline only supports CreateView and AlterView statements. Got: %v", sqlparser.String(viewStmt))
+	}
+	artifactViewCreateSQL := sqlparser.String(stmt)
+
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown)
+
+	if _, err := conn.ExecuteFetch(artifactViewCreateSQL, 0, false); err != nil {
+		return err
+	}
+	if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
+		return err
+	}
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactViewName); err != nil {
+		return err
+	}
+
+	// view created in requested format, but under different name. We now swap the views
+	swapTable, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return err
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+		onlineDDL.Table, swapTable,
+		artifactViewName, onlineDDL.Table,
+		swapTable, artifactViewName,
+	)
+	if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		return err
+	}
+	// Make sure this is considered as an ALTER.
+	// Either the user issued a ALTER VIEW, and the action is trivially ALTER,
+	// or the user issues a CREATE OR REPLACE, and the view existed, in which case this is implicitly an ALTER
+	if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.AlterStr); err != nil {
+		return err
+	}
+
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+
 	return nil
 }
 
@@ -2245,7 +2296,21 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 	}
 	if _, isAlterView := ddlStmt.(*sqlparser.AlterView); isAlterView {
 		// Same treatment for all online strategies
-		return failMigration(err)
+		exists, err := e.tableExists(ctx, onlineDDL.Table)
+		if err != nil {
+			return failMigration(err)
+		}
+		if !exists {
+			// We cannot ALTER VIEW if the view does not exist. We could bail out directly here,
+			// but we prefer to actually get an authentic MySQL error. We know MySQL will fail running
+			// this statement.
+			_, err := e.executeDirectly(ctx, onlineDDL)
+			return failMigration(err)
+		}
+		if err := e.executeAlterViewOnline(ctx, onlineDDL); err != nil {
+			return failMigration(err)
+		}
+		return nil
 	}
 
 	// if TABLE then proceeed:
@@ -3361,6 +3426,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
 		sqltypes.BoolBindVariable(e.allowConcurrentMigration(onlineDDL)),
 		sqltypes.StringBindVariable(revertedUUID),
+		sqltypes.BoolBindVariable(onlineDDL.IsView),
 	)
 	if err != nil {
 		return nil, err
