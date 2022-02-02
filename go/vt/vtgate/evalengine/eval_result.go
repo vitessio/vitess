@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -30,7 +31,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/ftoa"
 )
 
 const (
@@ -408,12 +408,26 @@ func (er *EvalResult) truthy() boolean {
 	}
 }
 
-func formatMySQLFloat(typ querypb.Type, f float64) []byte {
+// FormatFloat formats a float64 as a byte string in a similar way to what MySQL does
+func FormatFloat(typ querypb.Type, f float64) []byte {
 	format := byte('g')
 	if typ == sqltypes.Decimal {
 		format = 'f'
 	}
-	return ftoa.FormatFloat(nil, f, format)
+
+	// the float printer in MySQL does not add a positive sign before
+	// the exponent for positive exponents, but the Golang printer does
+	// do that, and there's no way to customize it, so we must strip the
+	// redundant positive sign manually
+	// e.g. 1.234E+56789 -> 1.234E56789
+	fstr := strconv.AppendFloat(nil, f, format, -1, 64)
+	if idx := bytes.IndexByte(fstr, 'e'); idx >= 0 {
+		if fstr[idx+1] == '+' {
+			fstr = append(fstr[:idx+1], fstr[idx+2:]...)
+		}
+	}
+
+	return fstr
 }
 
 func (er *EvalResult) toRawBytes() []byte {
@@ -423,7 +437,7 @@ func (er *EvalResult) toRawBytes() []byte {
 	case sqltypes.Uint64, sqltypes.Uint32:
 		return strconv.AppendUint(nil, er.uint64(), 10)
 	case sqltypes.Float64, sqltypes.Float32:
-		return formatMySQLFloat(sqltypes.Float64, er.float64())
+		return FormatFloat(sqltypes.Float64, er.float64())
 	case sqltypes.Decimal:
 		dec := er.decimal()
 		return dec.num.FormatCustom(dec.frac, roundingModeFormat)
@@ -459,7 +473,7 @@ func (er *EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 		case sqltypes.Uint64, sqltypes.Uint32:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, er.uint64(), 10))
 		case sqltypes.Float64, sqltypes.Float32:
-			return sqltypes.MakeTrusted(resultType, formatMySQLFloat(resultType, er.float64()))
+			return sqltypes.MakeTrusted(resultType, FormatFloat(resultType, er.float64()))
 		case sqltypes.Decimal:
 			dec := er.decimal()
 			return sqltypes.MakeTrusted(resultType, dec.num.FormatCustom(dec.frac, roundingModeFormat))
@@ -767,7 +781,9 @@ func (er *EvalResult) negateNumeric() {
 		er.setFloat(-er.float64())
 	case querypb.Type_DECIMAL:
 		dec := er.decimal()
-		dec.num.SetSignbit(!dec.num.Signbit())
+		if !dec.num.IsZero() {
+			dec.num.SetSignbit(!dec.num.Signbit())
+		}
 	}
 }
 
