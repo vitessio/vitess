@@ -1298,9 +1298,11 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 	logStats *tabletenv.LogStats,
 ) {
 	if x := recover(); x != nil {
+		// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
+		// this existing exception in place so as not to change the behavior for users of the flag.
 		errorMessage := fmt.Sprintf(
 			"Uncaught panic for %v:\n%v\n%s",
-			queryAsString(sql, bindVariables, (tsv.Config().SanitizeLogMessages || tsv.TerseErrors)),
+			queryAsString(sql, bindVariables, (tsv.TerseErrors || tsv.Config().SanitizeLogMessages)),
 			x,
 			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
 		log.Errorf(errorMessage)
@@ -1364,9 +1366,9 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
-			// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
-			// this existing exception in place so as not to change the behavior for users of the flag.
 			if logMethod != nil {
+				// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
+				// this existing exception in place so as not to change the behavior for users of the flag.
 				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.TerseErrors))
 			}
 		} else {
@@ -1378,7 +1380,9 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+			// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
+			// this existing exception in place so as not to change the behavior for users of the flag.
+			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, (tsv.TerseErrors || tsv.Config().SanitizeLogMessages)))
 		}
 	}
 
@@ -1854,18 +1858,20 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable, s
 	fmt.Fprintf(buf, "Sql: %q", sql)
 	// Add the bind vars unless this needs to be sanitized, e.g. for log messages
 	fmt.Fprintf(buf, ", BindVars: {")
-	if sanitize {
-		fmt.Fprintf(buf, "[REDACTED]")
-	} else {
-		var keys []string
-		for key := range bindVariables {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		var valString string
-		for _, key := range keys {
-			valString = fmt.Sprintf("%v", bindVariables[key])
-			fmt.Fprintf(buf, "%s: %q", key, valString)
+	if len(bindVariables) > 0 {
+		if sanitize {
+			fmt.Fprintf(buf, "[REDACTED]")
+		} else {
+			var keys []string
+			for key := range bindVariables {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			var valString string
+			for _, key := range keys {
+				valString = fmt.Sprintf("%v", bindVariables[key])
+				fmt.Fprintf(buf, "%s: %q", key, valString)
+			}
 		}
 	}
 	fmt.Fprintf(buf, "}")
