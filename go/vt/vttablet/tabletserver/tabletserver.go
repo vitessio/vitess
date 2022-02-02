@@ -1364,8 +1364,10 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
+			// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
+			// this existing exception in place so as not to change the behavior for users of the flag.
 			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.TerseErrors))
 			}
 		} else {
 			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
@@ -1392,23 +1394,25 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 }
 
 // truncateSQLAndBindVars calls TruncateForLog which:
-//  splits off trailing comments, truncates the query, and re-adds the trailing comments
-// and if sanitize is not false appends quoted bindvar:value pairs in sorted order
-// truncates the resulting string
+//  splits off trailing comments, truncates the query, re-adds the trailing comments,
+//  if sanitize is false appends quoted bindvar:value pairs in sorted order, and
+//  lastly it truncates the resulting string
 func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "BindVars: {")
-	if sanitize {
-		fmt.Fprintf(buf, "[REDACTED]")
-	} else {
-		var keys []string
-		for key := range bindVariables {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			fmt.Fprintf(buf, "%s: %q", key, fmt.Sprintf("%v", bindVariables[key]))
+	if len(bindVariables) > 0 {
+		if sanitize {
+			fmt.Fprintf(buf, "[REDACTED]")
+		} else {
+			var keys []string
+			for key := range bindVariables {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				fmt.Fprintf(buf, "%s: %q", key, fmt.Sprintf("%v", bindVariables[key]))
+			}
 		}
 	}
 	fmt.Fprintf(buf, "}")
