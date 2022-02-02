@@ -124,6 +124,7 @@ type OnlineDDL struct {
 	Status           OnlineDDLStatus `json:"status,omitempty"`
 	TabletAlias      string          `json:"tablet,omitempty"`
 	Retries          int64           `json:"retries,omitempty"`
+	IsView           bool            `json:"is_view,omitempty"` // Does DDL affect a VIEW rather than TABLE
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -236,6 +237,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		}
 	}
 
+	isView := false
 	{
 		encodeDirective := func(directive string) string {
 			return strconv.Quote(hex.EncodeToString([]byte(directive)))
@@ -279,6 +281,11 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 			}
 			sql = sqlparser.String(stmt)
+
+			switch stmt.(type) {
+			case *sqlparser.CreateView, *sqlparser.DropView, *sqlparser.AlterView:
+				isView = true
+			}
 		}
 	}
 
@@ -292,6 +299,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		RequestTime:      time.Now().UnixNano(),
 		MigrationContext: migrationContext,
 		Status:           OnlineDDLStatusRequested,
+		IsView:           isView,
 	}, nil
 }
 
