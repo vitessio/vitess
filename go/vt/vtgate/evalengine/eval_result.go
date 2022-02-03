@@ -197,6 +197,13 @@ func (er *EvalResult) setRaw(typ querypb.Type, raw []byte, coll collations.Typed
 	er.collation_ = coll
 }
 
+func (er *EvalResult) setBinaryHex(raw []byte) {
+	er.type_ = int16(sqltypes.VarBinary)
+	er.bytes_ = raw
+	er.collation_ = collationBinary
+	er.flags_ = flagHex
+}
+
 func (er *EvalResult) setString(str string, coll collations.TypedCollation) {
 	er.type_ = int16(sqltypes.VarChar)
 	er.bytes_ = []byte(str)
@@ -637,6 +644,18 @@ func (er *EvalResult) setBindVar1(typ querypb.Type, value []byte, collation coll
 			throwEvalError(err)
 		}
 		er.setDecimal(dec)
+	case sqltypes.HexNum:
+		raw, err := parseHexNumber(value)
+		if err != nil {
+			throwEvalError(err)
+		}
+		er.setBinaryHex(raw)
+	case sqltypes.HexVal:
+		raw, err := parseHexLiteral(value[2 : len(value)-1])
+		if err != nil {
+			throwEvalError(err)
+		}
+		er.setBinaryHex(raw)
 	case sqltypes.VarChar, sqltypes.Text:
 		er.setRaw(sqltypes.VarChar, value, collation)
 	case sqltypes.VarBinary:
@@ -646,7 +665,7 @@ func (er *EvalResult) setBindVar1(typ querypb.Type, value []byte, collation coll
 	case sqltypes.Null:
 		er.setNull()
 	default:
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", typ.String()))
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, typ.String()))
 	}
 }
 
