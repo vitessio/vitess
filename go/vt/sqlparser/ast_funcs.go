@@ -1569,6 +1569,19 @@ func (es *ExtractedSubquery) updateAlternative() {
 	}
 }
 
+func isExprLiteral(expr Expr) bool {
+	switch expr := expr.(type) {
+	case *Literal:
+		return true
+	case BoolVal:
+		return true
+	case *UnaryExpr:
+		return isExprLiteral(expr.Expr)
+	default:
+		return false
+	}
+}
+
 func defaultRequiresParens(ct *ColumnType) bool {
 	// in 5.7 null value should be without parenthesis, in 8.0 it is allowed either way.
 	// so it is safe to not keep parenthesis around null.
@@ -1584,10 +1597,7 @@ func defaultRequiresParens(ct *ColumnType) bool {
 		return true
 	}
 
-	_, isLiteral := ct.Options.Default.(*Literal)
-	_, isBool := ct.Options.Default.(BoolVal)
-
-	if isLiteral || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+	if isExprLiteral(ct.Options.Default) || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
 		return false
 	}
 
