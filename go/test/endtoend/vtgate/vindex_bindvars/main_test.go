@@ -202,10 +202,10 @@ func TestVindexHexTypes(t *testing.T) {
 	result := exec(t, conn, "select id, field from thex order by id")
 
 	expected :=
-		"[[HEXNUM(0x01) INT64(1)] " +
-			"[HEXVAL(x'a5') INT64(2)] " +
-			"[HEXNUM(0x48656c6c6f20476f7068657221) INT64(3)] " +
-			"[HEXVAL(x'c3e486fc26caa1a5eb94096d29a1bec') INT64(4)]]"
+		"[[VARBINARY(\"\\x01\") INT64(1)] " +
+			"[VARBINARY(\"Hello Gopher!\") INT64(3)] " +
+			"[VARBINARY(\"\\xa5\") INT64(2)] " +
+			"[VARBINARY(\"\\xc2l\\xaa\\x1a^\\xb9@\\x96Қ\\x1b\\xec\") INT64(4)]]"
 	assert.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 

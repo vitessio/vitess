@@ -340,25 +340,21 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) Expr {
 	return lit
 }
 
-func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
+func parseHexLiteral(val []byte) ([]byte, error) {
 	raw := make([]byte, hex.DecodedLen(len(val)))
 	if _, err := hex.Decode(raw, val); err != nil {
 		return nil, err
 	}
-	lit := &Literal{}
-	lit.Val.setRaw(sqltypes.VarBinary, raw, collationBinary)
-	lit.Val.flags_ |= flagHex
-	return lit, nil
+	return raw, nil
 }
 
-func NewLiteralBinaryFromHexNum(val []byte) (Expr, error) {
+func parseHexNumber(val []byte) ([]byte, error) {
 	if val[0] != '0' || val[1] != 'x' {
 		panic("malformed hex literal from parser")
 	}
 	if len(val)%2 == 0 {
-		return NewLiteralBinaryFromHex(val[2:])
+		return parseHexLiteral(val[2:])
 	}
-
 	// If the hex literal doesn't have an even amount of hex digits, we need
 	// to pad it with a '0' in the left. Instead of allocating a new slice
 	// for padding pad in-place by replacing the 'x' in the original slice with
@@ -367,7 +363,27 @@ func NewLiteralBinaryFromHexNum(val []byte) (Expr, error) {
 	defer func() {
 		val[1] = 'x'
 	}()
-	return NewLiteralBinaryFromHex(val[1:])
+	return parseHexLiteral(val[1:])
+}
+
+func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
+	raw, err := parseHexLiteral(val)
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setBinaryHex(raw)
+	return lit, nil
+}
+
+func NewLiteralBinaryFromHexNum(val []byte) (Expr, error) {
+	raw, err := parseHexNumber(val)
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setBinaryHex(raw)
+	return lit, nil
 }
 
 // NewBindVar returns a bind variable
