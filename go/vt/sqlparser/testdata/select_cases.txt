@@ -3248,7 +3248,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 MINUTE);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval -100000 MINUTE) from dual
+select date_add('1997-12-31 23:59:59', interval (-100000) MINUTE) from dual
 END
 INPUT
 select insert('hello', 18446744073709551616, 1, 'hi');
@@ -8108,7 +8108,7 @@ INPUT
 select -(-9223372036854775808), -(-(-9223372036854775808));
 END
 OUTPUT
-select 9223372036854775808, -9223372036854775808 from dual
+select - -9223372036854775808, - - -9223372036854775808 from dual
 END
 INPUT
 select from t1_mrg;
@@ -12176,7 +12176,7 @@ INPUT
 select date_add("2001-01-01 23:59:59",INTERVAL -2000 YEAR);
 END
 OUTPUT
-select date_add('2001-01-01 23:59:59', interval -2000 YEAR) from dual
+select date_add('2001-01-01 23:59:59', interval (-2000) YEAR) from dual
 END
 INPUT
 select avg(2) from t1;
@@ -12812,7 +12812,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 DAY);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval -100000 DAY) from dual
+select date_add('1997-12-31 23:59:59', interval (-100000) DAY) from dual
 END
 INPUT
 select dummy1,count(distinct id) from t1 group by dummy1;
@@ -13832,7 +13832,7 @@ INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 YEAR);
 END
 OUTPUT
-select date_add('1997-12-31 23:59:59', interval -100000 YEAR) from dual
+select date_add('1997-12-31 23:59:59', interval (-100000) YEAR) from dual
 END
 INPUT
 select substring_index('the king of the the hill',' ',-2);
@@ -20180,7 +20180,7 @@ INPUT
 select -(-(9223372036854775808));
 END
 OUTPUT
-select 9223372036854775808 from dual
+select - -9223372036854775808 from dual
 END
 INPUT
 select format(col2,7) from t1;

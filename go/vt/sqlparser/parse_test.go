@@ -208,7 +208,7 @@ var (
 		input: "select -1 from t where b = -2",
 	}, {
 		input:  "select - -1 from t",
-		output: "select 1 from t",
+		output: "select - -1 from t",
 	}, {
 		input: "select a from t",
 	}, {
@@ -785,7 +785,7 @@ var (
 		output: "select /* binary unary */ a - -b from t",
 	}, {
 		input:  "select /* - - */ - -b from t",
-		output: "select /* - - */ b from t",
+		output: "select /* - - */ - -b from t",
 	}, {
 		input: "select /* binary binary */ binary  binary b from t",
 	}, {
@@ -1093,10 +1093,10 @@ var (
 		input: "set @period.variable = 42",
 	}, {
 		input:  "set S= +++-++-+(4+1)",
-		output: "set S = 4 + 1",
+		output: "set S = - -(4 + 1)",
 	}, {
 		input:  "set S= +- - - - -(4+1)",
-		output: "set S = -(4 + 1)",
+		output: "set S = - - - - -(4 + 1)",
 	}, {
 		input:  "alter table a add foo int references simple (a) on delete restrict first",
 		output: "alter table a add column foo int references simple (a) on delete restrict first",
@@ -1354,9 +1354,11 @@ var (
 	}, {
 		input: "create table a (\n\ta int not null default 0\n)",
 	}, {
-		input: "create table a (\n\ta float not null default -1\n)",
+		input:  "create table a (\n\ta float not null default -1\n)",
+		output: "create table a (\n\ta float not null default (-1)\n)",
 	}, {
-		input: "create table a (\n\ta float not null default -2.1\n)",
+		input:  "create table a (\n\ta float not null default -2.1\n)",
+		output: "create table a (\n\ta float not null default (-2.1)\n)",
 	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
 		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
