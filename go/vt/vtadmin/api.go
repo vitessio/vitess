@@ -247,7 +247,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Name:          clusterID,
 					DiscoveryImpl: "dynamic",
 					DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-						"json": map[string]string{
+						"dynamic": map[string]string{
 							"discovery": string(decoded),
 						},
 					},
