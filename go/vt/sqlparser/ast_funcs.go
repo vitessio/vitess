@@ -1450,23 +1450,6 @@ const (
 	DoubleAt
 )
 
-// handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
-func handleUnaryMinus(expr Expr) Expr {
-	if num, ok := expr.(*Literal); ok && (num.Type == IntVal || num.Type == FloatVal || num.Type == DecimalVal) {
-		// Handle double negative
-		if num.Val[0] == '-' {
-			num.Val = num.Val[1:]
-			return num
-		}
-		num.Val = "-" + num.Val
-		return num
-	}
-	if unaryExpr, ok := expr.(*UnaryExpr); ok && unaryExpr.Operator == UMinusOp {
-		return unaryExpr.Expr
-	}
-	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
-}
-
 // encodeSQLString encodes the string as a SQL string.
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
@@ -1586,6 +1569,19 @@ func (es *ExtractedSubquery) updateAlternative() {
 	}
 }
 
+func isExprLiteral(expr Expr) bool {
+	switch expr := expr.(type) {
+	case *Literal:
+		return true
+	case BoolVal:
+		return true
+	case *UnaryExpr:
+		return isExprLiteral(expr.Expr)
+	default:
+		return false
+	}
+}
+
 func defaultRequiresParens(ct *ColumnType) bool {
 	// in 5.7 null value should be without parenthesis, in 8.0 it is allowed either way.
 	// so it is safe to not keep parenthesis around null.
@@ -1601,10 +1597,7 @@ func defaultRequiresParens(ct *ColumnType) bool {
 		return true
 	}
 
-	_, isLiteral := ct.Options.Default.(*Literal)
-	_, isBool := ct.Options.Default.(BoolVal)
-
-	if isLiteral || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+	if isExprLiteral(ct.Options.Default) || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
 		return false
 	}
 

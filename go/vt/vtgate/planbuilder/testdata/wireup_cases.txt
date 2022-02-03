@@ -1335,26 +1335,29 @@
 
 # Invalid value in IN clause
 "select id from user where id in (18446744073709551616, 1)"
-"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 {
   "QueryType": "SELECT",
   "Original": "select id from user where id in (18446744073709551616, 1)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "Scatter",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where id in (18446744073709551616, 1)",
-    "Table": "`user`"
+    "Query": "select id from `user` where id in ::__vals",
+    "Table": "`user`",
+    "Values": [
+      "(DECIMAL(18446744073709551616), INT64(1))"
+    ],
+    "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Invalid value in IN clause from LHS of join
 "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
-"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 {
   "QueryType": "SELECT",
   "Original": "select u1.id from user u1 join user u2 where u1.id = 18446744073709551616",
@@ -1366,14 +1369,18 @@
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select u1.id from `user` as u1 where 1 != 1",
         "Query": "select u1.id from `user` as u1 where u1.id = 18446744073709551616",
-        "Table": "`user`"
+        "Table": "`user`",
+        "Values": [
+          "DECIMAL(18446744073709551616)"
+        ],
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
@@ -1389,10 +1396,10 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Invalid value in IN clause from RHS of join
 "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
-"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 {
   "QueryType": "SELECT",
   "Original": "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616",
@@ -1415,18 +1422,23 @@
       },
       {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
         "Query": "select 1 from `user` as u2 where u2.id = 18446744073709551616",
-        "Table": "`user`"
+        "Table": "`user`",
+        "Values": [
+          "DECIMAL(18446744073709551616)"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }
 }
+Gen4 plan same as above
 
 # derived table with column aliases not supported by v3, but planner is overridden with hint
 "select /*vt+ PLANNER=gen4 */ u.a from (select id as b, name from user) u(a, n) where u.n = 1"
