@@ -44,7 +44,7 @@ fi
 function updateVersionGo () {
   echo package servenv > $ROOT/go/vt/servenv/version.go
   echo  >> $ROOT/go/vt/servenv/version.go
-  echo "const versionName = \"$1)\"" >> $ROOT/go/vt/servenv/version.go
+  echo "const versionName = \"$1\"" >> $ROOT/go/vt/servenv/version.go
 }
 
 function updateJava () {
