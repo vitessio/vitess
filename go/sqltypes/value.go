@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -486,8 +485,7 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 // array matching what MySQL would return when querying the column where
 // an INSERT was performed with x'A1' having been specified as a value
 func (v *Value) decodeHexVal() ([]byte, error) {
-	match, err := regexp.Match("^x'.*'$", v.val)
-	if !match || err != nil {
+	if len(v.val) < 3 || (v.val[0] != 'x' && v.val[0] != 'X') || v.val[1] != '\'' || v.val[len(v.val)-1] != '\'' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex value: %v", v.val)
 	}
 	hexBytes := v.val[2 : len(v.val)-1]
@@ -502,8 +500,7 @@ func (v *Value) decodeHexVal() ([]byte, error) {
 // array matching what MySQL would return when querying the column where
 // an INSERT was performed with 0xA1 having been specified as a value
 func (v *Value) decodeHexNum() ([]byte, error) {
-	match, err := regexp.Match("^0x.*$", v.val)
-	if !match || err != nil {
+	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'x' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex number: %v", v.val)
 	}
 	hexBytes := v.val[2:]
