@@ -26,18 +26,18 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-type CallExpression struct {
+type CallExpr struct {
 	Arguments TupleExpr
 	Aliases   []sqlparser.ColIdent
 	Method    string
 	Call      func(*ExpressionEnv, []EvalResult, *EvalResult)
 }
 
-func (c *CallExpression) typeof(*ExpressionEnv) querypb.Type {
+func (c *CallExpr) typeof(*ExpressionEnv) querypb.Type {
 	return -1
 }
 
-func (c *CallExpression) eval(env *ExpressionEnv, result *EvalResult) {
+func (c *CallExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	var args []EvalResult = make([]EvalResult, len(c.Arguments))
 	for i, arg := range c.Arguments {
 		args[i].init(env, arg)
@@ -76,7 +76,8 @@ func getMultiComparisonFunc(args []EvalResult) multiComparisonFunc {
 		In all other cases, the arguments are compared as binary strings.
 	*/
 
-	for _, arg := range args {
+	for i := range args {
+		arg := &args[i]
 		switch arg.typeof() {
 		case querypb.Type_NULL_TYPE:
 			return func(args []EvalResult, result *EvalResult, cmp int) {

@@ -981,7 +981,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user where id = 0x04",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 0x04",
+    "Table": "`user`",
+    "Values": [
+      "VARBINARY(\"\\x04\")"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # sharded limit offset
 "select user_id from music order by user_id limit 10, 20"
