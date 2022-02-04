@@ -345,7 +345,7 @@ func (dbc *DBConn) Taint() {
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	dbc.stats.KillCounters.Add("Queries", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.Current())
+	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
 
 	// Client side action. Set error and close connection.
 	dbc.errmu.Lock()
@@ -364,7 +364,7 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
 		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(),
-			sqlparser.TruncateForLog(dbc.Current()), err)
+			dbc.CurrentForLogging(), err)
 		return err
 	}
 	return nil
@@ -428,7 +428,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		select {
 		case <-tmr2.C:
 			dbc.stats.InternalErrors.Add("HungQuery", 1)
-			log.Warningf("Query may be hung: %s", sqlparser.TruncateForLog(dbc.Current()))
+			log.Warningf("Query may be hung: %s", dbc.CurrentForLogging())
 		case <-done:
 			return
 		}
@@ -436,4 +436,17 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		log.Warningf("Hung query returned")
 	}()
 	return done, &wg
+}
+
+// CurrentForLogging applies transformations to the query making it suitable to log.
+// It applies sanitization rules based on tablet settings and limits the max length of
+// queries.
+func (dbc *DBConn) CurrentForLogging() string {
+	var queryToLog string
+	if dbc.pool != nil && dbc.pool.env != nil && dbc.pool.env.Config() != nil && !dbc.pool.env.Config().SanitizeLogMessages {
+		queryToLog = dbc.Current()
+	} else {
+		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
+	}
+	return sqlparser.TruncateForLog(queryToLog)
 }
