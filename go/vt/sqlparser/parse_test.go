@@ -2194,6 +2194,17 @@ var (
 			input:  "GRANT SELECT (col1, col2), UPDATE (col2) ON db.tbl TO UserName",
 			output: "grant select (`col1`, `col2`), update (`col2`) on `db`.`tbl` to `UserName`@`%`",
 		}, {
+			input: "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, SHUTDOWN, PROCESS, " +
+				"FILE, REFERENCES, INDEX, ALTER, SHOW DATABASES, SUPER, CREATE TEMPORARY TABLES, LOCK TABLES, " +
+				"EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, " +
+				"ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO " +
+				"`UserName`@`%` WITH GRANT OPTION" ,
+			output: "grant select, insert, update, delete, create, drop, reload, shutdown, process, " +
+				"file, references, index, alter, show databases, super, create temporary tables, lock tables, " +
+				"execute, replication slave, replication client, create view, show view, create routine, " +
+				"alter routine, create user, event, trigger, create tablespace, create role, drop role on *.* to " +
+				"`UserName`@`%` with grant option",
+		}, {
 			input:  "GRANT ALL ON tbl TO UserName1@localhost, UserName2",
 			output: "grant all on `tbl` to `UserName1`@`localhost`, `UserName2`@`%`",
 		}, {

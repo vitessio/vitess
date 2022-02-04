@@ -235,7 +235,8 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
 %token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS
-%token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY
+%token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
+%token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
@@ -1102,21 +1103,129 @@ revoke_statement:
   }
 
 grant_privilege:
-  INSERT grant_privilege_columns_opt
+  ALTER grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Alter, Columns: $2}
+  }
+| ALTER ROUTINE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_AlterRoutine, Columns: $3}
+  }
+| CREATE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Create, Columns: $2}
+  }
+| CREATE ROLE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_CreateRole, Columns: $3}
+  }
+| CREATE ROUTINE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_CreateRoutine, Columns: $3}
+  }
+| CREATE TABLESPACE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_CreateTablespace, Columns: $3}
+  }
+| CREATE TEMPORARY TABLES grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_CreateTemporaryTables, Columns: $4}
+  }
+| CREATE USER grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_CreateUser, Columns: $3}
+  }
+| CREATE VIEW grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_CreateView, Columns: $3}
+  }
+| DELETE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Delete, Columns: $2}
+  }
+| DROP grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Drop, Columns: $2}
+  }
+| DROP ROLE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_DropRole, Columns: $3}
+  }
+| EVENT grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Event, Columns: $2}
+  }
+| EXECUTE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Execute, Columns: $2}
+  }
+| FILE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_File, Columns: $2}
+  }
+| INDEX grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Index, Columns: $2}
+  }
+| INSERT grant_privilege_columns_opt
   {
     $$ = Privilege{Type: PrivilegeType_Insert, Columns: $2}
+  }
+| LOCK TABLES grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_LockTables, Columns: $3}
+  }
+| PROCESS grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Process, Columns: $2}
   }
 | REFERENCES grant_privilege_columns_opt
   {
     $$ = Privilege{Type: PrivilegeType_References, Columns: $2}
   }
+| RELOAD grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Reload, Columns: $2}
+  }
+| REPLICATION CLIENT grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_ReplicationClient, Columns: $3}
+  }
+| REPLICATION SLAVE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_ReplicationSlave, Columns: $3}
+  }
 | SELECT grant_privilege_columns_opt
   {
     $$ = Privilege{Type: PrivilegeType_Select, Columns: $2}
   }
+| SHOW DATABASES grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_ShowDatabases, Columns: $3}
+  }
+| SHOW VIEW grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_ShowView, Columns: $3}
+  }
+| SHUTDOWN grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Shutdown, Columns: $2}
+  }
+| SUPER grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Super, Columns: $2}
+  }
+| TRIGGER grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Trigger, Columns: $2}
+  }
 | UPDATE grant_privilege_columns_opt
   {
     $$ = Privilege{Type: PrivilegeType_Update, Columns: $2}
+  }
+| USAGE grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Usage, Columns: $2}
   }
 
 grant_privilege_list:
@@ -5549,6 +5658,7 @@ reserved_keyword:
   ACCOUNT
 | ADD
 | AFTER
+| ALTER
 | AND
 | ARRAY
 | AS
@@ -5589,10 +5699,13 @@ reserved_keyword:
 | ELSEIF
 | END
 | ESCAPE
+| EVENT
+| EXECUTE
 | EXISTS
 | EXPLAIN
 | FAILED_LOGIN_ATTEMPTS
 | FALSE
+| FILE
 | FIRST
 | FOLLOWING
 | FOR
@@ -5651,10 +5764,12 @@ reserved_keyword:
 | PASSWORD
 | PASSWORD_LOCK_TIME
 | PROCEDURE
+| PROCESS
 | READS
 | RECURSIVE
 | REFERENCES
 | REGEXP
+| RELOAD
 | RENAME
 | REPLACE
 | REQUIRE
@@ -5665,6 +5780,7 @@ reserved_keyword:
 | SEPARATOR
 | SET
 | SHOW
+| SHUTDOWN
 | STD
 | STDDEV
 | STDDEV_POP
@@ -5674,17 +5790,20 @@ reserved_keyword:
 | SUBSTR
 | SUBSTRING
 | SUM
+| SUPER
 | SYSTEM
 | TABLE
 | THEN
 | TIMESTAMPADD
 | TIMESTAMPDIFF
 | TO
+| TRIGGER
 | TRUE
 | UNION
 | UNIQUE
 | UNLOCK
 | UPDATE
+| USAGE
 | USE
 | USING
 | UTC_DATE
@@ -5713,7 +5832,6 @@ non_reserved_keyword:
 | ACTIVE
 | ADMIN
 | AGAINST
-| ALTER
 | AUTHENTICATION
 | BEFORE
 | BEGIN
@@ -5733,6 +5851,7 @@ non_reserved_keyword:
 | CHECK
 | CIPHER
 | CLASS_ORIGIN
+| CLIENT
 | CLONE
 | COLLATION
 | COLUMNS
@@ -5855,7 +5974,6 @@ non_reserved_keyword:
 | PRIMARY
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
-| PROCESS
 | PROXY
 | QUERY
 | RANDOM
@@ -5867,6 +5985,7 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
+| REPLICATION
 | REQUIRE_ROW_FORMAT
 | RESIGNAL
 | RESOURCE
@@ -5877,6 +5996,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| ROUTINE
 | ROWS
 | SAVEPOINT
 | SCHEMAS
@@ -5893,6 +6013,7 @@ non_reserved_keyword:
 | SIGNAL
 | SIGNED
 | SKIP
+| SLAVE
 | SMALLINT
 | SPATIAL
 | SQLSTATE
@@ -5904,6 +6025,7 @@ non_reserved_keyword:
 | SUBCLASS_ORIGIN
 | SUBJECT
 | TABLES
+| TABLESPACE
 | TABLE_NAME
 | TEMPORARY
 | TEXT
@@ -5916,7 +6038,6 @@ non_reserved_keyword:
 | TINYINT
 | TINYTEXT
 | TRANSACTION
-| TRIGGER
 | TRIGGERS
 | TRUNCATE
 | UNBOUNDED
