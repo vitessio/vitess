@@ -1800,6 +1800,10 @@ var (
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
+			input: "select name, dense_rank() over ( order by y asc ROWS CURRENT ROW) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by x ROWS CURRENT ROW) from t",
+		}, {
 			input: "select name, dense_rank() over (partition by x order by y asc ROWS CURRENT ROW) from t",
 		}, {
 			input: "select name, row_number() over (partition by x order by y asc ROWS 2 PRECEDING) from t",
@@ -2706,6 +2710,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select * from test order by a union select * from test",
 		err:   "syntax error",
+	}, {
+		input: "select sum(x) over (rows unbounded preceding) from a",
+		err:   "window definition with frame must include OVER BY or PARTITION BY",
 	}}
 
 	for _, tcase := range invalidSQL {
