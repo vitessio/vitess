@@ -1298,15 +1298,13 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 	logStats *tabletenv.LogStats,
 ) {
 	if x := recover(); x != nil {
-		// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
-		// this existing exception in place so as not to change the behavior for users of the flag.
-		errorMessage := fmt.Sprintf(
-			"Uncaught panic for %v:\n%v\n%s",
-			queryAsString(sql, bindVariables, (tsv.TerseErrors || tsv.Config().SanitizeLogMessages)),
-			x,
-			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		log.Errorf(errorMessage)
-		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
+		// Redaction/sanitization of the client error message is controlled by TerseErrors while
+		// for the log message it is controlled by SanitizeLogMessages.
+		// We are handling an unrecoverable panic, so the cost of the dual message handling is
+		// not a concern.
+		messagef := fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+		log.Errorf(messagef, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages))
+		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, queryAsString(sql, bindVariables, tsv.TerseErrors)))
 		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
@@ -1367,12 +1365,10 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
 			if logMethod != nil {
-				// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
-				// this existing exception in place so as not to change the behavior for users of the flag.
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.TerseErrors))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
 		} else {
-			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
+			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false))
 			if logMethod != nil {
 				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 			}
@@ -1380,9 +1376,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	} else {
 		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 		if logMethod != nil {
-			// TerseErrors should generally NOT impact log messages -- rather client errors -- but keeping
-			// this existing exception in place so as not to change the behavior for users of the flag.
-			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, (tsv.TerseErrors || tsv.Config().SanitizeLogMessages)))
+			message = fmt.Sprintf("%v: %v", err, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
 		}
 	}
 
