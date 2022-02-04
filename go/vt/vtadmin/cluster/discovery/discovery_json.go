@@ -19,20 +19,20 @@ package discovery
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
-
-	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/trace"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // JSONDiscovery implements the Discovery interface for "discovering"
-// Vitess components hardcoded in a JSON string.
+// Vitess components hardcoded in a json object.
 //
-// As an example, here's a minimal JSON object for a single Vitess cluster running locally
+// StaticFileDiscovery and DynamicDiscovery inherit from JSONDiscovery because
+// they both read the same JSON object. They only differ in where the JSON object is stored.
+//
+// As an example, here's a minimal JSON file for a single Vitess cluster running locally
 // (such as the one described in https://vitess.io/docs/get-started/local-docker):
 //
 // 		{
@@ -46,9 +46,6 @@ import (
 // 		}
 //
 // For more examples of various static file configurations, see the unit tests.
-// Discovery JSON is very similar to static file discovery, but removes the need for a static file in memory.
-// This allows for dynamic cluster discovery after initial vtadmin deploy without a topo.
-
 type JSONDiscovery struct {
 	cluster *vtadminpb.Cluster
 	config  *JSONClusterConfig
@@ -79,29 +76,6 @@ type JSONVTGateConfig struct {
 type JSONVtctldConfig struct {
 	Host *vtadminpb.Vtctld `json:"host"`
 	Tags []string          `json:"tags"`
-}
-
-// NewJSON returns a JSONDiscovery for the given cluster.
-func NewJSON(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error) {
-	disco := &JSONDiscovery{
-		cluster: cluster,
-	}
-
-	json := flags.String("discovery", "", "the json config object")
-	if err := flags.Parse(args); err != nil {
-		return nil, err
-	}
-
-	if json == nil || *json == "" {
-		return nil, errors.New("must pass service discovery JSON config object")
-	}
-
-	bytes := []byte(*json)
-	if err := disco.parseConfig(bytes); err != nil {
-		return nil, err
-	}
-
-	return disco, nil
 }
 
 func (d *JSONDiscovery) parseConfig(bytes []byte) error {

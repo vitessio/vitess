@@ -23,11 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-func TestJSONDiscoverVTGate(t *testing.T) {
+func TestDynamicDiscoverVTGate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -54,7 +53,7 @@ func TestJSONDiscoverVTGate(t *testing.T) {
 					}]
 				}
 			`),
-			expected: &vtadmin.VTGate{
+			expected: &vtadminpb.VTGate{
 				Hostname: "127.0.0.1:12345",
 			},
 		},
@@ -98,8 +97,7 @@ func TestJSONDiscoverVTGate(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			disco := &JSONDiscovery{}
+			disco := &DynamicDiscovery{}
 			err := disco.parseConfig(tt.contents)
 			require.NoError(t, err)
 
@@ -115,7 +113,7 @@ func TestJSONDiscoverVTGate(t *testing.T) {
 	}
 }
 
-func TestJSONDiscoverVTGates(t *testing.T) {
+func TestDynamicDiscoverVTGates(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -244,7 +242,7 @@ func TestJSONDiscoverVTGates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			disco := &JSONDiscovery{}
+			disco := &DynamicDiscovery{}
 
 			err := disco.parseConfig(tt.contents)
 			if tt.shouldErrConfig {
@@ -265,7 +263,7 @@ func TestJSONDiscoverVTGates(t *testing.T) {
 	}
 }
 
-func TestJSONDiscoverVtctld(t *testing.T) {
+func TestDynamicDiscoverVtctld(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -292,7 +290,7 @@ func TestJSONDiscoverVtctld(t *testing.T) {
 					}]
 				}
 			`),
-			expected: &vtadmin.Vtctld{
+			expected: &vtadminpb.Vtctld{
 				Hostname: "127.0.0.1:12345",
 			},
 		},
@@ -337,7 +335,7 @@ func TestJSONDiscoverVtctld(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			disco := &JSONDiscovery{}
+			disco := &DynamicDiscovery{}
 			err := disco.parseConfig(tt.contents)
 			require.NoError(t, err)
 
@@ -353,7 +351,7 @@ func TestJSONDiscoverVtctld(t *testing.T) {
 	}
 }
 
-func TestJSONDiscoverVtctlds(t *testing.T) {
+func TestDynamicDiscoverVtctlds(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -482,7 +480,7 @@ func TestJSONDiscoverVtctlds(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			disco := &JSONDiscovery{}
+			disco := &DynamicDiscovery{}
 
 			err := disco.parseConfig(tt.contents)
 			if tt.shouldErrConfig {
