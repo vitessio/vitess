@@ -23,6 +23,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"os"
 	"strings"
@@ -53,6 +54,7 @@ import (
 
 var (
 	protoTopo = flag.String("proto_topo", "", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+	jsonTopo  = flag.String("json_topo", "", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 
@@ -119,9 +121,19 @@ func main() {
 
 	// parse the input topology
 	tpb := &vttestpb.VTTestTopology{}
-	if err := prototext.Unmarshal([]byte(*protoTopo), tpb); err != nil {
-		log.Errorf("cannot parse topology: %v", err)
-		exit.Return(1)
+	switch {
+	case *jsonTopo != "":
+		decoder := json.NewDecoder(strings.NewReader(*jsonTopo))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(tpb); err != nil {
+			log.Errorf("cannot parse topology: %v", err)
+			exit.Return(1)
+		}
+	default:
+		if err := prototext.Unmarshal([]byte(*protoTopo), tpb); err != nil {
+			log.Errorf("cannot parse topology: %v", err)
+			exit.Return(1)
+		}
 	}
 
 	// Stash away a copy of the topology that vtcombo was started with.
