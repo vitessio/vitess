@@ -366,10 +366,37 @@ type PrivilegeType byte
 
 const (
 	PrivilegeType_All PrivilegeType = iota
+	PrivilegeType_Alter
+	PrivilegeType_AlterRoutine
+	PrivilegeType_Create
+	PrivilegeType_CreateRole
+	PrivilegeType_CreateRoutine
+	PrivilegeType_CreateTablespace
+	PrivilegeType_CreateTemporaryTables
+	PrivilegeType_CreateUser
+	PrivilegeType_CreateView
+	PrivilegeType_Delete
+	PrivilegeType_Drop
+	PrivilegeType_DropRole
+	PrivilegeType_Event
+	PrivilegeType_Execute
+	PrivilegeType_File
+	PrivilegeType_Index
 	PrivilegeType_Insert
+	PrivilegeType_LockTables
+	PrivilegeType_Process
 	PrivilegeType_References
+	PrivilegeType_Reload
+	PrivilegeType_ReplicationClient
+	PrivilegeType_ReplicationSlave
 	PrivilegeType_Select
+	PrivilegeType_ShowDatabases
+	PrivilegeType_ShowView
+	PrivilegeType_Shutdown
+	PrivilegeType_Super
+	PrivilegeType_Trigger
 	PrivilegeType_Update
+	PrivilegeType_Usage
 	PrivilegeType_Dynamic // Dynamic privileges are defined at runtime, rather than enforced at the parser
 	//TODO: add the rest of the privileges -> https://dev.mysql.com/doc/refman/8.0/en/privileges-provided.html
 )
@@ -431,14 +458,68 @@ func (p *Privilege) String() string {
 	switch p.Type {
 	case PrivilegeType_All:
 		sb.WriteString("all")
+	case PrivilegeType_Alter:
+		sb.WriteString("alter")
+	case PrivilegeType_AlterRoutine:
+		sb.WriteString("alter routine")
+	case PrivilegeType_Create:
+		sb.WriteString("create")
+	case PrivilegeType_CreateRole:
+		sb.WriteString("create role")
+	case PrivilegeType_CreateRoutine:
+		sb.WriteString("create routine")
+	case PrivilegeType_CreateTablespace:
+		sb.WriteString("create tablespace")
+	case PrivilegeType_CreateTemporaryTables:
+		sb.WriteString("create temporary tables")
+	case PrivilegeType_CreateUser:
+		sb.WriteString("create user")
+	case PrivilegeType_CreateView:
+		sb.WriteString("create view")
+	case PrivilegeType_Delete:
+		sb.WriteString("delete")
+	case PrivilegeType_Drop:
+		sb.WriteString("drop")
+	case PrivilegeType_DropRole:
+		sb.WriteString("drop role")
+	case PrivilegeType_Event:
+		sb.WriteString("event")
+	case PrivilegeType_Execute:
+		sb.WriteString("execute")
+	case PrivilegeType_File:
+		sb.WriteString("file")
+	case PrivilegeType_Index:
+		sb.WriteString("index")
 	case PrivilegeType_Insert:
 		sb.WriteString("insert")
+	case PrivilegeType_LockTables:
+		sb.WriteString("lock tables")
+	case PrivilegeType_Process:
+		sb.WriteString("process")
 	case PrivilegeType_References:
 		sb.WriteString("references")
+	case PrivilegeType_Reload:
+		sb.WriteString("reload")
+	case PrivilegeType_ReplicationClient:
+		sb.WriteString("replication client")
+	case PrivilegeType_ReplicationSlave:
+		sb.WriteString("replication slave")
 	case PrivilegeType_Select:
 		sb.WriteString("select")
+	case PrivilegeType_ShowDatabases:
+		sb.WriteString("show databases")
+	case PrivilegeType_ShowView:
+		sb.WriteString("show view")
+	case PrivilegeType_Shutdown:
+		sb.WriteString("shutdown")
+	case PrivilegeType_Super:
+		sb.WriteString("super")
+	case PrivilegeType_Trigger:
+		sb.WriteString("trigger")
 	case PrivilegeType_Update:
 		sb.WriteString("update")
+	case PrivilegeType_Usage:
+		sb.WriteString("usage")
 	case PrivilegeType_Dynamic:
 		sb.WriteString(p.DynamicName)
 	}
