@@ -19,11 +19,12 @@ package sqlparser
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"reflect"
 	"strings"
 	"testing"
 	"unsafe"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 )
@@ -200,11 +201,11 @@ func TestDDL(t *testing.T) {
 	}{{
 		query: "create table a (id int)",
 		output: &DDL{
-			Action:    CreateStr,
-			Table:     TableName{Name: NewTableIdent("a")},
+			Action: CreateStr,
+			Table:  TableName{Name: NewTableIdent("a")},
 			TableSpec: &TableSpec{
 				Columns: []*ColumnDefinition{
-					&ColumnDefinition{Name: NewColIdent("id"), Type: ColumnType{Type: "int"}},
+					{Name: NewColIdent("id"), Type: ColumnType{Type: "int"}},
 				},
 			},
 		},

@@ -168,6 +168,7 @@ func yyOldPosition(yylex interface{}) int {
   grantObjectType GrantObjectType
   privilegeLevel PrivilegeLevel
   grantAssumption *GrantUserAssumption
+  with *With
 }
 
 %token LEX_ERROR
@@ -325,7 +326,8 @@ func yyOldPosition(yylex interface{}) int {
 %type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
-%type <tableExprs> table_references with_clause cte_list
+%type <tableExprs> table_references cte_list
+%type <with> with_clause
 %type <tableExpr> table_reference table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
@@ -368,7 +370,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list column_list column_list_opt
+%type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <assignExprs> on_dup_opt assignment_list
 %type <setVarExprs> set_list transaction_chars
@@ -545,7 +547,7 @@ base_select:
   }
 | with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
   {
-    $$ = &Select{CommonTableExprs: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13)}
+    $$ = &Select{With: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13)}
     if $6 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
@@ -574,7 +576,11 @@ base_select_no_cte:
 with_clause:
   WITH cte_list
   {
-    $$ = $2
+   $$ = &With{Ctes: $2, Recursive: false}
+  }
+| WITH RECURSIVE cte_list
+  {
+    $$ = &With{Ctes: $3, Recursive: true}
   }
 
 cte_list:
@@ -588,13 +594,9 @@ cte_list:
   }
 
 common_table_expression:
-  table_alias AS subquery_or_values
+  table_alias ins_column_list_opt AS subquery_or_values
   {
-    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$3, As: $1}, nil}
-  }
-| table_alias openb ins_column_list closeb AS subquery_or_values
-  {
-    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$6, As: $1}, $3}
+    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$4, As: $1}, $2}
   }
 
 union_lhs:
@@ -5207,6 +5209,15 @@ insert_data:
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Columns: $2, Rows: $5}
+  }
+
+ins_column_list_opt:
+  {
+    $$ = nil
+  }
+| openb ins_column_list closeb
+  {
+    $$ = $2
   }
 
 ins_column_list:

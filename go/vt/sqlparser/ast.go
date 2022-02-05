@@ -393,20 +393,20 @@ func (*ValuesStatement) iSelectStatement() {}
 
 // Select represents a SELECT statement.
 type Select struct {
-	Cache            string
-	CalcFoundRows    bool
-	Comments         Comments
-	Distinct         string
-	Hints            string
-	CommonTableExprs TableExprs
-	SelectExprs      SelectExprs
-	From             TableExprs
-	Where            *Where
-	GroupBy          GroupBy
-	Having           *Where
-	OrderBy          OrderBy
-	Limit            *Limit
-	Lock             string
+	Cache         string
+	CalcFoundRows bool
+	Comments      Comments
+	Distinct      string
+	Hints         string
+	With          *With
+	SelectExprs   SelectExprs
+	From          TableExprs
+	Where         *Where
+	GroupBy       GroupBy
+	Having        *Where
+	OrderBy       OrderBy
+	Limit         *Limit
+	Lock          string
 }
 
 // Select.Distinct
@@ -447,22 +447,12 @@ func (node *Select) SetLimit(limit *Limit) {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	if len(node.CommonTableExprs) > 0 {
-		buf.Myprintf("with ")
-		for i, cte := range node.CommonTableExprs {
-			if i > 0 {
-				buf.Myprintf(", ")
-			}
-			buf.Myprintf("%v", cte)
-		}
-		buf.Myprintf(" ")
-	}
-
 	calcFoundRows := ""
 	if node.CalcFoundRows {
 		calcFoundRows = "sql_calc_found_rows "
 	}
-	buf.Myprintf("select %v%s%s%s%s%v from %v%v%v%v%v%v%s",
+	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%s",
+		node.With,
 		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
@@ -3167,6 +3157,37 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	noHints := *node
 	noHints.Hints = nil
 	return &noHints
+}
+
+type With struct {
+	Ctes      []TableExpr
+	Recursive bool
+}
+
+func (w *With) Format(buf *TrackedBuffer) {
+	if w == nil {
+		return
+	}
+
+	buf.Myprintf("with ")
+	if w.Recursive {
+		buf.Myprintf("recursive ")
+	}
+	var prefix string
+	for _, n := range w.Ctes {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.Myprintf(" ")
+}
+
+func (w *With) walkSubtree(visit Visit) error {
+	for _, n := range w.Ctes {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type CommonTableExpr struct {

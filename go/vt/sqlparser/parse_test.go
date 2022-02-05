@@ -380,6 +380,12 @@ var (
 		}, {
 			input: "with cte1 (w, x) as (select a from b) select a from cte1 join (with cte2 (y, z) as (select c from d) select * from cte2) as sub1 where a = b",
 		}, {
+			input: "with t as (select (1) from dual) select sum(n) from t",
+		}, {
+			input: "with recursive t (n) as (select (1) from dual union all select n + 1 from t where n < 100) select sum(n) from t",
+		}, {
+			input: "with recursive t (n) as (select (1) from dual union select n + 1 from t where n < 100) select sum(n) from t",
+		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
@@ -1832,9 +1838,9 @@ var (
 		}, {
 			input: "select name, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
+			input: "select name, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND CURRENT ROW) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by x RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) from t",
+			input: "select name, dense_rank() over (partition by x RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING) from t",
 		}, {
 			input: "select name, row_number() over (partition by x RANGE BETWEEN interval 5 DAY PRECEDING AND CURRENT ROW) from t",
 		}, {
