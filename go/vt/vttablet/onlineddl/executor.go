@@ -3277,7 +3277,18 @@ func (e *Executor) SubmitMigration(
 
 	defer e.triggerNextCheckInterval()
 
-	return e.execQuery(ctx, query)
+	result, err = e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	// The query was a INSERT IGNORE because we allow a recurring submission of same migration.
+	// However, let's validate that the duplication (identified via UUID) was intentional.
+	storedMigration, _, err := e.readMigration(ctx, onlineDDL.UUID)
+	if storedMigration.MigrationContext != onlineDDL.MigrationContext {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "migration rejected: found migration %s with different context: %s than submmitted migration's context: %s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.MigrationContext)
+	}
+	return result, nil
 }
 
 // ShowMigrationLogs reads the migration log for a given migration
