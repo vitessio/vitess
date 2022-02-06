@@ -1419,13 +1419,14 @@ func TestTerseErrors(t *testing.T) {
 		nil,
 	)
 
+	// The client error message should be redacted (made terse)
 	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	// Log should be truncated in same way as the error
-	wantLog := wantErr
+	// But the log message should NOT be
+	wantLog := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
