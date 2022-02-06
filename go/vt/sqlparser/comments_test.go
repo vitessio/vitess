@@ -328,6 +328,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 				"alter " + testCase.input + " table t add column c int not null",
 				"create " + testCase.input + " view v as select * from t",
 				"create " + testCase.input + " or replace view v as select * from t",
+				"alter " + testCase.input + " view v as select * from t",
 				"drop " + testCase.input + " view v",
 			}
 			for _, sql := range sqls {
@@ -348,6 +349,8 @@ func TestExtractCommentDirectives(t *testing.T) {
 					case *CreateTable:
 						comments = s.Comments
 					case *CreateView:
+						comments = s.Comments
+					case *AlterView:
 						comments = s.Comments
 					case *DropView:
 						comments = s.Comments
