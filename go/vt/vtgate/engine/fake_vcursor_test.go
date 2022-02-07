@@ -343,6 +343,7 @@ func (f *loggingVCursor) SetSysVar(name string, expr string) {
 }
 
 func (f *loggingVCursor) NeedsReservedConn() {
+	f.log = append(f.log, "Needs Reserved Conn")
 }
 
 func (f *loggingVCursor) InReservedConn() bool {
