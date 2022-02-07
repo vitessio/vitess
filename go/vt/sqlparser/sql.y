@@ -348,7 +348,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> expression_list group_by_list
+%type <exprs> expression_list group_by_list partition_by_opt
 %type <values> tuple_list row_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
@@ -3704,15 +3704,27 @@ over:
   {
     $$ = &Over{WindowName: $2}
   }
-| OVER openb order_by_opt closeb
+| OVER openb partition_by_opt order_by_opt frame_opt closeb
   {
-    $$ = &Over{OrderBy: $3}
-  }
-| OVER openb PARTITION BY expression_list order_by_opt frame_opt closeb
-  {
-    $$ = &Over{PartitionBy: $5, OrderBy: $6, Frame: $7}
+    p := $3
+    o := $4
+    f := $5
+    if (p == nil && o == nil && f != nil) {
+      yylex.Error("window definition with frame must include OVER BY or PARTITION BY")
+      return 1
+    }
+    $$ = &Over{PartitionBy: p, OrderBy: o, Frame: f}
   }
 
+
+partition_by_opt:
+  {
+    $$ = nil
+  }
+| PARTITION BY expression_list
+  {
+    $$ = $3
+  }
 
 over_opt:
   {
