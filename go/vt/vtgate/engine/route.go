@@ -186,7 +186,7 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 func getSysVarsComment(vcursor VCursor, query sqlparser.SelectStatement) (string, error) {
-	if query == nil || vcursor.Session().InReservedConn() {
+	if vcursor.Session().InReservedConn() {
 		return "", nil
 	}
 	sysVars := vcursor.Session().GetSystemVariables()
@@ -194,7 +194,7 @@ func getSysVarsComment(vcursor VCursor, query sqlparser.SelectStatement) (string
 		return "", nil
 	}
 
-	if len(query.GetComments()) > 0 {
+	if query == nil || len(query.GetComments()) > 0 {
 		vcursor.Session().NeedsReservedConn()
 		return "", nil
 	}

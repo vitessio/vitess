@@ -66,6 +66,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		"ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)",
 		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
 		"SysVar set with (x,'foobar')",
+		"Needs Reserved Conn",
 	})
 }
 
@@ -443,7 +444,7 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,'')",
+			"SysVar set with (sql_mode,' ')",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -538,6 +539,7 @@ func TestSysVarSetErr(t *testing.T) {
 
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		"Needs Reserved Conn",
 		`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
 	}
 
