@@ -171,7 +171,7 @@ func (i *IsExpr) format(w *formatter, depth int) {
 	}
 }
 
-func (c *CallExpression) format(w *formatter, depth int) {
+func (c *CallExpr) format(w *formatter, depth int) {
 	w.Indent(depth)
 	w.WriteString(strings.ToUpper(c.Method))
 	w.WriteByte('(')
@@ -186,4 +186,10 @@ func (c *CallExpression) format(w *formatter, depth int) {
 		}
 	}
 	w.WriteByte(')')
+}
+
+func (n *NegateExpr) format(w *formatter, depth int) {
+	w.Indent(depth)
+	w.WriteByte('-')
+	n.Inner.format(w, depth)
 }

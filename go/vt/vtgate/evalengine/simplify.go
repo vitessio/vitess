@@ -162,11 +162,11 @@ func (expr *UnaryExpr) simplify(env *ExpressionEnv) error {
 	return err
 }
 
-func (c *CallExpression) constant() bool {
+func (c *CallExpr) constant() bool {
 	return c.Arguments.constant()
 }
 
-func (c *CallExpression) simplify(env *ExpressionEnv) error {
+func (c *CallExpr) simplify(env *ExpressionEnv) error {
 	return c.Arguments.simplify(env)
 }
 

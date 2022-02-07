@@ -19,6 +19,8 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"os"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -558,7 +560,9 @@ func floatPlusAny(v1 float64, v2 *EvalResult, out *EvalResult) error {
 	if err != nil {
 		return err
 	}
-	out.setFloat(v1 + v2f)
+	add := v1 + v2f
+	fmt.Fprintf(os.Stderr, "%f (%v) + %f (%v) = %f (%v)\n", v1, math.Signbit(v1), v2f, math.Signbit(v2f), add, math.Signbit(add))
+	out.setFloat(add)
 	return nil
 }
 

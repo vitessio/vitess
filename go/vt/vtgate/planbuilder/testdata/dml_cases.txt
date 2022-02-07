@@ -829,7 +829,22 @@ Gen4 plan same as above
 
 # insert unsharded, invalid value for auto-inc
 "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
-"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
+    "TableName": "unsharded_auto"
+  }
+}
 Gen4 plan same as above
 
 # insert unsharded, column present
@@ -1239,12 +1254,42 @@ Gen4 plan same as above
 
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
-"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
+    "TableName": "user_extra"
+  }
+}
 Gen4 plan same as above
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)"
-"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into music_extra(music_id, user_id) values (:_music_id_0, :_user_id_0)",
+    "TableName": "music_extra"
+  }
+}
 Gen4 plan same as above
 
 # insert invalid index value
@@ -1365,7 +1410,22 @@ Gen4 plan same as above
 
 # replace unsharded, invalid value for auto-inc
 "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
-"could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+  "QueryType": "INSERT",
+  "Original": "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
+    "TableName": "unsharded_auto"
+  }
+}
 Gen4 plan same as above
 
 # replace unsharded, column present

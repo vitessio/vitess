@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"strconv"
@@ -24,6 +25,8 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func perm(a []string, f func([]string)) {
@@ -43,6 +46,31 @@ func perm1(a []string, f func([]string), i int) {
 	}
 }
 
+func normalize(v sqltypes.Value) string {
+	typ := v.Type()
+	if typ == sqltypes.Null {
+		return "NULL"
+	}
+	if v.IsQuoted() || typ == sqltypes.Bit {
+		return fmt.Sprintf("%v(%q)", typ, v.Raw())
+	}
+	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
+		var bitsize = 64
+		if typ == sqltypes.Float32 {
+			bitsize = 32
+		}
+		f, err := strconv.ParseFloat(v.RawStr(), bitsize)
+		if err != nil {
+			panic(err)
+		}
+		return fmt.Sprintf("%v(%s)", typ, evalengine.FormatFloat(typ, f))
+	}
+	return fmt.Sprintf("%v(%s)", typ, v.Raw())
+}
+
+var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
+var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
+
 func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
 
@@ -54,10 +82,16 @@ func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 		localVal = local.Value().String()
 	}
 	if remoteErr == nil {
-		remoteVal = remote.Rows[0][0].String()
+		if *debugNormalize {
+			remoteVal = normalize(remote.Rows[0][0])
+		} else {
+			remoteVal = remote.Rows[0][0].String()
+		}
 	}
 	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, evaluated); diff != "" {
 		t.Errorf("%s\nquery: %s", diff, query)
+	} else if *debugPrintAll {
+		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, query)
 	}
 }
 
@@ -227,6 +261,93 @@ func TestCollationOperations(t *testing.T) {
 	}
 }
 
+func TestNegateArithmetic(t *testing.T) {
+	*debugPrintAll = true
+	var cases = []string{
+		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
+		`X'00'`, `X'1234'`, `X'ff'`,
+		`0x00`, `0x1`, `0x1234`,
+		`0xff`, `0xffff`, `0xffffffff`, `0xffffffffffffffff`,
+		strconv.FormatUint(math.MaxUint64, 10),
+		strconv.FormatUint(math.MaxInt64, 10),
+		strconv.FormatInt(math.MinInt64, 10),
+		`'foobar'`, `'FOOBAR'`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, rhs := range cases {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT - %s", rhs))
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%s", rhs))
+	}
+}
+
+func TestNumericTypes(t *testing.T) {
+	var numbers = []string{
+		`1234`, `-1234`,
+		`18446744073709551614`,
+		`18446744073709551615`, // MaxUint64
+		`18446744073709551616`,
+		`-18446744073709551614`,
+		`-18446744073709551615`, // -MaxUint64
+		`-18446744073709551616`,
+		`9223372036854775805`,
+		`9223372036854775806`,
+		`9223372036854775807`, // MaxInt64
+		`9223372036854775808`, // -MinInt64
+		`9223372036854775809`,
+		`-9223372036854775805`,
+		`-9223372036854775806`,
+		`-9223372036854775807`, // -MaxInt64
+		`-9223372036854775808`, // MinInt64
+		`-9223372036854775809`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, rhs := range numbers {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s", rhs))
+	}
+}
+
+func TestHexArithmetic(t *testing.T) {
+	var cases = []string{
+		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
+		`X'00'`, `X'1234'`, `X'ff'`,
+		`0x00`, `0x1`, `0x1234`,
+		`0xff`, `0xffff`, `0xffffffff`, `0xffffffffffffffff`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, lhs := range cases {
+		for _, rhs := range cases {
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s + %s", lhs, rhs))
+
+			// compare with negative values too
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%s + -%s", lhs, rhs))
+		}
+	}
+}
+
+func TestX(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, expr := range []string{
+		"0 + -X'00'",
+		"0 - X'00'",
+		"-X'00'",
+		"X'00'",
+		"X'00'+0e0",
+	} {
+		compareRemoteQuery(t, conn, "SELECT "+expr)
+	}
+}
+
 func TestTypes(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
@@ -257,5 +378,35 @@ func TestTypes(t *testing.T) {
 
 	for _, query := range queries {
 		compareRemoteQuery(t, conn, "SELECT "+query)
+	}
+}
+
+func TestFloatFormatting(t *testing.T) {
+	var floats = []string{
+		`18446744073709551615`,
+		`9223372036854775807`,
+		`0xff`, `0xffff`, `0xffffffff`,
+		`0xffffffffffffffff`,
+		`0xfffffffffffffffe`,
+		`0xffffffffffffffff0`,
+		`0x1fffffffffffffff`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, f := range floats {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s + 0.0e0", f))
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%s", f))
+	}
+
+	for i := 0; i < 64; i++ {
+		v := uint64(1) << i
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %d + 0.0e0", v))
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %d + 0.0e0", v+1))
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %d + 0.0e0", ^v))
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%de0", v))
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%de0", v+1))
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%de0", ^v))
 	}
 }

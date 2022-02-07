@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"encoding/hex"
+	"math"
 	"strconv"
 	"unicode/utf8"
 
@@ -68,10 +69,6 @@ type (
 		TypedCollation collations.TypedCollation
 	}
 
-	UnaryExpr struct {
-		Inner Expr
-	}
-
 	BinaryExpr struct {
 		Left, Right Expr
 	}
@@ -88,7 +85,7 @@ var _ Expr = (TupleExpr)(nil)
 var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
-var _ Expr = (*CallExpression)(nil)
+var _ Expr = (*CallExpr)(nil)
 
 type evalError struct {
 	error
@@ -270,21 +267,19 @@ func init() {
 // NewLiteralIntegralFromBytes returns a literal expression.
 // It tries to return an int64, but if the value is too large, it tries with an uint64
 func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
-	str := string(val)
-	ival, err := strconv.ParseInt(str, 10, 64)
-	if err == nil {
-		return NewLiteralInt(ival), nil
+	if val[0] == '-' {
+		panic("NewLiteralIntegralFromBytes: negative value")
 	}
 
-	// let's try with uint if we overflowed
-	numError, ok := err.(*strconv.NumError)
-	if !ok || numError.Err != strconv.ErrRange {
-		return nil, err
-	}
-
-	uval, err := strconv.ParseUint(str, 0, 64)
+	uval, err := strconv.ParseUint(string(val), 10, 64)
 	if err != nil {
+		if numError, ok := err.(*strconv.NumError); ok && numError.Err == strconv.ErrRange {
+			return NewLiteralDecimalFromBytes(val)
+		}
 		return nil, err
+	}
+	if uval <= math.MaxInt64 {
+		return NewLiteralInt(int64(uval)), nil
 	}
 	return NewLiteralUint(uval), nil
 }
@@ -345,13 +340,49 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) Expr {
 	return lit
 }
 
-func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
+func parseHexLiteral(val []byte) ([]byte, error) {
 	raw := make([]byte, hex.DecodedLen(len(val)))
 	if _, err := hex.Decode(raw, val); err != nil {
 		return nil, err
 	}
+	return raw, nil
+}
+
+func parseHexNumber(val []byte) ([]byte, error) {
+	if val[0] != '0' || val[1] != 'x' {
+		panic("malformed hex literal from parser")
+	}
+	if len(val)%2 == 0 {
+		return parseHexLiteral(val[2:])
+	}
+	// If the hex literal doesn't have an even amount of hex digits, we need
+	// to pad it with a '0' in the left. Instead of allocating a new slice
+	// for padding pad in-place by replacing the 'x' in the original slice with
+	// a '0', and clean it up after parsing.
+	val[1] = '0'
+	defer func() {
+		val[1] = 'x'
+	}()
+	return parseHexLiteral(val[1:])
+}
+
+func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
+	raw, err := parseHexLiteral(val)
+	if err != nil {
+		return nil, err
+	}
 	lit := &Literal{}
-	lit.Val.setRaw(sqltypes.VarBinary, raw, collationBinary)
+	lit.Val.setBinaryHex(raw)
+	return lit, nil
+}
+
+func NewLiteralBinaryFromHexNum(val []byte) (Expr, error) {
+	raw, err := parseHexNumber(val)
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setBinaryHex(raw)
 	return lit, nil
 }
 
@@ -379,10 +410,6 @@ func NewTupleExpr(exprs ...Expr) TupleExpr {
 		tupleExpr = append(tupleExpr, f)
 	}
 	return tupleExpr
-}
-
-func (c *UnaryExpr) typeof(env *ExpressionEnv) querypb.Type {
-	return c.Inner.typeof(env)
 }
 
 // eval implements the Expr interface
