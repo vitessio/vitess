@@ -639,14 +639,13 @@ func (ExecuteOptions_TransactionIsolation) EnumDescriptor() ([]byte, []int) {
 type ExecuteOptions_PlannerVersion int32
 
 const (
-	ExecuteOptions_DEFAULT_PLANNER   ExecuteOptions_PlannerVersion = 0
-	ExecuteOptions_V3                ExecuteOptions_PlannerVersion = 1
-	ExecuteOptions_Gen4              ExecuteOptions_PlannerVersion = 2
-	ExecuteOptions_Gen4Greedy        ExecuteOptions_PlannerVersion = 3
-	ExecuteOptions_Gen4Left2Right    ExecuteOptions_PlannerVersion = 4
-	ExecuteOptions_Gen4WithFallback  ExecuteOptions_PlannerVersion = 5
-	ExecuteOptions_Gen4CompareV3     ExecuteOptions_PlannerVersion = 6
-	ExecuteOptions_Gen4CompareV3Test ExecuteOptions_PlannerVersion = 7
+	ExecuteOptions_DEFAULT_PLANNER  ExecuteOptions_PlannerVersion = 0
+	ExecuteOptions_V3               ExecuteOptions_PlannerVersion = 1
+	ExecuteOptions_Gen4             ExecuteOptions_PlannerVersion = 2
+	ExecuteOptions_Gen4Greedy       ExecuteOptions_PlannerVersion = 3
+	ExecuteOptions_Gen4Left2Right   ExecuteOptions_PlannerVersion = 4
+	ExecuteOptions_Gen4WithFallback ExecuteOptions_PlannerVersion = 5
+	ExecuteOptions_Gen4CompareV3    ExecuteOptions_PlannerVersion = 6
 )
 
 // Enum value maps for ExecuteOptions_PlannerVersion.
@@ -659,17 +658,15 @@ var (
 		4: "Gen4Left2Right",
 		5: "Gen4WithFallback",
 		6: "Gen4CompareV3",
-		7: "Gen4CompareV3Test",
 	}
 	ExecuteOptions_PlannerVersion_value = map[string]int32{
-		"DEFAULT_PLANNER":   0,
-		"V3":                1,
-		"Gen4":              2,
-		"Gen4Greedy":        3,
-		"Gen4Left2Right":    4,
-		"Gen4WithFallback":  5,
-		"Gen4CompareV3":     6,
-		"Gen4CompareV3Test": 7,
+		"DEFAULT_PLANNER":  0,
+		"V3":               1,
+		"Gen4":             2,
+		"Gen4Greedy":       3,
+		"Gen4Left2Right":   4,
+		"Gen4WithFallback": 5,
+		"Gen4CompareV3":    6,
 	}
 )
 
