@@ -26,6 +26,14 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult){
+	"coalesce":  builtinFuncCoalesce,
+	"greatest":  builtinFuncGreatest,
+	"least":     builtinFuncLeast,
+	"collation": builtinFuncCollation,
+	"isnull":    builtinFuncIsNull,
+}
+
 type CallExpr struct {
 	Arguments TupleExpr
 	Aliases   []sqlparser.ColIdent
@@ -242,4 +250,11 @@ func builtinFuncCollation(env *ExpressionEnv, args []EvalResult, result *EvalRes
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireASCII,
 	})
+}
+
+func builtinFuncIsNull(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	if len(args) != 1 {
+		throwArgError("ISNULL")
+	}
+	result.setBool(args[0].null())
 }
