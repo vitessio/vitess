@@ -22,7 +22,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -33,7 +33,7 @@ type CallExpr struct {
 	Call      func(*ExpressionEnv, []EvalResult, *EvalResult)
 }
 
-func (c *CallExpr) typeof(*ExpressionEnv) querypb.Type {
+func (c *CallExpr) typeof(*ExpressionEnv) sqltypes.Type {
 	return -1
 }
 
@@ -79,25 +79,25 @@ func getMultiComparisonFunc(args []EvalResult) multiComparisonFunc {
 	for i := range args {
 		arg := &args[i]
 		switch arg.typeof() {
-		case querypb.Type_NULL_TYPE:
+		case sqltypes.Null:
 			return func(args []EvalResult, result *EvalResult, cmp int) {
 				result.setNull()
 			}
-		case querypb.Type_INT8, querypb.Type_INT16, querypb.Type_INT32, querypb.Type_INT64:
+		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 			integers++
-		case querypb.Type_UINT8, querypb.Type_UINT16, querypb.Type_UINT32, querypb.Type_UINT64:
+		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 			if arg.uint64() > math.MaxInt64 {
 				decimals++
 			} else {
 				integers++
 			}
-		case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
+		case sqltypes.Float32, sqltypes.Float64:
 			floats++
-		case querypb.Type_DECIMAL:
+		case sqltypes.Decimal:
 			decimals++
-		case querypb.Type_TEXT, querypb.Type_VARCHAR:
+		case sqltypes.Text, sqltypes.VarChar:
 			text++
-		case querypb.Type_BLOB, querypb.Type_BINARY, querypb.Type_VARBINARY:
+		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
 			binary++
 		}
 	}
@@ -197,7 +197,7 @@ func compareAllText(args []EvalResult, result *EvalResult, cmp int) {
 		}
 	}
 
-	result.setRaw(querypb.Type_VARCHAR, candidateB, collationB)
+	result.setRaw(sqltypes.VarChar, candidateB, collationB)
 }
 
 func compareAllBinary(args []EvalResult, result *EvalResult, cmp int) {
@@ -210,7 +210,7 @@ func compareAllBinary(args []EvalResult, result *EvalResult, cmp int) {
 		}
 	}
 
-	result.setRaw(querypb.Type_VARBINARY, candidateB, collationBinary)
+	result.setRaw(sqltypes.VarBinary, candidateB, collationBinary)
 }
 
 func throwArgError(fname string) {

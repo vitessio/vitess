@@ -17,7 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -130,22 +130,22 @@ func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.setBoolean(inner.truthy().not())
 }
 
-func (n *NotExpr) typeof(*ExpressionEnv) querypb.Type {
-	return querypb.Type_UINT64
+func (n *NotExpr) typeof(*ExpressionEnv) sqltypes.Type {
+	return sqltypes.Uint64
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var left, right EvalResult
 	left.init(env, l.Left)
 	right.init(env, l.Right)
-	if left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
+	if left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple {
 		panic("did not typecheck tuples")
 	}
 	out.setBoolean(l.op(left.truthy(), right.truthy()))
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) querypb.Type {
-	return querypb.Type_UINT64
+func (l *LogicalExpr) typeof(env *ExpressionEnv) sqltypes.Type {
+	return sqltypes.Uint64
 }
 
 // IsExpr represents the IS expression in MySQL.
@@ -164,6 +164,6 @@ func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.setBool(i.Check(&in))
 }
 
-func (i *IsExpr) typeof(env *ExpressionEnv) querypb.Type {
-	return querypb.Type_INT64
+func (i *IsExpr) typeof(env *ExpressionEnv) sqltypes.Type {
+	return sqltypes.Int64
 }

@@ -200,6 +200,7 @@ func TestMultiComparisons(t *testing.T) {
 		`"0"`, `"-1"`, `"1"`,
 		`_utf8mb4 'foobar'`, `_utf8mb4 'FOOBAR'`,
 		`_binary '0'`, `_binary '-1'`, `_binary '1'`,
+		`0x0`, `0x1`, `-0x0`, `-0x1`,
 	}
 
 	var conn = mysqlconn(t)
