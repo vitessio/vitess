@@ -45,6 +45,7 @@ func forSettings(systemVariables []sysvars.SystemVariable, f func(setting) planF
 			name:               sysvar.Name,
 			boolean:            sysvar.IsBoolean,
 			identifierAsString: sysvar.IdentifierAsString,
+			supportSetVar:      sysvar.SupportSetVar,
 		}
 
 		if sysvar.Default != "" {

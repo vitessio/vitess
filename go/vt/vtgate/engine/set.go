@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/sysvars"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -82,6 +84,7 @@ type (
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination `json:",omitempty"`
 		Expr              string
+		SupportSetVar     bool
 	}
 
 	// SysVarSetAware implements the SetOp interface and will write the changes variable into the session
@@ -353,7 +356,9 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 	buf := new(bytes.Buffer)
 	value.EncodeSQL(buf)
 	vcursor.Session().SetSysVar(svs.Name, buf.String())
-	vcursor.Session().NeedsReservedConn()
+	if sqlparser.MySQLVersion < "80000" || !svs.SupportSetVar {
+		vcursor.Session().NeedsReservedConn()
+	}
 	return true, nil
 }
 
