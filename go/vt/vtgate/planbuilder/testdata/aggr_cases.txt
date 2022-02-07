@@ -133,7 +133,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "GroupBy": "(1|4), (2|5) COLLATE latin1_swedish_ci, (3|6)",
     "ResultColumns": 4,
     "Inputs": [
@@ -185,7 +185,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "GroupBy": "1",
     "Inputs": [
       {
@@ -252,7 +252,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0) AS k",
+        "Aggregates": "sum(0) AS k",
         "GroupBy": "(1|4), (2|5) COLLATE latin1_swedish_ci, (3|6)",
         "Inputs": [
           {
@@ -303,7 +303,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -620,7 +620,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(*)",
+    "Aggregates": "sum(1) AS count(*)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -648,7 +648,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(*)",
+    "Aggregates": "sum(1) AS count(*)",
     "GroupBy": "0, (2|3)",
     "ResultColumns": 2,
     "Inputs": [
@@ -701,7 +701,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(*)",
+    "Aggregates": "sum(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -901,7 +901,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1051,7 +1051,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(distinct id)",
+    "Aggregates": "sum(1) AS count(distinct id)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1438,7 +1438,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2) AS count(*)",
+    "Aggregates": "sum(2) AS count(*)",
     "GroupBy": "(1|3), (0|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1491,7 +1491,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2) AS count(*)",
+    "Aggregates": "sum(2) AS count(*)",
     "GroupBy": "(1|3), (0|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1544,7 +1544,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2) AS count(*)",
+    "Aggregates": "sum(2) AS count(*)",
     "GroupBy": "(1|3), (0|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1648,7 +1648,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1756,7 +1756,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4) AS count(*)",
+    "Aggregates": "sum(4) AS count(*)",
     "GroupBy": "(0|5), (1|6), (2|7), (3|8)",
     "ResultColumns": 5,
     "Inputs": [
@@ -1809,7 +1809,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4) AS count(*)",
+    "Aggregates": "sum(4) AS count(*)",
     "GroupBy": "(2|5), (1|6), (0|7), (3|8)",
     "ResultColumns": 5,
     "Inputs": [
@@ -1862,7 +1862,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(3) AS count(*)",
+    "Aggregates": "sum(3) AS count(*)",
     "GroupBy": "(2|4), (1|5), (0|6)",
     "ResultColumns": 4,
     "Inputs": [
@@ -1929,7 +1929,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1) AS count(*)",
+        "Aggregates": "sum(1) AS count(*)",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2089,7 +2089,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1) AS count(*)",
+        "Aggregates": "sum(1) AS count(*)",
         "GroupBy": "(0|2)",
         "Inputs": [
           {
@@ -2134,7 +2134,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2239,7 +2239,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2374,7 +2374,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1) AS k",
+        "Aggregates": "sum(1) AS k",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2427,7 +2427,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1) AS k",
+    "Aggregates": "sum(1) AS k",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2495,7 +2495,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0) AS count(*)",
+    "Aggregates": "sum(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2564,7 +2564,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(*)",
+    "Aggregates": "sum(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2617,7 +2617,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(*)",
+    "Aggregates": "sum(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2744,7 +2744,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2776,7 +2776,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2808,7 +2808,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2840,7 +2840,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2872,7 +2872,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2904,7 +2904,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2936,7 +2936,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2968,7 +2968,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3000,7 +3000,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1) AS a",
+        "Aggregates": "sum(1) AS a",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -3041,7 +3041,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "count(0) AS a",
+            "Aggregates": "sum(0) AS a",
             "GroupBy": "(1|2)",
             "Inputs": [
               {
