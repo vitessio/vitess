@@ -52,7 +52,8 @@ type Insert struct {
 	// Query specifies the query to be executed.
 	// For InsertSharded plans, this value is unused,
 	// and Prefix, Mid and Suffix are used instead.
-	Query string
+	Query    string
+	QueryAST *sqlparser.Insert
 
 	// VindexValues specifies values for all the vindex columns.
 	// This is a three-dimensional data structure:
@@ -197,11 +198,16 @@ func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		defer cancel()
 	}
 
+	query, err := executableQuery(vcursor, ins.QueryAST, ins.Query)
+	if err != nil {
+		return nil, err
+	}
+
 	switch ins.Opcode {
 	case InsertUnsharded:
-		return ins.execInsertUnsharded(vcursor, bindVars)
+		return ins.execInsertUnsharded(vcursor, bindVars, query)
 	case InsertSharded, InsertShardedIgnore:
-		return ins.execInsertSharded(vcursor, bindVars)
+		return ins.execInsertSharded(vcursor, bindVars, query)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", ins)
@@ -222,7 +228,7 @@ func (ins *Insert) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
 }
 
-func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string) (*sqltypes.Result, error) {
 	insertID, err := ins.processGenerate(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -239,7 +245,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if err != nil {
 		return nil, err
 	}
-	result, err := execShard(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
+	result, err := execShard(vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +260,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	return result, nil
 }
 
-func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable, query string) (*sqltypes.Result, error) {
 	insertID, err := ins.processGenerate(vcursor, bindVars)
 	if err != nil {
 		return nil, err

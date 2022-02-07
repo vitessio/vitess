@@ -134,7 +134,7 @@ func TestSystemVariables(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name+tc.value, func(t *testing.T) {
 			utils.Exec(t, conn, fmt.Sprintf("set %s=%s", tc.name, tc.value))
-			utils.AssertMatches(t, conn, fmt.Sprintf("select @@%s from information_schema.tables limit 1", tc.name), tc.expectation)
+			utils.AssertMatches(t, conn, fmt.Sprintf("select @@%s", tc.name), tc.expectation)
 		})
 	}
 }
