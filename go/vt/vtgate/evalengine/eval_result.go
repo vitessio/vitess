@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
@@ -98,8 +97,8 @@ func (er *EvalResult) resolve() {
 			er.expr.eval(er.env, er)
 			if er.type_ != before {
 				panic(fmt.Sprintf("did not pre-compute the right type: %v before evaluation, %v after",
-					querypb.Type(before).String(),
-					querypb.Type(er.type_).String()))
+					sqltypes.Type(before).String(),
+					sqltypes.Type(er.type_).String()))
 			}
 		} else {
 			er.expr.eval(er.env, er)
@@ -108,11 +107,11 @@ func (er *EvalResult) resolve() {
 	}
 }
 
-func (er *EvalResult) typeof() querypb.Type {
+func (er *EvalResult) typeof() sqltypes.Type {
 	if er.type_ < 0 {
 		er.resolve()
 	}
-	return querypb.Type(er.type_)
+	return sqltypes.Type(er.type_)
 }
 
 func (er *EvalResult) hasFlag(f uint16) bool {
@@ -191,7 +190,7 @@ func (er *EvalResult) setBoolean(b boolean) {
 	}
 }
 
-func (er *EvalResult) setRaw(typ querypb.Type, raw []byte, coll collations.TypedCollation) {
+func (er *EvalResult) setRaw(typ sqltypes.Type, raw []byte, coll collations.TypedCollation) {
 	er.type_ = int16(typ)
 	er.bytes_ = raw
 	er.collation_ = coll
@@ -210,7 +209,7 @@ func (er *EvalResult) setString(str string, coll collations.TypedCollation) {
 	er.collation_ = coll
 }
 
-func (er *EvalResult) setRawNumeric(typ querypb.Type, u uint64) {
+func (er *EvalResult) setRawNumeric(typ sqltypes.Type, u uint64) {
 	er.type_ = int16(typ)
 	er.numeric_ = u
 	er.collation_ = collationNumeric
@@ -241,7 +240,7 @@ func (er *EvalResult) setDecimal(dec *decimalResult) {
 }
 
 func (er *EvalResult) setTuple(t []EvalResult) {
-	er.type_ = int16(querypb.Type_TUPLE)
+	er.type_ = int16(sqltypes.Tuple)
 	er.tuple_ = &t
 	er.collation_ = collations.TypedCollation{}
 }
@@ -351,7 +350,7 @@ func (er *EvalResult) TupleValues() []sqltypes.Value {
 
 // debugString prints the entire EvalResult in a debug format
 func (er *EvalResult) debugString() string {
-	return fmt.Sprintf("(%s) 0x%08x %s", querypb.Type_name[int32(er.type_)], er.numeric_, er.bytes_)
+	return fmt.Sprintf("(%s) 0x%08x %s", sqltypes.Type(er.type_).String(), er.numeric_, er.bytes_)
 }
 
 // ToBooleanStrict is used when the casting to a boolean has to be minimally forgiving,
@@ -408,7 +407,7 @@ func (er *EvalResult) truthy() boolean {
 		return makeboolean(!er.decimal().num.IsZero())
 	case sqltypes.VarBinary, sqltypes.VarChar:
 		return makeboolean(parseStringToFloat(er.string()) != 0.0)
-	case querypb.Type_TUPLE:
+	case sqltypes.Tuple:
 		panic("did not typecheck tuples")
 	default:
 		return boolTrue
@@ -416,7 +415,7 @@ func (er *EvalResult) truthy() boolean {
 }
 
 // FormatFloat formats a float64 as a byte string in a similar way to what MySQL does
-func FormatFloat(typ querypb.Type, f float64) []byte {
+func FormatFloat(typ sqltypes.Type, f float64) []byte {
 	format := byte('g')
 	if typ == sqltypes.Decimal {
 		format = 'f'
@@ -455,7 +454,7 @@ func (er *EvalResult) toRawBytes() []byte {
 	}
 }
 
-func (er *EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
+func (er *EvalResult) toSQLValue(resultType sqltypes.Type) sqltypes.Value {
 	switch {
 	case sqltypes.IsSigned(resultType):
 		switch er.typeof() {
@@ -523,7 +522,7 @@ func (er *EvalResult) nullSafeHashcode() (HashCode, error) {
 	}
 }
 
-func (er *EvalResult) setValueCast(v sqltypes.Value, typ querypb.Type) error {
+func (er *EvalResult) setValueCast(v sqltypes.Value, typ sqltypes.Type) error {
 	switch {
 	case typ == sqltypes.Null:
 		er.setNull()
@@ -611,7 +610,7 @@ func (er *EvalResult) setValueCast(v sqltypes.Value, typ querypb.Type) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }
 
-func (er *EvalResult) setBindVar1(typ querypb.Type, value []byte, collation collations.TypedCollation) {
+func (er *EvalResult) setBindVar1(typ sqltypes.Type, value []byte, collation collations.TypedCollation) {
 	switch typ {
 	case sqltypes.Int64:
 		ival, err := strconv.ParseInt(string(value), 10, 64)
@@ -670,7 +669,7 @@ func (er *EvalResult) setBindVar1(typ querypb.Type, value []byte, collation coll
 }
 
 // CoerceTo takes two input types, and decides how they should be coerced before compared
-func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
+func CoerceTo(v1, v2 sqltypes.Type) (sqltypes.Type, error) {
 	if v1 == v2 {
 		return v1, nil
 	}
@@ -709,7 +708,7 @@ func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
 
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
-func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType querypb.Type) (HashCode, error) {
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type) (HashCode, error) {
 	var cast EvalResult
 	if err := cast.setValueCast(v, coerceType); err != nil {
 		return 0, err
@@ -746,7 +745,7 @@ func (er *EvalResult) makeNumeric() {
 	if er.numeric() {
 		return
 	}
-	if er.typeof() == querypb.Type_VARBINARY && er.hasFlag(flagHex) {
+	if er.typeof() == sqltypes.VarBinary && er.hasFlag(flagHex) {
 		raw := er.bytes()
 		if len(raw) > 8 {
 			// overflow
@@ -776,7 +775,7 @@ func (er *EvalResult) makeNumeric() {
 func (er *EvalResult) negateNumeric() {
 	er.makeNumeric()
 	switch er.typeof() {
-	case querypb.Type_INT8, querypb.Type_INT16, querypb.Type_INT32, querypb.Type_INT64:
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 		i := er.int64()
 		if i == math.MinInt64 {
 			dec := newDecimalInt64(i)
@@ -785,7 +784,7 @@ func (er *EvalResult) negateNumeric() {
 		} else {
 			er.setInt64(-i)
 		}
-	case querypb.Type_UINT8, querypb.Type_UINT16, querypb.Type_UINT32, querypb.Type_UINT64:
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		u := er.uint64()
 		if er.hasFlag(flagHex) {
 			er.setFloat(-float64(u))
@@ -796,9 +795,9 @@ func (er *EvalResult) negateNumeric() {
 		} else {
 			er.setInt64(-int64(u))
 		}
-	case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
+	case sqltypes.Float32, sqltypes.Float64:
 		er.setFloat(-er.float64())
-	case querypb.Type_DECIMAL:
+	case sqltypes.Decimal:
 		dec := er.decimal()
 		if !dec.num.IsZero() {
 			dec.num.SetSignbit(!dec.num.Signbit())
@@ -880,7 +879,7 @@ func newEvalResultNumeric(v sqltypes.Value) (er EvalResult, err error) {
 	return
 }
 
-func newEvalRaw(typ querypb.Type, raw []byte) (er EvalResult) {
+func newEvalRaw(typ sqltypes.Type, raw []byte) (er EvalResult) {
 	er.setRaw(typ, raw, collations.TypedCollation{})
 	return
 }

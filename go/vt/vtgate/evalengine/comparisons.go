@@ -19,7 +19,6 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -142,8 +141,8 @@ func evalResultsAreDateAndNumeric(l, r *EvalResult) bool {
 }
 
 func compareAsTuples(lVal, rVal *EvalResult) bool {
-	left := lVal.typeof() == querypb.Type_TUPLE
-	right := rVal.typeof() == querypb.Type_TUPLE
+	left := lVal.typeof() == sqltypes.Tuple
+	right := rVal.typeof() == sqltypes.Tuple
 	if left && right {
 		return true
 	}
@@ -221,7 +220,7 @@ func evalCompare(lVal, rVal *EvalResult) (comp int, err error) {
 		// 			- select 1 where 104200 = cast("10:42:00" as time)
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
 
-	case lVal.typeof() == querypb.Type_TUPLE || rVal.typeof() == querypb.Type_TUPLE:
+	case lVal.typeof() == sqltypes.Tuple || rVal.typeof() == sqltypes.Tuple:
 		panic("evalCompare: tuple comparison should be handled early")
 
 	default:
@@ -270,7 +269,7 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(*ExpressionEnv) querypb.Type {
+func (c *ComparisonExpr) typeof(*ExpressionEnv) sqltypes.Type {
 	// TODO: make this less aggressive
 	return -1
 }
@@ -281,7 +280,7 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	left.init(env, i.Left)
 	right.init(env, i.Right)
 
-	if right.typeof() != querypb.Type_TUPLE {
+	if right.typeof() != sqltypes.Tuple {
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
 	}
 	if left.null() {
@@ -332,9 +331,9 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv) querypb.Type {
+func (i *InExpr) typeof(env *ExpressionEnv) sqltypes.Type {
 	// TODO: make this less aggressive
-	// return querypb.Type_INT64, nil
+	// return sqltypes.Int64, nil
 	return -1
 }
 
@@ -359,7 +358,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 
 	var matched bool
 	switch {
-	case left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE:
+	case left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple:
 		panic("failed to typecheck tuples")
 	case left.null() || right.null():
 		result.setNull()
@@ -378,8 +377,8 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv) querypb.Type {
+func (l *LikeExpr) typeof(env *ExpressionEnv) sqltypes.Type {
 	// TODO: make this less aggressive
-	// return querypb.Type_UINT64, nil
+	// return sqltypes.Uint64, nil
 	return -1
 }

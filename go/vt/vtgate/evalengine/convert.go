@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/mysql/collations"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -319,19 +319,19 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case *Literal:
 			switch collation {
 			case collations.CollationBinaryID:
-				lit.Val.type_ = int16(querypb.Type_VARBINARY)
+				lit.Val.type_ = int16(sqltypes.VarBinary)
 				lit.Val.collation_ = collationBinary
 			default:
-				lit.Val.type_ = int16(querypb.Type_VARCHAR)
+				lit.Val.type_ = int16(sqltypes.VarChar)
 				lit.Val.replaceCollationID(collation)
 			}
 		case *BindVariable:
 			switch collation {
 			case collations.CollationBinaryID:
-				lit.coerceType = querypb.Type_VARBINARY
+				lit.coerceType = sqltypes.VarBinary
 				lit.coll = collationBinary
 			default:
-				lit.coerceType = querypb.Type_VARCHAR
+				lit.coerceType = sqltypes.VarChar
 				lit.coll.Collation = collation
 			}
 		default:
