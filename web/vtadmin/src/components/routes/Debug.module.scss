@@ -61,6 +61,7 @@
     div:first-child {
         @apply bg-danger;
     }
+
     &:after {
         content: 'danger';
     }
@@ -70,6 +71,7 @@
     div:first-child {
         @apply bg-danger-50;
     }
+
     &:after {
         content: 'danger-50';
     }
@@ -79,6 +81,7 @@
     div:first-child {
         @apply bg-danger-200;
     }
+
     &:after {
         content: 'danger-200';
     }
@@ -88,6 +91,7 @@
     div:first-child {
         @apply bg-success;
     }
+
     &:after {
         content: 'success';
     }
@@ -97,6 +101,7 @@
     div:first-child {
         @apply bg-success-50;
     }
+
     &:after {
         content: 'success-50';
     }
@@ -106,6 +111,7 @@
     div:first-child {
         @apply bg-success-200;
     }
+
     &:after {
         content: 'success-200';
     }
@@ -115,6 +121,7 @@
     div:first-child {
         @apply bg-warning;
     }
+
     &:after {
         content: 'warning';
     }
@@ -124,6 +131,7 @@
     div:first-child {
         @apply bg-warning-50;
     }
+
     &:after {
         content: 'warning50';
     }
@@ -133,6 +141,7 @@
     div:first-child {
         @apply bg-warning-200;
     }
+
     &:after {
         content: 'warning-200';
     }
@@ -142,6 +151,7 @@
     div:first-child {
         @apply bg-vtblue;
     }
+
     &:after {
         content: 'vtblue';
     }
@@ -151,6 +161,7 @@
     div:first-child {
         @apply bg-vtblue-50;
     }
+
     &:after {
         content: 'vtblue-50';
     }
@@ -160,6 +171,7 @@
     div:first-child {
         @apply bg-vtblue-200;
     }
+
     &:after {
         content: 'vtblue-200';
     }
@@ -169,6 +181,7 @@
     div:first-child {
         @apply bg-vtblue-dark;
     }
+
     &:after {
         content: 'vtblue-dark';
     }
@@ -178,6 +191,7 @@
     div:first-child {
         @apply bg-vtblue-dark-50;
     }
+
     &:after {
         content: 'vtblue-dark-50';
     }
@@ -187,6 +201,7 @@
     div:first-child {
         @apply bg-vtblue-dark-200;
     }
+
     &:after {
         content: 'vtblue-dark-200';
     }
@@ -196,6 +211,7 @@
     div:first-child {
         @apply bg-gray-75;
     }
+
     &:after {
         content: 'gray-75';
     }
@@ -205,6 +221,7 @@
     div:first-child {
         @apply bg-gray-100;
     }
+
     &:after {
         content: 'gray-100';
     }
@@ -214,6 +231,7 @@
     div:first-child {
         @apply bg-gray-200;
     }
+
     &:after {
         content: 'gray-200';
     }
@@ -223,6 +241,7 @@
     div:first-child {
         @apply bg-gray-400;
     }
+
     &:after {
         content: 'gray-400';
     }
@@ -232,6 +251,7 @@
     div:first-child {
         @apply bg-gray-600;
     }
+
     &:after {
         content: 'gray-600';
     }
@@ -241,6 +261,7 @@
     div:first-child {
         @apply bg-gray-800;
     }
+
     &:after {
         content: 'gray-800';
     }
@@ -250,6 +271,7 @@
     div:first-child {
         @apply bg-gray-900;
     }
+
     &:after {
         content: 'gray-900';
     }
