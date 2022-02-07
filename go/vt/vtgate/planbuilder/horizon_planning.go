@@ -619,6 +619,12 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 		collID = ctx.SemTable.CollationForExpr(innerAliased.Expr)
 	}
 
+	if opcode == engine.AggregateCount {
+		// If we push down count(*) to shards, at the vtgate level,
+		// all we have to do is to SUM the individual COUNTs
+		opcode = engine.AggregateSum
+	}
+
 	param := &engine.AggregateParams{
 		Opcode:      opcode,
 		Alias:       alias,
