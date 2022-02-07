@@ -24,42 +24,45 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestSemiSyncACKersForPrimary(t *testing.T) {
-	primaryTablet := &topodatapb.Tablet{
+var (
+	primaryTablet = &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-1",
 			Uid:  1,
 		},
 		Type: topodatapb.TabletType_PRIMARY,
 	}
-	replicaTablet := &topodatapb.Tablet{
+	replicaTablet = &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-1",
 			Uid:  2,
 		},
 		Type: topodatapb.TabletType_REPLICA,
 	}
-	rdonlyTablet := &topodatapb.Tablet{
+	rdonlyTablet = &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-1",
 			Uid:  3,
 		},
 		Type: topodatapb.TabletType_RDONLY,
 	}
-	replicaCrossCellTablet := &topodatapb.Tablet{
+	replicaCrossCellTablet = &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-2",
 			Uid:  2,
 		},
 		Type: topodatapb.TabletType_REPLICA,
 	}
-	rdonlyCrossCellTablet := &topodatapb.Tablet{
+	rdonlyCrossCellTablet = &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-2",
 			Uid:  3,
 		},
 		Type: topodatapb.TabletType_RDONLY,
 	}
+)
+
+func TestSemiSyncACKersForPrimary(t *testing.T) {
 	tests := []struct {
 		name               string
 		durabilityPolicy   string
@@ -99,6 +102,104 @@ func TestSemiSyncACKersForPrimary(t *testing.T) {
 			require.NoError(t, err, "error setting durability policy")
 			semiSyncACKers := SemiSyncACKersForPrimary(tt.primary, tt.allTablets)
 			require.Equal(t, tt.wantSemiSyncACKers, semiSyncACKers)
+		})
+	}
+}
+
+func TestRevokeForTablet(t *testing.T) {
+	tests := []struct {
+		name             string
+		durabilityPolicy string
+		primaryCapable   *topodatapb.Tablet
+		allTablets       []*topodatapb.Tablet
+		tabletsReached   []*topodatapb.Tablet
+		revoked          bool
+	}{
+		{
+			name:             "'none' durability policy - not revoked",
+			durabilityPolicy: "none",
+			primaryCapable:   primaryTablet,
+			allTablets: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			tabletsReached: []*topodatapb.Tablet{
+				replicaTablet, replicaCrossCellTablet, rdonlyTablet, rdonlyCrossCellTablet,
+			},
+			revoked: false,
+		}, {
+			name:             "'none' durability policy - revoked",
+			durabilityPolicy: "none",
+			primaryCapable:   primaryTablet,
+			allTablets: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			tabletsReached: []*topodatapb.Tablet{
+				primaryTablet, rdonlyTablet, rdonlyCrossCellTablet,
+			},
+			revoked: true,
+		}, {
+			name:             "'semi_sync' durability policy - revoked",
+			durabilityPolicy: "semi_sync",
+			primaryCapable:   primaryTablet,
+			allTablets: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			tabletsReached: []*topodatapb.Tablet{
+				replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet,
+			},
+			revoked: true,
+		}, {
+			name:             "'semi_sync' durability policy - not revoked",
+			durabilityPolicy: "semi_sync",
+			primaryCapable:   primaryTablet,
+			allTablets: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			tabletsReached: []*topodatapb.Tablet{
+				replicaTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			revoked: false,
+		}, {
+			name:             "'cross_cell' durability policy - revoked",
+			durabilityPolicy: "cross_cell",
+			primaryCapable:   primaryTablet,
+			allTablets: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			tabletsReached: []*topodatapb.Tablet{
+				replicaCrossCellTablet,
+			},
+			revoked: true,
+		}, {
+			name:             "'cross_cell' durability policy - not revoked",
+			durabilityPolicy: "cross_cell",
+			primaryCapable:   primaryTablet,
+			allTablets: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			tabletsReached: []*topodatapb.Tablet{
+				replicaTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			revoked: false,
+		}, {
+			name:             "'cross_cell' durability policy - primary in list",
+			durabilityPolicy: "cross_cell",
+			primaryCapable:   primaryTablet,
+			allTablets: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			tabletsReached: []*topodatapb.Tablet{
+				primaryTablet,
+			},
+			revoked: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := SetDurabilityPolicy(tt.durabilityPolicy, nil)
+			require.NoError(t, err)
+			out := RevokeForTablet(tt.primaryCapable, tt.tabletsReached, tt.allTablets)
+			require.Equal(t, tt.revoked, out)
 		})
 	}
 }
