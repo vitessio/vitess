@@ -58,6 +58,10 @@ type OrderedAggregate struct {
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int `json:",omitempty"`
 
+	// Collations stores the collation ID per column offset.
+	// It is used for grouping keys and distinct aggregate functions
+	Collations map[int]collations.ID
+
 	// Input is the primitive that will feed into this Primitive.
 	Input Primitive
 }
@@ -73,10 +77,19 @@ type GroupByParams struct {
 
 // String returns a string. Used for plan descriptions
 func (gbp GroupByParams) String() string {
+	var out string
 	if gbp.WeightStringCol == -1 || gbp.KeyCol == gbp.WeightStringCol {
-		return strconv.Itoa(gbp.KeyCol)
+		out = strconv.Itoa(gbp.KeyCol)
+	} else {
+		out = fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
 	}
-	return fmt.Sprintf("(%d|%d)", gbp.KeyCol, gbp.WeightStringCol)
+
+	if gbp.CollationID != collations.Unknown {
+		collation := collations.Local().LookupByID(gbp.CollationID)
+		out += " COLLATE " + collation.Name()
+	}
+
+	return out
 }
 
 // AggregateParams specify the parameters for each aggregation.
@@ -86,9 +99,10 @@ type AggregateParams struct {
 	Col    int
 
 	// These are used only for distinct opcodes.
-	KeyCol    int
-	WCol      int
-	WAssigned bool
+	KeyCol      int
+	WCol        int
+	WAssigned   bool
+	CollationID collations.ID
 
 	Alias string `json:",omitempty"`
 	Expr  sqlparser.Expr
@@ -106,6 +120,10 @@ func (ap *AggregateParams) String() string {
 	keyCol := strconv.Itoa(ap.Col)
 	if ap.WAssigned {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
+	}
+	if ap.CollationID != collations.Unknown {
+		collation := collations.Local().LookupByID(ap.CollationID)
+		keyCol += " COLLATE " + collation.Name()
 	}
 	if ap.Alias != "" {
 		return fmt.Sprintf("%s(%s) AS %s", ap.Opcode.String(), keyCol, ap.Alias)
@@ -186,17 +204,6 @@ func (oa *OrderedAggregate) GetTableName() string {
 	return oa.Input.GetTableName()
 }
 
-// getCollations specifies the collation ID value for columns.
-func (oa *OrderedAggregate) getCollations() map[int]collations.ID {
-	colls := make(map[int]collations.ID)
-	for _, key := range oa.GroupByKeys {
-		if key.CollationID != collations.Unknown {
-			colls[key.KeyCol] = key.CollationID
-		}
-	}
-	return colls
-}
-
 // SetTruncateColumnCount sets the truncate column count.
 func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 	oa.TruncateColumnCount = count
@@ -220,7 +227,6 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		Fields: oa.convertFields(result.Fields),
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 	}
-	colls := oa.getCollations()
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value
@@ -229,13 +235,13 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 			current, curDistincts = oa.convertRow(row)
 			continue
 		}
-		equal, err := oa.keysEqual(current, row, colls)
+		equal, err := oa.keysEqual(current, row, oa.Collations)
 		if err != nil {
 			return nil, err
 		}
 
 		if equal {
-			current, curDistincts, err = oa.merge(result.Fields, current, row, curDistincts, colls)
+			current, curDistincts, err = oa.merge(result.Fields, current, row, curDistincts, oa.Collations)
 			if err != nil {
 				return nil, err
 			}
@@ -282,7 +288,6 @@ func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[strin
 				return err
 			}
 		}
-		colls := oa.getCollations()
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
 			if current == nil {
@@ -290,13 +295,13 @@ func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[strin
 				continue
 			}
 
-			equal, err := oa.keysEqual(current, row, colls)
+			equal, err := oa.keysEqual(current, row, oa.Collations)
 			if err != nil {
 				return err
 			}
 
 			if equal {
-				current, curDistincts, err = oa.merge(fields, current, row, curDistincts, colls)
+				current, curDistincts, err = oa.merge(fields, current, row, curDistincts, oa.Collations)
 				if err != nil {
 					return err
 				}
