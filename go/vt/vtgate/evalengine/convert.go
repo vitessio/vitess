@@ -381,13 +381,6 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	return nil, convertNotSupported(e)
 }
 
-var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult){
-	"coalesce":  builtinFuncCoalesce,
-	"greatest":  builtinFuncGreatest,
-	"least":     builtinFuncLeast,
-	"collation": builtinFuncCollation,
-}
-
 func convertNotSupported(e sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrConvertExprNotSupported, sqlparser.String(e))
 }
