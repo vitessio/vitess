@@ -17,11 +17,14 @@ limitations under the License.
 package engine
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -36,6 +39,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Route)(nil)
@@ -48,7 +52,8 @@ type Route struct {
 	TargetTabletType topodatapb.TabletType
 
 	// Query specifies the query to be executed.
-	Query string
+	Query    string
+	QueryAST sqlparser.SelectStatement
 
 	// TableName specifies the table to send the query to.
 	TableName string
@@ -94,12 +99,15 @@ func NewSimpleRoute(opcode Opcode, keyspace *vindexes.Keyspace) *Route {
 
 // NewRoute creates a Route.
 func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
+	stmt, _ := sqlparser.Parse(query)
+	queryAST, _ := stmt.(sqlparser.SelectStatement)
 	return &Route{
 		RoutingParameters: &RoutingParameters{
 			Opcode:   opcode,
 			Keyspace: keyspace,
 		},
 		Query:      query,
+		QueryAST:   queryAST,
 		FieldQuery: fieldQuery,
 	}
 }
@@ -177,6 +185,37 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
+func GetSysVarsComment(vcursor VCursor, query sqlparser.SelectStatement) (string, error) {
+	if query == nil || vcursor.Session().InReservedConn() {
+		return "", nil
+	}
+	sysVars := vcursor.Session().GetSystemVariables()
+	if len(sysVars) == 0 {
+		return "", nil
+	}
+
+	if len(query.GetComments()) > 0 {
+		vcursor.Session().NeedsReservedConn()
+		return "", nil
+	}
+	res := &bytes.Buffer{}
+	_, err := res.WriteString("/*+ ")
+	if err != nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
+	}
+	for key, val := range sysVars {
+		_, err = res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", key, val))
+		if err != nil {
+			return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
+		}
+	}
+	_, err = res.WriteString("*/")
+	if err != nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
+	}
+	return res.String(), nil
+}
+
 func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
@@ -191,7 +230,17 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 		return &sqltypes.Result{}, nil
 	}
 
-	queries := getQueries(route.Query, bvs)
+	q := route.Query
+	sysVarComment, err := GetSysVarsComment(vcursor, route.QueryAST)
+	if err != nil {
+		return nil, err
+	}
+	if sysVarComment != "" {
+		newAST := sqlparser.CloneSelectStatement(route.QueryAST)
+		newAST.SetComments(sqlparser.Comments{sysVarComment})
+		q = sqlparser.String(newAST)
+	}
+	queries := getQueries(q, bvs)
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* autocommit */)
 
 	if errs != nil {

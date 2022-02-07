@@ -65,6 +65,7 @@ func (rb *routeGen4) SetLimit(limit *sqlparser.Limit) {
 func (rb *routeGen4) WireupGen4(_ *semantics.SemTable) error {
 	rb.prepareTheAST()
 
+	rb.eroute.QueryAST = rb.Select
 	rb.eroute.Query = sqlparser.String(rb.Select)
 
 	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)

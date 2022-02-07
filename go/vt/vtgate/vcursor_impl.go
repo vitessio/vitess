@@ -172,6 +172,10 @@ func newVCursorImpl(
 	}, nil
 }
 
+func (vc *vcursorImpl) GetSystemVariables() map[string]string {
+	return vc.safeSession.GetSystemVariables()
+}
+
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation

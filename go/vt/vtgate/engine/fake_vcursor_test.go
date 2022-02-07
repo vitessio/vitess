@@ -68,6 +68,10 @@ func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[s
 	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
 }
 
+func (t *noopVCursor) GetSystemVariables() map[string]string {
+	panic("implement me")
+}
+
 func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
 	panic("implement me")
 }
@@ -300,9 +304,11 @@ type loggingVCursor struct {
 
 	resolvedTargetTabletType topodatapb.TabletType
 
-	tableRoutes tableRoutes
-	dbDDLPlugin string
-	ksAvailable bool
+	tableRoutes     tableRoutes
+	dbDDLPlugin     string
+	ksAvailable     bool
+	inReservedConn  bool
+	systemVariables map[string]string
 }
 
 type tableRoutes struct {
@@ -319,6 +325,10 @@ func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars ma
 
 func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {
 	return f.ksAvailable
+}
+
+func (f *loggingVCursor) GetSystemVariables() map[string]string {
+	return f.systemVariables
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
@@ -344,10 +354,11 @@ func (f *loggingVCursor) SetSysVar(name string, expr string) {
 
 func (f *loggingVCursor) NeedsReservedConn() {
 	f.log = append(f.log, "Needs Reserved Conn")
+	f.inReservedConn = true
 }
 
 func (f *loggingVCursor) InReservedConn() bool {
-	panic("implement me")
+	return f.inReservedConn
 }
 
 func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
