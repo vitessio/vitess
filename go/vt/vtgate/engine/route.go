@@ -185,7 +185,7 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func GetSysVarsComment(vcursor VCursor, query sqlparser.SelectStatement) (string, error) {
+func getSysVarsComment(vcursor VCursor, query sqlparser.SelectStatement) (string, error) {
 	if query == nil || vcursor.Session().InReservedConn() {
 		return "", nil
 	}
@@ -230,15 +230,9 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 		return &sqltypes.Result{}, nil
 	}
 
-	q := route.Query
-	sysVarComment, err := GetSysVarsComment(vcursor, route.QueryAST)
+	q, err := route.executableQuery(vcursor)
 	if err != nil {
-		return nil, err
-	}
-	if sysVarComment != "" {
-		newAST := sqlparser.CloneSelectStatement(route.QueryAST)
-		newAST.SetComments(sqlparser.Comments{sysVarComment})
-		q = sqlparser.String(newAST)
+		return &sqltypes.Result{}, err
 	}
 	queries := getQueries(q, bvs)
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* autocommit */)
@@ -262,6 +256,20 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	}
 
 	return route.sort(result)
+}
+
+func (route *Route) executableQuery(vcursor VCursor) (string, error) {
+	q := route.Query
+	sysVarComment, err := getSysVarsComment(vcursor, route.QueryAST)
+	if err != nil {
+		return "", err
+	}
+	if sysVarComment != "" {
+		newAST := sqlparser.CloneSelectStatement(route.QueryAST)
+		newAST.SetComments(sqlparser.Comments{sysVarComment})
+		q = sqlparser.String(newAST)
+	}
+	return q, nil
 }
 
 func filterOutNilErrors(errs []error) []error {
@@ -297,8 +305,12 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 		return nil
 	}
 
+	q, err := route.executableQuery(vcursor)
+	if err != nil {
+		return err
+	}
 	if len(route.OrderBy) == 0 {
-		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(q, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
@@ -315,14 +327,14 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 	}
 
 	// There is an order by. We have to merge-sort.
-	return route.mergeSort(vcursor, bindVars, wantfields, callback, rss, bvs)
+	return route.mergeSort(vcursor, q, bindVars, wantfields, callback, rss, bvs)
 }
 
-func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
+func (route *Route) mergeSort(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
-			query: route.Query,
+			query: query,
 			rs:    rs,
 			bv:    bvs[i],
 		})

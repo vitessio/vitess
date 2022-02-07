@@ -111,7 +111,7 @@ func TestSelectWithReservedConnection(t *testing.T) {
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`StreamExecuteMulti select 1 ks.0: {} `,
+		`StreamExecuteMulti select /*+ SET_VAR(sql_mode = '') */ 1 from dual ks.0: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
