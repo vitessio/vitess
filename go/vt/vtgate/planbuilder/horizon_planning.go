@@ -511,17 +511,14 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 			return nil, err
 		}
 
-		pushExpr, alias, opcode := hp.createPushExprAndAlias(e, handleDistinct, innerAliased, opcode, oa)
+		pushExpr, param := hp.createPushExprAndAlias(ctx, e, handleDistinct, innerAliased, opcode, oa)
 		offset, _, err := pushProjection(ctx, pushExpr, plan, true, false, true)
 		if err != nil {
 			return nil, err
 		}
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
-			Opcode: opcode,
-			Col:    offset,
-			Alias:  alias,
-			Expr:   fExpr,
-		})
+		param.Col = offset
+		param.Expr = fExpr
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, param)
 	}
 
 	for _, groupExpr := range hp.qp.GroupByExprs {
@@ -577,15 +574,16 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 // createPushExprAndAlias creates the expression that should be pushed down to the leaves,
 // and changes the opcode so it is a distinct one if needed
 func (hp *horizonPlanning) createPushExprAndAlias(
+	ctx *plancontext.PlanningContext,
 	expr abstract.SelectExpr,
 	handleDistinct bool,
 	innerAliased *sqlparser.AliasedExpr,
 	opcode engine.AggregateOpcode,
 	oa *orderedAggregate,
-) (*sqlparser.AliasedExpr, string, engine.AggregateOpcode) {
+) (*sqlparser.AliasedExpr, *engine.AggregateParams) {
 	aliasExpr, isAlias := expr.Col.(*sqlparser.AliasedExpr)
 	if !isAlias {
-		return nil, "", 0
+		return nil, nil
 	}
 	var alias string
 	if aliasExpr.As.IsEmpty() {
@@ -611,7 +609,17 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 		}
 		hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, by)
 	}
-	return aliasExpr, alias, opcode
+	collID := collations.Unknown
+	if innerAliased != nil {
+		collID = ctx.SemTable.CollationForExpr(innerAliased.Expr)
+	}
+
+	param := &engine.AggregateParams{
+		Opcode:      opcode,
+		Alias:       alias,
+		CollationID: collID,
+	}
+	return aliasExpr, param
 }
 
 func hasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
@@ -1156,7 +1164,12 @@ func selectHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemT
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (hp *horizonPlanning) needDistinctHandling(ctx *plancontext.PlanningContext, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode, input logicalPlan) (bool, *sqlparser.AliasedExpr, error) {
+func (hp *horizonPlanning) needDistinctHandling(
+	ctx *plancontext.PlanningContext,
+	funcExpr *sqlparser.FuncExpr,
+	opcode engine.AggregateOpcode,
+	input logicalPlan,
+) (bool, *sqlparser.AliasedExpr, error) {
 	if !funcExpr.Distinct {
 		return false, nil, nil
 	}
