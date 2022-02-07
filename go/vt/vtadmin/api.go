@@ -245,9 +245,9 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				c, err := cluster.Config{
 					ID:            clusterID,
 					Name:          clusterID,
-					DiscoveryImpl: "json",
+					DiscoveryImpl: "dynamic",
 					DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-						"json": map[string]string{
+						"dynamic": map[string]string{
 							"discovery": string(decoded),
 						},
 					},
