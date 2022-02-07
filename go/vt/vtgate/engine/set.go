@@ -401,6 +401,10 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 		changed = true
 	}
 
+	if qr.Rows[0][1].Len() == 0 {
+		return changed, sqltypes.NewVarChar(" ")
+	}
+
 	return changed, qr.Rows[0][1]
 }
 

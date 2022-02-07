@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+
 	"github.com/google/go-cmp/cmp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -112,6 +114,29 @@ func TestVersionCommentWorks(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	exec(t, conn, "/*!80000 SET SESSION information_schema_stats_expiry=0 */")
+}
+
+func TestSystemVariables(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcs := []struct {
+		name        string
+		value       string
+		expectation string
+	}{
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`},
+		{name: "sql_mode", value: "''", expectation: `[[VARCHAR("")]]`},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name+tc.value, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set %s=%s", tc.name, tc.value))
+			utils.AssertMatches(t, conn, fmt.Sprintf("select @@%s from information_schema.tables limit 1", tc.name), tc.expectation)
+		})
+	}
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
