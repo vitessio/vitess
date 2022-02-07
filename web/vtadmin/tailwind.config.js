@@ -75,8 +75,5 @@ module.exports = {
             '3xl': '3.6rem',
         },
     },
-    variants: {
-        extend: {},
-    },
     plugins: [],
 };
