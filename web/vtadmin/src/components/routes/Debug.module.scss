@@ -62,7 +62,7 @@
         @apply bg-danger;
     }
 
-    &:after {
+    &::after {
         content: 'danger';
     }
 }
@@ -72,7 +72,7 @@
         @apply bg-danger-50;
     }
 
-    &:after {
+    &::after {
         content: 'danger-50';
     }
 }
@@ -82,7 +82,7 @@
         @apply bg-danger-200;
     }
 
-    &:after {
+    &::after {
         content: 'danger-200';
     }
 }
@@ -92,7 +92,7 @@
         @apply bg-success;
     }
 
-    &:after {
+    &::after {
         content: 'success';
     }
 }
@@ -102,7 +102,7 @@
         @apply bg-success-50;
     }
 
-    &:after {
+    &::after {
         content: 'success-50';
     }
 }
@@ -112,7 +112,7 @@
         @apply bg-success-200;
     }
 
-    &:after {
+    &::after {
         content: 'success-200';
     }
 }
@@ -122,7 +122,7 @@
         @apply bg-warning;
     }
 
-    &:after {
+    &::after {
         content: 'warning';
     }
 }
@@ -132,7 +132,7 @@
         @apply bg-warning-50;
     }
 
-    &:after {
+    &::after {
         content: 'warning50';
     }
 }
@@ -142,7 +142,7 @@
         @apply bg-warning-200;
     }
 
-    &:after {
+    &::after {
         content: 'warning-200';
     }
 }
@@ -152,7 +152,7 @@
         @apply bg-vtblue;
     }
 
-    &:after {
+    &::after {
         content: 'vtblue';
     }
 }
@@ -162,7 +162,7 @@
         @apply bg-vtblue-50;
     }
 
-    &:after {
+    &::after {
         content: 'vtblue-50';
     }
 }
@@ -172,7 +172,7 @@
         @apply bg-vtblue-200;
     }
 
-    &:after {
+    &::after {
         content: 'vtblue-200';
     }
 }
@@ -182,7 +182,7 @@
         @apply bg-vtblue-dark;
     }
 
-    &:after {
+    &::after {
         content: 'vtblue-dark';
     }
 }
@@ -192,7 +192,7 @@
         @apply bg-vtblue-dark-50;
     }
 
-    &:after {
+    &::after {
         content: 'vtblue-dark-50';
     }
 }
@@ -202,7 +202,7 @@
         @apply bg-vtblue-dark-200;
     }
 
-    &:after {
+    &::after {
         content: 'vtblue-dark-200';
     }
 }
@@ -212,7 +212,7 @@
         @apply bg-gray-75;
     }
 
-    &:after {
+    &::after {
         content: 'gray-75';
     }
 }
@@ -222,7 +222,7 @@
         @apply bg-gray-100;
     }
 
-    &:after {
+    &::after {
         content: 'gray-100';
     }
 }
@@ -232,7 +232,7 @@
         @apply bg-gray-200;
     }
 
-    &:after {
+    &::after {
         content: 'gray-200';
     }
 }
@@ -242,7 +242,7 @@
         @apply bg-gray-400;
     }
 
-    &:after {
+    &::after {
         content: 'gray-400';
     }
 }
@@ -252,7 +252,7 @@
         @apply bg-gray-600;
     }
 
-    &:after {
+    &::after {
         content: 'gray-600';
     }
 }
@@ -262,7 +262,7 @@
         @apply bg-gray-800;
     }
 
-    &:after {
+    &::after {
         content: 'gray-800';
     }
 }
@@ -272,7 +272,7 @@
         @apply bg-gray-900;
     }
 
-    &:after {
+    &::after {
         content: 'gray-900';
     }
 }
