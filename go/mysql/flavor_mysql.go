@@ -259,19 +259,28 @@ const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_t
 		FROM information_schema.tables WHERE table_schema = database() group by table_name`
 
 // TablesWithSize57 is a query to select table along with size for mysql 5.7.
+//
 // It's a little weird, because the JOIN predicate only works if the table and databases do not contain weird characters.
-// As a fallback, we use the mysql 5.6 query, which is not always up to date, but works for all table/db names.
-const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, sum(i.file_size), sum(i.allocated_size) 
-	FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i 
-	WHERE t.table_schema = database() and 
-	(i.name = concat(t.table_schema,'/',t.table_name) or i.name like concat(t.table_schema,'/',t.table_name, '#p#%')) 
-	group by t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size
-UNION ALL
-	SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
-	FROM information_schema.tables t
-	WHERE table_schema = database() AND 
-	NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name) or i.name like concat(t.table_schema,'/',t.table_name, '#p#%')) 
-	group by table_name, table_type, unix_timestamp(create_time), table_comment
+// If the join does not return any data, we fall back to the same fields as used in the mysql 5.6 query.
+//
+// We join with a subquery that materializes the data from `information_schema.innodb_sys_tablespaces`
+// early for performance reasons. This effectively causes only a single read of `information_schema.innodb_sys_tablespaces`
+// per query.
+const TablesWithSize57 = `SELECT t.table_name,
+	t.table_type,
+	UNIX_TIMESTAMP(t.create_time),
+	t.table_comment,
+	IFNULL(SUM(i.file_size), SUM(t.data_length + t.index_length)),
+	IFNULL(SUM(i.allocated_size), SUM(t.data_length + t.index_length))
+FROM information_schema.tables t
+LEFT OUTER JOIN (
+	SELECT space, file_size, allocated_size, name
+	FROM information_schema.innodb_sys_tablespaces
+	WHERE name LIKE CONCAT(database(), '/%')
+	GROUP BY space, file_size, allocated_size, name
+) i ON i.name = CONCAT(t.table_schema, '/', t.table_name) or i.name LIKE CONCAT(t.table_schema, '/', t.table_name, '#p#%')
+WHERE t.table_schema = database()
+GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment
 `
 
 // TablesWithSize80 is a query to select table along with size for mysql 8.0
