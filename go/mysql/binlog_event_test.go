@@ -31,8 +31,8 @@ func TestQueryString(t *testing.T) {
 	}
 	input := Query{
 		Database: "test_database",
-		Charset: charset,
-		SQL: "sql",
+		Charset:  charset,
+		SQL:      "sql",
 	}
 	want := fmt.Sprintf(`{Database: "test_database", Charset: %s, SQL: "sql"}`, charset.String())
 	if got := input.String(); got != want {

@@ -167,7 +167,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
-	aStatic := NewAuthServerStatic(tmpFile.Name(), "", 10 * time.Millisecond)
+	aStatic := NewAuthServerStatic(tmpFile.Name(), "", 10*time.Millisecond)
 	defer aStatic.close()
 
 	if aStatic.getEntries()[oldStr][0].Password != oldStr {

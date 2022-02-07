@@ -127,7 +127,6 @@ func yyOldPosition(yylex interface{}) int {
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
   showFilter    *ShowFilter
-  over          *Over
   frame         *Frame
   frameExtent   *FrameExtent
   frameBound    *FrameBound
@@ -169,6 +168,9 @@ func yyOldPosition(yylex interface{}) int {
   privilegeLevel PrivilegeLevel
   grantAssumption *GrantUserAssumption
   with *With
+  window Window
+  over *Over
+  windowDef *WindowDef
 }
 
 %token LEX_ERROR
@@ -196,6 +198,8 @@ func yyOldPosition(yylex interface{}) int {
 %right <bytes> NOT '!'
 %left <bytes> BETWEEN CASE WHEN THEN ELSE ELSEIF END
 %left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%nonassoc  UNBOUNDED // ideally should have same precedence as IDENT
+%nonassoc ID NULL PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING
 %left <bytes> '|'
 %left <bytes> '&'
 %left <bytes> SHIFT_LEFT SHIFT_RIGHT
@@ -363,6 +367,8 @@ func yyOldPosition(yylex interface{}) int {
 %type <triggerOrder> trigger_order_opt
 %type <order> order
 %type <over> over over_opt
+%type <window> window window_opt
+%type <windowDef> window_definition window_spec
 %type <frame> frame_opt
 %type <frameExtent> frame_extent
 %type <frameBound> frame_bound
@@ -389,7 +395,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> definer_opt
 %type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias
@@ -545,9 +551,9 @@ base_select:
   {
     $$ = $1
   }
-| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt window_opt
   {
-    $$ = &Select{With: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13)}
+    $$ = &Select{With: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13), Window: $14}
     if $6 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
@@ -558,16 +564,16 @@ base_select:
   }
 
 base_select_no_cte:
-  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt
+  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt window_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), Window: $11}
     if $5 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
   }
-| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt window_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12)}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13}
     if $5 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
@@ -3702,20 +3708,26 @@ select_expression:
 over:
   OVER sql_id
   {
-    $$ = &Over{WindowName: $2}
+    $$ = &Over{NameRef: $2}
   }
-| OVER openb partition_by_opt order_by_opt frame_opt closeb
+| OVER window_spec
   {
-    p := $3
-    o := $4
-    f := $5
-    if (p == nil && o == nil && f != nil) {
-      yylex.Error("window definition with frame must include OVER BY or PARTITION BY")
-      return 1
-    }
-    $$ = &Over{PartitionBy: p, OrderBy: o, Frame: f}
+    $$ = (*Over)($2)
   }
 
+window_spec:
+  openb existing_window_name_opt partition_by_opt order_by_opt frame_opt closeb
+  {
+    $$ = &WindowDef{NameRef: $2, PartitionBy: $3, OrderBy: $4, Frame: $5}
+  }
+
+existing_window_name_opt:
+  {
+    $$ = ColIdent{}
+  }
+| ID {
+    $$ = NewColIdent(string($1))
+  }
 
 partition_by_opt:
   {
@@ -3750,29 +3762,29 @@ frame_opt:
 
 // enforce PRECEDING < CURRENT ROW < FOLLOWING
 frame_extent:
- BETWEEN frame_bound AND frame_bound
-    {
-       startBound := $2
-       endBound := $4
-       switch {
-       case startBound.Type == UnboundedFollowing:
-         yylex.Error("frame start cannot be UNBOUNDED FOLLOWING")
-         return 1
-       case endBound.Type == UnboundedPreceding:
-         yylex.Error("frame end cannot be UNBOUNDED PRECEDING")
-         return 1
-       case startBound.Type == CurrentRow && endBound.Type == ExprPreceding:
-         yylex.Error("frame starting from current row cannot have preceding rows")
-         return 1
-       case startBound.Type == ExprFollowing && endBound.Type == ExprPreceding:
-         yylex.Error("frame starting from following row cannot have preceding rows")
-         return 1
-       case startBound.Type == ExprFollowing && endBound.Type == CurrentRow:
-         yylex.Error("frame starting from following row cannot have preceding rows")
-         return 1
-       }
-       $$ = &FrameExtent{Start: startBound, End: endBound}
+  BETWEEN frame_bound AND frame_bound
+  {
+    startBound := $2
+    endBound := $4
+    switch {
+    case startBound.Type == UnboundedFollowing:
+      yylex.Error("frame start cannot be UNBOUNDED FOLLOWING")
+      return 1
+    case endBound.Type == UnboundedPreceding:
+      yylex.Error("frame end cannot be UNBOUNDED PRECEDING")
+      return 1
+    case startBound.Type == CurrentRow && endBound.Type == ExprPreceding:
+      yylex.Error("frame starting from current row cannot have preceding rows")
+      return 1
+    case startBound.Type == ExprFollowing && endBound.Type == ExprPreceding:
+      yylex.Error("frame starting from following row cannot have preceding rows")
+      return 1
+    case startBound.Type == ExprFollowing && endBound.Type == CurrentRow:
+      yylex.Error("frame starting from following row cannot have preceding rows")
+      return 1
     }
+    $$ = &FrameExtent{Start: startBound, End: endBound}
+  }
 | frame_bound
   {
     startBound := $1
@@ -3813,6 +3825,31 @@ UNBOUNDED PRECEDING
        Expr: $1,
        Type: ExprFollowing,
      }
+  }
+
+window_opt:
+  {
+  $$ = nil
+  }
+| WINDOW window {
+  $$ = $2
+  }
+
+window:
+  window_definition
+  {
+    $$ = Window{$1}
+  }
+| window ',' window_definition {
+    $$ = append($1, $3)
+  }
+
+window_definition:
+  sql_id AS window_spec
+  {
+    def := $3
+    def.Name = $1
+    $$ = def
   }
 
 // TODO : support prepared statements
