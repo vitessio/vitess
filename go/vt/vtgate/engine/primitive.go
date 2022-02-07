@@ -154,6 +154,8 @@ type (
 		SetSessionEnableSystemSettings(bool) error
 		GetSessionEnableSystemSettings() bool
 
+		GetSystemVariables() map[string]string
+
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)
 		SetReadAfterWriteTimeout(float64)

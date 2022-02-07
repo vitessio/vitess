@@ -377,7 +377,7 @@ func (session *SafeSession) SetTargetString(target string) {
 	session.TargetString = target
 }
 
-//SetSystemVariable sets the system variable in th session.
+// SetSystemVariable sets the system variable in the session.
 func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -385,6 +385,13 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+}
+
+// GetSystemVariables gets the system variables in the session.
+func (session *SafeSession) GetSystemVariables() map[string]string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.SystemVariables
 }
 
 // SetOptions sets the options
