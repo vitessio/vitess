@@ -207,7 +207,7 @@ func TestNewOnlineDDL(t *testing.T) {
 	}
 	strategies := []*DDLStrategySetting{
 		NewDDLStrategySetting(DDLStrategyDirect, ""),
-		NewDDLStrategySetting(DDLStrategyOnline, ""),
+		NewDDLStrategySetting(DDLStrategyVitess, ""),
 		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
 	}
 	require.True(t, strategies[0].IsSkipTopo())
@@ -238,18 +238,18 @@ func TestNewOnlineDDL(t *testing.T) {
 		var err error
 		var onlineDDL *OnlineDDL
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
 		assert.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(onlineDDL.UUID))
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc")
 		assert.Error(t, err)
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.NoError(t, err)
 		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.UUID)
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.Error(t, err)
 	})
 }
@@ -301,7 +301,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 			}
 			assert.True(t, ok)
 
-			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
+			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
 			if expect.isError {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), expect.expectErrorText)

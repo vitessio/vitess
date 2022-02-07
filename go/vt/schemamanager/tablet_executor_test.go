@@ -243,6 +243,12 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
+			ddlStrategy: "vitess",
+			isOnlineDDL: true,
+			strategy:    schema.DDLStrategyVitess,
+		},
+		{
+			query:       "ALTER TABLE t ADD COLUMN i INT",
 			ddlStrategy: "",
 			isOnlineDDL: false,
 		},
