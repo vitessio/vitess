@@ -77,6 +77,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (eng
 		table,
 		table.Keyspace,
 	)
+	eins.QueryAST = ins
 	var rows sqlparser.Values
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
@@ -202,6 +203,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	eins.VindexValues = routeValues
 	eins.ColVindexes = colVindexes
 	eins.Query = generateQuery(ins)
+	eins.QueryAST = ins
 	generateInsertShardedQuery(ins, eins, rows)
 	return eins, nil
 }
@@ -215,9 +217,9 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
 }
 
 func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, valueTuples sqlparser.Values) {
-	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	prefixBuf := sqlparser.NewTrackedBuffer(nil)
+	midBuf := sqlparser.NewTrackedBuffer(nil)
+	suffixBuf := sqlparser.NewTrackedBuffer(nil)
 	eins.Mid = make([]string, len(valueTuples))
 	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
 		node.Comments, node.Ignore.ToString(),

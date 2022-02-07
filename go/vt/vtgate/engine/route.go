@@ -185,7 +185,7 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func getSysVarsComment(vcursor VCursor, query sqlparser.SelectStatement) (string, error) {
+func getSetVarComment(vcursor VCursor, comments sqlparser.Comments, canAddComments bool) (string, error) {
 	if vcursor.Session().InReservedConn() {
 		return "", nil
 	}
@@ -194,7 +194,7 @@ func getSysVarsComment(vcursor VCursor, query sqlparser.SelectStatement) (string
 		return "", nil
 	}
 
-	if query == nil || len(query.GetComments()) > 0 {
+	if !canAddComments || len(comments) > 0 {
 		vcursor.Session().NeedsReservedConn()
 		return "", nil
 	}
@@ -230,7 +230,7 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 		return &sqltypes.Result{}, nil
 	}
 
-	q, err := route.executableQuery(vcursor)
+	q, err := executableQuery(vcursor, route.QueryAST, route.Query)
 	if err != nil {
 		return &sqltypes.Result{}, err
 	}
@@ -258,18 +258,36 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	return route.sort(result)
 }
 
-func (route *Route) executableQuery(vcursor VCursor) (string, error) {
-	q := route.Query
-	sysVarComment, err := getSysVarsComment(vcursor, route.QueryAST)
+func executableQuery(vcursor VCursor, stmt sqlparser.Statement, query string) (string, error) {
+	var getCommentToASTFunc func(comment string) string
+	comments := sqlparser.Comments{}
+	canAddComments := true
+	switch stmt := stmt.(type) {
+	case sqlparser.SelectStatement:
+		comments = stmt.GetComments()
+		getCommentToASTFunc = func(comment string) string {
+			newAST := sqlparser.CloneSelectStatement(stmt)
+			newAST.SetComments(sqlparser.Comments{comment})
+			return sqlparser.String(newAST)
+		}
+	case *sqlparser.Insert:
+		comments = stmt.Comments
+		getCommentToASTFunc = func(comment string) string {
+			newAST := sqlparser.CloneRefOfInsert(stmt)
+			newAST.Comments = sqlparser.Comments{comment}
+			return sqlparser.String(newAST)
+		}
+	default:
+		canAddComments = false
+	}
+	sysVarComment, err := getSetVarComment(vcursor, comments, canAddComments)
 	if err != nil {
 		return "", err
 	}
-	if sysVarComment != "" {
-		newAST := sqlparser.CloneSelectStatement(route.QueryAST)
-		newAST.SetComments(sqlparser.Comments{sysVarComment})
-		q = sqlparser.String(newAST)
+	if sysVarComment == "" || getCommentToASTFunc == nil {
+		return query, nil
 	}
-	return q, nil
+	return getCommentToASTFunc(sysVarComment), nil
 }
 
 func filterOutNilErrors(errs []error) []error {
@@ -305,7 +323,7 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 		return nil
 	}
 
-	q, err := route.executableQuery(vcursor)
+	q, err := executableQuery(vcursor, route.QueryAST, route.Query)
 	if err != nil {
 		return err
 	}
