@@ -9,8 +9,10 @@ interface DialogProps {
     description?: string;
     content?: React.ReactElement;
     onCancel?: () => void;
-    onConfirm?: () => void;
+    onConfirm?: Function;
     onClose?: () => void;
+    loading?: boolean;
+    loadingText?: string;
     confirmText?: string;
     cancelText?: string;
     footer?: React.ReactElement;
@@ -30,6 +32,8 @@ const Dialog: React.FC<DialogProps> = ({
     description,
     children,
     isOpen,
+    loading,
+    loadingText,
     confirmText,
     cancelText,
     footer,
@@ -86,7 +90,7 @@ const Dialog: React.FC<DialogProps> = ({
                                             <Icon icon={icon} />
                                         </div>
                                     )}
-                                    <div className="text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                    <div className="text-center sm:mt-0 sm:text-left w-full">
                                         {title && (
                                             <HUDialog.Title
                                                 as="h2"
@@ -108,14 +112,14 @@ const Dialog: React.FC<DialogProps> = ({
                                 <div className="px-4 py-3 flex gap-2 sm:px-6 sm:flex-row-reverse">
                                     {!hideConfirm && (
                                         <button
+                                            disabled={loading}
                                             type="button"
                                             className="btn"
                                             onClick={() => {
                                                 onConfirm && onConfirm();
-                                                onClose && onClose();
                                             }}
                                         >
-                                            {confirmText || 'Confirm'}
+                                            {loading ? loadingText : confirmText || 'Confirm'}
                                         </button>
                                     )}
                                     {!hideCancel && (
