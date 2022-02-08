@@ -15,8 +15,6 @@ This patch is providing an update regarding the Apache Log4j security vulnerabil
 ------------
 ## Changelog
 
-- `vtctl ApplySchema -uuid_list='...'` now rejects a migration if an existing migration has the same UUID but with different `migration_context`.
-
 ### Dependabot
 #### Java
 * build(deps): bump log4j-core from 2.15.0 to 2.16.0 in /java  #9394
