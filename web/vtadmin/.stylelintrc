@@ -4,6 +4,9 @@
 		"stylelint-config-prettier"
 	],
 	"rules": {
-		"at-rule-no-unknown": null
+		"at-rule-no-unknown": null,
+		"custom-property-pattern": null,
+		"scss/dollar-variable-pattern": null,
+		"selector-class-pattern": null
 	}
 }
