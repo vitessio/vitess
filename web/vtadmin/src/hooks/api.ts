@@ -51,8 +51,10 @@ import {
     stopReplication,
     setReadOnly,
     setReadWrite,
+    ValidateKeyspaceParams,
+    validateKeyspace,
 } from '../api/http';
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -310,6 +312,15 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
         ...options,
     });
 };
+
+/**
+ * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+export const useValidateKeyspace = (params: ValidateKeyspaceParams, options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>) => {
+    return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>(() => {
+        return validateKeyspace(params);
+    }, options);
+}
 
 /**
  * useVSchema is a query hook that fetches a single vschema definition for the given parameters.

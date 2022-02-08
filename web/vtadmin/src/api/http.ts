@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
@@ -427,3 +427,19 @@ export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, 
 
     return pb.VTExplainResponse.create(result);
 };
+
+export interface ValidateKeyspaceParams {
+    clusterID: string
+    keyspace: string
+    pingTablets: boolean
+}
+
+export const validateKeyspace = async ({ clusterID, keyspace, pingTablets }: ValidateKeyspaceParams) => {
+    const body = JSON.stringify({ pingTablets })
+
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate`, { method: 'put', body });
+    const err = vtctldata.ValidateKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateKeyspaceResponse.create(result);
+}

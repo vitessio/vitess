@@ -7,7 +7,7 @@ interface ToggleParams {
 
 const Toggle: React.FC<ToggleParams> = ({ enabled, onChange }) => {
     return (
-        <div className="py-16">
+        <div>
             <Switch
                 checked={enabled}
                 onChange={onChange}
