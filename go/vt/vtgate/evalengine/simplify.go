@@ -18,7 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 func (expr *Literal) constant() bool {
@@ -101,7 +101,7 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 
 	var (
 		collation collations.ID
-		typ       querypb.Type
+		typ       sqltypes.Type
 		optimize  = true
 	)
 

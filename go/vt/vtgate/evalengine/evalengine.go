@@ -23,13 +23,12 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Cast converts a Value to the target type.
-func Cast(v sqltypes.Value, typ querypb.Type) (sqltypes.Value, error) {
+func Cast(v sqltypes.Value, typ sqltypes.Type) (sqltypes.Value, error) {
 	if v.Type() == typ || v.IsNull() {
 		return v, nil
 	}

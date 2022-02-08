@@ -22,6 +22,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+type Type = querypb.Type
+
 // This file provides wrappers and support
 // functions for querypb.Type.
 
@@ -152,6 +154,7 @@ const (
 	Expression = querypb.Type_EXPRESSION
 	HexNum     = querypb.Type_HEXNUM
 	HexVal     = querypb.Type_HEXVAL
+	Tuple      = querypb.Type_TUPLE
 )
 
 // bit-shift the mysql flags by two byte so we

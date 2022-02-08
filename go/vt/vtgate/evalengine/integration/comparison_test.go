@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -70,6 +71,7 @@ func normalize(v sqltypes.Value) string {
 
 var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
 var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
+var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
 
 func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
@@ -89,7 +91,7 @@ func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 		}
 	}
 	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, evaluated); diff != "" {
-		t.Errorf("%s\nquery: %s", diff, query)
+		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)", diff, query, *debugSimplify)
 	} else if *debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, query)
 	}
@@ -200,6 +202,7 @@ func TestMultiComparisons(t *testing.T) {
 		`"0"`, `"-1"`, `"1"`,
 		`_utf8mb4 'foobar'`, `_utf8mb4 'FOOBAR'`,
 		`_binary '0'`, `_binary '-1'`, `_binary '1'`,
+		`0x0`, `0x1`, `-0x0`, `-0x1`,
 	}
 
 	var conn = mysqlconn(t)
@@ -262,7 +265,6 @@ func TestCollationOperations(t *testing.T) {
 }
 
 func TestNegateArithmetic(t *testing.T) {
-	*debugPrintAll = true
 	var cases = []string{
 		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
 		`X'00'`, `X'1234'`, `X'ff'`,
