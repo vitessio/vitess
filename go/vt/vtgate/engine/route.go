@@ -17,14 +17,11 @@ limitations under the License.
 package engine
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -39,7 +36,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Route)(nil)
@@ -52,8 +48,7 @@ type Route struct {
 	TargetTabletType topodatapb.TabletType
 
 	// Query specifies the query to be executed.
-	Query    string
-	QueryAST sqlparser.SelectStatement
+	Query string
 
 	// TableName specifies the table to send the query to.
 	TableName string
@@ -99,15 +94,12 @@ func NewSimpleRoute(opcode Opcode, keyspace *vindexes.Keyspace) *Route {
 
 // NewRoute creates a Route.
 func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
-	stmt, _ := sqlparser.Parse(query)
-	queryAST, _ := stmt.(sqlparser.SelectStatement)
 	return &Route{
 		RoutingParameters: &RoutingParameters{
 			Opcode:   opcode,
 			Keyspace: keyspace,
 		},
 		Query:      query,
-		QueryAST:   queryAST,
 		FieldQuery: fieldQuery,
 	}
 }
@@ -185,37 +177,6 @@ func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func getSetVarComment(vcursor VCursor, comments sqlparser.Comments, canAddComments bool) (string, error) {
-	if vcursor.Session().InReservedConn() {
-		return "", nil
-	}
-	sysVars := vcursor.Session().GetSystemVariables()
-	if len(sysVars) == 0 {
-		return "", nil
-	}
-
-	if !canAddComments || len(comments) > 0 {
-		vcursor.Session().NeedsReservedConn()
-		return "", nil
-	}
-	res := &bytes.Buffer{}
-	_, err := res.WriteString("/*+ ")
-	if err != nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
-	}
-	for key, val := range sysVars {
-		_, err = res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", key, val))
-		if err != nil {
-			return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
-		}
-	}
-	_, err = res.WriteString("*/")
-	if err != nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
-	}
-	return res.String(), nil
-}
-
 func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(vcursor, bindVars)
 	if err != nil {
@@ -230,11 +191,7 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 		return &sqltypes.Result{}, nil
 	}
 
-	q, err := executableQuery(vcursor, route.QueryAST, route.Query)
-	if err != nil {
-		return &sqltypes.Result{}, err
-	}
-	queries := getQueries(q, bvs)
+	queries := getQueries(route.Query, bvs)
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* autocommit */)
 
 	if errs != nil {
@@ -256,38 +213,6 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	}
 
 	return route.sort(result)
-}
-
-func executableQuery(vcursor VCursor, stmt sqlparser.Statement, query string) (string, error) {
-	var getCommentToASTFunc func(comment string) string
-	comments := sqlparser.Comments{}
-	canAddComments := true
-	switch stmt := stmt.(type) {
-	case sqlparser.SelectStatement:
-		comments = stmt.GetComments()
-		getCommentToASTFunc = func(comment string) string {
-			newAST := sqlparser.CloneSelectStatement(stmt)
-			newAST.SetComments(sqlparser.Comments{comment})
-			return sqlparser.String(newAST)
-		}
-	case *sqlparser.Insert:
-		comments = stmt.Comments
-		getCommentToASTFunc = func(comment string) string {
-			newAST := sqlparser.CloneRefOfInsert(stmt)
-			newAST.Comments = sqlparser.Comments{comment}
-			return sqlparser.String(newAST)
-		}
-	default:
-		canAddComments = false
-	}
-	sysVarComment, err := getSetVarComment(vcursor, comments, canAddComments)
-	if err != nil {
-		return "", err
-	}
-	if sysVarComment == "" || getCommentToASTFunc == nil {
-		return query, nil
-	}
-	return getCommentToASTFunc(sysVarComment), nil
 }
 
 func filterOutNilErrors(errs []error) []error {
@@ -323,12 +248,8 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 		return nil
 	}
 
-	q, err := executableQuery(vcursor, route.QueryAST, route.Query)
-	if err != nil {
-		return err
-	}
 	if len(route.OrderBy) == 0 {
-		errs := vcursor.StreamExecuteMulti(q, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
@@ -345,14 +266,14 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 	}
 
 	// There is an order by. We have to merge-sort.
-	return route.mergeSort(vcursor, q, bindVars, wantfields, callback, rss, bvs)
+	return route.mergeSort(vcursor, bindVars, wantfields, callback, rss, bvs)
 }
 
-func (route *Route) mergeSort(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
+func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
-			query: query,
+			query: route.Query,
 			rs:    rs,
 			bv:    bvs[i],
 		})

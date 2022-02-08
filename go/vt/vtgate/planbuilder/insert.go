@@ -77,7 +77,6 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (eng
 		table,
 		table.Keyspace,
 	)
-	eins.QueryAST = ins
 	var rows sqlparser.Values
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
@@ -203,7 +202,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	eins.VindexValues = routeValues
 	eins.ColVindexes = colVindexes
 	eins.Query = generateQuery(ins)
-	eins.QueryAST = ins
 	generateInsertShardedQuery(ins, eins, rows)
 	return eins, nil
 }
