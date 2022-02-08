@@ -21,37 +21,37 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-// SemiSyncACKersForPrimary returns the list of tablets which are capable of sending Semi-Sync ACKs for the given primary tablet
-func SemiSyncACKersForPrimary(primary *topodatapb.Tablet, allTablets []*topodatapb.Tablet) (semiSyncACKers []*topodatapb.Tablet) {
+// SemiSyncAckersForPrimary returns the list of tablets which are capable of sending Semi-Sync Acks for the given primary tablet
+func SemiSyncAckersForPrimary(primary *topodatapb.Tablet, allTablets []*topodatapb.Tablet) (semiSyncAckers []*topodatapb.Tablet) {
 	for _, tablet := range allTablets {
 		if topoproto.TabletAliasEqual(primary.Alias, tablet.Alias) {
 			continue
 		}
 		if IsReplicaSemiSync(primary, tablet) {
-			semiSyncACKers = append(semiSyncACKers, tablet)
+			semiSyncAckers = append(semiSyncAckers, tablet)
 		}
 	}
 	return
 }
 
 // RevokeForTablet checks whether we have reached enough tablets such that the given primary capable tablet cannot accept any new transaction
-func RevokeForTablet(primaryCapable *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
-	// if we have reached the primaryCapable tablet and stopped its replication, then it will not
+func RevokeForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+	// if we have reached the primaryEligible tablet and stopped its replication, then it will not
 	// accept any new transactions
-	if topoproto.TabletInList(primaryCapable, tabletsReached) {
+	if topoproto.TabletInList(primaryEligible, tabletsReached) {
 		return true
 	}
 
-	// semiSyncACKersReached is the list of reachable tablets capable of sending semi sync ACKs for the given primaryCapable tablet
-	semiSyncACKersReached := SemiSyncACKersForPrimary(primaryCapable, tabletsReached)
+	// semiSyncAckersReached is the list of reachable tablets capable of sending semi sync Acks for the given primaryEligible tablet
+	semiSyncAckersReached := SemiSyncAckersForPrimary(primaryEligible, tabletsReached)
 
-	// allSemiSyncACKers is the list of reachable tablets capable of sending semi sync ACKs for the given primaryCapable tablet
-	allSemiSyncACKers := SemiSyncACKersForPrimary(primaryCapable, allTablets)
+	// allSemiSyncAckers is the list of reachable tablets capable of sending semi sync Acks for the given primaryEligible tablet
+	allSemiSyncAckers := SemiSyncAckersForPrimary(primaryEligible, allTablets)
 
-	// numOfSemiSyncACKsRequired is the number of semi sync ACKs that the primaryCapable tablet requires
-	numOfSemiSyncACKsRequired := SemiSyncAckers(primaryCapable)
+	// numOfSemiSyncAcksRequired is the number of semi sync Acks that the primaryEligible tablet requires
+	numOfSemiSyncAcksRequired := SemiSyncAckers(primaryEligible)
 
-	// if we have reached enough semi-sync ACKing tablets such that the primaryCapable cannot accept a transaction
+	// if we have reached enough semi-sync Acking tablets such that the primaryEligible cannot accept a transaction
 	// we have revoked from the tablet
-	return len(allSemiSyncACKers)-len(semiSyncACKersReached) < numOfSemiSyncACKsRequired
+	return len(allSemiSyncAckers)-len(semiSyncAckersReached) < numOfSemiSyncAcksRequired
 }
