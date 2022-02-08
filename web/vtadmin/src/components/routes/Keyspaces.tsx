@@ -29,6 +29,7 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import KeyspaceActions from './keyspaces/KeyspaceActions'
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
@@ -74,6 +75,9 @@ export const Keyspaces = () => {
                         </div>
                     )}
                 </DataCell>
+                <DataCell>
+                    <KeyspaceActions keyspace={row.name as string} clusterID={row.clusterID as string} />
+                </DataCell>
             </tr>
         ));
 
@@ -91,7 +95,7 @@ export const Keyspaces = () => {
                     value={filter || ''}
                 />
                 <div className="max-w-screen-md">
-                    <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+                    <DataTable columns={['Keyspace', 'Shards', 'Actions']} data={ksRows} renderRows={renderRows} />
                 </div>
             </ContentContainer>
         </div>
