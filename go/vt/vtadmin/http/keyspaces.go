@@ -85,3 +85,13 @@ func GetKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {
 
 	return NewJSONResponse(keyspaces, err)
 }
+
+// ValidateKeyspace
+func ValidateKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := mux.Vars(r.Request)
+	res, err := api.server.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
+		Keyspace: vars["name"],
+	})
+
+	return NewJSONResponse(res, err)
+}
