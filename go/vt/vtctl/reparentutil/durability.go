@@ -35,10 +35,10 @@ func SemiSyncAckersForPrimary(primary *topodatapb.Tablet, allTablets []*topodata
 	return
 }
 
-// RevokeForTablet checks whether we have reached enough tablets such that the given primary capable tablet cannot accept any new transaction
+// RevokeForTablet checks whether we have reached enough tablets such that the given primary capable tablet cannot accept any new write
 func RevokeForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
 	// if we have reached the primaryEligible tablet and stopped its replication, then it will not
-	// accept any new transactions
+	// accept any new writes
 	if topoproto.TabletInList(primaryEligible, tabletsReached) {
 		return true
 	}
@@ -52,12 +52,12 @@ func RevokeForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topod
 	// numOfSemiSyncAcksRequired is the number of semi sync Acks that the primaryEligible tablet requires
 	numOfSemiSyncAcksRequired := SemiSyncAckers(primaryEligible)
 
-	// if we have reached enough semi-sync Acking tablets such that the primaryEligible cannot accept a transaction
+	// if we have reached enough semi-sync Acking tablets such that the primaryEligible cannot accept a write
 	// we have revoked from the tablet
 	return len(allSemiSyncAckers)-len(semiSyncAckersReached) < numOfSemiSyncAcksRequired
 }
 
-// Revoked checks whether we have reached enough tablets to guarantee that no tablet eligible to become a primary can accept any transaction
+// Revoked checks whether we have reached enough tablets to guarantee that no tablet eligible to become a primary can accept any write
 func Revoked(tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
 	for _, tablet := range allTablets {
 		if PromotionRule(tablet) == promotionrule.MustNot {
