@@ -62,46 +62,46 @@ var (
 	}
 )
 
-func TestSemiSyncACKersForPrimary(t *testing.T) {
+func TestSemiSyncAckersForPrimary(t *testing.T) {
 	tests := []struct {
 		name               string
 		durabilityPolicy   string
 		primary            *topodatapb.Tablet
 		allTablets         []*topodatapb.Tablet
-		wantSemiSyncACKers []*topodatapb.Tablet
+		wantSemiSyncAckers []*topodatapb.Tablet
 	}{
 		{
 			name:               "no other tablets",
 			durabilityPolicy:   "none",
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet},
-			wantSemiSyncACKers: nil,
+			wantSemiSyncAckers: nil,
 		}, {
 			name:               "'none' durability policy",
 			durabilityPolicy:   "none",
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
-			wantSemiSyncACKers: nil,
+			wantSemiSyncAckers: nil,
 		}, {
 			name:               "'semi_sync' durability policy",
 			durabilityPolicy:   "semi_sync",
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
-			wantSemiSyncACKers: []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet},
+			wantSemiSyncAckers: []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet},
 		}, {
 			name:               "'cross_cell' durability policy",
 			durabilityPolicy:   "cross_cell",
 			primary:            primaryTablet,
 			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
-			wantSemiSyncACKers: []*topodatapb.Tablet{replicaCrossCellTablet},
+			wantSemiSyncAckers: []*topodatapb.Tablet{replicaCrossCellTablet},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SetDurabilityPolicy(tt.durabilityPolicy, nil)
 			require.NoError(t, err, "error setting durability policy")
-			semiSyncACKers := SemiSyncACKersForPrimary(tt.primary, tt.allTablets)
-			require.Equal(t, tt.wantSemiSyncACKers, semiSyncACKers)
+			semiSyncAckers := SemiSyncAckersForPrimary(tt.primary, tt.allTablets)
+			require.Equal(t, tt.wantSemiSyncAckers, semiSyncAckers)
 		})
 	}
 }
@@ -110,7 +110,7 @@ func TestRevokeForTablet(t *testing.T) {
 	tests := []struct {
 		name             string
 		durabilityPolicy string
-		primaryCapable   *topodatapb.Tablet
+		primaryEligible  *topodatapb.Tablet
 		allTablets       []*topodatapb.Tablet
 		tabletsReached   []*topodatapb.Tablet
 		revoked          bool
@@ -118,7 +118,7 @@ func TestRevokeForTablet(t *testing.T) {
 		{
 			name:             "'none' durability policy - not revoked",
 			durabilityPolicy: "none",
-			primaryCapable:   primaryTablet,
+			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -129,7 +129,7 @@ func TestRevokeForTablet(t *testing.T) {
 		}, {
 			name:             "'none' durability policy - revoked",
 			durabilityPolicy: "none",
-			primaryCapable:   primaryTablet,
+			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -140,7 +140,7 @@ func TestRevokeForTablet(t *testing.T) {
 		}, {
 			name:             "'semi_sync' durability policy - revoked",
 			durabilityPolicy: "semi_sync",
-			primaryCapable:   primaryTablet,
+			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -151,7 +151,7 @@ func TestRevokeForTablet(t *testing.T) {
 		}, {
 			name:             "'semi_sync' durability policy - not revoked",
 			durabilityPolicy: "semi_sync",
-			primaryCapable:   primaryTablet,
+			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -162,7 +162,7 @@ func TestRevokeForTablet(t *testing.T) {
 		}, {
 			name:             "'cross_cell' durability policy - revoked",
 			durabilityPolicy: "cross_cell",
-			primaryCapable:   primaryTablet,
+			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -173,7 +173,7 @@ func TestRevokeForTablet(t *testing.T) {
 		}, {
 			name:             "'cross_cell' durability policy - not revoked",
 			durabilityPolicy: "cross_cell",
-			primaryCapable:   primaryTablet,
+			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -184,7 +184,7 @@ func TestRevokeForTablet(t *testing.T) {
 		}, {
 			name:             "'cross_cell' durability policy - primary in list",
 			durabilityPolicy: "cross_cell",
-			primaryCapable:   primaryTablet,
+			primaryEligible:  primaryTablet,
 			allTablets: []*topodatapb.Tablet{
 				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
 			},
@@ -198,7 +198,7 @@ func TestRevokeForTablet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SetDurabilityPolicy(tt.durabilityPolicy, nil)
 			require.NoError(t, err)
-			out := RevokeForTablet(tt.primaryCapable, tt.tabletsReached, tt.allTablets)
+			out := RevokeForTablet(tt.primaryEligible, tt.tabletsReached, tt.allTablets)
 			require.Equal(t, tt.revoked, out)
 		})
 	}
