@@ -18,14 +18,12 @@ package sqlparser
 
 import (
 	"strconv"
+	"strings"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"strings"
-
 	"vitess.io/vitess/go/vt/sysvars"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -196,19 +194,19 @@ func NewReservedVars(prefix string, known BindVars) *ReservedVars {
 }
 
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string, selectLimit int) (*RewriteASTResult, error) {
+func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string, selectLimit int, setVarComment string) (*RewriteASTResult, error) {
 	if parameterize {
 		err := Normalize(in, reservedVars, bindVars)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace, selectLimit)
+	return RewriteAST(in, keyspace, selectLimit, setVarComment)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
-func RewriteAST(in Statement, keyspace string, selectLimit int) (*RewriteASTResult, error) {
-	er := newExpressionRewriter(keyspace, selectLimit)
+func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string) (*RewriteASTResult, error) {
+	er := newExpressionRewriter(keyspace, selectLimit, setVarComment)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
 	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
@@ -255,12 +253,18 @@ type expressionRewriter struct {
 	// we need to know this to make a decision if we can safely rewrite JOIN USING => JOIN ON
 	hasStarInSelect bool
 
-	keyspace    string
-	selectLimit int
+	keyspace      string
+	selectLimit   int
+	setVarComment string
 }
 
-func newExpressionRewriter(keyspace string, selectLimit int) *expressionRewriter {
-	return &expressionRewriter{bindVars: &BindVarNeeds{}, keyspace: keyspace, selectLimit: selectLimit}
+func newExpressionRewriter(keyspace string, selectLimit int, setVarComment string) *expressionRewriter {
+	return &expressionRewriter{
+		bindVars:      &BindVarNeeds{},
+		keyspace:      keyspace,
+		selectLimit:   selectLimit,
+		setVarComment: setVarComment,
+	}
 }
 
 const (
@@ -281,7 +285,7 @@ const (
 )
 
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newExpressionRewriter(er.keyspace, er.selectLimit)
+	inner := newExpressionRewriter(er.keyspace, er.selectLimit, "")
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
@@ -296,6 +300,9 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *Select:
+		if er.setVarComment != "" {
+			node.Comments = append(node.Comments, er.setVarComment)
+		}
 		for _, col := range node.SelectExprs {
 			_, hasStar := col.(*StarExpr)
 			if hasStar {

@@ -651,7 +651,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1422,7 +1422,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit())
+		setVarComment, err := prepareSetVarComment(vcursor)
+		if err != nil {
+			return nil, err
+		}
+		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit(), setVarComment)
 		if err != nil {
 			return nil, err
 		}
@@ -1459,6 +1463,33 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func prepareSetVarComment(vcursor *vcursorImpl) (string, error) {
+	if vcursor == nil || vcursor.Session().InReservedConn() {
+		return "", nil
+	}
+	sysVars := vcursor.Session().GetSystemVariables()
+	if len(sysVars) == 0 {
+		return "", nil
+	}
+
+	res := &bytes.Buffer{}
+	_, err := res.WriteString("/* ")
+	if err != nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
+	}
+	for k, val := range sysVars {
+		_, err := res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, val))
+		if err != nil {
+			return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
+		}
+	}
+	_, err = res.WriteString("*/")
+	if err != nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
+	}
+	return res.String(), nil
 }
 
 func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
