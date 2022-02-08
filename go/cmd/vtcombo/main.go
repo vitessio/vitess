@@ -23,12 +23,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"os"
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -123,9 +123,7 @@ func main() {
 	tpb := &vttestpb.VTTestTopology{}
 	switch {
 	case *jsonTopo != "":
-		decoder := json.NewDecoder(strings.NewReader(*jsonTopo))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(tpb); err != nil {
+		if err := protojson.Unmarshal([]byte(*jsonTopo), tpb); err != nil {
 			log.Errorf("cannot parse topology: %v", err)
 			exit.Return(1)
 		}
