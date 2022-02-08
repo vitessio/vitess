@@ -43,7 +43,7 @@ var (
 	clusterInstance         *cluster.LocalProcessCluster
 	vtParams                mysql.ConnParams
 	evaluatedMysqlParams    *mysql.ConnParams
-	ddlStrategy             = "online -vreplication-test-suite"
+	ddlStrategy             = "vitess -vreplication-test-suite"
 	waitForMigrationTimeout = 20 * time.Second
 
 	hostname              = "localhost"

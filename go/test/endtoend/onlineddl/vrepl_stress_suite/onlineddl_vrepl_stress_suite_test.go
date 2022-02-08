@@ -72,7 +72,7 @@ var (
 	evaluatedMysqlParams *mysql.ConnParams
 
 	directDDLStrategy     = "direct"
-	onlineDDLStrategy     = "online -vreplication-test-suite -skip-topo"
+	onlineDDLStrategy     = "vitess -vreplication-test-suite -skip-topo"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
