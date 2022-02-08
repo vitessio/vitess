@@ -19,6 +19,7 @@ package reparentutil
 import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 // SemiSyncAckersForPrimary returns the list of tablets which are capable of sending Semi-Sync Acks for the given primary tablet
@@ -54,4 +55,17 @@ func RevokeForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topod
 	// if we have reached enough semi-sync Acking tablets such that the primaryEligible cannot accept a transaction
 	// we have revoked from the tablet
 	return len(allSemiSyncAckers)-len(semiSyncAckersReached) < numOfSemiSyncAcksRequired
+}
+
+// Revoked checks whether we have reached enough tablets to guarantee that no tablet eligible to become a primary can accept any transaction
+func Revoked(tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+	for _, tablet := range allTablets {
+		if PromotionRule(tablet) == promotionrule.MustNot {
+			continue
+		}
+		if !RevokeForTablet(tablet, tabletsReached, allTablets) {
+			return false
+		}
+	}
+	return true
 }
