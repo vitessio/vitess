@@ -616,29 +616,18 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	if err != nil {
 		return err
 	}
-	{
-		query, err := sqlparser.ParseAndBind(sqlStopVReplStream,
-			sqltypes.StringBindVariable(e.dbName),
-			sqltypes.StringBindVariable(uuid),
-		)
-		if err != nil {
-			return err
-		}
-		// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
-		_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, query)
+	query, err := sqlparser.ParseAndBind(sqlStopVReplStream,
+		sqltypes.StringBindVariable(e.dbName),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
 	}
-	{
-		query, err := sqlparser.ParseAndBind(sqlDeleteVReplStream,
-			sqltypes.StringBindVariable(e.dbName),
-			sqltypes.StringBindVariable(uuid),
-		)
-		if err != nil {
-			return err
-		}
-		// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
-		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
-			return err
-		}
+	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
+	_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, query)
+
+	if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
+		return err
 	}
 	return nil
 }
@@ -2734,6 +2723,28 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 	return err
 }
 
+// deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of
+// migration termination and as part of artifact cleanup
+func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlDeleteVReplStream,
+		sqltypes.StringBindVariable(e.dbName),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	tmClient := tmclient.NewTabletManagerClient()
+	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
+		return err
+	}
+	return nil
+}
+
 // gcArtifactTable garbage-collects a single table
 func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string, t time.Time) error {
 	tableExists, err := e.tableExists(ctx, artifactTable)
@@ -2804,6 +2815,13 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 				return err
 			}
 		}
+
+		// while the next function only applies to 'online' strategy ALTER and REVERT, there is no
+		// harm in invoking it for other migrations.
+		if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
+			return err
+		}
+
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
 		}
