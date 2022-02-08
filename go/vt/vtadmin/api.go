@@ -245,9 +245,9 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				c, err := cluster.Config{
 					ID:            clusterID,
 					Name:          clusterID,
-					DiscoveryImpl: "dynamic",
+					DiscoveryImpl: "json",
 					DiscoveryFlagsByImpl: cluster.FlagsByImpl{
-						"dynamic": map[string]string{
+						"json": map[string]string{
 							"discovery": string(decoded),
 						},
 					},
@@ -290,6 +290,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.ValidateKeyspace)).Name("API.ValidateKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
@@ -697,6 +698,32 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 	return &vtadminpb.GetKeyspacesResponse{
 		Keyspaces: keyspaces,
 	}, nil
+}
+
+// ValidateKeyspace
+func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
+		Keyspace:    req.Keyspace,
+		PingTablets: req.PingTablets,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 // GetSchema is part of the vtadminpb.VTAdminServer interface.

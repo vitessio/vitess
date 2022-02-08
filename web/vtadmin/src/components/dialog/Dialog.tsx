@@ -79,7 +79,7 @@ const Dialog: React.FC<DialogProps> = ({
                         leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                     >
                         <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                            <div className="bg-white px-4 py-5 sm:p-6 w-full">
+                            <div className="bg-white px-4 py-5 sm:py-8 sm:px-6 w-full">
                                 <div className="sm:flex sm:items-start">
                                     {icon && (
                                         <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
