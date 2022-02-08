@@ -41,7 +41,7 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		eval(env *ExpressionEnv, result *EvalResult)
-		typeof(env *ExpressionEnv) querypb.Type
+		typeof(env *ExpressionEnv) sqltypes.Type
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify(env *ExpressionEnv) error
@@ -54,7 +54,7 @@ type (
 	BindVariable struct {
 		Key        string
 		coll       collations.TypedCollation
-		coerceType querypb.Type
+		coerceType sqltypes.Type
 	}
 
 	Column struct {
@@ -104,7 +104,7 @@ func throwCardinalityError(expected int) {
 func (env *ExpressionEnv) cardinality(expr Expr) int {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.typeof(env) == querypb.Type_TUPLE {
+		if expr.typeof(env) == sqltypes.Tuple {
 			return len(expr.bvar(env).Values)
 		}
 		return 1
@@ -126,7 +126,7 @@ func (env *ExpressionEnv) ensureCardinality(expr Expr, expected int) {
 func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.typeof(env) == querypb.Type_TUPLE {
+		if expr.typeof(env) == sqltypes.Tuple {
 			return nil, 1
 		}
 	case TupleExpr:
@@ -183,7 +183,7 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		left := env.cardinality(expr.Left)
 		right := env.cardinality(expr.Right)
 
-		if expr.Right.typeof(env) != querypb.Type_TUPLE {
+		if expr.Right.typeof(env) != sqltypes.Tuple {
 			throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
 		}
 
@@ -230,7 +230,7 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
 	return
 }
 
-func (env *ExpressionEnv) TypeOf(expr Expr) (ty querypb.Type, err error) {
+func (env *ExpressionEnv) TypeOf(expr Expr) (ty sqltypes.Type, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if ee, ok := r.(evalError); ok {
@@ -442,7 +442,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 
 	switch typ {
-	case querypb.Type_TUPLE:
+	case sqltypes.Tuple:
 		tuple := make([]EvalResult, len(bvar.Values))
 		for i, value := range bvar.Values {
 			tuple[i].setBindVar1(value.Type, value.Value, collations.TypedCollation{})
@@ -455,7 +455,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv) querypb.Type {
+func (bv *BindVariable) typeof(env *ExpressionEnv) sqltypes.Type {
 	if bv.coerceType >= 0 {
 		return bv.coerceType
 	}
@@ -472,16 +472,16 @@ func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv) querypb.Type {
+func (l *Literal) typeof(*ExpressionEnv) sqltypes.Type {
 	return l.Val.typeof()
 }
 
 // typeof implements the Expr interface
-func (t TupleExpr) typeof(*ExpressionEnv) querypb.Type {
-	return querypb.Type_TUPLE
+func (t TupleExpr) typeof(*ExpressionEnv) sqltypes.Type {
+	return sqltypes.Tuple
 }
 
-func (c *Column) typeof(env *ExpressionEnv) querypb.Type {
+func (c *Column) typeof(env *ExpressionEnv) sqltypes.Type {
 	value := env.Row[c.Offset]
 	return value.Type()
 }

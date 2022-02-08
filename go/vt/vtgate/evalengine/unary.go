@@ -16,7 +16,7 @@ limitations under the License.
 
 package evalengine
 
-import querypb "vitess.io/vitess/go/vt/proto/query"
+import "vitess.io/vitess/go/sqltypes"
 
 type (
 	UnaryExpr struct {
@@ -28,7 +28,7 @@ type (
 	}
 )
 
-func (c *UnaryExpr) typeof(env *ExpressionEnv) querypb.Type {
+func (c *UnaryExpr) typeof(env *ExpressionEnv) sqltypes.Type {
 	return c.Inner.typeof(env)
 }
 
@@ -37,7 +37,7 @@ func (n *NegateExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.negateNumeric()
 }
 
-func (n *NegateExpr) typeof(env *ExpressionEnv) querypb.Type {
+func (n *NegateExpr) typeof(env *ExpressionEnv) sqltypes.Type {
 	// the type of a NegateExpr is not known beforehand because negating
 	// a large enough value can cause it to be upcasted into a larger type
 	return -1
