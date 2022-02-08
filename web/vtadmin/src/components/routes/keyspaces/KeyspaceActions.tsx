@@ -1,41 +1,67 @@
 import React, { useState } from 'react';
 import Dropdown from '../../dropdown/Dropdown';
 import MenuItem from '../../dropdown/MenuItem';
-import { Icons } from '../../Icon';
+import { Icon, Icons } from '../../Icon';
 import Dialog from '../../dialog/Dialog'
+import Toggle from '../../toggle/Toggle';
+import { useValidateKeyspace } from '../../../hooks/api';
+import KeyspaceAction from './KeyspaceAction';
+
 interface KeyspaceActionsProps {
     keyspace: string
     clusterID: string
 }
 
 const KeyspaceActions: React.FC<KeyspaceActionsProps> = ({ keyspace, clusterID }) => {
-    const [isOpen, setIsOpen] = useState(false);
 
-    const closeDialog = () => setIsOpen(false);
-    const openDialog = () => {
-        setIsOpen(true);
-    };
+    const [currentDialog, setCurrentDialog] = useState<string | null>(null)
+    const closeDialog = () => setCurrentDialog(null)
+
+    // Validate keyspace
+    const [pingTablets, setPingTablets] = useState(false)
+    const validateKeyspaceMutation = useValidateKeyspace(
+        { keyspace, clusterID, pingTablets }
+    );
 
 
     return (
         <div className="w-min inline-block">
             <Dropdown dropdownButton={Icons.info} position="bottom-right">
-                <MenuItem onClick={openDialog}>Validate Keyspace</MenuItem>
+                <MenuItem onClick={() => setCurrentDialog('Validate Keyspace')}>Validate Keyspace</MenuItem>
+                <MenuItem onClick={() => setCurrentDialog('Validate Schema')}>Validate Schema</MenuItem>
+                <MenuItem onClick={() => setCurrentDialog('Validate Version')}>Validate Version</MenuItem>
             </Dropdown>
-            <Dialog
-                isOpen={isOpen}
-                onClose={closeDialog}
-                confirmText="Validate"
-                cancelText="Cancel"
-                onCancel={closeDialog}
-                title="Validate Keyspace"
+            <KeyspaceAction
+                title='Validate Keyspace'
                 description={`Validates that all nodes reachable from keyspace "${keyspace}" are consistent.`}
-            >
-                <div className="h-12 w-12">
-                    Hello
-                </div>
-            </Dialog>
-        </div>
+                confirmText='Validate'
+                loadingText='Validating'
+                mutation={validateKeyspaceMutation}
+                successText="Validated keyspace"
+                errorText='Error validating keyspace'
+                closeDialog={closeDialog}
+                isOpen={currentDialog === 'Validate Keyspace'}
+                body={
+                    <div className="flex justify-between items-center w-full p-2 border border-vtblue rounded-md">
+                        <div className="mr-2">
+                            <h5 className="font-medium m-0">Ping Tablets</h5>
+                            <p className="m-0 text-sm">If enabled, all tablets will also be pinged during the validation process.</p>
+                        </div>
+                        <Toggle enabled={pingTablets} onChange={() => setPingTablets(!pingTablets)} />
+                    </div>
+                }
+                successBody={
+                    <div className="text-sm">
+                        {validateKeyspaceMutation.data && validateKeyspaceMutation.data.results.length === 0 && <div className="text-sm">No validation errors found.</div>}
+                        {validateKeyspaceMutation.data && validateKeyspaceMutation.data.results.length > 0 &&
+                            <ul>
+                                {validateKeyspaceMutation.data && validateKeyspaceMutation.data.results.map((res, i) => <li className="text-sm" key={`keyspace_validation_result_${i}`}>• {res}</li>)}
+                            </ul>
+                        }
+                    </div>
+                }
+            />
+        </div >
     );
 };
 
