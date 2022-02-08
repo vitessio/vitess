@@ -145,7 +145,7 @@ func CachePlan(stmt Statement) bool {
 	return !directives.IsSet(DirectiveSkipQueryPlanCache)
 }
 
-//MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
+// MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
 func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
 	switch node := stmt.(type) {
 	case *Set:
