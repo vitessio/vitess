@@ -1473,22 +1473,14 @@ func prepareSetVarComment(vcursor *vcursorImpl) (string, error) {
 	if len(sysVars) == 0 {
 		return "", nil
 	}
-
 	res := &bytes.Buffer{}
-	_, err := res.WriteString("/* ")
-	if err != nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
-	}
 	for k, val := range sysVars {
 		_, err := res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, val))
 		if err != nil {
 			return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
 		}
 	}
-	_, err = res.WriteString("*/")
-	if err != nil {
-		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
-	}
+	res.Truncate(res.Len() - 1)
 	return res.String(), nil
 }
 

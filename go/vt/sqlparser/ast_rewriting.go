@@ -297,12 +297,18 @@ func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNee
 }
 
 func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
+	if commentable, isCommentable := cursor.Node().(Commentable); isCommentable && er.setVarComment != "" {
+		newComments, err := commentable.GetComments().AddQueryHint(er.setVarComment)
+		if err != nil {
+			er.err = err
+			return false
+		}
+		commentable.SetComments(newComments)
+	}
+
 	switch node := cursor.Node().(type) {
 	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *Select:
-		if er.setVarComment != "" {
-			node.Comments = append(node.Comments, er.setVarComment)
-		}
 		for _, col := range node.SelectExprs {
 			_, hasStar := col.(*StarExpr)
 			if hasStar {
