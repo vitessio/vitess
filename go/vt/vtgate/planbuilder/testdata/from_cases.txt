@@ -582,43 +582,6 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "LeftJoin",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "u_a": 1
-    },
-    "TableName": "`user`_unsharded",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.col, u.a from `user` as u where 1 != 1",
-        "Query": "select u.col, u.a from `user` as u",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from unsharded as m where 1 != 1",
-        "Query": "select 1 from unsharded as m where m.b = :u_a",
-        "Table": "unsharded"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select u.col from user u left join unsharded m on u.a = m.b",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "LeftJoin",
     "JoinColumnIndexes": "-2",
     "JoinVars": {
       "u_a": 0
@@ -650,68 +613,10 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Three-way left join
 "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col"
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "LeftJoin",
-    "JoinColumnIndexes": "-1,1",
-    "JoinVars": {
-      "m1_col": 1
-    },
-    "TableName": "`user`_unsharded_unsharded",
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "LeftJoin",
-        "JoinColumnIndexes": "-1,1",
-        "JoinVars": {
-          "user_col": 0
-        },
-        "TableName": "`user`_unsharded",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
-            "Query": "select m1.col from unsharded as m1 where m1.col = :user_col",
-            "Table": "unsharded"
-          }
-        ]
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select m2.foo from unsharded as m2 where 1 != 1",
-        "Query": "select m2.foo from unsharded as m2 where m2.col = :m1_col",
-        "Table": "unsharded"
-      }
-    ]
-  }
-}
 {
   "QueryType": "SELECT",
   "Original": "select user.col, m2.foo from user left join unsharded as m1 on user.col = m1.col left join unsharded as m2 on m1.col = m2.col",
@@ -771,6 +676,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Three-way left join, right-associated
 "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col"
@@ -846,44 +752,15 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select m1.col from unsharded as m2 left join unsharded as m1 on m1.a = m2.b where 1 != 1",
-    "Query": "select m1.col from unsharded as m2 left join unsharded as m1 on m1.a = m2.b",
-    "Table": "unsharded"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Unsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
     "FieldQuery": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a = m2.b where 1 != 1",
     "Query": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a = m2.b",
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Right join with a join LHS
 "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b"
-{
-  "QueryType": "SELECT",
-  "Original": "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Unsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select m1.col from unsharded as m3 left join (unsharded as m1 join unsharded as m2) on m1.a = m2.b where 1 != 1",
-    "Query": "select m1.col from unsharded as m3 left join (unsharded as m1 join unsharded as m2) on m1.a = m2.b",
-    "Table": "unsharded"
-  }
-}
 {
   "QueryType": "SELECT",
   "Original": "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b",
@@ -899,6 +776,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Straight-join (Gen4 ignores the straight_join hint)
 "select m1.col from unsharded as m1 straight_join unsharded as m2"
@@ -3007,61 +2885,6 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
   "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "LeftJoin",
-    "JoinColumnIndexes": "-1",
-    "TableName": "unsharded_`user`",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Unsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-        "Query": "select unsharded.col from unsharded",
-        "Table": "unsharded"
-      },
-      {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
-            "Table": "`user`"
-          }
-        ]
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select unsharded.col from unsharded left join user on user.col in (select col from user)",
-  "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
     "PulloutVars": [
@@ -3113,6 +2936,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # subquery in ON clause, with join primitives, and join on top
 # The subquery is not pulled all the way out.
@@ -4480,7 +4304,6 @@ Gen4 plan same as above
 
 # left join where clauses #2
 "select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.col, 4) = 5"
-"unsupported: cross-shard left join and where clause"
 {
   "QueryType": "SELECT",
   "Original": "select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.col, 4) = 5",
@@ -4532,6 +4355,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # dont merge unsharded tables from different keyspaces
 "select 1 from main.unsharded join main_2.unsharded_tab"
