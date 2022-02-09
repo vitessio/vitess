@@ -46,7 +46,7 @@ var (
 	vtctldAddr   string
 	ks1          = "test_keyspace"
 	redirected   = "redirected"
-	jsonTopo = `
+	jsonTopo     = `
 {
 	"keyspaces": [
 		{
