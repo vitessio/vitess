@@ -25,11 +25,17 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+)
+
+var (
+	getSchemaT1Results = "CREATE TABLE `t1` (\n  `id` bigint(20) NOT NULL,\n  `value` varchar(16) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+	getSchemaV1Results = fmt.Sprintf("CREATE ALGORITHM=UNDEFINED DEFINER=`%s`@`%s` SQL SECURITY DEFINER VIEW {{.DatabaseName}}.`v1` AS select {{.DatabaseName}}.`t1`.`id` AS `id`,{{.DatabaseName}}.`t1`.`value` AS `value` from {{.DatabaseName}}.`t1`", username, hostname)
 )
 
 // TabletCommands tests the basic tablet commands
@@ -222,6 +228,20 @@ func TestShardReplicationFix(t *testing.T) {
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 	assertNodeCount(t, result, int(3))
+}
+
+func TestGetSchema(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema",
+		"-include-views", "-tables", "t1,v1",
+		fmt.Sprintf("%s-%d", clusterInstance.Cell, primaryTablet.TabletUID))
+	require.Nil(t, err)
+
+	t1Create := gjson.Get(res, "table_definitions.#(name==\"t1\").schema")
+	assert.Equal(t, getSchemaT1Results, t1Create.String())
+	v1Create := gjson.Get(res, "table_definitions.#(name==\"v1\").schema")
+	assert.Equal(t, getSchemaV1Results, v1Create.String())
 }
 
 func assertNodeCount(t *testing.T, result string, want int) {
