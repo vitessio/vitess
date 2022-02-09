@@ -244,9 +244,11 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 	norm := qr.Rows[0][1].ToString()
 	norm = autoIncr.ReplaceAllLiteralString(norm, "")
 	if tableType == tmutils.TableView {
-		// Views will have the dbname in there, replace it
-		// with {{.DatabaseName}}
-		norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
+		// Views will have the dbname qualifier in there, we remove it
+		// so that the results for Views match:
+		//   1. The SHOW CREATE VIEW output from MySQL
+		//   2. The CREATE TABLE output in these results, which does not have the DB name qualifier
+		norm = strings.Replace(norm, backtickDBName+".", "", -1)
 	}
 
 	return norm, nil
