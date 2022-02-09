@@ -2028,13 +2028,13 @@ func TestLeftJoin(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
+			sqltypes.NewInt32(1),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{
@@ -2060,7 +2060,7 @@ func TestLeftJoin(t *testing.T) {
 		},
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		t.Errorf("result: \n%+v, want \n%+v", result, wantResult)
 	}
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
 }
@@ -2069,13 +2069,13 @@ func TestLeftJoinStream(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
+			sqltypes.NewInt32(1),
 		}},
 	}}
 	emptyResult := []*sqltypes.Result{{
