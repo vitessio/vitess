@@ -23,16 +23,19 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/logutil"
+
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
@@ -198,8 +201,8 @@ func (cfg *Config) DbName() string {
 }
 
 type TopoFlag struct {
-	ptr *vttestpb.VTTestTopology
-	unmarshal func (b []byte, m proto.Message) error
+	ptr       *vttestpb.VTTestTopology
+	unmarshal func(b []byte, m proto.Message) error
 }
 
 func (tf *TopoFlag) String() string {
@@ -211,15 +214,15 @@ func (tf *TopoFlag) Set(value string) error {
 }
 
 func TextTopoFlag(tpb *vttestpb.VTTestTopology) flag.Value {
-	return &TopoFlag {
-		ptr: tpb,
+	return &TopoFlag{
+		ptr:       tpb,
 		unmarshal: prototext.Unmarshal,
 	}
 }
 
 func JsonTopoFlag(tpb *vttestpb.VTTestTopology) flag.Value {
-	return &TopoFlag {
-		ptr: tpb,
+	return &TopoFlag{
+		ptr:       tpb,
 		unmarshal: protojson.Unmarshal,
 	}
 }

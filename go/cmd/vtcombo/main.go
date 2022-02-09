@@ -27,6 +27,7 @@ import (
 	"os"
 	"strings"
 	"time"
+
 	"vitess.io/vitess/go/vt/vttest"
 
 	"google.golang.org/protobuf/proto"
