@@ -307,6 +307,10 @@ func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
 			if idx == -1 {
 				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
 			}
+			if strings.Contains(comment, queryHint) {
+				newComments = append(Comments{comment}, newComments...)
+				continue
+			}
 			newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
 			newComments = append(Comments{newComment}, newComments...)
 		} else {

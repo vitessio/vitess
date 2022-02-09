@@ -27,6 +27,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testCaseSetVar struct {
+	in, expected, setVarComment string
+}
+
 type myTestCase struct {
 	in, expected                                                       string
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
@@ -326,6 +330,98 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
 			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
 			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
+		})
+	}
+}
+
+func TestRewritesWithSetVarComment(in *testing.T) {
+	tests := []testCaseSetVar{{
+		in:            "select 1",
+		expected:      "select 1",
+		setVarComment: "",
+	}, {
+		in:            "select 1",
+		expected:      "select /*+ AA(a) */ 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "insert /* toto */ into t(id) values(1)",
+		expected:      "insert /*+ AA(a) */ /* toto */ into t(id) values(1)",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "select  /* toto */ * from t union select * from s",
+		expected:      "select /*+ AA(a) */ /* toto */ * from t union select /*+ AA(a) */ * from s",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "vstream /* toto */ * from t1",
+		expected:      "vstream /*+ AA(a) */ /* toto */ * from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "stream /* toto */ t from t1",
+		expected:      "stream /*+ AA(a) */ /* toto */ t from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "update /* toto */ t set id = 1",
+		expected:      "update /*+ AA(a) */ /* toto */ t set id = 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "delete /* toto */ from t",
+		expected:      "delete /*+ AA(a) */ /* toto */ from t",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "set /* toto */ a=1",
+		expected:      "set /*+ AA(a) */ /* toto */ session a=1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "set /* toto */ transaction isolation level read committed",
+		expected:      "set /*+ AA(a) */ /* toto */ transaction isolation level read committed",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "drop /* toto */ database t",
+		expected:      "drop /*+ AA(a) */ /* toto */ database t",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "create database /* toto */ t",
+		expected:      "create database /*+ AA(a) */ /* toto */ t",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "drop /* toto */ table t",
+		expected:      "drop /*+ AA(a) */ /* toto */ table t",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "drop /* toto */ view a",
+		expected:      "drop /*+ AA(a) */ /* toto */ view a",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "create /* toto */ table t2 (b blob default 'abc')",
+		expected:      "create /*+ AA(a) */ /* toto */ table t2 (b blob default 'abc')",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "show /* toto */ vitess_migrations from user",
+		expected:      "show /*+ AA(a) */ /* toto */ vitess_migrations from user",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "revert /* toto */ vitess_migration 'abc'",
+		expected:      "revert /*+ AA(a) */ /* toto */ vitess_migration 'abc'",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "alter /* toto */ table t add column i int",
+		expected:      "alter /*+ AA(a) */ /* toto */ table t add column i int",
+		setVarComment: "AA(a)",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment)
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
 		})
 	}
 }

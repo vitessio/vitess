@@ -31,8 +31,16 @@ func TestAddQueryHint(t *testing.T) {
 		expected  Comments
 		err       string
 	}{
-		{node: Comments{}, queryHint: "", expected: Comments{}},
-		{node: Comments{}, queryHint: "SET_VAR(aa)", expected: Comments{"/*+ SET_VAR(aa) */"}},
+		{
+			node:      Comments{},
+			queryHint: "",
+			expected:  Comments{},
+		},
+		{
+			node:      Comments{},
+			queryHint: "SET_VAR(aa)",
+			expected:  Comments{"/*+ SET_VAR(aa) */"},
+		},
 		{
 			node:      Comments{"/* toto */"},
 			queryHint: "SET_VAR(aa)",
@@ -43,11 +51,20 @@ func TestAddQueryHint(t *testing.T) {
 			queryHint: "SET_VAR(aa)",
 			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/* toto */"},
 		},
-		{node: Comments{"/* toto */", "/*+ SET_VAR(bb) "}, queryHint: "SET_VAR(aa)", err: "Query hint comment is malformed"},
+		{
+			node:      Comments{"/* toto */", "/*+ SET_VAR(bb) "},
+			queryHint: "SET_VAR(aa)",
+			err:       "Query hint comment is malformed",
+		},
 		{
 			node:      Comments{"/* toto */", "/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) */"},
 			queryHint: "SET_VAR(aa)",
 			err:       "Must have only one query hint",
+		},
+		{
+			node:      Comments{"/*+ SET_VAR(bb) */"},
+			queryHint: "SET_VAR(bb)",
+			expected:  Comments{"/*+ SET_VAR(bb) */"},
 		},
 	}
 
