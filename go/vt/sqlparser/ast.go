@@ -37,6 +37,7 @@ type (
 		SQLNode
 	}
 
+	// Commentable represents statements that are worth being commented.
 	Commentable interface {
 		iCommentable()
 		SetComments(comments Comments)
@@ -690,23 +691,13 @@ func (TableOptions) iAlterOption()             {}
 func (*ExplainStmt) iExplain() {}
 func (*ExplainTab) iExplain()  {}
 
-func (*DropTable) iCommentable()         {}
-func (*DropView) iCommentable()          {}
-func (*CreateTable) iCommentable()       {}
-func (*RevertMigration) iCommentable()   {}
-func (*CreateDatabase) iCommentable()    {}
-func (*Delete) iCommentable()            {}
-func (*DropDatabase) iCommentable()      {}
-func (*Insert) iCommentable()            {}
-func (*SetTransaction) iCommentable()    {}
-func (*Set) iCommentable()               {}
-func (*ShowMigrationLogs) iCommentable() {}
-func (*Stream) iCommentable()            {}
-func (*Update) iCommentable()            {}
-func (*VStream) iCommentable()           {}
-func (*AlterTable) iCommentable()        {}
-func (*Select) iCommentable()            {}
-func (*Union) iCommentable()             {}
+func (*Delete) iCommentable()  {}
+func (*Insert) iCommentable()  {}
+func (*Stream) iCommentable()  {}
+func (*Update) iCommentable()  {}
+func (*VStream) iCommentable() {}
+func (*Select) iCommentable()  {}
+func (*Union) iCommentable()   {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -1190,38 +1181,13 @@ func (node *RevertMigration) SetComments(comments Comments) {
 	node.Comments = comments
 }
 
-// SetComments for CreateDatabase
-func (node *CreateDatabase) SetComments(comments Comments) {
-	node.Comments = comments
-}
-
 // SetComments for Delete
 func (node *Delete) SetComments(comments Comments) {
 	node.Comments = comments
 }
 
-// SetComments for DropDatabase
-func (node *DropDatabase) SetComments(comments Comments) {
-	node.Comments = comments
-}
-
 // SetComments for Insert
 func (node *Insert) SetComments(comments Comments) {
-	node.Comments = comments
-}
-
-// SetComments for SetTransaction
-func (node *SetTransaction) SetComments(comments Comments) {
-	node.Comments = comments
-}
-
-// SetComments for Set
-func (node *Set) SetComments(comments Comments) {
-	node.Comments = comments
-}
-
-// SetComments for ShowMigrationLogs
-func (node *ShowMigrationLogs) SetComments(comments Comments) {
 	node.Comments = comments
 }
 
@@ -1286,42 +1252,12 @@ func (node *AlterView) GetComments() Comments {
 }
 
 // GetComments implements Commentable.
-func (node *CreateDatabase) GetComments() Comments {
-	return node.Comments
-}
-
-// GetComments implements Commentable.
 func (node *Delete) GetComments() Comments {
-	return node.Comments
-}
-
-// GetComments implements DropDatabase.
-func (node *DropDatabase) GetComments() Comments {
 	return node.Comments
 }
 
 // GetComments implements Insert.
 func (node *Insert) GetComments() Comments {
-	return node.Comments
-}
-
-// GetComments implements RevertMigration.
-func (node *RevertMigration) GetComments() Comments {
-	return node.Comments
-}
-
-// GetComments implements Set.
-func (node *Set) GetComments() Comments {
-	return node.Comments
-}
-
-// GetComments implements SetTransaction.
-func (node *SetTransaction) GetComments() Comments {
-	return node.Comments
-}
-
-// GetComments implements ShowMigrationLogs.
-func (node *ShowMigrationLogs) GetComments() Comments {
 	return node.Comments
 }
 

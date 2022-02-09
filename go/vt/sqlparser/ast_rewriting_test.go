@@ -367,46 +367,6 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 		in:            "delete /* toto */ from t",
 		expected:      "delete /*+ AA(a) */ /* toto */ from t",
 		setVarComment: "AA(a)",
-	}, {
-		in:            "set /* toto */ a=1",
-		expected:      "set /*+ AA(a) */ /* toto */ session a=1",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "set /* toto */ transaction isolation level read committed",
-		expected:      "set /*+ AA(a) */ /* toto */ transaction isolation level read committed",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "drop /* toto */ database t",
-		expected:      "drop /*+ AA(a) */ /* toto */ database t",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "create database /* toto */ t",
-		expected:      "create database /*+ AA(a) */ /* toto */ t",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "drop /* toto */ table t",
-		expected:      "drop /*+ AA(a) */ /* toto */ table t",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "drop /* toto */ view a",
-		expected:      "drop /*+ AA(a) */ /* toto */ view a",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "create /* toto */ table t2 (b blob default 'abc')",
-		expected:      "create /*+ AA(a) */ /* toto */ table t2 (b blob default 'abc')",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "show /* toto */ vitess_migrations from user",
-		expected:      "show /*+ AA(a) */ /* toto */ vitess_migrations from user",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "revert /* toto */ vitess_migration 'abc'",
-		expected:      "revert /*+ AA(a) */ /* toto */ vitess_migration 'abc'",
-		setVarComment: "AA(a)",
-	}, {
-		in:            "alter /* toto */ table t add column i int",
-		expected:      "alter /*+ AA(a) */ /* toto */ table t add column i int",
-		setVarComment: "AA(a)",
 	}}
 
 	for _, tc := range tests {
