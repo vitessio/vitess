@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -280,6 +281,42 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Geometry
 	}
 	return sqltypes.Null
+}
+
+// AddQueryHint adds the given string to list of comment.
+// If the list is empty, one will be created containing the query hint.
+// If the list already contains a query hint, the given string will be merged with the existing one.
+// This is done because only one query hint is allowed per query.
+func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
+	if queryHint == "" {
+		return node, nil
+	}
+	queryHintCommentStr := fmt.Sprintf("/*+ %s */", queryHint)
+	if len(node) == 0 {
+		return Comments{queryHintCommentStr}, nil
+	}
+	var newComments Comments
+	var hasQueryHint bool
+	for _, comment := range node {
+		if strings.HasPrefix(comment, "/*+") {
+			if hasQueryHint {
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
+			}
+			hasQueryHint = true
+			idx := strings.Index(comment, "*/")
+			if idx == -1 {
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
+			}
+			newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
+			newComments = append(Comments{newComment}, newComments...)
+		} else {
+			newComments = append(newComments, comment)
+		}
+	}
+	if !hasQueryHint {
+		newComments = append(Comments{queryHintCommentStr}, newComments...)
+	}
+	return newComments, nil
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case
