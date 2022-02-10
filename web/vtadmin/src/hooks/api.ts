@@ -53,6 +53,8 @@ import {
     setReadWrite,
     ValidateKeyspaceParams,
     validateKeyspace,
+    validateSchemaKeyspace,
+    ValidateSchemaKeyspaceParams,
 } from '../api/http';
 import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -319,6 +321,15 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
 export const useValidateKeyspace = (params: ValidateKeyspaceParams, options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>) => {
     return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>(() => {
         return validateKeyspace(params);
+    }, options);
+}
+
+/**
+ * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+ export const useValidateSchemaKeyspace = (params: ValidateSchemaKeyspaceParams, options?: UseMutationOptions<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>) => {
+    return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>(() => {
+        return validateSchemaKeyspace(params);
     }, options);
 }
 

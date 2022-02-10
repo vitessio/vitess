@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -2832,6 +2834,134 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	}
 
 	wg.Wait()
+	return &resp, nil
+}
+
+// ValidateSchemaKeyspace is a part of the vtctlservicepb.VtctldServer interface.
+// It will diff the schema from all the tablets in the keyspace.
+func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateSchemaKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	keyspace := req.Keyspace
+
+	resp := vtctldatapb.ValidateSchemaKeyspaceResponse{}
+
+	shards, err := s.ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
+		return &resp, nil
+	}
+
+	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
+
+	sort.Strings(shards)
+
+	var (
+		referenceSchema *tabletmanagerdatapb.SchemaDefinition
+		referenceAlias  *topodatapb.TabletAlias
+	)
+
+	var (
+		m  sync.Mutex
+		wg sync.WaitGroup
+	)
+
+	// TO DO: Use `IncludeVschema` parameter to determine whether or not to also add results from ValidateVschema to the results array.
+	// Unimplemented for now because ValidateVSchema method is out of scope.
+
+	// Diff all tablets in the other shards
+	for _, shard := range shards[0:] {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+
+			si, err := s.ts.GetShard(ctx, keyspace, shard)
+
+			shardResp := vtctldatapb.ValidateShardResponse{
+				Results: []string{},
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			if err != nil {
+				errMessage := fmt.Sprintf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
+				shardResp.Results = append(shardResp.Results, errMessage)
+				resp.Results = append(resp.Results, errMessage)
+				resp.ResultsByShard[shard] = &shardResp
+				return
+			}
+
+			if !si.HasPrimary() {
+				if !req.SkipNoPrimary {
+					errMessage := fmt.Sprintf("no primary in shard %v/%v", keyspace, shard)
+					shardResp.Results = append(shardResp.Results, errMessage)
+					resp.Results = append(resp.Results, errMessage)
+					resp.ResultsByShard[shard] = &shardResp
+				}
+				return
+			}
+
+			if referenceSchema == nil {
+				referenceAlias = si.PrimaryAlias
+				referenceSchema, err = schematools.GetSchema(ctx, s.ts, s.tmc, referenceAlias, nil, []string{} /*excludeTables*/, false /*includeViews*/)
+				if err != nil {
+					errMessage := fmt.Sprintf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, []string{} /*excludeTables*/, false /*includeViews*/, err)
+					shardResp.Results = append(shardResp.Results, errMessage)
+					resp.Results = append(resp.Results, errMessage)
+					resp.ResultsByShard[shard] = &shardResp
+					return
+				}
+			}
+
+			aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+			if err != nil {
+				errMessage := fmt.Sprintf("FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
+				shardResp.Results = append(shardResp.Results, errMessage)
+				resp.Results = append(resp.Results, errMessage)
+				resp.ResultsByShard[shard] = &shardResp
+				return
+			}
+
+			aliasWg := sync.WaitGroup{}
+			aliasErrs := concurrency.AllErrorRecorder{}
+
+			for _, alias := range aliases {
+				// Don't diff schemas for self
+				if referenceAlias == alias {
+					continue
+				}
+				aliasWg.Add(1)
+				go func(alias *topodatapb.TabletAlias) {
+					defer aliasWg.Done()
+					log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
+					replicaSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, alias, nil, req.ExcludeTables, req.InludeViews)
+					if err != nil {
+						aliasErrs.RecordError(fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", alias, req.ExcludeTables, req.InludeViews, err))
+						return
+					}
+
+					tmutils.DiffSchema(topoproto.TabletAliasString(referenceAlias), referenceSchema, topoproto.TabletAliasString(alias), replicaSchema, &aliasErrs)
+				}(alias)
+			}
+			aliasWg.Wait()
+
+			if aliasErrs.HasErrors() {
+				for _, err := range aliasErrs.Errors {
+					errMessage := err.Error()
+					shardResp.Results = append(shardResp.Results, errMessage)
+					resp.Results = append(resp.Results, errMessage)
+				}
+			}
+
+			resp.ResultsByShard[shard] = &shardResp
+		}(shard)
+	}
+
+	wg.Wait()
+
 	return &resp, nil
 }
 

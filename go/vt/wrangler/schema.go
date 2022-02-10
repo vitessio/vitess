@@ -108,8 +108,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	return nil
 }
 
-// ValidateSchemaKeyspace will diff the schema from all the tablets in
-// the keyspace.
+// ValidateSchemaKeyspace will diff the schema from all the tablets in the keyspace.
 func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoPrimary bool, includeVSchema bool) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(ctx, keyspace)

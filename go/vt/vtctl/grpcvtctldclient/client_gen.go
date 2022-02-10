@@ -586,6 +586,15 @@ func (client *gRPCVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctld
 	return client.c.ValidateKeyspace(ctx, in, opts...)
 }
 
+// ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateSchemaKeyspace(ctx, in, opts...)
+}
+
 // ValidateShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
 	if client.c == nil {
