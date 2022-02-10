@@ -2315,7 +2315,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	sbc1WantQueries := []*querypb.BoundQuery{{
 		Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
 	}, {
-		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+		Sql: "set @@sql_mode = ' '", BindVariables: emptyBV,
 	}, {
 		Sql: "savepoint a", BindVariables: emptyBV,
 	}, {
@@ -2327,7 +2327,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	}}
 
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+		Sql: "set @@sql_mode = ' '", BindVariables: emptyBV,
 	}, {
 		Sql: "savepoint a", BindVariables: emptyBV,
 	}, {
