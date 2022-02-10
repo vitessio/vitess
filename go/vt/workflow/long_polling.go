@@ -17,6 +17,7 @@ limitations under the License.
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"context"
+	"github.com/golang/glog"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/timer"
@@ -157,9 +158,48 @@ func getID(url, base string) (int, error) {
 	return i, nil
 }
 
+const (
+	LogLevelDumpAllHTTPHeaders glog.Level = 50
+	HTTPHeaderRedactedMessage  string     = "*** redacted by sanitizeRequestHeader() ***"
+)
+
+var whiteListedHTTPHeaders = map[string]interface{}{
+	"Accept":                    nil,
+	"Accept-Encoding":           nil,
+	"Accept-Language":           nil,
+	"Upgrade-Insecure-Requests": nil,
+	"User-Agent":                nil,
+	"X-Forwarded-For":           nil,
+	"X-Forwarded-Host":          nil,
+	"X-Forwarded-Proto":         nil,
+	"X-Real-Ip":                 nil,
+}
+
+// sanitizeRequestHeader - (unless debugOn=true) makes a copy of r and returns it with sanitized headers
+func sanitizeRequestHeader(r *http.Request, debugOn bool) *http.Request {
+	if debugOn {
+		return r
+	}
+
+	s := r.Clone(r.Context())
+
+	for k := range s.Header {
+		if _, ok := whiteListedHTTPHeaders[k]; !ok {
+			s.Header.Set(k, HTTPHeaderRedactedMessage)
+		}
+	}
+
+	return s
+}
+
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
 	errMsg := fmt.Sprintf(format, args...)
-	log.Errorf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
+	debugOn := bool(log.V(LogLevelDumpAllHTTPHeaders))
+	log.Errorf("HTTP error on %v: %v, request: %#v",
+		r.URL.Path,
+		errMsg,
+		sanitizeRequestHeader(r, debugOn),
+	)
 	http.Error(w, errMsg, http.StatusInternalServerError)
 }
 
