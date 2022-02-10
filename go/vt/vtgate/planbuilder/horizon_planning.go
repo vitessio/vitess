@@ -568,7 +568,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			// }
 		}
 	}
-	lhsGrouping, err := hp.funcName(ctx, plan.LHSColumns)
+	lhsGrouping, err := hp.createGroupingsForColumns(ctx, plan.LHSColumns)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -594,7 +594,10 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	return plan, nil, nil, nil
 }
 
-func (hp *horizonPlanning) funcName(ctx *plancontext.PlanningContext, columns []*sqlparser.ColName) ([]abstract.GroupBy, error) {
+func (hp *horizonPlanning) createGroupingsForColumns(
+	ctx *plancontext.PlanningContext,
+	columns []*sqlparser.ColName,
+) ([]abstract.GroupBy, error) {
 	var lhsGrouping []abstract.GroupBy
 	for _, lhsColumn := range columns {
 		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn, ctx.SemTable)
