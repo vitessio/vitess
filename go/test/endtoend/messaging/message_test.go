@@ -26,20 +26,18 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -204,6 +202,63 @@ func TestThreeColMessage(t *testing.T) {
 	}, {
 		Name: "msg1",
 		Type: sqltypes.VarChar,
+	}, {
+		Name: "msg2",
+		Type: sqltypes.Int64,
+	}}
+	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, wantFields, gotFields)
+
+	exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
+
+	got, err := streamConn.FetchNext(nil)
+	require.NoError(t, err)
+	want := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewVarChar("hello world"),
+		sqltypes.NewInt64(3),
+	}
+	utils.MustMatch(t, want, got)
+
+	// Verify Ack.
+	qr := exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	assert.Equal(t, uint64(1), qr.RowsAffected)
+}
+
+func TestThreeColMessageStreamTwoCols(t *testing.T) {
+	ctx := context.Background()
+
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	streamConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer streamConn.Close()
+
+	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	exec(t, conn, createThreeColMessage)
+	defer exec(t, conn, "drop table vitess_message3")
+
+	exec(t, streamConn, "set workload = 'olap'")
+	err = streamConn.ExecuteStreamFetch("stream id, msg2 from vitess_message3")
+	require.NoError(t, err)
+
+	wantFields := []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
 	}, {
 		Name: "msg2",
 		Type: sqltypes.Int64,
