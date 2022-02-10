@@ -470,7 +470,7 @@ func tryMerge(
 
 	switch aRoute.RouteOpCode {
 	case engine.Unsharded, engine.DBA:
-		if aRoute.RouteOpCode == bRoute.RouteOpCode {
+		if aRoute.RouteOpCode == bRoute.RouteOpCode && sameKeyspace {
 			return merger(aRoute, bRoute)
 		}
 	case engine.EqualUnique:
