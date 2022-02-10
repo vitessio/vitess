@@ -401,6 +401,9 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 		changed = true
 	}
 
+	// When sending SET_VAR(sql_mode = "") to MySQL, MySQL ignores the optimizer hints and produces a
+	// "syntax error" warning. For this reason, when we want to set sql_mode to "" we set it so " "
+	// so MySQL does not ignore it.
 	if qr.Rows[0][1].Len() == 0 {
 		return changed, sqltypes.NewVarChar(" ")
 	}
