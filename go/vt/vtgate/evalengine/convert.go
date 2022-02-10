@@ -89,13 +89,18 @@ func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Exp
 	}
 }
 
+func convertLogicalNot(inner Expr) Expr {
+	return &NotExpr{UnaryExpr{inner}}
+}
+
 func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	l, err := convertExpr(left, lookup)
 	if err != nil {
 		return nil, err
 	}
+
 	if opname == "NOT" {
-		return &NotExpr{UnaryExpr{l}}, nil
+		return convertLogicalNot(l), nil
 	}
 
 	r, err := convertExpr(right, lookup)
@@ -265,19 +270,14 @@ func convertCollateExpr(collate *sqlparser.CollateExpr, lookup ConverterLookup) 
 	}, nil
 }
 
-func convertIntroducerExpr(introducer *sqlparser.IntroducerExpr, lookup ConverterLookup) (Expr, error) {
-	expr, err := convertExpr(introducer.Expr, lookup)
-	if err != nil {
-		return nil, err
-	}
-
+func convertForceCharset(charset string, expr Expr) Expr {
 	var collation collations.ID
-	if strings.ToLower(introducer.CharacterSet) == "_binary" {
+	if strings.ToLower(charset) == "_binary" {
 		collation = collations.CollationBinaryID
 	} else {
-		defaultCollation := collations.Local().DefaultCollationForCharset(introducer.CharacterSet[1:])
+		defaultCollation := collations.Local().DefaultCollationForCharset(charset[1:])
 		if defaultCollation == nil {
-			panic(fmt.Sprintf("unknown character set: %s", introducer.CharacterSet))
+			panic(fmt.Sprintf("unknown character set: %s", charset))
 		}
 		collation = defaultCollation.ID()
 	}
@@ -304,7 +304,15 @@ func convertIntroducerExpr(introducer *sqlparser.IntroducerExpr, lookup Converte
 	default:
 		panic("character set introducers are only supported for literals and arguments")
 	}
-	return expr, nil
+	return expr
+}
+
+func convertIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup ConverterLookup) (Expr, error) {
+	expr, err := convertExpr(introduced, lookup)
+	if err != nil {
+		return nil, err
+	}
+	return convertForceCharset(introduced.CharacterSet, expr), nil
 }
 
 func convertFuncExpr(fn *sqlparser.FuncExpr, lookup ConverterLookup) (Expr, error) {
@@ -364,6 +372,10 @@ func convertUnaryExpr(unary *sqlparser.UnaryExpr, lookup ConverterLookup) (Expr,
 	switch unary.Operator {
 	case sqlparser.UMinusOp:
 		return &NegateExpr{UnaryExpr: UnaryExpr{expr}}, nil
+	case sqlparser.BinaryOp:
+		return convertForceCharset("_binary", expr), nil
+	case sqlparser.BangOp:
+		return convertLogicalNot(expr), nil
 	default:
 		return nil, convertNotSupported(unary)
 	}
