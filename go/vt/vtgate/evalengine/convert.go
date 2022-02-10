@@ -209,19 +209,6 @@ func convertLiteral(lit *sqlparser.Literal, lookup ConverterLookup) (Expr, error
 }
 
 func convertBinaryExpr(binary *sqlparser.BinaryExpr, lookup ConverterLookup) (Expr, error) {
-	var op ArithmeticOp
-	switch binary.Operator {
-	case sqlparser.PlusOp:
-		op = &OpAddition{}
-	case sqlparser.MinusOp:
-		op = &OpSubstraction{}
-	case sqlparser.MultOp:
-		op = &OpMultiplication{}
-	case sqlparser.DivOp:
-		op = &OpDivision{}
-	default:
-		return nil, convertNotSupported(binary)
-	}
 	left, err := convertExpr(binary.Left, lookup)
 	if err != nil {
 		return nil, err
@@ -230,13 +217,33 @@ func convertBinaryExpr(binary *sqlparser.BinaryExpr, lookup ConverterLookup) (Ex
 	if err != nil {
 		return nil, err
 	}
-	return &ArithmeticExpr{
-		BinaryExpr: BinaryExpr{
-			Left:  left,
-			Right: right,
-		},
-		Op: op,
-	}, nil
+	binaryExpr := BinaryExpr{
+		Left:  left,
+		Right: right,
+	}
+
+	switch binary.Operator {
+	case sqlparser.PlusOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &OpAddition{}}, nil
+	case sqlparser.MinusOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &OpSubstraction{}}, nil
+	case sqlparser.MultOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &OpMultiplication{}}, nil
+	case sqlparser.DivOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &OpDivision{}}, nil
+	case sqlparser.BitAndOp:
+		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &OpBitAnd{}}, nil
+	case sqlparser.BitOrOp:
+		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &OpBitOr{}}, nil
+	case sqlparser.BitXorOp:
+		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &OpBitXor{}}, nil
+	case sqlparser.ShiftLeftOp:
+		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &OpBitShiftLeft{}}, nil
+	case sqlparser.ShiftRightOp:
+		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &OpBitShiftRight{}}, nil
+	default:
+		return nil, convertNotSupported(binary)
+	}
 }
 
 func convertTuple(tuple sqlparser.ValTuple, lookup ConverterLookup) (Expr, error) {
@@ -308,7 +315,7 @@ func convertForceCharset(charset string, expr Expr) Expr {
 }
 
 func convertIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup ConverterLookup) (Expr, error) {
-	expr, err := convertExpr(introduced, lookup)
+	expr, err := convertExpr(introduced.Expr, lookup)
 	if err != nil {
 		return nil, err
 	}

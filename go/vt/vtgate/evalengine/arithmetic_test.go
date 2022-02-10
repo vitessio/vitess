@@ -1214,7 +1214,7 @@ func TestPrioritize(t *testing.T) {
 	}, {
 		v1:   textIntval,
 		v2:   ival,
-		out1: ival,
+		out1: newEvalFloat(-1.0),
 		out2: ival,
 	}, {
 		v1:   ival,

@@ -34,6 +34,7 @@ import (
 
 const (
 	flagHex = 1 << iota
+	flagBit
 )
 
 type (
@@ -761,15 +762,19 @@ func (er *EvalResult) makeNumeric() {
 		er.setUint64(u)
 		return
 	}
-	if ival, err := strconv.ParseInt(er.string(), 10, 64); err == nil {
-		er.setInt64(ival)
-		return
+	er.setFloat(parseStringToFloat(er.string()))
+}
+
+func (er *EvalResult) makeIntegral() {
+	er.makeNumeric()
+	switch er.typeof() {
+	case sqltypes.Float64:
+		er.setUint64(uint64(er.float64()))
+	case sqltypes.Decimal:
+		dec := er.decimal()
+		u, _ := dec.num.Uint64()
+		er.setUint64(u)
 	}
-	if fval, err := strconv.ParseFloat(er.string(), 64); err == nil {
-		er.setFloat(fval)
-		return
-	}
-	er.setFloat(0)
 }
 
 func (er *EvalResult) negateNumeric() {
