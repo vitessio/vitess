@@ -53,6 +53,9 @@ func (v *Counter) Add(delta int64) {
 }
 
 // Set overwrites the current value.
+// This should be used with caution for Counter values
+// only when we are certain that the underlying value we are setting
+// is increment only
 func (v *Counter) Set(value int64) {
 	v.i.Set(value)
 }
