@@ -200,30 +200,30 @@ func (cfg *Config) DbName() string {
 	return ""
 }
 
-type TopoFlag struct {
-	ptr       *vttestpb.VTTestTopology
-	unmarshal func(b []byte, m proto.Message) error
+type TopoData struct {
+	vtTestTopology *vttestpb.VTTestTopology
+	unmarshal      func(b []byte, m proto.Message) error
 }
 
-func (tf *TopoFlag) String() string {
-	return "vttestpb.VTTestTopology"
+func (td *TopoData) String() string {
+	return prototext.Format(td.vtTestTopology)
 }
 
-func (tf *TopoFlag) Set(value string) error {
-	return tf.unmarshal([]byte(value), tf.ptr)
+func (td *TopoData) Set(value string) error {
+	return td.unmarshal([]byte(value), td.vtTestTopology)
 }
 
-func TextTopoFlag(tpb *vttestpb.VTTestTopology) flag.Value {
-	return &TopoFlag{
-		ptr:       tpb,
-		unmarshal: prototext.Unmarshal,
+func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      prototext.Unmarshal,
 	}
 }
 
-func JsonTopoFlag(tpb *vttestpb.VTTestTopology) flag.Value {
-	return &TopoFlag{
-		ptr:       tpb,
-		unmarshal: protojson.Unmarshal,
+func JsonTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      protojson.Unmarshal,
 	}
 }
 

@@ -69,8 +69,8 @@ func TestMain(m *testing.M) {
 	exitcode, err := func() (int, error) {
 		var topology vttestpb.VTTestTopology
 
-		flag := vttest.JsonTopoFlag(&topology)
-		err := flag.Set(jsonTopo)
+		data := vttest.JsonTopoData(&topology)
+		err := data.Set(jsonTopo)
 		if err != nil {
 			return 1, err
 		}
