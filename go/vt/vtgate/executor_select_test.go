@@ -147,6 +147,25 @@ func TestSystemVariablesUsingSetVarCommentWithComment(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
+func TestCreateTableValidTimestamp(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", SystemVariables: map[string]string{"sql_mode": "ALLOW_INVALID_DATES"}})
+
+	query := "create table aa(t timestamp default 0)"
+	_, err := executor.Execute(context.Background(), "TestSelect", session, query, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.True(t, session.InReservedConn())
+
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "set @@sql_mode = ALLOW_INVALID_DATES", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "create table aa (\n\tt timestamp default 0\n)", BindVariables: map[string]*querypb.BindVariable{}},
+	}
+
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
 func TestGen4SelectDBA(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
