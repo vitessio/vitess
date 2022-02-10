@@ -2023,7 +2023,7 @@ func VisitRefOfStream(in *Stream, f Visit) error {
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitSelectExpr(in.SelectExpr, f); err != nil {
+	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
 		return err
 	}
 	if err := VisitTableName(in.Table, f); err != nil {

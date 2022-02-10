@@ -117,7 +117,7 @@ func (node *VStream) formatFast(buf *TrackedBuffer) {
 func (node *Stream) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("stream ")
 	node.Comments.formatFast(buf)
-	node.SelectExpr.formatFast(buf)
+	node.SelectExprs.formatFast(buf)
 	buf.WriteString(" from ")
 	node.Table.formatFast(buf)
 

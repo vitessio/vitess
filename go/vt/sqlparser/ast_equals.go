@@ -2480,7 +2480,7 @@ func EqualsRefOfStream(a, b *Stream) bool {
 		return false
 	}
 	return EqualsComments(a.Comments, b.Comments) &&
-		EqualsSelectExpr(a.SelectExpr, b.SelectExpr) &&
+		EqualsSelectExprs(a.SelectExprs, b.SelectExprs) &&
 		EqualsTableName(a.Table, b.Table)
 }
 

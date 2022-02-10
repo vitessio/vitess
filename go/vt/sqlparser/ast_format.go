@@ -94,7 +94,7 @@ func (node *VStream) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Stream) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "stream %v%v from %v",
-		node.Comments, node.SelectExpr, node.Table)
+		node.Comments, node.SelectExprs, node.Table)
 }
 
 // Format formats the node.

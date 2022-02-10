@@ -2108,9 +2108,14 @@ func (cached *Stream) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field SelectExpr vitess.io/vitess/go/vt/sqlparser.SelectExpr
-	if cc, ok := cached.SelectExpr.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field SelectExprs vitess.io/vitess/go/vt/sqlparser.SelectExprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.SelectExprs)) * int64(16))
+		for _, elem := range cached.SelectExprs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)

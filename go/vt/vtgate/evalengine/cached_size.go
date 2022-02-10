@@ -179,7 +179,7 @@ func (cached *ExpressionEnv) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field BindVars map[string]*vitess.io/vitess/go/vt/proto/query.BindVariable
 	if cached.BindVars != nil {
@@ -282,6 +282,18 @@ func (cached *LogicalExpr) CachedSize(alloc bool) int64 {
 	size += cached.BinaryExpr.CachedSize(false)
 	// field opname string
 	size += hack.RuntimeAllocSize(int64(len(cached.opname)))
+	return size
+}
+func (cached *NegateExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
+	size += cached.UnaryExpr.CachedSize(false)
 	return size
 }
 func (cached *NotExpr) CachedSize(alloc bool) int64 {

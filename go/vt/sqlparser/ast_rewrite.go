@@ -4082,8 +4082,8 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 	}) {
 		return false
 	}
-	if !a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
-		parent.(*Stream).SelectExpr = newNode.(SelectExpr)
+	if !a.rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
+		parent.(*Stream).SelectExprs = newNode.(SelectExprs)
 	}) {
 		return false
 	}

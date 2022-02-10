@@ -1613,7 +1613,7 @@ func CloneRefOfStream(n *Stream) *Stream {
 	}
 	out := *n
 	out.Comments = CloneComments(n.Comments)
-	out.SelectExpr = CloneSelectExpr(n.SelectExpr)
+	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Table = CloneTableName(n.Table)
 	return &out
 }
