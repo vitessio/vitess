@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -464,7 +466,163 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 	return -1
 }
 
-func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
+func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, plan logicalPlan) (out logicalPlan, err error) {
+	if !hp.qp.HasAggr {
+		return plan, nil
+	}
+
+	isPushable := !isJoin(plan)
+	vindexOverlapWithGrouping := hasUniqueVindex(ctx.VSchema, ctx.SemTable, hp.qp.GroupByExprs)
+	var oa *orderedAggregate
+	if isPushable && vindexOverlapWithGrouping {
+		// If we have a plan that we can push the group by and aggregation through, we don't need to do aggregation
+		// at the vtgate level at all
+		panic("oh noes")
+	} else {
+		oa = &orderedAggregate{}
+		out = oa
+	}
+
+	var grouping []sqlparser.Expr
+
+	// we know we will need these expressions, so we just push them all the way to where they come from
+	for _, expr := range hp.qp.GroupByExprs {
+		offset, wsOffset, err := wrapAndPushExpr(ctx, expr.Inner, expr.WeightStrExpr, plan)
+		if err != nil {
+			return nil, err
+		}
+		grouping = append(grouping, expr.Inner)
+		if oa != nil {
+			gb := &engine.GroupByParams{
+				KeyCol:          offset,
+				WeightStringCol: wsOffset,
+				Expr:            expr.Inner,
+				FromGroupBy:     true,
+				CollationID:     ctx.SemTable.CollationForExpr(expr.Inner),
+			}
+			oa.groupByKeys = append(oa.groupByKeys, gb)
+		}
+	}
+
+	aggregationExprs, err := hp.qp.AggregationExpressions()
+	if err != nil {
+		return nil, err
+	}
+
+	aggPlan, _, aggrParams, err := hp.pushAggregation(ctx, plan, grouping, aggregationExprs)
+	if err != nil {
+		return nil, err
+	}
+
+	if oa != nil {
+		oa.aggregates = aggrParams
+		oa.resultsBuilder = resultsBuilder{
+			logicalPlanCommon: newBuilderCommon(aggPlan),
+			weightStrings:     make(map[*resultColumn]int),
+		}
+	}
+
+	return out, nil
+}
+
+// pushAggregation pushes grouping and aggregation as far down in the tree as possible
+func (hp *horizonPlanning) pushAggregation(
+	ctx *plancontext.PlanningContext,
+	plan logicalPlan,
+	grouping []sqlparser.Expr,
+	aggregations []abstract.Aggr,
+) (newPlan logicalPlan, groupingOffsets []int, outputAggrs []*engine.AggregateParams, err error) {
+	switch plan := plan.(type) {
+	case *routeGen4:
+		groupingOffsets, outputAggrs, err = pushAggrOnRoute(plan, aggregations, grouping)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		newPlan = plan
+
+		return
+	case *joinGen4:
+		if len(grouping) > 0 {
+			panic(234)
+		}
+		// scalar aggregation
+		var lhsAggrs, rhsAggrs []abstract.Aggr
+		for _, aggr := range aggregations {
+			if isCountStar(aggr.Func) {
+				lhsAggrs = append(lhsAggrs, aggr)
+				rhsAggrs = append(rhsAggrs, aggr)
+			} else {
+				// deps := ctx.SemTable.RecursiveDeps(aggr.Func)
+				// switch {
+				// case deps.IsSolvedBy(plan.Left.ContainsTables()):
+				//
+				// case deps.IsSolvedBy(plan.Right.ContainsTables()):
+				// default:
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
+				// }
+			}
+		}
+		var lhsGrouping []sqlparser.Expr
+		for _, lhsColumn := range plan.LHSColumns {
+			lhsGrouping = append(lhsGrouping, lhsColumn)
+		}
+		foo, _, bar, err := hp.pushAggregation(ctx, plan.Left, lhsGrouping, lhsAggrs)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		plan.Left = foo
+		fmt.Println(bar)
+		foo, _, bar, err = hp.pushAggregation(ctx, plan.Right, nil, rhsAggrs)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		plan.Right = foo
+		fmt.Println(bar)
+		return plan, nil, nil, nil
+
+	default:
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "pushAggregation %T", plan)
+	}
+}
+
+func isCountStar(f *sqlparser.FuncExpr) bool {
+	_, isStar := f.Exprs[0].(*sqlparser.StarExpr)
+	return isStar
+}
+
+func pushAggrOnRoute(
+	plan *routeGen4,
+	aggregations []abstract.Aggr,
+	grouping []sqlparser.Expr,
+) ([]int, []*engine.AggregateParams, error) {
+	sel, isSel := plan.Select.(*sqlparser.Select)
+	if !isSel {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
+	}
+
+	vtgateAggregation := make([]*engine.AggregateParams, 0, len(aggregations))
+	for _, aggregation := range aggregations {
+		sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
+		var opCode engine.AggregateOpcode
+		switch aggregation.OpCode {
+		case engine.AggregateCount:
+			opCode = engine.AggregateSum
+		default:
+			panic(12)
+		}
+		param := &engine.AggregateParams{
+			Opcode: opCode,
+			Col:    len(sel.SelectExprs) - 1,
+			Alias:  aggregation.Alias,
+		}
+		vtgateAggregation = append(vtgateAggregation, param)
+	}
+
+	sel.GroupBy = grouping
+	return nil, vtgateAggregation, nil
+}
+
+func (hp *horizonPlanning) planAggregations2(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
 	newPlan := plan
 	var oa *orderedAggregate
 	uniqVindex := hasUniqueVindex(ctx.VSchema, ctx.SemTable, hp.qp.GroupByExprs)
@@ -617,12 +775,6 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 	collID := collations.Unknown
 	if innerAliased != nil {
 		collID = ctx.SemTable.CollationForExpr(innerAliased.Expr)
-	}
-
-	if opcode == engine.AggregateCount {
-		// If we push down count(*) to shards, at the vtgate level,
-		// all we have to do is to SUM the individual COUNTs
-		opcode = engine.AggregateSum
 	}
 
 	param := &engine.AggregateParams{
