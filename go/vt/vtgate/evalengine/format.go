@@ -188,6 +188,17 @@ func (c *CallExpr) format(w *formatter, depth int) {
 	w.WriteByte(')')
 }
 
+func (c *WeightStringCallExpr) format(w *formatter, depth int) {
+	w.Indent(depth)
+	w.WriteString("WEIGHT_STRING(")
+	c.String.format(w, depth)
+
+	if c.Cast != "" {
+		fmt.Fprintf(w, " AS %s(%d)", strings.ToUpper(c.Cast), c.Len)
+	}
+	w.WriteByte(')')
+}
+
 func (n *NegateExpr) format(w *formatter, depth int) {
 	w.Indent(depth)
 	w.WriteByte('-')

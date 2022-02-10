@@ -412,3 +412,20 @@ func TestFloatFormatting(t *testing.T) {
 		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%de0", ^v))
 	}
 }
+
+func TestWeightStrings(t *testing.T) {
+	var inputs = []string{
+		`'foobar'`, `_latin1 'foobar'`,
+		`'foobar' as char(12)`, `'foobar' as binary(12)`,
+		`_latin1 'foobar' as char(12)`, `_latin1 'foobar' as binary(12)`,
+		`1234.0`, `12340e0`,
+		`0x1234`, `0x1234 as char(12)`, `0x1234 as char(2)`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, i := range inputs {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT WEIGHT_STRING(%s)", i))
+	}
+}

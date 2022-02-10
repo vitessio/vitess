@@ -1946,6 +1946,13 @@ type (
 		Collation string
 	}
 
+	// WeightStringFuncExpr represents the function and arguments for WEIGHT_STRING('string' AS [CHAR|BINARY](n))
+	WeightStringFuncExpr struct {
+		Expr   Expr
+		Cast   string
+		Length string
+	}
+
 	// FuncExpr represents a function call.
 	FuncExpr struct {
 		Qualifier TableIdent
@@ -2044,40 +2051,41 @@ type (
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*AndExpr) iExpr()           {}
-func (*OrExpr) iExpr()            {}
-func (*XorExpr) iExpr()           {}
-func (*NotExpr) iExpr()           {}
-func (*ComparisonExpr) iExpr()    {}
-func (*BetweenExpr) iExpr()       {}
-func (*IsExpr) iExpr()            {}
-func (*ExistsExpr) iExpr()        {}
-func (*Literal) iExpr()           {}
-func (Argument) iExpr()           {}
-func (*NullVal) iExpr()           {}
-func (BoolVal) iExpr()            {}
-func (*ColName) iExpr()           {}
-func (ValTuple) iExpr()           {}
-func (*Subquery) iExpr()          {}
-func (ListArg) iExpr()            {}
-func (*BinaryExpr) iExpr()        {}
-func (*UnaryExpr) iExpr()         {}
-func (*IntroducerExpr) iExpr()    {}
-func (*IntervalExpr) iExpr()      {}
-func (*CollateExpr) iExpr()       {}
-func (*FuncExpr) iExpr()          {}
-func (*TimestampFuncExpr) iExpr() {}
-func (*ExtractFuncExpr) iExpr()   {}
-func (*CurTimeFuncExpr) iExpr()   {}
-func (*CaseExpr) iExpr()          {}
-func (*ValuesFuncExpr) iExpr()    {}
-func (*ConvertExpr) iExpr()       {}
-func (*SubstrExpr) iExpr()        {}
-func (*ConvertUsingExpr) iExpr()  {}
-func (*MatchExpr) iExpr()         {}
-func (*GroupConcatExpr) iExpr()   {}
-func (*Default) iExpr()           {}
-func (*ExtractedSubquery) iExpr() {}
+func (*AndExpr) iExpr()              {}
+func (*OrExpr) iExpr()               {}
+func (*XorExpr) iExpr()              {}
+func (*NotExpr) iExpr()              {}
+func (*ComparisonExpr) iExpr()       {}
+func (*BetweenExpr) iExpr()          {}
+func (*IsExpr) iExpr()               {}
+func (*ExistsExpr) iExpr()           {}
+func (*Literal) iExpr()              {}
+func (Argument) iExpr()              {}
+func (*NullVal) iExpr()              {}
+func (BoolVal) iExpr()               {}
+func (*ColName) iExpr()              {}
+func (ValTuple) iExpr()              {}
+func (*Subquery) iExpr()             {}
+func (ListArg) iExpr()               {}
+func (*BinaryExpr) iExpr()           {}
+func (*UnaryExpr) iExpr()            {}
+func (*IntroducerExpr) iExpr()       {}
+func (*IntervalExpr) iExpr()         {}
+func (*CollateExpr) iExpr()          {}
+func (*FuncExpr) iExpr()             {}
+func (*TimestampFuncExpr) iExpr()    {}
+func (*ExtractFuncExpr) iExpr()      {}
+func (*WeightStringFuncExpr) iExpr() {}
+func (*CurTimeFuncExpr) iExpr()      {}
+func (*CaseExpr) iExpr()             {}
+func (*ValuesFuncExpr) iExpr()       {}
+func (*ConvertExpr) iExpr()          {}
+func (*SubstrExpr) iExpr()           {}
+func (*ConvertUsingExpr) iExpr()     {}
+func (*MatchExpr) iExpr()            {}
+func (*GroupConcatExpr) iExpr()      {}
+func (*Default) iExpr()              {}
+func (*ExtractedSubquery) iExpr()    {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
