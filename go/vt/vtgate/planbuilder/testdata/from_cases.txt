@@ -4532,3 +4532,41 @@ Gen4 plan same as above
     ]
   }
 }
+
+# dont merge unsharded tables from different keyspaces
+"select 1 from main.unsharded join main_2.unsharded_tab"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from main.unsharded join main_2.unsharded_tab",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "unsharded_unsharded_tab",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded_tab where 1 != 1",
+        "Query": "select 1 from unsharded_tab",
+        "Table": "unsharded_tab"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
