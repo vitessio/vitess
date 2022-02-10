@@ -52,6 +52,11 @@ func (v *Counter) Add(delta int64) {
 	v.i.Add(delta)
 }
 
+// Set overwrites the current value.
+func (v *Counter) Set(value int64) {
+	v.i.Set(value)
+}
+
 // Reset resets the counter value to 0.
 func (v *Counter) Reset() {
 	v.i.Set(int64(0))
