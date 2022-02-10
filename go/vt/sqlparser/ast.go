@@ -37,9 +37,9 @@ type (
 		SQLNode
 	}
 
-	// Commentable represents statements that are worth being commented.
-	Commentable interface {
-		iCommentable()
+	// SupportOptimizerHint represents a statement that accepts optimizer hints.
+	SupportOptimizerHint interface {
+		iSupportOptimizerHint()
 		SetComments(comments Comments)
 		GetComments() Comments
 	}
@@ -691,13 +691,13 @@ func (TableOptions) iAlterOption()             {}
 func (*ExplainStmt) iExplain() {}
 func (*ExplainTab) iExplain()  {}
 
-func (*Delete) iCommentable()  {}
-func (*Insert) iCommentable()  {}
-func (*Stream) iCommentable()  {}
-func (*Update) iCommentable()  {}
-func (*VStream) iCommentable() {}
-func (*Select) iCommentable()  {}
-func (*Union) iCommentable()   {}
+func (*Delete) iSupportOptimizerHint()  {}
+func (*Insert) iSupportOptimizerHint()  {}
+func (*Stream) iSupportOptimizerHint()  {}
+func (*Update) iSupportOptimizerHint()  {}
+func (*VStream) iSupportOptimizerHint() {}
+func (*Select) iSupportOptimizerHint()  {}
+func (*Union) iSupportOptimizerHint()   {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -1251,7 +1251,7 @@ func (node *AlterView) GetComments() Comments {
 	return nil
 }
 
-// GetComments implements Commentable.
+// GetComments implements SupportOptimizerHint.
 func (node *Delete) GetComments() Comments {
 	return node.Comments
 }

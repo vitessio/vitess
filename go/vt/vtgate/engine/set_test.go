@@ -227,7 +227,7 @@ func TestSetTable(t *testing.T) {
 			"1",
 		)},
 	}, {
-		testName: "sysvar set with explicit destination",
+		testName: "sysvar set without destination",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",

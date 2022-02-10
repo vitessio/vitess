@@ -285,7 +285,7 @@ const (
 )
 
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newExpressionRewriter(er.keyspace, er.selectLimit, "")
+	inner := newExpressionRewriter(er.keyspace, er.selectLimit, er.setVarComment)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
@@ -297,13 +297,13 @@ func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNee
 }
 
 func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
-	if commentable, isCommentable := cursor.Node().(Commentable); isCommentable && er.setVarComment != "" {
-		newComments, err := commentable.GetComments().AddQueryHint(er.setVarComment)
+	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
+		newComments, err := supportOptimizerHint.GetComments().AddQueryHint(er.setVarComment)
 		if err != nil {
 			er.err = err
 			return false
 		}
-		commentable.SetComments(newComments)
+		supportOptimizerHint.SetComments(newComments)
 	}
 
 	switch node := cursor.Node().(type) {
