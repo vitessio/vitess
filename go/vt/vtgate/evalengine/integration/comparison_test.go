@@ -429,3 +429,27 @@ func TestWeightStrings(t *testing.T) {
 		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT WEIGHT_STRING(%s)", i))
 	}
 }
+
+func TestBitwiseOperators(t *testing.T) {
+	var inputs = []string{
+		"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13",
+		strconv.FormatUint(math.MaxUint64, 10),
+		strconv.FormatUint(math.MaxInt64, 10),
+		strconv.FormatInt(math.MinInt64, 10),
+		`"foobar"`, `"foobar1234"`, `"0"`, "0x1", "-0x1", "X'ff'", "X'00'",
+		`"1abcd"`, "NULL", `_binary "foobar"`, `_binary "foobar1234"`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, op := range []string{"&", "|", "^", "<<", ">>"} {
+		t.Run(op, func(t *testing.T) {
+			for _, lhs := range inputs {
+				for _, rhs := range inputs {
+					compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s %s %s", lhs, op, rhs))
+				}
+			}
+		})
+	}
+}

@@ -176,3 +176,7 @@ func (n *NegateExpr) format(w *formatter, depth int) {
 	w.WriteByte('-')
 	n.Inner.format(w, depth)
 }
+
+func (bit *BitwiseExpr) format(buf *formatter, depth int) {
+	buf.formatBinary(bit.Left, bit.Op.BitwiseOp(), bit.Right, depth)
+}

@@ -86,6 +86,8 @@ var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
 var _ Expr = (*CallExpr)(nil)
+var _ Expr = (*WeightStringCallExpr)(nil)
+var _ Expr = (*BitwiseExpr)(nil)
 
 type evalError struct {
 	error
