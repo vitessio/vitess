@@ -2065,6 +2065,8 @@ var (
 	}, {
 		input: "stream /* comment */ * from t",
 	}, {
+		input: "stream col1, col2 from t",
+	}, {
 		input: "vstream * from t",
 	}, {
 		input: "begin",

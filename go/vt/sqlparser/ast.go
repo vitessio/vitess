@@ -273,9 +273,9 @@ type (
 
 	// Stream represents a SELECT statement.
 	Stream struct {
-		Comments   Comments
-		SelectExpr SelectExpr
-		Table      TableName
+		Comments    Comments
+		SelectExprs SelectExprs
+		Table       TableName
 	}
 
 	// Insert represents an INSERT or REPLACE statement.
