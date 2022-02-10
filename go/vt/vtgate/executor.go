@@ -1475,20 +1475,16 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 	if len(sysVars) == 0 {
 		return "", nil
 	}
-	if _, isCommentable := stmt.(sqlparser.Commentable); !isCommentable {
+	if _, supportsOptimizerHint := stmt.(sqlparser.SupportOptimizerHint); !supportsOptimizerHint {
 		vcursor.NeedsReservedConn()
 		return "", nil
 	}
 
-	res := &bytes.Buffer{}
+	var res strings.Builder
 	for k, val := range sysVars {
-		_, err := res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, val))
-		if err != nil {
-			return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Buffer exceeded memory limit")
-		}
+		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, val))
 	}
-	res.Truncate(res.Len() - 1)
-	return res.String(), nil
+	return strings.TrimSpace(res.String()), nil
 }
 
 func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
