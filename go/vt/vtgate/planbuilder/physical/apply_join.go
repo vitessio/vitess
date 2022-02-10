@@ -37,6 +37,10 @@ type ApplyJoin struct {
 	// LeftJoin will be true in the case of an outer join
 	LeftJoin bool
 
+	// JoinCols are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the Vars field
+	LHSColumns []*sqlparser.ColName
+
 	Predicate sqlparser.Expr
 }
 

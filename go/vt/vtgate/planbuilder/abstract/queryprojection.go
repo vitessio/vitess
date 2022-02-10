@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -361,6 +363,47 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 		return false
 	}
 	return true
+}
+
+type Aggr struct {
+	Original *sqlparser.AliasedExpr
+	Func     *sqlparser.FuncExpr
+	OpCode   engine.AggregateOpcode
+	Alias    string
+}
+
+func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
+	for _, expr := range qp.SelectExprs {
+		aliasedExpr, err := expr.GetAliasedExpr()
+		if err != nil {
+			return nil, err
+		}
+		fExpr, isFunc := aliasedExpr.Expr.(*sqlparser.FuncExpr)
+		if !isFunc {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+		}
+
+		funcName := fExpr.Name.Lowered()
+		opcode, found := engine.SupportedAggregates[funcName]
+		if !found {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
+		}
+
+		var alias string
+		if aliasedExpr.As.IsEmpty() {
+			alias = sqlparser.String(aliasedExpr.Expr)
+		} else {
+			alias = aliasedExpr.As.String()
+		}
+
+		out = append(out, Aggr{
+			Original: aliasedExpr,
+			Func:     fExpr,
+			OpCode:   opcode,
+			Alias:    alias,
+		})
+	}
+	return
 }
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
