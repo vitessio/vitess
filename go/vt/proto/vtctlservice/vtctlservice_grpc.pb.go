@@ -338,6 +338,8 @@ type VtctldClient interface {
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *vtctldata.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+	ValidateSchemaKeyspace(ctx context.Context, in *vtctldata.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateShard validates that all nodes reachable from the specified shard
 	// are consistent.
 	ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error)
@@ -909,6 +911,15 @@ func (c *vtctldClient) ValidateKeyspace(ctx context.Context, in *vtctldata.Valid
 	return out, nil
 }
 
+func (c *vtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldata.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
+	out := new(vtctldata.ValidateSchemaKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateSchemaKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error) {
 	out := new(vtctldata.ValidateShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateShard", in, out, opts...)
@@ -1128,6 +1139,8 @@ type VtctldServer interface {
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+	ValidateSchemaKeyspace(context.Context, *vtctldata.ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateShard validates that all nodes reachable from the specified shard
 	// are consistent.
 	ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error)
@@ -1323,6 +1336,9 @@ func (UnimplementedVtctldServer) Validate(context.Context, *vtctldata.ValidateRe
 }
 func (UnimplementedVtctldServer) ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ValidateSchemaKeyspace(context.Context, *vtctldata.ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateSchemaKeyspace not implemented")
 }
 func (UnimplementedVtctldServer) ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateShard not implemented")
@@ -2456,6 +2472,24 @@ func _Vtctld_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateSchemaKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateSchemaKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateSchemaKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateSchemaKeyspace(ctx, req.(*vtctldata.ValidateSchemaKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_ValidateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ValidateShardRequest)
 	if err := dec(in); err != nil {
@@ -2728,6 +2762,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateKeyspace",
 			Handler:    _Vtctld_ValidateKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateSchemaKeyspace",
+			Handler:    _Vtctld_ValidateSchemaKeyspace_Handler,
 		},
 		{
 			MethodName: "ValidateShard",

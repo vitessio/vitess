@@ -106,6 +106,8 @@ service VTAdmin {
     rpc StopReplication(StopReplicationRequest) returns (StopReplicationResponse) {};
     // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
     rpc ValidateKeyspace(ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+    // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+    rpc ValidateSchemaKeyspace(ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
     // VTExplain provides information on how Vitess plans to execute a particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
@@ -522,6 +524,11 @@ message ValidateKeyspaceRequest {
     string cluster_id = 1;
     string keyspace = 2;
     bool ping_tablets = 3;
+}
+
+message ValidateSchemaKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
 }
 
 message VTExplainRequest {

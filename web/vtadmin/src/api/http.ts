@@ -443,3 +443,17 @@ export const validateKeyspace = async ({ clusterID, keyspace, pingTablets }: Val
 
     return vtctldata.ValidateKeyspaceResponse.create(result);
 }
+
+export interface ValidateSchemaKeyspaceParams {
+    clusterID: string
+    keyspace: string
+}
+
+export const validateSchemaKeyspace = async ({ clusterID, keyspace  }: ValidateSchemaKeyspaceParams) => {
+
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate_schema`, { method: 'put' });
+    const err = vtctldata.ValidateSchemaKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateSchemaKeyspaceResponse.create(result);
+}

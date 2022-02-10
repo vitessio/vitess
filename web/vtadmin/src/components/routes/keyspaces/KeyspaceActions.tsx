@@ -4,7 +4,7 @@ import MenuItem from '../../dropdown/MenuItem';
 import { Icon, Icons } from '../../Icon';
 import Dialog from '../../dialog/Dialog'
 import Toggle from '../../toggle/Toggle';
-import { useValidateKeyspace } from '../../../hooks/api';
+import { useValidateKeyspace, useValidateSchemaKeyspace } from '../../../hooks/api';
 import KeyspaceAction from './KeyspaceAction';
 
 interface KeyspaceActionsProps {
@@ -22,6 +22,9 @@ const KeyspaceActions: React.FC<KeyspaceActionsProps> = ({ keyspace, clusterID }
     const validateKeyspaceMutation = useValidateKeyspace(
         { keyspace, clusterID, pingTablets }
     );
+
+    // Validate schema keyspace
+    const validateSchemaKeyspaceMutation = useValidateSchemaKeyspace({ keyspace, clusterID })
 
 
     return (
@@ -56,6 +59,27 @@ const KeyspaceActions: React.FC<KeyspaceActionsProps> = ({ keyspace, clusterID }
                         {validateKeyspaceMutation.data && validateKeyspaceMutation.data.results.length > 0 &&
                             <ul>
                                 {validateKeyspaceMutation.data && validateKeyspaceMutation.data.results.map((res, i) => <li className="text-sm" key={`keyspace_validation_result_${i}`}>• {res}</li>)}
+                            </ul>
+                        }
+                    </div>
+                }
+            />
+            <KeyspaceAction
+                title='Validate Schema'
+                confirmText='Validate'
+                loadingText='Validating'
+                mutation={validateSchemaKeyspaceMutation}
+                successText="Validated schemas in keyspace"
+                errorText='Error validating schemas in keyspace'
+                closeDialog={closeDialog}
+                isOpen={currentDialog === 'Validate Schema'}
+                body={<div className="text-sm mt-3">Validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace <span className="font-mono bg-gray-300">{keyspace}</span>.</div>}
+                successBody={
+                    <div className="text-sm">
+                        {validateSchemaKeyspaceMutation.data && validateSchemaKeyspaceMutation.data.results.length === 0 && <div className="text-sm">No schema validation errors found.</div>}
+                        {validateSchemaKeyspaceMutation.data && validateSchemaKeyspaceMutation.data.results.length > 0 &&
+                            <ul>
+                                {validateSchemaKeyspaceMutation.data && validateSchemaKeyspaceMutation.data.results.map((res, i) => <li className="text-sm" key={`schema_keyspace_validation_result_${i}`}>• {res}</li>)}
                             </ul>
                         }
                     </div>
