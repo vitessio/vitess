@@ -1424,9 +1424,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 	// Normalize if possible and retry.
-	if (e.normalize && sqlparser.CanNormalize(stmt)) ||
-		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != "" {
-
+	if e.canNormalizeStatement(stmt, qo, setVarComment) {
 		parameterize := e.normalize // the public flag is called normalize
 		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit(), setVarComment)
 		if err != nil {
@@ -1465,6 +1463,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
+	return (e.normalize && sqlparser.CanNormalize(stmt)) ||
+		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != ""
 }
 
 func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (string, error) {
