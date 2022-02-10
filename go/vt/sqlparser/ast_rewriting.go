@@ -303,17 +303,6 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 			er.err = err
 			return false
 		}
-		// same := true
-		// for _, comment := range commentable.GetComments() {
-		// 	if !contains(newComments, comment) {
-		// 		same = false
-		// 		break
-		// 	}
-		// }
-		// if same {
-		// TODO: make the vcursor use reserved connection (TestFunctionInDefault fails without this behavior)
-		// }
-
 		commentable.SetComments(newComments)
 	}
 

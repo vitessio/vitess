@@ -1419,13 +1419,15 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
+	setVarComment, err := prepareSetVarComment(vcursor, stmt)
+	if err != nil {
+		return nil, err
+	}
 	// Normalize if possible and retry.
-	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
+	if (e.normalize && sqlparser.CanNormalize(stmt)) ||
+		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != "" {
+
 		parameterize := e.normalize // the public flag is called normalize
-		setVarComment, err := prepareSetVarComment(vcursor)
-		if err != nil {
-			return nil, err
-		}
 		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit(), setVarComment)
 		if err != nil {
 			return nil, err
@@ -1465,7 +1467,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	return e.checkThatPlanIsValid(stmt, plan)
 }
 
-func prepareSetVarComment(vcursor *vcursorImpl) (string, error) {
+func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (string, error) {
 	if vcursor == nil || vcursor.Session().InReservedConn() {
 		return "", nil
 	}
@@ -1473,6 +1475,11 @@ func prepareSetVarComment(vcursor *vcursorImpl) (string, error) {
 	if len(sysVars) == 0 {
 		return "", nil
 	}
+	if _, isCommentable := stmt.(sqlparser.Commentable); !isCommentable {
+		vcursor.NeedsReservedConn()
+		return "", nil
+	}
+
 	res := &bytes.Buffer{}
 	for k, val := range sysVars {
 		_, err := res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, val))
