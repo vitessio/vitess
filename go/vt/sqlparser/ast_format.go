@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1901,4 +1902,11 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 // show up like argument comparisons
 func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
 	node.alternative.Format(buf)
+}
+
+// Format formats the node.
+func (node Offset) Format(buf *TrackedBuffer) {
+	buf.WriteString("[")
+	buf.WriteString(strconv.Itoa(int(node)))
+	buf.WriteString("]")
 }

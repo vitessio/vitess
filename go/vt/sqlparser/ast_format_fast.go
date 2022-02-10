@@ -19,6 +19,7 @@ package sqlparser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -2489,4 +2490,11 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 // show up like argument comparisons
 func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
 	node.alternative.Format(buf)
+}
+
+// formatFast formats the node.
+func (node Offset) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("[")
+	buf.WriteString(strconv.Itoa(int(node)))
+	buf.WriteString("]")
 }
