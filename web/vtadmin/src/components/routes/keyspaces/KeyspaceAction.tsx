@@ -11,8 +11,8 @@ interface KeyspaceActionProps {
     successText: string
     errorText: string
     loadingText: string
-    description: string
-    body: JSX.Element
+    description?: string
+    body?: JSX.Element
     successBody?: JSX.Element
     closeDialog: () => void
 }
@@ -22,29 +22,31 @@ const KeyspaceAction: React.FC<KeyspaceActionProps> = ({ isOpen, closeDialog, mu
         setTimeout(mutation.reset, 500)
         closeDialog()
     }
+
+    const hasRun = mutation.data || mutation.error
     return (
         <div>
             <Dialog
                 isOpen={isOpen}
-                confirmText={Boolean(mutation.data) ? "Close" : confirmText}
+                confirmText={hasRun ? "Close" : confirmText}
                 cancelText="Cancel"
-                onConfirm={Boolean(mutation.data) ? onCloseDialog : mutation.mutate}
+                onConfirm={hasRun ? onCloseDialog : mutation.mutate}
                 loadingText={loadingText}
                 loading={mutation.isLoading}
                 onCancel={onCloseDialog}
                 onClose={onCloseDialog}
-                hideCancel={Boolean(mutation.data)}
-                title={mutation.data ? undefined : title}
-                description={mutation.data ? undefined : description}
+                hideCancel={hasRun}
+                title={hasRun ? undefined : title}
+                description={hasRun ? undefined : description}
             >
                 <div className="w-full">
-                    {!mutation.error && !mutation.data && body}
+                    {!hasRun && body}
                     {mutation.data && !mutation.error && (
                         <div className="w-full flex flex-col justify-center items-center">
                             <span className="flex h-12 w-12 relative items-center justify-center">
                                 <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
                             </span>
-                            <div className="text-lg mt-3 font-bold">{successText}</div>
+                            <div className="text-lg mt-3 font-bold text-center">{successText}</div>
                             {successBody}
                         </div>
                     )
@@ -52,9 +54,9 @@ const KeyspaceAction: React.FC<KeyspaceActionProps> = ({ isOpen, closeDialog, mu
                     {mutation.error &&
                         <div className="w-full flex flex-col justify-center items-center">
                             <span className="flex h-12 w-12 relative items-center justify-center">
-                                <Icon className="fill-current text-green-500" icon={Icons.alertFail} />
+                                <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
                             </span>
-                            <div className="text-lg mt-3 font-bold">{errorText}</div>
+                            <div className="text-lg mt-3 font-bold text-center">{errorText}</div>
                         </div>}
                 </div>
             </Dialog>

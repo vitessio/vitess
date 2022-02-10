@@ -237,6 +237,8 @@ service Vtctld {
   // ValidateKeyspace validates that all nodes reachable from the specified
   // keyspace are consistent.
   rpc ValidateKeyspace(vtctldata.ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+  // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+  rpc ValidateSchemaKeyspace(vtctldata.ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
   // ValidateShard validates that all nodes reachable from the specified shard
   // are consistent.
   rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};

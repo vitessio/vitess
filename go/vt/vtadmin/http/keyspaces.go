@@ -87,7 +87,6 @@ func GetKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {
 }
 
 // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
-
 func ValidateKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := mux.Vars(r.Request)
 	decoder := json.NewDecoder(r.Body)
@@ -107,6 +106,18 @@ func ValidateKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
 		Keyspace:    vars["name"],
 		ClusterId:   vars["cluster_id"],
 		PingTablets: result.PingTablets,
+	})
+
+	return NewJSONResponse(res, err)
+}
+
+// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+func ValidateSchemaKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := mux.Vars(r.Request)
+
+	res, err := api.server.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
+		Keyspace:  vars["name"],
+		ClusterId: vars["cluster_id"],
 	})
 
 	return NewJSONResponse(res, err)

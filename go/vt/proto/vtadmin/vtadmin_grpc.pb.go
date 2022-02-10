@@ -93,6 +93,8 @@ type VTAdminClient interface {
 	StopReplication(ctx context.Context, in *StopReplicationRequest, opts ...grpc.CallOption) (*StopReplicationResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+	ValidateSchemaKeyspace(ctx context.Context, in *ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
 }
@@ -393,6 +395,15 @@ func (c *vTAdminClient) ValidateKeyspace(ctx context.Context, in *ValidateKeyspa
 	return out, nil
 }
 
+func (c *vTAdminClient) ValidateSchemaKeyspace(ctx context.Context, in *ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
+	out := new(vtctldata.ValidateSchemaKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateSchemaKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
 	out := new(VTExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
@@ -480,6 +491,8 @@ type VTAdminServer interface {
 	StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
 	ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+	ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
 	mustEmbedUnimplementedVTAdminServer()
@@ -584,6 +597,9 @@ func (UnimplementedVTAdminServer) StopReplication(context.Context, *StopReplicat
 }
 func (UnimplementedVTAdminServer) ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
+}
+func (UnimplementedVTAdminServer) ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateSchemaKeyspace not implemented")
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
@@ -1177,6 +1193,24 @@ func _VTAdmin_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateSchemaKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ValidateSchemaKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ValidateSchemaKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ValidateSchemaKeyspace(ctx, req.(*ValidateSchemaKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
@@ -1329,6 +1363,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateKeyspace",
 			Handler:    _VTAdmin_ValidateKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateSchemaKeyspace",
+			Handler:    _VTAdmin_ValidateSchemaKeyspace_Handler,
 		},
 		{
 			MethodName: "VTExplain",
