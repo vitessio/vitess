@@ -1471,8 +1471,8 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 	if vcursor == nil || vcursor.Session().InReservedConn() {
 		return "", nil
 	}
-	sysVars := vcursor.Session().GetSystemVariables()
-	if len(sysVars) == 0 {
+
+	if !vcursor.Session().HasSystemVariables() {
 		return "", nil
 	}
 	if _, supportsOptimizerHint := stmt.(sqlparser.SupportOptimizerHint); !supportsOptimizerHint {
@@ -1481,9 +1481,9 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 	}
 
 	var res strings.Builder
-	for k, val := range sysVars {
-		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, val))
-	}
+	vcursor.Session().GetSystemVariables(func(k, v string) {
+		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
+	})
 	return strings.TrimSpace(res.String()), nil
 }
 

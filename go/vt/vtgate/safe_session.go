@@ -387,11 +387,20 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
-// GetSystemVariables gets the system variables in the session.
-func (session *SafeSession) GetSystemVariables() map[string]string {
+// GetSystemVariables takes a visitor function that will save each system variables of the session
+func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return session.SystemVariables
+	for k, v := range session.SystemVariables {
+		f(k, v)
+	}
+}
+
+// HasSystemVariables returns whether the session has system variables set or not.
+func (session *SafeSession) HasSystemVariables() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return len(session.SystemVariables) > 0
 }
 
 // SetOptions sets the options
