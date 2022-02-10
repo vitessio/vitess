@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -483,22 +481,13 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		out = oa
 	}
 
-	var grouping []sqlparser.Expr
-
 	// we know we will need these expressions, so we just push them all the way to where they come from
 	for _, expr := range hp.qp.GroupByExprs {
-		offset, wsOffset, err := wrapAndPushExpr(ctx, expr.Inner, expr.WeightStrExpr, plan)
-		if err != nil {
-			return nil, err
-		}
-		grouping = append(grouping, expr.Inner)
 		if oa != nil {
 			gb := &engine.GroupByParams{
-				KeyCol:          offset,
-				WeightStringCol: wsOffset,
-				Expr:            expr.Inner,
-				FromGroupBy:     true,
-				CollationID:     ctx.SemTable.CollationForExpr(expr.Inner),
+				Expr:        expr.Inner,
+				FromGroupBy: true,
+				CollationID: ctx.SemTable.CollationForExpr(expr.Inner),
 			}
 			oa.groupByKeys = append(oa.groupByKeys, gb)
 		}
@@ -509,7 +498,7 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, err
 	}
 
-	aggPlan, _, aggrParams, err := hp.pushAggregation(ctx, plan, grouping, aggregationExprs)
+	aggPlan, _, aggrParams, err := hp.pushAggregation(ctx, plan, hp.qp.GroupByExprs, aggregationExprs)
 	if err != nil {
 		return nil, err
 	}
@@ -525,16 +514,20 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 	return out, nil
 }
 
+type offsets struct {
+	col, wsCol int
+}
+
 // pushAggregation pushes grouping and aggregation as far down in the tree as possible
 func (hp *horizonPlanning) pushAggregation(
 	ctx *plancontext.PlanningContext,
 	plan logicalPlan,
-	grouping []sqlparser.Expr,
+	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
-) (newPlan logicalPlan, groupingOffsets []int, outputAggrs []*engine.AggregateParams, err error) {
+) (newPlan logicalPlan, groupingOffsets []offsets, outputAggrs []*engine.AggregateParams, err error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
-		groupingOffsets, outputAggrs, err = pushAggrOnRoute(plan, aggregations, grouping)
+		groupingOffsets, outputAggrs, err = pushAggrOnRoute(ctx, plan, aggregations, grouping)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -542,47 +535,79 @@ func (hp *horizonPlanning) pushAggregation(
 
 		return
 	case *joinGen4:
-		if len(grouping) > 0 {
-			panic(234)
-		}
-		// scalar aggregation
-		var lhsAggrs, rhsAggrs []abstract.Aggr
-		for _, aggr := range aggregations {
-			if isCountStar(aggr.Func) {
-				lhsAggrs = append(lhsAggrs, aggr)
-				rhsAggrs = append(rhsAggrs, aggr)
-			} else {
-				// deps := ctx.SemTable.RecursiveDeps(aggr.Func)
-				// switch {
-				// case deps.IsSolvedBy(plan.Left.ContainsTables()):
-				//
-				// case deps.IsSolvedBy(plan.Right.ContainsTables()):
-				// default:
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
-				// }
-			}
-		}
-		var lhsGrouping []sqlparser.Expr
-		for _, lhsColumn := range plan.LHSColumns {
-			lhsGrouping = append(lhsGrouping, lhsColumn)
-		}
-		foo, _, bar, err := hp.pushAggregation(ctx, plan.Left, lhsGrouping, lhsAggrs)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		plan.Left = foo
-		fmt.Println(bar)
-		foo, _, bar, err = hp.pushAggregation(ctx, plan.Right, nil, rhsAggrs)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		plan.Right = foo
-		fmt.Println(bar)
-		return plan, nil, nil, nil
+		return hp.pushAggrOnJoin(ctx, grouping, aggregations, plan)
 
 	default:
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "pushAggregation %T", plan)
 	}
+}
+
+func (hp *horizonPlanning) pushAggrOnJoin(
+	ctx *plancontext.PlanningContext,
+	grouping []abstract.GroupBy,
+	aggregations []abstract.Aggr,
+	plan *joinGen4,
+) (logicalPlan, []offsets, []*engine.AggregateParams, error) {
+	if len(grouping) > 0 {
+		panic(234)
+	}
+	// scalar aggregation
+	var lhsAggrs, rhsAggrs []abstract.Aggr
+	for _, aggr := range aggregations {
+		if isCountStar(aggr.Func) {
+			lhsAggrs = append(lhsAggrs, aggr)
+			rhsAggrs = append(rhsAggrs, aggr)
+		} else {
+			// deps := ctx.SemTable.RecursiveDeps(aggr.Func)
+			// switch {
+			// case deps.IsSolvedBy(plan.Left.ContainsTables()):
+			//
+			// case deps.IsSolvedBy(plan.Right.ContainsTables()):
+			// default:
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
+			// }
+		}
+	}
+	lhsGrouping, err := hp.funcName(ctx, plan.LHSColumns)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	lhsPlan, _, lhsAggregations, err := hp.pushAggregation(ctx, plan.Left, lhsGrouping, lhsAggrs)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	plan.Left = lhsPlan
+
+	rhsPlan, _, rhsAggregations, err := hp.pushAggregation(ctx, plan.Right, nil, rhsAggrs)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	plan.Right = rhsPlan
+
+	for _, aggr := range lhsAggregations {
+		plan.Cols = append(plan.Cols, -(aggr.Col + 1))
+	}
+	for _, aggr := range rhsAggregations {
+		plan.Cols = append(plan.Cols, aggr.Col+1)
+	}
+
+	return plan, nil, nil, nil
+}
+
+func (hp *horizonPlanning) funcName(ctx *plancontext.PlanningContext, columns []*sqlparser.ColName) ([]abstract.GroupBy, error) {
+	var lhsGrouping []abstract.GroupBy
+	for _, lhsColumn := range columns {
+		expr, wsExpr, err := hp.qp.GetSimplifiedExpr(lhsColumn, ctx.SemTable)
+		if err != nil {
+			return nil, err
+		}
+
+		lhsGrouping = append(lhsGrouping, abstract.GroupBy{
+			Inner:         expr,
+			WeightStrExpr: wsExpr,
+		})
+	}
+	return lhsGrouping, nil
 }
 
 func isCountStar(f *sqlparser.FuncExpr) bool {
@@ -591,10 +616,11 @@ func isCountStar(f *sqlparser.FuncExpr) bool {
 }
 
 func pushAggrOnRoute(
+	ctx *plancontext.PlanningContext,
 	plan *routeGen4,
 	aggregations []abstract.Aggr,
-	grouping []sqlparser.Expr,
-) ([]int, []*engine.AggregateParams, error) {
+	grouping []abstract.GroupBy,
+) ([]offsets, []*engine.AggregateParams, error) {
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
@@ -618,120 +644,21 @@ func pushAggrOnRoute(
 		vtgateAggregation = append(vtgateAggregation, param)
 	}
 
-	sel.GroupBy = grouping
-	return nil, vtgateAggregation, nil
-}
-
-func (hp *horizonPlanning) planAggregations2(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	newPlan := plan
-	var oa *orderedAggregate
-	uniqVindex := hasUniqueVindex(ctx.VSchema, ctx.SemTable, hp.qp.GroupByExprs)
-	joinPlan := isJoin(plan)
-	if !uniqVindex || joinPlan {
-		if hp.qp.ProjectionError != nil {
-			return nil, hp.qp.ProjectionError
-		}
-		oa = &orderedAggregate{
-			resultsBuilder: resultsBuilder{
-				logicalPlanCommon: newBuilderCommon(plan),
-				weightStrings:     make(map[*resultColumn]int),
-			},
-		}
-		newPlan = oa
-		hp.vtgateGrouping = true
-	}
-
-	if joinPlan && hp.qp.HasAggr && len(hp.qp.GroupByExprs) > 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
-	}
-
-	for _, e := range hp.qp.SelectExprs {
-		aliasExpr, err := e.GetAliasedExpr()
+	groupingOffsets := make([]offsets, 0, len(grouping))
+	sel.GroupBy = make([]sqlparser.Expr, 0, len(grouping))
+	for _, expr := range grouping {
+		sel.GroupBy = append(sel.GroupBy, expr.Inner)
+		col, wsCol, err := wrapAndPushExpr(ctx, expr.Inner, expr.WeightStrExpr, plan)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
-		// push all expression if they are non-aggregating or the plan is not ordered aggregated plan.
-		if !e.Aggr || oa == nil {
-			_, _, err := pushProjection(ctx, aliasExpr, plan, true, false, false)
-			if err != nil {
-				return nil, err
-			}
-			continue
-		}
-
-		fExpr, isFunc := aliasExpr.Expr.(*sqlparser.FuncExpr)
-		if !isFunc {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
-		}
-		funcName := fExpr.Name.Lowered()
-		opcode, found := engine.SupportedAggregates[funcName]
-		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
-		}
-		handleDistinct, innerAliased, err := hp.needDistinctHandling(ctx, fExpr, opcode, plan)
-		if err != nil {
-			return nil, err
-		}
-
-		pushExpr, param := hp.createPushExprAndAlias(ctx, e, handleDistinct, innerAliased, opcode, oa)
-		offset, _, err := pushProjection(ctx, pushExpr, plan, true, false, true)
-		if err != nil {
-			return nil, err
-		}
-		param.Col = offset
-		param.Expr = fExpr
-		oa.aggregates = append(oa.aggregates, param)
+		groupingOffsets = append(groupingOffsets, offsets{
+			col:   col,
+			wsCol: wsCol,
+		})
 	}
 
-	for _, groupExpr := range hp.qp.GroupByExprs {
-		err := planGroupByGen4(ctx, groupExpr, newPlan, false)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	newPlan, err := hp.planHaving(ctx, newPlan)
-	if err != nil {
-		return nil, err
-	}
-
-	if !hp.qp.CanPushDownSorting && oa != nil {
-		var orderExprs []abstract.OrderBy
-		// if we can't at a later stage push down the sorting to our inputs, we have to do ordering here
-		for _, groupExpr := range hp.qp.GroupByExprs {
-			orderExprs = append(orderExprs, abstract.OrderBy{
-				Inner:         &sqlparser.Order{Expr: groupExpr.Inner},
-				WeightStrExpr: groupExpr.WeightStrExpr},
-			)
-		}
-		if len(orderExprs) > 0 {
-			newInput, err := hp.planOrderBy(ctx, orderExprs, plan)
-			if err != nil {
-				return nil, err
-			}
-			oa.input = newInput
-			plan = oa
-		}
-	} else {
-		plan = newPlan
-	}
-
-	// done with aggregation planning. let's check if we should fail the query
-	if _, planIsRoute := plan.(*routeGen4); !planIsRoute {
-		// if we had to build up additional operators around the route, we have to fail this query
-		for _, expr := range hp.qp.SelectExprs {
-			colExpr, err := expr.GetExpr()
-			if err != nil {
-				return nil, err
-			}
-			if !sqlparser.IsAggregation(colExpr) && sqlparser.ContainsAggregation(colExpr) {
-				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
-			}
-		}
-	}
-
-	return plan, nil
+	return groupingOffsets, vtgateAggregation, nil
 }
 
 // createPushExprAndAlias creates the expression that should be pushed down to the leaves,
@@ -987,7 +914,7 @@ func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order abstract.OrderBy
 }
 
 // wrapAndPushExpr pushes the expression and weighted_string function to the plan using semantics.SemTable
-// It returns (expr offset, weight_string offset, new_column added, error)
+// It returns (expr offset, weight_string offset, error)
 func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan logicalPlan) (int, int, error) {
 	offset, _, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: expr}, plan, true, true, false)
 	if err != nil {

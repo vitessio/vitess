@@ -99,7 +99,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		return nil, err
 	}
 	for _, group := range sel.GroupBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, semTable)
+		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +186,7 @@ func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*Q
 func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *semantics.SemTable) error {
 	canPushDownSorting := true
 	for _, order := range orderBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
+		expr, weightStrExpr, err := qp.GetSimplifiedExpr(order.Expr, semTable)
 		if err != nil {
 			return err
 		}
@@ -256,8 +256,11 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 	return nil
 }
 
-// getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semantics.SemTable) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
+// GetSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
+func (qp *QueryProjection) GetSimplifiedExpr(
+	e sqlparser.Expr,
+	semTable *semantics.SemTable,
+) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
