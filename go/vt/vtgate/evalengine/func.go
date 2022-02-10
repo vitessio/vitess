@@ -23,7 +23,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult){
@@ -257,4 +259,51 @@ func builtinFuncIsNull(_ *ExpressionEnv, args []EvalResult, result *EvalResult) 
 		throwArgError("ISNULL")
 	}
 	result.setBool(args[0].null())
+}
+
+type WeightStringCallExpr struct {
+	String Expr
+	Cast   string
+	Len    int
+}
+
+func (c *WeightStringCallExpr) typeof(*ExpressionEnv) sqltypes.Type {
+	return sqltypes.VarBinary
+}
+
+func (c *WeightStringCallExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	var (
+		str     EvalResult
+		tc      collations.TypedCollation
+		text    []byte
+		weights []byte
+		length  = c.Len
+	)
+
+	str.init(env, c.String)
+	tt := str.typeof()
+
+	switch {
+	case sqltypes.IsIntegral(tt):
+		// when calling WEIGHT_STRING with an integral value, MySQL returns the
+		// internal sort key that would be used in an InnoDB table... we do not
+		// support that
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrEvaluatedExprNotSupported, FormatExpr(c)))
+	case sqltypes.IsQuoted(tt):
+		text = str.bytes()
+		tc = str.collation()
+	default:
+		result.setNull()
+		return
+	}
+
+	if c.Cast == "binary" {
+		tc = collationBinary
+		weights = make([]byte, 0, c.Len)
+		length = collations.PadToMax
+	}
+
+	collation := collations.Local().LookupByID(tc.Collation)
+	weights = collation.WeightString(weights, text, length)
+	result.setRaw(sqltypes.VarBinary, weights, collationBinary)
 }

@@ -277,6 +277,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SUBSTR SUBSTRING
 %token <str> GROUP_CONCAT SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
+%token <str> WEIGHT_STRING
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -452,7 +453,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-%type <str> underscore_charsets
+%type <str> underscore_charsets weight_string_cast
 %start any_command
 
 %%
@@ -4564,6 +4565,17 @@ UTC_DATE func_paren_opt
   {
 	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
   }
+| WEIGHT_STRING openb expression closeb
+  {
+    $$ = &WeightStringFuncExpr{Expr: $3}
+  }
+| WEIGHT_STRING openb expression AS weight_string_cast '(' INTEGRAL ')' closeb
+  {
+    $$ = &WeightStringFuncExpr{Expr: $3, Cast: $5, Length: $7}
+  }
+
+weight_string_cast:
+  CHAR | BINARY
 
 interval:
  interval_time_stamp
@@ -5653,6 +5665,7 @@ reserved_keyword:
 | WINDOW
 | WRITE
 | XOR
+| WEIGHT_STRING
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.

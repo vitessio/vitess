@@ -18,6 +18,8 @@ package evalengine
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,6 +37,7 @@ type (
 )
 
 var ErrConvertExprNotSupported = "expr cannot be converted, not supported"
+var ErrEvaluatedExprNotSupported = "expr cannot be evaluated, not supported"
 
 func convertComparisonExpr(op sqlparser.ComparisonExprOperator, left, right sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 	l, err := convertExpr(left, lookup)
@@ -302,10 +305,9 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		var collation collations.ID
 
-		// TODO: case insensitive
-		if node.CharacterSet == "_binary" {
+		var collation collations.ID
+		if strings.ToLower(node.CharacterSet) == "_binary" {
 			collation = collations.CollationBinaryID
 		} else {
 			defaultCollation := collations.Local().DefaultCollationForCharset(node.CharacterSet[1:])
@@ -367,6 +369,21 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			Method:    method,
 			Call:      call,
 		}, nil
+	case *sqlparser.WeightStringFuncExpr:
+		inner, err := convertExpr(node.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+		var length int
+		if node.Length != "" {
+			length, err = strconv.Atoi(node.Length)
+		}
+		return &WeightStringCallExpr{
+			String: inner,
+			Cast:   strings.ToLower(node.Cast),
+			Len:    length,
+		}, nil
+
 	case *sqlparser.UnaryExpr:
 		expr, err := convertExpr(node.Expr, lookup)
 		if err != nil {
