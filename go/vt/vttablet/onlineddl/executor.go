@@ -2000,12 +2000,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		if isCreateView {
 			// CREATE VIEW
 			// Read existing view
-			existingView, err := tengo.QuerySchemaView(ctx, db, e.dbName, onlineDDL.Table)
+			existingView, err := tengo.QuerySchemaView(ctx, db, e.dbName, onlineDDL.Table, flavor)
 			if err != nil {
 				return err
 			}
 			// Read comparison view
-			comparisonView, err := tengo.QuerySchemaView(ctx, db, e.dbName, comparisonTableName)
+			comparisonView, err := tengo.QuerySchemaView(ctx, db, e.dbName, comparisonTableName, flavor)
 			if err != nil {
 				return err
 			}
