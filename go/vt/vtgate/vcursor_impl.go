@@ -172,8 +172,14 @@ func newVCursorImpl(
 	}, nil
 }
 
-func (vc *vcursorImpl) GetSystemVariables() map[string]string {
-	return vc.safeSession.GetSystemVariables()
+// HasSystemVariables returns whether the session has set system variables or not
+func (vc *vcursorImpl) HasSystemVariables() bool {
+	return vc.safeSession.HasSystemVariables()
+}
+
+// GetSystemVariables takes a visitor function that will save each system variables of the session
+func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
+	vc.safeSession.GetSystemVariables(f)
 }
 
 // ConnCollation returns the collation of this session

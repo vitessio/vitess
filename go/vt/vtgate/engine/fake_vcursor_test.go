@@ -68,7 +68,11 @@ func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[s
 	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
 }
 
-func (t *noopVCursor) GetSystemVariables() map[string]string {
+func (t *noopVCursor) HasSystemVariables() bool {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetSystemVariables(func(k string, v string)) {
 	panic("implement me")
 }
 
@@ -327,8 +331,12 @@ func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {
 	return f.ksAvailable
 }
 
-func (f *loggingVCursor) GetSystemVariables() map[string]string {
-	return f.systemVariables
+func (f *loggingVCursor) HasSystemVariables() bool {
+	return len(f.systemVariables) > 0
+}
+
+func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
