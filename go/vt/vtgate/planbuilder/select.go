@@ -349,7 +349,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			// if we are using any locking functions, we bail out here and send the whole query to a single destination
 			return buildLockingPrimitive(sel, vschema)
 		}
-		exprs[i], err = evalengine.Convert(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
+		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
 			return nil, nil
 		}

@@ -119,7 +119,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, bool, error) {
 				err = fmt.Errorf("PANIC: %v", r)
 			}
 		}()
-		expr, err = evalengine.ConvertEx(astExpr, evalengine.LookupDefaultCollation(255), *debugSimplify)
+		expr, err = evalengine.TranslateEx(astExpr, evalengine.LookupDefaultCollation(255), *debugSimplify)
 		return
 	}()
 

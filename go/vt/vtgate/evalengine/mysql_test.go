@@ -52,7 +52,7 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := ConvertEx(astExpr, LookupDefaultCollation(255), true)
+	converted, err := TranslateEx(astExpr, LookupDefaultCollation(255), true)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return EvalResult{}, errKnownBadQuery
