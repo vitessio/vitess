@@ -157,7 +157,7 @@ SET GLOBAL old_alter_table = ON;
 			}
 		}
 
-		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil
