@@ -553,6 +553,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	}
 	// scalar aggregation
 	var lhsAggrs, rhsAggrs []abstract.Aggr
+	var outputAggrs []*engine.AggregateParams
 	for _, aggr := range aggregations {
 		if isCountStar(aggr.Func) {
 			lhsAggrs = append(lhsAggrs, aggr)
@@ -587,8 +588,8 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	proj := &projection{source: plan}
 
 	for idx, aggr := range aggregations {
+		// create the projection expression that will multiply the incoming aggregations
 		l, r := lhsAggregations[idx], rhsAggregations[idx]
-		proj.columnNames = append(proj.columnNames, aggr.Alias)
 		offset := len(plan.Cols)
 		expr := &sqlparser.BinaryExpr{
 			Operator: sqlparser.MultOp,
@@ -596,11 +597,21 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			Right:    sqlparser.Offset(offset + 1),
 		}
 		proj.columns = append(proj.columns, expr)
+		proj.columnNames = append(proj.columnNames, aggr.Alias)
+
+		// pass through the output columns from the join
 		plan.Cols = append(plan.Cols, -(l.Col + 1))
 		plan.Cols = append(plan.Cols, r.Col+1)
+
+		outputAggrs = append(outputAggrs, &engine.AggregateParams{
+			Opcode: engine.AggregateSum,
+			Col:    idx,
+			Alias:  aggr.Alias,
+			Expr:   aggr.Func,
+		})
 	}
 
-	return proj, nil, nil, nil
+	return proj, nil, outputAggrs, nil
 }
 
 func (hp *horizonPlanning) createGroupingsForColumns(
