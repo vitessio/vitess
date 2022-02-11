@@ -17,10 +17,9 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"flag"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/trace"
 
@@ -36,9 +35,10 @@ import (
 )
 
 var (
-	workflowManagerInit        = flag.Bool("workflow_manager_init", false, "Initialize the workflow manager in this vtctld instance.")
-	workflowManagerUseElection = flag.Bool("workflow_manager_use_election", false, "if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.")
-	workflowManagerDisable     flagutil.StringListValue
+	workflowManagerInit                = flag.Bool("workflow_manager_init", false, "Initialize the workflow manager in this vtctld instance.")
+	workflowManagerUseElection         = flag.Bool("workflow_manager_use_election", false, "if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.")
+	workflowManagerDisable             flagutil.StringListValue
+	workflowManagerSanitizeHTTPHeaders = flag.Bool("workflow_manager_sanitize_http_headers", true, "When false, workflow manager logging (on error) dumps all http headers without sanitizing them.")
 )
 
 func init() {
@@ -68,6 +68,7 @@ func initWorkflowManager(ts *topo.Server) {
 
 		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)
+		vtctl.WorkflowManager.SetDebugHTTPHeaders(*workflowManagerSanitizeHTTPHeaders)
 
 		// Register the long polling and websocket handlers.
 		vtctl.WorkflowManager.HandleHTTPLongPolling(apiPrefix + "workflow")

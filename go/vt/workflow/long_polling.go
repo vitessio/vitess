@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -158,12 +156,9 @@ func getID(url, base string) (int, error) {
 	return i, nil
 }
 
-const (
-	LogLevelDumpAllHTTPHeaders glog.Level = 50
-	HTTPHeaderRedactedMessage  string     = "*** redacted by sanitizeRequestHeader() ***"
-)
+const HTTPHeaderRedactedMessage string = "*** redacted by sanitizeRequestHeader() ***"
 
-var whiteListedHTTPHeaders = map[string]interface{}{
+var allowedHTTPHeadersList = map[string]interface{}{
 	"Accept":                    nil,
 	"Accept-Encoding":           nil,
 	"Accept-Language":           nil,
@@ -184,7 +179,7 @@ func sanitizeRequestHeader(r *http.Request, debugOn bool) *http.Request {
 	s := r.Clone(r.Context())
 
 	for k := range s.Header {
-		if _, ok := whiteListedHTTPHeaders[k]; !ok {
+		if _, ok := allowedHTTPHeadersList[k]; !ok {
 			s.Header.Set(k, HTTPHeaderRedactedMessage)
 		}
 	}
@@ -192,32 +187,31 @@ func sanitizeRequestHeader(r *http.Request, debugOn bool) *http.Request {
 	return s
 }
 
-func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
+func (m *Manager) httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
 	errMsg := fmt.Sprintf(format, args...)
-	debugOn := bool(log.V(LogLevelDumpAllHTTPHeaders))
 	log.Errorf("HTTP error on %v: %v, request: %#v",
 		r.URL.Path,
 		errMsg,
-		sanitizeRequestHeader(r, debugOn),
+		sanitizeRequestHeader(r, m.debugHTTPHeaders),
 	)
 	http.Error(w, errMsg, http.StatusInternalServerError)
 }
 
-func handleAPI(pattern string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
+func (m *Manager) handleAPI(pattern string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
 	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
-				httpErrorf(w, r, "uncaught panic: %v", x)
+				m.httpErrorf(w, r, "uncaught panic: %v", x)
 			}
 		}()
 
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
-			httpErrorf(w, r, "WorkflowManager acl.CheckAccessHTTP failed: %v", err)
+			m.httpErrorf(w, r, "WorkflowManager acl.CheckAccessHTTP failed: %v", err)
 			return
 		}
 
 		if err := handlerFunc(w, r); err != nil {
-			httpErrorf(w, r, "%v", err)
+			m.httpErrorf(w, r, "%v", err)
 		}
 	})
 }
@@ -227,7 +221,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 	log.Infof("workflow Manager listening to web traffic at %v/{create,poll,delete}", pattern)
 	lpm := newLongPollingManager(m)
 
-	handleAPI(pattern+"/create", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/create", func(w http.ResponseWriter, r *http.Request) error {
 		result, i, err := lpm.create(r.URL)
 		if err != nil {
 			return fmt.Errorf("longPollingManager.create failed: %v", err)
@@ -241,7 +235,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 		return nil
 	})
 
-	handleAPI(pattern+"/poll/", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/poll/", func(w http.ResponseWriter, r *http.Request) error {
 		i, err := getID(r.URL.Path, pattern+"/poll/")
 		if err != nil {
 			return err
@@ -260,7 +254,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 		return nil
 	})
 
-	handleAPI(pattern+"/remove/", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/remove/", func(w http.ResponseWriter, r *http.Request) error {
 		i, err := getID(r.URL.Path, pattern+"/remove/")
 		if err != nil {
 			return err
@@ -271,7 +265,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 		return nil
 	})
 
-	handleAPI(pattern+"/action/", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/action/", func(w http.ResponseWriter, r *http.Request) error {
 		_, err := getID(r.URL.Path, pattern+"/action/")
 		if err != nil {
 			return err
