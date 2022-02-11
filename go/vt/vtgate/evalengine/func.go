@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"math/bits"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -34,6 +35,7 @@ var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult
 	"least":     builtinFuncLeast,
 	"collation": builtinFuncCollation,
 	"isnull":    builtinFuncIsNull,
+	"bit_count": builtinFuncBitCount,
 }
 
 type CallExpr struct {
@@ -259,6 +261,32 @@ func builtinFuncIsNull(_ *ExpressionEnv, args []EvalResult, result *EvalResult) 
 		throwArgError("ISNULL")
 	}
 	result.setBool(args[0].null())
+}
+
+func builtinFuncBitCount(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	if len(args) != 1 {
+		throwArgError("BIT_COUNT")
+	}
+
+	var count int
+	inarg := &args[0]
+
+	if inarg.null() {
+		result.setNull()
+		return
+	}
+
+	if inarg.bitwiseBinaryString() {
+		binary := inarg.bytes()
+		for _, b := range binary {
+			count += bits.OnesCount8(b)
+		}
+	} else {
+		inarg.makeIntegral()
+		count = bits.OnesCount64(inarg.uint64())
+	}
+
+	result.setInt64(int64(count))
 }
 
 type WeightStringCallExpr struct {

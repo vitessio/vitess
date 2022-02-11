@@ -88,6 +88,7 @@ var _ Expr = (*NotExpr)(nil)
 var _ Expr = (*CallExpr)(nil)
 var _ Expr = (*WeightStringCallExpr)(nil)
 var _ Expr = (*BitwiseExpr)(nil)
+var _ Expr = (*BitwiseNotExpr)(nil)
 
 type evalError struct {
 	error
@@ -366,6 +367,12 @@ func parseHexNumber(val []byte) ([]byte, error) {
 		val[1] = 'x'
 	}()
 	return parseHexLiteral(val[1:])
+}
+
+func NewLiteralBinary(val []byte) Expr {
+	lit := &Literal{}
+	lit.Val.setRaw(sqltypes.VarBinary, val, collationBinary)
+	return lit
 }
 
 func NewLiteralBinaryFromHex(val []byte) (Expr, error) {

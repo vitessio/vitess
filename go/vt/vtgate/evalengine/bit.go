@@ -28,6 +28,10 @@ type (
 		Op BitwiseOp
 	}
 
+	BitwiseNotExpr struct {
+		UnaryExpr
+	}
+
 	BitwiseOp interface {
 		BitwiseOp() string
 	}
@@ -50,6 +54,30 @@ type (
 	OpBitShiftLeft  struct{}
 	OpBitShiftRight struct{}
 )
+
+func (b *BitwiseNotExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	var inner EvalResult
+	inner.init(env, b.Inner)
+
+	if inner.null() {
+		result.setNull()
+		return
+	}
+
+	if inner.bitwiseBinaryString() {
+		in := inner.bytes()
+		out := make([]byte, len(in))
+
+		for i := range in {
+			out[i] = ^in[i]
+		}
+
+		result.setRaw(sqltypes.VarBinary, out, collationBinary)
+	} else {
+		inner.makeIntegral()
+		result.setUint64(^inner.uint64())
+	}
+}
 
 func (o OpBitShiftRight) BitwiseOp() string                { return ">>" }
 func (o OpBitShiftRight) numeric(num, shift uint64) uint64 { return num >> shift }
@@ -176,7 +204,7 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			literal, bit literal, or NULL literal. Numeric evaluation occurs otherwise, with argument conversion to an
 			unsigned 64-bit integer as necessary.
 		*/
-		if l.typeof() == sqltypes.VarBinary && !l.hasFlag(flagHex|flagBit) {
+		if l.bitwiseBinaryString() {
 			r.makeIntegral()
 			result.setRaw(sqltypes.VarBinary, op.binary(l.bytes(), r.uint64()), collationBinary)
 		} else {
