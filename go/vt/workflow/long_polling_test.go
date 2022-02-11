@@ -137,18 +137,18 @@ func TestLongPolling(t *testing.T) {
 
 func TestSanitizeRequestHeader(t *testing.T) {
 	testCases := []struct {
-		name       string
-		debugOn    bool
-		reqMethod  string
-		reqURL     string
-		reqHeader  map[string]string
-		wantHeader http.Header
+		name                string
+		sanitizeHTTPHeaders bool
+		reqMethod           string
+		reqURL              string
+		reqHeader           map[string]string
+		wantHeader          http.Header
 	}{
 		{
-			name:      "withCookie-no-Debug",
-			debugOn:   false,
-			reqMethod: "GET",
-			reqURL:    "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
+			name:                "withCookie-and-sanitize",
+			sanitizeHTTPHeaders: true,
+			reqMethod:           "GET",
+			reqURL:              "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
 			reqHeader: map[string]string{
 				"Accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
 				"Cookie":     "_ga=GA1.2.1234567899.1234567890; machine-cookie=username:123456789:1234f999ff99aa1af3ae9999d2a5d3968ac014a0947ae1418b10642ab2cbb7d3; session=7e5dc76807be39dd0886b9425883dabe3fd2432f7415e2a08fba7ca43ac4d0dc;",
@@ -161,10 +161,10 @@ func TestSanitizeRequestHeader(t *testing.T) {
 			},
 		},
 		{
-			name:      "withCookie-with-Debug",
-			debugOn:   true,
-			reqMethod: "GET",
-			reqURL:    "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
+			name:                "withCookie-not-sanitize",
+			sanitizeHTTPHeaders: false,
+			reqMethod:           "GET",
+			reqURL:              "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
 			reqHeader: map[string]string{
 				"Accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
 				"Cookie":     "_ga=GA1.2.1234567899.1234567890; machine-cookie=username:123456789:1234f999ff99aa1af3ae9999d2a5d3968ac014a0947ae1418b10642ab2cbb7d3; session=7e5dc76807be39dd0886b9425883dabe3fd2432f7415e2a08fba7ca43ac4d0dc;",
@@ -177,10 +177,10 @@ func TestSanitizeRequestHeader(t *testing.T) {
 			},
 		},
 		{
-			name:      "noCookie-no-Debug",
-			debugOn:   false,
-			reqMethod: "GET",
-			reqURL:    "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
+			name:                "noCookie-sanitize",
+			sanitizeHTTPHeaders: true,
+			reqMethod:           "GET",
+			reqURL:              "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
 			reqHeader: map[string]string{
 				"Accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
 				"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36",
@@ -208,7 +208,7 @@ func TestSanitizeRequestHeader(t *testing.T) {
 			}
 			clone := req.Clone(ctx)
 
-			if got := sanitizeRequestHeader(req, tc.debugOn); !reflect.DeepEqual(got.Header, tc.wantHeader) {
+			if got := sanitizeRequestHeader(req, tc.sanitizeHTTPHeaders); !reflect.DeepEqual(got.Header, tc.wantHeader) {
 				t.Errorf("sanitizeRequestHeader() failed\nwant: %#v\ngot: %#v", tc.wantHeader, got.Header)
 			}
 
