@@ -135,7 +135,7 @@ func TestLongPolling(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSanitizeRequestHeaderCookie(t *testing.T) {
+func TestSanitizeRequestHeader(t *testing.T) {
 	testCases := []struct {
 		name       string
 		debugOn    bool
