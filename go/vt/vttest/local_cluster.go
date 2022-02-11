@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,7 +30,12 @@ import (
 	"strings"
 	"unicode"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/logutil"
+
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
@@ -192,6 +198,33 @@ func (cfg *Config) DbName() string {
 		return ns[0].Name
 	}
 	return ""
+}
+
+type TopoData struct {
+	vtTestTopology *vttestpb.VTTestTopology
+	unmarshal      func(b []byte, m proto.Message) error
+}
+
+func (td *TopoData) String() string {
+	return prototext.Format(td.vtTestTopology)
+}
+
+func (td *TopoData) Set(value string) error {
+	return td.unmarshal([]byte(value), td.vtTestTopology)
+}
+
+func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      prototext.Unmarshal,
+	}
+}
+
+func JsonTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      protojson.Unmarshal,
+	}
 }
 
 // LocalCluster controls a local Vitess setup for testing, containing
