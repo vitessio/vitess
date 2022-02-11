@@ -34,6 +34,7 @@ import (
 
 const (
 	flagHex = 1 << iota
+	flagBit
 )
 
 type (
@@ -117,6 +118,10 @@ func (er *EvalResult) typeof() sqltypes.Type {
 func (er *EvalResult) hasFlag(f uint16) bool {
 	er.resolve()
 	return (er.flags_ & f) != 0
+}
+
+func (er *EvalResult) bitwiseBinaryString() bool {
+	return er.typeof() == sqltypes.VarBinary && !er.hasFlag(flagHex|flagBit)
 }
 
 func (er *EvalResult) collation() collations.TypedCollation {
@@ -245,12 +250,26 @@ func (er *EvalResult) setTuple(t []EvalResult) {
 	er.collation_ = collations.TypedCollation{}
 }
 
-func (er *EvalResult) replaceBytes(b []byte, collation collations.TypedCollation) {
-	er.bytes_ = b
-	er.collation_ = collation
+func (er *EvalResult) makeBinary() {
+	er.resolve()
+	if er.bytes_ == nil {
+		panic("called makeBinary on non-textual")
+	}
+	er.type_ = int16(sqltypes.VarBinary)
+	er.collation_ = collationBinary
+	er.clearFlags(flagBit | flagHex)
 }
 
-func (er *EvalResult) replaceCollationID(collation collations.ID) {
+func (er *EvalResult) clearFlags(flags uint16) {
+	er.flags_ &= ^flags
+}
+
+func (er *EvalResult) makeTextual(collation collations.ID) {
+	er.resolve()
+	if er.bytes_ == nil {
+		panic("called makeTextual on non-textual")
+	}
+	er.type_ = int16(sqltypes.VarChar)
 	er.collation_.Collation = collation
 }
 
@@ -713,7 +732,7 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	if err := cast.setValueCast(v, coerceType); err != nil {
 		return 0, err
 	}
-	cast.replaceCollationID(collation)
+	cast.collation_.Collation = collation
 	return cast.nullSafeHashcode()
 }
 
@@ -761,15 +780,19 @@ func (er *EvalResult) makeNumeric() {
 		er.setUint64(u)
 		return
 	}
-	if ival, err := strconv.ParseInt(er.string(), 10, 64); err == nil {
-		er.setInt64(ival)
-		return
+	er.setFloat(parseStringToFloat(er.string()))
+}
+
+func (er *EvalResult) makeIntegral() {
+	er.makeNumeric()
+	switch er.typeof() {
+	case sqltypes.Float64:
+		er.setUint64(uint64(er.float64()))
+	case sqltypes.Decimal:
+		dec := er.decimal()
+		u, _ := dec.num.Uint64()
+		er.setUint64(u)
 	}
-	if fval, err := strconv.ParseFloat(er.string(), 64); err == nil {
-		er.setFloat(fval)
-		return
-	}
-	er.setFloat(0)
 }
 
 func (er *EvalResult) negateNumeric() {

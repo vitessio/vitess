@@ -412,3 +412,58 @@ func TestFloatFormatting(t *testing.T) {
 		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT -%de0", ^v))
 	}
 }
+
+func TestWeightStrings(t *testing.T) {
+	var inputs = []string{
+		`'foobar'`, `_latin1 'foobar'`,
+		`'foobar' as char(12)`, `'foobar' as binary(12)`,
+		`_latin1 'foobar' as char(12)`, `_latin1 'foobar' as binary(12)`,
+		`1234.0`, `12340e0`,
+		`0x1234`, `0x1234 as char(12)`, `0x1234 as char(2)`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, i := range inputs {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT WEIGHT_STRING(%s)", i))
+	}
+}
+
+var bitwiseInputs = []string{
+	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13",
+	strconv.FormatUint(math.MaxUint64, 10),
+	strconv.FormatUint(math.MaxInt64, 10),
+	strconv.FormatInt(math.MinInt64, 10),
+	`"foobar"`, `"foobar1234"`, `"0"`, "0x1", "-0x1", "X'ff'", "X'00'",
+	`"1abcd"`, "NULL", `_binary "foobar"`, `_binary "foobar1234"`,
+	"64", "'64'", "_binary '64'", "X'40'", "_binary X'40'",
+}
+
+func TestBitwiseOperators(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, op := range []string{"&", "|", "^", "<<", ">>"} {
+		t.Run(op, func(t *testing.T) {
+			for _, lhs := range bitwiseInputs {
+				for _, rhs := range bitwiseInputs {
+					compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s %s %s", lhs, op, rhs))
+				}
+			}
+		})
+	}
+}
+
+func TestBitwiseOperatorsUnary(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, op := range []string{"~", "BIT_COUNT"} {
+		t.Run(op, func(t *testing.T) {
+			for _, rhs := range bitwiseInputs {
+				compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s(%s)", op, rhs))
+			}
+		})
+	}
+}
