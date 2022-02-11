@@ -1216,8 +1216,8 @@ func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *WeightStringFuncExpr) Format(buf *TrackedBuffer) {
-	if node.Cast != "" {
-		buf.astPrintf(node, "weight_string(%v AS %s(%s))", node.Expr, node.Cast, node.Length)
+	if node.As != nil {
+		buf.astPrintf(node, "weight_string(%v as %v)", node.Expr, node.As)
 	} else {
 		buf.astPrintf(node, "weight_string(%v)", node.Expr)
 	}

@@ -411,7 +411,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
-%type <convertType> convert_type
+%type <convertType> convert_type convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt func_datetime_precision
@@ -453,7 +453,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-%type <str> underscore_charsets weight_string_cast
+%type <str> underscore_charsets
 %start any_command
 
 %%
@@ -4565,17 +4565,10 @@ UTC_DATE func_paren_opt
   {
 	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
   }
-| WEIGHT_STRING openb expression closeb
+| WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
-    $$ = &WeightStringFuncExpr{Expr: $3}
+    $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
   }
-| WEIGHT_STRING openb expression AS weight_string_cast '(' INTEGRAL ')' closeb
-  {
-    $$ = &WeightStringFuncExpr{Expr: $3, Cast: $5, Length: $7}
-  }
-
-weight_string_cast:
-  CHAR | BINARY
 
 interval:
  interval_time_stamp
@@ -4741,6 +4734,20 @@ charset:
 | BINARY
   {
     $$ = string($1)
+  }
+
+convert_type_weight_string:
+  /* empty */
+  {
+    $$ = nil
+  }
+| AS BINARY '(' INTEGRAL ')'
+  {
+    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+  }
+| AS CHAR '(' INTEGRAL ')'
+  {
+    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
   }
 
 convert_type:
@@ -5665,7 +5672,6 @@ reserved_keyword:
 | WINDOW
 | WRITE
 | XOR
-| WEIGHT_STRING
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -5975,6 +5981,7 @@ non_reserved_keyword:
 | SECOND
 | SECOND_MICROSECOND
 | YEAR_MONTH
+| WEIGHT_STRING
 
 openb:
   '('
