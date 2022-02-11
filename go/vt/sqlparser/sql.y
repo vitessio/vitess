@@ -4382,9 +4382,13 @@ function_call_keyword
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
 | BINARY simple_expr %prec UNARY
-	{
-	  $$ = &UnaryExpr{Operator: BinaryOp, Expr: $2}
-	}
+  {
+    // From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary
+    // To convert a string expression to a binary string, these constructs are equivalent:
+    //    CAST(expr AS BINARY)
+    //    BINARY expr
+    $$ = &ConvertExpr{Expr: $2, Type: &ConvertType{Type: $1}}
+  }
 | DEFAULT default_opt
   {
 	 $$ = &Default{ColName: $2}
