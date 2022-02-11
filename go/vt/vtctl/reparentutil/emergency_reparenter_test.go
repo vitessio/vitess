@@ -110,8 +110,6 @@ func TestEmergencyReparenter_getLockAction(t *testing.T) {
 }
 
 func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name                 string
 		durability           string
