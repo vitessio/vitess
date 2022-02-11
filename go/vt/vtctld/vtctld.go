@@ -19,14 +19,13 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"strings"
 	"time"
 
 	rice "github.com/GeertJohan/go.rice"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 
