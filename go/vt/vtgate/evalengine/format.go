@@ -180,3 +180,8 @@ func (n *NegateExpr) format(w *formatter, depth int) {
 func (bit *BitwiseExpr) format(buf *formatter, depth int) {
 	buf.formatBinary(bit.Left, bit.Op.BitwiseOp(), bit.Right, depth)
 }
+
+func (b *BitwiseNotExpr) format(buf *formatter, depth int) {
+	buf.WriteByte('~')
+	b.Inner.format(buf, depth)
+}
