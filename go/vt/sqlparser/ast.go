@@ -1948,9 +1948,8 @@ type (
 
 	// WeightStringFuncExpr represents the function and arguments for WEIGHT_STRING('string' AS [CHAR|BINARY](n))
 	WeightStringFuncExpr struct {
-		Expr   Expr
-		Cast   string
-		Length string
+		Expr Expr
+		As   *ConvertType
 	}
 
 	// FuncExpr represents a function call.

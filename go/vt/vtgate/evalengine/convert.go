@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -188,7 +187,7 @@ func convertColName(colname *sqlparser.ColName, lookup ConverterLookup) (Expr, e
 	return NewColumn(idx, collation), nil
 }
 
-func convertLiteral(lit *sqlparser.Literal, lookup ConverterLookup) (Expr, error) {
+func convertLiteral(lit *sqlparser.Literal, lookup ConverterLookup) (*Literal, error) {
 	switch lit.Type {
 	case sqlparser.IntVal:
 		return NewLiteralIntegralFromBytes(lit.Bytes())
@@ -352,15 +351,19 @@ func convertWeightStringFuncExpr(wsfn *sqlparser.WeightStringFuncExpr, lookup Co
 		return nil, err
 	}
 	var length int
-	if wsfn.Length != "" {
-		length, err = strconv.Atoi(wsfn.Length)
+	var ttype string
+	if wsfn.As != nil {
+		ttype = strings.ToLower(wsfn.As.Type)
+		literal, err := convertLiteral(wsfn.As.Length, lookup)
 		if err != nil {
-			return nil, convertNotSupported(wsfn)
+			return nil, err
 		}
+		// this conversion is always valid because the SQL parser enforces Length to be an integral
+		length = int(literal.Val.uint64())
 	}
 	return &WeightStringCallExpr{
 		String: inner,
-		Cast:   strings.ToLower(wsfn.Cast),
+		Cast:   ttype,
 		Len:    length,
 	}, nil
 }
