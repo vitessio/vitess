@@ -324,6 +324,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitVindexParam(in, f)
 	case *VindexSpec:
 		return VisitRefOfVindexSpec(in, f)
+	case *WeightStringFuncExpr:
+		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *When:
 		return VisitRefOfWhen(in, f)
 	case *Where:
@@ -2413,6 +2415,21 @@ func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfWeightStringFuncExpr(in *WeightStringFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfConvertType(in.As, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfWhen(in *When, f Visit) error {
 	if in == nil {
 		return nil
@@ -2512,6 +2529,38 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitRefOfTablespaceOperation(in, f)
 	case *Validation:
 		return VisitRefOfValidation(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func VisitCallable(in Callable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ConvertExpr:
+		return VisitRefOfConvertExpr(in, f)
+	case *ConvertUsingExpr:
+		return VisitRefOfConvertUsingExpr(in, f)
+	case *CurTimeFuncExpr:
+		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *ExtractFuncExpr:
+		return VisitRefOfExtractFuncExpr(in, f)
+	case *FuncExpr:
+		return VisitRefOfFuncExpr(in, f)
+	case *GroupConcatExpr:
+		return VisitRefOfGroupConcatExpr(in, f)
+	case *MatchExpr:
+		return VisitRefOfMatchExpr(in, f)
+	case *SubstrExpr:
+		return VisitRefOfSubstrExpr(in, f)
+	case *TimestampFuncExpr:
+		return VisitRefOfTimestampFuncExpr(in, f)
+	case *ValuesFuncExpr:
+		return VisitRefOfValuesFuncExpr(in, f)
+	case *WeightStringFuncExpr:
+		return VisitRefOfWeightStringFuncExpr(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -2688,6 +2737,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
+	case *WeightStringFuncExpr:
+		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
 	default:
