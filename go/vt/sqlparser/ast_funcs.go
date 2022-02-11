@@ -1174,8 +1174,6 @@ func (op UnaryExprOperator) ToString() string {
 		return TildaStr
 	case BangOp:
 		return BangStr
-	case BinaryOp:
-		return BinaryStr
 	case NStringOp:
 		return NStringStr
 	default:

@@ -160,7 +160,6 @@ const (
 	UMinusStr   = "-"
 	TildaStr    = "~"
 	BangStr     = "!"
-	BinaryStr   = "binary "
 	Armscii8Str = "_armscii8"
 	ASCIIStr    = "_ascii"
 	Big5Str     = "_big5"
@@ -442,7 +441,6 @@ const (
 	UMinusOp
 	TildaOp
 	BangOp
-	BinaryOp
 	NStringOp
 )
 

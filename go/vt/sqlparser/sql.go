@@ -12828,7 +12828,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:4385
 		{
-			yyLOCAL = &UnaryExpr{Operator: BinaryOp, Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = &ConvertExpr{Expr: yyDollar[2].exprUnion(), Type: &ConvertType{Type: yyDollar[1].str}}
 		}
 		yyVAL.union = yyLOCAL
 	case 860:

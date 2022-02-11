@@ -787,11 +787,14 @@ var (
 		input:  "select /* - - */ - -b from t",
 		output: "select /* - - */ - -b from t",
 	}, {
-		input: "select /* binary binary */ binary  binary b from t",
+		input:  "select /* binary binary */ binary  binary b from t",
+		output: "select /* binary binary */ convert(convert(b, binary), binary) from t",
 	}, {
-		input: "select /* binary ~ */ binary  ~b from t",
+		input:  "select /* binary ~ */ binary  ~b from t",
+		output: "select /* binary ~ */ convert(~b, binary) from t",
 	}, {
-		input: "select /* ~ binary */ ~ binary b from t",
+		input:  "select /* ~ binary */ ~ binary b from t",
+		output: "select /* ~ binary */ ~convert(b, binary) from t",
 	}, {
 		input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
 	}, {
@@ -2035,7 +2038,8 @@ var (
 		input:  "select sql_calc_found_rows 'foo' from t",
 		output: "select sql_calc_found_rows 'foo' from t",
 	}, {
-		input: "select binary 'a' = 'A' from t",
+		input:  "select binary 'a' = 'A' from t",
+		output: "select convert('a', binary) = 'A' from t",
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
 	}, {
