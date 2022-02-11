@@ -584,14 +584,23 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	}
 	plan.Right = rhsPlan
 
-	for _, aggr := range lhsAggregations {
-		plan.Cols = append(plan.Cols, -(aggr.Col + 1))
-	}
-	for _, aggr := range rhsAggregations {
-		plan.Cols = append(plan.Cols, aggr.Col+1)
+	proj := &projection{source: plan}
+
+	for idx, aggr := range aggregations {
+		l, r := lhsAggregations[idx], rhsAggregations[idx]
+		proj.columnNames = append(proj.columnNames, aggr.Alias)
+		offset := len(plan.Cols)
+		expr := &sqlparser.BinaryExpr{
+			Operator: sqlparser.MultOp,
+			Left:     sqlparser.Offset(offset),
+			Right:    sqlparser.Offset(offset + 1),
+		}
+		proj.columns = append(proj.columns, expr)
+		plan.Cols = append(plan.Cols, -(l.Col + 1))
+		plan.Cols = append(plan.Cols, r.Col+1)
 	}
 
-	return plan, nil, nil, nil
+	return proj, nil, nil, nil
 }
 
 func (hp *horizonPlanning) createGroupingsForColumns(
