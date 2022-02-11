@@ -135,7 +135,7 @@ func NewManager(ts *topo.Server) *Manager {
 	}
 }
 
-// SetSanitizeHTTPHeaders - toggles m.debugHTTPHeaders on/off
+// SetSanitizeHTTPHeaders - toggles m.sanitizeHTTPHeaders on/off
 func (m *Manager) SetSanitizeHTTPHeaders(to bool) {
 	m.sanitizeHTTPHeaders = to
 }
