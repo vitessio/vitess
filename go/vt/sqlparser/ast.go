@@ -1803,6 +1803,11 @@ type (
 		SQLNode
 	}
 
+	Callable interface {
+		iCallable()
+		Expr
+	}
+
 	// AndExpr represents an AND expression.
 	AndExpr struct {
 		Left, Right Expr
@@ -2085,6 +2090,19 @@ func (*MatchExpr) iExpr()            {}
 func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
+
+// iCallable marks all expressions that represent function calls
+func (*FuncExpr) iCallable()             {}
+func (*TimestampFuncExpr) iCallable()    {}
+func (*ExtractFuncExpr) iCallable()      {}
+func (*WeightStringFuncExpr) iCallable() {}
+func (*CurTimeFuncExpr) iCallable()      {}
+func (*ValuesFuncExpr) iCallable()       {}
+func (*ConvertExpr) iCallable()          {}
+func (*SubstrExpr) iCallable()           {}
+func (*ConvertUsingExpr) iCallable()     {}
+func (*MatchExpr) iCallable()            {}
+func (*GroupConcatExpr) iCallable()      {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
