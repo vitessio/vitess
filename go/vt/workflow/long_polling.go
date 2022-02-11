@@ -170,9 +170,9 @@ var allowedHTTPHeadersList = map[string]interface{}{
 	"X-Real-Ip":                 nil,
 }
 
-// sanitizeRequestHeader - (unless debugOn=true) makes a copy of r and returns it with sanitized headers
-func sanitizeRequestHeader(r *http.Request, debugOn bool) *http.Request {
-	if debugOn {
+// sanitizeRequestHeader - (unless sanitizeHTTPHeaders=false) makes a copy of r and returns it with sanitized headers
+func sanitizeRequestHeader(r *http.Request, sanitizeHTTPHeaders bool) *http.Request {
+	if !sanitizeHTTPHeaders {
 		return r
 	}
 
@@ -192,7 +192,7 @@ func (m *Manager) httpErrorf(w http.ResponseWriter, r *http.Request, format stri
 	log.Errorf("HTTP error on %v: %v, request: %#v",
 		r.URL.Path,
 		errMsg,
-		sanitizeRequestHeader(r, m.debugHTTPHeaders),
+		sanitizeRequestHeader(r, m.sanitizeHTTPHeaders),
 	)
 	http.Error(w, errMsg, http.StatusInternalServerError)
 }

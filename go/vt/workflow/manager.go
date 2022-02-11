@@ -94,8 +94,8 @@ type Manager struct {
 	started chan struct{}
 	// workflows is a map from job UUID to runningWorkflow.
 	workflows map[string]*runningWorkflow
-	// debugHTTPHeaders toggles sanitizeRequestHeader() behavior to OFF
-	debugHTTPHeaders bool
+	// sanitizeHTTPHeaders toggles sanitizeRequestHeader() behavior
+	sanitizeHTTPHeaders bool
 }
 
 // runningWorkflow holds information about a running workflow.
@@ -135,9 +135,9 @@ func NewManager(ts *topo.Server) *Manager {
 	}
 }
 
-// SetDebugHTTPHeaders - toggles m.debugHTTPHeaders on/off
-func (m *Manager) SetDebugHTTPHeaders(to bool) {
-	m.debugHTTPHeaders = to
+// SetSanitizeHTTPHeaders - toggles m.debugHTTPHeaders on/off
+func (m *Manager) SetSanitizeHTTPHeaders(to bool) {
+	m.sanitizeHTTPHeaders = to
 }
 
 // SetRedirectFunc sets the redirect function to use.
