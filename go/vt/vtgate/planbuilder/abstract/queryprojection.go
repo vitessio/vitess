@@ -377,6 +377,9 @@ type Aggr struct {
 
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 	for _, expr := range qp.SelectExprs {
+		if !sqlparser.ContainsAggregation(expr.Col) {
+			continue
+		}
 		aliasedExpr, err := expr.GetAliasedExpr()
 		if err != nil {
 			return nil, err

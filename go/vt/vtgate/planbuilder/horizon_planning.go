@@ -498,13 +498,17 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, err
 	}
 
-	aggPlan, _, aggrParams, err := hp.pushAggregation(ctx, plan, hp.qp.GroupByExprs, aggregationExprs)
+	aggPlan, groupings, aggrParams, err := hp.pushAggregation(ctx, plan, hp.qp.GroupByExprs, aggregationExprs)
 	if err != nil {
 		return nil, err
 	}
 
 	if oa != nil {
 		oa.aggregates = aggrParams
+		for i, grouping := range groupings {
+			oa.groupByKeys[i].KeyCol = grouping.col
+			oa.groupByKeys[i].WeightStringCol = grouping.wsCol
+		}
 		oa.resultsBuilder = resultsBuilder{
 			logicalPlanCommon: newBuilderCommon(aggPlan),
 			weightStrings:     make(map[*resultColumn]int),
@@ -548,10 +552,6 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	aggregations []abstract.Aggr,
 	plan *joinGen4,
 ) (logicalPlan, []offsets, []*engine.AggregateParams, error) {
-	if len(grouping) > 0 {
-		panic(234)
-	}
-	// scalar aggregation
 	var lhsAggrs, rhsAggrs []abstract.Aggr
 	var outputAggrs []*engine.AggregateParams
 	for _, aggr := range aggregations {
@@ -573,19 +573,53 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	lhsPlan, _, lhsAggregations, err := hp.pushAggregation(ctx, plan.Left, lhsGrouping, lhsAggrs)
+	var rhsGrouping []abstract.GroupBy
+
+	lhsTS := plan.Left.ContainsTables()
+	rhsTS := plan.Right.ContainsTables()
+	// here we store information about which side the grouping value is coming from.
+	// Negative values from the left operator and positive values are offsets into the RHS
+	var groupingOffsets []int
+	for _, groupBy := range grouping {
+		deps := ctx.SemTable.RecursiveDeps(groupBy.Inner)
+		switch {
+		case deps.IsSolvedBy(lhsTS):
+			groupingOffsets = append(groupingOffsets, -(len(lhsGrouping) + 1))
+			lhsGrouping = append(lhsGrouping, groupBy)
+		case deps.IsSolvedBy(rhsTS):
+			groupingOffsets = append(groupingOffsets, len(rhsGrouping)+1)
+			rhsGrouping = append(rhsGrouping, groupBy)
+		default:
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "grouping on columns from different sources not supported yet")
+		}
+	}
+
+	lhsPlan, lhsOffsets, lhsAggregations, err := hp.pushAggregation(ctx, plan.Left, lhsGrouping, lhsAggrs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	plan.Left = lhsPlan
 
-	rhsPlan, _, rhsAggregations, err := hp.pushAggregation(ctx, plan.Right, nil, rhsAggrs)
+	rhsPlan, rhsOffsets, rhsAggregations, err := hp.pushAggregation(ctx, plan.Right, rhsGrouping, rhsAggrs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	plan.Right = rhsPlan
 
+	outputGroupings := make([]offsets, 0, len(groupingOffsets))
 	proj := &projection{source: plan}
+	for _, groupBy := range groupingOffsets {
+		var offset offsets
+		var f func(i int) int
+		if groupBy < 0 {
+			offset = lhsOffsets[-groupBy-1]
+			f = func(i int) int { return -(i + 1) }
+		} else {
+			offset = rhsOffsets[groupBy-1]
+			f = func(i int) int { return i + 1 }
+		}
+		outputGroupings = append(outputGroupings, passGroupingsThroughJoinAndProj(proj, plan, offset, f))
+	}
 
 	for idx, aggr := range aggregations {
 		// create the projection expression that will multiply the incoming aggregations
@@ -596,6 +630,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			Left:     sqlparser.Offset(offset),
 			Right:    sqlparser.Offset(offset + 1),
 		}
+		output := len(proj.columns)
 		proj.columns = append(proj.columns, expr)
 		proj.columnNames = append(proj.columnNames, aggr.Alias)
 
@@ -605,13 +640,27 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 
 		outputAggrs = append(outputAggrs, &engine.AggregateParams{
 			Opcode: engine.AggregateSum,
-			Col:    idx,
+			Col:    output,
 			Alias:  aggr.Alias,
 			Expr:   aggr.Func,
 		})
 	}
 
-	return proj, nil, outputAggrs, nil
+	return proj, outputGroupings, outputAggrs, nil
+}
+
+func passGroupingsThroughJoinAndProj(proj *projection, join *joinGen4, offset offsets, f func(int) int) (output offsets) {
+	output.col = len(proj.columns)
+	proj.columns = append(proj.columns, sqlparser.Offset(len(join.Cols)))
+	proj.columnNames = append(proj.columnNames, "")
+	join.Cols = append(join.Cols, f(offset.col))
+	if offset.wsCol > -1 {
+		output.wsCol = len(proj.columns)
+		proj.columns = append(proj.columns, sqlparser.Offset(len(join.Cols)))
+		proj.columnNames = append(proj.columnNames, "")
+		join.Cols = append(join.Cols, f(offset.wsCol))
+	}
+	return
 }
 
 func (hp *horizonPlanning) createGroupingsForColumns(
