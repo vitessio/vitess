@@ -28,29 +28,29 @@ import (
 )
 
 type (
-	ConverterLookup interface {
+	TranslationLookup interface {
 		ColumnLookup(col *sqlparser.ColName) (int, error)
 		CollationForExpr(expr sqlparser.Expr) collations.ID
 		DefaultCollation() collations.ID
 	}
 )
 
-var ErrConvertExprNotSupported = "expr cannot be converted, not supported"
+var ErrTranslateExprNotSupported = "expr cannot be translated, not supported"
 var ErrEvaluatedExprNotSupported = "expr cannot be evaluated, not supported"
 
-func convertComparisonExpr(op sqlparser.ComparisonExprOperator, left, right sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
-	l, err := convertExpr(left, lookup)
+func translateComparisonExpr(op sqlparser.ComparisonExprOperator, left, right sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
+	l, err := translateExpr(left, lookup)
 	if err != nil {
 		return nil, err
 	}
-	r, err := convertExpr(right, lookup)
+	r, err := translateExpr(right, lookup)
 	if err != nil {
 		return nil, err
 	}
-	return convertComparisonExpr2(op, l, r)
+	return translateComparisonExpr2(op, l, r)
 }
 
-func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Expr) (Expr, error) {
+func translateComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Expr) (Expr, error) {
 	binaryExpr := BinaryExpr{
 		Left:  left,
 		Right: right,
@@ -88,21 +88,21 @@ func convertComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right Exp
 	}
 }
 
-func convertLogicalNot(inner Expr) Expr {
+func translateLogicalNot(inner Expr) Expr {
 	return &NotExpr{UnaryExpr{inner}}
 }
 
-func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
-	l, err := convertExpr(left, lookup)
+func translateLogicalExpr(opname string, left, right sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
+	l, err := translateExpr(left, lookup)
 	if err != nil {
 		return nil, err
 	}
 
 	if opname == "NOT" {
-		return convertLogicalNot(l), nil
+		return translateLogicalNot(l), nil
 	}
 
-	r, err := convertExpr(right, lookup)
+	r, err := translateExpr(right, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -129,8 +129,8 @@ func convertLogicalExpr(opname string, left, right sqlparser.Expr, lookup Conver
 	}, nil
 }
 
-func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup ConverterLookup) (Expr, error) {
-	expr, err := convertExpr(left, lookup)
+func translateIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup TranslationLookup) (Expr, error) {
+	expr, err := translateExpr(left, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func convertIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup Conv
 	}, nil
 }
 
-func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedCollation {
+func getCollation(expr sqlparser.Expr, lookup TranslationLookup) collations.TypedCollation {
 	collation := collations.TypedCollation{
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireUnicode,
@@ -175,9 +175,9 @@ func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.TypedC
 	return collation
 }
 
-func convertColName(colname *sqlparser.ColName, lookup ConverterLookup) (Expr, error) {
+func translateColName(colname *sqlparser.ColName, lookup TranslationLookup) (Expr, error) {
 	if lookup == nil {
-		return nil, vterrors.Wrap(convertNotSupported(colname), "cannot lookup column")
+		return nil, vterrors.Wrap(translateExprNotSupported(colname), "cannot lookup column")
 	}
 	idx, err := lookup.ColumnLookup(colname)
 	if err != nil {
@@ -187,7 +187,7 @@ func convertColName(colname *sqlparser.ColName, lookup ConverterLookup) (Expr, e
 	return NewColumn(idx, collation), nil
 }
 
-func convertLiteral(lit *sqlparser.Literal, lookup ConverterLookup) (*Literal, error) {
+func translateLiteral(lit *sqlparser.Literal, lookup TranslationLookup) (*Literal, error) {
 	switch lit.Type {
 	case sqlparser.IntVal:
 		return NewLiteralIntegralFromBytes(lit.Bytes())
@@ -203,16 +203,16 @@ func convertLiteral(lit *sqlparser.Literal, lookup ConverterLookup) (*Literal, e
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
 	default:
-		return nil, convertNotSupported(lit)
+		return nil, translateExprNotSupported(lit)
 	}
 }
 
-func convertBinaryExpr(binary *sqlparser.BinaryExpr, lookup ConverterLookup) (Expr, error) {
-	left, err := convertExpr(binary.Left, lookup)
+func translateBinaryExpr(binary *sqlparser.BinaryExpr, lookup TranslationLookup) (Expr, error) {
+	left, err := translateExpr(binary.Left, lookup)
 	if err != nil {
 		return nil, err
 	}
-	right, err := convertExpr(binary.Right, lookup)
+	right, err := translateExpr(binary.Right, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -241,14 +241,14 @@ func convertBinaryExpr(binary *sqlparser.BinaryExpr, lookup ConverterLookup) (Ex
 	case sqlparser.ShiftRightOp:
 		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &OpBitShiftRight{}}, nil
 	default:
-		return nil, convertNotSupported(binary)
+		return nil, translateExprNotSupported(binary)
 	}
 }
 
-func convertTuple(tuple sqlparser.ValTuple, lookup ConverterLookup) (Expr, error) {
+func translateTuple(tuple sqlparser.ValTuple, lookup TranslationLookup) (Expr, error) {
 	var exprs TupleExpr
 	for _, expr := range tuple {
-		convertedExpr, err := convertExpr(expr, lookup)
+		convertedExpr, err := translateExpr(expr, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -257,8 +257,8 @@ func convertTuple(tuple sqlparser.ValTuple, lookup ConverterLookup) (Expr, error
 	return exprs, nil
 }
 
-func convertCollateExpr(collate *sqlparser.CollateExpr, lookup ConverterLookup) (Expr, error) {
-	expr, err := convertExpr(collate.Expr, lookup)
+func translateCollateExpr(collate *sqlparser.CollateExpr, lookup TranslationLookup) (Expr, error) {
+	expr, err := translateExpr(collate.Expr, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +276,8 @@ func convertCollateExpr(collate *sqlparser.CollateExpr, lookup ConverterLookup) 
 	}, nil
 }
 
-func convertIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup ConverterLookup) (Expr, error) {
-	expr, err := convertExpr(introduced.Expr, lookup)
+func translateIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup TranslationLookup) (Expr, error) {
+	expr, err := translateExpr(introduced.Expr, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -316,11 +316,11 @@ func convertIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup Converte
 	return expr, nil
 }
 
-func convertFuncExpr(fn *sqlparser.FuncExpr, lookup ConverterLookup) (Expr, error) {
+func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, error) {
 	method := fn.Name.Lowered()
 	call, ok := builtinFunctions[method]
 	if !ok {
-		return nil, convertNotSupported(fn)
+		return nil, translateExprNotSupported(fn)
 	}
 
 	var args TupleExpr
@@ -328,9 +328,9 @@ func convertFuncExpr(fn *sqlparser.FuncExpr, lookup ConverterLookup) (Expr, erro
 	for _, expr := range fn.Exprs {
 		aliased, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, convertNotSupported(fn)
+			return nil, translateExprNotSupported(fn)
 		}
-		convertedExpr, err := convertExpr(aliased.Expr, lookup)
+		convertedExpr, err := translateExpr(aliased.Expr, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -345,8 +345,8 @@ func convertFuncExpr(fn *sqlparser.FuncExpr, lookup ConverterLookup) (Expr, erro
 	}, nil
 }
 
-func convertWeightStringFuncExpr(wsfn *sqlparser.WeightStringFuncExpr, lookup ConverterLookup) (Expr, error) {
-	inner, err := convertExpr(wsfn.Expr, lookup)
+func translateWeightStringFuncExpr(wsfn *sqlparser.WeightStringFuncExpr, lookup TranslationLookup) (Expr, error) {
+	inner, err := translateExpr(wsfn.Expr, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +354,7 @@ func convertWeightStringFuncExpr(wsfn *sqlparser.WeightStringFuncExpr, lookup Co
 	var ttype string
 	if wsfn.As != nil {
 		ttype = strings.ToLower(wsfn.As.Type)
-		literal, err := convertLiteral(wsfn.As.Length, lookup)
+		literal, err := translateLiteral(wsfn.As.Length, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -368,8 +368,8 @@ func convertWeightStringFuncExpr(wsfn *sqlparser.WeightStringFuncExpr, lookup Co
 	}, nil
 }
 
-func convertUnaryExpr(unary *sqlparser.UnaryExpr, lookup ConverterLookup) (Expr, error) {
-	expr, err := convertExpr(unary.Expr, lookup)
+func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (Expr, error) {
+	expr, err := translateExpr(unary.Expr, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -378,19 +378,19 @@ func convertUnaryExpr(unary *sqlparser.UnaryExpr, lookup ConverterLookup) (Expr,
 	case sqlparser.UMinusOp:
 		return &NegateExpr{UnaryExpr: UnaryExpr{expr}}, nil
 	case sqlparser.BangOp:
-		return convertLogicalNot(expr), nil
+		return translateLogicalNot(expr), nil
 	case sqlparser.TildaOp:
 		return &BitwiseNotExpr{UnaryExpr: UnaryExpr{expr}}, nil
 	default:
-		return nil, convertNotSupported(unary)
+		return nil, translateExprNotSupported(unary)
 	}
 }
 
-func convertNotSupported(e sqlparser.Expr) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrConvertExprNotSupported, sqlparser.String(e))
+func translateExprNotSupported(e sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrTranslateExprNotSupported, sqlparser.String(e))
 }
 
-func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
+func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 	switch node := e.(type) {
 	case sqlparser.BoolVal:
 		if node {
@@ -398,9 +398,9 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		}
 		return NewLiteralInt(0), nil
 	case *sqlparser.ColName:
-		return convertColName(node, lookup)
+		return translateColName(node, lookup)
 	case *sqlparser.ComparisonExpr:
-		return convertComparisonExpr(node.Operator, node.Left, node.Right, lookup)
+		return translateComparisonExpr(node.Operator, node.Left, node.Right, lookup)
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
 		return NewBindVar(string(node), collation), nil
@@ -408,40 +408,40 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		collation := getCollation(e, lookup)
 		return NewBindVar(string(node), collation), nil
 	case *sqlparser.Literal:
-		return convertLiteral(node, lookup)
+		return translateLiteral(node, lookup)
 	case *sqlparser.AndExpr:
-		return convertLogicalExpr("AND", node.Left, node.Right, lookup)
+		return translateLogicalExpr("AND", node.Left, node.Right, lookup)
 	case *sqlparser.OrExpr:
-		return convertLogicalExpr("OR", node.Left, node.Right, lookup)
+		return translateLogicalExpr("OR", node.Left, node.Right, lookup)
 	case *sqlparser.XorExpr:
-		return convertLogicalExpr("XOR", node.Left, node.Right, lookup)
+		return translateLogicalExpr("XOR", node.Left, node.Right, lookup)
 	case *sqlparser.NotExpr:
-		return convertLogicalExpr("NOT", node.Expr, nil, lookup)
+		return translateLogicalExpr("NOT", node.Expr, nil, lookup)
 	case *sqlparser.BinaryExpr:
-		return convertBinaryExpr(node, lookup)
+		return translateBinaryExpr(node, lookup)
 	case sqlparser.ValTuple:
-		return convertTuple(node, lookup)
+		return translateTuple(node, lookup)
 	case *sqlparser.NullVal:
 		return NullExpr, nil
 	case *sqlparser.CollateExpr:
-		return convertCollateExpr(node, lookup)
+		return translateCollateExpr(node, lookup)
 	case *sqlparser.IntroducerExpr:
-		return convertIntroducerExpr(node, lookup)
+		return translateIntroducerExpr(node, lookup)
 	case *sqlparser.IsExpr:
-		return convertIsExpr(node.Left, node.Right, lookup)
+		return translateIsExpr(node.Left, node.Right, lookup)
 	case *sqlparser.FuncExpr:
-		return convertFuncExpr(node, lookup)
+		return translateFuncExpr(node, lookup)
 	case *sqlparser.WeightStringFuncExpr:
-		return convertWeightStringFuncExpr(node, lookup)
+		return translateWeightStringFuncExpr(node, lookup)
 	case *sqlparser.UnaryExpr:
-		return convertUnaryExpr(node, lookup)
+		return translateUnaryExpr(node, lookup)
 	default:
-		return nil, convertNotSupported(e)
+		return nil, translateExprNotSupported(e)
 	}
 }
 
-func ConvertEx(e sqlparser.Expr, lookup ConverterLookup, simplify bool) (Expr, error) {
-	expr, err := convertExpr(e, lookup)
+func TranslateEx(e sqlparser.Expr, lookup TranslationLookup, simplify bool) (Expr, error) {
+	expr, err := translateExpr(e, lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -457,7 +457,7 @@ func ConvertEx(e sqlparser.Expr, lookup ConverterLookup, simplify bool) (Expr, e
 	return expr, err
 }
 
-// Convert converts between AST expressions and executable expressions
-func Convert(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
-	return ConvertEx(e, lookup, true)
+// Translate translates between AST expressions and executable expressions
+func Translate(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
+	return TranslateEx(e, lookup, true)
 }

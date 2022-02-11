@@ -174,7 +174,7 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 	case *routeGen4:
 		_, isColName := expr.Expr.(*sqlparser.ColName)
 		if !isColName {
-			_, err := evalengine.Convert(expr.Expr, ctx.SemTable)
+			_, err := evalengine.Translate(expr.Expr, ctx.SemTable)
 			if err != nil {
 				if vterrors.Code(err) != vtrpcpb.Code_UNIMPLEMENTED {
 					return 0, false, err
