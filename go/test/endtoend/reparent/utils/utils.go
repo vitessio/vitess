@@ -167,6 +167,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
+			clusterInstance.PrintMysqlctlLogFiles()
 			t.Fatalf("Error starting mysql: %s", err.Error())
 		}
 	}
