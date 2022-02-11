@@ -86,6 +86,8 @@ func TestConvertSimplification(t *testing.T) {
 		{"coalesce(NULL, 2, NULL, 4)", ok("COALESCE(NULL, INT64(2), NULL, INT64(4))"), ok("INT64(2)")},
 		{"coalesce(NULL, NULL)", ok("COALESCE(NULL, NULL)"), ok("NULL")},
 		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
+		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R")`)},
+		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R\x00 \x00 \x00 \x00 \x00 \x00 ")`)},
 	}
 
 	for _, tc := range testCases {

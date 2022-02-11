@@ -86,6 +86,9 @@ var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
 var _ Expr = (*CallExpr)(nil)
+var _ Expr = (*WeightStringCallExpr)(nil)
+var _ Expr = (*BitwiseExpr)(nil)
+var _ Expr = (*BitwiseNotExpr)(nil)
 
 type evalError struct {
 	error
@@ -266,7 +269,7 @@ func init() {
 
 // NewLiteralIntegralFromBytes returns a literal expression.
 // It tries to return an int64, but if the value is too large, it tries with an uint64
-func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
+func NewLiteralIntegralFromBytes(val []byte) (*Literal, error) {
 	if val[0] == '-' {
 		panic("NewLiteralIntegralFromBytes: negative value")
 	}
@@ -285,28 +288,28 @@ func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
 }
 
 // NewLiteralInt returns a literal expression
-func NewLiteralInt(i int64) Expr {
+func NewLiteralInt(i int64) *Literal {
 	lit := &Literal{}
 	lit.Val.setInt64(i)
 	return lit
 }
 
 // NewLiteralUint returns a literal expression
-func NewLiteralUint(i uint64) Expr {
+func NewLiteralUint(i uint64) *Literal {
 	lit := &Literal{}
 	lit.Val.setUint64(i)
 	return lit
 }
 
 // NewLiteralFloat returns a literal expression
-func NewLiteralFloat(val float64) Expr {
+func NewLiteralFloat(val float64) *Literal {
 	lit := &Literal{}
 	lit.Val.setFloat(val)
 	return lit
 }
 
 // NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
-func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
+func NewLiteralFloatFromBytes(val []byte) (*Literal, error) {
 	lit := &Literal{}
 	fval, err := strconv.ParseFloat(string(val), 64)
 	if err != nil {
@@ -316,7 +319,7 @@ func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	return lit, nil
 }
 
-func NewLiteralDecimalFromBytes(val []byte) (Expr, error) {
+func NewLiteralDecimalFromBytes(val []byte) (*Literal, error) {
 	lit := &Literal{}
 	dec, err := newDecimalString(string(val))
 	if err != nil {
@@ -327,7 +330,7 @@ func NewLiteralDecimalFromBytes(val []byte) (Expr, error) {
 }
 
 // NewLiteralString returns a literal expression
-func NewLiteralString(val []byte, collation collations.TypedCollation) Expr {
+func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal {
 	collation.Repertoire = collations.RepertoireASCII
 	for _, b := range val {
 		if b >= utf8.RuneSelf {
@@ -366,7 +369,13 @@ func parseHexNumber(val []byte) ([]byte, error) {
 	return parseHexLiteral(val[1:])
 }
 
-func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
+func NewLiteralBinary(val []byte) *Literal {
+	lit := &Literal{}
+	lit.Val.setRaw(sqltypes.VarBinary, val, collationBinary)
+	return lit
+}
+
+func NewLiteralBinaryFromHex(val []byte) (*Literal, error) {
 	raw, err := parseHexLiteral(val)
 	if err != nil {
 		return nil, err
@@ -376,7 +385,7 @@ func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
 	return lit, nil
 }
 
-func NewLiteralBinaryFromHexNum(val []byte) (Expr, error) {
+func NewLiteralBinaryFromHexNum(val []byte) (*Literal, error) {
 	raw, err := parseHexNumber(val)
 	if err != nil {
 		return nil, err

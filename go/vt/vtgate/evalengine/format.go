@@ -31,29 +31,11 @@ func FormatExpr(expr Expr) string {
 	return f.String()
 }
 
-func PrettyPrint(expr Expr) string {
-	var f formatter
-	f.indent = "    "
-	expr.format(&f, 0)
-	return f.String()
-}
-
 type formatter struct {
 	strings.Builder
-	indent string
-}
-
-func (f *formatter) Indent(depth int) {
-	if depth > 0 && f.indent != "" {
-		f.WriteByte('\n')
-		for i := 0; i < depth; i++ {
-			f.WriteString(f.indent)
-		}
-	}
 }
 
 func (f *formatter) formatBinary(left Expr, op string, right Expr, depth int) {
-	f.Indent(depth)
 	if depth > 0 {
 		f.WriteByte('(')
 	}
@@ -70,7 +52,6 @@ func (f *formatter) formatBinary(left Expr, op string, right Expr, depth int) {
 }
 
 func (l *Literal) format(w *formatter, depth int) {
-	w.Indent(depth)
 	switch l.Val.typeof() {
 	case sqltypes.Tuple:
 		w.WriteByte('(')
@@ -88,13 +69,11 @@ func (l *Literal) format(w *formatter, depth int) {
 }
 
 func (bv *BindVariable) format(w *formatter, depth int) {
-	w.Indent(depth)
 	w.WriteByte(':')
 	w.WriteString(bv.Key)
 }
 
 func (c *Column) format(w *formatter, depth int) {
-	w.Indent(depth)
 	fmt.Fprintf(w, "[COLUMN %d]", c.Offset)
 }
 
@@ -123,7 +102,6 @@ func (c *InExpr) format(w *formatter, depth int) {
 }
 
 func (t TupleExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
 	w.WriteByte('(')
 	for i, expr := range t {
 		if i > 0 {
@@ -135,7 +113,6 @@ func (t TupleExpr) format(w *formatter, depth int) {
 }
 
 func (c *CollateExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
 	c.Inner.format(w, depth)
 	coll := collations.Local().LookupByID(c.TypedCollation.Collation)
 	w.WriteString(" COLLATE ")
@@ -143,7 +120,6 @@ func (c *CollateExpr) format(w *formatter, depth int) {
 }
 
 func (n *NotExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
 	w.WriteString("NOT ")
 	n.Inner.format(w, depth)
 }
@@ -153,7 +129,6 @@ func (b *LogicalExpr) format(w *formatter, depth int) {
 }
 
 func (i *IsExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
 	i.Inner.format(w, depth)
 	switch i.Op {
 	case sqlparser.IsNullOp:
@@ -172,7 +147,6 @@ func (i *IsExpr) format(w *formatter, depth int) {
 }
 
 func (c *CallExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
 	w.WriteString(strings.ToUpper(c.Method))
 	w.WriteByte('(')
 	for i, expr := range c.Arguments {
@@ -188,8 +162,26 @@ func (c *CallExpr) format(w *formatter, depth int) {
 	w.WriteByte(')')
 }
 
+func (c *WeightStringCallExpr) format(w *formatter, depth int) {
+	w.WriteString("WEIGHT_STRING(")
+	c.String.format(w, depth)
+
+	if c.Cast != "" {
+		fmt.Fprintf(w, " AS %s(%d)", strings.ToUpper(c.Cast), c.Len)
+	}
+	w.WriteByte(')')
+}
+
 func (n *NegateExpr) format(w *formatter, depth int) {
-	w.Indent(depth)
 	w.WriteByte('-')
 	n.Inner.format(w, depth)
+}
+
+func (bit *BitwiseExpr) format(buf *formatter, depth int) {
+	buf.formatBinary(bit.Left, bit.Op.BitwiseOp(), bit.Right, depth)
+}
+
+func (b *BitwiseNotExpr) format(buf *formatter, depth int) {
+	buf.WriteByte('~')
+	b.Inner.format(buf, depth)
 }

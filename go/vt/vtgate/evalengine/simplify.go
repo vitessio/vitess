@@ -170,6 +170,16 @@ func (c *CallExpr) simplify(env *ExpressionEnv) error {
 	return c.Arguments.simplify(env)
 }
 
+func (c *WeightStringCallExpr) constant() bool {
+	return c.String.constant()
+}
+
+func (c *WeightStringCallExpr) simplify(env *ExpressionEnv) error {
+	var err error
+	c.String, err = simplifyExpr(env, c.String)
+	return err
+}
+
 func simplifyExpr(env *ExpressionEnv, e Expr) (Expr, error) {
 	if e.constant() {
 		res, err := env.Evaluate(e)
