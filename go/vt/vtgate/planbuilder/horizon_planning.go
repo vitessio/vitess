@@ -550,10 +550,9 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	ctx *plancontext.PlanningContext,
 	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
-	plan *joinGen4,
+	join *joinGen4,
 ) (logicalPlan, []offsets, []*engine.AggregateParams, error) {
 	var lhsAggrs, rhsAggrs []abstract.Aggr
-	var outputAggrs []*engine.AggregateParams
 	for _, aggr := range aggregations {
 		if isCountStar(aggr.Func) {
 			lhsAggrs = append(lhsAggrs, aggr)
@@ -561,22 +560,107 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		} else {
 			// deps := ctx.SemTable.RecursiveDeps(aggr.Func)
 			// switch {
-			// case deps.IsSolvedBy(plan.Left.ContainsTables()):
+			// case deps.IsSolvedBy(join.Left.ContainsTables()):
 			//
-			// case deps.IsSolvedBy(plan.Right.ContainsTables()):
+			// case deps.IsSolvedBy(join.Right.ContainsTables()):
 			// default:
 			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
 			// }
 		}
 	}
-	lhsGrouping, err := hp.createGroupingsForColumns(ctx, plan.LHSColumns)
+
+	// We need to group by the columns used in the join condition.
+	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
+	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	// Here we split the grouping depending on if they should with the LHS or RHS of the query
+	// This is done by using the semantic table and checking dependencies
+	lhsGrouping, rhsGrouping, groupingOffsets, err := splitGroupingsToLeftAndRight(ctx, join, grouping, lhsCols)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Next we push the aggregations to both sides
+	lhsPlan, lhsOffsets, lhsAggregations, err := hp.pushAggregation(ctx, join.Left, lhsGrouping, lhsAggrs)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	rhsPlan, rhsOffsets, rhsAggregations, err := hp.pushAggregation(ctx, join.Right, rhsGrouping, rhsAggrs)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	join.Left, join.Right = lhsPlan, rhsPlan
+
+	// Next, we have to pass through the grouping values through the join and the projection we add on top
+	// We added new groupings to the LHS because of the join condition, so we don't want to pass through everything,
+	// just the groupings that are used by operators on top of this current one
+	outputGroupings := make([]offsets, 0, len(groupingOffsets))
+	proj := &projection{source: join}
+	for _, groupBy := range groupingOffsets {
+		var offset offsets
+		var f func(i int) int
+		if groupBy < 0 {
+			offset = lhsOffsets[-groupBy-1]
+			f = func(i int) int { return -(i + 1) }
+		} else {
+			offset = rhsOffsets[groupBy-1]
+			f = func(i int) int { return i + 1 }
+		}
+		outputGroupings = append(outputGroupings, passGroupingsThroughJoinAndProj(proj, join, offset, f))
+	}
+
+	// Here we produce information about the grouping columns projected through
+	outputAggrs := produceOutputAggregations(aggregations, lhsAggregations, rhsAggregations, join, proj)
+
+	return proj, outputGroupings, outputAggrs, nil
+}
+
+func produceOutputAggregations(
+	aggregations []abstract.Aggr,
+	lhsAggregations, rhsAggregations []*engine.AggregateParams,
+	join *joinGen4,
+	proj *projection,
+) []*engine.AggregateParams {
+	var outputAggrs []*engine.AggregateParams
+	for idx, aggr := range aggregations {
+		// create the projection expression that will multiply the incoming aggregations
+		l, r := lhsAggregations[idx], rhsAggregations[idx]
+		offset := len(join.Cols)
+		expr := &sqlparser.BinaryExpr{
+			Operator: sqlparser.MultOp,
+			Left:     sqlparser.Offset(offset),
+			Right:    sqlparser.Offset(offset + 1),
+		}
+		output := len(proj.columns)
+		proj.columns = append(proj.columns, expr)
+		proj.columnNames = append(proj.columnNames, aggr.Alias)
+
+		// pass through the output columns from the join
+		join.Cols = append(join.Cols, -(l.Col + 1))
+		join.Cols = append(join.Cols, r.Col+1)
+
+		outputAggrs = append(outputAggrs, &engine.AggregateParams{
+			Opcode: engine.AggregateSum,
+			Col:    output,
+			Alias:  aggr.Alias,
+			Expr:   aggr.Func,
+		})
+	}
+	return outputAggrs
+}
+
+func splitGroupingsToLeftAndRight(
+	ctx *plancontext.PlanningContext,
+	join *joinGen4,
+	grouping, lhsGrouping []abstract.GroupBy,
+) ([]abstract.GroupBy, []abstract.GroupBy, []int, error) {
 	var rhsGrouping []abstract.GroupBy
 
-	lhsTS := plan.Left.ContainsTables()
-	rhsTS := plan.Right.ContainsTables()
+	lhsTS := join.Left.ContainsTables()
+	rhsTS := join.Right.ContainsTables()
 	// here we store information about which side the grouping value is coming from.
 	// Negative values from the left operator and positive values are offsets into the RHS
 	var groupingOffsets []int
@@ -593,62 +677,8 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "grouping on columns from different sources not supported yet")
 		}
 	}
-
-	lhsPlan, lhsOffsets, lhsAggregations, err := hp.pushAggregation(ctx, plan.Left, lhsGrouping, lhsAggrs)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	plan.Left = lhsPlan
-
-	rhsPlan, rhsOffsets, rhsAggregations, err := hp.pushAggregation(ctx, plan.Right, rhsGrouping, rhsAggrs)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	plan.Right = rhsPlan
-
-	outputGroupings := make([]offsets, 0, len(groupingOffsets))
-	proj := &projection{source: plan}
-	for _, groupBy := range groupingOffsets {
-		var offset offsets
-		var f func(i int) int
-		if groupBy < 0 {
-			offset = lhsOffsets[-groupBy-1]
-			f = func(i int) int { return -(i + 1) }
-		} else {
-			offset = rhsOffsets[groupBy-1]
-			f = func(i int) int { return i + 1 }
-		}
-		outputGroupings = append(outputGroupings, passGroupingsThroughJoinAndProj(proj, plan, offset, f))
-	}
-
-	for idx, aggr := range aggregations {
-		// create the projection expression that will multiply the incoming aggregations
-		l, r := lhsAggregations[idx], rhsAggregations[idx]
-		offset := len(plan.Cols)
-		expr := &sqlparser.BinaryExpr{
-			Operator: sqlparser.MultOp,
-			Left:     sqlparser.Offset(offset),
-			Right:    sqlparser.Offset(offset + 1),
-		}
-		output := len(proj.columns)
-		proj.columns = append(proj.columns, expr)
-		proj.columnNames = append(proj.columnNames, aggr.Alias)
-
-		// pass through the output columns from the join
-		plan.Cols = append(plan.Cols, -(l.Col + 1))
-		plan.Cols = append(plan.Cols, r.Col+1)
-
-		outputAggrs = append(outputAggrs, &engine.AggregateParams{
-			Opcode: engine.AggregateSum,
-			Col:    output,
-			Alias:  aggr.Alias,
-			Expr:   aggr.Func,
-		})
-	}
-
-	return proj, outputGroupings, outputAggrs, nil
+	return lhsGrouping, rhsGrouping, groupingOffsets, nil
 }
-
 func passGroupingsThroughJoinAndProj(proj *projection, join *joinGen4, offset offsets, f func(int) int) (output offsets) {
 	output.col = len(proj.columns)
 	proj.columns = append(proj.columns, sqlparser.Offset(len(join.Cols)))
@@ -701,15 +731,8 @@ func pushAggrOnRoute(
 	vtgateAggregation := make([]*engine.AggregateParams, 0, len(aggregations))
 	for _, aggregation := range aggregations {
 		sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
-		var opCode engine.AggregateOpcode
-		switch aggregation.OpCode {
-		case engine.AggregateCount:
-			opCode = engine.AggregateSum
-		default:
-			panic(12)
-		}
 		param := &engine.AggregateParams{
-			Opcode: opCode,
+			Opcode: engine.AggregateSum,
 			Col:    len(sel.SelectExprs) - 1,
 			Alias:  aggregation.Alias,
 		}
