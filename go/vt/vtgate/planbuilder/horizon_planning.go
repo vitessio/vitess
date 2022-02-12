@@ -546,27 +546,43 @@ func (hp *horizonPlanning) pushAggregation(
 	}
 }
 
+func countStarAggr() abstract.Aggr {
+	f := &sqlparser.FuncExpr{
+		Name:     sqlparser.NewColIdent("count"),
+		Distinct: false,
+		Exprs:    []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
+	}
+
+	return abstract.Aggr{
+		Original: &sqlparser.AliasedExpr{Expr: f},
+		Func:     f,
+		OpCode:   engine.AggregateCount,
+		Alias:    "count(*)",
+	}
+}
+
+/*
+We push down aggregations using the logic from the paper Orthogonal Optimization of Subqueries and Aggregation, by
+Cesar A. Galindo-Legaria and Milind M. Joshi from Microsoft Corp.
+
+It explains how one can split an aggregation into local aggregates that depend on only one side of the join.
+The local aggregates can then be gathered together to produce the global
+group by/aggregate query that the user asked for.
+
+In Vitess, this is particularly useful because it allows us to push aggregation down to the routes, even when
+we have to join the results at the vtgate level. Instead of doing all the grouping and aggregation at the
+vtgate level, we can offload most of the work to MySQL, and at the vtgate just summarize the results.
+*/
 func (hp *horizonPlanning) pushAggrOnJoin(
 	ctx *plancontext.PlanningContext,
 	grouping []abstract.GroupBy,
 	aggregations []abstract.Aggr,
 	join *joinGen4,
 ) (logicalPlan, []offsets, []*engine.AggregateParams, error) {
-	var lhsAggrs, rhsAggrs []abstract.Aggr
-	for _, aggr := range aggregations {
-		if isCountStar(aggr.Func) {
-			lhsAggrs = append(lhsAggrs, aggr)
-			rhsAggrs = append(rhsAggrs, aggr)
-		} else {
-			// deps := ctx.SemTable.RecursiveDeps(aggr.Func)
-			// switch {
-			// case deps.IsSolvedBy(join.Left.ContainsTables()):
-			//
-			// case deps.IsSolvedBy(join.Right.ContainsTables()):
-			// default:
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
-			// }
-		}
+	// First we separate aggregations according to which side the dependencies are coming from
+	lhsAggrs, rhsAggrs, err := splitAggregationsToLeftAndRight(ctx, aggregations, join)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	// We need to group by the columns used in the join condition.
@@ -616,6 +632,33 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	outputAggrs := produceOutputAggregations(aggregations, lhsAggregations, rhsAggregations, join, proj)
 
 	return proj, outputGroupings, outputAggrs, nil
+}
+
+func splitAggregationsToLeftAndRight(
+	ctx *plancontext.PlanningContext,
+	aggregations []abstract.Aggr,
+	join *joinGen4,
+) ([]abstract.Aggr, []abstract.Aggr, error) {
+	var lhsAggrs, rhsAggrs []abstract.Aggr
+	for _, aggr := range aggregations {
+		if isCountStar(aggr.Func) {
+			lhsAggrs = append(lhsAggrs, aggr)
+			rhsAggrs = append(rhsAggrs, aggr)
+		} else {
+			deps := ctx.SemTable.RecursiveDeps(aggr.Func)
+			switch {
+			case deps.IsSolvedBy(join.Left.ContainsTables()):
+				lhsAggrs = append(lhsAggrs, aggr)
+				rhsAggrs = append(rhsAggrs, countStarAggr())
+			case deps.IsSolvedBy(join.Right.ContainsTables()):
+				rhsAggrs = append(rhsAggrs, aggr)
+				lhsAggrs = append(lhsAggrs, countStarAggr())
+			default:
+				return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
+			}
+		}
+	}
+	return lhsAggrs, rhsAggrs, nil
 }
 
 func produceOutputAggregations(
