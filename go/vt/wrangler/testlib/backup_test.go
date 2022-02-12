@@ -721,7 +721,6 @@ func TestDisableActiveReparents(t *testing.T) {
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
