@@ -277,6 +277,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SUBSTR SUBSTRING
 %token <str> GROUP_CONCAT SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
+%token <str> WEIGHT_STRING
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -410,7 +411,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
-%type <convertType> convert_type
+%type <convertType> convert_type convert_type_weight_string
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt func_datetime_precision
@@ -4564,6 +4565,10 @@ UTC_DATE func_paren_opt
   {
 	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
   }
+| WEIGHT_STRING openb expression convert_type_weight_string closeb
+  {
+    $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
+  }
 
 interval:
  interval_time_stamp
@@ -4729,6 +4734,20 @@ charset:
 | BINARY
   {
     $$ = string($1)
+  }
+
+convert_type_weight_string:
+  /* empty */
+  {
+    $$ = nil
+  }
+| AS BINARY '(' INTEGRAL ')'
+  {
+    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
+  }
+| AS CHAR '(' INTEGRAL ')'
+  {
+    $$ = &ConvertType{Type: string($2), Length: NewIntLiteral($4)}
   }
 
 convert_type:
@@ -5962,6 +5981,7 @@ non_reserved_keyword:
 | SECOND
 | SECOND_MICROSECOND
 | YEAR_MONTH
+| WEIGHT_STRING
 
 openb:
   '('

@@ -1084,6 +1084,7 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
 		Input:       fp,
+		Collations:  map[int]collations.ID{0: collationID},
 	}
 
 	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
@@ -1125,6 +1126,7 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Collations:  map[int]collations.ID{0: collationID},
 		Input:       fp,
 	}
 
@@ -1169,6 +1171,7 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Collations:  map[int]collations.ID{0: collationID},
 		Input:       fp,
 	}
 

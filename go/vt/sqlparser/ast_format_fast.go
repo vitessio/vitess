@@ -1618,6 +1618,21 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *WeightStringFuncExpr) formatFast(buf *TrackedBuffer) {
+	if node.As != nil {
+		buf.WriteString("weight_string(")
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteString(" as ")
+		node.As.formatFast(buf)
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString("weight_string(")
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node.
 func (node *CurTimeFuncExpr) formatFast(buf *TrackedBuffer) {
 	if node.Fsp != nil {
 		buf.WriteString(node.Name.String())

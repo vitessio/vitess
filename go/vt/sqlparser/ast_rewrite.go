@@ -324,6 +324,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteVindexParam(parent, node, replacer)
 	case *VindexSpec:
 		return a.rewriteRefOfVindexSpec(parent, node, replacer)
+	case *WeightStringFuncExpr:
+		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *When:
 		return a.rewriteRefOfWhen(parent, node, replacer)
 	case *Where:
@@ -4987,6 +4989,38 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	}
 	return true
 }
+func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *WeightStringFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*WeightStringFuncExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfConvertType(node, node.As, func(newNode, parent SQLNode) {
+		parent.(*WeightStringFuncExpr).As = newNode.(*ConvertType)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5152,6 +5186,38 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
 	case *Validation:
 		return a.rewriteRefOfValidation(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
+func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *ConvertExpr:
+		return a.rewriteRefOfConvertExpr(parent, node, replacer)
+	case *ConvertUsingExpr:
+		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
+	case *CurTimeFuncExpr:
+		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
+	case *ExtractFuncExpr:
+		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
+	case *FuncExpr:
+		return a.rewriteRefOfFuncExpr(parent, node, replacer)
+	case *GroupConcatExpr:
+		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *MatchExpr:
+		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *SubstrExpr:
+		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
+	case *TimestampFuncExpr:
+		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
+	case *ValuesFuncExpr:
+		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *WeightStringFuncExpr:
+		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -5328,6 +5394,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *WeightStringFuncExpr:
+		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *XorExpr:
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
