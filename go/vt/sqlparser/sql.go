@@ -7359,7 +7359,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:946
 		{
-			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName.ToViewName(), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].str, Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].selStmtUnion(), CheckOption: yyDollar[12].str}
+			yyLOCAL = &CreateView{ViewName: yyDollar[8].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs), IsReplace: yyDollar[3].booleanUnion(), Algorithm: yyDollar[4].str, Definer: yyDollar[5].str, Security: yyDollar[6].str, Columns: yyDollar[9].columnsUnion(), Select: yyDollar[11].selStmtUnion(), CheckOption: yyDollar[12].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 115:
@@ -9970,7 +9970,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:2629
 		{
-			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName.ToViewName(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].str, Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
+			yyLOCAL = &AlterView{ViewName: yyDollar[7].tableName.ToViewName(), Comments: Comments(yyDollar[2].strs), Algorithm: yyDollar[3].str, Definer: yyDollar[4].str, Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 490:
@@ -10609,7 +10609,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:3034
 		{
-			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), IfExists: yyDollar[4].booleanUnion()}
+			yyLOCAL = &DropView{FromTables: yyDollar[5].tableNamesUnion(), Comments: Comments(yyDollar[2].strs), IfExists: yyDollar[4].booleanUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 561:
