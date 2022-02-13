@@ -2,7 +2,9 @@ package vreplication
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -11,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/require"
@@ -106,6 +109,107 @@ func setTempVtDataRoot() string {
 	return vtdataroot
 }
 
+// setVtMySQLRoot creates the root directory if it does not exist
+// and saves the directory in the VT_MYSQL_ROOT OS ENV var
+func setVtMySQLRoot(mysqlRoot string) error {
+	if _, err := os.Stat(mysqlRoot); os.IsNotExist(err) {
+		os.Mkdir(mysqlRoot, 0700)
+	}
+	err := os.Setenv("VT_MYSQL_ROOT", mysqlRoot)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("VT_MYSQL_ROOT is %s\n", mysqlRoot)
+	return nil
+}
+
+func setDBFlavor() error {
+	versionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return err
+	}
+	f, v, err := mysqlctl.ParseVersionString(versionStr)
+	if err != nil {
+		return err
+	}
+	flavor := fmt.Sprintf("%s%d%d", f, v.Major, v.Minor)
+	err = os.Setenv("MYSQL_FLAVOR", string(flavor))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("MYSQL_FLAVOR is %s\n", string(flavor))
+	return nil
+}
+
+func unsetVtMySQLRoot() {
+	_ = os.Unsetenv("VT_MYSQL_ROOT")
+}
+
+func unsetDBFlavor() {
+	_ = os.Unsetenv("MYSQL_FLAVOR")
+}
+
+func getDBMajorVersionInstalled() string {
+	var dbTypeMajorVersion string
+	versionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return dbTypeMajorVersion
+	}
+	flavor, version, err := mysqlctl.ParseVersionString(versionStr)
+	if err != nil {
+		return dbTypeMajorVersion
+	}
+	majorVersion := fmt.Sprintf("%d.%d", version.Major, version.Minor)
+	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
+		dbTypeMajorVersion = fmt.Sprintf("mysql-%s", majorVersion)
+	} else {
+		dbTypeMajorVersion = fmt.Sprintf("%s-%s", strings.ToLower(string(flavor)), majorVersion)
+	}
+	return dbTypeMajorVersion
+}
+
+func downloadDBVersion(dbType string, majorVersion string, path string) error {
+	client := http.Client{
+		Timeout: 60 * time.Second,
+	}
+	var url, file, versionFile string
+	dbType = strings.ToLower(dbType)
+
+	if dbType == "mysql" && majorVersion == "5.7" {
+		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar"
+		url = "https://dev.mysql.com/get/Downloads/MySQL-5.7/" + versionFile
+	} else if dbType == "mysql" && majorVersion == "8.0" {
+		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
+		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
+	} else {
+		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
+	}
+	file = fmt.Sprintf("%s/%s", path, versionFile)
+	// Let's not download the file again if we already have it
+	if _, err := os.Stat(file); err == nil {
+		return nil
+	}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	out, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	io.Copy(out, resp.Body)
+
+	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
+	output, err := untarCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("exec: %v failed: %v output: %s", untarCmd, err, string(output))
+	}
+
+	return nil
+}
+
 func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 	basePort := 15000
 	etcdPort := 2379
@@ -190,7 +294,44 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 }
 
 // AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets
-func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int) (*Keyspace, error) {
+func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts ...string) (*Keyspace, error) {
+	if len(opts) > 0 {
+		for _, opt := range opts {
+			if strings.HasPrefix(opt, "DBTypeVersion=") {
+				fullInfo := strings.Split(opt, "=")
+				if len(fullInfo) != 2 {
+					t.Fatalf("Invalid database details: %s", fullInfo)
+				}
+				details := strings.Split(fullInfo[1], "-")
+				if len(details) != 2 {
+					t.Fatalf("Invalid database details: %s", fullInfo[1])
+				}
+				dbType := strings.ToLower(details[0])
+				majorVersion := details[1]
+				dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
+				// Do nothing if this version is already installed
+				if dbTypeMajorVersion == getDBMajorVersionInstalled() {
+					t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
+					continue
+				}
+				path := fmt.Sprintf("/vt/%s", dbTypeMajorVersion)
+				// Set the root path and create it if needed
+				if err := setVtMySQLRoot(path); err != nil {
+					t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
+				}
+				defer unsetVtMySQLRoot()
+				// Download and extract the version artifact if needed
+				if err := downloadDBVersion(dbType, majorVersion, path); err != nil {
+					t.Fatalf("Could not download %s, error: %v", majorVersion, err)
+				}
+				// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
+				if err := setDBFlavor(); err != nil {
+					t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
+				}
+				defer unsetDBFlavor()
+			}
+		}
+	}
 	keyspace := &Keyspace{
 		Name:   ksName,
 		Shards: make(map[string]*Shard),

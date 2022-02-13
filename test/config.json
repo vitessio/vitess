@@ -1130,6 +1130,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vreplication_across_db_versions": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_across_db_versions",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vreplication_migrate": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
