@@ -503,6 +503,9 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
@@ -897,6 +900,9 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
@@ -1030,6 +1036,9 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 		return err
 	}
 	if err := VisitTableNames(in.FromTables, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil

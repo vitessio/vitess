@@ -1110,7 +1110,8 @@ func EqualsRefOfAlterView(a, b *AlterView) bool {
 		a.CheckOption == b.CheckOption &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterVschema does deep equals between the two objects.
@@ -1464,7 +1465,8 @@ func EqualsRefOfCreateView(a, b *CreateView) bool {
 		a.IsReplace == b.IsReplace &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
@@ -1579,7 +1581,8 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 		return false
 	}
 	return a.IfExists == b.IfExists &&
-		EqualsTableNames(a.FromTables, b.FromTables)
+		EqualsTableNames(a.FromTables, b.FromTables) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.
