@@ -277,6 +277,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add index i_idx (id) using btree"}},
 		"create view v as select * from t":              {sqls: []string{"create view v as select * from t"}, isView: true},
 		"alter view v as select * from t":               {sqls: []string{"alter view v as select * from t"}, isView: true},
+		"drop view v":                                   {sqls: []string{"drop view v"}, isView: true},
 		"drop view if exists v":                         {sqls: []string{"drop view if exists v"}, isView: true},
 		"create index with syntax error i_idx on t(id)": {parseError: true},
 		"select * from t":                               {notDDL: true},
