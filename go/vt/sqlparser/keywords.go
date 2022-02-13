@@ -564,6 +564,7 @@ var keywords = []keyword{
 	{"vschema", VSCHEMA},
 	{"vstream", VSTREAM},
 	{"warnings", WARNINGS},
+	{"weight_string", WEIGHT_STRING},
 	{"when", WHEN},
 	{"where", WHERE},
 	{"while", UNUSED},

@@ -134,7 +134,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0) AS count(*)",
-    "GroupBy": "(1|4), (2|5), (3|6)",
+    "GroupBy": "(1|4), (2|5) COLLATE latin1_swedish_ci, (3|6)",
     "ResultColumns": 4,
     "Inputs": [
       {
@@ -253,7 +253,7 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0) AS k",
-        "GroupBy": "(1|4), (2|5), (3|6)",
+        "GroupBy": "(1|4), (2|5) COLLATE latin1_swedish_ci, (3|6)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3059,6 +3059,59 @@ Gen4 plan same as above
             ]
           }
         ]
+      }
+    ]
+  }
+}
+
+# distinct on text column with collation
+"select col, count(distinct textcol1) from user group by col"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(distinct textcol1) from user group by col",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1) AS count(distinct textcol1)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by col, textcol1, weight_string(textcol1)",
+        "OrderBy": "0 ASC, (1|2) ASC",
+        "Query": "select col, textcol1, weight_string(textcol1) from `user` group by col, textcol1, weight_string(textcol1) order by col asc, textcol1 asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(distinct textcol1) from user group by col",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|2 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+    "GroupBy": "0",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by col, textcol1, weight_string(textcol1)",
+        "OrderBy": "0 ASC, (1|2) ASC COLLATE latin1_swedish_ci",
+        "Query": "select col, textcol1, weight_string(textcol1) from `user` group by col, textcol1, weight_string(textcol1) order by col asc, textcol1 asc",
+        "Table": "`user`"
       }
     ]
   }

@@ -2654,7 +2654,7 @@ INPUT
 select 1 as weight_string, 2 as reverse;
 END
 OUTPUT
-select 1 as weight_string, 2 as reverse from dual
+select 1 as `weight_string`, 2 as reverse from dual
 END
 INPUT
 select c,count(*) from t1 group by c order by c limit 10;
@@ -3055,8 +3055,8 @@ END
 INPUT
 select hex(weight_string('x�' as char(2)));
 END
-ERROR
-syntax error at position 41
+OUTPUT
+select hex(weight_string('x�' as char(2))) from dual
 END
 INPUT
 select spid,count(*) from t1 where spid between 1 and 2 group by spid;
@@ -4153,8 +4153,8 @@ END
 INPUT
 select hex(weight_string('aa' as char(3)));
 END
-ERROR
-syntax error at position 39
+OUTPUT
+select hex(weight_string('aa' as char(3))) from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1:1" HOUR_MINUTE);
@@ -8515,8 +8515,8 @@ END
 INPUT
 select hex(weight_string('ab' as char(1)));
 END
-ERROR
-syntax error at position 39
+OUTPUT
+select hex(weight_string('ab' as char(1))) from dual
 END
 INPUT
 select a1,a2,b,max(c),min(c) from t2 group by a1,a2,b;
@@ -8840,7 +8840,7 @@ INPUT
 select hex(weight_string(_utf8mb4 0xF0908080 /bin /boot /cdrom /dev /etc /home /lib /lib32 /lib64 /libx32 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /swapfile /sys /tmp /usr /var U+10000 node_modules/ collate utf8mb4_unicode_ci));
 END
 ERROR
-syntax error at position 202
+syntax error at position 201 near 'U'
 END
 INPUT
 select from t1 natural left join t2 natural left join t3;
@@ -9139,8 +9139,8 @@ END
 INPUT
 select hex(weight_string(cast(0xE0A1 as char) as char(1)));
 END
-ERROR
-syntax error at position 55
+OUTPUT
+select hex(weight_string(convert(0xE0A1, char) as char(1))) from dual
 END
 INPUT
 select group_concat(bar order by concat(bar,bar) desc) from t1;
@@ -9638,7 +9638,7 @@ INPUT
 select hex(weight_string('a' as char(-1)));
 END
 ERROR
-syntax error at position 38
+syntax error at position 39
 END
 INPUT
 select count(*) from t3 /bin /boot /cdrom /dev /etc /home /lib /lib32 /lib64 /libx32 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /swapfile /sys /tmp /usr /var must be 2 */;
@@ -10225,8 +10225,8 @@ END
 INPUT
 select hex(weight_string('aa' as binary(3)));
 END
-ERROR
-syntax error at position 40 near 'binary'
+OUTPUT
+select hex(weight_string('aa' as binary(3))) from dual
 END
 INPUT
 select from information_schema.table_privileges;
@@ -10831,8 +10831,8 @@ END
 INPUT
 select hex(weight_string('�' as char(1)));
 END
-ERROR
-syntax error at position 40
+OUTPUT
+select hex(weight_string('�' as char(1))) from dual
 END
 INPUT
 select 1, max(a) from t1i where 1=99;
@@ -15283,8 +15283,8 @@ END
 INPUT
 select hex(weight_string('a' as char(1)));
 END
-ERROR
-syntax error at position 38
+OUTPUT
+select hex(weight_string('a' as char(1))) from dual
 END
 INPUT
 select t1.id, count(t2.id) from t1,t2 where t2.id = t1.id group by t2.id;
@@ -20353,8 +20353,8 @@ END
 INPUT
 select hex(weight_string('a' as char(0)));
 END
-ERROR
-syntax error at position 38
+OUTPUT
+select hex(weight_string('a' as char(0))) from dual
 END
 INPUT
 select cast(5 as unsigned) -6.0;

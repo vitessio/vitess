@@ -46,32 +46,37 @@ var (
 	vtctldAddr   string
 	ks1          = "test_keyspace"
 	redirected   = "redirected"
+	jsonTopo     = `
+{
+	"keyspaces": [
+		{
+			"name": "test_keyspace",
+			"shards": [{"name": "-80"}, {"name": "80-"}],
+			"rdonlyCount": 1,
+			"replicaCount": 2
+		},
+		{
+			"name": "redirected",
+			"servedFrom": "test_keyspace"
+		}
+	]
+}`
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
+		var topology vttestpb.VTTestTopology
 
-		topology := new(vttestpb.VTTestTopology)
-		topology.Keyspaces = []*vttestpb.Keyspace{
-			{
-				Name: ks1,
-				Shards: []*vttestpb.Shard{
-					{Name: "-80"},
-					{Name: "80-"},
-				},
-				RdonlyCount:  1,
-				ReplicaCount: 2,
-			},
-			{
-				Name:       redirected,
-				ServedFrom: ks1,
-			},
+		data := vttest.JsonTopoData(&topology)
+		err := data.Set(jsonTopo)
+		if err != nil {
+			return 1, err
 		}
 
 		var cfg vttest.Config
-		cfg.Topology = topology
+		cfg.Topology = &topology
 		cfg.SchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema"
 		cfg.DefaultSchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema/default"
 		cfg.PersistentMode = true
@@ -80,7 +85,7 @@ func TestMain(m *testing.M) {
 			Config: cfg,
 		}
 
-		err := localCluster.Setup()
+		err = localCluster.Setup()
 		defer localCluster.TearDown()
 		if err != nil {
 			return 1, err

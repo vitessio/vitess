@@ -683,7 +683,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Tabl
 			colNames = append(colNames, col)
 			colTypes = append(colTypes, colType)
 		}
-	case *sqlparser.FuncExpr:
+	case sqlparser.Callable:
 		// As a shortcut, functions are integral types
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT32)

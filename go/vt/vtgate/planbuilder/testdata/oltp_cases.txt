@@ -157,7 +157,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "(0|1)",
+    "GroupBy": "(0|1) COLLATE latin1_swedish_ci",
     "ResultColumns": 1,
     "Inputs": [
       {
