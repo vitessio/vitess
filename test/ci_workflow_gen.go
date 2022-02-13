@@ -110,6 +110,7 @@ var (
 	clusterDockerList     = []string{
 		"vreplication_basic",
 		"vreplication_v2",
+		"vreplication_across_db_versions",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters

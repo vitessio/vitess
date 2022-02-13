@@ -1,0 +1,32 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Cluster (vreplication_across_db_versions)
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Run endtoend tests on Cluster (vreplication_across_db_versions)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17
+
+    - name: Tune the OS
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xz-utils
+
+    - name: Run cluster endtoend test
+      timeout-minutes: 30
+      run: |
+        go run test.go -docker=true --follow -shard vreplication_across_db_versions
