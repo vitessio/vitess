@@ -481,15 +481,14 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		out = oa
 	}
 
-	// we know we will need these expressions, so we just push them all the way to where they come from
-	for _, expr := range hp.qp.GroupByExprs {
-		if oa != nil {
-			gb := &engine.GroupByParams{
+	if oa != nil {
+		oa.groupByKeys = make([]*engine.GroupByParams, 0, len(hp.qp.GroupByExprs))
+		for _, expr := range hp.qp.GroupByExprs {
+			oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 				Expr:        expr.Inner,
 				FromGroupBy: true,
 				CollationID: ctx.SemTable.CollationForExpr(expr.Inner),
-			}
-			oa.groupByKeys = append(oa.groupByKeys, gb)
+			})
 		}
 	}
 
