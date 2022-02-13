@@ -459,6 +459,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -752,6 +753,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -851,6 +853,7 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	}
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
