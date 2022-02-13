@@ -76,7 +76,7 @@ func ReplaceTableNameInCreateTableStatement(createStatement string, replacementN
 // This intentionally string-replacement based, and not sqlparser.String() based, because the return statement has to be formatted _precisely_,
 // up to MySQL version nuances, like the original statement. That's in favor of tengo view comparison.
 // We expect a well formatted, no-qualifier statement in the form:
-// CREATE TABLE `some_table` ...
+// CREATE VIEW `some_table` ...
 func ReplaceViewNameInCreateViewStatement(createStatement string, replacementName string) (modifiedStatement string, err error) {
 	submatch := createViewRegexp.FindStringSubmatch(createStatement)
 	if len(submatch) == 0 {
