@@ -688,6 +688,11 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}) {
 		return false
 	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1566,6 +1571,11 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}) {
 		return false
 	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1853,6 +1863,11 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}
 	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropView).FromTables = newNode.(TableNames)
+	}) {
+		return false
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropView).Comments = newNode.(Comments)
 	}) {
 		return false
 	}

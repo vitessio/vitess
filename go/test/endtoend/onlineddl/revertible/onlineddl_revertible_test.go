@@ -47,7 +47,7 @@ var (
 	tableName             = `onlineddl_test`
 	createTableWrapper    = `CREATE TABLE onlineddl_test(%s)`
 	dropTableStatement    = `
-		DROP TABLE IF EXISTS onlineddl_test
+		DROP TABLE onlineddl_test
 	`
 	ddlStrategy = "online -declarative -allow-zero-in-date"
 )
