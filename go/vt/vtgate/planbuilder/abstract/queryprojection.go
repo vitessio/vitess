@@ -62,6 +62,8 @@ type (
 		// This is to add the distinct function expression in grouping column for pushing down but not be to used as grouping key at VTGate level.
 		// Starts with 1 so that default (0) means unassigned.
 		DistinctAggrIndex int
+		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
+		InnerIndex *int
 	}
 )
 
@@ -99,6 +101,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		return nil, err
 	}
 	for _, group := range sel.GroupBy {
+		selectExprIdx := qp.FindSelectExprIndexForExpr(group)
 		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group, semTable)
 		if err != nil {
 			return nil, err
@@ -108,7 +111,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 			return nil, err
 		}
 
-		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
+		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr, InnerIndex: selectExprIdx})
 	}
 
 	err = qp.addOrderBy(sel.OrderBy, semTable)
@@ -373,10 +376,12 @@ type Aggr struct {
 	Func     *sqlparser.FuncExpr
 	OpCode   engine.AggregateOpcode
 	Alias    string
+	// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
+	Index *int
 }
 
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
-	for _, expr := range qp.SelectExprs {
+	for idx, expr := range qp.SelectExprs {
 		if !sqlparser.ContainsAggregation(expr.Col) {
 			continue
 		}
@@ -402,14 +407,39 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			alias = aliasedExpr.As.String()
 		}
 
+		idxCopy := idx
 		out = append(out, Aggr{
 			Original: aliasedExpr,
 			Func:     fExpr,
 			OpCode:   opcode,
 			Alias:    alias,
+			Index:    &idxCopy,
 		})
 	}
 	return
+}
+
+// FindSelectExprIndexForExpr returns the index of the given expression in the select expressions, if it is part of it
+// returns -1 otherwise.
+func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) *int {
+	colExpr, isCol := expr.(*sqlparser.ColName)
+
+	for idx, selectExpr := range qp.SelectExprs {
+		aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
+		if !isAliasedExpr {
+			continue
+		}
+		if isCol {
+			isAliasExpr := !aliasedExpr.As.IsEmpty()
+			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
+				return &idx
+			}
+		}
+		if sqlparser.EqualsExpr(aliasedExpr.Expr, expr) {
+			return &idx
+		}
+	}
+	return nil
 }
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
