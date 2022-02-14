@@ -404,6 +404,7 @@ type Select struct {
 	Where         *Where
 	GroupBy       GroupBy
 	Having        *Where
+	Window        Window
 	OrderBy       OrderBy
 	Limit         *Limit
 	Lock          string
@@ -451,11 +452,11 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	if node.CalcFoundRows {
 		calcFoundRows = "sql_calc_found_rows "
 	}
-	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%s",
+	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%v%s",
 		node.With,
 		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
-		node.GroupBy, node.Having, node.OrderBy,
+		node.GroupBy, node.Having, node.Window, node.OrderBy,
 		node.Limit, node.Lock)
 }
 
@@ -2940,29 +2941,15 @@ func (node *AliasedExpr) walkSubtree(visit Visit) error {
 }
 
 // Over defines an OVER expression in a select
-type Over struct {
-	PartitionBy Exprs
-	OrderBy     OrderBy
-	WindowName  ColIdent
-	Frame       *Frame
-}
+type Over WindowDef
 
 // Format formats the node.
 func (node *Over) Format(buf *TrackedBuffer) {
-	if !node.WindowName.IsEmpty() {
-		buf.Myprintf("over %v", node.WindowName)
+	if !node.Name.IsEmpty() {
+		buf.Myprintf("over %v", node.Name)
 	} else {
-		// TODO: extra space after openb if no PARTITION BY
 		buf.Myprintf("over (")
-		if len(node.PartitionBy) > 0 {
-			buf.Myprintf("partition by %v", node.PartitionBy)
-		}
-		if len(node.OrderBy) > 0 {
-			buf.Myprintf("%v", node.OrderBy)
-		}
-		if node.Frame != nil {
-			buf.Myprintf("%v", node.Frame)
-		}
+		buf.Myprintf("%v", (*WindowDef)(node))
 		buf.Myprintf(")")
 	}
 }
@@ -2971,7 +2958,7 @@ func (node *Over) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(visit, node.PartitionBy, node.OrderBy, node.WindowName)
+	return Walk(visit, node.PartitionBy, node.OrderBy, node.Name)
 }
 
 // Nextval defines the NEXT VALUE expression.
@@ -4842,9 +4829,9 @@ func (node *Frame) Format(buf *TrackedBuffer) {
 	}
 	switch node.Unit {
 	case RangeUnit:
-		buf.Myprintf(" RANGE %v", node.Extent)
+		buf.Myprintf("RANGE %v", node.Extent)
 	case RowsUnit:
-		buf.Myprintf(" ROWS %v", node.Extent)
+		buf.Myprintf("ROWS %v", node.Extent)
 	}
 }
 
@@ -4935,6 +4922,75 @@ func (node *FrameBound) walkSubtree(visit Visit) error {
 		visit,
 		node.Expr,
 	)
+}
+
+// WindowDef represents a window clause definition
+type WindowDef struct {
+	// Name is used in WINDOW clauses
+	Name ColIdent
+	// NameRef is used in OVER clauses
+	NameRef     ColIdent
+	PartitionBy Exprs
+	OrderBy     OrderBy
+	Frame       *Frame
+}
+
+// Format formats the node.
+func (node *WindowDef) Format(buf *TrackedBuffer) {
+	var sep string
+	if !node.NameRef.IsEmpty() {
+		buf.Myprintf("%v", node.NameRef)
+		sep = " "
+	}
+	if len(node.PartitionBy) > 0 {
+		buf.Myprintf("%spartition by %v", sep, node.PartitionBy)
+		sep = " "
+	}
+	// OrderBy always adds prefixed whitespace currently
+	if len(node.OrderBy) > 0 {
+		buf.Myprintf("%v", node.OrderBy)
+		sep = " "
+	}
+	if node.Frame != nil {
+		buf.Myprintf("%s%v", sep, node.Frame)
+	}
+}
+
+func (node *WindowDef) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.PartitionBy, node.OrderBy, node.Name)
+}
+
+// Window represents a WINDOW clause.
+type Window []*WindowDef
+
+// Format formats the node.
+func (node Window) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.Myprintf(" window ")
+	var sep string
+	for _, def := range node {
+		buf.Myprintf("%s%v as (%v)", sep, def.Name, def)
+		sep = ", "
+	}
+}
+
+func (node Window) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	var err error
+	for _, def := range node {
+		err = Walk(visit, def.PartitionBy, def.OrderBy, def.Frame)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Limit represents a LIMIT clause.

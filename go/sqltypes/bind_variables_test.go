@@ -17,10 +17,10 @@ limitations under the License.
 package sqltypes
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
-	"fmt"
 
 	"google.golang.org/protobuf/proto"
 

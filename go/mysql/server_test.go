@@ -25,9 +25,9 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-	"sync"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	vtenv "github.com/dolthub/vitess/go/vt/env"
