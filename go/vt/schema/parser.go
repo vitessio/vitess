@@ -52,6 +52,7 @@ var (
 		regexp.MustCompile(alterTableBasicPattern + `([\S]+)\s+(.*$)`),
 	}
 	createTableRegexp     = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
+	createViewRegexp      = regexp.MustCompile(`(?s)(?i)(CREATE\b.*?\bVIEW\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*\bAS\b.*$)`)
 	revertStatementRegexp = regexp.MustCompile(`(?i)^revert\s+([\S]*)$`)
 
 	enumValuesRegexp = regexp.MustCompile("(?i)^enum[(](.*)[)]$")
@@ -65,6 +66,19 @@ var (
 // CREATE TABLE `some_table` ...
 func ReplaceTableNameInCreateTableStatement(createStatement string, replacementName string) (modifiedStatement string, err error) {
 	submatch := createTableRegexp.FindStringSubmatch(createStatement)
+	if len(submatch) == 0 {
+		return createStatement, fmt.Errorf("could not parse statement: %s", createStatement)
+	}
+	return fmt.Sprintf("%s`%s`%s", submatch[1], replacementName, submatch[3]), nil
+}
+
+// ReplaceViewNameInCreateViewStatement returns a modified CREATE VIEW statement, such that the view name is replaced with given name.
+// This intentionally string-replacement based, and not sqlparser.String() based, because the return statement has to be formatted _precisely_,
+// up to MySQL version nuances, like the original statement. That's in favor of tengo view comparison.
+// We expect a well formatted, no-qualifier statement in the form:
+// CREATE VIEW `some_table` ...
+func ReplaceViewNameInCreateViewStatement(createStatement string, replacementName string) (modifiedStatement string, err error) {
+	submatch := createViewRegexp.FindStringSubmatch(createStatement)
 	if len(submatch) == 0 {
 		return createStatement, fmt.Errorf("could not parse statement: %s", createStatement)
 	}

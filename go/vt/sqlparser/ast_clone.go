@@ -325,6 +325,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneVindexParam(in)
 	case *VindexSpec:
 		return CloneRefOfVindexSpec(in)
+	case *WeightStringFuncExpr:
+		return CloneRefOfWeightStringFuncExpr(in)
 	case *When:
 		return CloneRefOfWhen(in)
 	case *Where:
@@ -457,6 +459,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -750,6 +753,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	out.ViewName = CloneTableName(n.ViewName)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -849,6 +853,7 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	}
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -1898,6 +1903,17 @@ func CloneRefOfVindexSpec(n *VindexSpec) *VindexSpec {
 	return &out
 }
 
+// CloneRefOfWeightStringFuncExpr creates a deep clone of the input.
+func CloneRefOfWeightStringFuncExpr(n *WeightStringFuncExpr) *WeightStringFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.As = CloneRefOfConvertType(n.As)
+	return &out
+}
+
 // CloneRefOfWhen creates a deep clone of the input.
 func CloneRefOfWhen(n *When) *When {
 	if n == nil {
@@ -1984,6 +2000,40 @@ func CloneAlterOption(in AlterOption) AlterOption {
 		return CloneRefOfTablespaceOperation(in)
 	case *Validation:
 		return CloneRefOfValidation(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneCallable creates a deep clone of the input.
+func CloneCallable(in Callable) Callable {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ConvertExpr:
+		return CloneRefOfConvertExpr(in)
+	case *ConvertUsingExpr:
+		return CloneRefOfConvertUsingExpr(in)
+	case *CurTimeFuncExpr:
+		return CloneRefOfCurTimeFuncExpr(in)
+	case *ExtractFuncExpr:
+		return CloneRefOfExtractFuncExpr(in)
+	case *FuncExpr:
+		return CloneRefOfFuncExpr(in)
+	case *GroupConcatExpr:
+		return CloneRefOfGroupConcatExpr(in)
+	case *MatchExpr:
+		return CloneRefOfMatchExpr(in)
+	case *SubstrExpr:
+		return CloneRefOfSubstrExpr(in)
+	case *TimestampFuncExpr:
+		return CloneRefOfTimestampFuncExpr(in)
+	case *ValuesFuncExpr:
+		return CloneRefOfValuesFuncExpr(in)
+	case *WeightStringFuncExpr:
+		return CloneRefOfWeightStringFuncExpr(in)
 	default:
 		// this should never happen
 		return nil
@@ -2174,6 +2224,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
+	case *WeightStringFuncExpr:
+		return CloneRefOfWeightStringFuncExpr(in)
 	case *XorExpr:
 		return CloneRefOfXorExpr(in)
 	default:
