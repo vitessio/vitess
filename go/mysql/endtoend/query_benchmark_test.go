@@ -22,6 +22,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -141,26 +142,31 @@ func BenchmarkSetVarsWithQueryHints(b *testing.B) {
 		require.NoError(b, err)
 	}()
 
-	for i := 0; i < b.N; i++ {
-		_, err := conn.ExecuteFetch(fmt.Sprintf("insert /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ into t(id) values (%d)", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
+		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err := conn.ExecuteFetch(fmt.Sprintf("insert /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ into t(id) values (%d)", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("select /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ * from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("select /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ * from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("update /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ t set name = 'foo' where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("update /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ t set name = 'foo' where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("delete /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("delete /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				time.Sleep(sleepDuration)
+			}
+		})
 	}
 }
 
@@ -186,31 +192,36 @@ func BenchmarkSetVarsMultipleSets(b *testing.B) {
 		}
 	}
 
-	for i := 0; i < b.N; i++ {
-		setFunc()
+	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
+		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				setFunc()
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-		setFunc()
+				_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				setFunc()
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("select * from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-		setFunc()
+				_, err = conn.ExecuteFetch(fmt.Sprintf("select * from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				setFunc()
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("update t set name = 'foo' where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-		setFunc()
+				_, err = conn.ExecuteFetch(fmt.Sprintf("update t set name = 'foo' where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				setFunc()
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				time.Sleep(sleepDuration)
+			}
+		})
 	}
 }
 
@@ -229,43 +240,47 @@ func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
 		require.NoError(b, err)
 	}()
 
-	for i := 0; i < b.N; i++ {
-		_, _, err := conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; insert into t(id) values (%d)", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-		_, _, _, err = conn.ReadQueryResult(1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
+		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _, err := conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; insert into t(id) values (%d)", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _, _, err = conn.ReadQueryResult(1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; select * from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-		_, _, _, err = conn.ReadQueryResult(1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; select * from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _, _, err = conn.ReadQueryResult(1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; update t set name = 'foo' where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-		_, _, _, err = conn.ReadQueryResult(1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; update t set name = 'foo' where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _, _, err = conn.ReadQueryResult(1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; delete from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-		_, _, _, err = conn.ReadQueryResult(1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
-
+				_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; delete from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, _, _, err = conn.ReadQueryResult(1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				time.Sleep(sleepDuration)
+			}
+		})
 	}
 }
 
@@ -287,25 +302,31 @@ func BenchmarkSetVarsSingleSet(b *testing.B) {
 		require.NoError(b, err)
 	}()
 
-	for i := 0; i < b.N; i++ {
-		_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+	for _, sleepDuration := range []time.Duration{0, 1 * time.Millisecond} {
+		b.Run(fmt.Sprintf("Sleep %d ms", sleepDuration/time.Millisecond), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("select * from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("select * from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("update t set name = 'foo' where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("update t set name = 'foo' where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
 
-		_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, false)
-		if err != nil {
-			b.Fatal(err)
-		}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+				time.Sleep(sleepDuration)
+			}
+		})
 	}
+
 }
