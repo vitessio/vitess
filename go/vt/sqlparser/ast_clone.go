@@ -446,6 +446,7 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.Table = CloneTableName(n.Table)
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
+	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
 	out.Comments = CloneComments(n.Comments)
 	return &out
 }

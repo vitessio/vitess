@@ -2218,6 +2218,11 @@ func (node *AlterTable) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.PartitionSpec.formatFast(buf)
 	}
+	if node.PartitionOption != nil {
+		buf.WriteString(prefix)
+		buf.WriteByte(' ')
+		node.PartitionOption.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.
