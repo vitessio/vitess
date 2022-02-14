@@ -146,6 +146,9 @@ const (
 	BitVal
 )
 
+// queryOptimizerPrefix is the prefix of an optimizer hint comment.
+const queryOptimizerPrefix = "/*+"
+
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
 	ts.Columns = append(ts.Columns, cd)
@@ -291,14 +294,14 @@ func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
 	if queryHint == "" {
 		return node, nil
 	}
-	queryHintCommentStr := fmt.Sprintf("/*+ %s */", queryHint)
+	queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
 	if len(node) == 0 {
 		return Comments{queryHintCommentStr}, nil
 	}
 	var newComments Comments
 	var hasQueryHint bool
 	for _, comment := range node {
-		if strings.HasPrefix(comment, "/*+") {
+		if strings.HasPrefix(comment, queryOptimizerPrefix) {
 			if hasQueryHint {
 				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
 			}
@@ -313,9 +316,9 @@ func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
 			}
 			newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
 			newComments = append(Comments{newComment}, newComments...)
-		} else {
-			newComments = append(newComments, comment)
+			continue
 		}
+		newComments = append(newComments, comment)
 	}
 	if !hasQueryHint {
 		newComments = append(Comments{queryHintCommentStr}, newComments...)
