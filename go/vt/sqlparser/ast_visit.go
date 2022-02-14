@@ -482,6 +482,9 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	if err := VisitRefOfPartitionSpec(in.PartitionSpec, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
+		return err
+	}
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}

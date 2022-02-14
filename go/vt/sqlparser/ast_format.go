@@ -1674,6 +1674,9 @@ func (node *AlterTable) Format(buf *TrackedBuffer) {
 	if node.PartitionSpec != nil {
 		buf.astPrintf(node, "%s %v", prefix, node.PartitionSpec)
 	}
+	if node.PartitionOption != nil {
+		buf.astPrintf(node, "%s %v", prefix, node.PartitionOption)
+	}
 }
 
 // Format formats the node.

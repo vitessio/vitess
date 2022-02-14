@@ -1093,6 +1093,7 @@ func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
 		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
+		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption) &&
 		EqualsComments(a.Comments, b.Comments)
 }
 
