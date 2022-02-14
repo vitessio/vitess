@@ -2731,9 +2731,11 @@ func TestConvert(t *testing.T) {
 	}, {
 		input: "select convert('abc', char character set binary) from t",
 	}, {
-		input: "select convert('abc', char(4) ascii) from t",
+		input:  "select convert('abc', char(4) ascii) from t",
+		output: "select convert('abc', char(4) character set latin1) from t",
 	}, {
-		input: "select convert('abc', char unicode) from t",
+		input:  "select convert('abc', char unicode) from t",
+		output: "select convert('abc', char character set ucs2) from t",
 	}, {
 		input: "select convert('abc', char(4)) from t",
 	}, {
@@ -2770,8 +2772,6 @@ func TestConvert(t *testing.T) {
 		input: "select convert('abc', datetime) from t",
 	}, {
 		input: "select convert('abc', json) from t",
-	}, {
-		input: "select convert('abc' using ascii) from t",
 	}}
 
 	for _, tcase := range validSQL {

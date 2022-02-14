@@ -172,3 +172,11 @@ func register(c Collation) {
 	}
 	globalAllCollations[c.ID()] = c
 }
+
+func Slice(collation Collation, input []byte, from, to int) []byte {
+	return charset.Slice(collation.Charset(), input, from, to)
+}
+
+func Validate(collation Collation, input []byte) bool {
+	return charset.Validate(collation.Charset(), input)
+}

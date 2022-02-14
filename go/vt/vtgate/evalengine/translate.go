@@ -345,27 +345,35 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 	}, nil
 }
 
+func translateIntegral(lit *sqlparser.Literal, lookup TranslationLookup) (int, bool, error) {
+	if lit == nil {
+		return 0, false, nil
+	}
+	literal, err := translateLiteral(lit, lookup)
+	if err != nil {
+		return 0, false, err
+	}
+	// this conversion is always valid because the SQL parser enforces Length to be an integral
+	return int(literal.Val.uint64()), true, nil
+}
+
 func translateWeightStringFuncExpr(wsfn *sqlparser.WeightStringFuncExpr, lookup TranslationLookup) (Expr, error) {
-	inner, err := translateExpr(wsfn.Expr, lookup)
+	var (
+		call WeightStringCallExpr
+		err  error
+	)
+	call.String, err = translateExpr(wsfn.Expr, lookup)
 	if err != nil {
 		return nil, err
 	}
-	var length int
-	var ttype string
 	if wsfn.As != nil {
-		ttype = strings.ToLower(wsfn.As.Type)
-		literal, err := translateLiteral(wsfn.As.Length, lookup)
+		call.Cast = strings.ToLower(wsfn.As.Type)
+		call.Len, call.HasLen, err = translateIntegral(wsfn.As.Length, lookup)
 		if err != nil {
 			return nil, err
 		}
-		// this conversion is always valid because the SQL parser enforces Length to be an integral
-		length = int(literal.Val.uint64())
 	}
-	return &WeightStringCallExpr{
-		String: inner,
-		Cast:   ttype,
-		Len:    length,
-	}, nil
+	return &call, nil
 }
 
 func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (Expr, error) {
@@ -381,9 +389,47 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 		return translateLogicalNot(expr), nil
 	case sqlparser.TildaOp:
 		return &BitwiseNotExpr{UnaryExpr: UnaryExpr{expr}}, nil
+	case sqlparser.NStringOp:
+		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR"}, nil
 	default:
 		return nil, translateExprNotSupported(unary)
 	}
+}
+
+func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (*ConvertExpr, error) {
+	var (
+		convert ConvertExpr
+		err     error
+	)
+
+	convert.Inner, err = translateExpr(expr.Expr, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	convert.Length, convert.HasLength, err = translateIntegral(expr.Type.Length, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	convert.Scale, convert.HasScale, err = translateIntegral(expr.Type.Scale, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	convert.Charset = strings.ToLower(expr.Type.Charset)
+	convert.Type = strings.ToUpper(expr.Type.Type)
+
+	switch convert.Type {
+	case "DECIMAL":
+		if convert.Length < convert.Scale {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%s').",
+				"", // TODO: column name
+			)
+		}
+	}
+	return &convert, nil
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {
@@ -435,6 +481,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateWeightStringFuncExpr(node, lookup)
 	case *sqlparser.UnaryExpr:
 		return translateUnaryExpr(node, lookup)
+	case *sqlparser.ConvertExpr:
+		return translateConvertExpr(node, lookup)
 	default:
 		return nil, translateExprNotSupported(e)
 	}

@@ -1211,18 +1211,6 @@ func (dir OrderDirection) ToString() string {
 	}
 }
 
-// ToString returns the operator as a string
-func (op ConvertTypeOperator) ToString() string {
-	switch op {
-	case NoOperator:
-		return NoOperatorStr
-	case CharacterSetOp:
-		return CharacterSetStr
-	default:
-		return "Unknown ConvertTypeOperator"
-	}
-}
-
 // ToString returns the type as a string
 func (ty IndexHintsType) ToString() string {
 	switch ty {

@@ -73,6 +73,10 @@ var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
 var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
 var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
 
+func valueString(t *testing.T, er evalengine.EvalResult, query string) string {
+	return er.Value().String()
+}
+
 func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
 
@@ -80,8 +84,8 @@ func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 	remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 	var localVal, remoteVal string
-	if evaluated {
-		localVal = local.Value().String()
+	if localErr == nil {
+		localVal = valueString(t, local, query)
 	}
 	if remoteErr == nil {
 		if *debugNormalize {
@@ -431,7 +435,8 @@ func TestWeightStrings(t *testing.T) {
 }
 
 var bitwiseInputs = []string{
-	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13",
+	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13", "1.5", "-1.5",
+	"0.0e0", "1.0e0", "255.0", "1.5e0", "-1.5e0", "1.1e0", "-1e0", "-255e0", "7e0", "9e0", "13e0",
 	strconv.FormatUint(math.MaxUint64, 10),
 	strconv.FormatUint(math.MaxInt64, 10),
 	strconv.FormatInt(math.MinInt64, 10),
@@ -465,5 +470,36 @@ func TestBitwiseOperatorsUnary(t *testing.T) {
 				compareRemoteQuery(t, conn, fmt.Sprintf("SELECT %s(%s)", op, rhs))
 			}
 		})
+	}
+}
+
+func TestConversionOperators(t *testing.T) {
+	var left = []string{
+		"0", "1", "255",
+		"0.0e0", "1.0e0", "1.5e0", "-1.5e0",
+		"0.0", "0.000", "1.5", "-1.5",
+		`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
+		`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
+		"NULL",
+		"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
+	}
+	var right = []string{
+		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
+		"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
+		"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
+		// TODO: our decimal implementation does not do truncation properly
+		// "DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
+		"DOUBLE", "REAL",
+		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER",
+	}
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, lhs := range left {
+		for _, rhs := range right {
+			query := fmt.Sprintf("SELECT CAST(%s AS %s)", lhs, rhs)
+			compareRemoteQuery(t, conn, query)
+			// compareRemoteQuery(t, conn, fmt.Sprintf("SELECT CONVERT(%s, %s)", lhs, rhs))
+		}
 	}
 }

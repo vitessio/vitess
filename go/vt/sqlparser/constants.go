@@ -205,7 +205,6 @@ const (
 
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
-	NoOperatorStr   = ""
 
 	// CollateAndCharset.Type
 	CollateStr = " collate"
@@ -457,12 +456,6 @@ const (
 const (
 	AscOrder OrderDirection = iota
 	DescOrder
-)
-
-// Constant for Enum Type - ConvertTypeOperator
-const (
-	NoOperator ConvertTypeOperator = iota
-	CharacterSetOp
 )
 
 // Constant for Enum Type - IndexHintsType

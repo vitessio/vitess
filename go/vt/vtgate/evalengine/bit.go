@@ -74,7 +74,7 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv, result *EvalResult) {
 
 		result.setRaw(sqltypes.VarBinary, out, collationBinary)
 	} else {
-		inner.makeIntegral()
+		inner.makeUnsignedIntegral()
 		result.setUint64(^inner.uint64())
 	}
 }
@@ -192,8 +192,8 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			}
 			result.setRaw(sqltypes.VarBinary, op.binary(b1, b2), collationBinary)
 		} else {
-			l.makeIntegral()
-			r.makeIntegral()
+			l.makeUnsignedIntegral()
+			r.makeUnsignedIntegral()
 			result.setUint64(op.numeric(l.uint64(), r.uint64()))
 		}
 
@@ -205,11 +205,11 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l.bitwiseBinaryString() {
-			r.makeIntegral()
+			r.makeUnsignedIntegral()
 			result.setRaw(sqltypes.VarBinary, op.binary(l.bytes(), r.uint64()), collationBinary)
 		} else {
-			l.makeIntegral()
-			r.makeIntegral()
+			l.makeUnsignedIntegral()
+			r.makeUnsignedIntegral()
 			result.setUint64(op.numeric(l.uint64(), r.uint64()))
 		}
 	}

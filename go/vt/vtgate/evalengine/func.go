@@ -282,7 +282,7 @@ func builtinFuncBitCount(_ *ExpressionEnv, args []EvalResult, result *EvalResult
 			count += bits.OnesCount8(b)
 		}
 	} else {
-		inarg.makeIntegral()
+		inarg.makeUnsignedIntegral()
 		count = bits.OnesCount64(inarg.uint64())
 	}
 
@@ -293,6 +293,7 @@ type WeightStringCallExpr struct {
 	String Expr
 	Cast   string
 	Len    int
+	HasLen bool
 }
 
 func (c *WeightStringCallExpr) typeof(*ExpressionEnv) sqltypes.Type {
