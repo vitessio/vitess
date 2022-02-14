@@ -72,14 +72,6 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 			return nil, err
 		}
 	} else {
-		_, isOA := plan.(*orderedAggregate)
-		if isOA {
-			plan = &simpleProjection{
-				logicalPlanCommon: newBuilderCommon(plan),
-				eSimpleProj:       &engine.SimpleProjection{},
-			}
-		}
-
 		if canShortcut {
 			err = planSingleShardRoutePlan(hp.sel, rb)
 			if err != nil {
@@ -514,6 +506,22 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 			logicalPlanCommon: newBuilderCommon(aggPlan),
 			weightStrings:     make(map[*resultColumn]int),
 		}
+	}
+
+	var orderExprs []abstract.OrderBy
+	// if we can't at a later stage push down the sorting to our inputs, we have to do ordering here
+	for _, groupExpr := range hp.qp.GroupByExprs {
+		orderExprs = append(orderExprs, abstract.OrderBy{
+			Inner:         &sqlparser.Order{Expr: groupExpr.Inner},
+			WeightStrExpr: groupExpr.WeightStrExpr},
+		)
+	}
+	if len(orderExprs) > 0 {
+		newInput, err := hp.planOrderBy(ctx, orderExprs, aggPlan)
+		if err != nil {
+			return nil, err
+		}
+		oa.input = newInput
 	}
 
 	return out, nil

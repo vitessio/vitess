@@ -400,6 +400,10 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
 		}
 
+		if fExpr.Distinct {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "todo: distinct aggr column '%s'", funcName)
+		}
+
 		var alias string
 		if aliasedExpr.As.IsEmpty() {
 			alias = sqlparser.String(aliasedExpr.Expr)
