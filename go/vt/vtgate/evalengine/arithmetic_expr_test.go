@@ -24,15 +24,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // more tests in go/sqlparser/expressions_test.go
 
 func TestBinaryOpTypes(t *testing.T) {
 	type testcase struct {
-		l, r, e querypb.Type
+		l, r, e sqltypes.Type
 	}
 	type ops struct {
 		op        ArithmeticOp

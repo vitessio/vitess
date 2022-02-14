@@ -20,11 +20,23 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"math/bits"
 
 	"vitess.io/vitess/go/mysql/collations"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
+
+var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult){
+	"coalesce":  builtinFuncCoalesce,
+	"greatest":  builtinFuncGreatest,
+	"least":     builtinFuncLeast,
+	"collation": builtinFuncCollation,
+	"isnull":    builtinFuncIsNull,
+	"bit_count": builtinFuncBitCount,
+}
 
 type CallExpr struct {
 	Arguments TupleExpr
@@ -33,7 +45,7 @@ type CallExpr struct {
 	Call      func(*ExpressionEnv, []EvalResult, *EvalResult)
 }
 
-func (c *CallExpr) typeof(*ExpressionEnv) querypb.Type {
+func (c *CallExpr) typeof(*ExpressionEnv) sqltypes.Type {
 	return -1
 }
 
@@ -79,25 +91,25 @@ func getMultiComparisonFunc(args []EvalResult) multiComparisonFunc {
 	for i := range args {
 		arg := &args[i]
 		switch arg.typeof() {
-		case querypb.Type_NULL_TYPE:
+		case sqltypes.Null:
 			return func(args []EvalResult, result *EvalResult, cmp int) {
 				result.setNull()
 			}
-		case querypb.Type_INT8, querypb.Type_INT16, querypb.Type_INT32, querypb.Type_INT64:
+		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 			integers++
-		case querypb.Type_UINT8, querypb.Type_UINT16, querypb.Type_UINT32, querypb.Type_UINT64:
+		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 			if arg.uint64() > math.MaxInt64 {
 				decimals++
 			} else {
 				integers++
 			}
-		case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
+		case sqltypes.Float32, sqltypes.Float64:
 			floats++
-		case querypb.Type_DECIMAL:
+		case sqltypes.Decimal:
 			decimals++
-		case querypb.Type_TEXT, querypb.Type_VARCHAR:
+		case sqltypes.Text, sqltypes.VarChar:
 			text++
-		case querypb.Type_BLOB, querypb.Type_BINARY, querypb.Type_VARBINARY:
+		case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
 			binary++
 		}
 	}
@@ -197,7 +209,7 @@ func compareAllText(args []EvalResult, result *EvalResult, cmp int) {
 		}
 	}
 
-	result.setRaw(querypb.Type_VARCHAR, candidateB, collationB)
+	result.setRaw(sqltypes.VarChar, candidateB, collationB)
 }
 
 func compareAllBinary(args []EvalResult, result *EvalResult, cmp int) {
@@ -210,7 +222,7 @@ func compareAllBinary(args []EvalResult, result *EvalResult, cmp int) {
 		}
 	}
 
-	result.setRaw(querypb.Type_VARBINARY, candidateB, collationBinary)
+	result.setRaw(sqltypes.VarBinary, candidateB, collationBinary)
 }
 
 func throwArgError(fname string) {
@@ -242,4 +254,84 @@ func builtinFuncCollation(env *ExpressionEnv, args []EvalResult, result *EvalRes
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireASCII,
 	})
+}
+
+func builtinFuncIsNull(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	if len(args) != 1 {
+		throwArgError("ISNULL")
+	}
+	result.setBool(args[0].null())
+}
+
+func builtinFuncBitCount(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	if len(args) != 1 {
+		throwArgError("BIT_COUNT")
+	}
+
+	var count int
+	inarg := &args[0]
+
+	if inarg.null() {
+		result.setNull()
+		return
+	}
+
+	if inarg.bitwiseBinaryString() {
+		binary := inarg.bytes()
+		for _, b := range binary {
+			count += bits.OnesCount8(b)
+		}
+	} else {
+		inarg.makeIntegral()
+		count = bits.OnesCount64(inarg.uint64())
+	}
+
+	result.setInt64(int64(count))
+}
+
+type WeightStringCallExpr struct {
+	String Expr
+	Cast   string
+	Len    int
+}
+
+func (c *WeightStringCallExpr) typeof(*ExpressionEnv) sqltypes.Type {
+	return sqltypes.VarBinary
+}
+
+func (c *WeightStringCallExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	var (
+		str     EvalResult
+		tc      collations.TypedCollation
+		text    []byte
+		weights []byte
+		length  = c.Len
+	)
+
+	str.init(env, c.String)
+	tt := str.typeof()
+
+	switch {
+	case sqltypes.IsIntegral(tt):
+		// when calling WEIGHT_STRING with an integral value, MySQL returns the
+		// internal sort key that would be used in an InnoDB table... we do not
+		// support that
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrEvaluatedExprNotSupported, FormatExpr(c)))
+	case sqltypes.IsQuoted(tt):
+		text = str.bytes()
+		tc = str.collation()
+	default:
+		result.setNull()
+		return
+	}
+
+	if c.Cast == "binary" {
+		tc = collationBinary
+		weights = make([]byte, 0, c.Len)
+		length = collations.PadToMax
+	}
+
+	collation := collations.Local().LookupByID(tc.Collation)
+	weights = collation.WeightString(weights, text, length)
+	result.setRaw(sqltypes.VarBinary, weights, collationBinary)
 }

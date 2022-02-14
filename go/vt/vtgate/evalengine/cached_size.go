@@ -75,6 +75,34 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
 	return size
 }
+func (cached *BitwiseExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
+	size += cached.BinaryExpr.CachedSize(false)
+	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.BitwiseOp
+	if cc, ok := cached.Op.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *BitwiseNotExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
+	size += cached.UnaryExpr.CachedSize(false)
+	return size
+}
 func (cached *CallExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -179,7 +207,7 @@ func (cached *ExpressionEnv) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field BindVars map[string]*vitess.io/vitess/go/vt/proto/query.BindVariable
 	if cached.BindVars != nil {
@@ -284,6 +312,18 @@ func (cached *LogicalExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.opname)))
 	return size
 }
+func (cached *NegateExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
+	size += cached.UnaryExpr.CachedSize(false)
+	return size
+}
 func (cached *NotExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -308,6 +348,22 @@ func (cached *UnaryExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Inner.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *WeightStringCallExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field String vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.String.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Cast string
+	size += hack.RuntimeAllocSize(int64(len(cached.Cast)))
 	return size
 }
 func (cached *decimalResult) CachedSize(alloc bool) int64 {

@@ -71,6 +71,7 @@ const (
 	alterSchemaMigrationsTableAllowConcurrent          = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableRevertedUUID             = "ALTER TABLE _vt.schema_migrations add column reverted_uuid varchar(64) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
+	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -89,9 +90,10 @@ const (
 		retain_artifacts_seconds,
 		postpone_completion,
 		allow_concurrent,
-		reverted_uuid
+		reverted_uuid,
+		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
@@ -132,6 +134,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationIsView = `UPDATE _vt.schema_migrations
+			SET is_view=%a
+		WHERE
+			migration_uuid=%a
+`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
 			started_timestamp =IFNULL(started_timestamp,  NOW()),
 			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
@@ -359,6 +366,7 @@ const (
 			removed_unique_keys,
 			migration_context,
 			retain_artifacts_seconds,
+			is_view,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -526,7 +534,7 @@ var (
 	}
 	sqlGrantOnlineDDLUser = []string{
 		`GRANT PROCESS, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO %s`,
-		`GRANT ALTER, CREATE, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
+		`GRANT ALTER, CREATE, CREATE VIEW, SHOW VIEW, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
 	}
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
 )
@@ -561,4 +569,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableAllowConcurrent,
 	alterSchemaMigrationsTableRevertedUUID,
 	alterSchemaMigrationsTableRevertedUUIDIndex,
+	alterSchemaMigrationsTableIsView,
 }

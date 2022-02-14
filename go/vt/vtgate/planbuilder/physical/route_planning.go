@@ -85,10 +85,21 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 		if err != nil {
 			return nil, err
 		}
-		return &Filter{
-			Source:     src,
+
+		filter := &Filter{
 			Predicates: op.Predicates,
-		}, nil
+		}
+
+		if route, ok := src.(*Route); ok {
+			// let's push the filter into the route
+			filter.Source = route.Source
+			route.Source = filter
+			return route, nil
+		}
+
+		filter.Source = src
+
+		return filter, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
@@ -470,7 +481,7 @@ func tryMerge(
 
 	switch aRoute.RouteOpCode {
 	case engine.Unsharded, engine.DBA:
-		if aRoute.RouteOpCode == bRoute.RouteOpCode {
+		if aRoute.RouteOpCode == bRoute.RouteOpCode && sameKeyspace {
 			return merger(aRoute, bRoute)
 		}
 	case engine.EqualUnique:

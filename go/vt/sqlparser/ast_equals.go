@@ -932,6 +932,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfVindexSpec(a, b)
+	case *WeightStringFuncExpr:
+		b, ok := inB.(*WeightStringFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWeightStringFuncExpr(a, b)
 	case *When:
 		b, ok := inB.(*When)
 		if !ok {
@@ -1104,7 +1110,8 @@ func EqualsRefOfAlterView(a, b *AlterView) bool {
 		a.CheckOption == b.CheckOption &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterVschema does deep equals between the two objects.
@@ -1458,7 +1465,8 @@ func EqualsRefOfCreateView(a, b *CreateView) bool {
 		a.IsReplace == b.IsReplace &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
@@ -1573,7 +1581,8 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 		return false
 	}
 	return a.IfExists == b.IfExists &&
-		EqualsTableNames(a.FromTables, b.FromTables)
+		EqualsTableNames(a.FromTables, b.FromTables) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.
@@ -2803,6 +2812,18 @@ func EqualsRefOfVindexSpec(a, b *VindexSpec) bool {
 		EqualsSliceOfVindexParam(a.Params, b.Params)
 }
 
+// EqualsRefOfWeightStringFuncExpr does deep equals between the two objects.
+func EqualsRefOfWeightStringFuncExpr(a, b *WeightStringFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfConvertType(a.As, b.As)
+}
+
 // EqualsRefOfWhen does deep equals between the two objects.
 func EqualsRefOfWhen(a, b *When) bool {
 	if a == b {
@@ -2974,6 +2995,87 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfValidation(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
+// EqualsCallable does deep equals between the two objects.
+func EqualsCallable(inA, inB Callable) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *ConvertExpr:
+		b, ok := inB.(*ConvertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertExpr(a, b)
+	case *ConvertUsingExpr:
+		b, ok := inB.(*ConvertUsingExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertUsingExpr(a, b)
+	case *CurTimeFuncExpr:
+		b, ok := inB.(*CurTimeFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCurTimeFuncExpr(a, b)
+	case *ExtractFuncExpr:
+		b, ok := inB.(*ExtractFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractFuncExpr(a, b)
+	case *FuncExpr:
+		b, ok := inB.(*FuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFuncExpr(a, b)
+	case *GroupConcatExpr:
+		b, ok := inB.(*GroupConcatExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGroupConcatExpr(a, b)
+	case *MatchExpr:
+		b, ok := inB.(*MatchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMatchExpr(a, b)
+	case *SubstrExpr:
+		b, ok := inB.(*SubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubstrExpr(a, b)
+	case *TimestampFuncExpr:
+		b, ok := inB.(*TimestampFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *ValuesFuncExpr:
+		b, ok := inB.(*ValuesFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfValuesFuncExpr(a, b)
+	case *WeightStringFuncExpr:
+		b, ok := inB.(*WeightStringFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWeightStringFuncExpr(a, b)
 	default:
 		// this should never happen
 		return false
@@ -3397,6 +3499,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfValuesFuncExpr(a, b)
+	case *WeightStringFuncExpr:
+		b, ok := inB.(*WeightStringFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWeightStringFuncExpr(a, b)
 	case *XorExpr:
 		b, ok := inB.(*XorExpr)
 		if !ok {
