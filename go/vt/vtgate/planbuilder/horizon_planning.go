@@ -896,6 +896,7 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) *e
 		Opcode: engine.AggregateSum,
 		Col:    len(sel.SelectExprs) - 1,
 		Alias:  aggregation.Alias,
+		Expr:   aggregation.Func,
 	}
 	return param
 }
@@ -958,48 +959,6 @@ func hasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, 
 		}
 	}
 	return false
-}
-
-func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupBy, plan logicalPlan, wsAdded bool) error {
-	switch node := plan.(type) {
-	case *routeGen4:
-		sel := node.Select.(*sqlparser.Select)
-		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
-		// If a weight_string function is added to the select list,
-		// then we need to add that to the group by clause otherwise the query will fail on mysql with full_group_by error
-		// as the weight_string function might not be functionally dependent on the group by.
-		if wsAdded {
-			sel.GroupBy = append(sel.GroupBy, weightStringFor(groupExpr.WeightStrExpr))
-		}
-		return nil
-	case *joinGen4, *hashJoin:
-		_, _, err := wrapAndPushExpr(ctx, groupExpr.Inner, groupExpr.WeightStrExpr, node)
-		return err
-	case *orderedAggregate:
-		keyCol, wsOffset, err := wrapAndPushExpr(ctx, groupExpr.Inner, groupExpr.WeightStrExpr, node.input)
-		if err != nil {
-			return err
-		}
-		if groupExpr.DistinctAggrIndex == 0 {
-			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: ctx.SemTable.CollationForExpr(groupExpr.Inner)})
-		} else {
-			if wsOffset != -1 {
-				node.aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
-				node.aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
-			}
-		}
-		err = planGroupByGen4(ctx, groupExpr, node.input, wsOffset != -1)
-		if err != nil {
-			return err
-		}
-		return nil
-	case *pulloutSubquery:
-		return planGroupByGen4(ctx, groupExpr, node.underlying, wsAdded)
-	case *semiJoin:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by in a query having a correlated subquery")
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
-	}
 }
 
 func (hp *horizonPlanning) planGroupByUsingOrderBy(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
