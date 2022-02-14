@@ -64,6 +64,7 @@ type (
 		GetOptLike() *OptLike
 		GetIfExists() bool
 		GetIfNotExists() bool
+		GetIsReplace() bool
 		GetTableSpec() *TableSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
@@ -476,6 +477,7 @@ type (
 	DropView struct {
 		FromTables TableNames
 		IfExists   bool
+		Comments   Comments
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
@@ -499,6 +501,7 @@ type (
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
+		Comments    Comments
 	}
 
 	// AlterView represents a ALTER VIEW query
@@ -510,6 +513,7 @@ type (
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
+		Comments    Comments
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -992,6 +996,46 @@ func (node *DropView) GetIfNotExists() bool {
 	return false
 }
 
+// GetIsReplace implements the DDLStatement interface
+func (node *RenameTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *TruncateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateView) GetIsReplace() bool {
+	return node.IsReplace
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterView) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropView) GetIsReplace() bool {
+	return false
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -1143,7 +1187,7 @@ func (node *CreateTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *CreateView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
@@ -1153,12 +1197,12 @@ func (node *DropTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *DropView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
 func (node *AlterView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments for RevertMigration, does not implement DDLStatement
@@ -1190,8 +1234,7 @@ func (node *CreateTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *CreateView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
@@ -1201,14 +1244,12 @@ func (node *DropTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *DropView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
 func (node *AlterView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetToTables implements the DDLStatement interface
@@ -1803,6 +1844,11 @@ type (
 		SQLNode
 	}
 
+	Callable interface {
+		iCallable()
+		Expr
+	}
+
 	// AndExpr represents an AND expression.
 	AndExpr struct {
 		Left, Right Expr
@@ -1946,6 +1992,12 @@ type (
 		Collation string
 	}
 
+	// WeightStringFuncExpr represents the function and arguments for WEIGHT_STRING('string' AS [CHAR|BINARY](n))
+	WeightStringFuncExpr struct {
+		Expr Expr
+		As   *ConvertType
+	}
+
 	// FuncExpr represents a function call.
 	FuncExpr struct {
 		Qualifier TableIdent
@@ -2044,40 +2096,54 @@ type (
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*AndExpr) iExpr()           {}
-func (*OrExpr) iExpr()            {}
-func (*XorExpr) iExpr()           {}
-func (*NotExpr) iExpr()           {}
-func (*ComparisonExpr) iExpr()    {}
-func (*BetweenExpr) iExpr()       {}
-func (*IsExpr) iExpr()            {}
-func (*ExistsExpr) iExpr()        {}
-func (*Literal) iExpr()           {}
-func (Argument) iExpr()           {}
-func (*NullVal) iExpr()           {}
-func (BoolVal) iExpr()            {}
-func (*ColName) iExpr()           {}
-func (ValTuple) iExpr()           {}
-func (*Subquery) iExpr()          {}
-func (ListArg) iExpr()            {}
-func (*BinaryExpr) iExpr()        {}
-func (*UnaryExpr) iExpr()         {}
-func (*IntroducerExpr) iExpr()    {}
-func (*IntervalExpr) iExpr()      {}
-func (*CollateExpr) iExpr()       {}
-func (*FuncExpr) iExpr()          {}
-func (*TimestampFuncExpr) iExpr() {}
-func (*ExtractFuncExpr) iExpr()   {}
-func (*CurTimeFuncExpr) iExpr()   {}
-func (*CaseExpr) iExpr()          {}
-func (*ValuesFuncExpr) iExpr()    {}
-func (*ConvertExpr) iExpr()       {}
-func (*SubstrExpr) iExpr()        {}
-func (*ConvertUsingExpr) iExpr()  {}
-func (*MatchExpr) iExpr()         {}
-func (*GroupConcatExpr) iExpr()   {}
-func (*Default) iExpr()           {}
-func (*ExtractedSubquery) iExpr() {}
+func (*AndExpr) iExpr()              {}
+func (*OrExpr) iExpr()               {}
+func (*XorExpr) iExpr()              {}
+func (*NotExpr) iExpr()              {}
+func (*ComparisonExpr) iExpr()       {}
+func (*BetweenExpr) iExpr()          {}
+func (*IsExpr) iExpr()               {}
+func (*ExistsExpr) iExpr()           {}
+func (*Literal) iExpr()              {}
+func (Argument) iExpr()              {}
+func (*NullVal) iExpr()              {}
+func (BoolVal) iExpr()               {}
+func (*ColName) iExpr()              {}
+func (ValTuple) iExpr()              {}
+func (*Subquery) iExpr()             {}
+func (ListArg) iExpr()               {}
+func (*BinaryExpr) iExpr()           {}
+func (*UnaryExpr) iExpr()            {}
+func (*IntroducerExpr) iExpr()       {}
+func (*IntervalExpr) iExpr()         {}
+func (*CollateExpr) iExpr()          {}
+func (*FuncExpr) iExpr()             {}
+func (*TimestampFuncExpr) iExpr()    {}
+func (*ExtractFuncExpr) iExpr()      {}
+func (*WeightStringFuncExpr) iExpr() {}
+func (*CurTimeFuncExpr) iExpr()      {}
+func (*CaseExpr) iExpr()             {}
+func (*ValuesFuncExpr) iExpr()       {}
+func (*ConvertExpr) iExpr()          {}
+func (*SubstrExpr) iExpr()           {}
+func (*ConvertUsingExpr) iExpr()     {}
+func (*MatchExpr) iExpr()            {}
+func (*GroupConcatExpr) iExpr()      {}
+func (*Default) iExpr()              {}
+func (*ExtractedSubquery) iExpr()    {}
+
+// iCallable marks all expressions that represent function calls
+func (*FuncExpr) iCallable()             {}
+func (*TimestampFuncExpr) iCallable()    {}
+func (*ExtractFuncExpr) iCallable()      {}
+func (*WeightStringFuncExpr) iCallable() {}
+func (*CurTimeFuncExpr) iCallable()      {}
+func (*ValuesFuncExpr) iCallable()       {}
+func (*ConvertExpr) iCallable()          {}
+func (*SubstrExpr) iCallable()           {}
+func (*ConvertUsingExpr) iCallable()     {}
+func (*MatchExpr) iCallable()            {}
+func (*GroupConcatExpr) iCallable()      {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

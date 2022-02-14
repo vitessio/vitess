@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
@@ -38,8 +37,8 @@ var zeroBytes = []byte("0")
 
 // UnsupportedComparisonError represents the error where the comparison between the two types is unsupported on vitess
 type UnsupportedComparisonError struct {
-	Type1 querypb.Type
-	Type2 querypb.Type
+	Type1 sqltypes.Type
+	Type2 sqltypes.Type
 }
 
 // Error function implements the error interface
@@ -160,7 +159,7 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 // addition, if one of the input types was Decimal, then
 // a Decimal is built. Otherwise, the final type of the
 // result is preserved.
-func NullSafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) (sqltypes.Value, error) {
+func NullSafeAdd(v1, v2 sqltypes.Value, resultType sqltypes.Type) (sqltypes.Value, error) {
 	if v1.IsNull() {
 		v1 = sqltypes.MakeTrusted(resultType, zeroBytes)
 	}
@@ -266,7 +265,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 }
 
 // isByteComparable returns true if the type is binary or date/time.
-func isByteComparable(typ querypb.Type) bool {
+func isByteComparable(typ sqltypes.Type) bool {
 	if sqltypes.IsBinary(typ) {
 		return true
 	}

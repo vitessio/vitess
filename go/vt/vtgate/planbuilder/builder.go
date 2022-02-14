@@ -117,7 +117,32 @@ func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) se
 	}
 }
 
-func getPlannerFromQuery(stmt sqlparser.SelectStatement) (plancontext.PlannerVersion, bool) {
+// getPlannerFromQuery chooses the planner to use based on the query
+// The default planner can be overridden using /*vt+ PLANNER=gen4 */
+// We will also fall back on the gen4 planner if we encounter outer join,
+// since there are known problems with the v3 planner and outer joins
+func getPlannerFromQuery(stmt sqlparser.SelectStatement) (version plancontext.PlannerVersion, found bool) {
+	version, found = getPlannerFromQueryHint(stmt)
+	if found {
+		return
+	}
+
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		join, ok := node.(*sqlparser.JoinTableExpr)
+		if ok {
+			if join.Join == sqlparser.LeftJoinType || join.Join == sqlparser.RightJoinType {
+				version = querypb.ExecuteOptions_Gen4
+				found = true
+				return false, nil
+			}
+		}
+		return true, nil
+	}, stmt)
+
+	return
+}
+
+func getPlannerFromQueryHint(stmt sqlparser.SelectStatement) (plancontext.PlannerVersion, bool) {
 	var d sqlparser.CommentDirectives
 
 	firstSelect := sqlparser.GetFirstSelect(stmt)
