@@ -457,11 +457,12 @@ type (
 
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
-		Table         TableName
-		AlterOptions  []AlterOption
-		PartitionSpec *PartitionSpec
-		Comments      Comments
-		FullyParsed   bool
+		Table           TableName
+		AlterOptions    []AlterOption
+		PartitionSpec   *PartitionSpec
+		PartitionOption *PartitionOption
+		Comments        Comments
+		FullyParsed     bool
 	}
 
 	// DropTable represents a DROP TABLE statement.

@@ -646,6 +646,11 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).PartitionOption = newNode.(*PartitionOption)
+	}) {
+		return false
+	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).Comments = newNode.(Comments)
 	}) {

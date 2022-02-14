@@ -181,7 +181,7 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -196,6 +196,8 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	}
 	// field PartitionSpec *vitess.io/vitess/go/vt/sqlparser.PartitionSpec
 	size += cached.PartitionSpec.CachedSize(true)
+	// field PartitionOption *vitess.io/vitess/go/vt/sqlparser.PartitionOption
+	size += cached.PartitionOption.CachedSize(true)
 	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Comments)) * int64(16))

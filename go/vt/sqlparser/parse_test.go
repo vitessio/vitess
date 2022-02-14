@@ -1213,9 +1213,9 @@ var (
 		input:  "alter table t2 add primary key `zzz` (id)",
 		output: "alter table t2 add primary key (id)",
 	}, {
-		input:      "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
-		output:     "alter table a",
-		partialDDL: true,
+		input: "alter table a partition by hash (id) partitions 4",
+	}, {
+		input: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 	}, {
 		input:      "create database a garbage values",
 		output:     "create database a",

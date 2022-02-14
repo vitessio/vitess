@@ -2599,10 +2599,11 @@ alter_commands_modifier:
     }
 
 alter_statement:
-  alter_table_prefix alter_commands_list
+  alter_table_prefix alter_commands_list partitions_options_opt
   {
     $1.FullyParsed = true
     $1.AlterOptions = $2
+    $1.PartitionOption = $3
     $$ = $1
   }
 | alter_table_prefix alter_commands_list REMOVE PARTITIONING
