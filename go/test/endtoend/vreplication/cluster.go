@@ -170,13 +170,13 @@ func getDBMajorVersionInstalled() string {
 
 func downloadDBVersion(dbType string, majorVersion string, path string) error {
 	client := http.Client{
-		Timeout: 60 * time.Second,
+		Timeout: 10 * time.Minute,
 	}
 	var url, file, versionFile string
 	dbType = strings.ToLower(dbType)
 
 	if dbType == "mysql" && majorVersion == "5.7" {
-		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar"
+		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar.gz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-5.7/" + versionFile
 	} else if dbType == "mysql" && majorVersion == "8.0" {
 		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
@@ -191,15 +191,18 @@ func downloadDBVersion(dbType string, majorVersion string, path string) error {
 	}
 	resp, err := client.Get(url)
 	if err != nil {
-		return err
+		return fmt.Errorf("error downloading contents of %s to %s. Error: %v", url, file, err)
 	}
 	defer resp.Body.Close()
 	out, err := os.Create(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating file %s to save the contents of %s. Error: %v", file, url, err)
 	}
 	defer out.Close()
-	io.Copy(out, resp.Body)
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return fmt.Errorf("error saving contents of %s to %s. Error: %v", url, file, err)
+	}
 
 	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
 	output, err := untarCmd.CombinedOutput()
@@ -314,7 +317,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 					t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
 					continue
 				}
-				path := fmt.Sprintf("/vt/%s", dbTypeMajorVersion)
+				path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
 				// Set the root path and create it if needed
 				if err := setVtMySQLRoot(path); err != nil {
 					t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)

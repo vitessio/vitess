@@ -101,6 +101,7 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
+		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vtorc",
@@ -110,7 +111,6 @@ var (
 	clusterDockerList     = []string{
 		"vreplication_basic",
 		"vreplication_v2",
-		"vreplication_across_db_versions",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
@@ -123,6 +123,7 @@ var (
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
+		"vreplication_across_db_versions",
 	}
 )
 
