@@ -20,11 +20,12 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -118,10 +119,25 @@ func TestSystemVariablesUsingSetVarComment(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", SystemVariables: map[string]string{"sql_mode": "only_full_group_by"}})
+	sqlparser.MySQLVersion = "80001"
 
-	query := "select 1 from information_schema.table"
-	_, err := executor.Execute(context.Background(), "TestSelect", session, query, map[string]*querypb.BindVariable{})
+	session := NewSafeSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor", SystemVariables: map[string]string{}})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar},
+			{Name: "new", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("only_full_group_by"),
+		}},
+	}})
+
+	_, err := executor.Execute(context.Background(), "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(), "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	for _, shardSession := range session.ShardSessions {
@@ -129,7 +145,83 @@ func TestSystemVariablesUsingSetVarComment(t *testing.T) {
 	}
 
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = only_full_group_by) */ :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set @@sql_mode = 'only_full_group_by'"},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+	}
+
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
+func TestSystemVariablesMySQLBelow80(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+
+	sqlparser.MySQLVersion = "57000"
+
+	session := NewSafeSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor", SystemVariables: map[string]string{}})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar},
+			{Name: "new", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("only_full_group_by"),
+		}},
+	}})
+
+	_, err := executor.Execute(context.Background(), "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(), "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.True(t, session.InReservedConn())
+
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set @@sql_mode = 'only_full_group_by'"},
+		{Sql: "set @@sql_mode = 'only_full_group_by'"},
+		{Sql: "select :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+	}
+
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
+func TestSystemVariablesUsingSetVarCommentWithComment(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+
+	sqlparser.MySQLVersion = "80001"
+
+	session := NewSafeSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor", SystemVariables: map[string]string{}})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar},
+			{Name: "new", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("only_full_group_by"),
+		}},
+	}})
+
+	_, err := executor.Execute(context.Background(), "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(), "TestSelect", session, "select /* toto */ 1 from information_schema.table", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	require.False(t, session.InReservedConn())
+	for _, shardSession := range session.ShardSessions {
+		require.EqualValues(t, 0, shardSession.ReservedId)
+	}
+
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set @@sql_mode = 'only_full_group_by'"},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ /* toto */ :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -139,47 +231,47 @@ func TestSystemVariablesNeedReservedConn(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", InReservedConn: true, SystemVariables: map[string]string{"max_tmp_tables": "1", "sql_mode": "only_full_group_by"}})
+	sqlparser.MySQLVersion = "80001"
 
-	query := "select 1 from information_schema.table"
-	_, err := executor.Execute(context.Background(), "TestSelect", session, query, map[string]*querypb.BindVariable{})
+	session := NewSafeSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor", SystemVariables: map[string]string{}})
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "orig", Type: sqltypes.VarChar},
+			{Name: "new", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar(""),
+			sqltypes.NewVarChar("only_full_group_by"),
+		}},
+	}})
+
+	_, err := executor.Execute(context.Background(), "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "max_tmp_tables", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar("0"),
+		}},
+	}})
+
+	_, err = executor.Execute(context.Background(), "TestSetStmt", session, "set @@max_tmp_tables = 1", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	_, err = executor.Execute(context.Background(), "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.True(t, session.InReservedConn())
 
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "set @@max_tmp_tables = 1", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-		{Sql: "set @@sql_mode = only_full_group_by", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
+		{Sql: "set @@sql_mode = 'only_full_group_by'"},
+		{Sql: "set @@sql_mode = 'only_full_group_by'"},
+		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
+		{Sql: "set @@max_tmp_tables = 1"},
 		{Sql: "select :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-	}
-
-	// Because the system variables map is unordered, the `set @@var = value` queries will be
-	// executed in a random order. For that reason, we sort the two queries slices the same way.
-	sort.Slice(wantQueries, func(i, j int) bool {
-		return wantQueries[i].Sql < wantQueries[j].Sql
-	})
-	sort.Slice(sbc1.Queries, func(i, j int) bool {
-		return sbc1.Queries[i].Sql < sbc1.Queries[j].Sql
-	})
-	utils.MustMatch(t, wantQueries, sbc1.Queries)
-}
-
-func TestSystemVariablesUsingSetVarCommentWithComment(t *testing.T) {
-	executor, sbc1, _, _ := createExecutorEnv()
-	executor.normalize = true
-
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", SystemVariables: map[string]string{"sql_mode": "only_full_group_by"}})
-
-	query := "select /* toto */ 1 from information_schema.table"
-	_, err := executor.Execute(context.Background(), "TestSelect", session, query, map[string]*querypb.BindVariable{})
-	require.NoError(t, err)
-	require.False(t, session.InReservedConn())
-
-	for _, shardSession := range session.ShardSessions {
-		require.EqualValues(t, 0, shardSession.ReservedId)
-	}
-
-	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ SET_VAR(sql_mode = only_full_group_by) */ /* toto */ :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
