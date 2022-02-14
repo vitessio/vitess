@@ -125,39 +125,20 @@ func TestSystemVariables(t *testing.T) {
 		name        string
 		value       string
 		expectation string
+		comment     string
 	}{
 		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`},
 		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`},
 		{name: "sql_mode", value: "''", expectation: `[[VARCHAR("")]]`},
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`, comment: "/* comment */"},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`, comment: "/* comment */"},
+		{name: "sql_mode", value: "''", expectation: `[[VARCHAR("")]]`, comment: "/* comment */"},
 	}
 
 	for _, tc := range tcs {
 		t.Run(tc.name+tc.value, func(t *testing.T) {
 			utils.Exec(t, conn, fmt.Sprintf("set %s=%s", tc.name, tc.value))
-			utils.AssertMatches(t, conn, fmt.Sprintf("select @@%s", tc.name), tc.expectation)
-		})
-	}
-}
-
-func TestSystemVariablesWithComment(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	tcs := []struct {
-		name        string
-		value       string
-		expectation string
-	}{
-		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("ONLY_FULL_GROUP_BY")]]`},
-		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`},
-		{name: "sql_mode", value: "''", expectation: `[[VARCHAR("")]]`},
-	}
-
-	for _, tc := range tcs {
-		t.Run(tc.name+tc.value, func(t *testing.T) {
-			utils.Exec(t, conn, fmt.Sprintf("set %s=%s", tc.name, tc.value))
-			utils.AssertMatches(t, conn, fmt.Sprintf("select /* this is a query */ @@%s", tc.name), tc.expectation)
+			utils.AssertMatches(t, conn, fmt.Sprintf("select %s @@%s", tc.comment, tc.name), tc.expectation)
 		})
 	}
 }
