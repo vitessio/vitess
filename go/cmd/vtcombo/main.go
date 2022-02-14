@@ -28,7 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
+	"vitess.io/vitess/go/vt/vttest"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/exit"
@@ -52,7 +53,7 @@ import (
 )
 
 var (
-	protoTopo = flag.String("proto_topo", "", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+	tpb vttestpb.VTTestTopology
 
 	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 
@@ -68,6 +69,9 @@ var (
 )
 
 func init() {
+	flag.Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+	flag.Var(vttest.JsonTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+
 	servenv.RegisterDefaultFlags()
 }
 
@@ -117,18 +121,11 @@ func main() {
 	mysqlctl.RegisterFlags()
 	servenv.ParseFlags("vtcombo")
 
-	// parse the input topology
-	tpb := &vttestpb.VTTestTopology{}
-	if err := prototext.Unmarshal([]byte(*protoTopo), tpb); err != nil {
-		log.Errorf("cannot parse topology: %v", err)
-		exit.Return(1)
-	}
-
 	// Stash away a copy of the topology that vtcombo was started with.
 	//
 	// We will use this to determine the shard structure when keyspaces
 	// get recreated.
-	originalTopology := proto.Clone(tpb).(*vttestpb.VTTestTopology)
+	originalTopology := proto.Clone(&tpb).(*vttestpb.VTTestTopology)
 
 	// default cell to "test" if unspecified
 	if len(tpb.Cells) == 0 {
@@ -174,7 +171,7 @@ func main() {
 
 	// tablets configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
-	uid, err := vtcombo.InitTabletMap(ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, *startMysql)
+	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, *startMysql)
 	if err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		// ensure we start mysql in the event we fail here
@@ -198,7 +195,7 @@ func main() {
 		}
 
 		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
-		newUID, err := vtcombo.CreateKs(ctx, ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
+		newUID, err := vtcombo.CreateKs(ctx, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
 		if err != nil {
 			return err
 		}
@@ -208,7 +205,7 @@ func main() {
 	}
 
 	globalDropDb = func(ctx context.Context, ksName string) error {
-		if err := vtcombo.DeleteKs(ctx, ts, ksName, mysqld, tpb); err != nil {
+		if err := vtcombo.DeleteKs(ctx, ts, ksName, mysqld, &tpb); err != nil {
 			return err
 		}
 

@@ -56,6 +56,7 @@ const (
 	RevertActionStr           = "revert"
 )
 
+// when validateWalk returns true, then the child nodes are also visited
 func validateWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
 	switch node.(type) {
 	case *sqlparser.CreateTable, *sqlparser.AlterTable,
@@ -197,11 +198,11 @@ func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, 
 		return nil
 	}
 	switch ddlStmt := ddlStmt.(type) {
-	case *sqlparser.CreateTable, *sqlparser.AlterTable:
+	case *sqlparser.CreateTable, *sqlparser.AlterTable, *sqlparser.CreateView, *sqlparser.AlterView:
 		if err := appendOnlineDDL(ddlStmt.GetTable().Name.String(), ddlStmt); err != nil {
 			return nil, err
 		}
-	case *sqlparser.DropTable:
+	case *sqlparser.DropTable, *sqlparser.DropView:
 		tables := ddlStmt.GetFromTables()
 		for _, table := range tables {
 			ddlStmt.SetFromTables([]sqlparser.TableName{table})
@@ -418,6 +419,19 @@ func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) 
 
 	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL)
 	return action, err
+}
+
+// IsView returns 'true' when the statement affects a VIEW
+func (onlineDDL *OnlineDDL) IsView() bool {
+	stmt, _, err := ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return false
+	}
+	switch stmt.(type) {
+	case *sqlparser.CreateView, *sqlparser.DropView, *sqlparser.AlterView:
+		return true
+	}
+	return false
 }
 
 // GetActionStr returns a string representation of the DDL action
