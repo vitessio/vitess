@@ -310,7 +310,7 @@ func insertInitialData(t *testing.T) {
 		validateCount(t, vtgateConn, "product:0", "product", 2)
 		validateCount(t, vtgateConn, "product:0", "customer", 3)
 		validateQuery(t, vtgateConn, "product:0", "select * from merchant",
-			`[[VARCHAR("monoprice") VARCHAR("electronics")] [VARCHAR("newegg") VARCHAR("electronics")]]`)
+			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 	})
 }
 
