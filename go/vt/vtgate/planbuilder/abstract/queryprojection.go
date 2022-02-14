@@ -455,3 +455,49 @@ func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 		return true, nil
 	}, expr)
 }
+
+type Aggrs []Aggr
+
+// Len implements the sort.Interface
+func (a Aggrs) Len() int {
+	return len(a)
+}
+
+// Less implements the sort.Interface
+func (a Aggrs) Less(i, j int) bool {
+	return CompareRefInt(a[i].Index, a[j].Index)
+}
+
+// Swap implements the sort.Interface
+func (a Aggrs) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+// CompareRefInt compares two references of integers.
+// In case either one is nil, it is considered to be smaller
+func CompareRefInt(a *int, b *int) bool {
+	if a == nil {
+		return false
+	}
+	if b == nil {
+		return true
+	}
+	return *a < *b
+}
+
+type GroupBys []GroupBy
+
+// Len implements the sort.Interface
+func (gbys GroupBys) Len() int {
+	return len(gbys)
+}
+
+// Less implements the sort.Interface
+func (gbys GroupBys) Less(i, j int) bool {
+	return CompareRefInt(gbys[i].InnerIndex, gbys[j].InnerIndex)
+}
+
+// Swap implements the sort.Interface
+func (gbys GroupBys) Swap(i, j int) {
+	gbys[i], gbys[j] = gbys[j], gbys[i]
+}

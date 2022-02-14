@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"sort"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -531,7 +533,7 @@ func (hp *horizonPlanning) pushAggregation(
 ) (newPlan logicalPlan, groupingOffsets []offsets, outputAggrs []*engine.AggregateParams, err error) {
 	switch plan := plan.(type) {
 	case *routeGen4:
-		groupingOffsets, outputAggrs, err = pushAggrOnRoute(ctx, plan, aggregations, grouping)
+		groupingOffsets, outputAggrs, err = pushAggrOnRoute(ctx, plan, aggregations, grouping, ignoreOutputOrder)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -805,6 +807,7 @@ func pushAggrOnRoute(
 	plan *routeGen4,
 	aggregations []abstract.Aggr,
 	grouping []abstract.GroupBy,
+	ignoreOutputOrder bool,
 ) ([]offsets, []*engine.AggregateParams, error) {
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
@@ -812,13 +815,52 @@ func pushAggrOnRoute(
 	}
 
 	vtgateAggregation := make([]*engine.AggregateParams, 0, len(aggregations))
-	for _, aggregation := range aggregations {
-		sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
-		param := &engine.AggregateParams{
-			Opcode: engine.AggregateSum,
-			Col:    len(sel.SelectExprs) - 1,
-			Alias:  aggregation.Alias,
+	// aggIdx keeps track of the index of the aggregations we have processed so far. Starts with 0, goes all the way to len(aggregations)
+	aggrIdx := 0
+	if !ignoreOutputOrder {
+		// If we care for the output order, we first sort the aggregations and the groupBys independently
+		// Then we run a merge sort on the two lists. This ensures that we start pushing the aggregations and groupBys in the ascending order
+		// So their ordering in the SELECT statement of the route matches what we intended
+		groupbyIdx := 0
+		sort.Sort(abstract.Aggrs(aggregations))
+		sort.Sort(abstract.GroupBys(grouping))
+		for aggrIdx < len(aggregations) && groupbyIdx < len(grouping) {
+			aggregation := aggregations[aggrIdx]
+			groupBy := grouping[groupbyIdx]
+			// Compare the reference of integers, treating nils as columns that go to the end
+			// since they don't have any explicit ordering specified
+			if abstract.CompareRefInt(aggregation.Index, groupBy.InnerIndex) {
+				aggrIdx++
+				param := addAggregationToSelect(sel, aggregation)
+				vtgateAggregation = append(vtgateAggregation, param)
+			} else {
+				// Here we only push the groupBy column and not the weight string expr even if it is required.
+				// We rely on the later for-loop to push the weight strings. This is required since we care about the order
+				// and don't want to insert weight_strings in the beginning. We don't keep track of the offsets of where these
+				// are pushed since the later coll will reuse them and get the offset for us.
+				groupbyIdx++
+				_, _, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: groupBy.Inner}, plan, true, true, false)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
 		}
+		// Go over the remaining grouping values that we should push.
+		for groupbyIdx < len(grouping) {
+			groupBy := grouping[groupbyIdx]
+			groupbyIdx++
+			_, _, err := pushProjection(ctx, &sqlparser.AliasedExpr{Expr: groupBy.Inner}, plan, true, true, false)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	// Go over the remaining aggregations and add them to the SELECT.
+	for aggrIdx < len(aggregations) {
+		aggregation := aggregations[aggrIdx]
+		aggrIdx++
+		param := addAggregationToSelect(sel, aggregation)
 		vtgateAggregation = append(vtgateAggregation, param)
 	}
 
@@ -837,6 +879,17 @@ func pushAggrOnRoute(
 	}
 
 	return groupingOffsets, vtgateAggregation, nil
+}
+
+// addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
+func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) *engine.AggregateParams {
+	sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
+	param := &engine.AggregateParams{
+		Opcode: engine.AggregateSum,
+		Col:    len(sel.SelectExprs) - 1,
+		Alias:  aggregation.Alias,
+	}
+	return param
 }
 
 // createPushExprAndAlias creates the expression that should be pushed down to the leaves,
