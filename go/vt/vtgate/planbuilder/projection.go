@@ -31,6 +31,9 @@ type projection struct {
 	columnNames []string
 	columns     []sqlparser.Expr
 	primitive   *engine.Projection
+	// unorderedColumnIdx is used to find the index at which we should add any column output from projection
+	// we don't care for the ordering of. It should also be updated when such a column is added
+	unorderedColumnIdx int
 }
 
 var _ logicalPlan = (*projection)(nil)
@@ -91,4 +94,22 @@ func (p *projection) Primitive() engine.Primitive {
 		panic("WireUp not yet run")
 	}
 	return p.primitive
+}
+
+// addColumn is used to add a column output for the projection.
+// This is the only function that should be used to add  columns to projection
+func (p *projection) addColumn(idx *int, column sqlparser.Expr, columnName string) (int, error) {
+	var offset int
+	if idx == nil {
+		p.unorderedColumnIdx++
+		offset = len(p.columns) - p.unorderedColumnIdx
+	} else {
+		offset = *idx
+	}
+	if p.columnNames[offset] != "" || p.columns[offset] != nil {
+		return -1, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "overwriting columns in projection is not permitted")
+	}
+	p.columns[offset] = column
+	p.columnNames[offset] = columnName
+	return offset, nil
 }
