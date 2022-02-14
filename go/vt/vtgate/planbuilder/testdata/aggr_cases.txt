@@ -262,9 +262,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a), textcol1, weight_string(textcol1), b, weight_string(b)",
+            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b",
             "OrderBy": "(1|4) ASC, (2|5) ASC COLLATE latin1_swedish_ci, (3|6) ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` group by a, weight_string(a), textcol1, weight_string(textcol1), b, weight_string(b) order by a asc, textcol1 asc, b asc",
+            "Query": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` group by a, textcol1, b order by a asc, textcol1 asc, b asc",
             "Table": "`user`"
           }
         ]
@@ -2099,9 +2099,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a",
             "OrderBy": "(0|2) ASC",
-            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a order by a asc",
             "Table": "`user`"
           }
         ]
