@@ -17,12 +17,13 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
 	"testing"
 
-	"context"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -115,7 +116,7 @@ func benchmarkParallelReads(b *testing.B, params *mysql.ConnParams, parallelCoun
 			}
 
 			for j := 0; j < b.N; j++ {
-				if _, err := conn.ExecuteFetch("select * from a", 10000, true); err != nil {
+				if _, err := conn.ExecuteFetch("select * from a", 20000, true); err != nil {
 					b.Errorf("ExecuteFetch(%v, %v) failed: %v", i, j, err)
 				}
 			}
@@ -123,4 +124,188 @@ func benchmarkParallelReads(b *testing.B, params *mysql.ConnParams, parallelCoun
 		}(i)
 	}
 	wg.Wait()
+}
+
+func BenchmarkSetVarsWithQueryHints(b *testing.B) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	_, err = conn.ExecuteFetch("create table t(id int primary key, name varchar(100))", 1, false)
+	require.NoError(b, err)
+
+	defer func() {
+		_, err = conn.ExecuteFetch("drop table t", 1, false)
+		require.NoError(b, err)
+	}()
+
+	for i := 0; i < b.N; i++ {
+		_, err := conn.ExecuteFetch(fmt.Sprintf("insert /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ into t(id) values (%d)", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("select /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ * from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("update /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ t set name = 'foo' where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("delete /*+ SET_VAR(sql_mode = ' ') SET_VAR(sql_safe_updates = 0) */ from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSetVarsMultipleSets(b *testing.B) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	_, err = conn.ExecuteFetch("create table t(id int primary key, name varchar(100))", 1, false)
+	require.NoError(b, err)
+
+	defer func() {
+		_, err = conn.ExecuteFetch("drop table t", 1, false)
+		require.NoError(b, err)
+	}()
+
+	setFunc := func() {
+		_, err = conn.ExecuteFetch("set sql_mode = '', sql_safe_updates = 0;", 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	for i := 0; i < b.N; i++ {
+		setFunc()
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		setFunc()
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("select * from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		setFunc()
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("update t set name = 'foo' where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		setFunc()
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	_, err = conn.ExecuteFetch("create table t(id int primary key, name varchar(100))", 1, false)
+	require.NoError(b, err)
+
+	defer func() {
+		_, err = conn.ExecuteFetch("drop table t", 1, false)
+		require.NoError(b, err)
+	}()
+
+	for i := 0; i < b.N; i++ {
+		_, _, err := conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; insert into t(id) values (%d)", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _, _, err = conn.ReadQueryResult(1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; select * from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _, _, err = conn.ReadQueryResult(1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; update t set name = 'foo' where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _, _, err = conn.ReadQueryResult(1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, _, err = conn.ExecuteFetchMulti(fmt.Sprintf("set sql_mode = '', sql_safe_updates = 0 ; delete from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _, _, err = conn.ReadQueryResult(1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+	}
+}
+
+func BenchmarkSetVarsSingleSet(b *testing.B) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	_, err = conn.ExecuteFetch("set sql_mode = '', sql_safe_updates = 0", 1, false)
+	require.NoError(b, err)
+
+	_, err = conn.ExecuteFetch("create table t(id int primary key, name varchar(100))", 1, false)
+	require.NoError(b, err)
+
+	defer func() {
+		_, err = conn.ExecuteFetch("drop table t", 1, false)
+		require.NoError(b, err)
+	}()
+
+	for i := 0; i < b.N; i++ {
+		_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("select * from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("update t set name = 'foo' where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }
