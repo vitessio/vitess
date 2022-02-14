@@ -185,3 +185,10 @@ func (b *BitwiseNotExpr) format(buf *formatter, depth int) {
 	buf.WriteByte('~')
 	b.Inner.format(buf, depth)
 }
+
+func (c *ConvertExpr) format(buf *formatter, depth int) {
+	buf.WriteString("CONVERT(")
+	c.Inner.format(buf, depth)
+	buf.WriteString(", ")
+	fmt.Fprintf(buf, ", %s(%d,%d))", c.Type, c.Length, c.Scale)
+}

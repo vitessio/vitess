@@ -258,6 +258,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
 %token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
+%token <str> ASCII UNICODE // used in CONVERT/CAST types
 
 // Type Modifiers
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
@@ -1920,7 +1921,7 @@ charset_opt:
   {
     $$ = ""
   }
-| charset_or_character_set id_or_var
+| charset_or_character_set sql_id
   {
     $$ = string($2.String())
   }
@@ -1931,6 +1932,16 @@ charset_opt:
 | charset_or_character_set BINARY
   {
     $$ = string($2)
+  }
+| ASCII
+  {
+    // ASCII: Shorthand for CHARACTER SET latin1.
+    $$ = "latin1"
+  }
+| UNICODE
+  {
+    // UNICODE: Shorthand for CHARACTER SET ucs2.
+    $$ = "ucs2"
   }
 
 collate_opt:
@@ -4812,11 +4823,7 @@ convert_type:
   }
 | CHAR length_opt charset_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3, Operator: CharacterSetOp}
-  }
-| CHAR length_opt id_or_var
-  {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3.String())}
+    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3}
   }
 | DATE
   {
@@ -4860,6 +4867,19 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
+| FLOAT_TYPE length_opt
+  {
+    $$ = &ConvertType{Type: string($1), Length: $2}
+  }
+| DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| REAL
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+
 
 expression_opt:
   {
@@ -5765,6 +5785,7 @@ non_reserved_keyword:
 | AFTER
 | ALGORITHM
 | ALWAYS
+| ASCII
 | AUTO_INCREMENT
 | AVG_ROW_LENGTH
 | BEGIN
@@ -6011,6 +6032,7 @@ non_reserved_keyword:
 | UNBOUNDED
 | UNCOMMITTED
 | UNDEFINED
+| UNICODE
 | UNSIGNED
 | UNUSED
 | UPGRADE

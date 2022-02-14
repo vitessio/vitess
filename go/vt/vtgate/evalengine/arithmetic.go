@@ -620,6 +620,14 @@ func newDecimalInt64(x int64) *decimalResult {
 	return &result
 }
 
+func newDecimalFloat64(f float64) *decimalResult {
+	var result decimalResult
+	result.num.Context = decimalContextSQL
+	result.num.SetFloat64(f)
+	result.frac = result.num.Scale()
+	return &result
+}
+
 func newDecimalFromOp(left, right *decimalResult, op func(r, x, y *decimal.Big)) *decimalResult {
 	var result decimalResult
 	result.num.Context = decimalContextSQL

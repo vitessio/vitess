@@ -253,7 +253,7 @@ func (er *EvalResult) setTuple(t []EvalResult) {
 func (er *EvalResult) makeBinary() {
 	er.resolve()
 	if er.bytes_ == nil {
-		panic("called makeBinary on non-textual")
+		er.bytes_ = er.toRawBytes()
 	}
 	er.type_ = int16(sqltypes.VarBinary)
 	er.collation_ = collationBinary
@@ -267,10 +267,28 @@ func (er *EvalResult) clearFlags(flags uint16) {
 func (er *EvalResult) makeTextual(collation collations.ID) {
 	er.resolve()
 	if er.bytes_ == nil {
-		panic("called makeTextual on non-textual")
+		er.bytes_ = er.toRawBytes()
 	}
 	er.type_ = int16(sqltypes.VarChar)
 	er.collation_.Collation = collation
+}
+
+func (er *EvalResult) truncate(size int) {
+	switch er.typeof() {
+	case sqltypes.VarBinary:
+		if size > len(er.bytes_) {
+			pad := make([]byte, size)
+			_ = append(pad[:0], er.bytes_...)
+			er.bytes_ = pad
+		} else {
+			er.bytes_ = er.bytes_[:size]
+		}
+	case sqltypes.VarChar:
+		collation := collations.Local().LookupByID(er.collation().Collation)
+		er.bytes_ = collations.Slice(collation, er.bytes_, 0, size)
+	default:
+		panic("called EvalResult.truncate on non-quoted")
+	}
 }
 
 func (er *EvalResult) replaceCollation(collation collations.TypedCollation) {
@@ -737,26 +755,40 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 }
 
 func (er *EvalResult) makeFloat() {
+	er.makeNumeric()
 	switch er.typeof() {
 	case sqltypes.Float64, sqltypes.Float32:
-		return
 	case sqltypes.Decimal:
-		if f, ok := er.coerceDecimalToFloat(); ok {
-			er.setFloat(f)
-			return
-		}
+		f, _ := er.coerceDecimalToFloat()
+		er.setFloat(f)
 	case sqltypes.Uint64:
 		er.setFloat(float64(er.uint64()))
-		return
 	case sqltypes.Int64:
 		er.setFloat(float64(er.int64()))
-		return
 	}
-	if er.bytes() != nil {
-		er.setFloat(parseStringToFloat(er.string()))
-		return
+}
+
+func (er *EvalResult) makeDecimal(m, d int) {
+	er.makeNumeric()
+
+	var dec *decimalResult
+	switch er.typeof() {
+	case sqltypes.Decimal:
+		dec = er.decimal()
+	case sqltypes.Float64, sqltypes.Float32:
+		dec = newDecimalFloat64(er.float64())
+	case sqltypes.Int64:
+		dec = newDecimalInt64(er.int64())
+	case sqltypes.Uint64:
+		dec = newDecimalUint64(er.uint64())
 	}
-	er.setFloat(0)
+
+	dec.frac = d
+	er.setDecimal(dec)
+}
+
+func (er *EvalResult) isHexLiteral() bool {
+	return er.typeof() == sqltypes.VarBinary && er.hasFlag(flagHex)
 }
 
 func (er *EvalResult) makeNumeric() {
@@ -764,7 +796,7 @@ func (er *EvalResult) makeNumeric() {
 	if er.numeric() {
 		return
 	}
-	if er.typeof() == sqltypes.VarBinary && er.hasFlag(flagHex) {
+	if er.isHexLiteral() {
 		raw := er.bytes()
 		if len(raw) > 8 {
 			// overflow
@@ -783,15 +815,50 @@ func (er *EvalResult) makeNumeric() {
 	er.setFloat(parseStringToFloat(er.string()))
 }
 
-func (er *EvalResult) makeIntegral() {
+func (er *EvalResult) makeUnsignedIntegral() {
 	er.makeNumeric()
 	switch er.typeof() {
+	case sqltypes.Uint64:
+		// noop
+	case sqltypes.Int64:
+		er.type_ = int16(sqltypes.Uint64)
 	case sqltypes.Float64:
-		er.setUint64(uint64(er.float64()))
+		f := math.Round(er.float64())
+		er.setUint64(uint64(f))
 	case sqltypes.Decimal:
 		dec := er.decimal()
-		u, _ := dec.num.Uint64()
-		er.setUint64(u)
+		dec.num.Context.RoundingMode = decimal.AwayFromZero
+		dec.num.RoundToInt()
+		if dec.num.Signbit() {
+			i, _ := dec.num.Int64()
+			er.setUint64(uint64(i))
+		} else {
+			u, _ := dec.num.Uint64()
+			er.setUint64(u)
+		}
+	default:
+		panic("BUG: bad type from makeNumeric")
+	}
+}
+
+func (er *EvalResult) makeSignedIntegral() {
+	er.makeNumeric()
+	switch er.typeof() {
+	case sqltypes.Int64:
+		// noop
+	case sqltypes.Uint64:
+		er.type_ = int16(sqltypes.Int64)
+	case sqltypes.Float64:
+		f := math.Round(er.float64())
+		er.setInt64(int64(f))
+	case sqltypes.Decimal:
+		dec := er.decimal()
+		dec.num.Context.RoundingMode = decimal.AwayFromZero
+		dec.num.RoundToInt()
+		i, _ := dec.num.Int64()
+		er.setInt64(i)
+	default:
+		panic("BUG: bad type from makeNumeric")
 	}
 }
 

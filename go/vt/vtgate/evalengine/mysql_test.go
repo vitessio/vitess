@@ -118,6 +118,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT WEIGHT_STRING(0x1234 as char(12))`)
+	eval, err := testSingle(t, `SELECT CAST(0 AS DECIMAL)`)
 	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }
