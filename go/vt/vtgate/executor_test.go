@@ -2312,6 +2312,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	_, err = exec(executor, session, "commit")
 	require.NoError(t, err)
 	emptyBV := map[string]*querypb.BindVariable{}
+
 	sbc1WantQueries := []*querypb.BoundQuery{{
 		Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
 	}, {
@@ -2337,15 +2338,48 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	}, {
 		Sql: "select id from `user` where id = 3", BindVariables: emptyBV,
 	}}
+
+	if sqlparser.MySQLVersion >= "80000" {
+		sbc1WantQueries = []*querypb.BoundQuery{{
+			Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
+		}, {
+			Sql: "savepoint a", BindVariables: emptyBV,
+		}, {
+			Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", BindVariables: emptyBV,
+		}, {
+			Sql: "savepoint b", BindVariables: emptyBV,
+		}, {
+			Sql: "release savepoint a", BindVariables: emptyBV,
+		}}
+
+		sbc2WantQueries = []*querypb.BoundQuery{{
+			Sql: "savepoint a", BindVariables: emptyBV,
+		}, {
+			Sql: "savepoint b", BindVariables: emptyBV,
+		}, {
+			Sql: "release savepoint a", BindVariables: emptyBV,
+		}, {
+			Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV,
+		}}
+	}
+
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
 	testQueryLog(t, logChan, "TestExecute", "SET", "set session sql_mode = ''", 1)
 	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	if sqlparser.MySQLVersion >= "80000" {
+		testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", 1)
+	} else {
+		testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	}
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	if sqlparser.MySQLVersion >= "80000" {
+		testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", 1)
+	} else {
+		testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	}
 	testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 2)
 }
 
