@@ -407,9 +407,9 @@ func TestGen4SelectDBA(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	sbc1.Queries = nil
-	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
+	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from information_schema.tables t join information_schema.columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
 	_, err = executor.Execute(context.Background(), "TestSelectDBA",
-		NewSafeSession(&vtgatepb.Session{TargetString: "information_schema"}),
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
