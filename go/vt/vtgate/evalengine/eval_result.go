@@ -278,6 +278,9 @@ func (er *EvalResult) makeTextualAndConvert(collation collations.ID) bool {
 	if er.bytes_ == nil {
 		er.bytes_ = er.toRawBytes()
 	}
+	if er.collation_.Collation == collations.Unknown {
+		er.collation_.Collation = collations.CollationBinaryID
+	}
 
 	var err error
 	environment := collations.Local()
