@@ -1179,18 +1179,27 @@ table_column_list:
     $$.AddConstraint($3)
   }
 
+// collate_opt has to be in the first rule so that we don't have a shift reduce conflict when seeing a COLLATE
+// with column_attribute_list_opt. Always shifting there would have meant that we would have always ended up using the
+// second rule in the grammar whenever COLLATE was specified.
+// We now have a shift reduce conflict between COLLATE and collate_opt. Shifting there is fine. Essentially, we have
+// postponed the decision of which rule to use until we have consumed the COLLATE id/string tokens.
 column_definition:
-  sql_id column_type column_attribute_list_opt reference_definition_opt
+  sql_id column_type collate_opt column_attribute_list_opt reference_definition_opt
   {
-    $2.Options = $3
-    $2.Options.Reference = $4
+    $2.Options = $4
+    if $2.Options.Collate == "" {
+    	$2.Options.Collate = $3
+    }
+    $2.Options.Reference = $5
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
-| sql_id column_type generated_always_opt AS '(' expression ')' generated_column_attribute_list_opt reference_definition_opt
+| sql_id column_type collate_opt generated_always_opt AS '(' expression ')' generated_column_attribute_list_opt reference_definition_opt
   {
-    $2.Options = $8
-    $2.Options.As = $6
-    $2.Options.Reference = $9
+    $2.Options = $9
+    $2.Options.As = $7
+    $2.Options.Reference = $10
+    $2.Options.Collate = $3
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 

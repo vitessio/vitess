@@ -3134,6 +3134,20 @@ func TestCreateTable(t *testing.T) {
 	unique index by_username4 (username) using BTREE key_block_size 4 comment 'hi'
 )`,
 		},
+		{
+			input: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci as (concat(first_name, ' ', last_name)) virtual,
+	middle_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci default '' collate utf8mb4_bin
+)`,
+			output: `create table t1 (
+	first_name varchar(10),
+	last_name varchar(10),
+	full_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci as (concat(first_name, ' ', last_name)) virtual,
+	middle_name varchar(255) character set utf8mb4 collate utf8mb4_bin default ''
+)`,
+		},
 		// multi-column indexes
 		{
 			input: `create table t (
