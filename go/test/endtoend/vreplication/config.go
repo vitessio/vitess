@@ -15,7 +15,7 @@ create table product(pid int, description varbinary(128), date1 datetime not nul
 create table customer(cid int, name varchar(128) collate utf8mb4_bin, meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),
 	ts timestamp not null default current_timestamp, bits bit(2) default b'11', date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(cid)) CHARSET=utf8mb4;
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
-create table merchant(mname varchar(128), category varchar(128), primary key(mname)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+create table merchant(mname varchar(128), category varchar(128), primary key(mname)) CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 create table orders(oid int, cid int, pid int, mname varchar(128), price int, qty int, total int as (qty * price), total2 int as (qty * price) stored, primary key(oid)) CHARSET=utf8;
 create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table customer2(cid int, name varchar(128), typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid)) CHARSET=utf8;
@@ -222,7 +222,7 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
 	"tableSettings": [{
 		"targetTable": "cproduct",
 		"sourceExpression": "select * from product",
-		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid))"
+		"create_ddl": "create table cproduct(pid bigint, description varchar(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4"
 	}]
 }
 `
@@ -277,7 +277,7 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
   "tableSettings": [{
     "targetTable": "morders",
     "sourceExpression": "select oid, cid, mname, pid, price, qty, total from orders",
-    "create_ddl": "create table morders(oid int, cid int, mname varchar(128), pid int, price int, qty int, total int, total2 int as (10 * total), primary key(oid))"
+    "create_ddl": "create table morders(oid int, cid int, mname varchar(128), pid int, price int, qty int, total int, total2 int as (10 * total), primary key(oid)) CHARSET=utf8"
   }]
 }
 `
@@ -290,7 +290,7 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
   "tableSettings": [{
     "targetTable": "msales",
 	"sourceExpression": "select mname as merchant_name, count(*) as kount, sum(price) as amount from orders group by merchant_name",
-    "create_ddl": "create table msales(merchant_name varchar(128), kount int, amount int, primary key(merchant_name))"
+    "create_ddl": "create table msales(merchant_name varchar(128), kount int, amount int, primary key(merchant_name)) CHARSET=utf8"
   }]
 }
 `
@@ -317,7 +317,7 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
   "tableSettings": [{
     "targetTable": "sales",
     "sourceExpression": "select pid, count(*) as kount, sum(price) as amount from orders group by pid",
-    "create_ddl": "create table sales(pid int, kount int, amount int, primary key(pid))"
+    "create_ddl": "create table sales(pid int, kount int, amount int, primary key(pid)) CHARSET=utf8"
   }]
 }
 `
@@ -329,7 +329,7 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
   "tableSettings": [{
     "targetTable": "rollup",
     "sourceExpression": "select 'total' as rollupname, count(*) as kount from product group by rollupname",
-    "create_ddl": "create table rollup(rollupname varchar(100), kount int, primary key (rollupname))"
+    "create_ddl": "create table rollup(rollupname varchar(100), kount int, primary key (rollupname)) CHARSET=utf8mb4"
   }]
 }
 `
