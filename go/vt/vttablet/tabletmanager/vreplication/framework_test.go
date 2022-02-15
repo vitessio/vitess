@@ -561,6 +561,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 	failed := false
 
 	skipQueries := withDDLInitialQueries
+	skipQueries = append(skipQueries, withDDL.DDLs()...)
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
