@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"unicode/utf8"
@@ -158,31 +159,51 @@ func (env *ExpressionEnv) typecheckComparison(expr1 Expr, card1 int, expr2 Expr,
 	}
 }
 
+func (env *ExpressionEnv) typecheckBinary(left, right Expr) {
+	env.typecheck(left)
+	env.ensureCardinality(left, 1)
+
+	env.typecheck(right)
+	env.ensureCardinality(right, 1)
+}
+
+func (env *ExpressionEnv) typecheckUnary(inner Expr) {
+	env.typecheck(inner)
+	env.ensureCardinality(inner, 1)
+}
+
 func (env *ExpressionEnv) typecheck(expr Expr) {
 	if expr == nil {
 		return
 	}
 
 	switch expr := expr.(type) {
+	case *ConvertExpr:
+		env.typecheckUnary(expr.Inner)
+	case *ConvertUsingExpr:
+		env.typecheckUnary(expr.Inner)
+	case *NegateExpr:
+		env.typecheckUnary(expr.Inner)
+	case *CollateExpr:
+		env.typecheckUnary(expr.Inner)
+	case *IsExpr:
+		env.typecheckUnary(expr.Inner)
+	case *BitwiseNotExpr:
+		env.typecheckUnary(expr.Inner)
+	case *WeightStringCallExpr:
+		env.typecheckUnary(expr.String)
 	case *ArithmeticExpr:
-		env.typecheck(expr.Left)
-		env.ensureCardinality(expr.Left, 1)
-
-		env.typecheck(expr.Right)
-		env.ensureCardinality(expr.Right, 1)
-
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *LogicalExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *BitwiseExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *LikeExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
 	case *ComparisonExpr:
 		left := env.cardinality(expr.Left)
 		right := env.cardinality(expr.Right)
 		env.typecheckComparison(expr.Left, left, expr.Right, right)
-
-	case *LogicalExpr:
-		env.typecheck(expr.Left)
-		env.ensureCardinality(expr.Left, 1)
-
-		env.typecheck(expr.Right)
-		env.ensureCardinality(expr.Right, 1)
-
 	case *InExpr:
 		env.typecheck(expr.Left)
 		left := env.cardinality(expr.Left)
@@ -199,25 +220,15 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 				throwCardinalityError(left)
 			}
 		}
-
-	case *LikeExpr:
-		env.typecheck(expr.Left)
-		env.ensureCardinality(expr.Left, 1)
-
-		env.typecheck(expr.Right)
-		env.ensureCardinality(expr.Right, 1)
-
 	case TupleExpr:
 		for _, subexpr := range expr {
 			env.typecheck(subexpr)
 		}
-
-	case *IsExpr:
-		env.ensureCardinality(expr.Inner, 1)
-
+	case *CallExpr:
+		env.typecheck(expr.Arguments)
+	case *Literal, *Column, *BindVariable: // noop
 	default:
-		// TODO: handle all cardinalities
-		// panic(fmt.Sprintf("unhandled cardinality: %T", expr))
+		panic(fmt.Sprintf("unhandled cardinality: %T", expr))
 	}
 }
 

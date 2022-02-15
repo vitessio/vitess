@@ -118,6 +118,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT CAST(CONVERT(_binary 'foobar' USING utf32) AS binary)`)
+	eval, err := testSingle(t, `SELECT (NULL, -1, 0, 1) != (NULL, -1, 0, 1)`)
 	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }
