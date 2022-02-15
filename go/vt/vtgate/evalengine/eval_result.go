@@ -279,20 +279,12 @@ func (er *EvalResult) makeTextualAndConvert(collation collations.Collation) bool
 		er.bytes_ = er.toRawBytes()
 	}
 
-	switch er.collation_.Collation {
-	case collations.CollationBinaryID:
-		if !collations.Validate(collation, er.bytes_) {
-			er.setNull()
-			return false
-		}
-	default:
-		var err error
-		fromCollation := collations.Local().LookupByID(er.collation_.Collation)
-		er.bytes_, err = collations.Convert(nil, collation, er.bytes_, fromCollation)
-		if err != nil {
-			er.setNull()
-			return false
-		}
+	var err error
+	fromCollation := collations.Local().LookupByID(er.collation_.Collation)
+	er.bytes_, err = collations.Convert(nil, collation, er.bytes_, fromCollation)
+	if err != nil {
+		er.setNull()
+		return false
 	}
 
 	er.collation_.Collation = collation.ID()
