@@ -51,6 +51,14 @@ Behavior of migrations with this flag:
 - an `ALTER` table begins, runs, but does not cut-over.
 - `CREATE` or `DROP` migrations are silently not even scheduled
 
+### ddl_strategy: 'vitess' strategy, synonym to 'online'
+
+`online` strategy is renamed to `vitess`. Both work identically, and going forward `vitess` will be the preferred term. Future versions will implicitly convert `online` to `vitess` and eventually deprecate `online`. Example:
+
+```shell
+$ vtctl ApplySchema -skip_preflight -ddl_strategy='vitess' -sql "alter table example drop column c" commerce
+```
+
 ### alter vitess_migration ... cleanup
 
 A new query is supported:
