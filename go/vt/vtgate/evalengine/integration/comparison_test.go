@@ -504,8 +504,8 @@ func TestCharsetConversionOperators(t *testing.T) {
 
 	for _, lhs := range left {
 		for _, rhs := range charsets {
-			// compareRemoteQuery(t, conn, fmt.Sprintf("SELECT CAST(%s AS CHAR CHARACTER SET %s)", lhs, rhs))
-			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT CAST(CONVERT(%s USING %s) AS binary)", lhs, rhs))
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT HEX(CAST(%s AS CHAR CHARACTER SET %s))", lhs, rhs))
+			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT HEX(CONVERT(%s USING %s))", lhs, rhs))
 		}
 	}
 }
