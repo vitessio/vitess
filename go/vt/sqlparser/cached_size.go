@@ -219,8 +219,8 @@ func (cached *AlterView) CachedSize(alloc bool) int64 {
 	size += cached.ViewName.CachedSize(false)
 	// field Algorithm string
 	size += hack.RuntimeAllocSize(int64(len(cached.Algorithm)))
-	// field Definer string
-	size += hack.RuntimeAllocSize(int64(len(cached.Definer)))
+	// field Definer *vitess.io/vitess/go/vt/sqlparser.Definer
+	size += cached.Definer.CachedSize(true)
 	// field Security string
 	size += hack.RuntimeAllocSize(int64(len(cached.Security)))
 	// field Columns vitess.io/vitess/go/vt/sqlparser.Columns
@@ -738,14 +738,14 @@ func (cached *CreateView) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(160)
 	}
 	// field ViewName vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.ViewName.CachedSize(false)
 	// field Algorithm string
 	size += hack.RuntimeAllocSize(int64(len(cached.Algorithm)))
-	// field Definer string
-	size += hack.RuntimeAllocSize(int64(len(cached.Definer)))
+	// field Definer *vitess.io/vitess/go/vt/sqlparser.Definer
+	size += cached.Definer.CachedSize(true)
 	// field Security string
 	size += hack.RuntimeAllocSize(int64(len(cached.Security)))
 	// field Columns vitess.io/vitess/go/vt/sqlparser.Columns
@@ -794,6 +794,20 @@ func (cached *Default) CachedSize(alloc bool) int64 {
 	}
 	// field ColName string
 	size += hack.RuntimeAllocSize(int64(len(cached.ColName)))
+	return size
+}
+func (cached *Definer) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	// field Address string
+	size += hack.RuntimeAllocSize(int64(len(cached.Address)))
 	return size
 }
 func (cached *Delete) CachedSize(alloc bool) int64 {

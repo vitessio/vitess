@@ -290,6 +290,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfDefault(a, b)
+	case *Definer:
+		b, ok := inB.(*Definer)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDefiner(a, b)
 	case *Delete:
 		b, ok := inB.(*Delete)
 		if !ok {
@@ -1106,10 +1112,10 @@ func EqualsRefOfAlterView(a, b *AlterView) bool {
 		return false
 	}
 	return a.Algorithm == b.Algorithm &&
-		a.Definer == b.Definer &&
 		a.Security == b.Security &&
 		a.CheckOption == b.CheckOption &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
+		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsSelectStatement(a.Select, b.Select) &&
 		EqualsComments(a.Comments, b.Comments)
@@ -1460,11 +1466,11 @@ func EqualsRefOfCreateView(a, b *CreateView) bool {
 		return false
 	}
 	return a.Algorithm == b.Algorithm &&
-		a.Definer == b.Definer &&
 		a.Security == b.Security &&
 		a.CheckOption == b.CheckOption &&
 		a.IsReplace == b.IsReplace &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
+		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsSelectStatement(a.Select, b.Select) &&
 		EqualsComments(a.Comments, b.Comments)
@@ -1491,6 +1497,18 @@ func EqualsRefOfDefault(a, b *Default) bool {
 		return false
 	}
 	return a.ColName == b.ColName
+}
+
+// EqualsRefOfDefiner does deep equals between the two objects.
+func EqualsRefOfDefiner(a, b *Definer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Address == b.Address
 }
 
 // EqualsRefOfDelete does deep equals between the two objects.
