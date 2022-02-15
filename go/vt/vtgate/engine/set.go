@@ -290,11 +290,11 @@ func (svs *SysVarReservedConn) Execute(vcursor VCursor, env *evalengine.Expressi
 		vcursor.Session().NeedsReservedConn()
 		return svs.execSetStatement(vcursor, rss, env)
 	}
-	isSysVarModified, err := svs.checkAndUpdateSysVar(vcursor, env)
+	needReservedConn, err := svs.checkAndUpdateSysVar(vcursor, env)
 	if err != nil {
 		return err
 	}
-	if !isSysVarModified {
+	if !needReservedConn {
 		// setting ignored, same as underlying datastore
 		return nil
 	}
@@ -358,8 +358,9 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 	vcursor.Session().SetSysVar(svs.Name, buf.String())
 	if sqlparser.MySQLVersion < "80000" || !svs.SupportSetVar {
 		vcursor.Session().NeedsReservedConn()
+		return true, nil
 	}
-	return true, nil
+	return false, nil
 }
 
 func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
