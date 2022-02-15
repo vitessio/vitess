@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -103,9 +102,9 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex          int  // index of the column in the filter's select
-	weightStringIndex int  // index of the weight_string() requested for each text column
-	isPK              bool // is this column part of the primary key
+	colIndex  int // index of the column in the filter's select
+	collation collations.Collation
+	isPK      bool // is this column part of the primary key
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -483,18 +482,11 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	// Start with adding all columns for comparison.
 	td.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
 	for i := range td.compareCols {
+		td.compareCols[i].colIndex = i
 		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
-		typ, ok := fields[colname]
+		_, ok := fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v", colname, table.Name)
-		}
-		td.compareCols[i].colIndex = i
-		if sqltypes.IsText(typ) {
-			// For text columns, we need to additionally pull their weight string values for lexical comparisons.
-			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, wrapWeightString(sourceSelect.SelectExprs[i]))
-			targetSelect.SelectExprs = append(targetSelect.SelectExprs, wrapWeightString(targetSelect.SelectExprs[i]))
-			// Update the column number to point at the weight_string column instead.
-			td.compareCols[i].weightStringIndex = len(sourceSelect.SelectExprs) - 1
 		}
 	}
 
@@ -557,10 +549,12 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	ob := make([]engine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
-		if cpk.weightStringIndex != cpk.colIndex {
-			weightStringCol = cpk.weightStringIndex
+		if cpk.collation == nil {
+			// use a full unicode 9 compliant collation by default (accent and case insensitive)
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationUtf8mb4ID})
+		} else {
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
 		}
-		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -1051,29 +1045,16 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 			continue
 		}
 		compareIndex := col.colIndex
-		// This detects if we are using weight_string() to compare this (text) column.
-		// If either source or target weight_string is null we fallback to a byte compare for text columns
-		if !sourceRow[col.weightStringIndex].IsNull() && sourceRow[col.colIndex].IsText() &&
-			!targetRow[col.weightStringIndex].IsNull() && targetRow[col.colIndex].IsText() &&
-			col.weightStringIndex > col.colIndex {
-			compareIndex = col.weightStringIndex
-		}
 		var c int
 		var err error
-		if sourceRow[compareIndex].IsText() && targetRow[compareIndex].IsText() {
-			srowBytes, err := sourceRow[compareIndex].ToBytes()
-			if err != nil {
-				return 0, err
-			}
-			trowBytes, err := targetRow[compareIndex].ToBytes()
-			if err != nil {
-				return 0, err
-			}
-			c = bytes.Compare(srowBytes, trowBytes)
+		var collationID collations.ID
+		// if the collation is nil or unknown, use binary collation to compare as bytes
+		if col.collation == nil || col.collation.ID() == collations.Unknown {
+			collationID = collations.CollationBinaryID
 		} else {
-			// TODO(king-11) make collation aware
-			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collations.Unknown)
+			collationID = col.collation.ID()
 		}
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
 		if err != nil {
 			return 0, err
 		}
@@ -1210,19 +1191,6 @@ func removeExprKeyrange(node sqlparser.Expr) sqlparser.Expr {
 func isFuncKeyrange(expr sqlparser.Expr) bool {
 	funcExpr, ok := expr.(*sqlparser.FuncExpr)
 	return ok && funcExpr.Name.EqualString("in_keyrange")
-}
-
-func wrapWeightString(expr sqlparser.SelectExpr) *sqlparser.AliasedExpr {
-	return &sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name: sqlparser.NewColIdent("weight_string"),
-			Exprs: []sqlparser.SelectExpr{
-				&sqlparser.AliasedExpr{
-					Expr: expr.(*sqlparser.AliasedExpr).Expr,
-				},
-			},
-		},
-	}
 }
 
 func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) {

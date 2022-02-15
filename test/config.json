@@ -1136,7 +1136,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_across_db_versions",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_migrate": {
