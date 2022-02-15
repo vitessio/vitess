@@ -36,6 +36,7 @@ var builtinFunctions = map[string]func(*ExpressionEnv, []EvalResult, *EvalResult
 	"collation": builtinFuncCollation,
 	"isnull":    builtinFuncIsNull,
 	"bit_count": builtinFuncBitCount,
+	"hex":       builtinFuncHex,
 }
 
 type CallExpr struct {

@@ -214,6 +214,10 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 
 	case *IsExpr:
 		env.ensureCardinality(expr.Inner, 1)
+
+	default:
+		// TODO: handle all cardinalities
+		// panic(fmt.Sprintf("unhandled cardinality: %T", expr))
 	}
 }
 
