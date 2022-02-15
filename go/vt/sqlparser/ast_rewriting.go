@@ -194,19 +194,28 @@ func NewReservedVars(prefix string, known BindVars) *ReservedVars {
 }
 
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string, selectLimit int, setVarComment string) (*RewriteASTResult, error) {
+func PrepareAST(
+	in Statement,
+	reservedVars *ReservedVars,
+	bindVars map[string]*querypb.BindVariable,
+	parameterize bool,
+	keyspace string,
+	selectLimit int,
+	setVarComment string,
+	sysVars map[string]string,
+) (*RewriteASTResult, error) {
 	if parameterize {
 		err := Normalize(in, reservedVars, bindVars)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace, selectLimit, setVarComment)
+	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
-func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string) (*RewriteASTResult, error) {
-	er := newExpressionRewriter(keyspace, selectLimit, setVarComment)
+func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) (*RewriteASTResult, error) {
+	er := newExpressionRewriter(keyspace, selectLimit, setVarComment, sysVars)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
 	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
@@ -256,14 +265,16 @@ type expressionRewriter struct {
 	keyspace      string
 	selectLimit   int
 	setVarComment string
+	sysVars       map[string]string
 }
 
-func newExpressionRewriter(keyspace string, selectLimit int, setVarComment string) *expressionRewriter {
+func newExpressionRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) *expressionRewriter {
 	return &expressionRewriter{
 		bindVars:      &BindVarNeeds{},
 		keyspace:      keyspace,
 		selectLimit:   selectLimit,
 		setVarComment: setVarComment,
+		sysVars:       sysVars,
 	}
 }
 
@@ -285,7 +296,7 @@ const (
 )
 
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newExpressionRewriter(er.keyspace, er.selectLimit, er.setVarComment)
+	inner := newExpressionRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
@@ -474,6 +485,12 @@ func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node *JoinCon
 
 func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 	lowered := node.Name.Lowered()
+
+	var found bool
+	if er.sysVars != nil {
+		_, found = er.sysVars[lowered]
+	}
+
 	switch lowered {
 	case sysvars.Autocommit.Name,
 		sysvars.Charset.Name,
@@ -492,6 +509,10 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
 		sysvars.Workload.Name:
+		found = true
+	}
+
+	if found {
 		cursor.Replace(bindVarExpression("__vt" + lowered))
 		er.bindVars.AddSysVar(lowered)
 	}

@@ -505,6 +505,10 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
+		default:
+			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
+				bindVars[key] = sqltypes.StringBindVariable(value)
+			}
 		}
 	}
 
@@ -651,7 +655,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "")
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1426,7 +1430,16 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if e.canNormalizeStatement(stmt, qo, setVarComment) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit(), setVarComment)
+		result, err := sqlparser.PrepareAST(
+			stmt,
+			reservedVars,
+			bindVars,
+			parameterize,
+			vcursor.keyspace,
+			qo.getSelectLimit(),
+			setVarComment,
+			vcursor.safeSession.SystemVariables,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1478,7 +1491,14 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 	if !vcursor.Session().HasSystemVariables() {
 		return "", nil
 	}
-	if _, supportsOptimizerHint := stmt.(sqlparser.SupportOptimizerHint); !supportsOptimizerHint {
+
+	switch stmt.(type) {
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set:
+		return "", nil
+	case sqlparser.SupportOptimizerHint:
+		break
+	default:
 		vcursor.NeedsReservedConn()
 		return "", nil
 	}
