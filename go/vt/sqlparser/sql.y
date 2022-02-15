@@ -5103,6 +5103,10 @@ CURRENT_USER
   {
     $$ = encodeSQLString($1) + "@" + string($2)
   }
+| ID AT_ID
+  {
+    $$ = string($1) + "@" + string($2)
+  }
 | ID
   {
     $$ = string($1)
