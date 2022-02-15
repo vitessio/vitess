@@ -51,3 +51,25 @@ func BenchmarkBig_SetString(b *testing.B) {
 	}
 	globOk = ok
 }
+
+func TestLargestForm(t *testing.T) {
+	var cases = []struct {
+		a, b   int
+		result string
+	}{
+		{1, 1, "9.9"},
+		{1, 0, "9"},
+		{10, 10, "9999999999.9999999999"},
+		{5, 5, "99999.99999"},
+		{8, 0, "99999999"},
+		{0, 5, "0.99999"},
+	}
+
+	for _, tc := range cases {
+		var b Big
+		b.LargestForm(tc.a, tc.b)
+		if b.String() != tc.result {
+			t.Errorf("LargestForm(%d, %d) = %q (expected %q)", tc.a, tc.b, b.String(), tc.result)
+		}
+	}
+}

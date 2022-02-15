@@ -802,6 +802,18 @@ func (er *EvalResult) makeDecimal(m, d int) {
 		dec = newDecimalUint64(er.uint64())
 	}
 
+	var clamp decimal.Big
+	clamp.Context = decimalContextSQL
+	clamp.LargestForm(m-d, d)
+
+	neg := dec.num.Signbit()
+	dec.num.SetSignbit(false)
+
+	if dec.num.Cmp(&clamp) > 0 {
+		dec.num = clamp
+	}
+
+	dec.num.SetSignbit(neg)
 	dec.frac = d
 	er.setDecimal(dec)
 }
