@@ -29,12 +29,12 @@ type (
 		Type                string
 		Length, Scale       int
 		HasLength, HasScale bool
-		Collation           collations.Collation
+		Collation           collations.ID
 	}
 
 	ConvertUsingExpr struct {
 		UnaryExpr
-		Collation collations.Collation
+		Collation collations.ID
 	}
 )
 

@@ -199,9 +199,9 @@ func (c *ConvertExpr) format(buf *formatter, depth int) {
 	default:
 		fmt.Fprintf(buf, ", %s", c.Type)
 	}
-	if c.Collation != nil {
+	if c.Collation != collations.Unknown {
 		buf.WriteString(" CHARACTER SET ")
-		buf.WriteString(c.Collation.Name())
+		buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
 	}
 	buf.WriteByte(')')
 }
@@ -210,6 +210,6 @@ func (c *ConvertUsingExpr) format(buf *formatter, depth int) {
 	buf.WriteString("CONVERT(")
 	c.Inner.format(buf, depth)
 	buf.WriteString(" USING ")
-	buf.WriteString(c.Collation.Name())
+	buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
 	buf.WriteByte(')')
 }

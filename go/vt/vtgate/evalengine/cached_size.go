@@ -169,6 +169,32 @@ func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
+	size += cached.UnaryExpr.CachedSize(false)
+	// field Type string
+	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
+	return size
+}
+func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field UnaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.UnaryExpr
+	size += cached.UnaryExpr.CachedSize(false)
+	return size
+}
 func (cached *EvalResult) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

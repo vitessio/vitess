@@ -273,21 +273,23 @@ func (er *EvalResult) makeTextual(collation collations.ID) {
 	er.type_ = int16(sqltypes.VarChar)
 }
 
-func (er *EvalResult) makeTextualAndConvert(collation collations.Collation) bool {
+func (er *EvalResult) makeTextualAndConvert(collation collations.ID) bool {
 	er.resolve()
 	if er.bytes_ == nil {
 		er.bytes_ = er.toRawBytes()
 	}
 
 	var err error
-	fromCollation := collations.Local().LookupByID(er.collation_.Collation)
-	er.bytes_, err = collations.Convert(nil, collation, er.bytes_, fromCollation)
+	environment := collations.Local()
+	fromCollation := environment.LookupByID(er.collation_.Collation)
+	toCollation := environment.LookupByID(collation)
+	er.bytes_, err = collations.Convert(nil, toCollation, er.bytes_, fromCollation)
 	if err != nil {
 		er.setNull()
 		return false
 	}
 
-	er.collation_.Collation = collation.ID()
+	er.collation_.Collation = collation
 	er.type_ = int16(sqltypes.VarChar)
 	return true
 }
