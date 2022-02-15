@@ -1,0 +1,13 @@
+----------------------------------------------------------------------
+select * from user_region where regionId = 2305843009213693952 and userId = 100 /* exact shard */
+
+1 ks_sharded/2000-2080: select * from user_region where regionId = 2305843009213693952 and userId = 100 limit 10001 /* exact shard */
+
+----------------------------------------------------------------------
+select * from user_region where regionId = 2305843009213693952 /* subshard */
+
+1 ks_sharded/1f80-2000: select * from user_region where regionId = 2305843009213693952 limit 10001 /* subshard */
+1 ks_sharded/2000-2080: select * from user_region where regionId = 2305843009213693952 limit 10001 /* subshard */
+1 ks_sharded/2080-2100: select * from user_region where regionId = 2305843009213693952 limit 10001 /* subshard */
+
+----------------------------------------------------------------------
