@@ -31,6 +31,11 @@ type testCaseSetVar struct {
 	in, expected, setVarComment string
 }
 
+type testCaseSysVar struct {
+	in, expected string
+	sysVar       map[string]string
+}
+
 type myTestCase struct {
 	in, expected                                                       string
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
@@ -376,6 +381,33 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			require.NoError(err)
 
 			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil)
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+func TestRewritesSysVar(in *testing.T) {
+	tests := []testCaseSysVar{{
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = @@sql_mode as `@x = @@sql_mode` from dual",
+	}, {
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
+		sysVar:   map[string]string{"sql_mode": "' '"},
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar)
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
