@@ -104,6 +104,7 @@ var (
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vtorc",
+		"schemadiff_vrepl",
 	}
 
 	clusterSelfHostedList []string

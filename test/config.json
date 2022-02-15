@@ -400,6 +400,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"schemadiff_vrepl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/schemadiff/vrepl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "schemadiff_vrepl",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
