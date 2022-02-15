@@ -472,8 +472,7 @@ func TestConversionOperators(t *testing.T) {
 		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
 		"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
 		"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
-		// TODO: our decimal implementation does not do truncation properly
-		// "DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
+		"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
 		"DOUBLE", "REAL",
 		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER",
 	}
