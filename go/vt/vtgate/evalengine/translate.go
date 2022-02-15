@@ -390,7 +390,7 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 	case sqlparser.TildaOp:
 		return &BitwiseNotExpr{UnaryExpr: UnaryExpr{expr}}, nil
 	case sqlparser.NStringOp:
-		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR"}, nil
+		return &ConvertExpr{UnaryExpr: UnaryExpr{expr}, Type: "NCHAR", Collation: collations.CollationUtf8ID}, nil
 	default:
 		return nil, translateExprNotSupported(unary)
 	}
@@ -398,7 +398,11 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 
 func translateConvertCharset(charset string, lookup TranslationLookup) (collations.ID, error) {
 	if charset == "" {
-		return lookup.DefaultCollation(), nil
+		collation := lookup.DefaultCollation()
+		if collation == collations.Unknown {
+			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No default character set specified")
+		}
+		return collation, nil
 	}
 	charset = strings.ToLower(charset)
 	collation := collations.Local().DefaultCollationForCharset(charset)
