@@ -396,16 +396,16 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 	}
 }
 
-func translateConvertCharset(charset string, lookup TranslationLookup) (collations.Collation, error) {
+func translateConvertCharset(charset string, lookup TranslationLookup) (collations.ID, error) {
 	if charset == "" {
-		return collations.Local().LookupByID(lookup.DefaultCollation()), nil
+		return lookup.DefaultCollation(), nil
 	}
 	charset = strings.ToLower(charset)
 	collation := collations.Local().DefaultCollationForCharset(charset)
 	if collation == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
+		return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
 	}
-	return collation, nil
+	return collation.ID(), nil
 }
 
 func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (Expr, error) {
@@ -439,7 +439,7 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 			)
 		}
 	case "NCHAR":
-		convert.Collation = collations.Local().LookupByID(collations.CollationUtf8ID)
+		convert.Collation = collations.CollationUtf8ID
 	case "CHAR":
 		convert.Collation, err = translateConvertCharset(expr.Type.Charset, lookup)
 		if err != nil {
