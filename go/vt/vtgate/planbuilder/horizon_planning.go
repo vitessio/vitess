@@ -458,32 +458,33 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 	return -1
 }
 
-func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, plan logicalPlan) (out logicalPlan, err error) {
-	if !hp.qp.HasAggr {
+func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
+	if !hp.qp.NeedsAggregation() {
 		return plan, nil
 	}
 
 	isPushable := !isJoin(plan)
 	vindexOverlapWithGrouping := hasUniqueVindex(ctx.VSchema, ctx.SemTable, hp.qp.GroupByExprs)
-	var oa *orderedAggregate
 	if isPushable && vindexOverlapWithGrouping {
 		// If we have a plan that we can push the group by and aggregation through, we don't need to do aggregation
 		// at the vtgate level at all
-		panic("oh noes")
-	} else {
-		oa = &orderedAggregate{}
-		out = oa
+		err := hp.planAggregationWithoutOA(ctx, plan)
+		if err != nil {
+			return nil, err
+		}
+		return plan, nil
 	}
 
-	if oa != nil {
-		oa.groupByKeys = make([]*engine.GroupByParams, 0, len(hp.qp.GroupByExprs))
-		for _, expr := range hp.qp.GroupByExprs {
-			oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
-				Expr:        expr.Inner,
-				FromGroupBy: true,
-				CollationID: ctx.SemTable.CollationForExpr(expr.Inner),
-			})
-		}
+	oa := &orderedAggregate{
+		groupByKeys: make([]*engine.GroupByParams, 0, len(hp.qp.GroupByExprs)),
+	}
+
+	for _, expr := range hp.qp.GroupByExprs {
+		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
+			Expr:        expr.Inner,
+			FromGroupBy: true,
+			CollationID: ctx.SemTable.CollationForExpr(expr.Inner),
+		})
 	}
 
 	aggregationExprs, err := hp.qp.AggregationExpressions()
@@ -496,19 +497,18 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, err
 	}
 
-	if oa != nil {
-		oa.aggregates = aggrParams
-		for i, grouping := range groupings {
-			oa.groupByKeys[i].KeyCol = grouping.col
-			oa.groupByKeys[i].WeightStringCol = grouping.wsCol
-		}
-		oa.resultsBuilder = resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(aggPlan),
-			weightStrings:     make(map[*resultColumn]int),
-		}
+	oa.aggregates = aggrParams
+	for i, grouping := range groupings {
+		oa.groupByKeys[i].KeyCol = grouping.col
+		oa.groupByKeys[i].WeightStringCol = grouping.wsCol
+	}
+	oa.resultsBuilder = resultsBuilder{
+		logicalPlanCommon: newBuilderCommon(aggPlan),
+		weightStrings:     make(map[*resultColumn]int),
 	}
 
 	var orderExprs []abstract.OrderBy
+
 	// if we can't at a later stage push down the sorting to our inputs, we have to do ordering here
 	for _, groupExpr := range hp.qp.GroupByExprs {
 		orderExprs = append(orderExprs, abstract.OrderBy{
@@ -524,7 +524,31 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		oa.input = newInput
 	}
 
-	return out, nil
+	return oa, nil
+}
+
+func (hp *horizonPlanning) planAggregationWithoutOA(ctx *plancontext.PlanningContext, plan logicalPlan) error {
+	for _, expr := range hp.qp.SelectExprs {
+		aliasedExpr, err := expr.GetAliasedExpr()
+		if err != nil {
+			return err
+		}
+		_, _, err = pushProjection(ctx, aliasedExpr, plan, true, false, false)
+		if err != nil {
+			return err
+		}
+	}
+	for _, expr := range hp.qp.GroupByExprs {
+		// since all the grouping will be done at the mysql level,
+		// we know that we won't need any weight_string() calls
+		weighString := false
+		//goland:noinspection ALL
+		err := planGroupByGen4(ctx, expr, plan, weighString)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type offsets struct {
@@ -1597,4 +1621,25 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
 	}
 	return nil
+}
+
+func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupBy, plan logicalPlan, wsAdded bool) error {
+	switch node := plan.(type) {
+	case *routeGen4:
+		sel := node.Select.(*sqlparser.Select)
+		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
+		// If a weight_string function is added to the select list,
+		// then we need to add that to the group by clause otherwise the query will fail on mysql with full_group_by error
+		// as the weight_string function might not be functionally dependent on the group by.
+		if wsAdded {
+			sel.GroupBy = append(sel.GroupBy, weightStringFor(groupExpr.WeightStrExpr))
+		}
+		return nil
+	case *pulloutSubquery:
+		return planGroupByGen4(ctx, groupExpr, node.underlying, wsAdded)
+	case *semiJoin:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by in a query having a correlated subquery")
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
+	}
 }
