@@ -159,7 +159,7 @@ func TestExplain(t *testing.T) {
 		}},
 		{"gen4", &Options{
 			ReplicationMode: "ROW",
-			NumShards:       512,
+			NumShards:       4,
 			Normalize:       true,
 			PlannerVersion:  querypb.ExecuteOptions_Gen4,
 		}},
