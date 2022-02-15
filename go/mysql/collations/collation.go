@@ -180,3 +180,7 @@ func Slice(collation Collation, input []byte, from, to int) []byte {
 func Validate(collation Collation, input []byte) bool {
 	return charset.Validate(collation.Charset(), input)
 }
+
+func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
+	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
+}

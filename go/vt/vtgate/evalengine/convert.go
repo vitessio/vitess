@@ -23,13 +23,20 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type ConvertExpr struct {
-	UnaryExpr
-	Type                string
-	Length, Scale       int
-	HasLength, HasScale bool
-	Charset             string
-}
+type (
+	ConvertExpr struct {
+		UnaryExpr
+		Type                string
+		Length, Scale       int
+		HasLength, HasScale bool
+		Collation           collations.Collation
+	}
+
+	ConvertUsingExpr struct {
+		UnaryExpr
+		Collation collations.Collation
+	}
+)
 
 func (c *ConvertExpr) unsupported() {
 	var err error
@@ -58,24 +65,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			result.truncate(c.Length)
 		}
 	case "CHAR", "NCHAR":
-		var collation collations.Collation
-		switch {
-		case c.Type == "NCHAR":
-			collation = collations.Local().LookupByID(collations.CollationUtf8ID)
-		case c.Charset != "":
-			collation = collations.Local().DefaultCollationForCharset(c.Charset)
-			if collation == nil {
-				throwEvalError(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", c.Charset))
-			}
-		default:
-			collation = collations.Local().LookupByID(env.DefaultCollation)
-		}
-		result.makeTextual(collation.ID())
-		if !collations.Validate(collation, result.bytes()) {
-			result.setNull()
-			return
-		}
-		if c.HasLength {
+		if result.makeTextualAndConvert(c.Collation) && c.HasLength {
 			result.truncate(c.Length)
 		}
 	case "DECIMAL":
@@ -116,5 +106,18 @@ func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 func (c *ConvertExpr) typeof(env *ExpressionEnv) sqltypes.Type {
+	return -1
+}
+
+func (c *ConvertUsingExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	result.init(env, c.Inner)
+	if result.null() {
+		result.resolve()
+	} else {
+		result.makeTextualAndConvert(c.Collation)
+	}
+}
+
+func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) sqltypes.Type {
 	return -1
 }

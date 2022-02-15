@@ -90,6 +90,7 @@ var _ Expr = (*WeightStringCallExpr)(nil)
 var _ Expr = (*BitwiseExpr)(nil)
 var _ Expr = (*BitwiseNotExpr)(nil)
 var _ Expr = (*ConvertExpr)(nil)
+var _ Expr = (*ConvertUsingExpr)(nil)
 
 type evalError struct {
 	error

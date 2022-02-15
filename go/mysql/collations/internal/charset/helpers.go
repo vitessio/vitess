@@ -35,11 +35,12 @@ func Validate(charset Charset, input []byte) bool {
 	if charset, ok := charset.(interface{ Validate([]byte) bool }); ok {
 		return charset.Validate(input)
 	}
-	for {
+	for len(input) > 0 {
 		r, size := charset.DecodeRune(input)
 		if r == RuneError && size < 2 {
-			return size == 0
+			return false
 		}
 		input = input[size:]
 	}
+	return true
 }

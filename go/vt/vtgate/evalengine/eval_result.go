@@ -269,8 +269,35 @@ func (er *EvalResult) makeTextual(collation collations.ID) {
 	if er.bytes_ == nil {
 		er.bytes_ = er.toRawBytes()
 	}
-	er.type_ = int16(sqltypes.VarChar)
 	er.collation_.Collation = collation
+	er.type_ = int16(sqltypes.VarChar)
+}
+
+func (er *EvalResult) makeTextualAndConvert(collation collations.Collation) bool {
+	er.resolve()
+	if er.bytes_ == nil {
+		er.bytes_ = er.toRawBytes()
+	}
+
+	switch er.collation_.Collation {
+	case collations.CollationBinaryID:
+		if !collations.Validate(collation, er.bytes_) {
+			er.setNull()
+			return false
+		}
+	default:
+		var err error
+		fromCollation := collations.Local().LookupByID(er.collation_.Collation)
+		er.bytes_, err = collations.Convert(nil, collation, er.bytes_, fromCollation)
+		if err != nil {
+			er.setNull()
+			return false
+		}
+	}
+
+	er.collation_.Collation = collation.ID()
+	er.type_ = int16(sqltypes.VarChar)
+	return true
 }
 
 func (er *EvalResult) truncate(size int) {
@@ -827,7 +854,7 @@ func (er *EvalResult) makeUnsignedIntegral() {
 		er.setUint64(uint64(f))
 	case sqltypes.Decimal:
 		dec := er.decimal()
-		dec.num.Context.RoundingMode = decimal.AwayFromZero
+		dec.num.Context.RoundingMode = roundingModeIntegerConversion
 		dec.num.RoundToInt()
 		if dec.num.Signbit() {
 			i, _ := dec.num.Int64()
@@ -853,7 +880,7 @@ func (er *EvalResult) makeSignedIntegral() {
 		er.setInt64(int64(f))
 	case sqltypes.Decimal:
 		dec := er.decimal()
-		dec.num.Context.RoundingMode = decimal.AwayFromZero
+		dec.num.Context.RoundingMode = roundingModeIntegerConversion
 		dec.num.RoundToInt()
 		i, _ := dec.num.Int64()
 		er.setInt64(i)
