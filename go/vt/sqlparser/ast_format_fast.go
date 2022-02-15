@@ -2091,9 +2091,9 @@ func (node *CreateView) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Algorithm)
 		buf.WriteByte(' ')
 	}
-	if node.Definer != "" {
+	if node.Definer != nil {
 		buf.WriteString("definer = ")
-		buf.WriteString(node.Definer)
+		node.Definer.formatFast(buf)
 		buf.WriteByte(' ')
 	}
 	if node.Security != "" {
@@ -2141,9 +2141,9 @@ func (node *AlterView) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Algorithm)
 		buf.WriteByte(' ')
 	}
-	if node.Definer != "" {
+	if node.Definer != nil {
 		buf.WriteString("definer = ")
-		buf.WriteString(node.Definer)
+		node.Definer.formatFast(buf)
 		buf.WriteByte(' ')
 	}
 	if node.Security != "" {
@@ -2160,6 +2160,14 @@ func (node *AlterView) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" with ")
 		buf.WriteString(node.CheckOption)
 		buf.WriteString(" check option")
+	}
+}
+
+func (definer *Definer) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(definer.Name)
+	if definer.Address != "" {
+		buf.WriteByte('@')
+		buf.WriteString(definer.Address)
 	}
 }
 
