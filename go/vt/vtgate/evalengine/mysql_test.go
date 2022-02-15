@@ -118,6 +118,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT CAST(0xFF666F6F626172FF AS DECIMAL)`)
+	eval, err := testSingle(t, `select N'string' from dual`)
 	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }
