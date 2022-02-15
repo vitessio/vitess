@@ -3148,6 +3148,12 @@ func TestCreateTable(t *testing.T) {
 	middle_name varchar(255) character set utf8mb4 collate utf8mb4_bin default ''
 )`,
 		},
+		{
+			input: "create table t1 (`idb` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci GENERATED ALWAYS AS (json_unquote(json_extract(`jsonobj`,_utf8mb4'$._id'))) STORED NOT NULL)",
+			output: `create table t1 (
+	idb varchar(36) character set utf8mb4 collate utf8mb4_0900_ai_ci as (json_unquote(json_extract(jsonobj, _utf8mb4 '$._id'))) stored not null
+)`,
+		},
 		// multi-column indexes
 		{
 			input: `create table t (
