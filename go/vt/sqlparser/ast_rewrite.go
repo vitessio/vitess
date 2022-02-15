@@ -110,6 +110,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *Default:
 		return a.rewriteRefOfDefault(parent, node, replacer)
+	case *Definer:
+		return a.rewriteRefOfDefiner(parent, node, replacer)
 	case *Delete:
 		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DerivedTable:
@@ -680,6 +682,11 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}
 	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
 		parent.(*AlterView).ViewName = newNode.(TableName)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Definer = newNode.(*Definer)
 	}) {
 		return false
 	}
@@ -1566,6 +1573,11 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Definer = newNode.(*Definer)
+	}) {
+		return false
+	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Columns = newNode.(Columns)
 	}) {
@@ -1624,6 +1636,30 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	return true
 }
 func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfDefiner(parent SQLNode, node *Definer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}

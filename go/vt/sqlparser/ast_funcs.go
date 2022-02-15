@@ -1467,6 +1467,21 @@ func ToString(exprs []TableExpr) string {
 	return buf.String()
 }
 
+func formatIdentifier(id string) string {
+	buf := NewTrackedBuffer(nil)
+	formatID(buf, id, NoAt)
+	return buf.String()
+}
+
+func formatAddress(address string) string {
+	if len(address) > 0 && address[0] == '\'' {
+		return address
+	}
+	buf := NewTrackedBuffer(nil)
+	formatID(buf, address, NoAt)
+	return buf.String()
+}
+
 // ContainsAggregation returns true if the expression contains aggregation
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false

@@ -1590,8 +1590,8 @@ func (node *CreateView) Format(buf *TrackedBuffer) {
 	if node.Algorithm != "" {
 		buf.astPrintf(node, "algorithm = %s ", node.Algorithm)
 	}
-	if node.Definer != "" {
-		buf.astPrintf(node, "definer = %s ", node.Definer)
+	if node.Definer != nil {
+		buf.astPrintf(node, "definer = %v ", node.Definer)
 	}
 	if node.Security != "" {
 		buf.astPrintf(node, "sql security %s ", node.Security)
@@ -1622,8 +1622,8 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 	if node.Algorithm != "" {
 		buf.astPrintf(node, "algorithm = %s ", node.Algorithm)
 	}
-	if node.Definer != "" {
-		buf.astPrintf(node, "definer = %s ", node.Definer)
+	if node.Definer != nil {
+		buf.astPrintf(node, "definer = %v ", node.Definer)
 	}
 	if node.Security != "" {
 		buf.astPrintf(node, "sql security %s ", node.Security)
@@ -1632,6 +1632,13 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
 	if node.CheckOption != "" {
 		buf.astPrintf(node, " with %s check option", node.CheckOption)
+	}
+}
+
+func (definer *Definer) Format(buf *TrackedBuffer) {
+	buf.WriteString(definer.Name)
+	if definer.Address != "" {
+		buf.astPrintf(definer, "@%s", definer.Address)
 	}
 }
 

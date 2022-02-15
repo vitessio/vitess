@@ -110,6 +110,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *Default:
 		return VisitRefOfDefault(in, f)
+	case *Definer:
+		return VisitRefOfDefiner(in, f)
 	case *Delete:
 		return VisitRefOfDelete(in, f)
 	case *DerivedTable:
@@ -498,6 +500,9 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.ViewName, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
 		return err
 	}
 	if err := VisitColumns(in.Columns, f); err != nil {
@@ -897,6 +902,9 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	if err := VisitTableName(in.ViewName, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
+		return err
+	}
 	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
@@ -924,6 +932,15 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	return nil
 }
 func VisitRefOfDefault(in *Default, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDefiner(in *Definer, f Visit) error {
 	if in == nil {
 		return nil
 	}
