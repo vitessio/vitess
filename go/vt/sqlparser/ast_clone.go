@@ -111,6 +111,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *Default:
 		return CloneRefOfDefault(in)
+	case *Definer:
+		return CloneRefOfDefiner(in)
 	case *Delete:
 		return CloneRefOfDelete(in)
 	case *DerivedTable:
@@ -458,6 +460,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	}
 	out := *n
 	out.ViewName = CloneTableName(n.ViewName)
+	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
 	out.Comments = CloneComments(n.Comments)
@@ -752,6 +755,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	}
 	out := *n
 	out.ViewName = CloneTableName(n.ViewName)
+	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
 	out.Comments = CloneComments(n.Comments)
@@ -771,6 +775,15 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 
 // CloneRefOfDefault creates a deep clone of the input.
 func CloneRefOfDefault(n *Default) *Default {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfDefiner creates a deep clone of the input.
+func CloneRefOfDefiner(n *Definer) *Definer {
 	if n == nil {
 		return nil
 	}

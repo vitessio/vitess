@@ -496,7 +496,7 @@ type (
 	CreateView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
@@ -509,12 +509,18 @@ type (
 	AlterView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
 		Comments    Comments
+	}
+
+	// Definer stores the user for AlterView and CreateView definers
+	Definer struct {
+		Name    string
+		Address string
 	}
 
 	// DDLAction is an enum for DDL.Action

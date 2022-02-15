@@ -168,6 +168,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionOption *PartitionOption
   exprOrColumns *ExprOrColumns
   subPartition  *SubPartition
+  definer 	*Definer
 }
 
 %token LEX_ERROR
@@ -347,7 +348,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selectExpr> select_expression
 %type <strs> select_options flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
-%type <str> definer_opt user generated_always_opt
+%type <str> generated_always_opt user_username address_opt
+%type <definer> definer_opt user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table
@@ -5087,7 +5089,7 @@ cascade_or_local_opt:
 
 definer_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | DEFINER '=' user
   {
@@ -5097,23 +5099,41 @@ definer_opt:
 user:
 CURRENT_USER
   {
-    $$ = string($1)
+    $$ = &Definer{
+    	Name: string($1),
+    }
   }
 | CURRENT_USER '(' ')'
   {
-    $$ = string($1)
+    $$ = &Definer{
+        Name: string($1),
+    }
   }
-| STRING AT_ID
+| user_username address_opt
   {
-    $$ = encodeSQLString($1) + "@" + formatIdentifier($2)
+    $$ = &Definer{
+        Name: $1,
+        Address: $2,
+    }
   }
-| ID AT_ID
+
+user_username:
+  STRING
   {
-    $$ = formatIdentifier($1) + "@" + formatIdentifier($2)
+    $$ = encodeSQLString($1)
   }
 | ID
   {
     $$ = formatIdentifier($1)
+  }
+
+address_opt:
+  {
+    $$ = ""
+  }
+| AT_ID
+  {
+    $$ = formatAddress($1)
   }
 
 locking_clause:
