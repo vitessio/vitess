@@ -190,5 +190,26 @@ func (c *ConvertExpr) format(buf *formatter, depth int) {
 	buf.WriteString("CONVERT(")
 	c.Inner.format(buf, depth)
 	buf.WriteString(", ")
-	fmt.Fprintf(buf, ", %s(%d,%d))", c.Type, c.Length, c.Scale)
+
+	switch {
+	case c.HasLength && c.HasScale:
+		fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, c.Length, c.Scale)
+	case c.HasLength:
+		fmt.Fprintf(buf, ", %s(%d)", c.Type, c.Length)
+	default:
+		fmt.Fprintf(buf, ", %s", c.Type)
+	}
+	if c.Collation != nil {
+		buf.WriteString(" CHARACTER SET ")
+		buf.WriteString(c.Collation.Name())
+	}
+	buf.WriteByte(')')
+}
+
+func (c *ConvertUsingExpr) format(buf *formatter, depth int) {
+	buf.WriteString("CONVERT(")
+	c.Inner.format(buf, depth)
+	buf.WriteString(" USING ")
+	buf.WriteString(c.Collation.Name())
+	buf.WriteByte(')')
 }

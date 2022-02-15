@@ -396,7 +396,19 @@ func translateUnaryExpr(unary *sqlparser.UnaryExpr, lookup TranslationLookup) (E
 	}
 }
 
-func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (*ConvertExpr, error) {
+func translateConvertCharset(charset string, lookup TranslationLookup) (collations.Collation, error) {
+	if charset == "" {
+		return collations.Local().LookupByID(lookup.DefaultCollation()), nil
+	}
+	charset = strings.ToLower(charset)
+	collation := collations.Local().DefaultCollationForCharset(charset)
+	if collation == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unknown character set: '%s'", charset)
+	}
+	return collation, nil
+}
+
+func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (Expr, error) {
 	var (
 		convert ConvertExpr
 		err     error
@@ -417,9 +429,7 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 		return nil, err
 	}
 
-	convert.Charset = strings.ToLower(expr.Type.Charset)
 	convert.Type = strings.ToUpper(expr.Type.Type)
-
 	switch convert.Type {
 	case "DECIMAL":
 		if convert.Length < convert.Scale {
@@ -428,8 +438,35 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 				"", // TODO: column name
 			)
 		}
+	case "NCHAR":
+		convert.Collation = collations.Local().LookupByID(collations.CollationUtf8ID)
+	case "CHAR":
+		convert.Collation, err = translateConvertCharset(expr.Type.Charset, lookup)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return &convert, nil
+}
+
+func translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr, lookup TranslationLookup) (Expr, error) {
+	var (
+		using ConvertUsingExpr
+		err   error
+	)
+
+	using.Inner, err = translateExpr(expr.Expr, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	using.Collation, err = translateConvertCharset(expr.Type, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	return &using, nil
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {
@@ -483,6 +520,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateUnaryExpr(node, lookup)
 	case *sqlparser.ConvertExpr:
 		return translateConvertExpr(node, lookup)
+	case *sqlparser.ConvertUsingExpr:
+		return translateConvertUsingExpr(node, lookup)
 	default:
 		return nil, translateExprNotSupported(e)
 	}
