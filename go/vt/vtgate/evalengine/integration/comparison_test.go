@@ -53,7 +53,7 @@ func normalize(v sqltypes.Value) string {
 		return "NULL"
 	}
 	if v.IsQuoted() || typ == sqltypes.Bit {
-		return fmt.Sprintf("%v(%x)", typ, v.Raw())
+		return fmt.Sprintf("%v(%q)", typ, v.Raw())
 	}
 	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
 		var bitsize = 64
@@ -489,11 +489,11 @@ func TestConversionOperators(t *testing.T) {
 }
 
 func TestCharsetConversionOperators(t *testing.T) {
-	var left = []string{
-		`"foobar"`,
-		`_utf8mb4 "foobar"`,
-		`_latin1 X'4D7953514C'`,
-		`_binary 'foobar'`,
+	var introducers = []string{
+		"", "_latin1", "_utf8mb4", "_utf8", "_binary",
+	}
+	var contents = []string{
+		`"foobar"`, `X'4D7953514C'`,
 	}
 	var charsets = []string{
 		"utf8mb4", "utf8", "utf16", "utf32", "latin1", "ucs2",
@@ -502,10 +502,11 @@ func TestCharsetConversionOperators(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
-	for _, lhs := range left {
-		for _, rhs := range charsets {
-			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT HEX(CAST(%s AS CHAR CHARACTER SET %s))", lhs, rhs))
-			compareRemoteQuery(t, conn, fmt.Sprintf("SELECT HEX(CONVERT(%s USING %s))", lhs, rhs))
+	for _, pfx := range introducers {
+		for _, lhs := range contents {
+			for _, rhs := range charsets {
+				compareRemoteQuery(t, conn, fmt.Sprintf("SELECT HEX(CONVERT(%s %s USING %s))", pfx, lhs, rhs))
+			}
 		}
 	}
 }
