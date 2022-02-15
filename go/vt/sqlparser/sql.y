@@ -3299,9 +3299,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
   }
-| SHOW show_session_or_global STATUS
+| SHOW show_session_or_global STATUS like_or_where_opt
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{Scope: $2, Type: string($3), Filter: $4}
   }
 | SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
