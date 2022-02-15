@@ -1529,16 +1529,16 @@ var (
 		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e with cascaded check option",
 	}, {
 		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
-		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@`b.c.d` view a(b, c, d) as select * from e with local check option",
 	}, {
 		input:  "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
-		output: "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b, c, d) as select * from e with local check option",
+		output: "create or replace algorithm = temptable definer = a@`b.c.d` sql security definer view a(b, c, d) as select * from e with local check option",
 	}, {
 		input:  "create algorithm = undefined definer = `msandbox`@`localhost` sql security definer view `v3` as select `t`.`id` as `id` from `t`",
 		output: "create algorithm = undefined definer = msandbox@localhost sql security definer view v3 as select t.id as id from t",
 	}, {
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
-		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
+		output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
 	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
@@ -1546,7 +1546,7 @@ var (
 	}, {
 		input: "alter /*vt+ strategy=online */ view a as select * from t",
 	}, {
-		input: "alter algorithm = merge definer = m@172.0.1.01 sql security definer view a as select * from t with local check option",
+		input: "alter algorithm = merge definer = m@`172.0.1.01` sql security definer view a as select * from t with local check option",
 	}, {
 		input:  "rename table a to b",
 		output: "rename table a to b",

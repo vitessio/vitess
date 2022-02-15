@@ -3363,6 +3363,10 @@ use_statement:
   {
     $$ = &Use{DBName:TableIdent{v:""}}
   }
+| USE table_id AT_ID
+  {
+    $$ = &Use{DBName:NewTableIdent($2.String()+"@"+string($3))}
+  }
 
 begin_statement:
   BEGIN
@@ -5101,15 +5105,15 @@ CURRENT_USER
   }
 | STRING AT_ID
   {
-    $$ = encodeSQLString($1) + "@" + string($2)
+    $$ = encodeSQLString($1) + "@" + formatIdentifier($2)
   }
 | ID AT_ID
   {
-    $$ = string($1) + "@" + string($2)
+    $$ = formatIdentifier($1) + "@" + formatIdentifier($2)
   }
 | ID
   {
-    $$ = string($1)
+    $$ = formatIdentifier($1)
   }
 
 locking_clause:
