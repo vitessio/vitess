@@ -601,7 +601,7 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString("partition ")
 		node.Name.formatFast(buf)
-		buf.WriteString(" values less than (maxvalue)")
+		buf.WriteString(" values less than maxvalue")
 	}
 }
 

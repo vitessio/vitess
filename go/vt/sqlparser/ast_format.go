@@ -431,7 +431,7 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 	if !node.Maxvalue {
 		buf.astPrintf(node, "partition %v values less than (%v)", node.Name, node.Limit)
 	} else {
-		buf.astPrintf(node, "partition %v values less than (maxvalue)", node.Name)
+		buf.astPrintf(node, "partition %v values less than maxvalue", node.Name)
 	}
 }
 

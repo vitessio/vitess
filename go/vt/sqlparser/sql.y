@@ -342,7 +342,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partitionOption> partitions_options_opt partitions_options_beginning
 %type <subPartition> subpartition_opt
 %type <intervalType> interval_time_stamp interval
-%type <str> cache_opt separator_opt flush_option for_channel_opt
+%type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -3002,9 +3002,19 @@ partition_definition:
   {
     $$ = &PartitionDefinition{Name: $2, Limit: $7}
   }
-| PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb
+| PARTITION sql_id VALUES LESS THAN maxvalue
   {
     $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
+  }
+
+maxvalue:
+  MAXVALUE
+  {
+    $$ = ""
+  }
+| openb MAXVALUE closeb
+  {
+    $$ = ""
   }
 
 rename_statement:
