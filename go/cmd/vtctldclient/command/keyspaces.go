@@ -92,10 +92,16 @@ var (
 	}
 	ValidateSchemaKeyspace = &cobra.Command{
 		Use:                   "ValidateSchemaKeyspace [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace>",
-		Aliases:               []string{"validatekeyspace"},
+		Aliases:               []string{"validateschemakeyspace"},
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandValidateSchemaKeyspace,
+	}
+	ValidateVersionKeyspace = &cobra.Command{
+		Use:     "ValidateVersionKeyspace <keyspace>",
+		Aliases: []string{"validateversionkeyspace"},
+		Args:    cobra.ExactArgs(1),
+		RunE:    commandValidateVersionKeyspace,
 	}
 )
 
@@ -394,6 +400,27 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 
 	ks := cmd.Flags().Arg(0)
 	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       ks,
+		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
+		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVschema,
+		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
+		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%+v\n", resp.Results)
+
+	return nil
+}
+
+func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	ks := cmd.Flags().Arg(0)
+	resp, err := client.ValidateVersionKeyspace(commandCtx, &vtctldatapb.ValidateVersionKeyspaceRequest{
 		Keyspace: ks,
 	})
 
@@ -441,4 +468,6 @@ func init() {
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards")
 	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison")
 	Root.AddCommand(ValidateSchemaKeyspace)
+
+	Root.AddCommand(ValidateVersionKeyspace)
 }

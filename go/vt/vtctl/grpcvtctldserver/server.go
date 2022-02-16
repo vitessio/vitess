@@ -18,8 +18,11 @@ package grpcvtctldserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -1384,6 +1387,21 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
 	}, nil
+}
+
+// GetVersion returns the version string from a tablet
+func (s *VtctldServer) GetVersion(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (string, error) {
+	tablet, err := s.ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return "", err
+	}
+
+	version, err := getVersionFromTablet(tablet.Addr())
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), version)
+	return version, err
 }
 
 // GetVSchema is part of the vtctlservicepb.VtctldServer interface.
@@ -2937,9 +2955,9 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 				go func(alias *topodatapb.TabletAlias) {
 					defer aliasWg.Done()
 					log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
-					replicaSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, alias, nil, req.ExcludeTables, req.InludeViews)
+					replicaSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, alias, nil, req.ExcludeTables, req.IncludeViews)
 					if err != nil {
-						aliasErrs.RecordError(fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", alias, req.ExcludeTables, req.InludeViews, err))
+						aliasErrs.RecordError(fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", alias, req.ExcludeTables, req.IncludeViews, err))
 						return
 					}
 
@@ -2961,6 +2979,103 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	}
 
 	wg.Wait()
+
+	return &resp, nil
+}
+
+// ValidateVersionKeyspace validates all versions are the same in all
+// tablets in a keyspace
+func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctldatapb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	keyspace := req.Keyspace
+	// find all the shards
+	shards, err := s.ts.GetShardNames(ctx, keyspace)
+	resp := vtctldatapb.ValidateVersionKeyspaceResponse{
+		Results:        []string{},
+		ResultsByShard: make(map[string]*vtctldatapb.ValidateShardResponse, len(shards)),
+	}
+
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err))
+		return &resp, nil
+	}
+
+	// corner cases
+	if len(shards) == 0 {
+		resp.Results = append(resp.Results, fmt.Sprintf("no shards in keyspace %v", keyspace))
+		return &resp, nil
+	}
+
+	// find the reference version using the first shard's primary
+	si, err := s.ts.GetShard(ctx, keyspace, shards[0])
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("unable to find primary shard %v/%v", keyspace, shards[0]))
+		return &resp, nil
+	}
+	if !si.HasPrimary() {
+		resp.Results = append(resp.Results, fmt.Sprintf("no primary in shard %v/%v", keyspace, shards[0]))
+		return &resp, nil
+	}
+
+	referenceAlias := si.PrimaryAlias
+	referenceVersion, err := s.GetVersion(ctx, referenceAlias)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("unable to get reference version of first shard's primary tablet: %v", err))
+		return &resp, nil
+	}
+
+	// Mutex for ValidateVersionKeyspaceResponse
+	var m sync.Mutex
+
+	for _, shard := range shards {
+		m.Lock()
+		shardResp := vtctldatapb.ValidateShardResponse{
+			Results: []string{},
+		}
+
+		var (
+			// Mutex for ValidateShardResponse
+			sm sync.Mutex
+			// WaitGroup for tablets
+			wg sync.WaitGroup
+		)
+
+		aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+		if err != nil {
+			errMessage := fmt.Sprintf("unable to find tablet aliases in shard %v: %v", shard, err)
+			shardResp.Results = append(shardResp.Results, errMessage)
+			resp.Results = append(resp.Results, errMessage)
+			resp.ResultsByShard[shard] = &shardResp
+			m.Unlock()
+			continue
+		}
+
+		for _, alias := range aliases {
+			if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
+				continue
+			}
+
+			wg.Add(1)
+			go func(alias *topodatapb.TabletAlias, m *sync.Mutex) {
+				sm.Lock()
+				defer sm.Unlock()
+				defer wg.Done()
+				replicaVersion, err := s.GetVersion(ctx, alias)
+				if err != nil {
+					shardResp.Results = append(shardResp.Results, fmt.Sprintf("unable to get version for tablet %v: %v", alias, err))
+					return
+				}
+
+				if referenceVersion != replicaVersion {
+					shardResp.Results = append(shardResp.Results, fmt.Sprintf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(referenceAlias), referenceVersion, topoproto.TabletAliasString(alias), replicaVersion))
+				}
+			}(alias, &sm)
+		}
+
+		wg.Wait()
+		resp.Results = append(resp.Results, shardResp.Results...)
+		resp.ResultsByShard[shard] = &shardResp
+		m.Unlock()
+	}
 
 	return &resp, nil
 }
@@ -3149,3 +3264,32 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
 }
+
+// Helper function to get version of a tablet from its debug vars
+var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
+	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var vars struct {
+		BuildHost      string
+		BuildUser      string
+		BuildTimestamp int64
+		BuildGitRev    string
+	}
+	err = json.Unmarshal(body, &vars)
+	if err != nil {
+		return "", err
+	}
+
+	version := fmt.Sprintf("%v", vars)
+	return version, nil
+}
+
+var getVersionFromTablet = getVersionFromTabletDebugVars

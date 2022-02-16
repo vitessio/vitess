@@ -29,7 +29,7 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
-import KeyspaceActions from './keyspaces/KeyspaceActions'
+import KeyspaceActions from './keyspaces/KeyspaceActions';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
