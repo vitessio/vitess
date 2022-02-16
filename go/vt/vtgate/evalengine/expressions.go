@@ -286,6 +286,7 @@ var NullExpr = &Literal{}
 
 func init() {
 	NullExpr.Val.setNull()
+	NullExpr.Val.replaceCollation(collationNull)
 }
 
 // NewLiteralIntegralFromBytes returns a literal expression.
