@@ -102,9 +102,9 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex  int // index of the column in the filter's select
-	collation collations.Collation
-	isPK      bool // is this column part of the primary key
+	colIndex  int                  // index of the column in the filter's select
+	collation collations.Collation // is the colloation of the column, if any
+	isPK      bool                 // is this column part of the primary key
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -550,7 +550,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		if cpk.collation == nil {
-			// use a full unicode 9 compliant collation by default (accent and case insensitive)
+			// use a full unicode 9 compliant collation by default (accent and case insensitive) for sorting
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationUtf8mb4ID})
 		} else {
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
@@ -1049,7 +1049,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		var err error
 		var collationID collations.ID
 		// if the collation is nil or unknown, use binary collation to compare as bytes
-		if col.collation == nil || col.collation.ID() == collations.Unknown {
+		if col.collation == nil {
 			collationID = collations.CollationBinaryID
 		} else {
 			collationID = col.collation.ID()
