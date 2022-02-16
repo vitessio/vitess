@@ -79,8 +79,11 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
-	_, f := b.Inner.typeof(env)
+func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	tt, f := b.Inner.typeof(env)
+	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
+		return sqltypes.VarBinary, f
+	}
 	return sqltypes.Uint64, f
 }
 
@@ -220,9 +223,22 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
-	_, f1 := bit.Left.typeof(env)
-	_, f2 := bit.Right.typeof(env)
+func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	t1, f1 := bit.Left.typeof(env)
+	t2, f2 := bit.Right.typeof(env)
+
+	switch bit.Op.(type) {
+	case BitwiseBinaryOp:
+		if t1 == sqltypes.VarBinary && t2 == sqltypes.VarBinary &&
+			(f1&(flagHex|flagBit) == 0 || f2&(flagHex|flagBit) == 0) {
+			return sqltypes.VarBinary, f1 | f2
+		}
+	case BitWiseShiftOp:
+		if t1 == sqltypes.VarBinary && (f1&(flagHex|flagBit)) == 0 {
+			return sqltypes.VarBinary, f1 | f2
+		}
+	}
+
 	return sqltypes.Uint64, f1 | f2
 }
 

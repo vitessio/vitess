@@ -42,7 +42,7 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		eval(env *ExpressionEnv, result *EvalResult)
-		typeof(env *ExpressionEnv) (sqltypes.Type, uint16)
+		typeof(env *ExpressionEnv) (sqltypes.Type, flag)
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify(env *ExpressionEnv) error
@@ -81,6 +81,7 @@ var _ Expr = (*Column)(nil)
 var _ Expr = (*ArithmeticExpr)(nil)
 var _ Expr = (*ComparisonExpr)(nil)
 var _ Expr = (*InExpr)(nil)
+var _ Expr = (*IsExpr)(nil)
 var _ Expr = (*LikeExpr)(nil)
 var _ Expr = (TupleExpr)(nil)
 var _ Expr = (*CollateExpr)(nil)
@@ -484,7 +485,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	bvar := bv.bvar(env)
 	if bvar.Type == sqltypes.Null {
 		return sqltypes.Null, flagNull | flagNullable
@@ -505,16 +506,16 @@ func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, uint16) {
+func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
 	return l.Val.typeof(), l.Val.flags_
 }
 
 // typeof implements the Expr interface
-func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, uint16) {
+func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
 	return sqltypes.Tuple, flagNullable
 }
 
-func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	value := env.Row[c.Offset]
 	tt := value.Type()
 	switch tt {
