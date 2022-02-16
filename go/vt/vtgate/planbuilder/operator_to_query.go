@@ -82,7 +82,7 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		sel.OrderBy = opQuery.OrderBy
 		sel.GroupBy = opQuery.GroupBy
 		sel.Having = opQuery.Having
-		sel.SelectExprs = sqlparser.GetFirstSelect(op.Query).SelectExprs
+		sel.SelectExprs = opQuery.SelectExprs
 		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
 			Select: sel,
 		}, nil)
