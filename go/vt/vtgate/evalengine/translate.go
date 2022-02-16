@@ -341,7 +341,7 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 		Arguments: args,
 		Aliases:   aliases,
 		Method:    method,
-		Call:      call,
+		F:         call,
 	}, nil
 }
 

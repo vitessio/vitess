@@ -33,8 +33,10 @@ import (
 )
 
 const (
-	flagHex = 1 << iota
-	flagBit
+	flagNull     = 1 << 0
+	flagNullable = 1 << 1
+	flagHex      = 1 << 8
+	flagBit      = 1 << 9
 )
 
 type (
@@ -83,7 +85,10 @@ type (
 func (er *EvalResult) init(env *ExpressionEnv, expr Expr) {
 	er.expr = expr
 	er.env = env
-	er.type_ = int16(expr.typeof(env))
+
+	var tt sqltypes.Type
+	tt, er.flags_ = expr.typeof(env)
+	er.type_ = int16(tt)
 }
 
 const typecheckEval = false
@@ -110,13 +115,12 @@ func (er *EvalResult) resolve() {
 
 func (er *EvalResult) typeof() sqltypes.Type {
 	if er.type_ < 0 {
-		er.resolve()
+		panic("er.type_ < 0")
 	}
 	return sqltypes.Type(er.type_)
 }
 
 func (er *EvalResult) hasFlag(f uint16) bool {
-	er.resolve()
 	return (er.flags_ & f) != 0
 }
 
@@ -165,16 +169,25 @@ func (er *EvalResult) string() string {
 }
 
 func (er *EvalResult) value() sqltypes.Value {
+	if er.null() {
+		return sqltypes.NULL
+	}
 	return sqltypes.MakeTrusted(er.typeof(), er.toRawBytes())
 }
 
 func (er *EvalResult) null() bool {
-	return er.typeof() == sqltypes.Null
+	if !er.hasFlag(flagNullable) {
+		return false
+	}
+	if er.hasFlag(flagNull) {
+		return true
+	}
+	er.resolve()
+	return er.hasFlag(flagNull)
 }
 
 func (er *EvalResult) setNull() {
-	er.type_ = int16(sqltypes.Null)
-	er.collation_ = collationNull
+	er.flags_ |= flagNullable | flagNull
 }
 
 func (er *EvalResult) setBool(b bool) {
@@ -457,9 +470,10 @@ func (er *EvalResult) textual() bool {
 }
 
 func (er *EvalResult) truthy() boolean {
-	switch er.typeof() {
-	case sqltypes.Null:
+	if er.null() {
 		return boolNULL
+	}
+	switch er.typeof() {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64, sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return makeboolean(er.uint64() != 0)
 	case sqltypes.Float64, sqltypes.Float32:
@@ -498,6 +512,9 @@ func FormatFloat(typ sqltypes.Type, f float64) []byte {
 }
 
 func (er *EvalResult) toRawBytes() []byte {
+	if er.null() {
+		return nil
+	}
 	switch er.typeof() {
 	case sqltypes.Int64, sqltypes.Int32:
 		return strconv.AppendInt(nil, er.int64(), 10)
@@ -508,8 +525,6 @@ func (er *EvalResult) toRawBytes() []byte {
 	case sqltypes.Decimal:
 		dec := er.decimal()
 		return dec.num.FormatCustom(dec.frac, roundingModeFormat)
-	case sqltypes.Null:
-		return nil
 	default:
 		return er.bytes()
 	}

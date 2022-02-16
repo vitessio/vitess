@@ -79,6 +79,11 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
+func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f := b.Inner.typeof(env)
+	return sqltypes.Uint64, f
+}
+
 func (o OpBitShiftRight) BitwiseOp() string                { return ">>" }
 func (o OpBitShiftRight) numeric(num, shift uint64) uint64 { return num >> shift }
 
@@ -215,8 +220,10 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return sqltypes.Uint64
+func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f1 := bit.Left.typeof(env)
+	_, f2 := bit.Right.typeof(env)
+	return sqltypes.Uint64, f1 | f2
 }
 
 var _ BitwiseBinaryOp = (*OpBitAnd)(nil)

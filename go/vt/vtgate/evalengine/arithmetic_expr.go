@@ -61,11 +61,12 @@ func (b *ArithmeticExpr) eval(env *ExpressionEnv, out *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (b *ArithmeticExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	// TODO: this is returning an unknown type for this arithmetic expression;
-	// for some cases, it may be possible to calculate the resulting type
-	// of the expression ahead of time, making the evaluation lazier.
-	return -1
+func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	t1, f1 := b.Left.typeof(env)
+	_, f2 := b.Right.typeof(env)
+
+	// TODO: this is not really accurate
+	return b.Op.typeof(t1), f1 | f2
 }
 
 func (a *OpAddition) eval(left, right, out *EvalResult) error {

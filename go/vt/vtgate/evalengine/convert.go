@@ -42,11 +42,11 @@ func (c *ConvertExpr) unsupported() {
 	var err error
 	switch {
 	case c.HasLength && c.HasScale:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type convertsion: %s(%d,%d)", c.Type, c.Length, c.Scale)
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s(%d,%d)", c.Type, c.Length, c.Scale)
 	case c.HasLength:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type convertsion: %s(%d)", c.Type, c.Length)
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s(%d)", c.Type, c.Length)
 	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type convertsion: %s", c.Type)
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", c.Type)
 	}
 	throwEvalError(err)
 }
@@ -105,8 +105,31 @@ func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (c *ConvertExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return -1
+func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f := c.Inner.typeof(env)
+
+	switch c.Type {
+	case "BINARY":
+		return sqltypes.VarBinary, f
+	case "CHAR", "NCHAR":
+		return sqltypes.VarChar, f | flagNullable
+	case "DECIMAL":
+		return sqltypes.Decimal, f
+	case "DOUBLE", "REAL":
+		return sqltypes.Float64, f
+	case "FLOAT":
+		c.unsupported()
+		return sqltypes.Float32, f
+	case "SIGNED", "SIGNED INTEGER":
+		return sqltypes.Int64, f
+	case "UNSIGNED", "UNSIGNED INTEGER":
+		return sqltypes.Uint64, f
+	case "DATE", "DATETIME", "YEAR", "JSON", "TIME":
+		c.unsupported()
+		return sqltypes.Null, f
+	default:
+		panic("BUG: sqlparser emitted unknown type")
+	}
 }
 
 func (c *ConvertUsingExpr) eval(env *ExpressionEnv, result *EvalResult) {
@@ -118,6 +141,7 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return -1
+func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f := c.Inner.typeof(env)
+	return sqltypes.VarChar, f | flagNullable
 }

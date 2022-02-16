@@ -130,8 +130,9 @@ func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.setBoolean(inner.truthy().not())
 }
 
-func (n *NotExpr) typeof(*ExpressionEnv) sqltypes.Type {
-	return sqltypes.Uint64
+func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, flags := n.Inner.typeof(env)
+	return sqltypes.Uint64, flags
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
@@ -144,8 +145,10 @@ func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.setBoolean(l.op(left.truthy(), right.truthy()))
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return sqltypes.Uint64
+func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f1 := l.Left.typeof(env)
+	_, f2 := l.Right.typeof(env)
+	return sqltypes.Uint64, f1 | f2
 }
 
 // IsExpr represents the IS expression in MySQL.
@@ -164,6 +167,6 @@ func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.setBool(i.Check(&in))
 }
 
-func (i *IsExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return sqltypes.Int64
+func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	return sqltypes.Int64, 0
 }
