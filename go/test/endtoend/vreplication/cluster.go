@@ -110,7 +110,9 @@ func setTempVtDataRoot() string {
 }
 
 // setVtMySQLRoot creates the root directory if it does not exist
-// and saves the directory in the VT_MYSQL_ROOT OS ENV var
+// and saves the directory in the VT_MYSQL_ROOT OS env var.
+// mysqlctl will then look for the mysql related binaries in the
+// ./bin, ./sbin, and ./libexec subdirectories of VT_MYSQL_ROOT.
 func setVtMySQLRoot(mysqlRoot string) error {
 	if _, err := os.Stat(mysqlRoot); os.IsNotExist(err) {
 		os.Mkdir(mysqlRoot, 0700)
@@ -123,6 +125,11 @@ func setVtMySQLRoot(mysqlRoot string) error {
 	return nil
 }
 
+// setDBFlavor sets the MYSQL_FLAVOR OS env var.
+// You should call this after calling setVtMySQLRoot() to ensure that the
+// correct flavor is used by mysqlctl based on the current mysqld version
+// in the path. If you don't do this then mysqlctl will use the incorrect
+// config/mycnf/<flavor>.cnf file and mysqld may fail to start.
 func setDBFlavor() error {
 	versionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
@@ -149,15 +156,18 @@ func unsetDBFlavor() {
 	_ = os.Unsetenv("MYSQL_FLAVOR")
 }
 
-func getDBMajorVersionInstalled() string {
+// getDBTypeVersionInUse checks the major DB version of the mysqld binary
+// that mysqlctl would currently use, e.g. 5.7 or 8.0 (in semantic versioning
+// this would be major.minor but in MySQL it's effectively the major version).
+func getDBTypeVersionInUse() (string, error) {
 	var dbTypeMajorVersion string
 	versionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
-		return dbTypeMajorVersion
+		return dbTypeMajorVersion, err
 	}
 	flavor, version, err := mysqlctl.ParseVersionString(versionStr)
 	if err != nil {
-		return dbTypeMajorVersion
+		return dbTypeMajorVersion, err
 	}
 	majorVersion := fmt.Sprintf("%d.%d", version.Major, version.Minor)
 	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
@@ -165,10 +175,18 @@ func getDBMajorVersionInstalled() string {
 	} else {
 		dbTypeMajorVersion = fmt.Sprintf("%s-%s", strings.ToLower(string(flavor)), majorVersion)
 	}
-	return dbTypeMajorVersion
+	return dbTypeMajorVersion, nil
 }
 
-func downloadDBVersion(dbType string, majorVersion string, path string) error {
+// downloadDBTypeVersion downloads a recent major version release build for the specified
+// DB type.
+// If the file already exists, it will not download it again.
+// The artifact will be downloaded and extracted in the specified path. So e.g. if you
+// pass /tmp as the path and 5.7 as the majorVersion, mysqld will be installed in:
+// /tmp/mysql-5.7/bin/mysqld
+// You should then call setVtMySQLRoot() and setDBFlavor() to ensure that this new
+// binary is used by mysqlctl along with the correct flavor specific config file.
+func downloadDBTypeVersion(dbType string, majorVersion string, path string) error {
 	client := http.Client{
 		Timeout: 10 * time.Minute,
 	}
@@ -296,7 +314,8 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 	return vc
 }
 
-// AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets
+// AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets.
+// You can pass optional key=value pairs (opts) if you want conditional behavior.
 func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts ...string) (*Keyspace, error) {
 	for _, opt := range opts {
 		if strings.HasPrefix(opt, "DBTypeVersion=") {
@@ -312,7 +331,11 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 			majorVersion := details[1]
 			dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
 			// Do nothing if this version is already installed
-			if dbTypeMajorVersion == getDBMajorVersionInstalled() {
+			dbVersionInUse, err := getDBTypeVersionInUse()
+			if err != nil {
+				t.Fatalf("Could not get details of database to be used for the keyspace: %v", err)
+			}
+			if dbTypeMajorVersion == dbVersionInUse {
 				t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
 				continue
 			}
@@ -323,7 +346,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 			}
 			defer unsetVtMySQLRoot()
 			// Download and extract the version artifact if needed
-			if err := downloadDBVersion(dbType, majorVersion, path); err != nil {
+			if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
 				t.Fatalf("Could not download %s, error: %v", majorVersion, err)
 			}
 			// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
