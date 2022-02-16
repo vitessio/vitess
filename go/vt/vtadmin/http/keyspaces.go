@@ -122,3 +122,15 @@ func ValidateSchemaKeyspace(ctx context.Context, r Request, api *API) *JSONRespo
 
 	return NewJSONResponse(res, err)
 }
+
+// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+func ValidateVersionKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := mux.Vars(r.Request)
+
+	res, err := api.server.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
+		Keyspace:  vars["name"],
+		ClusterId: vars["cluster_id"],
+	})
+
+	return NewJSONResponse(res, err)
+}

@@ -345,3 +345,8 @@ func (client *localVtctldClient) ValidateSchemaKeyspace(ctx context.Context, in 
 func (client *localVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
 	return client.s.ValidateShard(ctx, in)
 }
+
+// ValidateVersionKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	return client.s.ValidateVersionKeyspace(ctx, in)
+}

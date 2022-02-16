@@ -485,6 +485,20 @@ export namespace vtadmin {
         public validateSchemaKeyspace(request: vtadmin.IValidateSchemaKeyspaceRequest): Promise<vtctldata.ValidateSchemaKeyspaceResponse>;
 
         /**
+         * Calls ValidateVersionKeyspace.
+         * @param request ValidateVersionKeyspaceRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ValidateVersionKeyspaceResponse
+         */
+        public validateVersionKeyspace(request: vtadmin.IValidateVersionKeyspaceRequest, callback: vtadmin.VTAdmin.ValidateVersionKeyspaceCallback): void;
+
+        /**
+         * Calls ValidateVersionKeyspace.
+         * @param request ValidateVersionKeyspaceRequest message or plain object
+         * @returns Promise
+         */
+        public validateVersionKeyspace(request: vtadmin.IValidateVersionKeyspaceRequest): Promise<vtctldata.ValidateVersionKeyspaceResponse>;
+
+        /**
          * Calls VTExplain.
          * @param request VTExplainRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VTExplainResponse
@@ -731,6 +745,13 @@ export namespace vtadmin {
          * @param [response] ValidateSchemaKeyspaceResponse
          */
         type ValidateSchemaKeyspaceCallback = (error: (Error|null), response?: vtctldata.ValidateSchemaKeyspaceResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#validateVersionKeyspace}.
+         * @param error Error, if any
+         * @param [response] ValidateVersionKeyspaceResponse
+         */
+        type ValidateVersionKeyspaceCallback = (error: (Error|null), response?: vtctldata.ValidateVersionKeyspaceResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
@@ -7366,6 +7387,102 @@ export namespace vtadmin {
 
         /**
          * Converts this ValidateSchemaKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVersionKeyspaceRequest. */
+    interface IValidateVersionKeyspaceRequest {
+
+        /** ValidateVersionKeyspaceRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** ValidateVersionKeyspaceRequest keyspace */
+        keyspace?: (string|null);
+    }
+
+    /** Represents a ValidateVersionKeyspaceRequest. */
+    class ValidateVersionKeyspaceRequest implements IValidateVersionKeyspaceRequest {
+
+        /**
+         * Constructs a new ValidateVersionKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IValidateVersionKeyspaceRequest);
+
+        /** ValidateVersionKeyspaceRequest cluster_id. */
+        public cluster_id: string;
+
+        /** ValidateVersionKeyspaceRequest keyspace. */
+        public keyspace: string;
+
+        /**
+         * Creates a new ValidateVersionKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVersionKeyspaceRequest instance
+         */
+        public static create(properties?: vtadmin.IValidateVersionKeyspaceRequest): vtadmin.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Encodes the specified ValidateVersionKeyspaceRequest message. Does not implicitly {@link vtadmin.ValidateVersionKeyspaceRequest.verify|verify} messages.
+         * @param message ValidateVersionKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IValidateVersionKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVersionKeyspaceRequest message, length delimited. Does not implicitly {@link vtadmin.ValidateVersionKeyspaceRequest.verify|verify} messages.
+         * @param message ValidateVersionKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IValidateVersionKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVersionKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVersionKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Decodes a ValidateVersionKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVersionKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Verifies a ValidateVersionKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVersionKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVersionKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a ValidateVersionKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message ValidateVersionKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ValidateVersionKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVersionKeyspaceRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -41228,6 +41345,18 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest keyspace */
         keyspace?: (string|null);
+
+        /** ValidateSchemaKeyspaceRequest exclude_tables */
+        exclude_tables?: (string[]|null);
+
+        /** ValidateSchemaKeyspaceRequest include_views */
+        include_views?: (boolean|null);
+
+        /** ValidateSchemaKeyspaceRequest skip_no_primary */
+        skip_no_primary?: (boolean|null);
+
+        /** ValidateSchemaKeyspaceRequest include_vschema */
+        include_vschema?: (boolean|null);
     }
 
     /** Represents a ValidateSchemaKeyspaceRequest. */
@@ -41241,6 +41370,18 @@ export namespace vtctldata {
 
         /** ValidateSchemaKeyspaceRequest keyspace. */
         public keyspace: string;
+
+        /** ValidateSchemaKeyspaceRequest exclude_tables. */
+        public exclude_tables: string[];
+
+        /** ValidateSchemaKeyspaceRequest include_views. */
+        public include_views: boolean;
+
+        /** ValidateSchemaKeyspaceRequest skip_no_primary. */
+        public skip_no_primary: boolean;
+
+        /** ValidateSchemaKeyspaceRequest include_vschema. */
+        public include_vschema: boolean;
 
         /**
          * Creates a new ValidateSchemaKeyspaceRequest instance using the specified properties.
@@ -41596,6 +41737,192 @@ export namespace vtctldata {
 
         /**
          * Converts this ValidateShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVersionKeyspaceRequest. */
+    interface IValidateVersionKeyspaceRequest {
+
+        /** ValidateVersionKeyspaceRequest keyspace */
+        keyspace?: (string|null);
+    }
+
+    /** Represents a ValidateVersionKeyspaceRequest. */
+    class ValidateVersionKeyspaceRequest implements IValidateVersionKeyspaceRequest {
+
+        /**
+         * Constructs a new ValidateVersionKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidateVersionKeyspaceRequest);
+
+        /** ValidateVersionKeyspaceRequest keyspace. */
+        public keyspace: string;
+
+        /**
+         * Creates a new ValidateVersionKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVersionKeyspaceRequest instance
+         */
+        public static create(properties?: vtctldata.IValidateVersionKeyspaceRequest): vtctldata.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Encodes the specified ValidateVersionKeyspaceRequest message. Does not implicitly {@link vtctldata.ValidateVersionKeyspaceRequest.verify|verify} messages.
+         * @param message ValidateVersionKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidateVersionKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVersionKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.ValidateVersionKeyspaceRequest.verify|verify} messages.
+         * @param message ValidateVersionKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidateVersionKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVersionKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVersionKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Decodes a ValidateVersionKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVersionKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Verifies a ValidateVersionKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVersionKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVersionKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidateVersionKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a ValidateVersionKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message ValidateVersionKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidateVersionKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVersionKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ValidateVersionKeyspaceResponse. */
+    interface IValidateVersionKeyspaceResponse {
+
+        /** ValidateVersionKeyspaceResponse results */
+        results?: (string[]|null);
+
+        /** ValidateVersionKeyspaceResponse results_by_shard */
+        results_by_shard?: ({ [k: string]: vtctldata.IValidateShardResponse }|null);
+    }
+
+    /** Represents a ValidateVersionKeyspaceResponse. */
+    class ValidateVersionKeyspaceResponse implements IValidateVersionKeyspaceResponse {
+
+        /**
+         * Constructs a new ValidateVersionKeyspaceResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IValidateVersionKeyspaceResponse);
+
+        /** ValidateVersionKeyspaceResponse results. */
+        public results: string[];
+
+        /** ValidateVersionKeyspaceResponse results_by_shard. */
+        public results_by_shard: { [k: string]: vtctldata.IValidateShardResponse };
+
+        /**
+         * Creates a new ValidateVersionKeyspaceResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ValidateVersionKeyspaceResponse instance
+         */
+        public static create(properties?: vtctldata.IValidateVersionKeyspaceResponse): vtctldata.ValidateVersionKeyspaceResponse;
+
+        /**
+         * Encodes the specified ValidateVersionKeyspaceResponse message. Does not implicitly {@link vtctldata.ValidateVersionKeyspaceResponse.verify|verify} messages.
+         * @param message ValidateVersionKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IValidateVersionKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ValidateVersionKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.ValidateVersionKeyspaceResponse.verify|verify} messages.
+         * @param message ValidateVersionKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IValidateVersionKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ValidateVersionKeyspaceResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ValidateVersionKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ValidateVersionKeyspaceResponse;
+
+        /**
+         * Decodes a ValidateVersionKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ValidateVersionKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ValidateVersionKeyspaceResponse;
+
+        /**
+         * Verifies a ValidateVersionKeyspaceResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ValidateVersionKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ValidateVersionKeyspaceResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ValidateVersionKeyspaceResponse;
+
+        /**
+         * Creates a plain object from a ValidateVersionKeyspaceResponse message. Also converts values to other types if specified.
+         * @param message ValidateVersionKeyspaceResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ValidateVersionKeyspaceResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ValidateVersionKeyspaceResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

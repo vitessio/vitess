@@ -18,7 +18,7 @@ export const Debug = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
     const [formData, setFormData] = React.useState<{ [key: string]: any }>({});
-    const [enabled, setEnabled] = React.useState(false)
+    const [enabled, setEnabled] = React.useState(false);
 
     return (
         <ContentContainer>
