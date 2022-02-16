@@ -77,7 +77,12 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		buildQuery(op.Source, qb)
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil
-		sel.SelectExprs = sqlparser.GetFirstSelect(op.Query).SelectExprs
+		opQuery := sqlparser.RemoveKeyspace(op.Query).(*sqlparser.Select)
+		sel.Limit = opQuery.Limit
+		sel.OrderBy = opQuery.OrderBy
+		sel.GroupBy = opQuery.GroupBy
+		sel.Having = opQuery.Having
+		sel.SelectExprs = opQuery.SelectExprs
 		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
 			Select: sel,
 		}, nil)
