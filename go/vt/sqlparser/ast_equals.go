@@ -2173,7 +2173,8 @@ func EqualsRefOfPartitionValueRange(a, b *PartitionValueRange) bool {
 		return false
 	}
 	return a.Maxvalue == b.Maxvalue &&
-		EqualsExpr(a.Range, b.Range)
+		a.Type == b.Type &&
+		EqualsValTuple(a.Range, b.Range)
 }
 
 // EqualsPartitions does deep equals between the two objects.

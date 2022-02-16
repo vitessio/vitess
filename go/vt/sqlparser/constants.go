@@ -72,6 +72,10 @@ const (
 	RangeTypeStr = "range"
 	ListTypeStr  = "list"
 
+	// Partition value range type strings
+	LessThanTypeStr = "less than"
+	InTypeStr       = "in"
+
 	// Online DDL hint
 	OnlineStr = "online"
 
@@ -495,6 +499,12 @@ const (
 	KeyType
 	RangeType
 	ListType
+)
+
+// Constant for Enum Type - PartitionValueRangeType
+const (
+	LessThanType PartitionValueRangeType = iota
+	InType
 )
 
 // Constant for Enum Type - ExplainType

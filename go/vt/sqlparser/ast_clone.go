@@ -1349,7 +1349,7 @@ func CloneRefOfPartitionValueRange(n *PartitionValueRange) *PartitionValueRange 
 		return nil
 	}
 	out := *n
-	out.Range = CloneExpr(n.Range)
+	out.Range = CloneValTuple(n.Range)
 	return &out
 }
 

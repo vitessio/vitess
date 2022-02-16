@@ -1151,6 +1151,18 @@ func (partitionType PartitionByType) ToString() string {
 	}
 }
 
+// ToString returns the partition value range type as a string
+func (t PartitionValueRangeType) ToString() string {
+	switch t {
+	case LessThanType:
+		return LessThanTypeStr
+	case InType:
+		return InTypeStr
+	default:
+		return "Unknown PartitionValueRangeType"
+	}
+}
+
 // ToString returns the operator as a string
 func (op UnaryExprOperator) ToString() string {
 	switch op {

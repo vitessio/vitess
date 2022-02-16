@@ -3009,13 +3009,26 @@ partition_value_range_opt:
   {
     $$ = nil
   }
-| VALUES LESS THAN openb expression closeb
+| VALUES LESS THAN row_tuple
   {
-    $$ = &PartitionValueRange{Range: $5}
+    $$ = &PartitionValueRange{
+    	Type: LessThanType,
+    	Range: $4,
+    }
   }
 | VALUES LESS THAN maxvalue
   {
-    $$ = &PartitionValueRange{Maxvalue: true}
+    $$ = &PartitionValueRange{
+    	Type: LessThanType,
+    	Maxvalue: true,
+    }
+  }
+| VALUES IN row_tuple
+  {
+    $$ = &PartitionValueRange{
+    	Type: InType,
+    	Range: $3,
+    }
   }
 
 partition_name:
