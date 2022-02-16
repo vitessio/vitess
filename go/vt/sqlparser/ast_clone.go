@@ -219,6 +219,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
 		return CloneRefOfPartitionSpec(in)
+	case *PartitionValueRange:
+		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
 	case ReferenceAction:
@@ -1311,7 +1313,7 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
-	out.Limit = CloneExpr(n.Limit)
+	out.ValueRange = CloneRefOfPartitionValueRange(n.ValueRange)
 	return &out
 }
 
@@ -1338,6 +1340,16 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	out.Number = CloneRefOfLiteral(n.Number)
 	out.TableName = CloneTableName(n.TableName)
 	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
+	return &out
+}
+
+// CloneRefOfPartitionValueRange creates a deep clone of the input.
+func CloneRefOfPartitionValueRange(n *PartitionValueRange) *PartitionValueRange {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Range = CloneExpr(n.Range)
 	return &out
 }
 

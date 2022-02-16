@@ -128,6 +128,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
   partDefs      []*PartitionDefinition
+  partitionValueRange	*PartitionValueRange
   partSpecs     []*PartitionSpec
   characteristics []Characteristic
   selectExpr    SelectExpr
@@ -441,7 +442,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions partition_definitions_opt
-%type <partDef> partition_definition
+%type <partDef> partition_definition partition_name
+%type <partitionValueRange> partition_value_range_opt
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -2998,13 +3000,28 @@ partition_definitions:
   }
 
 partition_definition:
-  PARTITION sql_id VALUES LESS THAN openb expression closeb
+  partition_name partition_value_range_opt
   {
-    $$ = &PartitionDefinition{Name: $2, Limit: $7}
+    $$.ValueRange = $2
   }
-| PARTITION sql_id VALUES LESS THAN maxvalue
+
+partition_value_range_opt:
   {
-    $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
+    $$ = nil
+  }
+| VALUES LESS THAN openb expression closeb
+  {
+    $$ = &PartitionValueRange{Range: $5}
+  }
+| VALUES LESS THAN maxvalue
+  {
+    $$ = &PartitionValueRange{Maxvalue: true}
+  }
+
+partition_name:
+  PARTITION sql_id
+  {
+    $$ = &PartitionDefinition{Name: $2}
   }
 
 maxvalue:

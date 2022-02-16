@@ -592,16 +592,22 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
-	if !node.Maxvalue {
-		buf.WriteString("partition ")
-		node.Name.formatFast(buf)
-		buf.WriteString(" values less than (")
-		node.Limit.formatFast(buf)
-		buf.WriteByte(')')
+	buf.WriteString("partition ")
+	node.Name.formatFast(buf)
+	if node.ValueRange != nil {
+		buf.WriteByte(' ')
+		node.ValueRange.formatFast(buf)
+	}
+}
+
+// formatFast formats the node
+func (node *PartitionValueRange) formatFast(buf *TrackedBuffer) {
+	if node.Maxvalue {
+		buf.WriteString("values less than maxvalue")
 	} else {
-		buf.WriteString("partition ")
-		node.Name.formatFast(buf)
-		buf.WriteString(" values less than maxvalue")
+		buf.WriteString("values less than (")
+		node.Range.formatFast(buf)
+		buf.WriteByte(')')
 	}
 }
 
