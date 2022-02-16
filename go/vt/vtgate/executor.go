@@ -507,6 +507,11 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
+				// if the system variable's value is a string with single quotes we can remove the extra single quotes
+				//   sql_mode = "'only_full_group_by'" will become: sql_mode = "only_full_group_by"
+				if strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
+					value = strings.TrimSpace(value[1 : len(value)-1])
+				}
 				bindVars[key] = sqltypes.StringBindVariable(value)
 			}
 		}
