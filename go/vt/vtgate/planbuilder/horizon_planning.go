@@ -834,7 +834,7 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 		return offset, -1, nil
 	}
 	if !sqlparser.IsColName(expr) {
-		unary, ok := expr.(*sqlparser.UnaryExpr)
+		unary, ok := expr.(*sqlparser.ConvertExpr)
 		if ok && sqlparser.IsColName(unary.Expr) {
 			expr = unary.Expr
 		} else {

@@ -793,12 +793,65 @@ Gen4 plan same as above
 # unary expression
 "select a from user order by binary a desc"
 "unsupported: in scatter query: complex order by expression: convert(a, binary)"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select a from user order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` where 1 != 1",
+    "OrderBy": "(1|2) DESC",
+    "Query": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` order by convert(a, binary) desc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}
 
 # unary expression in join query
 "select u.a from user u join music m on u.a = m.a order by binary a desc"
 "unsupported: in scatter query: complex order by expression: convert(a, binary)"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u_a": 0
+    },
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u where 1 != 1",
+        "OrderBy": "(1|2) DESC",
+        "Query": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u order by convert(a, binary) desc",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music as m where 1 != 1",
+        "Query": "select 1 from music as m where m.a = :u_a",
+        "Table": "music"
+      }
+    ]
+  }
+}
 
 # intcol order by
 "select id, intcol from user order by intcol"
