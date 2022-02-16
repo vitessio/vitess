@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -1134,6 +1135,22 @@ func (op BinaryExprOperator) ToString() string {
 	}
 }
 
+// ToString returns the partition type as a string
+func (partitionType PartitionByType) ToString() string {
+	switch partitionType {
+	case HashType:
+		return HashTypeStr
+	case KeyType:
+		return KeyTypeStr
+	case ListType:
+		return ListTypeStr
+	case RangeType:
+		return RangeTypeStr
+	default:
+		return "Unknown PartitionByType"
+	}
+}
+
 // ToString returns the operator as a string
 func (op UnaryExprOperator) ToString() string {
 	switch op {
@@ -1632,4 +1649,9 @@ func RemoveKeyspaceFromColName(expr Expr) Expr {
 	}) // This hard cast is safe because we do not change the type the input
 
 	return expr
+}
+
+func convertStringToInt(integer string) int {
+	val, _ := strconv.Atoi(integer)
+	return val
 }

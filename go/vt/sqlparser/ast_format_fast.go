@@ -18,6 +18,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -607,42 +608,39 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("partition by")
-	if node.isHASH {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
+	if node.IsLinear {
+		buf.WriteString(" linear")
+	}
+
+	switch node.Type {
+	case HashType:
+		buf.WriteString(" hash (")
+		node.Expr.formatFast(buf)
+		buf.WriteByte(')')
+	case KeyType:
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != 0 {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteString(" hash")
+		buf.WriteByte(' ')
+		node.ColList.formatFast(buf)
+	case RangeType, ListType:
+		buf.WriteByte(' ')
+		buf.WriteString(node.Type.ToString())
 		if node.Expr != nil {
 			buf.WriteString(" (")
 			node.Expr.formatFast(buf)
 			buf.WriteByte(')')
+		} else {
+			buf.WriteString(" columns ")
+			node.ColList.formatFast(buf)
 		}
 	}
-	if node.isKEY {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
-		}
-		buf.WriteString(" key")
-		if node.KeyAlgorithm != "" {
-			buf.WriteString(" algorithm = ")
-			buf.WriteString(node.KeyAlgorithm)
-		}
-		if node.KeyColList != nil {
-			buf.WriteByte(' ')
-			node.KeyColList.formatFast(buf)
-		}
-	}
-	if node.RangeOrList != "" {
-		buf.WriteByte(' ')
-		buf.WriteString(node.RangeOrList)
-		buf.WriteByte(' ')
-		node.ExprOrCol.formatFast(buf)
-	}
-	if node.Partitions != "" {
+
+	if node.Partitions != -1 {
 		buf.WriteString(" partitions ")
-		buf.WriteString(node.Partitions)
+		buf.WriteString(fmt.Sprintf("%d", node.Partitions))
 	}
 	if node.SubPartition != nil {
 		buf.WriteByte(' ')
@@ -663,50 +661,28 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("subpartition by")
-	if node.isHASH {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
-		}
-		buf.WriteString(" hash")
-		if node.Expr != nil {
-			buf.WriteString(" (")
-			node.Expr.formatFast(buf)
-			buf.WriteByte(')')
-		}
+	if node.IsLinear {
+		buf.WriteString(" linear")
 	}
-	if node.isKEY {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
-		}
-		buf.WriteString(" key")
-		if node.KeyAlgorithm != "" {
-			buf.WriteString(" algorithm = ")
-			buf.WriteString(node.KeyAlgorithm)
-		}
-		if node.KeyColList != nil {
-			buf.WriteString(" (")
-			node.KeyColList.formatFast(buf)
-			buf.WriteByte(')')
-		}
-	}
-	if node.SubPartitions != "" {
-		buf.WriteString(" subpartitions ")
-		buf.WriteString(node.SubPartitions)
-	}
-}
 
-// formatFast formats the node.
-func (node *ExprOrColumns) formatFast(buf *TrackedBuffer) {
-	if node.Expr != nil {
-		buf.WriteByte('(')
+	switch node.Type {
+	case HashType:
+		buf.WriteString(" hash (")
 		node.Expr.formatFast(buf)
 		buf.WriteByte(')')
+	case KeyType:
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != 0 {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
+		}
+		buf.WriteByte(' ')
+		node.ColList.formatFast(buf)
 	}
-	if node.ColumnList != nil {
-		buf.WriteString("columns ")
-		node.ColumnList.formatFast(buf)
+
+	if node.SubPartitions != -1 {
+		buf.WriteString(" subpartitions ")
+		buf.WriteString(fmt.Sprintf("%d", node.SubPartitions))
 	}
 }
 

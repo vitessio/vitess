@@ -132,8 +132,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
 		return a.rewriteRefOfExplainTab(parent, node, replacer)
-	case *ExprOrColumns:
-		return a.rewriteRefOfExprOrColumns(parent, node, replacer)
 	case Exprs:
 		return a.rewriteExprs(parent, node, replacer)
 	case *ExtractFuncExpr:
@@ -2003,38 +2001,6 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 	}
 	return true
 }
-func (a *application) rewriteRefOfExprOrColumns(parent SQLNode, node *ExprOrColumns, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*ExprOrColumns).Expr = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteColumns(node, node.ColumnList, func(newNode, parent SQLNode) {
-		parent.(*ExprOrColumns).ColumnList = newNode.(Columns)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3232,13 +3198,8 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 			return true
 		}
 	}
-	if !a.rewriteColumns(node, node.KeyColList, func(newNode, parent SQLNode) {
-		parent.(*PartitionOption).KeyColList = newNode.(Columns)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfExprOrColumns(node, node.ExprOrCol, func(newNode, parent SQLNode) {
-		parent.(*PartitionOption).ExprOrCol = newNode.(*ExprOrColumns)
+	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
+		parent.(*PartitionOption).ColList = newNode.(Columns)
 	}) {
 		return false
 	}
@@ -4172,8 +4133,8 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 			return true
 		}
 	}
-	if !a.rewriteColumns(node, node.KeyColList, func(newNode, parent SQLNode) {
-		parent.(*SubPartition).KeyColList = newNode.(Columns)
+	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
+		parent.(*SubPartition).ColList = newNode.(Columns)
 	}) {
 		return false
 	}

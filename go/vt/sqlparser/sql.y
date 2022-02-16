@@ -166,9 +166,10 @@ func bindVariable(yylex yyLexer, bvar string) {
   boolVal BoolVal
   ignore Ignore
   partitionOption *PartitionOption
-  exprOrColumns *ExprOrColumns
   subPartition  *SubPartition
+  partitionByType PartitionByType
   definer 	*Definer
+  integer 	int
 }
 
 %token LEX_ERROR
@@ -308,7 +309,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 // Partitions tokens
 %token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS HASH
 
-%type <str> linear_opt range_or_list partitions_opt subpartitions_opt algorithm_opt
+%type <partitionByType> range_or_list
+%type <integer> partitions_opt algorithm_opt subpartitions_opt
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
@@ -327,7 +329,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional first_opt
+%type <boolean> default_optional first_opt linear_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -337,8 +339,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
-%type <partitionOption> partitions_options_opt
-%type <exprOrColumns> expr_or_col
+%type <partitionOption> partitions_options_opt partitions_options_beginning
 %type <subPartition> subpartition_opt
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt
@@ -439,7 +440,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <indexOption> index_option using_index_type
 %type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
-%type <partDefs> partition_definitions partition_definition_opt
+%type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
@@ -2762,42 +2763,46 @@ partitions_options_opt:
   {
     $$ = nil
   }
-| PARTITION BY linear_opt HASH '(' expression ')' partitions_opt
-    subpartition_opt partition_definition_opt
+| PARTITION BY partitions_options_beginning partitions_opt subpartition_opt partition_definitions_opt
+    {
+      $3.Partitions = $4
+      $3.SubPartition = $5
+      $3.Definitions = $6
+      $$ = $3
+    }
+
+partitions_options_beginning:
+  linear_opt HASH '(' expression ')'
     {
       $$ = &PartitionOption {
-        Linear: $3,
-        isHASH: true,
-        Expr: $6,
-        Partitions: $8,
-        SubPartition: $9,
-        Definitions: $10,
+        IsLinear: $1,
+        Type: HashType,
+        Expr: $4,
       }
     }
-| PARTITION BY linear_opt KEY algorithm_opt '(' column_list ')'
-    partitions_opt subpartition_opt partition_definition_opt
+| linear_opt KEY algorithm_opt '(' column_list ')'
     {
       $$ = &PartitionOption {
-        Linear: $3,
-        isKEY: true,
-        KeyAlgorithm: $5,
-        KeyColList: $7,
-        Partitions: $9,
-        SubPartition: $10,
-        Definitions: $11,
+        IsLinear: $1,
+        Type: KeyType,
+        KeyAlgorithm: $3,
+        ColList: $5,
       }
     }
-| PARTITION BY range_or_list expr_or_col partitions_opt subpartition_opt
-    partition_definition_opt
+| range_or_list '(' expression ')'
     {
       $$ = &PartitionOption {
-        RangeOrList: $3,
-        ExprOrCol: $4,
-        Partitions: $5,
-        SubPartition: $6,
-        Definitions: $7,
+        Type: $1,
+        Expr: $3,
       }
     }
+| range_or_list COLUMNS '(' column_list ')'
+  {
+    $$ = &PartitionOption {
+        Type: $1,
+        ColList: $4,
+    }
+  }
 
 subpartition_opt:
   {
@@ -2806,8 +2811,8 @@ subpartition_opt:
 | SUBPARTITION BY linear_opt HASH '(' expression ')' subpartitions_opt
   {
     $$ = &SubPartition {
-      Linear: $3,
-      isHASH: true,
+      IsLinear: $3,
+      Type: HashType,
       Expr: $6,
       SubPartitions: $8,
     }
@@ -2815,15 +2820,15 @@ subpartition_opt:
 | SUBPARTITION BY linear_opt KEY algorithm_opt '(' column_list ')' subpartitions_opt
   {
     $$ = &SubPartition {
-      Linear: $3,
-      isKEY: true,
+      IsLinear: $3,
+      Type: KeyType,
       KeyAlgorithm: $5,
-      KeyColList: $7,
+      ColList: $7,
       SubPartitions: $9,
     }
   }
 
-partition_definition_opt:
+partition_definitions_opt:
   {
     $$ = nil
   }
@@ -2834,58 +2839,48 @@ partition_definition_opt:
 
 linear_opt:
   {
-    $$ = ""
+    $$ = false
   }
 | LINEAR
   {
-    $$ = string($1)
+    $$ = true
   }
 
 algorithm_opt:
   {
-    $$ = ""
+    $$ = 0
   }
 | ALGORITHM '=' INTEGRAL
   {
-    $$ = string($3)
+    $$ = convertStringToInt($3)
   }
 
 range_or_list:
   RANGE
   {
-    $$ = string($1)
+    $$ = RangeType
   }
 | LIST
   {
-    $$ = string($1)
-  }
-
-expr_or_col:
-  '(' expression ')'
-  {
-    $$ = &ExprOrColumns{Expr: $2}
-  }
-| COLUMNS '(' column_list ')'
-  {
-    $$ = &ExprOrColumns{ColumnList: $3}
+    $$ = ListType
   }
 
 partitions_opt:
   {
-    $$ = ""
+    $$ = -1
   }
 | PARTITIONS INTEGRAL
   {
-    $$ = string($2)
+    $$ = convertStringToInt($2)
   }
 
 subpartitions_opt:
   {
-    $$ = ""
+    $$ = -1
   }
 | SUBPARTITIONS INTEGRAL
   {
-    $$ = string($2)
+    $$ = convertStringToInt($2)
   }
 
 partition_operation:
