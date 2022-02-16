@@ -256,19 +256,42 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t2 (`id` int primary key, i int, key i2_idx (`i`, id), key i_idx3(id), key i_idx ( i ) )",
 			diff: "alter table t1 add key i_idx3 (id)",
 		},
+		// foreign keys
 		{
-			name:     "error on foreign key",
-			from:     "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
-			to:       "create table t2 (id int primary key, i int)",
-			isError:  true,
-			errorMsg: "foreign key",
+			name: "drop foreign key",
+			from: "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
+			to:   "create table t2 (id int primary key, i int)",
+			diff: "alter table t1 drop foreign key f",
 		},
 		{
-			name:     "error on foreign key 2",
-			from:     "create table t1 (id int primary key, i int)",
-			to:       "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
-			isError:  true,
-			errorMsg: "foreign key",
+			name: "add foreign key",
+			from: "create table t1 (id int primary key, i int)",
+			to:   "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
+			diff: "alter table t1 add constraint f foreign key (i) references parent (id)",
+		},
+		{
+			name: "identical foreign key",
+			from: "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
+			to:   "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
+			diff: "",
+		},
+		{
+			name: "modify foreign key",
+			from: "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
+			to:   "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete set null)",
+			diff: "alter table t1 drop foreign key f, add constraint f foreign key (i) references parent (id) on delete set null",
+		},
+		{
+			name: "drop and add foreign key",
+			from: "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
+			to:   "create table t2 (id int primary key, i int, constraint f2 foreign key (i) references parent(id) on delete set null)",
+			diff: "alter table t1 drop foreign key f, add constraint f2 foreign key (i) references parent (id) on delete set null",
+		},
+		{
+			name: "ignore different foreign key order",
+			from: "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete restrict, constraint f2 foreign key (i2) references parent2(id) on delete restrict)",
+			to:   "create table t2 (id int primary key, i int, constraint f2 foreign key (i2) references parent2(id) on delete restrict, constraint f foreign key (i) references parent(id) on delete restrict)",
+			diff: "",
 		},
 		// partitions
 		{
@@ -483,7 +506,7 @@ func TestCreateTableDiff(t *testing.T) {
 			alter, err := c.Diff(other, &hints)
 			switch {
 			case ts.isError:
-				assert.Error(t, err)
+				require.Error(t, err)
 				if ts.errorMsg != "" {
 					assert.Contains(t, err.Error(), ts.errorMsg)
 				}
