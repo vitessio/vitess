@@ -46,6 +46,9 @@ type (
 		CanPushDownSorting bool
 		HasStar            bool
 		ProjectionError    error
+
+		// CanCombineGroupByAndOrderBy is true if the grouping and ordering can be merged into one set of expressions
+		CanCombineGroupByAndOrderBy bool
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -66,6 +69,16 @@ type (
 		InnerIndex *int
 	}
 )
+
+func (b GroupBy) AsOrderBy() OrderBy {
+	return OrderBy{
+		Inner: &sqlparser.Order{
+			Expr:      b.Inner,
+			Direction: sqlparser.AscOrder,
+		},
+		WeightStrExpr: b.WeightStrExpr,
+	}
+}
 
 // GetExpr returns the underlying sqlparser.Expr of our SelectExpr
 func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {

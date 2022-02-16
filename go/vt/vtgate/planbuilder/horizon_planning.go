@@ -36,9 +36,8 @@ import (
 )
 
 type horizonPlanning struct {
-	sel            *sqlparser.Select
-	qp             *abstract.QueryProjection
-	vtgateGrouping bool
+	sel *sqlparser.Select
+	qp  *abstract.QueryProjection
 }
 
 func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
@@ -87,19 +86,10 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 
 	// If we have done the shortcut that means we already planned order by
 	// and group by, thus we don't need to do it again.
-	if !canShortcut {
-		if len(hp.qp.OrderExprs) > 0 {
-			plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
-			plan, err = hp.planGroupByUsingOrderBy(ctx, plan)
-			if err != nil {
-				return nil, err
-			}
+	if !qp.CanPushDownSorting && len(hp.qp.OrderExprs) > 0 {
+		plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -479,6 +469,34 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		groupByKeys: make([]*engine.GroupByParams, 0, len(hp.qp.GroupByExprs)),
 	}
 
+	if hp.qp.CanPushDownSorting {
+		// The ORDER BY can be performed before the OA
+
+		// Here we align the GROUP BY and ORDER BY.
+		// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
+		var newGrouping []abstract.GroupBy
+		used := make([]bool, len(hp.qp.GroupByExprs))
+		for _, orderExpr := range hp.qp.OrderExprs {
+			for i, groupingExpr := range hp.qp.GroupByExprs {
+				if !used[i] && sqlparser.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+					newGrouping = append(newGrouping, groupingExpr)
+					used[i] = true
+				}
+			}
+		}
+		if len(newGrouping) != len(hp.qp.GroupByExprs) {
+			// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
+			for i, added := range used {
+				if !added {
+					groupBy := hp.qp.GroupByExprs[i]
+					newGrouping = append(newGrouping, groupBy)
+					hp.qp.OrderExprs = append(hp.qp.OrderExprs, groupBy.AsOrderBy())
+				}
+			}
+		}
+		hp.qp.GroupByExprs = newGrouping
+	}
+
 	for _, expr := range hp.qp.GroupByExprs {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			Expr:        expr.Inner,
@@ -502,26 +520,17 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		oa.groupByKeys[i].KeyCol = grouping.col
 		oa.groupByKeys[i].WeightStringCol = grouping.wsCol
 	}
-	oa.resultsBuilder = resultsBuilder{
-		logicalPlanCommon: newBuilderCommon(aggPlan),
-		weightStrings:     make(map[*resultColumn]int),
-	}
 
-	var orderExprs []abstract.OrderBy
-
-	// if we can't at a later stage push down the sorting to our inputs, we have to do ordering here
-	for _, groupExpr := range hp.qp.GroupByExprs {
-		orderExprs = append(orderExprs, abstract.OrderBy{
-			Inner:         &sqlparser.Order{Expr: groupExpr.Inner},
-			WeightStrExpr: groupExpr.WeightStrExpr},
-		)
-	}
-	if len(orderExprs) > 0 {
-		newInput, err := hp.planOrderBy(ctx, orderExprs, aggPlan)
+	if hp.qp.CanPushDownSorting {
+		aggPlan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, aggPlan)
 		if err != nil {
 			return nil, err
 		}
-		oa.input = newInput
+	}
+
+	oa.resultsBuilder = resultsBuilder{
+		logicalPlanCommon: newBuilderCommon(aggPlan),
+		weightStrings:     make(map[*resultColumn]int),
 	}
 
 	return oa, nil
@@ -1219,6 +1228,8 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, 
 		plan.Right = rhs
 		return plan, nil
 	}
+	// We can only push down sorting on the LHS of the join.
+	// If the order is on the RHS, we need to do the sorting on the vtgate
 	if orderExprsDependsOnTableSet(orderExprs, ctx.SemTable, plan.Left.ContainsTables()) {
 		newLeft, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {

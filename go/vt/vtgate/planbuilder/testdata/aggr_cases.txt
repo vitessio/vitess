@@ -1450,8 +1450,8 @@ Gen4 error: Can't group on 'count(*)'
           "Sharded": true
         },
         "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b",
-        "OrderBy": "(0|3) ASC, (1|4) ASC",
-        "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b order by a asc, b asc",
+        "OrderBy": "(1|4) ASC, (0|3) ASC",
+        "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b order by b asc, a asc",
         "Table": "`user`"
       }
     ]
