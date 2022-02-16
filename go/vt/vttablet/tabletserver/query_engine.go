@@ -224,7 +224,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
 	qe.queryCounts = env.Exporter().NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
-	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
+	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "(DEPRECATED - use QueryRowsAffected and QueryRowsReturned instead) query row counts", []string{"Table", "Plan"})
 	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", []string{"Table", "Plan"})
 	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", []string{"Table", "Plan"})
 	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"})
