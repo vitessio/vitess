@@ -25,7 +25,6 @@ import (
 var (
 	ErrEntityTypeMismatch             = errors.New("mismatched entity type")
 	ErrStrictIndexOrderingUnsupported = errors.New("strict index ordering is unsupported")
-	ErrFKConstraintsUnsupported       = errors.New("foreign key constraints are unsupported")
 	ErrPartitioningUnsupported        = errors.New("partitions are unsupported")
 	ErrUnsupportedTableOption         = errors.New("unsupported table option")
 	ErrUnexpectedDiffAction           = errors.New("unexpected diff action")

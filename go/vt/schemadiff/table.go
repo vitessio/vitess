@@ -101,12 +101,6 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 	if c.CreateTable.TableSpec == nil {
 		return nil, ErrUnexpectedTableSpec
 	}
-	if len(c.CreateTable.TableSpec.Constraints) > 0 {
-		return nil, ErrFKConstraintsUnsupported
-	}
-	if len(otherCreateTable.TableSpec.Constraints) > 0 {
-		return nil, ErrFKConstraintsUnsupported
-	}
 
 	d, err := c.TableDiff(otherCreateTable, hints)
 	if err != nil {
@@ -152,6 +146,13 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		t1Keys := c.CreateTable.TableSpec.Indexes
 		t2Keys := other.CreateTable.TableSpec.Indexes
 		c.diffKeys(alterTable, t1Keys, t2Keys, hints)
+	}
+	{
+		// diff constraints (foreign keys)
+		// ordered constraints for both tables:
+		t1Constraints := c.CreateTable.TableSpec.Constraints
+		t2Constraints := other.CreateTable.TableSpec.Constraints
+		c.diffConstraints(alterTable, t1Constraints, t2Constraints, hints)
 	}
 	{
 		// diff partitions
@@ -346,6 +347,61 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	return nil
 }
 
+func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
+	t1Constraints []*sqlparser.ConstraintDefinition,
+	t2Constraints []*sqlparser.ConstraintDefinition,
+	hints *DiffHints,
+) {
+	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
+	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
+	for _, constraint := range t1Constraints {
+		t1ConstraintsMap[constraint.Name.String()] = constraint
+	}
+	for _, constraint := range t2Constraints {
+		t2ConstraintsMap[constraint.Name.String()] = constraint
+	}
+
+	dropConstraintStatement := func(name sqlparser.ColIdent) *sqlparser.DropKey {
+		return &sqlparser.DropKey{Name: name, Type: sqlparser.ForeignKeyType}
+	}
+
+	// evaluate dropped constraints
+	//
+	for _, t1Constraint := range t1Constraints {
+		if _, ok := t2ConstraintsMap[t1Constraint.Name.String()]; !ok {
+			// column exists in t1 but not in t2, hence it is dropped
+			dropConstraint := dropConstraintStatement(t1Constraint.Name)
+			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
+		}
+	}
+
+	for _, t2Constraint := range t2Constraints {
+		t2ConstraintName := t2Constraint.Name.String()
+		// evaluate modified & added constraints:
+		//
+		if t1Constraint, ok := t1ConstraintsMap[t2ConstraintName]; ok {
+			// constraint exists in both tables
+			// check diff between before/after columns:
+			if sqlparser.String(t2Constraint) != sqlparser.String(t1Constraint) {
+				// constraints with same name have different definition. There is no ALTER INDEX statement,
+				// we're gonna drop and create.
+				dropConstraint := dropConstraintStatement(t1Constraint.Name)
+				addConstraint := &sqlparser.AddConstraintDefinition{
+					ConstraintDefinition: t2Constraint,
+				}
+				alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
+				alterTable.AlterOptions = append(alterTable.AlterOptions, addConstraint)
+			}
+		} else {
+			// constraint exists in t2 but not in t1, hence it is added
+			addConstraint := &sqlparser.AddConstraintDefinition{
+				ConstraintDefinition: t2Constraint,
+			}
+			alterTable.AlterOptions = append(alterTable.AlterOptions, addConstraint)
+		}
+	}
+}
+
 func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 	t1Keys []*sqlparser.IndexDefinition,
 	t2Keys []*sqlparser.IndexDefinition,
@@ -371,7 +427,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		return dropKey
 	}
 
-	// evaluate dropped columns
+	// evaluate dropped keys
 	//
 	for _, t1Key := range t1Keys {
 		if _, ok := t2KeysMap[t1Key.Info.Name.String()]; !ok {
