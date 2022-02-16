@@ -81,13 +81,23 @@ func TestDiffTables(t *testing.T) {
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
 				assert.True(t, ok)
 			}
+			// Testing two paths:
+			// - one, just diff the "CREATE TABLE..." strings
+			// - two, diff the CreateTable constructs
+			// Technically, DiffCreateTablesQueries calls DiffTables,
+			// but we expose both to users of this library. so we want to make sure
+			// both work as expected irrespective of any relationship between them.
+			dq, dqerr := DiffCreateTablesQueries(ts.from, ts.to, hints)
 			d, err := DiffTables(fromCreateTable, toCreateTable, hints)
 			switch {
 			case ts.isError:
 				assert.Error(t, err)
+				assert.Error(t, dqerr)
 			case ts.diff == "":
 				assert.NoError(t, err)
+				assert.NoError(t, dqerr)
 				assert.Nil(t, d)
+				assert.Nil(t, dq)
 			default:
 				assert.NoError(t, err)
 				require.NotNil(t, d)
@@ -97,6 +107,13 @@ func TestDiffTables(t *testing.T) {
 				action, err := DDLActionStr(d)
 				assert.NoError(t, err)
 				assert.Equal(t, ts.action, action)
+
+				// let's also check dq, and also validate that dq's statement is identical to d's
+				assert.NoError(t, dqerr)
+				require.NotNil(t, dq)
+				require.False(t, dq.IsEmpty())
+				diff = sqlparser.String(dq.Statement())
+				assert.Equal(t, ts.diff, diff)
 			}
 		})
 	}
@@ -158,13 +175,23 @@ func TestDiffViews(t *testing.T) {
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)
 				assert.True(t, ok)
 			}
+			// Testing two paths:
+			// - one, just diff the "CREATE TABLE..." strings
+			// - two, diff the CreateTable constructs
+			// Technically, DiffCreateTablesQueries calls DiffTables,
+			// but we expose both to users of this library. so we want to make sure
+			// both work as expected irrespective of any relationship between them.
+			dq, dqerr := DiffCreateViewsQueries(ts.from, ts.to, hints)
 			d, err := DiffViews(fromCreateView, toCreateView, hints)
 			switch {
 			case ts.isError:
 				assert.Error(t, err)
+				assert.Error(t, dqerr)
 			case ts.diff == "":
 				assert.NoError(t, err)
+				assert.NoError(t, dqerr)
 				assert.Nil(t, d)
+				assert.Nil(t, dq)
 			default:
 				assert.NoError(t, err)
 				require.NotNil(t, d)
@@ -174,6 +201,13 @@ func TestDiffViews(t *testing.T) {
 				action, err := DDLActionStr(d)
 				assert.NoError(t, err)
 				assert.Equal(t, ts.action, action)
+
+				// let's also check dq, and also validate that dq's statement is identical to d's
+				assert.NoError(t, dqerr)
+				require.NotNil(t, dq)
+				require.False(t, dq.IsEmpty())
+				diff = sqlparser.String(dq.Statement())
+				assert.Equal(t, ts.diff, diff)
 			}
 		})
 	}
