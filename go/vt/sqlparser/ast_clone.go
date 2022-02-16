@@ -133,8 +133,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
-	case *ExprOrColumns:
-		return CloneRefOfExprOrColumns(in)
 	case Exprs:
 		return CloneExprs(in)
 	case *ExtractFuncExpr:
@@ -901,17 +899,6 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
-// CloneRefOfExprOrColumns creates a deep clone of the input.
-func CloneRefOfExprOrColumns(n *ExprOrColumns) *ExprOrColumns {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Expr = CloneExpr(n.Expr)
-	out.ColumnList = CloneColumns(n.ColumnList)
-	return &out
-}
-
 // CloneExprs creates a deep clone of the input.
 func CloneExprs(n Exprs) Exprs {
 	if n == nil {
@@ -1334,8 +1321,7 @@ func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
 		return nil
 	}
 	out := *n
-	out.KeyColList = CloneColumns(n.KeyColList)
-	out.ExprOrCol = CloneRefOfExprOrColumns(n.ExprOrCol)
+	out.ColList = CloneColumns(n.ColList)
 	out.Expr = CloneExpr(n.Expr)
 	out.SubPartition = CloneRefOfSubPartition(n.SubPartition)
 	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
@@ -1643,7 +1629,7 @@ func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
 		return nil
 	}
 	out := *n
-	out.KeyColList = CloneColumns(n.KeyColList)
+	out.ColList = CloneColumns(n.ColList)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
 }

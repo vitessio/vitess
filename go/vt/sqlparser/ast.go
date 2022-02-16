@@ -1525,36 +1525,29 @@ type PartitionDefinition struct {
 	Maxvalue bool
 }
 
+// PartitionByType is an enum storing how we are partitioning a table
+type PartitionByType int8
+
 // PartitionOption describes partitioning control (for create table statements)
 type PartitionOption struct {
-	Linear       string
-	isHASH       bool
-	isKEY        bool
-	KeyAlgorithm string
-	KeyColList   Columns
-	RangeOrList  string
-	ExprOrCol    *ExprOrColumns
+	Type         PartitionByType
+	IsLinear     bool
+	KeyAlgorithm int
+	ColList      Columns
 	Expr         Expr
-	Partitions   string
+	Partitions   int
 	SubPartition *SubPartition
 	Definitions  []*PartitionDefinition
 }
 
-// ExprOrColumns describes expression and columnlist in the partition
-type ExprOrColumns struct {
-	Expr       Expr
-	ColumnList Columns
-}
-
 // SubPartition describes subpartitions control
 type SubPartition struct {
-	Linear        string
-	isHASH        bool
-	isKEY         bool
-	KeyAlgorithm  string
-	KeyColList    Columns
+	Type          PartitionByType
+	IsLinear      bool
+	KeyAlgorithm  int
+	ColList       Columns
 	Expr          Expr
-	SubPartitions string
+	SubPartitions int
 }
 
 // TableOptions specifies a list of table options
