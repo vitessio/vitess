@@ -31,6 +31,8 @@ var (
 	ErrUnexpectedDiffAction           = errors.New("unexpected diff action")
 	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
 	ErrNotFullyParsed                 = errors.New("unable to fully parse statement")
+	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
+	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
 )
 
 type Entity interface {
