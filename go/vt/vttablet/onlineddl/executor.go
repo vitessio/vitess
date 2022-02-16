@@ -165,6 +165,8 @@ type Executor struct {
 	ticks             *timer.Timer
 	isOpen            bool
 	schemaInitialized bool
+
+	initVreplicationDDLOnce sync.Once
 }
 
 type cancellableMigration struct {
@@ -980,6 +982,13 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
+
+		e.initVreplicationDDLOnce.Do(func() {
+			// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
+			// This will make vreplication run through its WithDDL schema changes.
+			_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, sqlImpossibleSelectVreplication)
+		})
+
 		// reload schema
 		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
 			return err
