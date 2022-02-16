@@ -58,7 +58,7 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		eMemorySort:    eMemorySort,
 	}
 	for _, order := range orderBy {
-		colNumber := -1
+		var colNumber int
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
 			var err error
