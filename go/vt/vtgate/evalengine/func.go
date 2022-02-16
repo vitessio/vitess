@@ -41,7 +41,7 @@ var builtinFunctions = map[string]builtin{
 
 type builtin interface {
 	call(*ExpressionEnv, []EvalResult, *EvalResult)
-	typeof(*ExpressionEnv, []Expr) (sqltypes.Type, uint16)
+	typeof(*ExpressionEnv, []Expr) (sqltypes.Type, flag)
 }
 
 type CallExpr struct {
@@ -51,7 +51,7 @@ type CallExpr struct {
 	F         builtin
 }
 
-func (c *CallExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (c *CallExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	return c.F.typeof(env, c.Arguments)
 }
 
@@ -76,7 +76,7 @@ func (builtinCoalesce) call(_ *ExpressionEnv, args []EvalResult, result *EvalRes
 	result.setNull()
 }
 
-func (builtinCoalesce) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, uint16) {
+func (builtinCoalesce) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	return aggregatedType(env, args), flagNullable
 }
 
@@ -252,7 +252,7 @@ func (cmp *builtinMultiComparison) call(_ *ExpressionEnv, args []EvalResult, res
 	getMultiComparisonFunc(args)(args, result, cmp.cmp)
 }
 
-func (cmp *builtinMultiComparison) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, uint16) {
+func (cmp *builtinMultiComparison) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) < 2 {
 		throwArgError(cmp.name)
 	}
@@ -263,7 +263,7 @@ func (cmp *builtinMultiComparison) typeof(env *ExpressionEnv, args []Expr) (sqlt
 		decimals int
 		text     int
 		binary   int
-		flags    uint16
+		flags    flag
 	)
 
 	for _, expr := range args {
@@ -274,8 +274,11 @@ func (cmp *builtinMultiComparison) typeof(env *ExpressionEnv, args []Expr) (sqlt
 		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 			integers++
 		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-			// TODO: overflow
-			integers++
+			if f&flagIntegerOvf != 0 {
+				decimals++
+			} else {
+				integers++
+			}
 		case sqltypes.Float32, sqltypes.Float64:
 			floats++
 		case sqltypes.Decimal:
@@ -322,7 +325,7 @@ func (builtinCollation) call(env *ExpressionEnv, args []EvalResult, result *Eval
 	})
 }
 
-func (builtinCollation) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, uint16) {
+func (builtinCollation) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
 		throwArgError("COLLATION")
 	}
@@ -335,7 +338,7 @@ func (builtinIsNull) call(_ *ExpressionEnv, args []EvalResult, result *EvalResul
 	result.setBool(args[0].null())
 }
 
-func (builtinIsNull) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, uint16) {
+func (builtinIsNull) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
 		throwArgError("ISNULL")
 	}
@@ -366,7 +369,7 @@ func (builtinBitCount) call(_ *ExpressionEnv, args []EvalResult, result *EvalRes
 	result.setInt64(int64(count))
 }
 
-func (builtinBitCount) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, uint16) {
+func (builtinBitCount) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
 		throwArgError("BIT_COUNT")
 	}
@@ -382,7 +385,7 @@ type WeightStringCallExpr struct {
 	HasLen bool
 }
 
-func (c *WeightStringCallExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (c *WeightStringCallExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	_, f := c.String.typeof(env)
 	return sqltypes.VarBinary, f
 }

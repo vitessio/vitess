@@ -83,7 +83,7 @@ func (builtinHex) call(env *ExpressionEnv, args []EvalResult, result *EvalResult
 	})
 }
 
-func (builtinHex) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, uint16) {
+func (builtinHex) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
 		throwArgError("HEX")
 	}

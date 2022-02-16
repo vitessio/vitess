@@ -32,11 +32,29 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
 )
 
+type flag uint16
+
 const (
-	flagNull     = 1 << 0
-	flagNullable = 1 << 1
-	flagHex      = 1 << 8
-	flagBit      = 1 << 9
+	// flagNull marks that this value is null; implies flagNullable
+	flagNull flag = 1 << 0
+	// flagNullable marks that this value CAN be null
+	flagNullable flag = 1 << 1
+
+	// flagIntegerUdf marks that this value is math.MinInt64, and will underflow if negated
+	flagIntegerUdf flag = 1 << 5
+	// flagIntegerCap marks that this value is (-math.MinInt64),
+	// and should be promoted to flagIntegerUdf if negated
+	flagIntegerCap flag = 1 << 6
+	// flagIntegerOvf marks that this value will overflow if negated
+	flagIntegerOvf flag = 1 << 7
+
+	// flagHex marks that this value originated from a hex literal
+	flagHex flag = 1 << 8
+	// flagBit marks that this value originated from a bit literal
+	flagBit flag = 1 << 9
+
+	// flagIntegerRange are the flags that mark overflow/underflow in integers
+	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 )
 
 type (
@@ -54,8 +72,8 @@ type (
 		// Must not be accessed directly: call EvalResult.typeof() instead.
 		// For most expression types, this is known ahead of time and calling typeof() does not require
 		// an evaluation, so the type of an expression can be known without evaluating it.
-		type_  int16  //nolint
-		flags_ uint16 //nolint
+		type_  int16 //nolint
+		flags_ flag  //nolint
 		// collation_ is the collation of this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.collation() instead.
 		collation_ collations.TypedCollation //nolint
@@ -120,7 +138,7 @@ func (er *EvalResult) typeof() sqltypes.Type {
 	return sqltypes.Type(er.type_)
 }
 
-func (er *EvalResult) hasFlag(f uint16) bool {
+func (er *EvalResult) hasFlag(f flag) bool {
 	return (er.flags_ & f) != 0
 }
 
@@ -237,12 +255,21 @@ func (er *EvalResult) setInt64(i int64) {
 	er.type_ = int16(sqltypes.Int64)
 	er.numeric_ = uint64(i)
 	er.collation_ = collationNumeric
+	if i == math.MinInt64 {
+		er.flags_ |= flagIntegerUdf
+	}
 }
 
 func (er *EvalResult) setUint64(u uint64) {
 	er.type_ = int16(sqltypes.Uint64)
 	er.numeric_ = u
 	er.collation_ = collationNumeric
+	if u == math.MaxInt64+1 {
+		er.flags_ |= flagIntegerCap
+	}
+	if u > math.MaxInt64+1 {
+		er.flags_ |= flagIntegerOvf
+	}
 }
 
 func (er *EvalResult) setFloat(f float64) {
@@ -255,6 +282,7 @@ func (er *EvalResult) setDecimal(dec *decimalResult) {
 	er.type_ = int16(sqltypes.Decimal)
 	er.decimal_ = dec
 	er.collation_ = collationNumeric
+	er.clearFlags(flagIntegerRange)
 }
 
 func (er *EvalResult) setTuple(t []EvalResult) {
@@ -273,8 +301,8 @@ func (er *EvalResult) makeBinary() {
 	er.clearFlags(flagBit | flagHex)
 }
 
-func (er *EvalResult) clearFlags(flags uint16) {
-	er.flags_ &= ^flags
+func (er *EvalResult) clearFlags(f flag) {
+	er.flags_ &= ^f
 }
 
 func (er *EvalResult) makeTextual(collation collations.ID) {
@@ -918,7 +946,7 @@ func (er *EvalResult) negateNumeric() {
 	switch er.typeof() {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 		i := er.int64()
-		if i == math.MinInt64 {
+		if er.hasFlag(flagIntegerUdf) {
 			dec := newDecimalInt64(i)
 			dec.num.SetSignbit(false)
 			er.setDecimal(dec)
@@ -929,7 +957,7 @@ func (er *EvalResult) negateNumeric() {
 		u := er.uint64()
 		if er.hasFlag(flagHex) {
 			er.setFloat(-float64(u))
-		} else if u > math.MaxInt64+1 {
+		} else if er.hasFlag(flagIntegerOvf) {
 			dec := newDecimalUint64(u)
 			dec.num.SetSignbit(true)
 			er.setDecimal(dec)
@@ -988,6 +1016,10 @@ func (er *EvalResult) coerceToDecimal() *decimalResult {
 	default:
 		panic("bad numeric type")
 	}
+}
+
+func (er *EvalResult) String() string {
+	return er.value().String()
 }
 
 func newEvalUint64(u uint64) (er EvalResult) {

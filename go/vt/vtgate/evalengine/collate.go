@@ -50,7 +50,7 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	out.replaceCollation(c.TypedCollation)
 }
 
-func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	return c.Inner.typeof(env)
 }
 

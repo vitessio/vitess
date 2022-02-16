@@ -269,7 +269,7 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	_, f1 := c.Left.typeof(env)
 	_, f2 := c.Right.typeof(env)
 	return sqltypes.Int64, f1 | f2
@@ -332,7 +332,7 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	_, f1 := i.Left.typeof(env)
 	_, f2 := i.Right.typeof(env)
 	return sqltypes.Int64, f1 | f2
@@ -378,7 +378,7 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (l *LikeExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	_, f1 := l.Left.typeof(env)
 	_, f2 := l.Right.typeof(env)
 	return sqltypes.Int64, f1 | f2

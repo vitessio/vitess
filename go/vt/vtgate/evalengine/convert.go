@@ -105,7 +105,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	_, f := c.Inner.typeof(env)
 
 	switch c.Type {
@@ -141,7 +141,7 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	_, f := c.Inner.typeof(env)
 	return sqltypes.VarChar, f | flagNullable
 }

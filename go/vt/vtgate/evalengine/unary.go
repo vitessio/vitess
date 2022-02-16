@@ -33,18 +33,21 @@ func (n *NegateExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.negateNumeric()
 }
 
-func (n *NegateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
-	// FIXME: the type of a NegateExpr is not really known beforehand because negating
-	// a large enough value can cause it to be upcasted into a larger type
+func (n *NegateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	tt, f := n.Inner.typeof(env)
 	switch tt {
-	case sqltypes.VarBinary:
-		if f&flagHex != 0 {
-			return sqltypes.Float64, f
-		}
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-		fallthrough
+		if f&flagIntegerOvf != 0 {
+			return sqltypes.Decimal, f & ^flagIntegerRange
+		}
+		if f&flagIntegerCap != 0 {
+			return sqltypes.Int64, (f | flagIntegerUdf) & ^flagIntegerCap
+		}
+		return sqltypes.Int64, f
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
+		if f&flagIntegerUdf != 0 {
+			return sqltypes.Decimal, f & ^flagIntegerRange
+		}
 		return sqltypes.Int64, f
 	case sqltypes.Decimal:
 		return sqltypes.Decimal, f
