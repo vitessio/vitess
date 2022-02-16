@@ -148,16 +148,19 @@ func TestUseSystemAndUserVariables(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	utils.Exec(t, conn, "set @@sql_mode = ''")
+	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("")]]`)
+
 	utils.Exec(t, conn, "set @@sql_mode = 'only_full_group_by,strict_trans_tables'")
 	utils.Exec(t, conn, "select 1 from information_schema.table_constraints")
 
 	utils.Exec(t, conn, "set @var = @@sql_mode")
-	utils.AssertMatches(t, conn, "select @var", `[[VARCHAR("'only_full_group_by,strict_trans_tables'")]]`)
+	utils.AssertMatches(t, conn, "select @var", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
 
 	utils.Exec(t, conn, "create table t(name varchar(100))")
 	utils.Exec(t, conn, "insert into t(name) values (@var)")
 
-	utils.AssertMatches(t, conn, "select name from t", `[[VARCHAR("'only_full_group_by,strict_trans_tables'")]]`)
+	utils.AssertMatches(t, conn, "select name from t", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
 
 	utils.Exec(t, conn, "delete from t where name = @var")
 	utils.AssertMatches(t, conn, "select name from t", `[]`)
