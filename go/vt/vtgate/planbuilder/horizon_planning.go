@@ -470,31 +470,7 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 	}
 
 	if hp.qp.CanPushDownSorting {
-		// The ORDER BY can be performed before the OA
-
-		// Here we align the GROUP BY and ORDER BY.
-		// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
-		var newGrouping []abstract.GroupBy
-		used := make([]bool, len(hp.qp.GroupByExprs))
-		for _, orderExpr := range hp.qp.OrderExprs {
-			for i, groupingExpr := range hp.qp.GroupByExprs {
-				if !used[i] && sqlparser.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
-					newGrouping = append(newGrouping, groupingExpr)
-					used[i] = true
-				}
-			}
-		}
-		if len(newGrouping) != len(hp.qp.GroupByExprs) {
-			// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
-			for i, added := range used {
-				if !added {
-					groupBy := hp.qp.GroupByExprs[i]
-					newGrouping = append(newGrouping, groupBy)
-					hp.qp.OrderExprs = append(hp.qp.OrderExprs, groupBy.AsOrderBy())
-				}
-			}
-		}
-		hp.qp.GroupByExprs = newGrouping
+		hp.qp.AlignGroupByAndOrderBy()
 	}
 
 	for _, expr := range hp.qp.GroupByExprs {

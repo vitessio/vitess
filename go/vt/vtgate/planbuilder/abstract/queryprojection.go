@@ -459,6 +459,34 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) *int 
 	return nil
 }
 
+func (qp *QueryProjection) AlignGroupByAndOrderBy() {
+	// The ORDER BY can be performed before the OA
+
+	// Here we align the GROUP BY and ORDER BY.
+	// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
+	var newGrouping []GroupBy
+	used := make([]bool, len(qp.GroupByExprs))
+	for _, orderExpr := range qp.OrderExprs {
+		for i, groupingExpr := range qp.GroupByExprs {
+			if !used[i] && sqlparser.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+				newGrouping = append(newGrouping, groupingExpr)
+				used[i] = true
+			}
+		}
+	}
+	if len(newGrouping) != len(qp.GroupByExprs) {
+		// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
+		for i, added := range used {
+			if !added {
+				groupBy := qp.GroupByExprs[i]
+				newGrouping = append(newGrouping, groupBy)
+				qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
+			}
+		}
+	}
+	qp.GroupByExprs = newGrouping
+}
+
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if sqlparser.IsAggregation(node) {
