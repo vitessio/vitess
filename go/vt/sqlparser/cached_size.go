@@ -1602,14 +1602,12 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
-	// field Limit vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Limit.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
+	// field ValueRange *vitess.io/vitess/go/vt/sqlparser.PartitionValueRange
+	size += cached.ValueRange.CachedSize(true)
 	return size
 }
 func (cached *PartitionOption) CachedSize(alloc bool) int64 {
@@ -1667,6 +1665,20 @@ func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 		for _, elem := range cached.Definitions {
 			size += elem.CachedSize(true)
 		}
+	}
+	return size
+}
+func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Range vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Range.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }

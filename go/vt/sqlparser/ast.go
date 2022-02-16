@@ -1520,8 +1520,12 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name     ColIdent
-	Limit    Expr
+	Name       ColIdent
+	ValueRange *PartitionValueRange
+}
+
+type PartitionValueRange struct {
+	Range    Expr
 	Maxvalue bool
 }
 

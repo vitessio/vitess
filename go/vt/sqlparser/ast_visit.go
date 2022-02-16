@@ -218,6 +218,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPartitionOption(in, f)
 	case *PartitionSpec:
 		return VisitRefOfPartitionSpec(in, f)
+	case *PartitionValueRange:
+		return VisitRefOfPartitionValueRange(in, f)
 	case Partitions:
 		return VisitPartitions(in, f)
 	case ReferenceAction:
@@ -1612,7 +1614,7 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExpr(in.Limit, f); err != nil {
+	if err := VisitRefOfPartitionValueRange(in.ValueRange, f); err != nil {
 		return err
 	}
 	return nil
@@ -1660,6 +1662,18 @@ func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 		if err := VisitRefOfPartitionDefinition(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfPartitionValueRange(in *PartitionValueRange, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Range, f); err != nil {
+		return err
 	}
 	return nil
 }

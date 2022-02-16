@@ -614,6 +614,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionSpec(a, b)
+	case *PartitionValueRange:
+		b, ok := inB.(*PartitionValueRange)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionValueRange(a, b)
 	case Partitions:
 		b, ok := inB.(Partitions)
 		if !ok {
@@ -2119,9 +2125,8 @@ func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Maxvalue == b.Maxvalue &&
-		EqualsColIdent(a.Name, b.Name) &&
-		EqualsExpr(a.Limit, b.Limit)
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange)
 }
 
 // EqualsRefOfPartitionOption does deep equals between the two objects.
@@ -2157,6 +2162,18 @@ func EqualsRefOfPartitionSpec(a, b *PartitionSpec) bool {
 		EqualsRefOfLiteral(a.Number, b.Number) &&
 		EqualsTableName(a.TableName, b.TableName) &&
 		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
+}
+
+// EqualsRefOfPartitionValueRange does deep equals between the two objects.
+func EqualsRefOfPartitionValueRange(a, b *PartitionValueRange) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Maxvalue == b.Maxvalue &&
+		EqualsExpr(a.Range, b.Range)
 }
 
 // EqualsPartitions does deep equals between the two objects.
