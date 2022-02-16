@@ -72,19 +72,28 @@ func normalize(v sqltypes.Value) string {
 var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
 var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
 var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
+var debugCheckTypes = flag.Bool("check-types", true, "check the TypeOf operator for all queries")
 
 func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
 
-	local, evaluated, localErr := safeEvaluate(query)
+	local, localType, localErr := safeEvaluate(query)
 	remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 	var localVal, remoteVal string
 	if localErr == nil {
+		v := local.Value()
 		if *debugNormalize {
-			localVal = normalize(local.Value())
+			localVal = normalize(v)
 		} else {
-			localVal = local.Value().String()
+			localVal = v.String()
+		}
+		if *debugCheckTypes {
+			tt := v.Type()
+			if tt != sqltypes.Null && tt != localType {
+				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
+					tt, localType, localVal, query, *debugSimplify)
+			}
 		}
 	}
 	if remoteErr == nil {
@@ -94,7 +103,7 @@ func compareRemoteQuery(t *testing.T, conn *mysql.Conn, query string) {
 			remoteVal = remote.Rows[0][0].String()
 		}
 	}
-	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, evaluated); diff != "" {
+	if diff := compareResult(localErr, remoteErr, localVal, remoteVal); diff != "" {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)", diff, query, *debugSimplify)
 	} else if *debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, query)
@@ -365,6 +374,7 @@ func TestTypes(t *testing.T) {
 		`"foobar"`,
 		`X'444444'`,
 		`_binary "foobar"`,
+		`-0x0`,
 	}
 
 	for _, query := range queries {

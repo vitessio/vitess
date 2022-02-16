@@ -269,9 +269,10 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(*ExpressionEnv) sqltypes.Type {
-	// TODO: make this less aggressive
-	return -1
+func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f1 := c.Left.typeof(env)
+	_, f2 := c.Right.typeof(env)
+	return sqltypes.Int64, f1 | f2
 }
 
 // eval implements the ComparisonOp interface
@@ -331,10 +332,10 @@ func (i *InExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	// TODO: make this less aggressive
-	// return sqltypes.Int64, nil
-	return -1
+func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f1 := i.Left.typeof(env)
+	_, f2 := i.Right.typeof(env)
+	return sqltypes.Int64, f1 | f2
 }
 
 func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
@@ -377,8 +378,8 @@ func (l *LikeExpr) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	// TODO: make this less aggressive
-	// return sqltypes.Uint64, nil
-	return -1
+func (l *LikeExpr) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	_, f1 := l.Left.typeof(env)
+	_, f2 := l.Right.typeof(env)
+	return sqltypes.Int64, f1 | f2
 }

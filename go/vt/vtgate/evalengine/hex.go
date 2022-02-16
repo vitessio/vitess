@@ -21,6 +21,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const hextable = "0123456789ABCDEF"
@@ -55,12 +57,14 @@ func hexEncodeUint(u uint64) []byte {
 	return a[i:]
 }
 
-func builtinFuncHex(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	if len(args) != 1 {
-		throwArgError("HEX")
+type builtinHex struct{}
+
+func (builtinHex) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	tohex := &args[0]
+	if tohex.null() {
+		result.setNull()
 	}
 
-	tohex := &args[0]
 	var encoded []byte
 	switch tt := tohex.typeof(); {
 	case sqltypes.IsQuoted(tt):
@@ -69,8 +73,7 @@ func builtinFuncHex(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 		tohex.makeUnsignedIntegral()
 		encoded = hexEncodeUint(tohex.uint64())
 	default:
-		result.setNull()
-		return
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", tt.String()))
 	}
 
 	result.setRaw(sqltypes.VarChar, encoded, collations.TypedCollation{
@@ -78,4 +81,12 @@ func builtinFuncHex(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireASCII,
 	})
+}
+
+func (builtinHex) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, uint16) {
+	if len(args) != 1 {
+		throwArgError("HEX")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.VarChar, f
 }

@@ -42,7 +42,7 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		eval(env *ExpressionEnv, result *EvalResult)
-		typeof(env *ExpressionEnv) sqltypes.Type
+		typeof(env *ExpressionEnv) (sqltypes.Type, uint16)
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify(env *ExpressionEnv) error
@@ -110,7 +110,8 @@ func throwCardinalityError(expected int) {
 func (env *ExpressionEnv) cardinality(expr Expr) int {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.typeof(env) == sqltypes.Tuple {
+		tt, _ := expr.typeof(env)
+		if tt == sqltypes.Tuple {
 			return len(expr.bvar(env).Values)
 		}
 		return 1
@@ -132,7 +133,8 @@ func (env *ExpressionEnv) ensureCardinality(expr Expr, expected int) {
 func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.typeof(env) == sqltypes.Tuple {
+		tt, _ := expr.typeof(env)
+		if tt == sqltypes.Tuple {
 			return nil, 1
 		}
 	case TupleExpr:
@@ -209,7 +211,8 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 		left := env.cardinality(expr.Left)
 		right := env.cardinality(expr.Right)
 
-		if expr.Right.typeof(env) != sqltypes.Tuple {
+		tt, _ := expr.Right.typeof(env)
+		if tt != sqltypes.Tuple {
 			throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
 		}
 
@@ -260,7 +263,7 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (ty sqltypes.Type, err error) {
 			}
 		}
 	}()
-	ty = expr.typeof(env)
+	ty, _ = expr.typeof(env)
 	return
 }
 
@@ -481,11 +484,15 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv) sqltypes.Type {
-	if bv.coerceType >= 0 {
-		return bv.coerceType
+func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
+	bvar := bv.bvar(env)
+	if bvar.Type == sqltypes.Null {
+		return sqltypes.Null, flagNull | flagNullable
 	}
-	return bv.bvar(env).Type
+	if bv.coerceType >= 0 {
+		return bv.coerceType, 0
+	}
+	return bvar.Type, 0
 }
 
 // eval implements the Expr interface
@@ -498,16 +505,22 @@ func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv) sqltypes.Type {
-	return l.Val.typeof()
+func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, uint16) {
+	return l.Val.typeof(), l.Val.flags_
 }
 
 // typeof implements the Expr interface
-func (t TupleExpr) typeof(*ExpressionEnv) sqltypes.Type {
-	return sqltypes.Tuple
+func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, uint16) {
+	return sqltypes.Tuple, flagNullable
 }
 
-func (c *Column) typeof(env *ExpressionEnv) sqltypes.Type {
+func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, uint16) {
 	value := env.Row[c.Offset]
-	return value.Type()
+	tt := value.Type()
+	switch tt {
+	case sqltypes.Null:
+		return tt, flagNullable | flagNull
+	default:
+		return tt, 0
+	}
 }

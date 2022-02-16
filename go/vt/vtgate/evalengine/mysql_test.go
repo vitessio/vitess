@@ -118,6 +118,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `select N'string' from dual`)
+	eval, err := testSingle(t, `SELECT LEAST(0,-0x0)`)
 	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
 }
