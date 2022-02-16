@@ -3620,6 +3620,51 @@ PARTITION BY RANGE COLUMNS(joined) (
 	joined DATE not null
 ) partition by range columns (joined) (partition p0 values less than ('1960-01-01'), partition p1 values less than ('1970-01-01'), partition p2 values less than ('1980-01-01'), partition p3 values less than ('1990-01-01'), partition p4 values less than maxvalue)`,
 		},
+		{
+			input: `CREATE TABLE ti (id INT, amount DECIMAL(7,2), tr_date DATE)
+    ENGINE=INNODB
+    PARTITION BY HASH( MONTH(tr_date) )
+    PARTITIONS 6`,
+			output: `create table ti (
+	id INT,
+	amount DECIMAL(7,2),
+	tr_date DATE
+) ENGINE INNODB partition by hash (MONTH(tr_date)) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE members (
+    firstname VARCHAR(25) NOT NULL,
+    lastname VARCHAR(25) NOT NULL,
+    username VARCHAR(16) NOT NULL,
+    email VARCHAR(35),
+    joined DATE NOT NULL
+)
+PARTITION BY KEY(joined)
+PARTITIONS 6`,
+			output: `create table members (
+	firstname VARCHAR(25) not null,
+	lastname VARCHAR(25) not null,
+	username VARCHAR(16) not null,
+	email VARCHAR(35),
+	joined DATE not null
+) partition by key (joined) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5),
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5), partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
+			output: `create table t1 (
+	id int primary key
+) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
+		},
 	}
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)

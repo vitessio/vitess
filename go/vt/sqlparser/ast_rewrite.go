@@ -3292,8 +3292,8 @@ func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *Part
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Range, func(newNode, parent SQLNode) {
-		parent.(*PartitionValueRange).Range = newNode.(Expr)
+	if !a.rewriteValTuple(node, node.Range, func(newNode, parent SQLNode) {
+		parent.(*PartitionValueRange).Range = newNode.(ValTuple)
 	}) {
 		return false
 	}

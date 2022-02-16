@@ -1524,8 +1524,12 @@ type PartitionDefinition struct {
 	ValueRange *PartitionValueRange
 }
 
+// PartitionValueRangeType is an enum for PartitionValueRange.Type
+type PartitionValueRangeType int8
+
 type PartitionValueRange struct {
-	Range    Expr
+	Type     PartitionValueRangeType
+	Range    ValTuple
 	Maxvalue bool
 }
 

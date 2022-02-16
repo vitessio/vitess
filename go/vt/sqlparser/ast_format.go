@@ -436,10 +436,11 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *PartitionValueRange) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "values %s", node.Type.ToString())
 	if node.Maxvalue {
-		buf.WriteString("values less than maxvalue")
+		buf.WriteString(" maxvalue")
 	} else {
-		buf.astPrintf(node, "values less than (%v)", node.Range)
+		buf.astPrintf(node, " %v", node.Range)
 	}
 }
 

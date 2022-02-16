@@ -1674,11 +1674,16 @@ func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(48)
 	}
-	// field Range vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Range.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field Range vitess.io/vitess/go/vt/sqlparser.ValTuple
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Range)) * int64(16))
+		for _, elem := range cached.Range {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
 	return size
 }

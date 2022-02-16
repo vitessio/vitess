@@ -1672,7 +1672,7 @@ func VisitRefOfPartitionValueRange(in *PartitionValueRange, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExpr(in.Range, f); err != nil {
+	if err := VisitValTuple(in.Range, f); err != nil {
 		return err
 	}
 	return nil

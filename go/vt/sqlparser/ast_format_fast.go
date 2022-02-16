@@ -602,12 +602,13 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *PartitionValueRange) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("values ")
+	buf.WriteString(node.Type.ToString())
 	if node.Maxvalue {
-		buf.WriteString("values less than maxvalue")
+		buf.WriteString(" maxvalue")
 	} else {
-		buf.WriteString("values less than (")
+		buf.WriteByte(' ')
 		node.Range.formatFast(buf)
-		buf.WriteByte(')')
 	}
 }
 
