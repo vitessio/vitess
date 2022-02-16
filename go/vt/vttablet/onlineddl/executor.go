@@ -3555,6 +3555,14 @@ func (e *Executor) SubmitMigration(
 	if storedMigration.MigrationContext != onlineDDL.MigrationContext {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "migration rejected: found migration %s with different context: %s than submmitted migration's context: %s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.MigrationContext)
 	}
+
+	// Finally, possibly this migration already existed, and this is a resubmission of same UUID.
+	// possibly, the existing migration is in 'failed' or 'cancelled' state, in which case this
+	// resubmission should retry the migration.
+	if _, err := e.RetryMigration(ctx, onlineDDL.UUID); err != nil {
+		return result, err
+	}
+
 	return result, nil
 }
 
