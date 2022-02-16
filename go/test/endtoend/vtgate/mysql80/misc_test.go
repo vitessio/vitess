@@ -168,6 +168,114 @@ func TestUseSystemAndUserVariables(t *testing.T) {
 	utils.Exec(t, conn, "drop table t")
 }
 
+func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(b, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("create table t(id int)", 1000, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	defer func() {
+		_, err = conn.ExecuteFetch("drop table t", 1000, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}()
+
+	_, err = conn.ExecuteFetch("set @@sql_mode = 'only_full_group_by,strict_trans_tables', @@sql_big_selects = 0, @@sql_safe_updates = 1, @@foreign_key_checks = 0", 1000, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	benchmarkName := "Use SET_VAR"
+	for i := 0; i < 2; i++ {
+		b.Run(benchmarkName, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("select id from t where id = %d limit 1", i), 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("update t set id = 1 where id = %d", i), 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, err = conn.ExecuteFetch("delete from t where id = 1", 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+
+		// setting another sysvar that does not support SET_VAR, the next iteration of benchmark will use reserved connection
+		_, err = conn.ExecuteFetch("set @@sql_warnings = 1", 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		benchmarkName = "Use reserved connections"
+	}
+}
+
+func BenchmarkCrash(b *testing.B) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(b, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("create table t(id int)", 1000, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	defer func() {
+		_, err = conn.ExecuteFetch("drop table t", 1000, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}()
+
+	_, err = conn.ExecuteFetch("set @@sql_mode = 'only_full_group_by,strict_trans_tables', @@sql_big_selects = 0, @@sql_safe_updates = 1, @@foreign_key_checks = 0", 1000, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	benchmarkName := "Use SET_VAR"
+	for i := 0; i < 2; i++ {
+		b.Run(benchmarkName, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("select id from t where id = %d limit 1", i), 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, err = conn.ExecuteFetch(fmt.Sprintf("update t set id = 1 where id = %d", i), 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+				_, err = conn.ExecuteFetch("delete from t where id = 1", 1, true)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+
+		// setting another sysvar that does not support SET_VAR, the next iteration of benchmark will use reserved connection
+		_, err = conn.ExecuteFetch("set @@sql_warnings = 1", 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		benchmarkName = "Use reserved connections"
+	}
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
