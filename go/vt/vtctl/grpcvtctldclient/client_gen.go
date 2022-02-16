@@ -603,3 +603,12 @@ func (client *gRPCVtctldClient) ValidateShard(ctx context.Context, in *vtctldata
 
 	return client.c.ValidateShard(ctx, in, opts...)
 }
+
+// ValidateVersionKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateVersionKeyspace(ctx, in, opts...)
+}

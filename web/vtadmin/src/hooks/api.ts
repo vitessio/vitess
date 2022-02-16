@@ -55,8 +55,10 @@ import {
     validateKeyspace,
     validateSchemaKeyspace,
     ValidateSchemaKeyspaceParams,
+    validateVersionKeyspace,
+    ValidateVersionKeyspaceParams,
 } from '../api/http';
-import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
+import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
 
 /**
@@ -318,20 +320,38 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
 /**
  * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
  */
-export const useValidateKeyspace = (params: ValidateKeyspaceParams, options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>) => {
+export const useValidateKeyspace = (
+    params: ValidateKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>
+) => {
     return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>(() => {
         return validateKeyspace(params);
     }, options);
-}
+};
 
 /**
- * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ * useValidateSchemaKeyspace is a mutation hook that validates that all nodes reachable from the specified keyspace are consistent.
  */
- export const useValidateSchemaKeyspace = (params: ValidateSchemaKeyspaceParams, options?: UseMutationOptions<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>) => {
+export const useValidateSchemaKeyspace = (
+    params: ValidateSchemaKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>
+) => {
     return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>(() => {
         return validateSchemaKeyspace(params);
     }, options);
-}
+};
+
+/**
+ * useValidateVersionKeyspace is a mutation hook that validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+ */
+export const useValidateVersionKeyspace = (
+    params: ValidateVersionKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>(() => {
+        return validateVersionKeyspace(params);
+    }, options);
+};
 
 /**
  * useVSchema is a query hook that fetches a single vschema definition for the given parameters.
