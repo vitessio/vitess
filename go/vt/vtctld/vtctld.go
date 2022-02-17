@@ -53,7 +53,7 @@ const (
 
 // InitVtctld initializes all the vtctld functionality.
 func InitVtctld(ts *topo.Server) error {
-	err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil)
+	err := reparentutil.SetDurabilityPolicy(*durabilityPolicy)
 	if err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		return err
