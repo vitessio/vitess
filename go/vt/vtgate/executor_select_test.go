@@ -442,7 +442,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	sbc1.Queries = nil
-	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from information_schema.tables t join information_schema.columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
+	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
 	_, err = executor.Execute(context.Background(), "TestSelectDBA",
 		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
@@ -450,7 +450,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{Sql: "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
 		BindVariables: map[string]*querypb.BindVariable{
-			"vtg1":                  sqltypes.StringBindVariable("TestExecutor"),
+			"vtg1":                  sqltypes.StringBindVariable("information_schema"),
 			"__replacevtschemaname": sqltypes.Int64BindVariable(1),
 		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)

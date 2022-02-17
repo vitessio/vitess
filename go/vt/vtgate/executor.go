@@ -1498,6 +1498,7 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 	}
 
 	switch stmt.(type) {
+	// If the statement is a transaction statement or a set no reserved connection / SET_VAR is needed
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set:
 		return "", nil

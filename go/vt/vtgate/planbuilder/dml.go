@@ -371,14 +371,17 @@ func generateDMLSubquery(tblExpr sqlparser.TableExpr, where *sqlparser.Where, or
 }
 
 func generateQuery(statement sqlparser.Statement) string {
-	sqlparser.Rewrite(statement, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case sqlparser.TableName:
-			cursor.Replace(sqlparser.TableName{
-				Name: node.Name,
-			})
-		}
-		return true
-	}, nil)
-	return sqlparser.String(statement)
+	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	statement.Format(buf)
+	return buf.String()
+}
+
+// dmlFormatter strips out keyspace name from dmls.
+func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+	switch node := node.(type) {
+	case sqlparser.TableName:
+		node.Name.Format(buf)
+		return
+	}
+	node.Format(buf)
 }

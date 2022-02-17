@@ -356,6 +356,9 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 	buf := new(bytes.Buffer)
 	value.EncodeSQL(buf)
 	vcursor.Session().SetSysVar(svs.Name, buf.String())
+
+	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
+	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
 	if sqlparser.MySQLVersion < "80000" || !vcursor.Session().GetEnableSetVar() || !svs.SupportSetVar {
 		vcursor.Session().NeedsReservedConn()
 		return true, nil
