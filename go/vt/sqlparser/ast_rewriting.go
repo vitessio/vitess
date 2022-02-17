@@ -213,7 +213,8 @@ func PrepareAST(
 	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars)
 }
 
-// RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
+// RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries.
+// SET_VAR comments are also added to the AST if required.
 func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) (*RewriteASTResult, error) {
 	er := newExpressionRewriter(keyspace, selectLimit, setVarComment, sysVars)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
@@ -308,6 +309,7 @@ func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNee
 }
 
 func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
+	// Add SET_VAR comment to this node if it supports it and is needed
 	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
 		newComments, err := supportOptimizerHint.GetComments().AddQueryHint(er.setVarComment)
 		if err != nil {

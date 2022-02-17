@@ -215,9 +215,9 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
 }
 
 func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, valueTuples sqlparser.Values) {
-	prefixBuf := sqlparser.NewTrackedBuffer(nil)
-	midBuf := sqlparser.NewTrackedBuffer(nil)
-	suffixBuf := sqlparser.NewTrackedBuffer(nil)
+	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	eins.Mid = make([]string, len(valueTuples))
 	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
 		node.Comments, node.Ignore.ToString(),
