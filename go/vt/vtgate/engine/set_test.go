@@ -81,6 +81,7 @@ func TestSetTable(t *testing.T) {
 		input            Primitive
 		execErr          error
 		mysqlVersion     string
+		disableSetVar    bool
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -465,10 +466,33 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
 			"SysVar set with (sql_mode,'a')",
+			"SET_VAR enabled: true",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|a",
 		)},
+	}, {
+		testName:     "sql_mode change - empty orig - MySQL80 - SET_VAR disabled",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'a'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
+			"SysVar set with (sql_mode,'a')",
+			"SET_VAR enabled: false",
+			"Needs Reserved Conn",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|a",
+		)},
+		disableSetVar: true,
 	}, {
 		testName:     "default_week_format change - empty orig - MySQL80",
 		mysqlVersion: "80000",
@@ -483,6 +507,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select 'a' from dual where @@default_week_format != 'a' {} false false`,
 			"SysVar set with (default_week_format,'a')",
+			"SET_VAR enabled: true",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
@@ -510,6 +535,7 @@ func TestSetTable(t *testing.T) {
 				shards:         []string{"-20", "20-"},
 				results:        tc.qr,
 				multiShardErrs: []error{tc.execErr},
+				disableSetVar:  tc.disableSetVar,
 			}
 			_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {

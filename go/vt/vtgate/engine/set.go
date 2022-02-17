@@ -356,7 +356,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 	buf := new(bytes.Buffer)
 	value.EncodeSQL(buf)
 	vcursor.Session().SetSysVar(svs.Name, buf.String())
-	if sqlparser.MySQLVersion < "80000" || !svs.SupportSetVar {
+	if sqlparser.MySQLVersion < "80000" || !vcursor.Session().GetEnableSetVar() || !svs.SupportSetVar {
 		vcursor.Session().NeedsReservedConn()
 		return true, nil
 	}

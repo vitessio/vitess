@@ -153,6 +153,7 @@ type (
 
 		SetSessionEnableSystemSettings(bool) error
 		GetSessionEnableSystemSettings() bool
+		GetEnableSetVar() bool
 
 		GetSystemVariables(func(k string, v string))
 		HasSystemVariables() bool

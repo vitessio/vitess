@@ -749,6 +749,11 @@ func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
 	return vc.safeSession.GetSessionEnableSystemSettings()
 }
 
+// GetEnableSetVar implements the SessionActions interface
+func (vc *vcursorImpl) GetEnableSetVar() bool {
+	return vc.safeSession.GetEnableSetVar()
+}
+
 // SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
 	vc.safeSession.SetReadAfterWriteGTID(vtgtid)

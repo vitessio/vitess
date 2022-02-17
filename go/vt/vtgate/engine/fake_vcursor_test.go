@@ -116,6 +116,10 @@ func (t *noopVCursor) GetSessionEnableSystemSettings() bool {
 	panic("implement me")
 }
 
+func (t *noopVCursor) GetEnableSetVar() bool {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetReadAfterWriteTimeout(f float64) {
 	panic("implement me")
 }
@@ -313,6 +317,7 @@ type loggingVCursor struct {
 	ksAvailable     bool
 	inReservedConn  bool
 	systemVariables map[string]string
+	disableSetVar   bool
 }
 
 type tableRoutes struct {
@@ -670,6 +675,11 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 		return &sqltypes.Result{}, f.resultErr
 	}
 	return r, nil
+}
+
+func (f *loggingVCursor) GetEnableSetVar() bool {
+	f.log = append(f.log, fmt.Sprintf("SET_VAR enabled: %v", !f.disableSetVar))
+	return !f.disableSetVar
 }
 
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
