@@ -3568,9 +3568,10 @@ func (e *Executor) SubmitMigration(
 	// Finally, possibly this migration already existed, and this is a resubmission of same UUID.
 	// possibly, the existing migration is in 'failed' or 'cancelled' state, in which case this
 	// resubmission should retry the migration.
-	if _, err := e.RetryMigration(ctx, onlineDDL.UUID); err != nil {
-		return result, err
-	}
+	go func() {
+		// RetryMigration locks the mutex. It's fine if we run it asynchronously. No concern of a race condition.
+		_, _ = e.RetryMigration(ctx, onlineDDL.UUID)
+	}()
 
 	return result, nil
 }
