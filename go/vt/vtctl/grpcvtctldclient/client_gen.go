@@ -325,6 +325,15 @@ func (client *gRPCVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.
 	return client.c.GetVSchema(ctx, in, opts...)
 }
 
+// GetVersion is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetVersion(ctx context.Context, in *vtctldatapb.GetVersionRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVersionResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetVersion(ctx, in, opts...)
+}
+
 // GetWorkflows is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetWorkflows(ctx context.Context, in *vtctldatapb.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetWorkflowsResponse, error) {
 	if client.c == nil {

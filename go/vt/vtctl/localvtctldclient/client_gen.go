@@ -191,6 +191,11 @@ func (client *localVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb
 	return client.s.GetVSchema(ctx, in)
 }
 
+// GetVersion is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetVersion(ctx context.Context, in *vtctldatapb.GetVersionRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVersionResponse, error) {
+	return client.s.GetVersion(ctx, in)
+}
+
 // GetWorkflows is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetWorkflows(ctx context.Context, in *vtctldatapb.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetWorkflowsResponse, error) {
 	return client.s.GetWorkflows(ctx, in)

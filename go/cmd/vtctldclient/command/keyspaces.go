@@ -392,7 +392,7 @@ var validateSchemaKeyspaceOptions = struct {
 	ExcludeTables  []string
 	IncludeViews   bool
 	SkipNoPrimary  bool
-	IncludeVschema bool
+	IncludeVSchema bool
 }{}
 
 func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
@@ -402,7 +402,7 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace:       ks,
 		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
-		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVschema,
+		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVSchema,
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
@@ -411,8 +411,12 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("%+v\n", resp.Results)
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
 
+	fmt.Printf("%s\n", data)
 	return nil
 }
 
@@ -428,8 +432,12 @@ func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("%+v\n", resp.Results)
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
 
+	fmt.Printf("%s\n", data)
 	return nil
 }
 
@@ -464,7 +472,7 @@ func init() {
 	Root.AddCommand(SetKeyspaceShardingInfo)
 
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVschema, "include-vschema", false, "Includes VSchema validation in validation results")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results")
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards")
 	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison")
 	Root.AddCommand(ValidateSchemaKeyspace)

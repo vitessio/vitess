@@ -599,6 +599,14 @@ message GetVSchemaRequest {
   string keyspace = 1;
 }
 
+message GetVersionRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetVersionResponse {
+  string version = 1;
+}
+
 message GetVSchemaResponse {
   vschema.Keyspace v_schema = 1;
 }

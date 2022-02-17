@@ -291,8 +291,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
 	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate", httpAPI.Adapt(vtadminhttp.ValidateKeyspace)).Name("API.ValidateKeyspace").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate_schema", httpAPI.Adapt(vtadminhttp.ValidateSchemaKeyspace)).Name("API.ValidateSchemaKeyspace").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate_version", httpAPI.Adapt(vtadminhttp.ValidateVersionKeyspace)).Name("API.ValidateVersionKeyspace").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/schema", httpAPI.Adapt(vtadminhttp.ValidateSchemaKeyspace)).Name("API.ValidateSchemaKeyspace").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/version", httpAPI.Adapt(vtadminhttp.ValidateVersionKeyspace)).Name("API.ValidateVersionKeyspace").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
@@ -700,90 +700,6 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 	return &vtadminpb.GetKeyspacesResponse{
 		Keyspaces: keyspaces,
 	}, nil
-}
-
-// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
-func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")
-	defer span.Finish()
-
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
-	}
-
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
-		return nil, nil
-	}
-
-	res, err := c.Vtctld.ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
-		Keyspace:    req.Keyspace,
-		PingTablets: req.PingTablets,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
-func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.ValidateSchemaKeyspace")
-	defer span.Finish()
-
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
-	}
-
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
-		return nil, nil
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
-		Keyspace: req.Keyspace,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
-func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionKeyspace")
-	defer span.Finish()
-
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
-	}
-
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
-		return nil, nil
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
-		Keyspace: req.Keyspace,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }
 
 // GetSchema is part of the vtadminpb.VTAdminServer interface.
@@ -1661,6 +1577,90 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 	}
 
 	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil
+}
+
+// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
+		Keyspace:    req.Keyspace,
+		PingTablets: req.PingTablets,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateSchemaKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace: req.Keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
+		Keyspace: req.Keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.

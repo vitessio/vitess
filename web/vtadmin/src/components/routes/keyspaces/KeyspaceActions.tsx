@@ -12,17 +12,14 @@ interface KeyspaceActionsProps {
 }
 
 const KeyspaceActions: React.FC<KeyspaceActionsProps> = ({ keyspace, clusterID }) => {
-    const [currentDialog, setCurrentDialog] = useState<string | null>(null);
-    const closeDialog = () => setCurrentDialog(null);
+    const [currentDialog, setCurrentDialog] = useState<string>('');
+    const closeDialog = () => setCurrentDialog('');
 
-    // Validate keyspace
     const [pingTablets, setPingTablets] = useState(false);
     const validateKeyspaceMutation = useValidateKeyspace({ keyspace, clusterID, pingTablets });
 
-    // Validate schema keyspace
     const validateSchemaKeyspaceMutation = useValidateSchemaKeyspace({ keyspace, clusterID });
 
-    // Validate version keyspace
     const validateVersionKeyspaceMutation = useValidateVersionKeyspace({ keyspace, clusterID });
 
     return (
@@ -43,9 +40,9 @@ const KeyspaceActions: React.FC<KeyspaceActionsProps> = ({ keyspace, clusterID }
                 closeDialog={closeDialog}
                 isOpen={currentDialog === 'Validate Keyspace'}
                 body={
-                    <div className="flex justify-between items-center w-full p-2 border border-vtblue rounded-md">
+                    <div className="flex justify-between items-center w-full p-4 border border-vtblue rounded-md">
                         <div className="mr-2">
-                            <h5 className="font-medium m-0">Ping Tablets</h5>
+                            <h5 className="font-medium m-0 mb-2">Ping Tablets</h5>
                             <p className="m-0 text-sm">
                                 If enabled, all tablets will also be pinged during the validation process.
                             </p>
