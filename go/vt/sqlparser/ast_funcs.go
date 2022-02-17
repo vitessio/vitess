@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -1134,6 +1135,34 @@ func (op BinaryExprOperator) ToString() string {
 	}
 }
 
+// ToString returns the partition type as a string
+func (partitionType PartitionByType) ToString() string {
+	switch partitionType {
+	case HashType:
+		return HashTypeStr
+	case KeyType:
+		return KeyTypeStr
+	case ListType:
+		return ListTypeStr
+	case RangeType:
+		return RangeTypeStr
+	default:
+		return "Unknown PartitionByType"
+	}
+}
+
+// ToString returns the partition value range type as a string
+func (t PartitionValueRangeType) ToString() string {
+	switch t {
+	case LessThanType:
+		return LessThanTypeStr
+	case InType:
+		return InTypeStr
+	default:
+		return "Unknown PartitionValueRangeType"
+	}
+}
+
 // ToString returns the operator as a string
 func (op UnaryExprOperator) ToString() string {
 	switch op {
@@ -1635,4 +1664,9 @@ func RemoveKeyspace(in SQLNode) SQLNode {
 		}
 		return true
 	})
+}
+
+func convertStringToInt(integer string) int {
+	val, _ := strconv.Atoi(integer)
+	return val
 }
