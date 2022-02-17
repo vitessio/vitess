@@ -356,12 +356,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfExplainTab(a, b)
-	case *ExprOrColumns:
-		b, ok := inB.(*ExprOrColumns)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfExprOrColumns(a, b)
 	case Exprs:
 		b, ok := inB.(Exprs)
 		if !ok {
@@ -620,6 +614,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionSpec(a, b)
+	case *PartitionValueRange:
+		b, ok := inB.(*PartitionValueRange)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionValueRange(a, b)
 	case Partitions:
 		b, ok := inB.(Partitions)
 		if !ok {
@@ -1639,18 +1639,6 @@ func EqualsRefOfExplainTab(a, b *ExplainTab) bool {
 		EqualsTableName(a.Table, b.Table)
 }
 
-// EqualsRefOfExprOrColumns does deep equals between the two objects.
-func EqualsRefOfExprOrColumns(a, b *ExprOrColumns) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsExpr(a.Expr, b.Expr) &&
-		EqualsColumns(a.ColumnList, b.ColumnList)
-}
-
 // EqualsExprs does deep equals between the two objects.
 func EqualsExprs(a, b Exprs) bool {
 	if len(a) != len(b) {
@@ -2137,9 +2125,8 @@ func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Maxvalue == b.Maxvalue &&
-		EqualsColIdent(a.Name, b.Name) &&
-		EqualsExpr(a.Limit, b.Limit)
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange)
 }
 
 // EqualsRefOfPartitionOption does deep equals between the two objects.
@@ -2150,14 +2137,11 @@ func EqualsRefOfPartitionOption(a, b *PartitionOption) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Linear == b.Linear &&
-		a.isHASH == b.isHASH &&
-		a.isKEY == b.isKEY &&
+	return a.IsLinear == b.IsLinear &&
 		a.KeyAlgorithm == b.KeyAlgorithm &&
-		a.RangeOrList == b.RangeOrList &&
 		a.Partitions == b.Partitions &&
-		EqualsColumns(a.KeyColList, b.KeyColList) &&
-		EqualsRefOfExprOrColumns(a.ExprOrCol, b.ExprOrCol) &&
+		a.Type == b.Type &&
+		EqualsColumns(a.ColList, b.ColList) &&
 		EqualsExpr(a.Expr, b.Expr) &&
 		EqualsRefOfSubPartition(a.SubPartition, b.SubPartition) &&
 		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
@@ -2178,6 +2162,19 @@ func EqualsRefOfPartitionSpec(a, b *PartitionSpec) bool {
 		EqualsRefOfLiteral(a.Number, b.Number) &&
 		EqualsTableName(a.TableName, b.TableName) &&
 		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
+}
+
+// EqualsRefOfPartitionValueRange does deep equals between the two objects.
+func EqualsRefOfPartitionValueRange(a, b *PartitionValueRange) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Maxvalue == b.Maxvalue &&
+		a.Type == b.Type &&
+		EqualsValTuple(a.Range, b.Range)
 }
 
 // EqualsPartitions does deep equals between the two objects.
@@ -2520,12 +2517,11 @@ func EqualsRefOfSubPartition(a, b *SubPartition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Linear == b.Linear &&
-		a.isHASH == b.isHASH &&
-		a.isKEY == b.isKEY &&
+	return a.IsLinear == b.IsLinear &&
 		a.KeyAlgorithm == b.KeyAlgorithm &&
 		a.SubPartitions == b.SubPartitions &&
-		EqualsColumns(a.KeyColList, b.KeyColList) &&
+		a.Type == b.Type &&
+		EqualsColumns(a.ColList, b.ColList) &&
 		EqualsExpr(a.Expr, b.Expr)
 }
 

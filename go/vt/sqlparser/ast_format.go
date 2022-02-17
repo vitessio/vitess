@@ -428,43 +428,49 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
-	if !node.Maxvalue {
-		buf.astPrintf(node, "partition %v values less than (%v)", node.Name, node.Limit)
+	buf.astPrintf(node, "partition %v", node.Name)
+	if node.ValueRange != nil {
+		buf.astPrintf(node, " %v", node.ValueRange)
+	}
+}
+
+// Format formats the node
+func (node *PartitionValueRange) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "values %s", node.Type.ToString())
+	if node.Maxvalue {
+		buf.WriteString(" maxvalue")
 	} else {
-		buf.astPrintf(node, "partition %v values less than (maxvalue)", node.Name)
+		buf.astPrintf(node, " %v", node.Range)
 	}
 }
 
 // Format formats the node.
 func (node *PartitionOption) Format(buf *TrackedBuffer) {
 	buf.WriteString("partition by")
-	if node.isHASH {
-		if node.Linear != "" {
-			buf.astPrintf(node, " %s", node.Linear)
+	if node.IsLinear {
+		buf.WriteString(" linear")
+	}
+
+	switch node.Type {
+	case HashType:
+		buf.astPrintf(node, " hash (%v)", node.Expr)
+	case KeyType:
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != 0 {
+			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
 		}
-		buf.WriteString(" hash")
+		buf.astPrintf(node, " %v", node.ColList)
+	case RangeType, ListType:
+		buf.astPrintf(node, " %s", node.Type.ToString())
 		if node.Expr != nil {
 			buf.astPrintf(node, " (%v)", node.Expr)
+		} else {
+			buf.astPrintf(node, " columns %v", node.ColList)
 		}
 	}
-	if node.isKEY {
-		if node.Linear != "" {
-			buf.astPrintf(node, " %s", node.Linear)
-		}
-		buf.WriteString(" key")
-		if node.KeyAlgorithm != "" {
-			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
-		}
-		if node.KeyColList != nil {
-			buf.astPrintf(node, " %v", node.KeyColList)
-		}
-	}
-	if node.RangeOrList != "" {
-		buf.astPrintf(node, " %s", node.RangeOrList)
-		buf.astPrintf(node, " %v", node.ExprOrCol)
-	}
-	if node.Partitions != "" {
-		buf.astPrintf(node, " partitions %s", node.Partitions)
+
+	if node.Partitions != -1 {
+		buf.astPrintf(node, " partitions %d", node.Partitions)
 	}
 	if node.SubPartition != nil {
 		buf.astPrintf(node, " %v", node.SubPartition)
@@ -484,39 +490,23 @@ func (node *PartitionOption) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *SubPartition) Format(buf *TrackedBuffer) {
 	buf.WriteString("subpartition by")
-	if node.isHASH {
-		if node.Linear != "" {
-			buf.astPrintf(node, " %s", node.Linear)
-		}
-		buf.WriteString(" hash")
-		if node.Expr != nil {
-			buf.astPrintf(node, " (%v)", node.Expr)
-		}
+	if node.IsLinear {
+		buf.WriteString(" linear")
 	}
-	if node.isKEY {
-		if node.Linear != "" {
-			buf.astPrintf(node, " %s", node.Linear)
-		}
-		buf.WriteString(" key")
-		if node.KeyAlgorithm != "" {
-			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
-		}
-		if node.KeyColList != nil {
-			buf.astPrintf(node, " (%v)", node.KeyColList)
-		}
-	}
-	if node.SubPartitions != "" {
-		buf.astPrintf(node, " subpartitions %s", node.SubPartitions)
-	}
-}
 
-// Format formats the node.
-func (node *ExprOrColumns) Format(buf *TrackedBuffer) {
-	if node.Expr != nil {
-		buf.astPrintf(node, "(%v)", node.Expr)
+	switch node.Type {
+	case HashType:
+		buf.astPrintf(node, " hash (%v)", node.Expr)
+	case KeyType:
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != 0 {
+			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
+		}
+		buf.astPrintf(node, " %v", node.ColList)
 	}
-	if node.ColumnList != nil {
-		buf.astPrintf(node, "columns %v", node.ColumnList)
+
+	if node.SubPartitions != -1 {
+		buf.astPrintf(node, " subpartitions %d", node.SubPartitions)
 	}
 }
 

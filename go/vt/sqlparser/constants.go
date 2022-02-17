@@ -66,6 +66,16 @@ const (
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 
+	// Partition and subpartition type strings
+	HashTypeStr  = "hash"
+	KeyTypeStr   = "key"
+	RangeTypeStr = "range"
+	ListTypeStr  = "list"
+
+	// Partition value range type strings
+	LessThanTypeStr = "less than"
+	InTypeStr       = "in"
+
 	// Online DDL hint
 	OnlineStr = "online"
 
@@ -481,6 +491,20 @@ const (
 	RepairAction
 	RemoveAction
 	UpgradeAction
+)
+
+// Constant for Enum Type - PartitionByType
+const (
+	HashType PartitionByType = iota
+	KeyType
+	RangeType
+	ListType
+)
+
+// Constant for Enum Type - PartitionValueRangeType
+const (
+	LessThanType PartitionValueRangeType = iota
+	InType
 )
 
 // Constant for Enum Type - ExplainType
