@@ -316,26 +316,20 @@ func TestCreateTableDiff(t *testing.T) {
 			name: "change partitioning 1",
 			from: "create table t1 (id int primary key) partition by hash (id) partitions 4",
 			to:   "create table t1 (id int primary key) partition by hash (id) partitions 5",
-			// diff: "alter table t1 partition by hash (id) partitions 5",
-			isError:  true,
-			errorMsg: "partitions",
+			diff: "alter table t1 partition by hash (id) partitions 5",
 		},
 		{
 			name: "change partitioning 2",
 			from: "create table t1 (id int primary key) partition by key (id) partitions 2",
 			to:   "create table t1 (id int primary key) partition by hash (id) partitions 5",
-			// diff: "alter table t1 partition by hash (id) partitions 5",
-			isError:  true,
-			errorMsg: "partitions",
+			diff: "alter table t1 partition by hash (id) partitions 5",
 		},
-		// {
-		// 	name: "change partitioning 3",
-		// 	from: "create table t1 (id int primary key) partition by key (id) partitions 2",
-		// 	to:   "create table t1 (id int primary key) partition by list (id) {partition p1 values in(11,21), partition p2 values in (12,22)}",
-		// 	// diff: "alter table t1 partition by list (id) {partition p1 values in(11,21), partition p2 values in (12,22)}",
-		// 	isError:  true,
-		// 	errorMsg: "partitions",
-		// },
+		{
+			name: "change partitioning 3",
+			from: "create table t1 (id int primary key) partition by key (id) partitions 2",
+			to:   "create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))",
+			diff: "alter table t1 partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))",
+		},
 
 		//
 		// table options

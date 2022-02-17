@@ -172,7 +172,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			return nil, err
 		}
 	}
-	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionSpec == nil {
+	if len(alterTable.AlterOptions) == 0 && alterTable.PartitionSpec == nil && alterTable.PartitionOption == nil {
 		// it's possible that the table definitions are different, and still there's no
 		// "real" difference. Reasons could be:
 		// - reordered keys -- we treat that as non-diff
@@ -326,6 +326,9 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 	switch {
 	case t1Partitions == nil && t2Partitions == nil:
 		return nil
+	case t1Partitions == nil:
+		// add partitioning
+		alterTable.PartitionOption = t2Partitions
 	case t2Partitions == nil:
 		// remove partitioning
 		partitionSpec := &sqlparser.PartitionSpec{
@@ -337,12 +340,14 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 		// identical partitioning
 		return nil
 	default:
-		// either partitioning was added or it was changed
-		// return ErrPartitioningUnsupported
-		return ErrPartitioningUnsupported
-		// TODO(shlomi): paritions will be supported when sqlparser support for partitions is complete.
-		// missing right now: parsing PARTITION BY LIST/RANGE, ALTER TABLE... PARTITION (PartitionOption)
-		//		alterTable.PartitionOption = t2Partitions
+		// partitioning was changed
+		// we produce a complete re-partitioing schema. What we don't do is try and figure out the minimal
+		// needed change. For example, maybe the minimal change is to REORGANIZE a specific partition and split
+		// into two, thus unaffecting the rest of the partitions. But we don't evaluate that, we just set a
+		// complete new ALTER TABLE ... PARTITION BY statement.
+		// The idea is that it doesn't matter: we're not looking to do optimal in-place ALTERs, we run
+		// Online DDL alters, where we create a new table anyway. Thus, the optimization is meaningless.
+		alterTable.PartitionOption = t2Partitions
 	}
 	return nil
 }
