@@ -264,15 +264,10 @@ docker_bootstrap_pull:
 
 
 define build_docker_image
-	# Fix permissions before copying files, to avoid AUFS bug.
-	# Take permission backup before setting for restore.
-	getfacl -R ./ > /tmp/vitess-permissions.txt
 	${info Building ${2}}
-	chmod -R o=g *;
+	# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
+	chmod -R o=rx *;
 	docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
-	# Restore permissions from backup
-	setfacl --restore=/tmp/vitess-permissions.txt
-	rm -f /tmp/vitess-permissions.txt
 endef
 
 docker_base:
