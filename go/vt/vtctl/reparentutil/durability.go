@@ -32,7 +32,7 @@ import (
 // A newDurabler is a function that creates a new durabler based on the
 // properties specified in the input map. Every durabler must
 // register a newDurabler function.
-type newDurabler func(map[string]string) durabler
+type newDurabler func() durabler
 
 var (
 	// durabilityPolicies is a map that stores the functions needed to create a new durabler
@@ -45,16 +45,18 @@ var (
 
 func init() {
 	// register all the durability rules with their functions to create them
-	registerDurability("none", func(map[string]string) durabler {
+	registerDurability("none", func() durabler {
 		return &durabilityNone{}
 	})
-	registerDurability("semi_sync", func(map[string]string) durabler {
+	registerDurability("semi_sync", func() durabler {
 		return &durabilitySemiSync{}
 	})
-	registerDurability("cross_cell", func(map[string]string) durabler {
+	registerDurability("cross_cell", func() durabler {
 		return &durabilityCrossCell{}
 	})
-	registerDurability("specified", newDurabilitySpecified)
+	registerDurability("test", func() durabler {
+		return &durabilityTest{}
+	})
 }
 
 // durabler is the interface which is used to get the promotion rules for candidates and the semi sync setup
@@ -74,7 +76,7 @@ func registerDurability(name string, newDurablerFunc newDurabler) {
 //=======================================================================
 
 // SetDurabilityPolicy is used to set the durability policy from the registered policies
-func SetDurabilityPolicy(name string, durabilityParams map[string]string) error {
+func SetDurabilityPolicy(name string) error {
 	newDurabilityCreationFunc, found := durabilityPolicies[name]
 	if !found {
 		return fmt.Errorf("durability policy %v not found", name)
@@ -82,7 +84,7 @@ func SetDurabilityPolicy(name string, durabilityParams map[string]string) error 
 	log.Infof("Setting durability policy to %v", name)
 	curDurabilityPolicyMutex.Lock()
 	defer curDurabilityPolicyMutex.Unlock()
-	curDurabilityPolicy = newDurabilityCreationFunc(durabilityParams)
+	curDurabilityPolicy = newDurabilityCreationFunc()
 	return nil
 }
 
@@ -189,16 +191,12 @@ func (d *durabilityCrossCell) isReplicaSemiSync(primary, replica *topodatapb.Tab
 
 //=======================================================================
 
-// durabilitySpecified is like durabilityNone. It has an additional map which it first queries with the tablet alias as the key
-// If a CandidatePromotionRule is found in that map, then that is used as the promotion rule. Otherwise, it reverts to the same logic as durabilityNone
-type durabilitySpecified struct {
-	promotionRules map[string]promotionrule.CandidatePromotionRule
-}
+// durabilityTest is like durabilityNone. It overrides the type for a specific tablet to prefer. It is only meant to be used for testing purposes!
+type durabilityTest struct{}
 
-func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
-	promoteRule, isFound := d.promotionRules[topoproto.TabletAliasString(tablet.Alias)]
-	if isFound {
-		return promoteRule
+func (d *durabilityTest) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
+	if topoproto.TabletAliasString(tablet.Alias) == "zone2-0000000200" {
+		return promotionrule.Prefer
 	}
 
 	switch tablet.Type {
@@ -208,31 +206,10 @@ func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) promotion
 	return promotionrule.MustNot
 }
 
-func (d *durabilitySpecified) semiSyncAckers(tablet *topodatapb.Tablet) int {
+func (d *durabilityTest) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 0
 }
 
-func (d *durabilitySpecified) isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+func (d *durabilityTest) isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	return false
-}
-
-// newDurabilitySpecified is a function that is used to create a new durabilitySpecified struct
-func newDurabilitySpecified(m map[string]string) durabler {
-	promotionRules := map[string]promotionrule.CandidatePromotionRule{}
-	// range over the map given by the user
-	for tabletAliasStr, promotionRuleStr := range m {
-		// parse the promotion rule
-		promotionRule, err := promotionrule.Parse(promotionRuleStr)
-		// if parsing is not successful, skip over this rule
-		if err != nil {
-			log.Errorf("invalid promotion rule %s found, received error - %v", promotionRuleStr, err)
-			continue
-		}
-		// set the promotion rule in the map at the given tablet alias
-		promotionRules[tabletAliasStr] = promotionRule
-	}
-
-	return &durabilitySpecified{
-		promotionRules: promotionRules,
-	}
 }
