@@ -30,6 +30,8 @@ import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import KeyspaceActions from './keyspaces/KeyspaceActions';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import { isReadOnlyMode } from '../../util/env';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
@@ -75,9 +77,11 @@ export const Keyspaces = () => {
                         </div>
                     )}
                 </DataCell>
-                <DataCell>
-                    <KeyspaceActions keyspace={row.name as string} clusterID={row.clusterID as string} />
-                </DataCell>
+                <ReadOnlyGate>
+                    <DataCell>
+                        <KeyspaceActions keyspace={row.name as string} clusterID={row.clusterID as string} />
+                    </DataCell>
+                </ReadOnlyGate>
             </tr>
         ));
 
@@ -95,7 +99,11 @@ export const Keyspaces = () => {
                     value={filter || ''}
                 />
                 <div className="max-w-screen-md">
-                    <DataTable columns={['Keyspace', 'Shards', 'Actions']} data={ksRows} renderRows={renderRows} />
+                    <DataTable
+                        columns={isReadOnlyMode() ? ['Keyspace', 'Shards'] : ['Keyspace', 'Shards', 'Actions']}
+                        data={ksRows}
+                        renderRows={renderRows}
+                    />
                 </div>
             </ContentContainer>
         </div>

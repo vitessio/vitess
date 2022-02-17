@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
@@ -9251,6 +9252,350 @@ func TestValidate(t *testing.T) {
 			},
 		},
 	}, resp)
+}
+
+func TestValidateSchemaKeyspace(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1", "zone2", "zone3")
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks1",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks2",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	tablets := []*topodatapb.Tablet{
+		{
+			Keyspace: "ks1",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_PRIMARY,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Hostname: "ks1-00-00-primary",
+		},
+		{
+			Keyspace: "ks1",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_REPLICA,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Hostname: "ks1-00-00-replica",
+		},
+		// ks2 shard -80 has no Primary intentionally for testing
+		{
+			Keyspace: "ks2",
+			Shard:    "-80",
+			Type:     topodatapb.TabletType_REPLICA,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			Hostname: "ks2-00-80-replica0",
+		},
+		{
+			Keyspace: "ks2",
+			Shard:    "-80",
+			Type:     topodatapb.TabletType_REPLICA,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone2",
+				Uid:  200,
+			},
+			Hostname: "ks2-00-80-replica1",
+		},
+		//
+		{
+			Keyspace: "ks2",
+			Shard:    "80-",
+			Type:     topodatapb.TabletType_PRIMARY,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  103,
+			},
+			Hostname: "ks2-80-00-primary1",
+		},
+		{
+			Keyspace: "ks2",
+			Shard:    "80-",
+			Type:     topodatapb.TabletType_REPLICA,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone2",
+				Uid:  201,
+			},
+			Hostname: "ks2-80-00-replica1",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+		SkipShardCreation:    false,
+	}, tablets...)
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	schema1 := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "not_in_vschema",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+
+	schema2 := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:    "t1",
+				Columns: []string{"c1"},
+			},
+			{
+				Name:    "t2",
+				Columns: []string{"c1"},
+			},
+			{
+				Name:    "t3",
+				Columns: []string{"c1"},
+			},
+		},
+	}
+
+	// we need to run this on each test case or they will pollute each other
+	setupSchema := func(tablet *topodatapb.TabletAlias, schema *tabletmanagerdatapb.SchemaDefinition) {
+		tmc.GetSchemaResults[topoproto.TabletAliasString(tablet)] = struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			Schema: schema,
+			Error:  nil,
+		}
+	}
+
+	tests := []*struct {
+		name      string
+		req       *vtctldatapb.ValidateSchemaKeyspaceRequest
+		expected  *vtctldatapb.ValidateSchemaKeyspaceResponse
+		setup     func()
+		shouldErr bool
+	}{
+		{
+			name: "valid schemas",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				}, schema1)
+			},
+			shouldErr: false,
+		},
+		{
+			name: "different schemas",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{"zone1-0000000100 has an extra table named not_in_vschema"},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{"zone1-0000000100 has an extra table named not_in_vschema"}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				}, schema2)
+			},
+			shouldErr: false,
+		},
+		{
+			name: "skip-no-primary: no primary",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace:      "ks2",
+				SkipNoPrimary: false,
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{"no primary in shard ks2/-80"},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-80": {Results: []string{"no primary in shard ks2/-80"}},
+					"80-": {Results: []string{}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  201,
+				}, schema1)
+			},
+			shouldErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup()
+			resp, err := vtctld.ValidateSchemaKeyspace(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestValidateVersionKeyspace(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1", "zone2")
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks1",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks2",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	tablets := []*topodatapb.Tablet{
+		{
+			Keyspace: "ks1",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_PRIMARY,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Hostname: "primary",
+		},
+		{
+			Keyspace: "ks1",
+			Shard:    "-",
+			Type:     topodatapb.TabletType_REPLICA,
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			Hostname: "replica",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+		SkipShardCreation:    false,
+	}, tablets...)
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tests := []*struct {
+		name      string
+		req       *vtctldatapb.ValidateVersionKeyspaceRequest
+		expected  *vtctldatapb.ValidateVersionKeyspaceResponse
+		setup     func()
+		shouldErr bool
+	}{
+		{
+			name: "valid versions",
+			req: &vtctldatapb.ValidateVersionKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			expected: &vtctldatapb.ValidateVersionKeyspaceResponse{
+				Results: []string{},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{}},
+				},
+			},
+			setup: func() {
+				addrVersionMap := map[string]string{
+					"primary:0": "version1",
+					"replica:0": "version1",
+				}
+				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+			},
+			shouldErr: false,
+		},
+		{
+			name: "different versions",
+			req: &vtctldatapb.ValidateVersionKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			expected: &vtctldatapb.ValidateVersionKeyspaceResponse{
+				Results: []string{"primary zone1-0000000100 version version:\"version1\" is different than replica zone1-0000000101 version version:\"version2\""},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{"primary zone1-0000000100 version version:\"version1\" is different than replica zone1-0000000101 version version:\"version2\""}},
+				},
+			},
+			setup: func() {
+				addrVersionMap := map[string]string{
+					"primary:0": "version1",
+					"replica:0": "version2",
+				}
+				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+			},
+			shouldErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup()
+			resp, err := vtctld.ValidateVersionKeyspace(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
 }
 
 func TestValidateShard(t *testing.T) {

@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"sort"
 	"sync"
 	"time"
 
@@ -110,81 +109,15 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 
 // ValidateSchemaKeyspace will diff the schema from all the tablets in the keyspace.
 func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoPrimary bool, includeVSchema bool) error {
-	// find all the shards
-	shards, err := wr.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return fmt.Errorf("GetShardNames(%v) failed: %v", keyspace, err)
-	}
+	_, err := wr.VtctldServer().ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       keyspace,
+		ExcludeTables:  excludeTables,
+		IncludeViews:   includeViews,
+		IncludeVschema: includeVSchema,
+		SkipNoPrimary:  skipNoPrimary,
+	})
 
-	// corner cases
-	if len(shards) == 0 {
-		return fmt.Errorf("no shards in keyspace %v", keyspace)
-	}
-	sort.Strings(shards)
-	if len(shards) == 1 {
-		return wr.ValidateSchemaShard(ctx, keyspace, shards[0], excludeTables, includeViews, includeVSchema)
-	}
-
-	var referenceSchema *tabletmanagerdatapb.SchemaDefinition
-	var referenceAlias *topodatapb.TabletAlias
-
-	// then diff with all other tablets everywhere
-	er := concurrency.AllErrorRecorder{}
-	wg := sync.WaitGroup{}
-
-	// If we are checking against the vschema then all shards
-	// should just be validated individually against it
-	if includeVSchema {
-		err := wr.ValidateVSchema(ctx, keyspace, shards, excludeTables, includeViews)
-		if err != nil {
-			return err
-		}
-	}
-
-	// then diffs all tablets in the other shards
-	for _, shard := range shards[0:] {
-		si, err := wr.ts.GetShard(ctx, keyspace, shard)
-		if err != nil {
-			er.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
-			continue
-		}
-
-		if !si.HasPrimary() {
-			if !skipNoPrimary {
-				er.RecordError(fmt.Errorf("no primary in shard %v/%v", keyspace, shard))
-			}
-			continue
-		}
-
-		if referenceSchema == nil {
-			referenceAlias = si.PrimaryAlias
-			log.Infof("Gathering schema for reference primary %v", topoproto.TabletAliasString(referenceAlias))
-			referenceSchema, err = schematools.GetSchema(ctx, wr.ts, wr.tmc, referenceAlias, nil, excludeTables, includeViews)
-			if err != nil {
-				return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, excludeTables, includeViews, err)
-			}
-		}
-
-		aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
-		if err != nil {
-			er.RecordError(fmt.Errorf("FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err))
-			continue
-		}
-
-		for _, alias := range aliases {
-			// Don't diff schemas for self
-			if referenceAlias == alias {
-				continue
-			}
-			wg.Add(1)
-			go wr.diffSchema(ctx, referenceSchema, referenceAlias, alias, excludeTables, includeViews, &wg, &er)
-		}
-	}
-	wg.Wait()
-	if er.HasErrors() {
-		return fmt.Errorf("schema diffs: %v", er.Error().Error())
-	}
-	return nil
+	return err
 }
 
 // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
