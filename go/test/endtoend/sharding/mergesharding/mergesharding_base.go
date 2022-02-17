@@ -198,20 +198,16 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 
 	// Init Shard primary
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard0.Name), shard0Primary.Alias)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard0.Name, shard0Primary.Cell, shard0Primary.TabletUID)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1Primary.Alias)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard1.Name, shard1Primary.Cell, shard1Primary.TabletUID)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard2.Name), shard2Primary.Alias)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID)
 	require.NoError(t, err)
 
 	// Init Shard primary on Merge Shard
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard3.Name), shard3Primary.Alias)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard3.Name, shard3Primary.Cell, shard3Primary.TabletUID)
 	require.NoError(t, err)
 
 	// Wait for tablets to come in Service state

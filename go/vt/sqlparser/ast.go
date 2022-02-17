@@ -457,11 +457,12 @@ type (
 
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
-		Table         TableName
-		AlterOptions  []AlterOption
-		PartitionSpec *PartitionSpec
-		Comments      Comments
-		FullyParsed   bool
+		Table           TableName
+		AlterOptions    []AlterOption
+		PartitionSpec   *PartitionSpec
+		PartitionOption *PartitionOption
+		Comments        Comments
+		FullyParsed     bool
 	}
 
 	// DropTable represents a DROP TABLE statement.
@@ -495,7 +496,7 @@ type (
 	CreateView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
@@ -508,12 +509,18 @@ type (
 	AlterView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
 		Comments    Comments
+	}
+
+	// Definer stores the user for AlterView and CreateView definers
+	Definer struct {
+		Name    string
+		Address string
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -1513,41 +1520,42 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name     ColIdent
-	Limit    Expr
+	Name       ColIdent
+	ValueRange *PartitionValueRange
+}
+
+// PartitionValueRangeType is an enum for PartitionValueRange.Type
+type PartitionValueRangeType int8
+
+type PartitionValueRange struct {
+	Type     PartitionValueRangeType
+	Range    ValTuple
 	Maxvalue bool
 }
 
+// PartitionByType is an enum storing how we are partitioning a table
+type PartitionByType int8
+
 // PartitionOption describes partitioning control (for create table statements)
 type PartitionOption struct {
-	Linear       string
-	isHASH       bool
-	isKEY        bool
-	KeyAlgorithm string
-	KeyColList   Columns
-	RangeOrList  string
-	ExprOrCol    *ExprOrColumns
+	Type         PartitionByType
+	IsLinear     bool
+	KeyAlgorithm int
+	ColList      Columns
 	Expr         Expr
-	Partitions   string
+	Partitions   int
 	SubPartition *SubPartition
 	Definitions  []*PartitionDefinition
 }
 
-// ExprOrColumns describes expression and columnlist in the partition
-type ExprOrColumns struct {
-	Expr       Expr
-	ColumnList Columns
-}
-
 // SubPartition describes subpartitions control
 type SubPartition struct {
-	Linear        string
-	isHASH        bool
-	isKEY         bool
-	KeyAlgorithm  string
-	KeyColList    Columns
+	Type          PartitionByType
+	IsLinear      bool
+	KeyAlgorithm  int
+	ColList       Columns
 	Expr          Expr
-	SubPartitions string
+	SubPartitions int
 }
 
 // TableOptions specifies a list of table options
