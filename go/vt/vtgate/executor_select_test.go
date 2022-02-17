@@ -122,7 +122,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 
 	sqlparser.MySQLVersion = "57000"
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -192,7 +192,7 @@ func TestSetSystemVariablesTx(t *testing.T) {
 
 	sqlparser.MySQLVersion = "80001"
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: "TestExecutor"})
 
 	_, err := executor.Execute(context.Background(), "TestBegin", session, "begin", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -240,7 +240,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	sqlparser.MySQLVersion = "80001"
 
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSetVar: true, EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
 	// Set @@sql_mode and execute a select statement. We should have SET_VAR in the select statement
 
@@ -299,7 +299,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	require.Nil(t, lookup.Queries)
-	require.Equal(t, "'only_full_group_by'", string(session.UserDefinedVariables["var"].GetValue()))
+	require.Equal(t, "only_full_group_by", string(session.UserDefinedVariables["var"].GetValue()))
 
 	lookup.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -313,11 +313,11 @@ func TestSetSystemVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
-		{Sql: "select @@max_tmp_tables from dual", BindVariables: map[string]*querypb.BindVariable{"__vtsql_mode": sqltypes.StringBindVariable("'only_full_group_by'")}},
+		{Sql: "select @@max_tmp_tables from dual", BindVariables: map[string]*querypb.BindVariable{"__vtsql_mode": sqltypes.StringBindVariable("only_full_group_by")}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
-	require.Equal(t, "'only_full_group_by'", string(session.UserDefinedVariables["var"].GetValue()))
-	require.Equal(t, "'only_full_group_by'", string(session.UserDefinedVariables["x"].GetValue()))
+	require.Equal(t, "only_full_group_by", string(session.UserDefinedVariables["var"].GetValue()))
+	require.Equal(t, "only_full_group_by", string(session.UserDefinedVariables["x"].GetValue()))
 	require.Equal(t, "4", string(session.UserDefinedVariables["y"].GetValue()))
 	lookup.Queries = nil
 
