@@ -136,7 +136,6 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
 		"-disable_active_reparents",
-		"-use_super_read_only=false",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -319,8 +318,11 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
 func cleanAndStartVttablet(t *testing.T, clusterInfo *VtOrcClusterInfo, vttablet *cluster.Vttablet) {
 	t.Helper()
+	// set super-read-only to false
+	_, err := RunSQL(t, "SET GLOBAL super_read_only = OFF", vttablet, "")
+	require.NoError(t, err)
 	// remove the databases if they exist
-	_, err := RunSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
+	_, err = RunSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
 	require.NoError(t, err)
 	_, err = RunSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
@@ -772,7 +774,6 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
 		"-disable_active_reparents",
-		"-use_super_read_only=false",
 		"-enable_semi_sync",
 	}
 

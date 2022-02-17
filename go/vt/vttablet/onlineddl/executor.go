@@ -165,6 +165,8 @@ type Executor struct {
 	ticks             *timer.Timer
 	isOpen            bool
 	schemaInitialized bool
+
+	initVreplicationDDLOnce sync.Once
 }
 
 type cancellableMigration struct {
@@ -980,6 +982,13 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
+
+		e.initVreplicationDDLOnce.Do(func() {
+			// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
+			// This will make vreplication run through its WithDDL schema changes.
+			_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, sqlImpossibleSelectVreplication)
+		})
+
 		// reload schema
 		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
 			return err
@@ -1498,7 +1507,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 	defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 
 	switch onlineDDL.Strategy {
-	case schema.DDLStrategyOnline:
+	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		// migration could have started by a different tablet. We need to actively verify if it is running
 		foundRunning, _, _ = e.isVReplMigrationRunning(ctx, onlineDDL.UUID)
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
@@ -1710,7 +1719,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 	}
 	switch action {
 	case sqlparser.AlterDDLAction:
-		if revertMigration.Strategy != schema.DDLStrategyOnline {
+		if revertMigration.Strategy != schema.DDLStrategyOnline && revertMigration.Strategy != schema.DDLStrategyVitess {
 			return fmt.Errorf("can only revert a %s strategy migration. Migration %s has %s strategy", schema.DDLStrategyOnline, revertMigration.UUID, revertMigration.Strategy)
 		}
 	case sqlparser.RevertDDLAction:
@@ -2335,7 +2344,7 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 
 	// This is a real TABLE
 	switch onlineDDL.Strategy {
-	case schema.DDLStrategyOnline:
+	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		go func() {
 			e.migrationMutex.Lock()
 			defer e.migrationMutex.Unlock()
@@ -2788,7 +2797,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		uuidsFoundRunning[uuid] = true
 
 		switch onlineDDL.StrategySetting().Strategy {
-		case schema.DDLStrategyOnline:
+		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
 				// We check the _vt.vreplication table
 				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
