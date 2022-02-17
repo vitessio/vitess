@@ -1172,9 +1172,9 @@ var (
 		input: "alter table e comment 'hello' remove partitioning",
 	}, {
 		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
-		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
+		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than maxvalue)",
 	}, {
-		input: "alter table a algorithm = default, lock none, add partition (partition d values less than (maxvalue))",
+		input: "alter table a algorithm = default, lock none, add partition (partition d values less than maxvalue)",
 	}, {
 		input: "alter table a discard partition all tablespace",
 	}, {
@@ -1215,7 +1215,7 @@ var (
 	}, {
 		input: "alter table a partition by hash (id) partitions 4",
 	}, {
-		input: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
+		input: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than maxvalue)",
 	}, {
 		input:      "create database a garbage values",
 		output:     "create database a",
@@ -3443,6 +3443,227 @@ func TestCreateTable(t *testing.T) {
 			output: `create table t1 (
 	id int(11)
 ) ENGINE FOOBAR`,
+		},
+		// partitions
+		{
+			input: `
+CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (store_id) (
+    PARTITION p0 VALUES LESS THAN (6),
+    PARTITION p1 VALUES LESS THAN (11),
+    PARTITION p2 VALUES LESS THAN (16),
+    PARTITION p3 VALUES LESS THAN (21)
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than (21))`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (store_id) (
+    PARTITION p0 VALUES LESS THAN (6),
+    PARTITION p1 VALUES LESS THAN (11),
+    PARTITION p2 VALUES LESS THAN (16),
+    PARTITION p3 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (store_id) (partition p0 values less than (6), partition p1 values less than (11), partition p2 values less than (16), partition p3 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT NOT NULL,
+    store_id INT NOT NULL
+)
+PARTITION BY RANGE (job_code) (
+    PARTITION p0 VALUES LESS THAN (100),
+    PARTITION p1 VALUES LESS THAN (1000),
+    PARTITION p2 VALUES LESS THAN (10000)
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT not null,
+	store_id INT not null
+) partition by range (job_code) (partition p0 values less than (100), partition p1 values less than (1000), partition p2 values less than (10000))`,
+		},
+		{
+			input: `CREATE TABLE employees (
+    id INT NOT NULL,
+    fname VARCHAR(30),
+    lname VARCHAR(30),
+    hired DATE NOT NULL DEFAULT '1970-01-01',
+    separated DATE NOT NULL DEFAULT '9999-12-31',
+    job_code INT,
+    store_id INT
+)
+PARTITION BY RANGE ( YEAR(separated) ) (
+    PARTITION p0 VALUES LESS THAN (1991),
+    PARTITION p1 VALUES LESS THAN (1996),
+    PARTITION p2 VALUES LESS THAN (2001),
+    PARTITION p3 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table employees (
+	id INT not null,
+	fname VARCHAR(30),
+	lname VARCHAR(30),
+	hired DATE not null default '1970-01-01',
+	separated DATE not null default '9999-12-31',
+	job_code INT,
+	store_id INT
+) partition by range (YEAR(separated)) (partition p0 values less than (1991), partition p1 values less than (1996), partition p2 values less than (2001), partition p3 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE quarterly_report_status (
+    report_id INT NOT NULL,
+    report_status VARCHAR(20) NOT NULL,
+    report_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
+    PARTITION p0 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-01-01 00:00:00') ),
+    PARTITION p1 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-04-01 00:00:00') ),
+    PARTITION p2 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-07-01 00:00:00') ),
+    PARTITION p3 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-10-01 00:00:00') ),
+    PARTITION p4 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-01-01 00:00:00') ),
+    PARTITION p5 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-04-01 00:00:00') ),
+    PARTITION p6 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-07-01 00:00:00') ),
+    PARTITION p7 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-10-01 00:00:00') ),
+    PARTITION p8 VALUES LESS THAN ( UNIX_TIMESTAMP('2010-01-01 00:00:00') ),
+    PARTITION p9 VALUES LESS THAN (MAXVALUE)
+)`,
+			output: `create table quarterly_report_status (
+	report_id INT not null,
+	report_status VARCHAR(20) not null,
+	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE quarterly_report_status (
+    report_id INT NOT NULL,
+    report_status VARCHAR(20) NOT NULL,
+    report_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+PARTITION BY RANGE ( UNIX_TIMESTAMP(report_updated) ) (
+    PARTITION p0 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-01-01 00:00:00') ),
+    PARTITION p1 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-04-01 00:00:00') ),
+    PARTITION p2 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-07-01 00:00:00') ),
+    PARTITION p3 VALUES LESS THAN ( UNIX_TIMESTAMP('2008-10-01 00:00:00') ),
+    PARTITION p4 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-01-01 00:00:00') ),
+    PARTITION p5 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-04-01 00:00:00') ),
+    PARTITION p6 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-07-01 00:00:00') ),
+    PARTITION p7 VALUES LESS THAN ( UNIX_TIMESTAMP('2009-10-01 00:00:00') ),
+    PARTITION p8 VALUES LESS THAN ( UNIX_TIMESTAMP('2010-01-01 00:00:00') ),
+    PARTITION p9 VALUES LESS THAN (MAXVALUE)
+)`,
+			output: `create table quarterly_report_status (
+	report_id INT not null,
+	report_status VARCHAR(20) not null,
+	report_updated TIMESTAMP not null default current_timestamp() on update current_timestamp()
+) partition by range (UNIX_TIMESTAMP(report_updated)) (partition p0 values less than (UNIX_TIMESTAMP('2008-01-01 00:00:00')), partition p1 values less than (UNIX_TIMESTAMP('2008-04-01 00:00:00')), partition p2 values less than (UNIX_TIMESTAMP('2008-07-01 00:00:00')), partition p3 values less than (UNIX_TIMESTAMP('2008-10-01 00:00:00')), partition p4 values less than (UNIX_TIMESTAMP('2009-01-01 00:00:00')), partition p5 values less than (UNIX_TIMESTAMP('2009-04-01 00:00:00')), partition p6 values less than (UNIX_TIMESTAMP('2009-07-01 00:00:00')), partition p7 values less than (UNIX_TIMESTAMP('2009-10-01 00:00:00')), partition p8 values less than (UNIX_TIMESTAMP('2010-01-01 00:00:00')), partition p9 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE members (
+    firstname VARCHAR(25) NOT NULL,
+    lastname VARCHAR(25) NOT NULL,
+    username VARCHAR(16) NOT NULL,
+    email VARCHAR(35),
+    joined DATE NOT NULL
+)
+PARTITION BY RANGE COLUMNS(joined) (
+    PARTITION p0 VALUES LESS THAN ('1960-01-01'),
+    PARTITION p1 VALUES LESS THAN ('1970-01-01'),
+    PARTITION p2 VALUES LESS THAN ('1980-01-01'),
+    PARTITION p3 VALUES LESS THAN ('1990-01-01'),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+)`,
+			output: `create table members (
+	firstname VARCHAR(25) not null,
+	lastname VARCHAR(25) not null,
+	username VARCHAR(16) not null,
+	email VARCHAR(35),
+	joined DATE not null
+) partition by range columns (joined) (partition p0 values less than ('1960-01-01'), partition p1 values less than ('1970-01-01'), partition p2 values less than ('1980-01-01'), partition p3 values less than ('1990-01-01'), partition p4 values less than maxvalue)`,
+		},
+		{
+			input: `CREATE TABLE ti (id INT, amount DECIMAL(7,2), tr_date DATE)
+    ENGINE=INNODB
+    PARTITION BY HASH( MONTH(tr_date) )
+    PARTITIONS 6`,
+			output: `create table ti (
+	id INT,
+	amount DECIMAL(7,2),
+	tr_date DATE
+) ENGINE INNODB partition by hash (MONTH(tr_date)) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE members (
+    firstname VARCHAR(25) NOT NULL,
+    lastname VARCHAR(25) NOT NULL,
+    username VARCHAR(16) NOT NULL,
+    email VARCHAR(35),
+    joined DATE NOT NULL
+)
+PARTITION BY KEY(joined)
+PARTITIONS 6`,
+			output: `create table members (
+	firstname VARCHAR(25) not null,
+	lastname VARCHAR(25) not null,
+	username VARCHAR(16) not null,
+	email VARCHAR(35),
+	joined DATE not null
+) partition by key (joined) partitions 6`,
+		},
+		{
+			input: `CREATE TABLE t2 (val INT)
+	PARTITION BY LIST(val)(
+	PARTITION mypart VALUES IN (1,3,5),
+	PARTITION MyPart VALUES IN (2,4,6)
+)`,
+			output: `create table t2 (
+	val INT
+) partition by list (val) (partition mypart values in (1, 3, 5), partition MyPart values in (2, 4, 6))`,
+		},
+		{
+			input: `create table t1 (id int primary key) partition by list (id) (partition p1 values in(11,21), partition p2 values in (12,22))`,
+			output: `create table t1 (
+	id int primary key
+) partition by list (id) (partition p1 values in (11, 21), partition p2 values in (12, 22))`,
 		},
 	}
 	for _, test := range createTableQueries {
