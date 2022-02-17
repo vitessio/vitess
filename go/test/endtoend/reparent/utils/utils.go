@@ -75,7 +75,7 @@ func SetupReparentCluster(t *testing.T, enableSemiSync bool) *cluster.LocalProce
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, true)
+	return setupClusterLegacy(ctx, t, ShardName, []string{cell1}, []int{2}, true)
 }
 
 // TeardownCluster is used to teardown the reparent cluster
