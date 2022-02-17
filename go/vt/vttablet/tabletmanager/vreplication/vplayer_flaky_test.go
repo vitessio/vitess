@@ -132,8 +132,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 	// drop time_heartbeat column to test that heartbeat is updated using WithDDL and can self-heal by creating the column again
 	env.Mysqld.ExecuteSuperQuery(ctx, "alter table _vt.vreplication drop column time_heartbeat")
 	time.Sleep(2 * time.Second)
-	timeUpdated3, transactionTimestamp3, timeHeartbeat3 := getTimestamps()
-	_, _, _ = timeUpdated3, transactionTimestamp3, timeHeartbeat3
+	_, _, timeHeartbeat3 := getTimestamps()
 	require.Greater(t, timeHeartbeat3, timeHeartbeat2, "time_heartbeat not updated")
 }
 
