@@ -3524,39 +3524,53 @@ func (e *Executor) SubmitMigration(
 	}
 
 	if onlineDDL.StrategySetting().IsSingleton() || onlineDDL.StrategySetting().IsSingletonContext() {
-		e.migrationMutex.Lock()
-		defer e.migrationMutex.Unlock()
+		// we need two wrap some logic within a mutex, so as to make sure we can't submit the migration whilst
+		// another query submits a conflicting migration
+		validateSingleton := func() error {
+			// We wrap everything in a function because we want the mutex released. We will need to reaquire it later on
+			// for other bookkeeping work.
+			e.migrationMutex.Lock()
+			defer e.migrationMutex.Unlock()
 
-		pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
-		if err != nil {
+			pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+			if err != nil {
+				return err
+			}
+			switch {
+			case onlineDDL.StrategySetting().IsSingleton():
+				// We will reject this migration if there's any pending migration
+				if len(pendingUUIDs) > 0 {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
+				}
+			case onlineDDL.StrategySetting().IsSingletonContext():
+				// We will reject this migration if there's any pending migration within a different context
+				for _, pendingUUID := range pendingUUIDs {
+					pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
+					if err != nil {
+						return err
+					}
+					if pendingOnlineDDL.MigrationContext != onlineDDL.MigrationContext {
+						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
+					}
+				}
+			}
+			// OK to go! We can submit the migration:
+			result, err = e.execQuery(ctx, query)
+			return err
+		}
+		if err := validateSingleton(); err != nil {
 			return nil, err
 		}
-		switch {
-		case onlineDDL.StrategySetting().IsSingleton():
-			// We will reject this migration if there's any pending migration
-			if len(pendingUUIDs) > 0 {
-				return result, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
-			}
-		case onlineDDL.StrategySetting().IsSingletonContext():
-			// We will reject this migration if there's any pending migration within a different context
-			for _, pendingUUID := range pendingUUIDs {
-				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
-				if err != nil {
-					return nil, err
-				}
-				if pendingOnlineDDL.MigrationContext != onlineDDL.MigrationContext {
-					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
-				}
-			}
+		// mutex aquired and released within validateSingleton(). We are now mutex free
+	} else {
+		// not a singleton. We submit the migration:
+		result, err = e.execQuery(ctx, query)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	defer e.triggerNextCheckInterval()
-
-	result, err = e.execQuery(ctx, query)
-	if err != nil {
-		return nil, err
-	}
 
 	// The query was a INSERT IGNORE because we allow a recurring submission of same migration.
 	// However, let's validate that the duplication (identified via UUID) was intentional.
@@ -3568,10 +3582,9 @@ func (e *Executor) SubmitMigration(
 	// Finally, possibly this migration already existed, and this is a resubmission of same UUID.
 	// possibly, the existing migration is in 'failed' or 'cancelled' state, in which case this
 	// resubmission should retry the migration.
-	go func() {
-		// RetryMigration locks the mutex. It's fine if we run it asynchronously. No concern of a race condition.
-		_, _ = e.RetryMigration(ctx, onlineDDL.UUID)
-	}()
+	if _, err := e.RetryMigration(ctx, onlineDDL.UUID); err != nil {
+		return result, err
+	}
 
 	return result, nil
 }
