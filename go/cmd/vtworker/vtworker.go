@@ -80,7 +80,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil); err != nil {
+	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy); err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		exit.Return(1)
 	}
