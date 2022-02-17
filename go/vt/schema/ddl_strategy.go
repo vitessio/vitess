@@ -44,6 +44,8 @@ type DDLStrategy string
 const (
 	// DDLStrategyDirect means not an online-ddl migration. Just a normal MySQL ALTER TABLE
 	DDLStrategyDirect DDLStrategy = "direct"
+	// DDLStrategyVitess requests vreplication to run the migration; new name for DDLStrategyOnline
+	DDLStrategyVitess DDLStrategy = "vitess"
 	// DDLStrategyOnline requests vreplication to run the migration
 	DDLStrategyOnline DDLStrategy = "online"
 	// DDLStrategyGhost requests gh-ost to run the migration
@@ -56,7 +58,7 @@ const (
 // A strategy is direct if it's not explciitly one of the online DDL strategies
 func (s DDLStrategy) IsDirect() bool {
 	switch s {
-	case DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC:
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC:
 		return false
 	}
 	return true
@@ -88,7 +90,7 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	switch strategy := DDLStrategy(strategyName); strategy {
 	case "": // backward compatiblity and to handle unspecified values
 		setting.Strategy = DDLStrategyDirect
-	case DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyDirect:
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyDirect:
 		setting.Strategy = strategy
 	default:
 		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)

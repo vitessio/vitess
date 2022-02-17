@@ -17,13 +17,12 @@ limitations under the License.
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"sync"
 	"time"
-
-	"context"
 
 	gouuid "github.com/pborman/uuid"
 
@@ -95,6 +94,8 @@ type Manager struct {
 	started chan struct{}
 	// workflows is a map from job UUID to runningWorkflow.
 	workflows map[string]*runningWorkflow
+	// sanitizeHTTPHeaders toggles sanitizeRequestHeader() behavior
+	sanitizeHTTPHeaders bool
 }
 
 // runningWorkflow holds information about a running workflow.
@@ -132,6 +133,11 @@ func NewManager(ts *topo.Server) *Manager {
 		started:     make(chan struct{}),
 		workflows:   make(map[string]*runningWorkflow),
 	}
+}
+
+// SetSanitizeHTTPHeaders - toggles m.sanitizeHTTPHeaders on/off
+func (m *Manager) SetSanitizeHTTPHeaders(to bool) {
+	m.sanitizeHTTPHeaders = to
 }
 
 // SetRedirectFunc sets the redirect function to use.
