@@ -223,6 +223,8 @@ type VtctldClient interface {
 	GetTablet(ctx context.Context, in *vtctldata.GetTabletRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(ctx context.Context, in *vtctldata.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldata.GetTabletsResponse, error)
+	// GetVersion returns the version of a tablet from its debug vars
+	GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
 	GetVSchema(ctx context.Context, in *vtctldata.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetVSchemaResponse, error)
 	// GetWorkflows returns a list of workflows for the given keyspace.
@@ -643,6 +645,15 @@ func (c *vtctldClient) GetTablets(ctx context.Context, in *vtctldata.GetTabletsR
 	return out, nil
 }
 
+func (c *vtctldClient) GetVersion(ctx context.Context, in *vtctldata.GetVersionRequest, opts ...grpc.CallOption) (*vtctldata.GetVersionResponse, error) {
+	out := new(vtctldata.GetVersionResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetVersion", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) GetVSchema(ctx context.Context, in *vtctldata.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetVSchemaResponse, error) {
 	out := new(vtctldata.GetVSchemaResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetVSchema", in, out, opts...)
@@ -1035,6 +1046,8 @@ type VtctldServer interface {
 	GetTablet(context.Context, *vtctldata.GetTabletRequest) (*vtctldata.GetTabletResponse, error)
 	// GetTablets returns tablets, optionally filtered by keyspace and shard.
 	GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error)
+	// GetVersion returns the version of a tablet from its debug vars
+	GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error)
 	// GetVSchema returns the vschema for a keyspace.
 	GetVSchema(context.Context, *vtctldata.GetVSchemaRequest) (*vtctldata.GetVSchemaResponse, error)
 	// GetWorkflows returns a list of workflows for the given keyspace.
@@ -1259,6 +1272,9 @@ func (UnimplementedVtctldServer) GetTablet(context.Context, *vtctldata.GetTablet
 }
 func (UnimplementedVtctldServer) GetTablets(context.Context, *vtctldata.GetTabletsRequest) (*vtctldata.GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
+}
+func (UnimplementedVtctldServer) GetVersion(context.Context, *vtctldata.GetVersionRequest) (*vtctldata.GetVersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
 }
 func (UnimplementedVtctldServer) GetVSchema(context.Context, *vtctldata.GetVSchemaRequest) (*vtctldata.GetVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
@@ -1944,6 +1960,24 @@ func _Vtctld_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetTablets(ctx, req.(*vtctldata.GetTabletsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetVersion",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetVersion(ctx, req.(*vtctldata.GetVersionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2676,6 +2710,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablets",
 			Handler:    _Vtctld_GetTablets_Handler,
+		},
+		{
+			MethodName: "GetVersion",
+			Handler:    _Vtctld_GetVersion_Handler,
 		},
 		{
 			MethodName: "GetVSchema",

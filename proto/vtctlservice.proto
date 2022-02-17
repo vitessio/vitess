@@ -122,6 +122,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetVersion returns the version of a tablet from its debug vars
+  rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.
   rpc GetVSchema(vtctldata.GetVSchemaRequest) returns (vtctldata.GetVSchemaResponse) {};
   // GetWorkflows returns a list of workflows for the given keyspace.
