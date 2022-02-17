@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -54,6 +55,18 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// When doing a VDiff across MySQL versions, or where the collation details
+// are otherwise different between the source and target, you can end up with
+// a number of extra rows on the source and target that are in fact the same.
+// The only difference was the order they were returned from the underlying
+// MySQL query. Because of this, when we see extra rows we do a second pass
+// to ensure that the rows *are* actually different. This variable caps how
+// many rows we will perform this check for in order to cap the memory usage.
+var maxSecondPassRows = 10000
+
+// How many samples we should show for row differences in the final report
+var maxReportSampleRows = 10
 
 // DiffReport is the summary of differences for one table.
 type DiffReport struct {
@@ -258,6 +271,15 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, vterrors.Wrap(err, "diff")
 		}
 		dr.TableName = table
+		// Let's see if the extra rows on either side are actually different
+		for i := range dr.ExtraRowsSourceSample {
+			if reflect.DeepEqual(dr.ExtraRowsSourceSample[i], dr.ExtraRowsTargetSample[i]) {
+				dr.ExtraRowsSourceSample = append(dr.ExtraRowsSourceSample[:i], dr.ExtraRowsSourceSample[i+1:]...)
+				dr.ExtraRowsSource--
+				dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample[:i], dr.ExtraRowsTargetSample[i+1:]...)
+				dr.ExtraRowsTarget--
+			}
+		}
 		diffReports[table] = dr
 	}
 	if format == "json" {
@@ -278,10 +300,16 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			for i, rs := range dr.ExtraRowsSourceSample {
 				wr.Logger().Printf("\tSample extra row in source %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
+				if i == maxReportSampleRows {
+					break
+				}
 			}
 			for i, rs := range dr.ExtraRowsTargetSample {
 				wr.Logger().Printf("\tSample extra row in target %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
+				if i == maxReportSampleRows {
+					break
+				}
 			}
 			for i, rs := range dr.MismatchedRowsSample {
 				wr.Logger().Printf("\tSample rows with mismatch %v:\n", i)
@@ -991,7 +1019,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		case err != nil:
 			return nil, err
 		case c < 0:
-			if dr.ExtraRowsSource < 10 {
+			if dr.ExtraRowsSource < maxSecondPassRows {
 				diffRow, err := td.genRowDiff(td.sourceExpression, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -1002,7 +1030,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			advanceTarget = false
 			continue
 		case c > 0:
-			if dr.ExtraRowsTarget < 10 {
+			if dr.ExtraRowsTarget < maxSecondPassRows {
 				diffRow, err := td.genRowDiff(td.targetExpression, targetRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -1021,7 +1049,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		case err != nil:
 			return nil, err
 		case c != 0:
-			if dr.MismatchedRows < 10 {
+			// We don't do a second pass to compare mismatched rows so we can cap the slice here
+			if dr.MismatchedRows < maxReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.targetExpression, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
