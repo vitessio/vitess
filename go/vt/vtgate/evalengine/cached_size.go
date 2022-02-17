@@ -129,6 +129,10 @@ func (cached *CallExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Method string
 	size += hack.RuntimeAllocSize(int64(len(cached.Method)))
+	// field F vitess.io/vitess/go/vt/vtgate/evalengine.builtin
+	if cc, ok := cached.F.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *CollateExpr) CachedSize(alloc bool) int64 {
@@ -390,6 +394,18 @@ func (cached *WeightStringCallExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Cast string
 	size += hack.RuntimeAllocSize(int64(len(cached.Cast)))
+	return size
+}
+func (cached *builtinMultiComparison) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field name string
+	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	return size
 }
 func (cached *decimalResult) CachedSize(alloc bool) int64 {
