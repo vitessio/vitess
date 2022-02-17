@@ -190,26 +190,33 @@ func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
 		b.Fatal(err)
 	}
 
+	f := func(i int) {
+		_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("select id from t where id = %d limit 1", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("update t set id = 1 where id = %d", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	// warmup, plan and cache the plans
+	f(0)
+
 	benchmarkName := "Use SET_VAR"
 	for i := 0; i < 2; i++ {
 		b.Run(benchmarkName, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, true)
-				if err != nil {
-					b.Fatal(err)
-				}
-				_, err = conn.ExecuteFetch(fmt.Sprintf("select id from t where id = %d limit 1", i), 1, true)
-				if err != nil {
-					b.Fatal(err)
-				}
-				_, err = conn.ExecuteFetch(fmt.Sprintf("update t set id = 1 where id = %d", i), 1, true)
-				if err != nil {
-					b.Fatal(err)
-				}
-				_, err = conn.ExecuteFetch("delete from t where id = 1", 1, true)
-				if err != nil {
-					b.Fatal(err)
-				}
+				f(i)
 			}
 		})
 
