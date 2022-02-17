@@ -67,7 +67,7 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
-	_ = reparentutil.SetDurabilityPolicy("none", nil)
+	_ = reparentutil.SetDurabilityPolicy("none")
 }
 
 func TestAddCellInfo(t *testing.T) {
