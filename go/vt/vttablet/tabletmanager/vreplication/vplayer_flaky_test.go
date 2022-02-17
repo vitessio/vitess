@@ -104,26 +104,36 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		"insert into t1 values(1, 'aaa')",
 	})
 
-	var getTimestamps = func() (int64, int64) {
-		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp from _vt.vreplication")
+	var getTimestamps = func() (int64, int64, int64) {
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp, time_heartbeat from _vt.vreplication")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
 		require.Equal(t, 1, len(qr.Rows))
-		timeUpdated, err := qr.Rows[0][0].ToInt64()
+		row := qr.Named().Row()
+		timeUpdated, err := row.ToInt64("time_updated")
 		require.NoError(t, err)
-		transactionTimestamp, err := qr.Rows[0][1].ToInt64()
+		transactionTimestamp, err := row.ToInt64("transaction_timestamp")
 		require.NoError(t, err)
-		return timeUpdated, transactionTimestamp
+		timeHeartbeat, err := row.ToInt64("time_heartbeat")
+		require.NoError(t, err)
+		return timeUpdated, transactionTimestamp, timeHeartbeat
 	}
 	expectNontxQueries(t, []string{
 		"insert into t1(id,val) values (1,'aaa')",
 	})
 	time.Sleep(1 * time.Second)
-	timeUpdated1, transactionTimestamp1 := getTimestamps()
+	timeUpdated1, transactionTimestamp1, timeHeartbeat1 := getTimestamps()
 	time.Sleep(2 * time.Second)
-	timeUpdated2, _ := getTimestamps()
+	timeUpdated2, _, timeHeartbeat2 := getTimestamps()
 	require.Greater(t, timeUpdated2, timeUpdated1, "time_updated not updated")
 	require.Greater(t, timeUpdated2, transactionTimestamp1, "transaction_timestamp should not be < time_updated")
+	require.Greater(t, timeHeartbeat2, timeHeartbeat1, "time_heartbeat not updated")
+
+	// drop time_heartbeat column to test that heartbeat is updated using WithDDL and can self-heal by creating the column again
+	env.Mysqld.ExecuteSuperQuery(ctx, "alter table _vt.vreplication drop column time_heartbeat")
+	time.Sleep(2 * time.Second)
+	_, _, timeHeartbeat3 := getTimestamps()
+	require.Greater(t, timeHeartbeat3, timeHeartbeat2, "time_heartbeat not updated")
 }
 
 func TestCharPK(t *testing.T) {
