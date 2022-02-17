@@ -187,3 +187,76 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
 }
+
+func TestTypeORMQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	query := `
+SELECT /*vt+ PLANNER=gen4 */ table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't1'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't1_id2_idx' 
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 'vstream_test'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't2' 
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't2_id4_idx' 
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't3' 
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't3_id7_idx' 
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't4' 
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't4_id2_idx' 
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't5_null_vindex'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't6'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't6_id2_idx'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't7_xxhash'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't7_xxhash_idx'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't7_fk'
+UNION 
+SELECT table_schema, table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'ks' AND table_name = 't8'`
+	utils.AssertMatches(t, conn, query, `[[VARBINARY("vt_ks") VARBINARY("t1")] [VARBINARY("vt_ks") VARBINARY("t1_id2_idx")] [VARBINARY("vt_ks") VARBINARY("vstream_test")] [VARBINARY("vt_ks") VARBINARY("t2")] [VARBINARY("vt_ks") VARBINARY("t2_id4_idx")] [VARBINARY("vt_ks") VARBINARY("t3")] [VARBINARY("vt_ks") VARBINARY("t3_id7_idx")] [VARBINARY("vt_ks") VARBINARY("t4")] [VARBINARY("vt_ks") VARBINARY("t4_id2_idx")] [VARBINARY("vt_ks") VARBINARY("t5_null_vindex")] [VARBINARY("vt_ks") VARBINARY("t6")] [VARBINARY("vt_ks") VARBINARY("t6_id2_idx")] [VARBINARY("vt_ks") VARBINARY("t7_xxhash")] [VARBINARY("vt_ks") VARBINARY("t7_xxhash_idx")] [VARBINARY("vt_ks") VARBINARY("t7_fk")] [VARBINARY("vt_ks") VARBINARY("t8")]]`)
+}

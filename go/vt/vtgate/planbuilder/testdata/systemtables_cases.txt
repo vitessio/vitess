@@ -1384,3 +1384,385 @@ Gen4 plan same as above
     "Table": "information_schema.key_column_usage"
   }
 }
+
+# typeORM uses a query like this
+"SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't1' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't1_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 'vstream_test' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't2' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't2_id4_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't3' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't3_id7_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't4' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't4_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't5_null_vindex' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't6' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't6_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_xxhash' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_xxhash_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_fk' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't8'"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't1' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't1_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 'vstream_test' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't2' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't2_id4_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't3' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't3_id7_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't4' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't4_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't5_null_vindex' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't6' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't6_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_xxhash' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_xxhash_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_fk' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't8'",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Distinct",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Concatenate",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Distinct",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Concatenate",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Distinct",
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Concatenate",
+                                        "Inputs": [
+                                          {
+                                            "OperatorType": "Distinct",
+                                            "Inputs": [
+                                              {
+                                                "OperatorType": "Concatenate",
+                                                "Inputs": [
+                                                  {
+                                                    "OperatorType": "Distinct",
+                                                    "Inputs": [
+                                                      {
+                                                        "OperatorType": "Concatenate",
+                                                        "Inputs": [
+                                                          {
+                                                            "OperatorType": "Distinct",
+                                                            "Inputs": [
+                                                              {
+                                                                "OperatorType": "Concatenate",
+                                                                "Inputs": [
+                                                                  {
+                                                                    "OperatorType": "Distinct",
+                                                                    "Inputs": [
+                                                                      {
+                                                                        "OperatorType": "Concatenate",
+                                                                        "Inputs": [
+                                                                          {
+                                                                            "OperatorType": "Distinct",
+                                                                            "Inputs": [
+                                                                              {
+                                                                                "OperatorType": "Concatenate",
+                                                                                "Inputs": [
+                                                                                  {
+                                                                                    "OperatorType": "Distinct",
+                                                                                    "Inputs": [
+                                                                                      {
+                                                                                        "OperatorType": "Concatenate",
+                                                                                        "Inputs": [
+                                                                                          {
+                                                                                            "OperatorType": "Distinct",
+                                                                                            "Inputs": [
+                                                                                              {
+                                                                                                "OperatorType": "Concatenate",
+                                                                                                "Inputs": [
+                                                                                                  {
+                                                                                                    "OperatorType": "Distinct",
+                                                                                                    "Inputs": [
+                                                                                                      {
+                                                                                                        "OperatorType": "Concatenate",
+                                                                                                        "Inputs": [
+                                                                                                          {
+                                                                                                            "OperatorType": "Distinct",
+                                                                                                            "Inputs": [
+                                                                                                              {
+                                                                                                                "OperatorType": "Concatenate",
+                                                                                                                "Inputs": [
+                                                                                                                  {
+                                                                                                                    "OperatorType": "Distinct",
+                                                                                                                    "Inputs": [
+                                                                                                                      {
+                                                                                                                        "OperatorType": "Concatenate",
+                                                                                                                        "Inputs": [
+                                                                                                                          {
+                                                                                                                            "OperatorType": "Route",
+                                                                                                                            "Variant": "DBA",
+                                                                                                                            "Keyspace": {
+                                                                                                                              "Name": "main",
+                                                                                                                              "Sharded": false
+                                                                                                                            },
+                                                                                                                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                                                                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name",
+                                                                                                                            "SysTableTableName": "[table_name:VARCHAR(\"t1\")]",
+                                                                                                                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                                                                            "Table": "information_schema.`tables`"
+                                                                                                                          },
+                                                                                                                          {
+                                                                                                                            "OperatorType": "Route",
+                                                                                                                            "Variant": "DBA",
+                                                                                                                            "Keyspace": {
+                                                                                                                              "Name": "main",
+                                                                                                                              "Sharded": false
+                                                                                                                            },
+                                                                                                                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                                                                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name1",
+                                                                                                                            "SysTableTableName": "[table_name1:VARCHAR(\"t1_id2_idx\")]",
+                                                                                                                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                                                                            "Table": "information_schema.`tables`"
+                                                                                                                          }
+                                                                                                                        ]
+                                                                                                                      }
+                                                                                                                    ]
+                                                                                                                  },
+                                                                                                                  {
+                                                                                                                    "OperatorType": "Route",
+                                                                                                                    "Variant": "DBA",
+                                                                                                                    "Keyspace": {
+                                                                                                                      "Name": "main",
+                                                                                                                      "Sharded": false
+                                                                                                                    },
+                                                                                                                    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                                                                    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name2",
+                                                                                                                    "SysTableTableName": "[table_name2:VARCHAR(\"vstream_test\")]",
+                                                                                                                    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                                                                    "Table": "information_schema.`tables`"
+                                                                                                                  }
+                                                                                                                ]
+                                                                                                              }
+                                                                                                            ]
+                                                                                                          },
+                                                                                                          {
+                                                                                                            "OperatorType": "Route",
+                                                                                                            "Variant": "DBA",
+                                                                                                            "Keyspace": {
+                                                                                                              "Name": "main",
+                                                                                                              "Sharded": false
+                                                                                                            },
+                                                                                                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                                                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name3",
+                                                                                                            "SysTableTableName": "[table_name3:VARCHAR(\"t2\")]",
+                                                                                                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                                                            "Table": "information_schema.`tables`"
+                                                                                                          }
+                                                                                                        ]
+                                                                                                      }
+                                                                                                    ]
+                                                                                                  },
+                                                                                                  {
+                                                                                                    "OperatorType": "Route",
+                                                                                                    "Variant": "DBA",
+                                                                                                    "Keyspace": {
+                                                                                                      "Name": "main",
+                                                                                                      "Sharded": false
+                                                                                                    },
+                                                                                                    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                                                    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name4",
+                                                                                                    "SysTableTableName": "[table_name4:VARCHAR(\"t2_id4_idx\")]",
+                                                                                                    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                                                    "Table": "information_schema.`tables`"
+                                                                                                  }
+                                                                                                ]
+                                                                                              }
+                                                                                            ]
+                                                                                          },
+                                                                                          {
+                                                                                            "OperatorType": "Route",
+                                                                                            "Variant": "DBA",
+                                                                                            "Keyspace": {
+                                                                                              "Name": "main",
+                                                                                              "Sharded": false
+                                                                                            },
+                                                                                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name5",
+                                                                                            "SysTableTableName": "[table_name5:VARCHAR(\"t3\")]",
+                                                                                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                                            "Table": "information_schema.`tables`"
+                                                                                          }
+                                                                                        ]
+                                                                                      }
+                                                                                    ]
+                                                                                  },
+                                                                                  {
+                                                                                    "OperatorType": "Route",
+                                                                                    "Variant": "DBA",
+                                                                                    "Keyspace": {
+                                                                                      "Name": "main",
+                                                                                      "Sharded": false
+                                                                                    },
+                                                                                    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                                    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name6",
+                                                                                    "SysTableTableName": "[table_name6:VARCHAR(\"t3_id7_idx\")]",
+                                                                                    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                                    "Table": "information_schema.`tables`"
+                                                                                  }
+                                                                                ]
+                                                                              }
+                                                                            ]
+                                                                          },
+                                                                          {
+                                                                            "OperatorType": "Route",
+                                                                            "Variant": "DBA",
+                                                                            "Keyspace": {
+                                                                              "Name": "main",
+                                                                              "Sharded": false
+                                                                            },
+                                                                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name7",
+                                                                            "SysTableTableName": "[table_name7:VARCHAR(\"t4\")]",
+                                                                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                            "Table": "information_schema.`tables`"
+                                                                          }
+                                                                        ]
+                                                                      }
+                                                                    ]
+                                                                  },
+                                                                  {
+                                                                    "OperatorType": "Route",
+                                                                    "Variant": "DBA",
+                                                                    "Keyspace": {
+                                                                      "Name": "main",
+                                                                      "Sharded": false
+                                                                    },
+                                                                    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                                    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name8",
+                                                                    "SysTableTableName": "[table_name8:VARCHAR(\"t4_id2_idx\")]",
+                                                                    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                                    "Table": "information_schema.`tables`"
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          },
+                                                          {
+                                                            "OperatorType": "Route",
+                                                            "Variant": "DBA",
+                                                            "Keyspace": {
+                                                              "Name": "main",
+                                                              "Sharded": false
+                                                            },
+                                                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name9",
+                                                            "SysTableTableName": "[table_name9:VARCHAR(\"t5_null_vindex\")]",
+                                                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                            "Table": "information_schema.`tables`"
+                                                          }
+                                                        ]
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "OperatorType": "Route",
+                                                    "Variant": "DBA",
+                                                    "Keyspace": {
+                                                      "Name": "main",
+                                                      "Sharded": false
+                                                    },
+                                                    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                                    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name10",
+                                                    "SysTableTableName": "[table_name10:VARCHAR(\"t6\")]",
+                                                    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                                    "Table": "information_schema.`tables`"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "OperatorType": "Route",
+                                            "Variant": "DBA",
+                                            "Keyspace": {
+                                              "Name": "main",
+                                              "Sharded": false
+                                            },
+                                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name11",
+                                            "SysTableTableName": "[table_name11:VARCHAR(\"t6_id2_idx\")]",
+                                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                            "Table": "information_schema.`tables`"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "DBA",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": false
+                                    },
+                                    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                                    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name12",
+                                    "SysTableTableName": "[table_name12:VARCHAR(\"t7_xxhash\")]",
+                                    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                                    "Table": "information_schema.`tables`"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "DBA",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": false
+                            },
+                            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name13",
+                            "SysTableTableName": "[table_name13:VARCHAR(\"t7_xxhash_idx\")]",
+                            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                            "Table": "information_schema.`tables`"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "DBA",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+                    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name14",
+                    "SysTableTableName": "[table_name14:VARCHAR(\"t7_fk\")]",
+                    "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+                    "Table": "information_schema.`tables`"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "DBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1",
+            "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name15",
+            "SysTableTableName": "[table_name15:VARCHAR(\"t8\")]",
+            "SysTableTableSchema": "[VARCHAR(\"ks\")]",
+            "Table": "information_schema.`tables`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't1' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't1_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 'vstream_test' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't2' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't2_id4_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't3' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't3_id7_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't4' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't4_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't5_null_vindex' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't6' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't6_id2_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_xxhash' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_xxhash_idx' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't7_fk' UNION SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'ks' AND table_name = 't8'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union all select table_schema, table_name from information_schema.`tables` where 1 != 1 union select table_schema, table_name from information_schema.`tables` where 1 != 1",
+    "Query": "select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name1 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name2 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name3 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name4 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name5 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name6 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name7 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name8 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name9 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name10 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name11 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name12 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name13 union all select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name14 union select table_schema, table_name from information_schema.`tables` where table_schema = :__vtschemaname and table_name = :table_name15",
+    "SysTableTableName": "[table_name10:VARCHAR(\"t6\"), table_name11:VARCHAR(\"t6_id2_idx\"), table_name12:VARCHAR(\"t7_xxhash\"), table_name13:VARCHAR(\"t7_xxhash_idx\"), table_name14:VARCHAR(\"t7_fk\"), table_name15:VARCHAR(\"t8\"), table_name1:VARCHAR(\"t1_id2_idx\"), table_name2:VARCHAR(\"vstream_test\"), table_name3:VARCHAR(\"t2\"), table_name4:VARCHAR(\"t2_id4_idx\"), table_name5:VARCHAR(\"t3\"), table_name6:VARCHAR(\"t3_id7_idx\"), table_name7:VARCHAR(\"t4\"), table_name8:VARCHAR(\"t4_id2_idx\"), table_name9:VARCHAR(\"t5_null_vindex\"), table_name:VARCHAR(\"t1\")]",
+    "SysTableTableSchema": "[VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\"), VARCHAR(\"ks\")]",
+    "Table": "information_schema.`tables`"
+  }
+}
