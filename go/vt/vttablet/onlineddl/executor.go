@@ -52,6 +52,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -61,10 +62,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
-
-	mysqldriver "github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
-	"github.com/planetscale/tengo"
 )
 
 var (
@@ -520,6 +517,20 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 	}
 	row := rs.Named().Row()
 	return (row != nil), nil
+}
+
+// showCreateTable returns the SHOW CREATE statement for a table or a view
+func (e *Executor) showCreateTable(ctx context.Context, tableName string) (string, error) {
+	parsed := sqlparser.BuildParsedQuery(sqlShowCreateTable, tableName)
+	rs, err := e.execQuery(ctx, parsed.Query)
+	if err != nil {
+		return "", err
+	}
+	if len(rs.Rows) == 0 {
+		return "", nil
+	}
+	row := rs.Rows[0]
+	return row[1].ToString(), nil
 }
 
 func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.OnlineDDL) string {
@@ -1908,23 +1919,22 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 // evaluateDeclarativeDiff is called for -declarative CREATE statements, where the table already exists. The function generates a SQL diff, which can be:
 // - empty, in which case the migration is noop and implicitly successful, or
 // - non-empty, in which case the migration turns to be an ALTER
-func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (alterClause string, err error) {
+func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
 
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	// Is this CREATE TABLE or CREATE VIEW?
-	_, isCreateView := ddlStmt.(*sqlparser.CreateView)
 	comparisonTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -1936,11 +1946,11 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
-			return "", err
+			return nil, err
 		}
 
 		defer func() {
@@ -1952,121 +1962,33 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		}()
 	}
 
-	// Compare the existing (to be potentially migrated) table with the declared (newly created) table:
-	// all things are tengo related
-	if err := func() error {
-		variables, err := e.readMySQLVariables(ctx)
-		if err != nil {
-			return err
-		}
-		flavor := tengo.ParseFlavor(variables.version, variables.versionComment)
-
-		// Create a temporary account for tengo to use
-		onlineDDLPassword, err := e.createOnlineDDLUser(ctx)
-		if err != nil {
-			return err
-		}
-		defer e.dropOnlineDDLUser(ctx)
-
-		// tengo requires sqlx.DB
-		cfg := mysqldriver.NewConfig()
-		cfg.User = onlineDDLUser
-		cfg.Passwd = onlineDDLPassword
-		cfg.Net = "tcp"
-		cfg.Addr = fmt.Sprintf("%s:%d", variables.host, variables.port)
-		cfg.DBName = e.dbName
-		cfg.ParseTime = true
-		cfg.InterpolateParams = true
-		cfg.Timeout = 1 * time.Second
-		mysqlDSN := cfg.FormatDSN()
-
-		db, err := sqlx.Open("mysql", mysqlDSN)
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-
-		if isCreateView {
-			// CREATE VIEW
-			// Read existing view
-			existingView, err := tengo.QuerySchemaView(ctx, db, e.dbName, onlineDDL.Table, flavor)
-			if err != nil {
-				return err
-			}
-			// Read comparison view
-			comparisonView, err := tengo.QuerySchemaView(ctx, db, e.dbName, comparisonTableName, flavor)
-			if err != nil {
-				return err
-			}
-			// We created the comparison view in same schema as original table, but under different name (because obviously we can't have
-			// two views with identical name in same schema). It is our preference to create the table in the same schema.
-			// unfortunately, tengo does not allow comparing views with different names. After asking tengo to read table info, we cheat
-			// and override the name of the view:
-			comparisonView.Name = existingView.Name
-			// We also override `.CreateStatement` (output of SHOW CREATE VIEW), because tengo has a validation, where if it doesn't
-			// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
-			comparisonView.CreateStatement, err = schema.ReplaceViewNameInCreateViewStatement(comparisonView.CreateStatement, existingView.Name)
-			if err != nil {
-				return err
-			}
-			// Diff the two views
-			diff := tengo.NewAlterView(existingView, comparisonView)
-			if diff == nil {
-				// No change. alterClause remains empty
-				return nil
-			}
-			mods := tengo.StatementModifiers{
-				AllowUnsafe: true,
-				NextAutoInc: tengo.NextAutoIncIfIncreased,
-			}
-			alterClause, err = diff.Statement(mods)
-			if err != nil {
-				return err
-			}
-		} else {
-			// CREATE TABLE
-			// Read existing table
-			existingTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, onlineDDL.Table, flavor)
-			if err != nil {
-				return err
-			}
-			// Read comparison table
-			comparisonTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, comparisonTableName, flavor)
-			if err != nil {
-				return err
-			}
-			// We created the comparison tablein same schema as original table, but under different name (because obviously we can't have
-			// two tables with identical name in same schema). It is our preference to create the table in the same schema.
-			// unfortunately, tengo does not allow comparing tables with different names. After asking tengo to read table info, we cheat
-			// and override the name of the table:
-			comparisonTable.Name = existingTable.Name
-			// We also override `.CreateStatement` (output of SHOW CREATE TABLE), because tengo has a validation, where if it doesn't
-			// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
-			comparisonTable.CreateStatement, err = schema.ReplaceTableNameInCreateTableStatement(comparisonTable.CreateStatement, existingTable.Name)
-			if err != nil {
-				return err
-			}
-			// Diff the two tables
-			diff := tengo.NewAlterTable(existingTable, comparisonTable)
-			if diff == nil {
-				// No change. alterClause remains empty
-				return nil
-			}
-			mods := tengo.StatementModifiers{
-				AllowUnsafe: true,
-				NextAutoInc: tengo.NextAutoIncIfIncreased,
-			}
-			alterClause, err = diff.Clauses(mods)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}(); err != nil {
-		return "", err
+	existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+	if err != nil {
+		return nil, err
 	}
-
-	return alterClause, nil
+	if existingShowCreateTable == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "unexpected: cannot find table or view %v", onlineDDL.Table)
+	}
+	newShowCreateTable, err := e.showCreateTable(ctx, comparisonTableName)
+	if err != nil {
+		return nil, err
+	}
+	if newShowCreateTable == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected: cannot find table or view even as it was just created: %v", onlineDDL.Table)
+	}
+	hints := &schemadiff.DiffHints{AutoIncrementStrategy: schemadiff.AutoIncrementApplyHigher}
+	switch ddlStmt.(type) {
+	case *sqlparser.CreateTable:
+		diff, err = schemadiff.DiffCreateTablesQueries(existingShowCreateTable, newShowCreateTable, hints)
+	case *sqlparser.CreateView:
+		diff, err = schemadiff.DiffCreateViewsQueries(existingShowCreateTable, newShowCreateTable, hints)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected CREATE TABLE or CREATE VIEW in online DDL statement: %v", onlineDDL.SQL)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return diff, nil
 }
 
 // getCompletedMigrationByContextAndSQL chceks if there exists a completed migration with exact same
@@ -2459,11 +2381,11 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				return failMigration(err)
 			}
 			if exists {
-				alterClause, err := e.evaluateDeclarativeDiff(ctx, onlineDDL)
+				diff, err := e.evaluateDeclarativeDiff(ctx, onlineDDL)
 				if err != nil {
 					return failMigration(err)
 				}
-				if alterClause == "" {
+				if diff == nil || diff.IsEmpty() {
 					// No diff! We mark this CREATE as implicitly sucessful
 					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
 					_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
@@ -2481,9 +2403,9 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				} else {
 					// a TABLE
 					ddlAction = sqlparser.AlterDDLAction
-					onlineDDL.SQL = fmt.Sprintf("ALTER TABLE `%s` %s", onlineDDL.Table, alterClause)
+					onlineDDL.SQL = sqlparser.String(diff.Statement())
 				}
-				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, alterClause)
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, sqlparser.String(diff.Statement()))
 			} else {
 				{
 					// table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here.

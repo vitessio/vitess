@@ -480,6 +480,7 @@ const (
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
 	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT
