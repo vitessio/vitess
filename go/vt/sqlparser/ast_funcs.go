@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -1134,6 +1135,34 @@ func (op BinaryExprOperator) ToString() string {
 	}
 }
 
+// ToString returns the partition type as a string
+func (partitionType PartitionByType) ToString() string {
+	switch partitionType {
+	case HashType:
+		return HashTypeStr
+	case KeyType:
+		return KeyTypeStr
+	case ListType:
+		return ListTypeStr
+	case RangeType:
+		return RangeTypeStr
+	default:
+		return "Unknown PartitionByType"
+	}
+}
+
+// ToString returns the partition value range type as a string
+func (t PartitionValueRangeType) ToString() string {
+	switch t {
+	case LessThanType:
+		return LessThanTypeStr
+	case InType:
+		return InTypeStr
+	default:
+		return "Unknown PartitionValueRangeType"
+	}
+}
+
 // ToString returns the operator as a string
 func (op UnaryExprOperator) ToString() string {
 	switch op {
@@ -1621,7 +1650,12 @@ func defaultRequiresParens(ct *ColumnType) bool {
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
 func RemoveKeyspaceFromColName(expr Expr) Expr {
-	Rewrite(expr, nil, func(cursor *Cursor) bool {
+	return RemoveKeyspace(expr).(Expr) // This hard cast is safe because we do not change the type the input
+}
+
+// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
+func RemoveKeyspace(in SQLNode) SQLNode {
+	return Rewrite(in, nil, func(cursor *Cursor) bool {
 		switch col := cursor.Node().(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
@@ -1629,7 +1663,10 @@ func RemoveKeyspaceFromColName(expr Expr) Expr {
 			}
 		}
 		return true
-	}) // This hard cast is safe because we do not change the type the input
+	})
+}
 
-	return expr
+func convertStringToInt(integer string) int {
+	val, _ := strconv.Atoi(integer)
+	return val
 }
