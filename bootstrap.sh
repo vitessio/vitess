@@ -105,6 +105,11 @@ install_protoc() {
   case $(get_arch) in
       aarch64)  local target=aarch_64;;
       x86_64)  local target=x86_64;;
+      arm64) case "$platform" in # TODO (ajm188): remove after protoc includes signed protoc binaries for M1 Macs.
+          osx) echo "WARN: Installing x86_64 protoc on arm macos; This will work if you have Rosetta installed. See https://github.com/protocolbuffers/protobuf/issues/9397." >&2;
+               local target=x86_64;;
+          *) echo "ERROR: unsupported architecture"; exit 1;;
+          esac;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
