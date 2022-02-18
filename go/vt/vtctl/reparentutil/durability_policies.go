@@ -90,6 +90,10 @@ func SetDurabilityPolicy(name string) error {
 
 // PromotionRule returns the promotion rule for the instance.
 func PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
+	// Prevent panics.
+	if tablet == nil || tablet.Alias == nil {
+		return promotionrule.MustNot
+	}
 	curDurabilityPolicyMutex.Lock()
 	defer curDurabilityPolicyMutex.Unlock()
 	return curDurabilityPolicy.promotionRule(tablet)
@@ -106,6 +110,10 @@ func SemiSyncAckers(tablet *topodatapb.Tablet) int {
 // IsReplicaSemiSync returns the replica semi-sync setting from the tablet record.
 // Prefer using this function if tablet record is available.
 func IsReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
+	// Prevent panics.
+	if primary == nil || primary.Alias == nil || replica == nil || replica.Alias == nil {
+		return false
+	}
 	curDurabilityPolicyMutex.Lock()
 	defer curDurabilityPolicyMutex.Unlock()
 	return curDurabilityPolicy.isReplicaSemiSync(primary, replica)
@@ -178,10 +186,6 @@ func (d *durabilityCrossCell) semiSyncAckers(tablet *topodatapb.Tablet) int {
 }
 
 func (d *durabilityCrossCell) isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
-	// Prevent panics.
-	if primary.Alias == nil || replica.Alias == nil {
-		return false
-	}
 	switch replica.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
 		return primary.Alias.Cell != replica.Alias.Cell
