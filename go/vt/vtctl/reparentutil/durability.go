@@ -35,7 +35,7 @@ func SemiSyncAckersForPrimary(primary *topodatapb.Tablet, allTablets []*topodata
 	return
 }
 
-// RevokeForTablet checks whether we have reached enough tablets such that the given primary capable tablet cannot accept any new write
+// RevokeForTablet checks whether we have reached enough tablets such that the given primary eligible tablet cannot accept any new writes
 func RevokeForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
 	// if we have reached the primaryEligible tablet and stopped its replication, then it will not
 	// accept any new writes
