@@ -479,6 +479,12 @@ func TestCreateTableDiff(t *testing.T) {
 			autoinc: AutoIncrementApplyAlways,
 			diff:    "alter table t1 AUTO_INCREMENT 100",
 		},
+		{
+			name: `change table charset`,
+			from: "create table t (id int primary key, t1 varchar(128) default null, t2 varchar(128) not null, t3 tinytext charset latin1, t4 tinytext charset latin1) default charset=utf8",
+			to:   "create table t (id int primary key, t1 varchar(128) not null, t2 varchar(128) not null, t3 tinytext, t4 tinytext charset latin1) default charset=utf8mb4",
+			diff: "alter table t modify column t1 varchar(128) not null, modify column t2 varchar(128) not null, modify column t3 tinytext, charset utf8mb4",
+		},
 	}
 	standardHints := DiffHints{}
 	for _, ts := range tt {
