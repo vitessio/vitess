@@ -25,7 +25,6 @@ package flag
 
 import (
 	goflag "flag"
-	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -44,65 +43,26 @@ import (
 func Parse() {
 	// First, override the Usage func to make flags show in their double-dash
 	// forms to the user.
-	goflag.CommandLine.Usage = func() {
-		fmt.Fprintf(goflag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+	goflag.CommandLine.Usage = usage
 
-		var buf strings.Builder
-		goflag.CommandLine.VisitAll(func(f *goflag.Flag) {
-			defer buf.Reset()
-			defer func() { fmt.Fprintf(goflag.CommandLine.Output(), "%s\n", buf.String()) }()
-
-			// See https://cs.opensource.google/go/go/+/refs/tags/go1.17.7:src/flag/flag.go;l=512;drc=refs%2Ftags%2Fgo1.17.7
-			// for why two leading spaces.
-			buf.WriteString("  ")
-
-			// We use `UnquoteUsage` to preserve the "name override"
-			// behavior of the standard flag package, documented here:
-			//
-			//	> The listed type, here int, can be changed by placing a
-			//	> back-quoted name in the flag's usage string; the first
-			//	> such item in the message is taken to be a parameter name
-			//	> to show in the message and the back quotes are stripped
-			//	> from the message when displayed. For instance, given
-			//	>
-			//	>	flag.String("I", "", "search `directory` for include files")
-			//	>
-			//	> the output will be
-			//	>
-			// 	> 	-I directory
-			//	>		search directory for include files.
-			name, usage := goflag.UnquoteUsage(f)
-
-			// From the standard library documentation:
-			//	> For bool flags, the type is omitted and if the flag name is
-			//	> one byte the usage message appears on the same line.
-			if bf, ok := f.Value.(maybeBoolFlag); ok && bf.IsBoolFlag() && len(name) == 1 {
-				fmt.Fprintf(&buf, "-%s\t%s", f.Name, usage)
-				return
-			}
-
-			// First line: name, and, type or backticked name.
-			buf.WriteString("--")
-			buf.WriteString(f.Name)
-			if name != "" {
-				fmt.Fprintf(&buf, " %s", name)
-			}
-			buf.WriteString("\n\t")
-
-			// Second line: usage and optional default, if not the zero value
-			// for the type.
-			buf.WriteString(usage)
-			if !isZeroValue(f, f.DefValue) {
-				fmt.Fprintf(&buf, " (default %s)", f.DefValue)
-			}
-		})
-	}
-
+	// Then, parse as normal.
 	goflag.Parse()
 
-	// Check and warn on any single-dash flags.
-	argv := os.Args
-	goflag.Visit(func(f *goflag.Flag) {
+	// Finally, warn on deprecated flag usage.
+	warnOnSingleDashLongFlags(goflag.CommandLine, os.Args, log.Warningf)
+	warnOnMixedPositionalAndFlagArguments(goflag.Args(), log.Warningf)
+}
+
+const (
+	singleDashLongFlagsWarning  = "Use of single-dash long flags is deprecated and will be removed in the next version of Vitess. Please use --%s instead"
+	mixedFlagsAndPosargsWarning = "Detected a dashed argument after a positional argument. " +
+		"Currently these are treated as posargs that may be parsed by a subcommand, but in the next version of Vitess they will be parsed as top-level flags, which may not be defined, causing errors. " +
+		"To preserve existing behavior, please update your invocation to include a \"--\" after all top-level flags to continue treating %s as a positional argument."
+)
+
+// Check and warn on any single-dash flags.
+func warnOnSingleDashLongFlags(fs *goflag.FlagSet, argv []string, warningf func(msg string, args ...interface{})) {
+	fs.Visit(func(f *goflag.Flag) {
 		// Boolean flags with single-character names are okay to use the
 		// single-dash form. I don't _think_ we have any of these, but I'm being
 		// conservative here.
@@ -112,20 +72,21 @@ func Parse() {
 
 		for _, arg := range argv {
 			if strings.HasPrefix(arg, "-"+f.Name) {
-				log.Warningf("Use of single-dash long flags is deprecated and will be removed in the next version of Vitess. Please use --%s instead", f.Name)
+				warningf(singleDashLongFlagsWarning, f.Name)
 			}
 		}
 	})
+}
 
-	// Check and warn for any mixed posarg / dashed-arg on the CLI.
-	posargs := goflag.Args()
+// Check and warn for any mixed posarg / dashed-arg on the CLI.
+func warnOnMixedPositionalAndFlagArguments(posargs []string, warningf func(msg string, args ...interface{})) {
 	for _, arg := range posargs {
 		if arg == "--" {
 			break
 		}
 
 		if strings.HasPrefix(arg, "-") {
-			log.Warningf("Detected a positional argument beginning with a dash; This will be treated as a flag argument in the next version of Vitess. Please update your invocation to include a \"--\" before to continue treating %s as a positional argument.", arg)
+			log.Warningf(mixedFlagsAndPosargsWarning, arg)
 		}
 	}
 }
