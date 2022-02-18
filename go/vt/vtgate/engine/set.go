@@ -355,11 +355,12 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res *evalen
 	}
 	buf := new(bytes.Buffer)
 	value.EncodeSQL(buf)
-	vcursor.Session().SetSysVar(svs.Name, buf.String())
+	s := buf.String()
+	vcursor.Session().SetSysVar(svs.Name, s)
 
 	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
 	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if sqlparser.MySQLVersion < "80000" || !vcursor.Session().GetEnableSetVar() || !svs.SupportSetVar {
+	if sqlparser.MySQLVersion < "80000" || !vcursor.Session().GetEnableSetVar() || !svs.SupportSetVar || s == "''" {
 		vcursor.Session().NeedsReservedConn()
 		return true, nil
 	}
@@ -403,13 +404,6 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 	}
 	if !changed && uniqOrigVal != origValSeen {
 		changed = true
-	}
-
-	// When sending SET_VAR(sql_mode = "") to MySQL, MySQL ignores the optimizer hints and produces a
-	// "syntax error" warning. For this reason, when we want to set sql_mode to "" we set it so " "
-	// so MySQL does not ignore it.
-	if qr.Rows[0][1].Len() == 0 {
-		return changed, sqltypes.NewVarChar(" ")
 	}
 
 	return changed, qr.Rows[0][1]

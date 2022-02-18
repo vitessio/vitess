@@ -128,11 +128,9 @@ func TestSystemVariables(t *testing.T) {
 		comment     string
 	}{
 		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`},
-		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`},
-		{name: "sql_mode", value: "''", expectation: `[[VARCHAR("")]]`},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`},
 		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`, comment: "/* comment */"},
-		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR("")]]`, comment: "/* comment */"},
-		{name: "sql_mode", value: "''", expectation: `[[VARCHAR("")]]`, comment: "/* comment */"},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`, comment: "/* comment */"},
 	}
 
 	for _, tc := range tcs {
