@@ -63,22 +63,22 @@ import (
 // MySQL query. Because of this, when we see extra rows we do a second pass
 // to ensure that the rows *are* actually different. This variable caps how
 // many rows we will perform this check for in order to cap the memory usage.
-var maxSecondPassRows = 10000
+var maxSecondPassRows int
 
 // How many samples we should show for row differences in the final report
 var maxReportSampleRows = 10
 
 // DiffReport is the summary of differences for one table.
 type DiffReport struct {
-	ProcessedRows         int
-	MatchingRows          int
-	MismatchedRows        int
-	ExtraRowsSource       int
-	ExtraRowsSourceSample []*RowDiff
-	ExtraRowsTarget       int
-	ExtraRowsTargetSample []*RowDiff
-	MismatchedRowsSample  []*DiffMismatch
-	TableName             string
+	ProcessedRows        int
+	MatchingRows         int
+	MismatchedRows       int
+	ExtraRowsSource      int
+	ExtraRowsSourceDiffs []*RowDiff
+	ExtraRowsTarget      int
+	ExtraRowsTargetDiffs []*RowDiff
+	MismatchedRowsSample []*DiffMismatch
+	TableName            string
 }
 
 // DiffMismatch is a sample of row diffs between source and target.
@@ -163,9 +163,11 @@ type shardStreamer struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr string,
-	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool) (map[string]*DiffReport, error) {
+	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool,
+	maxExtraRowsToCompare int) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
+	maxSecondPassRows = maxExtraRowsToCompare
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
@@ -271,13 +273,20 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, vterrors.Wrap(err, "diff")
 		}
 		dr.TableName = table
-		// Let's see if the extra rows on either side are actually different
-		for i := range dr.ExtraRowsSourceSample {
-			if reflect.DeepEqual(dr.ExtraRowsSourceSample[i], dr.ExtraRowsTargetSample[i]) {
-				dr.ExtraRowsSourceSample = append(dr.ExtraRowsSourceSample[:i], dr.ExtraRowsSourceSample[i+1:]...)
-				dr.ExtraRowsSource--
-				dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample[:i], dr.ExtraRowsTargetSample[i+1:]...)
-				dr.ExtraRowsTarget--
+		// If the only difference is the order in which the rows were returned
+		// by MySQL on each side then we'll have the same number of extras on
+		// both sides. If that's the case, then let's see if the extra rows on
+		// both sides are actually different.
+		if dr.ExtraRowsSource == dr.ExtraRowsTarget {
+			for i := range dr.ExtraRowsSourceDiffs {
+				if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[i]) {
+					dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
+					dr.ExtraRowsSource--
+					dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:i], dr.ExtraRowsTargetDiffs[i+1:]...)
+					dr.ExtraRowsTarget--
+					dr.ProcessedRows--
+					dr.MatchingRows++
+				}
 			}
 		}
 		diffReports[table] = dr
@@ -297,14 +306,14 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			wr.Logger().Printf("\tMismatchedRows: %v\n", dr.MismatchedRows)
 			wr.Logger().Printf("\tExtraRowsSource: %v\n", dr.ExtraRowsSource)
 			wr.Logger().Printf("\tExtraRowsTarget: %v\n", dr.ExtraRowsTarget)
-			for i, rs := range dr.ExtraRowsSourceSample {
+			for i, rs := range dr.ExtraRowsSourceDiffs {
 				wr.Logger().Printf("\tSample extra row in source %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
 				if i == maxReportSampleRows {
 					break
 				}
 			}
-			for i, rs := range dr.ExtraRowsTargetSample {
+			for i, rs := range dr.ExtraRowsTargetDiffs {
 				wr.Logger().Printf("\tSample extra row in target %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
 				if i == maxReportSampleRows {
@@ -579,6 +588,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		weightStringCol := -1
 		if cpk.collation == nil {
 			// use a full unicode 9 compliant collation by default (accent and case insensitive) for sorting
+			// results within vitess
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationUtf8mb4ID})
 		} else {
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
@@ -982,7 +992,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
 			}
-			dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample, diffRow)
+			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 
 			// drain target, update count
 			count, err := targetExecutor.drain(ctx)
@@ -1000,7 +1010,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
 			}
-			dr.ExtraRowsSourceSample = append(dr.ExtraRowsTargetSample, diffRow)
+			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 
 			count, err := sourceExecutor.drain(ctx)
 			if err != nil {
@@ -1024,7 +1034,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				dr.ExtraRowsSourceSample = append(dr.ExtraRowsTargetSample, diffRow)
+				dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 			}
 			dr.ExtraRowsSource++
 			advanceTarget = false
@@ -1035,7 +1045,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample, diffRow)
+				dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 			}
 			dr.ExtraRowsTarget++
 			advanceSource = false
