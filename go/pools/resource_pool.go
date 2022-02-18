@@ -73,6 +73,7 @@ type ResourcePool struct {
 	waitTime   sync2.AtomicDuration
 	idleClosed sync2.AtomicInt64
 	exhausted  sync2.AtomicInt64
+	maxInUse   sync2.AtomicInt64
 
 	capacity    sync2.AtomicInt64
 	idleTimeout sync2.AtomicDuration
@@ -309,7 +310,22 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	if rp.available.Add(-1) <= 0 {
 		rp.exhausted.Add(1)
 	}
-	rp.inUse.Add(1)
+
+	var inUse = rp.inUse.Add(1)
+
+	// Ensure that maxInUse is set to a value greater-than-or-equal to inUse,
+	// while guaranteeing that we won't decrease it
+	for {
+		var oldMax = rp.maxInUse.Get()
+		if inUse <= oldMax {
+			break
+		}
+
+		if rp.maxInUse.CompareAndSwap(oldMax, inUse) {
+			break
+		}
+	}
+
 	return wrapper.resource, err
 }
 
@@ -415,11 +431,12 @@ func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
 
 // StatsJSON returns the stats in JSON format.
 func (rp *ResourcePool) StatsJSON() string {
-	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "Active": %v, "InUse": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v, "IdleClosed": %v, "Exhausted": %v}`,
+	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "Active": %v, "InUse": %v, "InUseMax": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v, "IdleClosed": %v, "Exhausted": %v}`,
 		rp.Capacity(),
 		rp.Available(),
 		rp.Active(),
 		rp.InUse(),
+		rp.InUseMax(),
 		rp.MaxCap(),
 		rp.WaitCount(),
 		rp.WaitTime().Nanoseconds(),
@@ -448,6 +465,25 @@ func (rp *ResourcePool) Active() int64 {
 // InUse returns the number of claimed resources from the pool
 func (rp *ResourcePool) InUse() int64 {
 	return rp.inUse.Get()
+}
+
+// InUseMax returns the maximum value InUse has taken since ResetInUseMax was last called
+func (rp *ResourcePool) InUseMax() int64 {
+	return rp.maxInUse.Get()
+}
+
+// ResetInUseMax returns the maximum value InUse has taken since last called, and
+// resets the gauge to the current value of InUse
+func (rp *ResourcePool) ResetInUseMax() int64 {
+	var oldMax = rp.maxInUse.Get()
+
+	// We have the possibility of dropping the true max value here (never making it
+	// visible to a gauge calling ResetInUseMax) if there's a race where maxInUse
+	// has been incremented between Get and Set; we just tolerate that rather than
+	// adding locking, since this is only for metrics.
+	rp.maxInUse.Set(rp.inUse.Get())
+
+	return oldMax
 }
 
 // MaxCap returns the max capacity.

@@ -73,6 +73,7 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dns
 	stats.NewGaugeFunc(name+"Available", "Connection pool available", cp.Available)
 	stats.NewGaugeFunc(name+"Active", "Connection pool active", cp.Active)
 	stats.NewGaugeFunc(name+"InUse", "Connection pool in-use", cp.InUse)
+	stats.NewGaugeFunc(name+"InUseMax", "Connection pool max in-use per period", cp.ResetInUseMax)
 	stats.NewGaugeFunc(name+"MaxCap", "Connection pool max cap", cp.MaxCap)
 	stats.NewCounterFunc(name+"WaitCount", "Connection pool wait count", cp.WaitCount)
 	stats.NewCounterDurationFunc(name+"WaitTime", "Connection pool wait time", cp.WaitTime)
@@ -235,6 +236,16 @@ func (cp *ConnectionPool) InUse() int64 {
 		return 0
 	}
 	return p.InUse()
+}
+
+// ResetInUseMax returns the maximum value InUse has taken since last called, and
+// resets the gauge to the current value of InUse
+func (cp *ConnectionPool) ResetInUseMax() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.ResetInUseMax()
 }
 
 // MaxCap returns the maximum size of the pool
