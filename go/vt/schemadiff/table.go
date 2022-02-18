@@ -133,18 +133,18 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: otherStmt.Table,
 	}
-	changedTableCharset := ""
+	diffedTableCharset := ""
 	{
 		t1Options := c.CreateTable.TableSpec.Options
 		t2Options := other.CreateTable.TableSpec.Options
-		changedTableCharset = c.diffTableCharset(t1Options, t2Options)
+		diffedTableCharset = c.diffTableCharset(t1Options, t2Options)
 	}
 	{
 		// diff columns
 		// ordered columns for both tables:
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints, changedTableCharset)
+		c.diffColumns(alterTable, t1Columns, t2Columns, hints, (diffedTableCharset != ""))
 	}
 	{
 		// diff keys
@@ -544,7 +544,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t1Columns []*sqlparser.ColumnDefinition,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
-	changedTableCharset string,
+	tableCharsetChanged bool,
 ) {
 	// map columns by names for easy access
 	t1ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
@@ -602,7 +602,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
 			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
-			if changedTableCharset != "" && t2ColEntity.IsTextual() && t2Col.Type.Charset == "" {
+			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset == "" {
 				modifyColumn = NewModifyColumnDiffByDefinition(t2Col)
 			}
 		}
