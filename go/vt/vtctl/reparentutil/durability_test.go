@@ -98,7 +98,7 @@ func TestSemiSyncAckersForPrimary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy, nil)
+			err := SetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err, "error setting durability policy")
 			semiSyncAckers := SemiSyncAckersForPrimary(tt.primary, tt.allTablets)
 			require.Equal(t, tt.wantSemiSyncAckers, semiSyncAckers)
@@ -196,7 +196,7 @@ func TestRevokeForTablet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy, nil)
+			err := SetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
 			out := RevokeForTablet(tt.primaryEligible, tt.tabletsReached, tt.allTablets)
 			require.Equal(t, tt.revoked, out)
@@ -306,7 +306,7 @@ func TestRevoked(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy, nil)
+			err := SetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
 			out := Revoked(tt.tabletsReached, tt.allTablets)
 			require.Equal(t, tt.revoked, out)

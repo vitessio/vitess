@@ -964,7 +964,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durability, nil)
+			err := SetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
 			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
 			if tt.shouldErr {
