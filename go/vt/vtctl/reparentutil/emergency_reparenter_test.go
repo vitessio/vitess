@@ -1528,7 +1528,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			_ = SetDurabilityPolicy(tt.durability, nil)
+			_ = SetDurabilityPolicy(tt.durability)
 
 			ctx := context.Background()
 			logger := logutil.NewMemoryLogger()
