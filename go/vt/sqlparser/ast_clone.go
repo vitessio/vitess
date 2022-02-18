@@ -133,8 +133,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
-	case *ExprOrColumns:
-		return CloneRefOfExprOrColumns(in)
 	case Exprs:
 		return CloneExprs(in)
 	case *ExtractFuncExpr:
@@ -221,6 +219,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
 		return CloneRefOfPartitionSpec(in)
+	case *PartitionValueRange:
+		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
 	case ReferenceAction:
@@ -901,17 +901,6 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
-// CloneRefOfExprOrColumns creates a deep clone of the input.
-func CloneRefOfExprOrColumns(n *ExprOrColumns) *ExprOrColumns {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Expr = CloneExpr(n.Expr)
-	out.ColumnList = CloneColumns(n.ColumnList)
-	return &out
-}
-
 // CloneExprs creates a deep clone of the input.
 func CloneExprs(n Exprs) Exprs {
 	if n == nil {
@@ -1324,7 +1313,7 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
-	out.Limit = CloneExpr(n.Limit)
+	out.ValueRange = CloneRefOfPartitionValueRange(n.ValueRange)
 	return &out
 }
 
@@ -1334,8 +1323,7 @@ func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
 		return nil
 	}
 	out := *n
-	out.KeyColList = CloneColumns(n.KeyColList)
-	out.ExprOrCol = CloneRefOfExprOrColumns(n.ExprOrCol)
+	out.ColList = CloneColumns(n.ColList)
 	out.Expr = CloneExpr(n.Expr)
 	out.SubPartition = CloneRefOfSubPartition(n.SubPartition)
 	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
@@ -1352,6 +1340,16 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	out.Number = CloneRefOfLiteral(n.Number)
 	out.TableName = CloneTableName(n.TableName)
 	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
+	return &out
+}
+
+// CloneRefOfPartitionValueRange creates a deep clone of the input.
+func CloneRefOfPartitionValueRange(n *PartitionValueRange) *PartitionValueRange {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Range = CloneValTuple(n.Range)
 	return &out
 }
 
@@ -1643,7 +1641,7 @@ func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
 		return nil
 	}
 	out := *n
-	out.KeyColList = CloneColumns(n.KeyColList)
+	out.ColList = CloneColumns(n.ColList)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
 }

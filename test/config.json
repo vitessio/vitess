@@ -1127,7 +1127,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_migrate": {

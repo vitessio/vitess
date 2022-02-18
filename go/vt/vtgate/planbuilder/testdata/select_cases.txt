@@ -2902,3 +2902,41 @@ Gen4 plan same as above
     ]
   }
 }
+
+# mergeable derived table with order by and limit
+"select 1 from (select col from main.unsharded order by main.unsharded.col1 desc limit 12 offset 0) as f left join unsharded as u on f.col = u.id"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from (select col from main.unsharded order by main.unsharded.col1 desc limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from (select col from unsharded where 1 != 1) as f left join unsharded as u on f.col = u.id where 1 != 1",
+    "Query": "select 1 from (select col from unsharded order by unsharded.col1 desc limit 0, 12) as f left join unsharded as u on f.col = u.id",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
+
+# mergeable derived table with group by and limit
+"select 1 from (select col, count(*) as a from main.unsharded group by col having a > 0 limit 12 offset 0) as f left join unsharded as u on f.col = u.id"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from (select col, count(*) as a from main.unsharded group by col having a \u003e 0 limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from (select col, count(*) as a from unsharded where 1 != 1 group by col) as f left join unsharded as u on f.col = u.id where 1 != 1",
+    "Query": "select 1 from (select col, count(*) as a from unsharded group by col having a \u003e 0 limit 0, 12) as f left join unsharded as u on f.col = u.id",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
