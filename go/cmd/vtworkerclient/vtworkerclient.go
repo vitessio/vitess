@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/worker/vtworkerclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -36,7 +38,7 @@ var (
 )
 
 func main() {
-	flag.Parse()
+	_flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

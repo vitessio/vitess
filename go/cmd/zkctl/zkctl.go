@@ -27,6 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/zkctl"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var usage = `
@@ -58,7 +60,7 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	flag.Parse()
+	_flag.Parse()
 	args := flag.Args()
 
 	if len(args) == 0 {

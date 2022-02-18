@@ -34,6 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -244,7 +246,7 @@ func main() {
 		exit.Return(1)
 	}
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
-	flag.Parse()
+	_flag.Parse()
 
 	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
 

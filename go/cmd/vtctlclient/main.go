@@ -33,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 // The default values used by these flags cannot be taken from wrangler and
@@ -45,7 +47,7 @@ var (
 func main() {
 	defer exit.Recover()
 
-	flag.Parse()
+	_flag.Parse()
 
 	closer := trace.StartTracing("vtctlclient")
 	defer trace.LogErrorsWhenClosing(closer)

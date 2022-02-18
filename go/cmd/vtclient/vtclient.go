@@ -40,6 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -145,7 +147,7 @@ func main() {
 }
 
 func run() (*results, error) {
-	flag.Parse()
+	_flag.Parse()
 	args := flag.Args()
 
 	if len(args) == 0 {
