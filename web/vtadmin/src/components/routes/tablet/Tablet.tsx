@@ -17,6 +17,7 @@
 import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
 import { useExperimentalTabletDebugVars, useTablet } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { isReadOnlyMode } from '../../../util/env';
 import { formatDisplayType, formatState } from '../../../util/tablets';
 import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
@@ -102,7 +103,8 @@ export const Tablet = () => {
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
                     <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="Advanced" to={`${url}/advanced`} />
+
+                    {!isReadOnlyMode() && <Tab text="Advanced" to={`${url}/advanced`} />}
                 </TabContainer>
 
                 <Switch>
@@ -119,9 +121,12 @@ export const Tablet = () => {
                             )}
                         </div>
                     </Route>
-                    <Route path={`${path}/advanced`}>
-                        <Advanced tablet={tablet} />
-                    </Route>
+
+                    {!isReadOnlyMode() && (
+                        <Route path={`${path}/advanced`}>
+                            <Advanced tablet={tablet} />
+                        </Route>
+                    )}
                     <Redirect from={path} to={`${path}/qps`} />
                 </Switch>
             </ContentContainer>
