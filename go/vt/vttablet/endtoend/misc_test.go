@@ -469,6 +469,7 @@ func TestQueryStats(t *testing.T) {
 	}
 	utils.MustMatch(t, want, stat)
 	vend := framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsAffected/vitess_a.Select"))
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.Select", vstart, 2)
 	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 0)
 	compareIntDiff(t, vend, "QueryRowsReturned/vitess_a.Select", vstart, 2)
@@ -497,6 +498,7 @@ func TestQueryStats(t *testing.T) {
 	}
 	utils.MustMatch(t, want, stat)
 	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.UpdateLimit"))
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.UpdateLimit", vstart, 1)
 	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.UpdateLimit", vstart, 2)
 	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.UpdateLimit", vstart, 2)
@@ -518,6 +520,7 @@ func TestQueryStats(t *testing.T) {
 	}
 	utils.MustMatch(t, want, stat)
 	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.Insert"))
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.Insert", vstart, 1)
 	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Insert", vstart, 1)
 	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.Insert", vstart, 1)
@@ -539,6 +542,7 @@ func TestQueryStats(t *testing.T) {
 	}
 	utils.MustMatch(t, want, stat)
 	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.DeleteLimit"))
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.DeleteLimit", vstart, 1)
 	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.DeleteLimit", vstart, 1)
 	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.DeleteLimit", vstart, 1)
