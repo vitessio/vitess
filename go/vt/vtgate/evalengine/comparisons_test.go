@@ -1244,7 +1244,7 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 		"utf8mb4_0900_bin",
 	}
 
-	var lengths = []int{16}
+	var lengths = []int{1, 16}
 
 	for _, collation := range collnames {
 		for _, length := range lengths {
