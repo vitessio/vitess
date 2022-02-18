@@ -36,6 +36,7 @@ import { ExternalTabletLink } from '../links/ExternalTabletLink';
 import { ShardLink } from '../links/ShardLink';
 import InfoDropdown from './tablets/InfoDropdown';
 import { isReadOnlyMode } from '../../util/env';
+import { ReadOnlyGate } from '../ReadOnlyGate';
 
 const COLUMNS = ['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname'];
 if (!isReadOnlyMode()) {
@@ -92,11 +93,12 @@ export const Tablets = () => {
                     <DataCell>
                         <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
-                    {!isReadOnlyMode() && (
+
+                    <ReadOnlyGate>
                         <DataCell>
                             <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
                         </DataCell>
-                    )}
+                    </ReadOnlyGate>
                 </tr>
             ));
         },

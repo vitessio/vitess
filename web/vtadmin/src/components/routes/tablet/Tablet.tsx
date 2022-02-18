@@ -17,7 +17,6 @@
 import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
 import { useExperimentalTabletDebugVars, useTablet } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
-import { isReadOnlyMode } from '../../../util/env';
 import { formatDisplayType, formatState } from '../../../util/tablets';
 import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
@@ -26,6 +25,7 @@ import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { ExternalTabletLink } from '../../links/ExternalTabletLink';
 import { TabletServingPip } from '../../pips/TabletServingPip';
+import { ReadOnlyGate } from '../../ReadOnlyGate';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
 import Advanced from './Advanced';
@@ -104,7 +104,9 @@ export const Tablet = () => {
                     <Tab text="QPS" to={`${url}/qps`} />
                     <Tab text="JSON" to={`${url}/json`} />
 
-                    {!isReadOnlyMode() && <Tab text="Advanced" to={`${url}/advanced`} />}
+                    <ReadOnlyGate>
+                        <Tab text="Advanced" to={`${url}/advanced`} />
+                    </ReadOnlyGate>
                 </TabContainer>
 
                 <Switch>
@@ -122,12 +124,13 @@ export const Tablet = () => {
                         </div>
                     </Route>
 
-                    {!isReadOnlyMode() && (
+                    <ReadOnlyGate>
                         <Route path={`${path}/advanced`}>
                             <Advanced tablet={tablet} />
                         </Route>
-                    )}
-                    <Redirect from={path} to={`${path}/qps`} />
+                    </ReadOnlyGate>
+
+                    <Redirect to={`${path}/qps`} />
                 </Switch>
             </ContentContainer>
 
