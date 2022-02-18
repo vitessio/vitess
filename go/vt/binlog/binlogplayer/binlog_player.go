@@ -569,10 +569,14 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
 }
 
-// WithDDLInitialQueries contains the queries to be expected by the mock db client during tests
+// WithDDLInitialQueries contains the queries that:
+// - are to be expected by the mock db client during tests, or
+// - trigger some of the above _vt.vreplication schema changes to take effect
+//   when the binlogplayer starts up
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
+	"SELECT time_heartbeat FROM _vt.vreplication LIMIT 0",
 }
 
 // VRSettings contains the settings of a vreplication table.

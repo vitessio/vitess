@@ -95,7 +95,7 @@ func main() {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
 
-	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy, nil); err != nil {
+	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy); err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		exit.Return(1)
 	}
