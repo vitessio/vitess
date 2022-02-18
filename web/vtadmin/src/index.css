@@ -255,7 +255,7 @@ table tbody td[rowSpan] {
         @apply focus:ring-2;
 
         height: fit-content;
-        -webkit-appearance: button;
+        appearance: button;
     }
 
     .btn:disabled {
