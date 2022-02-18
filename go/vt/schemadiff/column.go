@@ -72,10 +72,7 @@ func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints
 		return nil
 	}
 
-	modifyColumn := &sqlparser.ModifyColumn{
-		NewColDefinition: &other.ColumnDefinition,
-	}
-	return &ModifyColumnDiff{ModifyColumn: *modifyColumn}
+	return NewModifyColumnDiffByDefinition(&other.ColumnDefinition)
 }
 
 // IsTextual
