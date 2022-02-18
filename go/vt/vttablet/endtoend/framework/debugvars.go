@@ -68,6 +68,13 @@ func FetchInt(vars map[string]interface{}, tags string) int {
 	return int(val)
 }
 
+// IsPresent returns whether the specified slash-separated tag
+// is present in the vars provided
+func IsPresent(vars map[string]interface{}, tags string) bool {
+	val := FetchVal(vars, tags)
+	return val != nil
+}
+
 // FetchVal fetches the specified slash-separated tag and returns the
 // value as an interface. It returns nil on error, or if not found.
 func FetchVal(vars map[string]interface{}, tags string) interface{} {
