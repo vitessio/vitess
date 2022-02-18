@@ -28,6 +28,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 type (
@@ -343,11 +344,11 @@ func NewLiteralFloatFromBytes(val []byte) (*Literal, error) {
 
 func NewLiteralDecimalFromBytes(val []byte) (*Literal, error) {
 	lit := &Literal{}
-	dec, err := newDecimalString(string(val))
+	dec, err := decimal.NewFromMySQL(val)
 	if err != nil {
 		return nil, err
 	}
-	lit.Val.setDecimal(dec)
+	lit.Val.setDecimal(dec, -dec.Exponent())
 	return lit, nil
 }
 
