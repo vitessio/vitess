@@ -934,14 +934,6 @@ func TestCaseChangeEqualities(t *testing.T) {
 	}
 }
 
-func Test1(t *testing.T) {
-	str1 := []byte(EnglishString)
-	str3 := []byte(strings.ToUpper(EnglishString))
-
-	collation := &ConsistentCollation{Collation: testcollation(t, "utf8mb4_0900_as_cs"), t: t}
-	_ = collation.Collate(str1, str3, false)
-}
-
 func BenchmarkUCA900Collation(b *testing.B) {
 	var Collations = []Collation{
 		testcollation(b, "utf8mb4_0900_as_cs"),
