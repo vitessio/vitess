@@ -416,7 +416,7 @@ func ContinuousDiscovery() {
 	go ometrics.InitMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
-	reparentutil.SetDurabilityPolicy(config.Config.Durability, config.Config.DurabilityParams)
+	reparentutil.SetDurabilityPolicy(config.Config.Durability)
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
