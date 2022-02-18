@@ -502,6 +502,48 @@ func TestQueryStats(t *testing.T) {
 	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.UpdateLimit", vstart, 2)
 	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.UpdateLimit", vstart, 0)
 
+	query = "insert /* query_stats */ into vitess_a (eid, id, name, foo) values(100, 100, 'sdf', 'asdf')"
+	_, _ = client.Execute(query, bv)
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "Insert",
+		QueryCount:   1,
+		RowsAffected: 1,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Insert", vstart, 0)
+
+	query = "delete /* query_stats */ from vitess_a where eid = 100"
+	_, _ = client.Execute(query, bv)
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "DeleteLimit",
+		QueryCount:   1,
+		RowsAffected: 1,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.DeleteLimit", vstart, 0)
+
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
 	if _, err := client.BeginExecute(query, bv, nil); err != nil {
