@@ -952,14 +952,14 @@ func BenchmarkUCA900Collation(b *testing.B) {
 	var BenchStrings = []struct {
 		Name, Content string
 	}{
-		// {"Long", ExampleStringLong},
+		{"Long", ExampleStringLong},
 		{"Spanish", SpanishString},
 		{"English", EnglishString},
 		{"Japanese", JapaneseString2},
 	}
 
 	for _, teststr := range BenchStrings {
-		for _, length := range []int{8} {
+		for _, length := range []int{1, 8} {
 			content := strings.Repeat(teststr.Content, length)
 			str1 := []byte(content)
 			str2 := []byte(strings.ToUpper(content))
