@@ -9,6 +9,7 @@ package vreplication
 //   2. Column and table names with special characters in them, namely a dash
 //   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 // The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
+// The mysql_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
 var (
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4;
@@ -23,6 +24,7 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
 create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `));
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id));
+create table mysql_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, primary key (c_uuid,created_at)) CHARSET=utf8mb4;
 `
 
 	// These should always be ignored in vreplication
@@ -53,7 +55,8 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
 		"type": "sequence"
 	},
 	"Lead": {},
-	"Lead-1": {}
+	"Lead-1": {},
+	"mysql_order_test": {}
   }
 }
 `
@@ -62,55 +65,66 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
 {
   "sharded": true,
   "vindexes": {
-	    "reverse_bits": {
-	      "type": "reverse_bits"
-	    },
-		"bmd5": {
-          "type": "binary_md5"
-		}
-	  },
-   "tables":  {
-	    "customer": {
-	      "column_vindexes": [
-	        {
-	          "column": "cid",
-	          "name": "reverse_bits"
-	        }
-	      ],
-	      "auto_increment": {
-	        "column": "cid",
-	        "sequence": "customer_seq"
-	      }
-	    },
-	    "customer2": {
-	      "column_vindexes": [
-	        {
-	          "column": "cid",
-	          "name": "reverse_bits"
-	        }
-	      ],
-	      "auto_increment": {
-	        "column": "cid",
-	        "sequence": "customer_seq2"
-	      }
-	    },
-	  "Lead": {
-          "column_vindexes": [
-	        {
-	          "column": "Lead-id",
-	          "name": "bmd5"
-	        }
-	      ]
-		},
-	  "Lead-1": {
-          "column_vindexes": [
-	        {
-	          "column": "Lead",
-	          "name": "bmd5"
-	        }
-	      ]
-		}
-   }
+    "reverse_bits": {
+      "type": "reverse_bits"
+    },
+    "xxhash": {
+      "type": "xxhash"
+    },
+    "bmd5": {
+      "type": "binary_md5"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "reverse_bits"
+        }
+      ],
+      "auto_increment": {
+        "column": "cid",
+        "sequence": "customer_seq"
+      }
+    },
+    "customer2": {
+      "column_vindexes": [
+        {
+          "column": "cid",
+          "name": "reverse_bits"
+        }
+      ],
+      "auto_increment": {
+        "column": "cid",
+        "sequence": "customer_seq2"
+      }
+    },
+    "Lead": {
+      "column_vindexes": [
+        {
+          "column": "Lead-id",
+          "name": "bmd5"
+        }
+      ]
+    },
+    "Lead-1": {
+      "column_vindexes": [
+        {
+          "column": "Lead",
+          "name": "bmd5"
+        }
+      ]
+    },
+    "mysql_order_test": {
+      "column_vindexes": [
+        {
+          "columns": ["c_uuid", "created_at"],
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
 }
 `
 	merchantVSchema = `
@@ -166,7 +180,6 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
         "column": "oid",
         "sequence": "order_seq"
       }
-
     }
   }
 }
@@ -177,6 +190,9 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
   "vindexes": {
     "reverse_bits": {
       "type": "reverse_bits"
+    },
+    "xxhash": {
+      "type": "xxhash"
     }
   },
   "tables": {
@@ -203,7 +219,14 @@ create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, v
         "column": "oid",
         "sequence": "order_seq"
       }
-
+    },
+    "mysql_order_test": {
+      "column_vindexes": [
+        {
+          "columns": ["c_uuid", "created_at"],
+          "name": "xxhash"
+        }
+      ]
     },
 	"cproduct": {
 		"type": "reference"
