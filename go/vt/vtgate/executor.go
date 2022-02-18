@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
@@ -507,12 +509,20 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
-				// if the system variable's value is a string with single quotes we can remove the extra single quotes
-				//   sql_mode = "'only_full_group_by'" will become: sql_mode = "only_full_group_by"
-				if strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
-					value = strings.TrimSpace(value[1 : len(value)-1])
+				expr, err := sqlparser.ParseExpr(value)
+				if err != nil {
+					return err
 				}
-				bindVars[key] = sqltypes.StringBindVariable(value)
+
+				evalExpr, err := evalengine.Convert(expr, nil)
+				if err != nil {
+					return err
+				}
+				evaluated, err := evalengine.EmptyExpressionEnv().Evaluate(evalExpr)
+				if err != nil {
+					return err
+				}
+				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value())
 			}
 		}
 	}
