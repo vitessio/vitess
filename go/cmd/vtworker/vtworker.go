@@ -25,11 +25,10 @@ It has two modes: single command or interactive.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/callerid"
