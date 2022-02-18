@@ -31,7 +31,6 @@ var charsetTypes = map[string]bool{
 	"LONGTEXT":   true,
 	"ENUM":       true,
 	"SET":        true,
-	"JSON":       true,
 }
 
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
