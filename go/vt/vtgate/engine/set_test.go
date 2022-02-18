@@ -445,7 +445,7 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
-			"SysVar set with (sql_mode,' ')",
+			"SysVar set with (sql_mode,'')",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -470,6 +470,27 @@ func TestSetTable(t *testing.T) {
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|a",
+		)},
+	}, {
+		testName:     "sql_mode change to empty - non empty orig - MySQL80 - should use reserved conn",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "''",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+			"SysVar set with (sql_mode,'')",
+			"SET_VAR enabled: true",
+			"Needs Reserved Conn",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"a|",
 		)},
 	}, {
 		testName:     "sql_mode change - empty orig - MySQL80 - SET_VAR disabled",
