@@ -277,15 +277,18 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		// by MySQL on each side then we'll have the same number of extras on
 		// both sides. If that's the case, then let's see if the extra rows on
 		// both sides are actually different.
-		if dr.ExtraRowsSource == dr.ExtraRowsTarget {
+		if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxSecondPassRows) {
 			for i := range dr.ExtraRowsSourceDiffs {
-				if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[i]) {
-					dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
-					dr.ExtraRowsSource--
-					dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:i], dr.ExtraRowsTargetDiffs[i+1:]...)
-					dr.ExtraRowsTarget--
-					dr.ProcessedRows--
-					dr.MatchingRows++
+				for j := range dr.ExtraRowsTargetDiffs {
+					if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
+						dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
+						dr.ExtraRowsSource--
+						dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:j], dr.ExtraRowsTargetDiffs[j+1:]...)
+						dr.ExtraRowsTarget--
+						dr.ProcessedRows--
+						dr.MatchingRows++
+						break
+					}
 				}
 			}
 		}
@@ -587,9 +590,8 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
 		if cpk.collation == nil {
-			// use a full unicode 9 compliant collation by default (accent and case insensitive) for sorting
-			// results within vitess
-			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationUtf8mb4ID})
+			// if no collation is set then we compare as bytes
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationBinaryID})
 		} else {
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
 		}
@@ -1034,7 +1036,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
+				dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
 			}
 			dr.ExtraRowsSource++
 			advanceTarget = false
