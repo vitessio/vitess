@@ -16,7 +16,23 @@ limitations under the License.
 
 package schemadiff
 
-import "vitess.io/vitess/go/vt/sqlparser"
+import (
+	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+var charsetTypes = map[string]bool{
+	"CHAR":       true,
+	"VARCHAR":    true,
+	"TEXT":       true,
+	"TINYTEXT":   true,
+	"MEDIUMTEXT": true,
+	"LONGTEXT":   true,
+	"ENUM":       true,
+	"SET":        true,
+	"JSON":       true,
+}
 
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 	return &sqlparser.ColName{Name: *colIdent}
@@ -24,6 +40,17 @@ func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 
 type ModifyColumnDiff struct {
 	sqlparser.ModifyColumn
+}
+
+func NewModifyColumnDiff(modifyColumn *sqlparser.ModifyColumn) *ModifyColumnDiff {
+	return &ModifyColumnDiff{ModifyColumn: *modifyColumn}
+}
+
+func NewModifyColumnDiffByDefinition(definition *sqlparser.ColumnDefinition) *ModifyColumnDiff {
+	modifyColumn := &sqlparser.ModifyColumn{
+		NewColDefinition: definition,
+	}
+	return NewModifyColumnDiff(modifyColumn)
 }
 
 type ColumnDefinitionEntity struct {
@@ -49,4 +76,9 @@ func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints
 		NewColDefinition: &other.ColumnDefinition,
 	}
 	return &ModifyColumnDiff{ModifyColumn: *modifyColumn}
+}
+
+// IsTextual
+func (c *ColumnDefinitionEntity) IsTextual() bool {
+	return charsetTypes[strings.ToUpper(c.Type.Type)]
 }
