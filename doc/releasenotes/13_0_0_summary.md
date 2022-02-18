@@ -200,3 +200,9 @@ languages may now start returning as "string" values that were previously return
 
 Support for `discoverygateway` is being dropped. `tabletgateway` is now the only supported implementation. Scripts using
 this flag should be updated to remove the flag as it will be deleted in the next release.
+
+### web/vtctld2 is deprecated and can optionally be turned off
+
+The vtctld2 web interface is no longer maintained and is planned for removal in Vitess 16. Motivation for this change and a roadmap to removing [the web/vtctld2 codebase](https://github.com/vitessio/vitess/tree/main/web/vtctld2) is given in https://github.com/vitessio/vitess/issues/9686. 
+
+Vitess operators can optionally disable the vtctld2 web interface ahead of time by calling the `vtctld` process with the flag `enable_vtctld_ui=false`. For more details on this flag, see https://github.com/vitessio/vitess/pull/9614. 
