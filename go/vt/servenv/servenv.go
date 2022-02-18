@@ -48,6 +48,10 @@ import (
 
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	// See VEP-4.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -229,7 +233,7 @@ func RunDefault() {
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
-	flag.Parse()
+	_flag.Parse()
 
 	if *Version {
 		AppVersion.Print()
@@ -245,7 +249,7 @@ func ParseFlags(cmd string) {
 
 // ParseFlagsWithArgs initializes flags and returns the positional arguments
 func ParseFlagsWithArgs(cmd string) []string {
-	flag.Parse()
+	_flag.Parse()
 
 	if *Version {
 		AppVersion.Print()
