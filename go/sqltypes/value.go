@@ -243,18 +243,16 @@ func (v Value) RawStr() string {
 // match MySQL's representation for hex encoded binary data or newer types.
 // If the value is not convertible like in the case of Expression, it returns an error.
 func (v Value) ToBytes() ([]byte, error) {
-	if v.typ == Expression {
+	switch v.typ {
+	case Expression:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes")
+	case HexVal:
+		return v.decodeHexVal()
+	case HexNum:
+		return v.decodeHexNum()
+	default:
+		return v.val, nil
 	}
-	if v.typ == HexVal {
-		dv, err := v.decodeHexVal()
-		return dv, err
-	}
-	if v.typ == HexNum {
-		dv, err := v.decodeHexNum()
-		return dv, err
-	}
-	return v.val, nil
 }
 
 // Len returns the length.
