@@ -133,12 +133,18 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: otherStmt.Table,
 	}
+	changedTableCharset := ""
+	{
+		t1Options := c.CreateTable.TableSpec.Options
+		t2Options := other.CreateTable.TableSpec.Options
+		changedTableCharset = c.diffTableCharset(t1Options, t2Options)
+	}
 	{
 		// diff columns
 		// ordered columns for both tables:
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints)
+		c.diffColumns(alterTable, t1Columns, t2Columns, hints, changedTableCharset)
 	}
 	{
 		// diff keys
@@ -179,6 +185,26 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		return nil, nil
 	}
 	return &AlterTableEntityDiff{AlterTable: *alterTable}, nil
+}
+
+func (c *CreateTableEntity) diffTableCharset(
+	t1Options sqlparser.TableOptions,
+	t2Options sqlparser.TableOptions,
+) string {
+	getcharset := func(options sqlparser.TableOptions) string {
+		for _, option := range options {
+			if strings.ToUpper(option.Name) == "CHARSET" {
+				return option.String
+			}
+		}
+		return ""
+	}
+	t1Charset := getcharset(t1Options)
+	t2Charset := getcharset(t2Options)
+	if t1Charset != t2Charset {
+		return t2Charset
+	}
+	return ""
 }
 
 func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
@@ -518,6 +544,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t1Columns []*sqlparser.ColumnDefinition,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
+	changedTableCharset string,
 ) {
 	// map columns by names for easy access
 	t1ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
@@ -570,17 +597,22 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 
 		// check diff between before/after columns:
 		modifyColumn := t1ColEntity.ColumnDiff(t2ColEntity, hints)
+		if modifyColumn == nil {
+			// even if there's no apparent change, there can still be implciit changes
+			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
+			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
+			// MySQL rebuilds it.
+			if changedTableCharset != "" && t2ColEntity.IsTextual() && t2Col.Type.Charset == "" {
+				modifyColumn = NewModifyColumnDiffByDefinition(t2Col)
+			}
+		}
 		// It is also possible that a column is reordered. Whether the column definition has
 		// or hasn't changed, if a column is reordered then that's a change of its own!
 		if columnReorderIndex, ok := columnReordering[t2ColName]; ok {
 			// seems like we previously evaluated that this column should be reordered
 			if modifyColumn == nil {
 				// create column change
-				modifyColumn = &ModifyColumnDiff{
-					ModifyColumn: sqlparser.ModifyColumn{
-						NewColDefinition: t2Col,
-					},
-				}
+				modifyColumn = NewModifyColumnDiffByDefinition(t2Col)
 			}
 			if columnReorderIndex == 0 {
 				modifyColumn.ModifyColumn.First = true
