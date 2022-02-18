@@ -1593,6 +1593,8 @@ type ColumnType struct {
 	Scale    *Literal
 
 	// Text field options
+	// IsText indicates whether the column has textual properties, thus if it is capable fo having a charset (irrespective of having or not having a declared charset)
+	IsText  bool
 	Charset string
 
 	// Enum values

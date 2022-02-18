@@ -1750,11 +1750,11 @@ time_type:
 char_type:
   CHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, IsText: true}
   }
 | VARCHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, IsText: true}
   }
 | BINARY length_opt
   {
@@ -1766,19 +1766,19 @@ char_type:
   }
 | TEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = ColumnType{Type: string($1), Charset: $2, IsText: true}
   }
 | TINYTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = ColumnType{Type: string($1), Charset: $2, IsText: true}
   }
 | MEDIUMTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = ColumnType{Type: string($1), Charset: $2, IsText: true}
   }
 | LONGTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = ColumnType{Type: string($1), Charset: $2, IsText: true}
   }
 | BLOB
   {
@@ -1798,16 +1798,16 @@ char_type:
   }
 | JSON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = ColumnType{Type: string($1), IsText: true}
   }
 | ENUM '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, IsText: true}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, IsText: true}
   }
 
 spatial_type:
