@@ -39,6 +39,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/worker"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -69,7 +72,7 @@ var (
 func main() {
 	defer exit.Recover()
 
-	flag.Parse()
+	_flag.Parse()
 	args := flag.Args()
 
 	servenv.Init()

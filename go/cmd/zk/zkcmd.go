@@ -42,6 +42,9 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/zk2topo"
 	"vitess.io/vitess/go/vt/vtctl"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var doc = `
@@ -142,7 +145,7 @@ func main() {
 		flag.PrintDefaults()
 		fmt.Fprint(os.Stderr, doc)
 	}
-	flag.Parse()
+	_flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()

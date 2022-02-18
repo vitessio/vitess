@@ -50,7 +50,6 @@ import (
 	_ "vitess.io/vitess/go/vt/logutil"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	// See VEP-4.
 	_flag "vitess.io/vitess/go/internal/flag"
 )
 

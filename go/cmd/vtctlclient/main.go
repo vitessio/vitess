@@ -33,6 +33,9 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 // The default values used by these flags cannot be taken from wrangler and
@@ -68,7 +71,7 @@ func checkDeprecations(args []string) {
 func main() {
 	defer exit.Recover()
 
-	flag.Parse()
+	_flag.Parse()
 
 	closer := trace.StartTracing("vtctlclient")
 	defer trace.LogErrorsWhenClosing(closer)

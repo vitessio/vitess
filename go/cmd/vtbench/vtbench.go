@@ -33,6 +33,9 @@ import (
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	// Import and register the gRPC tabletconn client
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 /*
@@ -101,7 +104,7 @@ func main() {
 	defer exit.Recover()
 
 	flag.Lookup("logtostderr").Value.Set("true")
-	flag.Parse()
+	_flag.Parse()
 
 	clientProto := vtbench.MySQL
 	switch *protocol {
