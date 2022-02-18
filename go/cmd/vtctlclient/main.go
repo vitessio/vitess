@@ -17,14 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"

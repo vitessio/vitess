@@ -19,6 +19,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -31,8 +32,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"context"
 
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"

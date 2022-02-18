@@ -18,12 +18,11 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
