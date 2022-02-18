@@ -467,13 +467,86 @@ func TestQueryStats(t *testing.T) {
 		RowsReturned: 0,
 		ErrorCount:   1,
 	}
-	if stat != want {
-		t.Errorf("stat: %+v, want %+v", stat, want)
-	}
+	utils.MustMatch(t, want, stat)
 	vend := framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsAffected/vitess_a.Select"))
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.Select", vstart, 2)
 	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 0)
+	compareIntDiff(t, vend, "QueryRowsReturned/vitess_a.Select", vstart, 2)
 	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Select", vstart, 1)
+
+	query = "update /* query_stats */ vitess_a set name = 'a'"
+	_, _ = client.Execute(query, bv)
+	defer func() {
+		// restore the table rows for other tests to use
+		query = "update /* query_stats */ vitess_a set name = 'abcd' where id = 1"
+		_, _ = client.Execute(query, bv)
+		query = "update /* query_stats */ vitess_a set name = 'bcde' where id = 2"
+		_, _ = client.Execute(query, bv)
+	}()
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "UpdateLimit",
+		QueryCount:   1,
+		RowsAffected: 2,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.UpdateLimit"))
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.UpdateLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.UpdateLimit", vstart, 2)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.UpdateLimit", vstart, 2)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.UpdateLimit", vstart, 0)
+
+	query = "insert /* query_stats */ into vitess_a (eid, id, name, foo) values(100, 100, 'sdf', 'asdf')"
+	_, _ = client.Execute(query, bv)
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "Insert",
+		QueryCount:   1,
+		RowsAffected: 1,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.Insert"))
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.Insert", vstart, 1)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Insert", vstart, 0)
+
+	query = "delete /* query_stats */ from vitess_a where eid = 100"
+	_, _ = client.Execute(query, bv)
+	stat = framework.QueryStats()[query]
+	stat.Time = 0
+	stat.MysqlTime = 0
+	want = framework.QueryStat{
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "DeleteLimit",
+		QueryCount:   1,
+		RowsAffected: 1,
+		RowsReturned: 0,
+		ErrorCount:   0,
+	}
+	utils.MustMatch(t, want, stat)
+	vend = framework.DebugVars()
+	require.False(t, framework.IsPresent(vend, "QueryRowsReturned/vitess_a.DeleteLimit"))
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryRowsAffected/vitess_a.DeleteLimit", vstart, 1)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.DeleteLimit", vstart, 0)
 
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
