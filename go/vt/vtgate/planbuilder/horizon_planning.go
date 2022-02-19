@@ -84,8 +84,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		}
 	}
 
-	// If we have done the shortcut that means we already planned order by
-	// and group by, thus we don't need to do it again.
+	// If we didn't already take care of ORDER BY during aggregation planning, we need to handle it now
 	if !qp.CanPushDownSorting && len(hp.qp.OrderExprs) > 0 {
 		plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
 		if err != nil {
@@ -454,7 +453,8 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 	}
 
 	isPushable := !isJoin(plan)
-	vindexOverlapWithGrouping := hasUniqueVindex(ctx.VSchema, ctx.SemTable, hp.qp.GroupByExprs)
+	grouping := hp.qp.GetGrouping()
+	vindexOverlapWithGrouping := hasUniqueVindex(ctx.VSchema, ctx.SemTable, grouping)
 	if isPushable && vindexOverlapWithGrouping {
 		// If we have a plan that we can push the group by and aggregation through, we don't need to do aggregation
 		// at the vtgate level at all
@@ -466,14 +466,22 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 	}
 
 	oa := &orderedAggregate{
-		groupByKeys: make([]*engine.GroupByParams, 0, len(hp.qp.GroupByExprs)),
+		groupByKeys: make([]*engine.GroupByParams, 0, len(grouping)),
 	}
 
+	var order []abstract.OrderBy
 	if hp.qp.CanPushDownSorting {
 		hp.qp.AlignGroupByAndOrderBy()
+		// the grouping order might have changed, so we reload the grouping expressions
+		grouping = hp.qp.GetGrouping()
+		order = hp.qp.OrderExprs
+	} else {
+		for _, expr := range grouping {
+			order = append(order, expr.AsOrderBy())
+		}
 	}
 
-	for _, expr := range hp.qp.GroupByExprs {
+	for _, expr := range grouping {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			Expr:        expr.Inner,
 			FromGroupBy: true,
@@ -486,7 +494,7 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, err
 	}
 
-	aggPlan, groupings, aggrParams, err := hp.pushAggregation(ctx, plan, hp.qp.GroupByExprs, aggregationExprs, false)
+	aggPlan, groupings, aggrParams, err := hp.pushAggregation(ctx, plan, grouping, aggregationExprs, false)
 	if err != nil {
 		return nil, err
 	}
@@ -497,11 +505,9 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		oa.groupByKeys[i].WeightStringCol = grouping.wsCol
 	}
 
-	if hp.qp.CanPushDownSorting {
-		aggPlan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, aggPlan)
-		if err != nil {
-			return nil, err
-		}
+	aggPlan, err = hp.planOrderBy(ctx, order, aggPlan)
+	if err != nil {
+		return nil, err
 	}
 
 	oa.resultsBuilder = resultsBuilder{
@@ -523,12 +529,10 @@ func (hp *horizonPlanning) planAggregationWithoutOA(ctx *plancontext.PlanningCon
 			return err
 		}
 	}
-	for _, expr := range hp.qp.GroupByExprs {
+	for _, expr := range hp.qp.GetGrouping() {
 		// since all the grouping will be done at the mysql level,
 		// we know that we won't need any weight_string() calls
-		weighString := false
-		//goland:noinspection ALL
-		err := planGroupByGen4(ctx, expr, plan, weighString)
+		err := planGroupByGen4(ctx, expr, plan /*weighString*/, false)
 		if err != nil {
 			return err
 		}
@@ -946,7 +950,7 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 			WeightStrExpr:     innerAliased.Expr,
 			DistinctAggrIndex: len(oa.aggregates) + 1,
 		}
-		hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, by)
+		hp.qp.AddGroupBy(by)
 	}
 	collID := collations.Unknown
 	if innerAliased != nil {
@@ -972,7 +976,7 @@ func hasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, 
 
 func (hp *horizonPlanning) planGroupByUsingOrderBy(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
 	var orderExprs []abstract.OrderBy
-	for _, groupExpr := range hp.qp.GroupByExprs {
+	for _, groupExpr := range hp.qp.GetGrouping() {
 		addExpr := true
 		for _, orderExpr := range hp.qp.OrderExprs {
 			if sqlparser.EqualsExpr(groupExpr.Inner, orderExpr.Inner.Expr) {
