@@ -92,6 +92,11 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		}
 	}
 
+	plan, err = hp.planHaving(ctx, plan)
+	if err != nil {
+		return nil, err
+	}
+
 	plan, err = hp.planDistinct(ctx, plan)
 	if err != nil {
 		return nil, err
