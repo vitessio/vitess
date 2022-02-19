@@ -506,7 +506,7 @@ var commands = []commandGroup{
 			{
 				name:   "VDiff",
 				method: commandVDiff,
-				params: "[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=primary,replica,rdonly] [-filtered_replication_wait_time=30s] [-max_extra_rows_to_compare=100000] <keyspace.workflow>",
+				params: "[-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=primary,replica,rdonly] [-filtered_replication_wait_time=30s] [-max_extra_rows_to_compare=1000] <keyspace.workflow>",
 				help:   "Perform a diff of all tables in the workflow",
 			},
 			{
@@ -2707,7 +2707,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
 	format := subFlags.String("format", "", "Format of report") //"json" or ""
 	tables := subFlags.String("tables", "", "Only run vdiff for these tables in the workflow")
-	maxExtraRowsToCompare := subFlags.Int("max_extra_rows_to_compare", 100000, "If there are collation differences between the soruce and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
+	maxExtraRowsToCompare := subFlags.Int("max_extra_rows_to_compare", 1000, "If there are collation differences between the soruce and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
