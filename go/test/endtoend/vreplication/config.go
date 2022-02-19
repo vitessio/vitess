@@ -9,7 +9,7 @@ package vreplication
 //   2. Column and table names with special characters in them, namely a dash
 //   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 // The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
-// The mysql_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
+// The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
 var (
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4;
@@ -24,7 +24,7 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
 create table ` + "`Lead`(`Lead-id`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead-id`" + `));
 create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key (` + "`Lead`" + `));
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id));
-create table mysql_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, primary key (c_uuid,created_at)) CHARSET=utf8mb4;
+create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), primary key (c_uuid,created_at)) CHARSET=utf8mb4;
 `
 
 	// These should always be ignored in vreplication
@@ -56,7 +56,7 @@ create table mysql_order_test (c_uuid varchar(64) not null default '', created_a
 	},
 	"Lead": {},
 	"Lead-1": {},
-	"mysql_order_test": {}
+	"db_order_test": {}
   }
 }
 `
@@ -116,7 +116,7 @@ create table mysql_order_test (c_uuid varchar(64) not null default '', created_a
         }
       ]
     },
-    "mysql_order_test": {
+    "db_order_test": {
       "column_vindexes": [
         {
           "columns": ["c_uuid", "created_at"],
@@ -220,7 +220,7 @@ create table mysql_order_test (c_uuid varchar(64) not null default '', created_a
         "sequence": "order_seq"
       }
     },
-    "mysql_order_test": {
+    "db_order_test": {
       "column_vindexes": [
         {
           "columns": ["c_uuid", "created_at"],

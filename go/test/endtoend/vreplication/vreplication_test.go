@@ -52,8 +52,8 @@ var (
 	defaultRdonly          int
 	defaultReplicas        int
 	allCellNames           string
-	sourceKsOpts           []string
-	targetKsOpts           []string
+	sourceKsOpts           = make(map[string]string)
+	targetKsOpts           = make(map[string]string)
 	httpClient             = throttlebase.SetupHTTPClient(time.Second)
 	sourceThrottlerAppName = "vstreamer"
 	targetThrottlerAppName = "vreplication"
@@ -106,8 +106,8 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	sourceKsOpts = []string{"DBTypeVersion=mysql-5.7"}
-	targetKsOpts = []string{"DBTypeVersion=mysql-5.7"}
+	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
+	targetKsOpts["DBTypeVersion"] = "mysql-5.7"
 	testBasicVreplicationWorkflow(t)
 }
 
@@ -124,7 +124,7 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts...)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
@@ -162,8 +162,8 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
-	sourceKsOpts = []string{"DBTypeVersion=mysql-5.7"}
-	targetKsOpts = []string{"DBTypeVersion=mysql-8.0"}
+	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t)
 }
 
@@ -180,7 +180,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
-	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts...)
+	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
@@ -212,7 +212,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
-	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts...)
+	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 
 	// Add cell alias containing only zone2
 	result, err := vc.VtctlClient.ExecuteCommandWithOutput("AddCellsAlias", "-cells", "zone2", "alias")
@@ -348,7 +348,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		sourceKs := "product"
 		targetKs := "customer"
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-		if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts...); err != nil {
+		if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
 			t.Fatal(err)
 		}
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
@@ -362,7 +362,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
-		tables := "customer,Lead,Lead-1,mysql_order_test"
+		tables := "customer,Lead,Lead-1,db_order_test"
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -672,7 +672,7 @@ func shardMerchant(t *testing.T) {
 		targetKs := merchantKeyspace
 		tables := "merchant"
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, targetKsOpts...); err != nil {
+		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, targetKsOpts); err != nil {
 			t.Fatal(err)
 		}
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "-80"), 1); err != nil {

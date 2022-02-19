@@ -56,17 +56,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// When doing a VDiff across MySQL versions, or where the collation details
-// are otherwise different between the source and target, you can end up with
-// a number of extra rows on the source and target that are in fact the same.
-// The only difference was the order they were returned from the underlying
-// MySQL query. Because of this, when we see extra rows we do a second pass
-// to ensure that the rows *are* actually different. This variable caps how
-// many rows we will perform this check for in order to cap the memory usage.
-var maxSecondPassRows int
-
-// How many samples we should show for row differences in the final report
-var maxReportSampleRows = 10
+// At most how many samples we should show for row differences in the final report
+const maxVDiffReportSampleRows = 10
 
 // DiffReport is the summary of differences for one table.
 type DiffReport struct {
@@ -116,7 +107,7 @@ type vdiff struct {
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
 	colIndex  int                  // index of the column in the filter's select
-	collation collations.Collation // is the colloation of the column, if any
+	collation collations.Collation // is the collation of the column, if any
 	isPK      bool                 // is this column part of the primary key
 }
 
@@ -167,7 +158,6 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	maxExtraRowsToCompare int) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
-	maxSecondPassRows = maxExtraRowsToCompare
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
@@ -268,7 +258,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, err
 		}
 		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, &rowsToCompare, debug, onlyPks)
+		dr, err := td.diff(ctx, &rowsToCompare, debug, onlyPks, maxExtraRowsToCompare)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
@@ -277,7 +267,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		// by MySQL on each side then we'll have the same number of extras on
 		// both sides. If that's the case, then let's see if the extra rows on
 		// both sides are actually different.
-		if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxSecondPassRows) {
+		if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
 			for i := range dr.ExtraRowsSourceDiffs {
 				for j := range dr.ExtraRowsTargetDiffs {
 					if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
@@ -312,14 +302,14 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			for i, rs := range dr.ExtraRowsSourceDiffs {
 				wr.Logger().Printf("\tSample extra row in source %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
-				if i == maxReportSampleRows {
+				if i == maxVDiffReportSampleRows {
 					break
 				}
 			}
 			for i, rs := range dr.ExtraRowsTargetDiffs {
 				wr.Logger().Printf("\tSample extra row in target %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
-				if i == maxReportSampleRows {
+				if i == maxVDiffReportSampleRows {
 					break
 				}
 			}
@@ -589,8 +579,8 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	ob := make([]engine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
+		// if the collation is nil or unknown, use binary collation to compare as bytes
 		if cpk.collation == nil {
-			// if no collation is set then we compare as bytes
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationBinaryID})
 		} else {
 			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
@@ -952,7 +942,7 @@ func humanInt(n int64) string {
 //-----------------------------------------------------------------
 // tableDiffer
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool, maxExtraRowsToCompare int) (*DiffReport, error) {
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
 	dr := &DiffReport{}
@@ -1012,7 +1002,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
 			}
-			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
+			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
 
 			count, err := sourceExecutor.drain(ctx)
 			if err != nil {
@@ -1031,7 +1021,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		case err != nil:
 			return nil, err
 		case c < 0:
-			if dr.ExtraRowsSource < maxSecondPassRows {
+			if dr.ExtraRowsSource < maxExtraRowsToCompare {
 				diffRow, err := td.genRowDiff(td.sourceExpression, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -1042,7 +1032,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			advanceTarget = false
 			continue
 		case c > 0:
-			if dr.ExtraRowsTarget < maxSecondPassRows {
+			if dr.ExtraRowsTarget < maxExtraRowsToCompare {
 				diffRow, err := td.genRowDiff(td.targetExpression, targetRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -1055,14 +1045,14 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		}
 
 		// c == 0
-		// Compare non-pk values.
+		// Compare the non-pk values.
 		c, err = td.compare(sourceRow, targetRow, td.compareCols, true)
 		switch {
 		case err != nil:
 			return nil, err
 		case c != 0:
 			// We don't do a second pass to compare mismatched rows so we can cap the slice here
-			if dr.MismatchedRows < maxReportSampleRows {
+			if dr.MismatchedRows < maxVDiffReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.targetExpression, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
