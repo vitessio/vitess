@@ -315,30 +315,24 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 }
 
 // AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets.
-// You can pass optional key=value pairs (opts) if you want conditional behavior.
-func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts ...string) (*Keyspace, error) {
-	for _, opt := range opts {
-		if strings.HasPrefix(opt, "DBTypeVersion=") {
-			fullInfo := strings.Split(opt, "=")
-			if len(fullInfo) != 2 {
-				t.Fatalf("Invalid database details: %s", fullInfo)
-			}
-			details := strings.Split(fullInfo[1], "-")
-			if len(details) != 2 {
-				t.Fatalf("Invalid database details: %s", fullInfo[1])
-			}
-			dbType := strings.ToLower(details[0])
-			majorVersion := details[1]
-			dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
-			// Do nothing if this version is already installed
-			dbVersionInUse, err := getDBTypeVersionInUse()
-			if err != nil {
-				t.Fatalf("Could not get details of database to be used for the keyspace: %v", err)
-			}
-			if dbTypeMajorVersion == dbVersionInUse {
-				t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
-				continue
-			}
+// You can pass optional key value pairs (opts) if you want conditional behavior.
+func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) (*Keyspace, error) {
+	if value, exists := opts["DBTypeVersion"]; exists {
+		details := strings.Split(value, "-")
+		if len(details) != 2 {
+			t.Fatalf("Invalid database details: %s", value)
+		}
+		dbType := strings.ToLower(details[0])
+		majorVersion := details[1]
+		dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
+		// Do nothing if this version is already installed
+		dbVersionInUse, err := getDBTypeVersionInUse()
+		if err != nil {
+			t.Fatalf("Could not get details of database to be used for the keyspace: %v", err)
+		}
+		if dbTypeMajorVersion == dbVersionInUse {
+			t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
+		} else {
 			path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
 			// Set the root path and create it if needed
 			if err := setVtMySQLRoot(path); err != nil {
