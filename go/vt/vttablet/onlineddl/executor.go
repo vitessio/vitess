@@ -786,8 +786,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// Tables are now swapped! Migration is successful
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied)
-	return nil
 
+	// Freeze vreplication rows to mark completion, and also so that we don't migrate them during a Reshard cutover
+	if _, err = tmClient.VReplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "FROZEN")); err != nil {
+		return err
+	}
+
+	return nil
 	// deferred function will re-enable writes now
 	// deferred function will unlock keyspace
 }
@@ -833,6 +838,13 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
+	}
+	{
+		// Update materialized table name for the migration
+		parsed := sqlparser.BuildParsedQuery(sqlUpdateMaterializeTableName, vreplTableName, onlineDDL.UUID)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return v, err
+		}
 	}
 	{
 		// Apply CREATE TABLE for materialized table
@@ -1001,6 +1013,15 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		}
 		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, insertVReplicationQuery); err != nil {
 			return err
+		}
+
+		{
+			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
+			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
+				binlogdatapb.VReplicationWorkflowType_ONLINEDDL, v.workflow)
+			if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
+			}
 		}
 		// start stream!
 		startVReplicationQuery, err := v.generateStartStatement(ctx)

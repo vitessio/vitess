@@ -101,6 +101,10 @@ type vreplicator struct {
 
 	originalFKCheckSetting int64
 	originalSQLMode        string
+
+	workflowType int64
+	workflowName string
+	shard        string
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -124,7 +128,7 @@ type vreplicator struct {
 //   alias like "a+b as targetcol" must be used.
 //   More advanced constructs can be used. Please see the table plan builder
 //   documentation for more info.
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine, shard string) *vreplicator {
 	if *vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("the supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			*vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
@@ -137,6 +141,7 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
+		shard:           shard,
 	}
 }
 
@@ -206,6 +211,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		vr.workflowType = settings.WorkflowType
+		vr.workflowName = settings.WorkflowName
 		// If any of the operations below changed state to Stopped, we should return.
 		if settings.State == binlogplayer.BlpStopped {
 			return nil

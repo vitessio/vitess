@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -31,12 +32,18 @@ import (
 type localVSchema struct {
 	keyspace string
 	vschema  *vindexes.VSchema
+	// map of online ddl's materialized tables and their corresponding table to which migration is being applied
+	aliases map[string]string
+	mu      sync.Mutex
 }
 
 func (lvs *localVSchema) FindColVindex(tablename string) (*vindexes.ColumnVindex, error) {
 	table, err := lvs.findTable(tablename)
 	if err != nil {
 		return nil, err
+	}
+	if table == nil {
+		return nil, fmt.Errorf("table %s not found in local vschema", tablename)
 	}
 	return vindexes.FindBestColVindex(table)
 }
@@ -65,18 +72,43 @@ func (lvs *localVSchema) FindOrCreateVindex(qualifiedName string) (vindexes.Vind
 	return vindexes.CreateVindex(name, name, map[string]string{})
 }
 
+func (lvs *localVSchema) findAlias(tablename string) string {
+	if lvs.aliases != nil {
+		alias, ok := lvs.aliases[tablename]
+		if ok {
+			return alias
+		}
+	}
+	return ""
+}
+
 func (lvs *localVSchema) findTable(tablename string) (*vindexes.Table, error) {
+	lvs.mu.Lock()
+	defer lvs.mu.Unlock()
 	ks, ok := lvs.vschema.Keyspaces[lvs.keyspace]
 	if !ok {
 		return nil, fmt.Errorf("keyspace %s not found in vschema", lvs.keyspace)
+	}
+	if alias := lvs.findAlias(tablename); alias != "" {
+		tablename = alias
 	}
 	table := ks.Tables[tablename]
 	if table == nil {
 		if schema.IsInternalOperationTableName(tablename) {
 			log.Infof("found internal table %s, ignoring in local vschema search", tablename)
 		} else {
-			return nil, fmt.Errorf("table %s not found", tablename)
+			return nil, fmt.Errorf("table %s not found in local vschema", tablename)
 		}
 	}
 	return table, nil
+}
+
+func (lvs *localVSchema) aliasTable(aliasname, tablename string) {
+	lvs.mu.Lock()
+	defer lvs.mu.Unlock()
+	if lvs.aliases == nil {
+		lvs.aliases = make(map[string]string)
+	}
+	log.Infof("Aliasing local vschema %s to %s", aliasname, tablename)
+	lvs.aliases[aliasname] = tablename
 }

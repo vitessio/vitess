@@ -162,7 +162,7 @@ message Rule {
 
   // SourceUniqueKeyColumns represents the ordered columns in the index used by rowstreamer to iterate the table
   // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
-   string source_unique_key_columns = 5;
+  string source_unique_key_columns = 5;
 
   // TargetUniqueKeyColumns represents the ordered columns in that index used by vcopier and vplayer to apply rows
   // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
@@ -189,7 +189,11 @@ message Filter {
   // If the value is ERR_ON_MISMATCH (default), then it errors out.
   // If it's BEST_EFFORT, it sends a field event with fake column
   // names as "@1", "@2", etc.
-  FieldEventMode fieldEventMode = 2;
+  FieldEventMode field_event_mode = 2;
+
+  int64 workflow_type = 3;
+  string workflow_name = 4;
+  string target_shard = 5;
 }
 
 // OnDDLAction lists the possible actions for DDLs.
@@ -198,6 +202,17 @@ enum OnDDLAction {
   STOP = 1;
   EXEC = 2;
   EXEC_IGNORE = 3;
+}
+
+// VReplicationWorkflowType define types of vreplication workflows.
+enum VReplicationWorkflowType {
+  UNDEFINED = 0;
+  MOVETABLES = 1;
+  RESHARD = 2;
+  MIGRATE = 3;
+  ONLINEDDL = 4;
+  MATERIALIZE = 5;
+  CREATELOOKUPINDEX = 6;
 }
 
 // BinlogSource specifies the source  and filter parameters for
@@ -270,6 +285,7 @@ enum VEventType {
   VERSION = 17;
   LASTPK = 18;
   SAVEPOINT = 19;
+  ONLINEDDLEVENT = 20;
 }
 
 // RowChange represents one row change.
@@ -295,6 +311,22 @@ message FieldEvent {
   repeated query.Field fields = 2;
   string keyspace = 3;
   string shard = 4;
+}
+
+enum OnlineDDLEventType {
+  ONLINEDDLEVENT_UNDEFINED = 0;
+  MATERIALIZED_TABLE = 1;
+  CREATE_TABLE = 2;
+  RENAME_TABLE = 3;
+}
+
+// OnlineDDLEvent has the information to apply online ddl operations
+message OnlineDDLEvent {
+  OnlineDDLEventType event_type = 1;
+  string uuid = 2;
+  string materialized_table_name = 3;
+  string mysql_table_name = 4;
+  string ddl = 5;
 }
 
 // ShardGtid contains the GTID position for one shard.
@@ -391,17 +423,19 @@ message VEvent {
   string keyspace = 22;
   // the source shard
   string shard = 23;
+  // OnlineDDLEvent is set if the event type is OnlineDDLEvent
+  OnlineDDLEvent online_ddl_event = 24;
 
 }
 
 message MinimalTable {
-    string name = 1;
-    repeated query.Field fields = 2;
-    repeated int64 p_k_columns = 3;
+  string name = 1;
+  repeated query.Field fields = 2;
+  repeated int64 p_k_columns = 3;
 }
 
 message MinimalSchema {
-    repeated MinimalTable tables = 1;
+  repeated MinimalTable tables = 1;
 }
 
 // VStreamRequest is the payload for VStreamer

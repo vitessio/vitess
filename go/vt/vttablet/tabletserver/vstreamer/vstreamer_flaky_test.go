@@ -2004,6 +2004,94 @@ func TestGeneratedColumns(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+func TestOnlineDDLMaterializedTable(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id1 int, val varbinary(128), primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl",
+		"drop table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431",
+	})
+	engine.se.Reload(context.Background())
+
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+			//Filter: "select id1, val from t1 where in_keyrange('-80')",
+			Filter: "-80",
+		}},
+		WorkflowType: int64(binlogdatapb.VReplicationWorkflowType_RESHARD),
+		WorkflowName: "wf1",
+		TargetShard:  "-80",
+	}
+
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into t1 values (1, 'aaa')",
+			"insert into t1 values (2, 'bbb')",
+			"insert into t1 values (3, 'ccc')",
+			"insert into t1 values (4, 'ddd')",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:{table_name:"t1" fields:{name:"id1" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"1aaa"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"2bbb"}}}`,
+			`type:ROW row_event:{table_name:"t1" row_changes:{after:{lengths:1 lengths:3 values:"3ccc"}}}`,
+			`gtid`,
+			`commit`,
+		}},
+	}, {
+		input: []string{
+			"create table _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id1 int, val varbinary(128), id2 int default 12, primary key(id1));",
+		},
+		output: [][]string{{
+			`gtid`,
+			`type:DDL statement:"create table _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id1 int, val varbinary(128), id2 int default 12, primary key(id1))"`,
+		}},
+	}, {
+		input: []string{
+			"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id1 int, val varbinary(128), id2 int, primary key(id1));",
+		},
+		output: [][]string{{
+			`gtid`,
+			`type:DDL statement:"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id1 int, val varbinary(128), id2 int, primary key(id1))"`,
+		}},
+	}, {
+		input: []string{
+			"begin",
+			"insert into _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id1, val) values (1, 'aaa')",
+			"insert into _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id1, val) values (2, 'bbb')",
+			"insert into _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id1, val) values (3, 'ccc')",
+			"insert into _0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl(id1, val) values (4, 'ddd')",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:{table_name:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" fields:{name:"id1" type:INT32 table:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" org_table:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"val" type:VARBINARY table:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" org_table:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" database:"vttest" org_name:"val" column_length:128 charset:63 column_type:"varbinary(128)"} fields:{name:"id2" type:INT32 table:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" org_table:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"}}`,
+			`type:ROW row_event:{table_name:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" row_changes:{after:{lengths:1 lengths:3 lengths:2 values:"1aaa12"}}}`,
+			`type:ROW row_event:{table_name:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" row_changes:{after:{lengths:1 lengths:3 lengths:2 values:"2bbb12"}}}`,
+			`type:ROW row_event:{table_name:"_0e8a27c8_1d73_11ec_a579_0aa0c75a6a1d_20210924200735_vrepl" row_changes:{after:{lengths:1 lengths:3 lengths:2 values:"3ccc12"}}}`,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	_, _ = testcases, filter
+	runCases(t, filter, testcases, "", nil)
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
 
 	ctx, cancel := context.WithCancel(context.Background())

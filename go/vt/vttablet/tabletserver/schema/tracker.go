@@ -304,7 +304,9 @@ func MustReloadSchemaOnDDL(sql string, dbname string) bool {
 				continue
 			}
 			tableName := table.Name.String()
-			if schema.IsOnlineDDLTableName(tableName) {
+			// ignore internal tables from online ddl except the materialized table which can be
+			// streamed to a target during a reshard
+			if schema.IsOnlineDDLTableName(tableName) && !schema.IsOnlineDDLMaterializedTableName(tableName) {
 				continue
 			}
 			return true

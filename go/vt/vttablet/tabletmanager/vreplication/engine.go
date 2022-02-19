@@ -127,6 +127,7 @@ type Engine struct {
 	ec        *externalConnector
 
 	throttlerClient *throttle.Client
+	shard           string
 }
 
 type journalEvent struct {
@@ -137,7 +138,7 @@ type journalEvent struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, shard string) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
@@ -146,6 +147,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		journaler:       make(map[string]*journalEvent),
 		ec:              newExternalConnector(config.ExternalConnections),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
+		shard:           shard,
 	}
 
 	return vre

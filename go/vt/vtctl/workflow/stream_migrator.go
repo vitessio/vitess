@@ -297,7 +297,7 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			}
 		}
 
-		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), "")
+		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("workflow_type != %d", binlogdatapb.VReplicationWorkflowType_ONLINEDDL))
 		if err != nil {
 			return err
 		}

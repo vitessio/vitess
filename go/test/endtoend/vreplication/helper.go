@@ -35,7 +35,7 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 	}
 }
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	qr, err := conn.ExecuteFetch(query, 1000, false)
+	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	return qr
 }

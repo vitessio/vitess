@@ -72,6 +72,7 @@ const (
 	alterSchemaMigrationsTableRevertedUUID             = "ALTER TABLE _vt.schema_migrations add column reverted_uuid varchar(64) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
 	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableMaterializedTableName    = "ALTER TABLE _vt.schema_migrations add column materialized_table varchar(1024) NOT NULL DEFAULT ''"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -514,8 +515,13 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
-	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
+	sqlSwapTables                 = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable                = "RENAME TABLE `%a` TO `%a`"
+	sqlUpdateMaterializeTableName = `UPDATE _vt.schema_migrations
+			SET materialized_table='%a'
+		WHERE
+			migration_uuid='%a'
+		`
 )
 
 const (
@@ -571,4 +577,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableRevertedUUID,
 	alterSchemaMigrationsTableRevertedUUIDIndex,
 	alterSchemaMigrationsTableIsView,
+	alterSchemaMigrationsTableMaterializedTableName,
 }

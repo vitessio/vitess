@@ -339,6 +339,12 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
 		}
+		query = fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
+			binlogdatapb.VReplicationWorkflowType_RESHARD, rs.workflow)
+		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {
+			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetPrimary.Tablet, query)
+		}
+
 		return nil
 	})
 

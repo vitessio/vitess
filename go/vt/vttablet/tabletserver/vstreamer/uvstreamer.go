@@ -364,7 +364,7 @@ func (uvs *uvstreamer) init() error {
 
 // Stream streams binlog events.
 func (uvs *uvstreamer) Stream() error {
-	log.Info("Stream() called")
+	log.Info("Stream() called with filter %+v", uvs.filter)
 	if err := uvs.init(); err != nil {
 		return err
 	}

@@ -267,7 +267,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		defer vsClient.Close(ctx)
 
-		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.vre.shard)
 		return vr.Replicate(ctx)
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)

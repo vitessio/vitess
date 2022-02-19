@@ -290,6 +290,31 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 	return nil
 }
 
+// GetCreateTableStatement returns the ddl to create the specified table
+func (se *Engine) GetCreateTableStatement(ctx context.Context, tableName string) (string, error) {
+	defer func() {
+		se.env.LogError()
+	}()
+
+	conn, err := se.conns.Get(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Recycle()
+
+	query := fmt.Sprintf("SHOW CREATE TABLE `%s`", tableName)
+	qr, err := conn.Exec(ctx, query, 1, false)
+	if err != nil {
+		return "", err
+	}
+	if qr == nil || len(qr.Rows) == 0 {
+		return "", fmt.Errorf("unable to get create table statement for %s", tableName)
+	}
+	createTableStatement := qr.Rows[0][1].ToString()
+	log.Infof("createTableStatement: %+v >>>>>>>> %s >>>>>>>> %s", qr.Named().Row(), qr.Named().Row()["Create Table"].ToString(), createTableStatement)
+	return createTableStatement, nil
+}
+
 // reload reloads the schema. It can also be used to initialize it.
 func (se *Engine) reload(ctx context.Context) error {
 	defer func() {
@@ -484,7 +509,7 @@ func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*
 	tableNameStr := tableName.String()
 	st, ok := se.tables[tableNameStr]
 	if !ok {
-		if schema.IsInternalOperationTableName(tableNameStr) {
+		if schema.IsInternalOperationTableName(tableNameStr) && !schema.IsOnlineDDLMaterializedTableName(tableNameStr) {
 			log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
 		} else {
 			log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)

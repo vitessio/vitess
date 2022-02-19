@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -292,6 +294,7 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 	case sqlparser.DBDDLStatement:
 		return false
 	case sqlparser.DDLStatement:
+
 		if !stmt.GetTable().IsEmpty() {
 			return tableMatches(stmt.GetTable(), dbname, filter)
 		}
@@ -353,8 +356,14 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*
 			return buildREPlan(ti, vschema, rule.Filter)
 		case rule.Match == ti.Name:
 			return buildTablePlan(ti, vschema, rule.Filter)
+		case schema.IsOnlineDDLMaterializedTableName(ti.Name):
+			// materialized tables are not part of the filter, so we need to create a new table plan for it.
+			// only rows in the keyrange of the target should be sent.
+			return buildTablePlan(ti, vschema, fmt.Sprintf("select * from %s where in_keyrange('%s')",
+				sqlescape.EscapeID(ti.Name), filter.TargetShard))
 		}
 	}
+	log.Infof("buildPlan returns nil")
 	return nil, nil
 }
 
@@ -372,7 +381,6 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 	if filter == "" {
 		return plan, nil
 	}
-
 	// We need to additionally set VindexColumn, Vindex and KeyRange
 	// based on the Primary Vindex of the table.
 	cv, err := vschema.FindColVindex(ti.Name)
@@ -406,7 +414,7 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
-		log.Errorf("%s", err.Error())
+		log.Errorf("%s: %s", query, err.Error())
 		return nil, err
 	}
 	if fromTable.String() != ti.Name {

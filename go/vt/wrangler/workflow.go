@@ -17,6 +17,7 @@ import (
 )
 
 // VReplicationWorkflowType specifies whether workflow is MoveTables or Reshard
+// todo: Replace this with binlogdatapb.VReplicationWorkflowType
 type VReplicationWorkflowType int
 
 // VReplicationWorkflowType enums

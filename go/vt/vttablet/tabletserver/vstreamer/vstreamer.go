@@ -108,6 +108,7 @@ type streamerPlan struct {
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
+	log.Infof("newVStreamer phase %s with pos %s, who %s", phase, startPos, filter.WorkflowName+":"+filter.TargetShard)
 	return &vstreamer{
 		ctx:      ctx,
 		cancel:   cancel,
@@ -171,6 +172,11 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	}
 	defer conn.Close()
 
+	// send MATERIALIZED_TABLE events, one per active migration
+	if err := vs.sendVEventsForOnlineDDLMigrations(""); err != nil {
+		return err
+	}
+
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
 		return wrapError(err, vs.pos, vs.vse)
@@ -210,7 +216,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// So, we don't have to send it right away.
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER,
-			binlogdatapb.VEventType_HEARTBEAT, binlogdatapb.VEventType_VERSION:
+			binlogdatapb.VEventType_HEARTBEAT, binlogdatapb.VEventType_VERSION, binlogdatapb.VEventType_ONLINEDDLEVENT:
 			// COMMIT, DDL, OTHER and HEARTBEAT must be immediately sent.
 			// Although unlikely, it's possible to get a HEARTBEAT in the middle
 			// of a transaction. If so, we still send the partial transaction along
@@ -374,7 +380,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		}
 		return nil, nil
 	}
-
 	// We can't parse anything until we get a FORMAT_DESCRIPTION_EVENT that
 	// tells us the size of the event header.
 	if vs.format.IsZero() {
@@ -463,7 +468,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
+			renameEvent, err := vs.getRenameOnlineDDLEvent(q, vs.cp.DBName())
+			if err != nil {
+				return nil, err
+			}
+			if renameEvent != nil {
+				vevents = append(vevents, renameEvent)
+			} else if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
@@ -479,6 +490,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				}, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_OTHER,
 				})
+
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
 				vs.se.ReloadAt(context.Background(), vs.pos)
@@ -533,14 +545,25 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
-		if vtschema.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
-			vs.plans[id] = nil
-			return nil, nil
-		}
-		if !ruleMatches(tm.Name, vs.filter) {
-			return nil, nil
-		}
+		// ignore tables created by onlineddl (except materialized table) /gh-ost/pt-osc
+		if vtschema.IsInternalOperationTableName(tm.Name) {
+			if vtschema.IsOnlineDDLMaterializedTableName(tm.Name) &&
+				vs.filter.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_RESHARD) {
 
+				vs.se.Reload(vs.ctx) // ensure materialized table's schema is loaded
+
+				if err := vs.sendVEventsForOnlineDDLMigrations(tm.Name); err != nil {
+					return nil, err
+				}
+			} else {
+				vs.plans[id] = nil
+				return nil, nil
+			}
+		} else {
+			if !ruleMatches(tm.Name, vs.filter) {
+				return nil, nil
+			}
+		}
 		vevent, err := vs.buildTablePlan(id, tm)
 		if err != nil {
 			vs.vse.errorCounts.Add("TablePlan", 1)
@@ -668,6 +691,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	}
 	plan, err := buildPlan(table, vs.vschema, vs.filter)
 	if err != nil {
+		log.Infof("buildPlan error %s", err)
 		return nil, err
 	}
 	if plan == nil {
@@ -855,6 +879,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			},
 		})
 	}
+	log.Infof("rowevent end for %s", plan.Table.Name)
 	return vevents, nil
 }
 

@@ -693,10 +693,16 @@ func shardMerchant(t *testing.T) {
 	})
 }
 
+var vdiffError error
+
 func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=primary", "-source_cell="+cells, "-format", "json", workflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=primary", "-filtered_replication_wait_time", "10s", "-source_cell="+cells, "-format", "json", workflow)
 		log.Infof("vdiff err: %+v, output: %+v", err, output)
+		vdiffError = err
+		if err != nil {
+			require.FailNow(t, "vdiff error", err)
+		}
 		require.Nil(t, err)
 		require.NotNil(t, output)
 		diffReports := make(map[string]*wrangler.DiffReport)

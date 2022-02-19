@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -25,11 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 
@@ -145,7 +143,12 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		filter := vp.replicatorPlan.VStreamFilter
+		filter.WorkflowType = vp.vr.workflowType
+		filter.WorkflowName = vp.vr.workflowName
+		filter.TargetShard = vp.vr.shard
+
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, filter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -520,7 +523,31 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if posReached {
 			return io.EOF
 		}
+	case binlogdatapb.VEventType_ONLINEDDLEVENT:
+		log.Infof(">>>>> Got VEventType_ONLINEDDLEVENT for %+v", event)
+		ddl := event.OnlineDdlEvent.Ddl
+		// The target can see the same event multiple times. Example: there are multiple streams with the same source.
+		// The first ddl will succeed and others error out, hence we ignore.
+		if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, ddl); err != nil {
+			log.Infof("Ignoring error: %v for DDL: %s", err, ddl)
+		}
+		// Applying the ddl would change the schema and the field events that we get will reflect the new schema.
+		// So reload the extended column information from the information_schema and rebuild the replicator plan.
+		// Otherwise, the field events will not match the current plan, resulting in errors.
+		colInfo, err := vp.vr.buildColInfoMap(ctx)
+		if err != nil {
+			return err
+		}
+		vp.vr.colInfoMap = colInfo
+
+		plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
+		if err != nil {
+			vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
+			return err
+		}
+		vp.replicatorPlan = plan
 	case binlogdatapb.VEventType_DDL:
+
 		if vp.vr.dbClient.InTransaction {
 			// Unreachable
 			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)

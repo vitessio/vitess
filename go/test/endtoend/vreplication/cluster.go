@@ -240,6 +240,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		"-enable-lag-throttler",
 		"-heartbeat_enable",
 		"-heartbeat_interval", "250ms",
+		"-track_schema_versions=true",
 	} //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
 
 	if mainClusterConfig.vreplicationCompressGTID {

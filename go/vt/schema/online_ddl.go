@@ -34,10 +34,11 @@ import (
 )
 
 var (
-	migrationBasePath                 = "schema-migration"
-	onlineDdlUUIDRegexp               = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
-	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
-	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
+	migrationBasePath                    = "schema-migration"
+	onlineDdlUUIDRegexp                  = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
+	onlineDDLGeneratedTableNameRegexp    = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
+	ptOSCGeneratedTableNameRegexp        = regexp.MustCompile(`^_.*_old$`)
+	onlineDDLMaterializedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_vrepl$`)
 )
 
 var (
@@ -520,6 +521,14 @@ func IsOnlineDDLTableName(tableName string) bool {
 		return true
 	}
 	if ptOSCGeneratedTableNameRegexp.MatchString(tableName) {
+		return true
+	}
+	return false
+}
+
+func IsOnlineDDLMaterializedTableName(tableName string) bool {
+	// todo: see if the second check for _vrepl was needed
+	if onlineDDLMaterializedTableNameRegexp.MatchString(tableName) && strings.HasSuffix(tableName, "_vrepl") {
 		return true
 	}
 	return false
