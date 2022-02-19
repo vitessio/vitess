@@ -18,6 +18,7 @@ package abstract
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -41,7 +42,7 @@ type (
 		SelectExprs        []SelectExpr
 		HasAggr            bool
 		Distinct           bool
-		GroupByExprs       []GroupBy
+		groupByExprs       []GroupBy
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
 		HasStar            bool
@@ -124,7 +125,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 			return nil, err
 		}
 
-		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr, InnerIndex: selectExprIdx})
+		qp.groupByExprs = append(qp.groupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr, InnerIndex: selectExprIdx})
 	}
 
 	err = qp.addOrderBy(sel.OrderBy, semTable)
@@ -132,12 +133,12 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		return nil, err
 	}
 
-	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
+	if qp.HasAggr || len(qp.groupByExprs) > 0 {
 		expr := qp.getNonAggrExprNotMatchingGroupByExprs()
 		// if we have aggregation functions, non aggregating columns and GROUP BY,
 		// the non-aggregating expressions must all be listed in the GROUP BY list
 		if expr != nil {
-			if len(qp.GroupByExprs) == 0 {
+			if len(qp.groupByExprs) == 0 {
 				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.MixOfGroupFuncAndFields, "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '%s'; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
 			}
 			qp.ProjectionError = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongFieldWithGroup, "Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '%s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by", sqlparser.String(expr))
@@ -145,7 +146,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	}
 
 	if qp.Distinct && !qp.HasAggr {
-		qp.GroupByExprs = nil
+		qp.groupByExprs = nil
 	}
 
 	return qp, nil
@@ -219,6 +220,13 @@ func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *seman
 	return nil
 }
 
+// GetGrouping returns a copy of the grouping parameters of the QP
+func (qp *QueryProjection) GetGrouping() []GroupBy {
+	out := make([]GroupBy, len(qp.groupByExprs))
+	copy(out, qp.groupByExprs)
+	return out
+}
+
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		fExpr, ok := node.(*sqlparser.FuncExpr)
@@ -237,7 +245,7 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 			continue
 		}
 		isGroupByOk := false
-		for _, groupByExpr := range qp.GroupByExprs {
+		for _, groupByExpr := range qp.groupByExprs {
 			exp, err := expr.GetExpr()
 			if err != nil {
 				return expr.Col
@@ -257,7 +265,7 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 			continue
 		}
 		isGroupByOk := false
-		for _, groupByExpr := range qp.GroupByExprs {
+		for _, groupByExpr := range qp.groupByExprs {
 			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, order.WeightStrExpr) {
 				isGroupByOk = true
 				break
@@ -345,7 +353,7 @@ func (qp *QueryProjection) toString() string {
 		out.Select = append(out.Select, e)
 	}
 
-	for _, expr := range qp.GroupByExprs {
+	for _, expr := range qp.groupByExprs {
 		out.Grouping = append(out.Grouping, sqlparser.String(expr.Inner))
 	}
 	for _, expr := range qp.OrderExprs {
@@ -358,7 +366,7 @@ func (qp *QueryProjection) toString() string {
 
 // NeedsAggregation returns true if we either have aggregate functions or grouping defined
 func (qp *QueryProjection) NeedsAggregation() bool {
-	return qp.HasAggr || len(qp.GroupByExprs) > 0
+	return qp.HasAggr || len(qp.groupByExprs) > 0
 }
 
 func (qp QueryProjection) onlyAggr() bool {
@@ -378,7 +386,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 	if !qp.Distinct {
 		return false
 	}
-	if qp.onlyAggr() && len(qp.GroupByExprs) == 0 {
+	if qp.onlyAggr() && len(qp.groupByExprs) == 0 {
 		return false
 	}
 	return true
@@ -462,29 +470,45 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) *int 
 func (qp *QueryProjection) AlignGroupByAndOrderBy() {
 	// The ORDER BY can be performed before the OA
 
-	// Here we align the GROUP BY and ORDER BY.
-	// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
 	var newGrouping []GroupBy
-	used := make([]bool, len(qp.GroupByExprs))
-	for _, orderExpr := range qp.OrderExprs {
-		for i, groupingExpr := range qp.GroupByExprs {
-			if !used[i] && sqlparser.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
-				newGrouping = append(newGrouping, groupingExpr)
-				used[i] = true
+	if len(qp.OrderExprs) == 0 {
+		// The query didn't ask for any particular order, so we are free to add arbitrary ordering.
+		// We'll align the grouping and ordering by the output columns
+		newGrouping = qp.GetGrouping()
+		sort.Sort(GroupBys(newGrouping))
+		for _, groupBy := range newGrouping {
+			qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
+		}
+	} else {
+		// Here we align the GROUP BY and ORDER BY.
+		// First step is to make sure that the GROUP BY is in the same order as the ORDER BY
+		used := make([]bool, len(qp.groupByExprs))
+		for _, orderExpr := range qp.OrderExprs {
+			for i, groupingExpr := range qp.groupByExprs {
+				if !used[i] && sqlparser.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+					newGrouping = append(newGrouping, groupingExpr)
+					used[i] = true
+				}
+			}
+		}
+		if len(newGrouping) != len(qp.groupByExprs) {
+			// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
+			for i, added := range used {
+				if !added {
+					groupBy := qp.groupByExprs[i]
+					newGrouping = append(newGrouping, groupBy)
+					qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
+				}
 			}
 		}
 	}
-	if len(newGrouping) != len(qp.GroupByExprs) {
-		// we are missing some groupings. We need to add them both to the new groupings list, but also to the ORDER BY
-		for i, added := range used {
-			if !added {
-				groupBy := qp.GroupByExprs[i]
-				newGrouping = append(newGrouping, groupBy)
-				qp.OrderExprs = append(qp.OrderExprs, groupBy.AsOrderBy())
-			}
-		}
-	}
-	qp.GroupByExprs = newGrouping
+
+	qp.groupByExprs = newGrouping
+}
+
+// AddGroupBy does just that
+func (qp *QueryProjection) AddGroupBy(by GroupBy) {
+	qp.groupByExprs = append(qp.groupByExprs, by)
 }
 
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {

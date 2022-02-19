@@ -1450,8 +1450,8 @@ Gen4 error: Can't group on 'count(*)'
           "Sharded": true
         },
         "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b",
-        "OrderBy": "(1|4) ASC, (0|3) ASC",
-        "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b order by b asc, a asc",
+        "OrderBy": "(0|3) ASC, (1|4) ASC",
+        "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, b order by a asc, b asc",
         "Table": "`user`"
       }
     ]
@@ -2125,7 +2125,7 @@ Gen4 plan same as above
 "syntax error: count(distinct *)"
 Gen4 plan same as above
 
-# if derived table scatter and ordering, then V3 doesn't allow outer constructs to be pushed down.
+# here it is safe to remove the order by on the derived table since it will not influence the output of the count(*)
 "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
 "unsupported: cross-shard query with aggregates"
 {
@@ -2143,10 +2143,36 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1",
-        "OrderBy": "(1|2) ASC",
-        "Query": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
-        "ResultColumns": 2,
+        "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1",
+        "Query": "select count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a",
+        "Table": "`user`, user_extra"
+      }
+    ]
+  }
+}
+
+# here we keep the order since the column is visible on the outside, and used by the orderedAggregate
+"select col, count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a group by col"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a group by col",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "sum(1) AS count(*)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(*) from (select `user`.col, user_extra.extra from `user`, user_extra where `user`.id = user_extra.user_id) as a group by col order by col asc",
         "Table": "`user`, user_extra"
       }
     ]
