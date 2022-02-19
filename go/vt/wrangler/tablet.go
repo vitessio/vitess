@@ -127,8 +127,9 @@ func (wr *Wrangler) StartReplication(ctx context.Context, tablet *topodatapb.Tab
 	return wr.TabletManagerClient().StartReplication(ctx, tablet, semiSync)
 }
 
-// SetReplicationSource is used to set the replication source on the specified tablet
-// It also finds out if the tablet should be sending semi-sync ACKs or not. It does not start the replication forcefully
+// SetReplicationSource is used to set the replication source on the specified tablet to the current shard primary (if available).
+// It also figures out if the tablet should be sending semi-sync ACKs or not and passes that to the tabletmanager RPC.
+// It does not start the replication forcefully
 func (wr *Wrangler) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet) error {
 	shardPrimary, err := wr.getShardPrimaryForTablet(ctx, tablet)
 	if err != nil {
