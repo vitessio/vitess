@@ -171,7 +171,18 @@ func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.T
 		case nil:
 			logutil.LogEvent(wr.Logger(), e)
 		case io.EOF:
-			return nil
+			// Do not do anything for primary tablets and when active reparenting is disabled
+			if *mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
+				return nil
+			}
+			// Otherwise we find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we executed the backup which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err := wr.TopoServer().GetTablet(ctx, tablet.Alias)
+			if err != nil {
+				return err
+			}
+			return wr.SetReplicationSource(ctx, tabletInfo.Tablet)
 		default:
 			return err
 		}
@@ -269,7 +280,18 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 		case nil:
 			logutil.LogEvent(wr.Logger(), e)
 		case io.EOF:
-			return nil
+			// Do not do anything when active reparenting is disabled
+			if *mysqlctl.DisableActiveReparents {
+				return nil
+			}
+			// Otherwise we find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we restored which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err = wr.TopoServer().GetTablet(ctx, tabletAlias)
+			if err != nil {
+				return err
+			}
+			return wr.SetReplicationSource(ctx, tabletInfo.Tablet)
 		default:
 			return err
 		}

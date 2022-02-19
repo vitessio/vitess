@@ -680,12 +680,16 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			}
 		}
 	} else if shouldbeReplicating {
-		// The address is correct. Just start replication if needed.
-		if !status.ReplicationRunning() {
-			if err := tm.MysqlDaemon.StartReplication(tm.hookExtraEnv()); err != nil {
-				if err := tm.handleRelayLogError(err); err != nil {
-					return err
-				}
+		// The address is correct. We need to restart replication so that any semi-sync changes if any
+		// are taken into account
+		if err := tm.MysqlDaemon.StopReplication(tm.hookExtraEnv()); err != nil {
+			if err := tm.handleRelayLogError(err); err != nil {
+				return err
+			}
+		}
+		if err := tm.MysqlDaemon.StartReplication(tm.hookExtraEnv()); err != nil {
+			if err := tm.handleRelayLogError(err); err != nil {
+				return err
 			}
 		}
 	}
