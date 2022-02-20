@@ -38,11 +38,11 @@ func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 }
 
 type ModifyColumnDiff struct {
-	sqlparser.ModifyColumn
+	modifyColumn *sqlparser.ModifyColumn
 }
 
 func NewModifyColumnDiff(modifyColumn *sqlparser.ModifyColumn) *ModifyColumnDiff {
-	return &ModifyColumnDiff{ModifyColumn: *modifyColumn}
+	return &ModifyColumnDiff{modifyColumn: modifyColumn}
 }
 
 func NewModifyColumnDiffByDefinition(definition *sqlparser.ColumnDefinition) *ModifyColumnDiff {

@@ -25,7 +25,7 @@ import (
 
 //
 type AlterTableEntityDiff struct {
-	sqlparser.AlterTable
+	alterTable *sqlparser.AlterTable
 }
 
 func (d *AlterTableEntityDiff) IsEmpty() bool {
@@ -36,12 +36,12 @@ func (d *AlterTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.AlterTable
+	return d.alterTable
 }
 
 //
 type CreateTableEntityDiff struct {
-	sqlparser.CreateTable
+	createTable *sqlparser.CreateTable
 }
 
 func (d *CreateTableEntityDiff) IsEmpty() bool {
@@ -52,12 +52,12 @@ func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.CreateTable
+	return d.createTable
 }
 
 //
 type DropTableEntityDiff struct {
-	sqlparser.DropTable
+	dropTable *sqlparser.DropTable
 }
 
 func (d *DropTableEntityDiff) IsEmpty() bool {
@@ -68,7 +68,7 @@ func (d *DropTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.DropTable
+	return d.dropTable
 }
 
 //
@@ -81,11 +81,6 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 }
 
 func (c *CreateTableEntity) Format() string {
-	return sqlparser.String(&c.CreateTable)
-}
-
-// Clause implements Entity interface function
-func (c *CreateTableEntity) Clause() string {
 	return sqlparser.String(&c.CreateTable)
 }
 
@@ -184,7 +179,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// - reordered keys -- we treat that as non-diff
 		return nil, nil
 	}
-	return &AlterTableEntityDiff{AlterTable: *alterTable}, nil
+	return &AlterTableEntityDiff{alterTable: alterTable}, nil
 }
 
 func (c *CreateTableEntity) diffTableCharset(
@@ -596,33 +591,33 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumn := t1ColEntity.ColumnDiff(t2ColEntity, hints)
-		if modifyColumn == nil {
+		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
+		if modifyColumnDiff == nil {
 			// even if there's no apparent change, there can still be implciit changes
 			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
 			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
 			// MySQL rebuilds it.
 			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset == "" {
-				modifyColumn = NewModifyColumnDiffByDefinition(t2Col)
+				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
 			}
 		}
 		// It is also possible that a column is reordered. Whether the column definition has
 		// or hasn't changed, if a column is reordered then that's a change of its own!
 		if columnReorderIndex, ok := columnReordering[t2ColName]; ok {
 			// seems like we previously evaluated that this column should be reordered
-			if modifyColumn == nil {
+			if modifyColumnDiff == nil {
 				// create column change
-				modifyColumn = NewModifyColumnDiffByDefinition(t2Col)
+				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
 			}
 			if columnReorderIndex == 0 {
-				modifyColumn.ModifyColumn.First = true
+				modifyColumnDiff.modifyColumn.First = true
 			} else {
-				modifyColumn.ModifyColumn.After = getColName(&t2SharedColumns[columnReorderIndex-1].Name)
+				modifyColumnDiff.modifyColumn.After = getColName(&t2SharedColumns[columnReorderIndex-1].Name)
 			}
 		}
-		if modifyColumn != nil {
+		if modifyColumnDiff != nil {
 			// column definition or ordering has changed
-			alterTable.AlterOptions = append(alterTable.AlterOptions, &modifyColumn.ModifyColumn)
+			alterTable.AlterOptions = append(alterTable.AlterOptions, modifyColumnDiff.modifyColumn)
 		}
 	}
 	// Evaluate added columns
