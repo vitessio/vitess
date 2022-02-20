@@ -333,6 +333,7 @@ func generateClusterWorkflows(list []string, tpl string) {
 			mysqlVersionIndicator := ""
 			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
+				test.Name = test.Name + " " + string(mysqlVersion)
 			}
 			path := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
 			template := tpl
