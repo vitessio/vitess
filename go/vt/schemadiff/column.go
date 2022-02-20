@@ -53,11 +53,11 @@ func NewModifyColumnDiffByDefinition(definition *sqlparser.ColumnDefinition) *Mo
 }
 
 type ColumnDefinitionEntity struct {
-	sqlparser.ColumnDefinition
+	columnDefinition *sqlparser.ColumnDefinition
 }
 
 func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionEntity {
-	return &ColumnDefinitionEntity{ColumnDefinition: *c}
+	return &ColumnDefinitionEntity{columnDefinition: c}
 }
 
 // Diff compares this table statement with another table statement, and sees what it takes to
@@ -65,16 +65,16 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints *DiffHints) *ModifyColumnDiff {
-	format := sqlparser.String(&c.ColumnDefinition)
-	otherFormat := sqlparser.String(&other.ColumnDefinition)
+	format := sqlparser.String(c.columnDefinition)
+	otherFormat := sqlparser.String(other.columnDefinition)
 	if format == otherFormat {
 		return nil
 	}
 
-	return NewModifyColumnDiffByDefinition(&other.ColumnDefinition)
+	return NewModifyColumnDiffByDefinition(other.columnDefinition)
 }
 
 // IsTextual returns true when this column is of textual type, and is capable of having a character set property
 func (c *ColumnDefinitionEntity) IsTextual() bool {
-	return charsetTypes[strings.ToUpper(c.Type.Type)]
+	return charsetTypes[strings.ToUpper(c.columnDefinition.Type.Type)]
 }
