@@ -25,50 +25,80 @@ import (
 
 //
 type AlterTableEntityDiff struct {
-	sqlparser.AlterTable
+	alterTable *sqlparser.AlterTable
 }
 
+// IsEmpty implements EntityDiff
 func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *AlterTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.AlterTable
+	return d.alterTable
+}
+
+// StatementString implements EntityDiff
+func (d *AlterTableEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
 type CreateTableEntityDiff struct {
-	sqlparser.CreateTable
+	createTable *sqlparser.CreateTable
 }
 
+// IsEmpty implements EntityDiff
 func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.CreateTable
+	return d.createTable
+}
+
+// StatementString implements EntityDiff
+func (d *CreateTableEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
 type DropTableEntityDiff struct {
-	sqlparser.DropTable
+	dropTable *sqlparser.DropTable
 }
 
+// IsEmpty implements EntityDiff
 func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *DropTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.DropTable
+	return d.dropTable
+}
+
+// StatementString implements EntityDiff
+func (d *DropTableEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
@@ -78,15 +108,6 @@ type CreateTableEntity struct {
 
 func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 	return &CreateTableEntity{CreateTable: *c}
-}
-
-func (c *CreateTableEntity) Format() string {
-	return sqlparser.String(&c.CreateTable)
-}
-
-// Clause implements Entity interface function
-func (c *CreateTableEntity) Clause() string {
-	return sqlparser.String(&c.CreateTable)
 }
 
 // Diff implements Entity interface function
@@ -133,12 +154,18 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: otherStmt.Table,
 	}
+	diffedTableCharset := ""
+	{
+		t1Options := c.CreateTable.TableSpec.Options
+		t2Options := other.CreateTable.TableSpec.Options
+		diffedTableCharset = c.diffTableCharset(t1Options, t2Options)
+	}
 	{
 		// diff columns
 		// ordered columns for both tables:
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints)
+		c.diffColumns(alterTable, t1Columns, t2Columns, hints, (diffedTableCharset != ""))
 	}
 	{
 		// diff keys
@@ -178,7 +205,27 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// - reordered keys -- we treat that as non-diff
 		return nil, nil
 	}
-	return &AlterTableEntityDiff{AlterTable: *alterTable}, nil
+	return &AlterTableEntityDiff{alterTable: alterTable}, nil
+}
+
+func (c *CreateTableEntity) diffTableCharset(
+	t1Options sqlparser.TableOptions,
+	t2Options sqlparser.TableOptions,
+) string {
+	getcharset := func(options sqlparser.TableOptions) string {
+		for _, option := range options {
+			if strings.ToUpper(option.Name) == "CHARSET" {
+				return option.String
+			}
+		}
+		return ""
+	}
+	t1Charset := getcharset(t1Options)
+	t2Charset := getcharset(t2Options)
+	if t1Charset != t2Charset {
+		return t2Charset
+	}
+	return ""
 }
 
 func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
@@ -518,6 +565,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	t1Columns []*sqlparser.ColumnDefinition,
 	t2Columns []*sqlparser.ColumnDefinition,
 	hints *DiffHints,
+	tableCharsetChanged bool,
 ) {
 	// map columns by names for easy access
 	t1ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
@@ -569,28 +617,33 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
-		modifyColumn := t1ColEntity.ColumnDiff(t2ColEntity, hints)
+		modifyColumnDiff := t1ColEntity.ColumnDiff(t2ColEntity, hints)
+		if modifyColumnDiff == nil {
+			// even if there's no apparent change, there can still be implciit changes
+			// it is possible that the table charset is changed. the column may be some col1 TEXT NOT NULL, possibly in both varsions 1 and 2,
+			// but implicitly the column has changed its characters set. So we need to explicitly ass a MODIFY COLUMN statement, so that
+			// MySQL rebuilds it.
+			if tableCharsetChanged && t2ColEntity.IsTextual() && t2Col.Type.Charset == "" {
+				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
+			}
+		}
 		// It is also possible that a column is reordered. Whether the column definition has
 		// or hasn't changed, if a column is reordered then that's a change of its own!
 		if columnReorderIndex, ok := columnReordering[t2ColName]; ok {
 			// seems like we previously evaluated that this column should be reordered
-			if modifyColumn == nil {
+			if modifyColumnDiff == nil {
 				// create column change
-				modifyColumn = &ModifyColumnDiff{
-					ModifyColumn: sqlparser.ModifyColumn{
-						NewColDefinition: t2Col,
-					},
-				}
+				modifyColumnDiff = NewModifyColumnDiffByDefinition(t2Col)
 			}
 			if columnReorderIndex == 0 {
-				modifyColumn.ModifyColumn.First = true
+				modifyColumnDiff.modifyColumn.First = true
 			} else {
-				modifyColumn.ModifyColumn.After = getColName(&t2SharedColumns[columnReorderIndex-1].Name)
+				modifyColumnDiff.modifyColumn.After = getColName(&t2SharedColumns[columnReorderIndex-1].Name)
 			}
 		}
-		if modifyColumn != nil {
+		if modifyColumnDiff != nil {
 			// column definition or ordering has changed
-			alterTable.AlterOptions = append(alterTable.AlterOptions, &modifyColumn.ModifyColumn)
+			alterTable.AlterOptions = append(alterTable.AlterOptions, modifyColumnDiff.modifyColumn)
 		}
 	}
 	// Evaluate added columns
