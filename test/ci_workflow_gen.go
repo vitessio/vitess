@@ -26,11 +26,32 @@ import (
 	"text/template"
 )
 
+type mysqlVersion string
+
+const (
+	mysql57    mysqlVersion = "mysql57"
+	mysql80    mysqlVersion = "mysql80"
+	mariadb102 mysqlVersion = "mariadb102"
+	mariadb103 mysqlVersion = "mariadb103"
+
+	defaultMySQLVersion mysqlVersion = mysql57
+)
+
+type mysqlVersions []mysqlVersion
+
+var (
+	defaultMySQLVersions   = []mysqlVersion{defaultMySQLVersion}
+	allOracleMySQLVersions = []mysqlVersion{mysql57, mysql80}
+)
+
+var (
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb102, mariadb103}
+)
+
 const (
 	workflowConfigDir = "../.github/workflows"
 
-	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "mysql57, mariadb103, mysql80, mariadb102"
+	unitTestTemplate = "templates/unit_test.tpl"
 
 	// An empty string will cause the default non platform specific template
 	// to be used.
@@ -140,6 +161,18 @@ type selfHostedTest struct {
 	MakeTools, InstallXtraBackup                                bool
 }
 
+// clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
+func clusterMySQLVersions(clusterName string) mysqlVersions {
+	switch {
+	case strings.HasPrefix(clusterName, "onlineddl_"):
+		return allOracleMySQLVersions
+	case clusterName == "mysql80":
+		return []mysqlVersion{mysql80}
+	default:
+		return defaultMySQLVersions
+	}
+}
+
 func mergeBlankLines(buf *bytes.Buffer) string {
 	var out []string
 	in := strings.Split(buf.String(), "\n")
@@ -178,13 +211,13 @@ func main() {
 func canonnizeList(list []string) []string {
 	var output []string
 	for _, item := range list {
-		item = strings.TrimSpace(item)
-		if item != "" {
+		if item := strings.TrimSpace(item); item != "" {
 			output = append(output, item)
 		}
 	}
 	return output
 }
+
 func parseList(csvList string) []string {
 	var list []string
 	for _, item := range strings.Split(csvList, ",") {
@@ -274,53 +307,50 @@ func generateSelfHostedClusterWorkflows() error {
 func generateClusterWorkflows(list []string, tpl string) {
 	clusters := canonnizeList(list)
 	for _, cluster := range clusters {
-		test := &clusterTest{
-			Name:  fmt.Sprintf("Cluster (%s)", cluster),
-			Shard: cluster,
-		}
-		makeToolClusters := canonnizeList(clustersRequiringMakeTools)
-		for _, makeToolCluster := range makeToolClusters {
-			if makeToolCluster == cluster {
-				test.MakeTools = true
-				break
+		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
+			test := &clusterTest{
+				Name:  fmt.Sprintf("Cluster (%s)", cluster),
+				Shard: cluster,
 			}
-		}
-		xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
-		for _, xtraBackupCluster := range xtraBackupClusters {
-			if xtraBackupCluster == cluster {
-				test.InstallXtraBackup = true
-				break
+			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
+			for _, makeToolCluster := range makeToolClusters {
+				if makeToolCluster == cluster {
+					test.MakeTools = true
+					break
+				}
 			}
-		}
-		ubuntu20Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, ubuntu20Cluster := range ubuntu20Clusters {
-			if ubuntu20Cluster == cluster {
+			xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
+			for _, xtraBackupCluster := range xtraBackupClusters {
+				if xtraBackupCluster == cluster {
+					test.InstallXtraBackup = true
+					break
+				}
+			}
+			if mysqlVersion == mysql80 {
 				test.Ubuntu20 = true
-				test.Platform = "mysql80"
-				break
+				test.Platform = string(mysql80)
 			}
-		}
 
-		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
-		template := tpl
-		if test.Platform != "" {
-			template = fmt.Sprintf(tpl, "_"+test.Platform)
-		} else if strings.Contains(template, "%s") {
-			template = fmt.Sprintf(tpl, "")
-		}
-		err := writeFileFromTemplate(template, path, test)
-		if err != nil {
-			log.Print(err)
+			path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
+			template := tpl
+			if test.Platform != "" {
+				template = fmt.Sprintf(tpl, "_"+test.Platform)
+			} else if strings.Contains(template, "%s") {
+				template = fmt.Sprintf(tpl, "")
+			}
+			err := writeFileFromTemplate(template, path, test)
+			if err != nil {
+				log.Print(err)
+			}
 		}
 	}
 }
 
 func generateUnitTestWorkflows() {
-	platforms := parseList(unitTestDatabases)
-	for _, platform := range platforms {
+	for _, platform := range unitTestDatabases {
 		test := &unitTest{
 			Name:     fmt.Sprintf("Unit Test (%s)", platform),
-			Platform: platform,
+			Platform: string(platform),
 		}
 		path := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
 		err := writeFileFromTemplate(unitTestTemplate, path, test)
