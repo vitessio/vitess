@@ -520,7 +520,7 @@ func TestCreateTableDiff(t *testing.T) {
 				assert.NoError(t, err)
 				require.NotNil(t, alter)
 				assert.False(t, alter.IsEmpty(), "expected changes, found empty diff")
-				diff := sqlparser.String(alter.Statement())
+				diff := alter.StatementString()
 				assert.Equal(t, ts.diff, diff)
 			}
 		})
