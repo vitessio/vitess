@@ -146,9 +146,6 @@ func TestUseSystemAndUserVariables(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set @@sql_mode = ''")
-	utils.AssertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("")]]`)
-
 	utils.Exec(t, conn, "set @@sql_mode = 'only_full_group_by,strict_trans_tables'")
 	utils.Exec(t, conn, "select 1 from information_schema.table_constraints")
 
