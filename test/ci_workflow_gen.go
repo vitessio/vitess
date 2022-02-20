@@ -41,6 +41,7 @@ type mysqlVersions []mysqlVersion
 
 var (
 	defaultMySQLVersions   = []mysqlVersion{defaultMySQLVersion}
+	mysql80OnlyVersions    = []mysqlVersion{mysql80}
 	allOracleMySQLVersions = []mysqlVersion{mysql57, mysql80}
 )
 
@@ -140,9 +141,6 @@ var (
 		"24",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
-	}
-	clustersRequiringMySQL80 = []string{
-		"mysql80",
 	}
 )
 
@@ -257,48 +255,50 @@ func generateSelfHostedUnitTestWorkflows() error {
 func generateSelfHostedClusterWorkflows() error {
 	clusters := canonnizeList(clusterSelfHostedList)
 	for _, cluster := range clusters {
-		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
-		test := &selfHostedTest{
-			Name:              fmt.Sprintf("Cluster (%s)", cluster),
-			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-			Platform:          "mysql57",
-			directoryName:     directoryName,
-			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
-			Shard:             cluster,
-			MakeTools:         false,
-			InstallXtraBackup: false,
-		}
-		makeToolClusters := canonnizeList(clustersRequiringMakeTools)
-		for _, makeToolCluster := range makeToolClusters {
-			if makeToolCluster == cluster {
-				test.MakeTools = true
-				break
+		for _, mysqlVersion := range clusterMySQLVersions(cluster) {
+			directoryName := fmt.Sprintf("cluster_test_%s", cluster)
+			test := &selfHostedTest{
+				Name:              fmt.Sprintf("Cluster (%s)", cluster),
+				ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
+				Platform:          "mysql57",
+				directoryName:     directoryName,
+				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
+				Shard:             cluster,
+				MakeTools:         false,
+				InstallXtraBackup: false,
 			}
-		}
-		xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
-		for _, xtraBackupCluster := range xtraBackupClusters {
-			if xtraBackupCluster == cluster {
-				test.InstallXtraBackup = true
-				break
+			makeToolClusters := canonnizeList(clustersRequiringMakeTools)
+			for _, makeToolCluster := range makeToolClusters {
+				if makeToolCluster == cluster {
+					test.MakeTools = true
+					break
+				}
 			}
-		}
-		mysql80Clusters := canonnizeList(clustersRequiringMySQL80)
-		for _, mysql80Cluster := range mysql80Clusters {
-			if mysql80Cluster == cluster {
-				test.Platform = "mysql80"
-				break
+			xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
+			for _, xtraBackupCluster := range xtraBackupClusters {
+				if xtraBackupCluster == cluster {
+					test.InstallXtraBackup = true
+					break
+				}
 			}
-		}
+			if mysqlVersion == mysql80 {
+				test.Platform = string(mysql80)
+			}
+			mysqlVersionIndicator := ""
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			}
 
-		err := setupTestDockerFile(test)
-		if err != nil {
-			return err
-		}
+			err := setupTestDockerFile(test)
+			if err != nil {
+				return err
+			}
 
-		filePath := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
-		err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
-		if err != nil {
-			log.Print(err)
+			filePath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
+			err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
+			if err != nil {
+				log.Print(err)
+			}
 		}
 	}
 	return nil
@@ -330,8 +330,11 @@ func generateClusterWorkflows(list []string, tpl string) {
 				test.Ubuntu20 = true
 				test.Platform = string(mysql80)
 			}
-
-			path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
+			mysqlVersionIndicator := ""
+			if mysqlVersion != defaultMySQLVersion && len(clusterMySQLVersions(cluster)) > 1 {
+				mysqlVersionIndicator = "_" + string(mysqlVersion)
+			}
+			path := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
 			template := tpl
 			if test.Platform != "" {
 				template = fmt.Sprintf(tpl, "_"+test.Platform)
