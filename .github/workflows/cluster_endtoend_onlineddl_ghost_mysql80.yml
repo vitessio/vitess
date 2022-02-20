@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (onlineddl_ghost)
+name: Cluster (onlineddl_ghost) mysql80
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_ghost)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (onlineddl_ghost) mysql80')
   cancel-in-progress: true
 
 env:
@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (onlineddl_ghost)
+    name: Run endtoend tests on Cluster (onlineddl_ghost) mysql80
     runs-on: ubuntu-20.04
 
     steps:
