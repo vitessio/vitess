@@ -20,7 +20,7 @@ import "vitess.io/vitess/go/vt/sqlparser"
 
 //
 type AlterViewEntityDiff struct {
-	sqlparser.AlterView
+	alterView *sqlparser.AlterView
 }
 
 func (d *AlterViewEntityDiff) IsEmpty() bool {
@@ -31,12 +31,12 @@ func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.AlterView
+	return d.alterView
 }
 
 //
 type CreateViewEntityDiff struct {
-	sqlparser.CreateView
+	createView *sqlparser.CreateView
 }
 
 func (d *CreateViewEntityDiff) IsEmpty() bool {
@@ -47,12 +47,12 @@ func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.CreateView
+	return d.createView
 }
 
 //
 type DropViewEntityDiff struct {
-	sqlparser.DropView
+	dropView *sqlparser.DropView
 }
 
 func (d *DropViewEntityDiff) IsEmpty() bool {
@@ -63,7 +63,7 @@ func (d *DropViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.DropView
+	return d.dropView
 }
 
 //
@@ -76,11 +76,6 @@ func NewCreateViewEntity(c *sqlparser.CreateView) *CreateViewEntity {
 }
 
 func (c *CreateViewEntity) Format() string {
-	return sqlparser.String(&c.CreateView)
-}
-
-// Clause implements Entity interface function
-func (c *CreateViewEntity) Clause() string {
 	return sqlparser.String(&c.CreateView)
 }
 
@@ -123,5 +118,5 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		Select:      otherStmt.Select,
 		CheckOption: otherStmt.CheckOption,
 	}
-	return &AlterViewEntityDiff{AlterView: *alterView}, nil
+	return &AlterViewEntityDiff{alterView: alterView}, nil
 }
