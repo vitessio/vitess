@@ -41,6 +41,7 @@ type Entity interface {
 type EntityDiff interface {
 	IsEmpty() bool
 	Statement() sqlparser.Statement
+	StatementString() string
 }
 
 const (
