@@ -59,12 +59,12 @@ func DiffTables(create1 *sqlparser.CreateTable, create2 *sqlparser.CreateTable, 
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return &CreateTableEntityDiff{CreateTable: *create2}, nil
+		return &CreateTableEntityDiff{createTable: create2}, nil
 	case create2 == nil:
-		dropTable := sqlparser.DropTable{
+		dropTable := &sqlparser.DropTable{
 			FromTables: []sqlparser.TableName{create1.Table},
 		}
-		return &DropTableEntityDiff{dropTable}, nil
+		return &DropTableEntityDiff{dropTable: dropTable}, nil
 	default:
 		c1 := NewCreateTableEntity(create1)
 		c2 := NewCreateTableEntity(create2)
@@ -116,12 +116,12 @@ func DiffViews(create1 *sqlparser.CreateView, create2 *sqlparser.CreateView, hin
 	case create1 == nil && create2 == nil:
 		return nil, nil
 	case create1 == nil:
-		return &CreateViewEntityDiff{CreateView: *create2}, nil
+		return &CreateViewEntityDiff{createView: create2}, nil
 	case create2 == nil:
-		dropView := sqlparser.DropView{
+		dropView := &sqlparser.DropView{
 			FromTables: []sqlparser.TableName{create1.ViewName},
 		}
-		return &DropViewEntityDiff{dropView}, nil
+		return &DropViewEntityDiff{dropView: dropView}, nil
 	default:
 		c1 := NewCreateViewEntity(create1)
 		c2 := NewCreateViewEntity(create2)

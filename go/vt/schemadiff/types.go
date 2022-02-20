@@ -35,13 +35,13 @@ var (
 )
 
 type Entity interface {
-	Clause() string
 	Diff(other Entity, hints *DiffHints) (diff EntityDiff, err error)
 }
 
 type EntityDiff interface {
 	IsEmpty() bool
 	Statement() sqlparser.Statement
+	StatementString() string
 }
 
 const (

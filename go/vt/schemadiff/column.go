@@ -16,22 +16,48 @@ limitations under the License.
 
 package schemadiff
 
-import "vitess.io/vitess/go/vt/sqlparser"
+import (
+	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
+var charsetTypes = map[string]bool{
+	"CHAR":       true,
+	"VARCHAR":    true,
+	"TEXT":       true,
+	"TINYTEXT":   true,
+	"MEDIUMTEXT": true,
+	"LONGTEXT":   true,
+	"ENUM":       true,
+	"SET":        true,
+}
 
 func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
 	return &sqlparser.ColName{Name: *colIdent}
 }
 
 type ModifyColumnDiff struct {
-	sqlparser.ModifyColumn
+	modifyColumn *sqlparser.ModifyColumn
+}
+
+func NewModifyColumnDiff(modifyColumn *sqlparser.ModifyColumn) *ModifyColumnDiff {
+	return &ModifyColumnDiff{modifyColumn: modifyColumn}
+}
+
+func NewModifyColumnDiffByDefinition(definition *sqlparser.ColumnDefinition) *ModifyColumnDiff {
+	modifyColumn := &sqlparser.ModifyColumn{
+		NewColDefinition: definition,
+	}
+	return NewModifyColumnDiff(modifyColumn)
 }
 
 type ColumnDefinitionEntity struct {
-	sqlparser.ColumnDefinition
+	columnDefinition *sqlparser.ColumnDefinition
 }
 
 func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionEntity {
-	return &ColumnDefinitionEntity{ColumnDefinition: *c}
+	return &ColumnDefinitionEntity{columnDefinition: c}
 }
 
 // Diff compares this table statement with another table statement, and sees what it takes to
@@ -39,14 +65,16 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, hints *DiffHints) *ModifyColumnDiff {
-	format := sqlparser.String(&c.ColumnDefinition)
-	otherFormat := sqlparser.String(&other.ColumnDefinition)
+	format := sqlparser.String(c.columnDefinition)
+	otherFormat := sqlparser.String(other.columnDefinition)
 	if format == otherFormat {
 		return nil
 	}
 
-	modifyColumn := &sqlparser.ModifyColumn{
-		NewColDefinition: &other.ColumnDefinition,
-	}
-	return &ModifyColumnDiff{ModifyColumn: *modifyColumn}
+	return NewModifyColumnDiffByDefinition(other.columnDefinition)
+}
+
+// IsTextual returns true when this column is of textual type, and is capable of having a character set property
+func (c *ColumnDefinitionEntity) IsTextual() bool {
+	return charsetTypes[strings.ToUpper(c.columnDefinition.Type.Type)]
 }

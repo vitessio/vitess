@@ -20,50 +20,80 @@ import "vitess.io/vitess/go/vt/sqlparser"
 
 //
 type AlterViewEntityDiff struct {
-	sqlparser.AlterView
+	alterView *sqlparser.AlterView
 }
 
+// IsEmpty implements EntityDiff
 func (d *AlterViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.AlterView
+	return d.alterView
+}
+
+// StatementString implements EntityDiff
+func (d *AlterViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
 type CreateViewEntityDiff struct {
-	sqlparser.CreateView
+	createView *sqlparser.CreateView
 }
 
+// IsEmpty implements EntityDiff
 func (d *CreateViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.CreateView
+	return d.createView
+}
+
+// StatementString implements EntityDiff
+func (d *CreateViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
 type DropViewEntityDiff struct {
-	sqlparser.DropView
+	dropView *sqlparser.DropView
 }
 
+// IsEmpty implements EntityDiff
 func (d *DropViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *DropViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
-	return &d.DropView
+	return d.dropView
+}
+
+// StatementString implements EntityDiff
+func (d *DropViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
@@ -73,15 +103,6 @@ type CreateViewEntity struct {
 
 func NewCreateViewEntity(c *sqlparser.CreateView) *CreateViewEntity {
 	return &CreateViewEntity{CreateView: *c}
-}
-
-func (c *CreateViewEntity) Format() string {
-	return sqlparser.String(&c.CreateView)
-}
-
-// Clause implements Entity interface function
-func (c *CreateViewEntity) Clause() string {
-	return sqlparser.String(&c.CreateView)
 }
 
 // Diff implements Entity interface function
@@ -123,5 +144,5 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		Select:      otherStmt.Select,
 		CheckOption: otherStmt.CheckOption,
 	}
-	return &AlterViewEntityDiff{AlterView: *alterView}, nil
+	return &AlterViewEntityDiff{alterView: alterView}, nil
 }
