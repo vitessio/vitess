@@ -23,10 +23,12 @@ type AlterViewEntityDiff struct {
 	alterView *sqlparser.AlterView
 }
 
+// IsEmpty implements EntityDiff
 func (d *AlterViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
@@ -34,15 +36,25 @@ func (d *AlterViewEntityDiff) Statement() sqlparser.Statement {
 	return d.alterView
 }
 
+// StatementString implements EntityDiff
+func (d *AlterViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
 //
 type CreateViewEntityDiff struct {
 	createView *sqlparser.CreateView
 }
 
+// IsEmpty implements EntityDiff
 func (d *CreateViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
@@ -50,20 +62,38 @@ func (d *CreateViewEntityDiff) Statement() sqlparser.Statement {
 	return d.createView
 }
 
+// StatementString implements EntityDiff
+func (d *CreateViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
 //
 type DropViewEntityDiff struct {
 	dropView *sqlparser.DropView
 }
 
+// IsEmpty implements EntityDiff
 func (d *DropViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *DropViewEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
 	return d.dropView
+}
+
+// StatementString implements EntityDiff
+func (d *DropViewEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
@@ -73,10 +103,6 @@ type CreateViewEntity struct {
 
 func NewCreateViewEntity(c *sqlparser.CreateView) *CreateViewEntity {
 	return &CreateViewEntity{CreateView: *c}
-}
-
-func (c *CreateViewEntity) Format() string {
-	return sqlparser.String(&c.CreateView)
 }
 
 // Diff implements Entity interface function

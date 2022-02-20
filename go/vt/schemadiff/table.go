@@ -28,10 +28,12 @@ type AlterTableEntityDiff struct {
 	alterTable *sqlparser.AlterTable
 }
 
+// IsEmpty implements EntityDiff
 func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *AlterTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
@@ -39,15 +41,25 @@ func (d *AlterTableEntityDiff) Statement() sqlparser.Statement {
 	return d.alterTable
 }
 
+// StatementString implements EntityDiff
+func (d *AlterTableEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
 //
 type CreateTableEntityDiff struct {
 	createTable *sqlparser.CreateTable
 }
 
+// IsEmpty implements EntityDiff
 func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
@@ -55,20 +67,38 @@ func (d *CreateTableEntityDiff) Statement() sqlparser.Statement {
 	return d.createTable
 }
 
+// StatementString implements EntityDiff
+func (d *CreateTableEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
 //
 type DropTableEntityDiff struct {
 	dropTable *sqlparser.DropTable
 }
 
+// IsEmpty implements EntityDiff
 func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// Statement implements EntityDiff
 func (d *DropTableEntityDiff) Statement() sqlparser.Statement {
 	if d == nil {
 		return nil
 	}
 	return d.dropTable
+}
+
+// StatementString implements EntityDiff
+func (d *DropTableEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
 }
 
 //
@@ -78,10 +108,6 @@ type CreateTableEntity struct {
 
 func NewCreateTableEntity(c *sqlparser.CreateTable) *CreateTableEntity {
 	return &CreateTableEntity{CreateTable: *c}
-}
-
-func (c *CreateTableEntity) Format() string {
-	return sqlparser.String(&c.CreateTable)
 }
 
 // Diff implements Entity interface function
