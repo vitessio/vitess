@@ -61,8 +61,12 @@ func init() {
 
 // durabler is the interface which is used to get the promotion rules for candidates and the semi sync setup
 type durabler interface {
+	// promotionRule represents the precedence in which we want to tablets to be promoted.
+	// The lower the promotion rule of a tablet, the more we want it to be promoted in case of a failover
 	promotionRule(*topodatapb.Tablet) promotionrule.CandidatePromotionRule
+	// semiSyncAckers represents the number of semi-sync ackers for a given tablet are required if it were to become the PRIMARY instance
 	semiSyncAckers(*topodatapb.Tablet) int
+	// isReplicaSemiSync returns whether the replica should send semi-sync acks if primary were to become the PRIMARY instance
 	isReplicaSemiSync(primary, replica *topodatapb.Tablet) bool
 }
 
