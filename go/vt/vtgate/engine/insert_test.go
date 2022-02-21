@@ -1471,3 +1471,67 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 }
+
+func TestInsertSelectSimple(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	// A single row insert should be autocommitted
+	ins := &Insert{
+		Opcode:            InsertSelect,
+		Keyspace:          ks.Keyspace,
+		Query:             "dummy_insert",
+		Table:             ks.Tables["t1"],
+		VindexValueOffset: [][]int{{1}},
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace,
+			},
+		},
+	}
+	for _, colVindex := range ks.Tables["t1"].ColumnVindexes {
+		if colVindex.IgnoreInDML() {
+			continue
+		}
+		ins.ColVindexes = append(ins.ColVindexes, colVindex)
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("name|id", "varchar|int64"),
+			"a|1", "b|2"),
+	}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// select query
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+	})
+}
