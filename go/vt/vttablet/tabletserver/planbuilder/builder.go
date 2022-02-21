@@ -178,8 +178,9 @@ func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 
 func lookupTables(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) (singleTable *schema.Table, allTables []*schema.Table) {
 	for _, tableExpr := range tableExprs {
-		t := lookupSingleTable(tableExpr, tables)
-		allTables = append(allTables, t)
+		if t := lookupSingleTable(tableExpr, tables); t != nil {
+			allTables = append(allTables, t)
+		}
 	}
 	if len(allTables) == 1 {
 		singleTable = allTables[0]
