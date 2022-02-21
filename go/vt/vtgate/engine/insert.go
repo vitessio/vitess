@@ -87,11 +87,22 @@ type Insert struct {
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
 
-	// Insert does not take inputs
-	noInputs
+	// VindexValueOffset stores the offset for each column in the ColumnVindex
+	// that will appear in the result set of the select query.
+	VindexValueOffset [][]int
+
+	// Input is a select query plan to retrieve results for inserting data.
+	Input Primitive `json:",omitempty"`
 
 	// Insert needs tx handling
 	txNeeded
+}
+
+func (ins *Insert) Inputs() []Primitive {
+	if ins.Input == nil {
+		return nil
+	}
+	return []Primitive{ins.Input}
 }
 
 // NewQueryInsert creates an Insert with a query string.
@@ -153,12 +164,16 @@ const (
 	// InsertShardedIgnore is for INSERT IGNORE and
 	// INSERT...ON DUPLICATE KEY constructs.
 	InsertShardedIgnore
+	// InsertSelect is for routing an insert statement
+	// based on rows returned from the select statement.
+	InsertSelect
 )
 
 var insName = map[InsertOpcode]string{
 	InsertUnsharded:     "InsertUnsharded",
 	InsertSharded:       "InsertSharded",
 	InsertShardedIgnore: "InsertShardedIgnore",
+	InsertSelect:        "InsertSelect",
 }
 
 // String returns the opcode

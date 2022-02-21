@@ -268,7 +268,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(208)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -315,6 +315,19 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	// field Suffix string
 	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
+	// field VindexValueOffset [][]int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValueOffset)) * int64(24))
+		for _, elem := range cached.VindexValueOffset {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(8))
+			}
+		}
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 
