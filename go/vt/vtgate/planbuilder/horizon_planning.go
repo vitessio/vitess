@@ -470,6 +470,10 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return plan, nil
 	}
 
+	if hp.qp.ProjectionError != nil {
+		return nil, hp.qp.ProjectionError
+	}
+
 	oa := &orderedAggregate{
 		groupByKeys: make([]*engine.GroupByParams, 0, len(grouping)),
 	}
