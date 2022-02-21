@@ -3179,7 +3179,7 @@ Gen4 plan same as above
 
 # this query lead to a nil pointer error
 "select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)"
-"expr cannot be converted, not supported: foo(user_extra.foobar)"
+"expr cannot be translated, not supported: foo(user_extra.foobar)"
 Gen4 plan same as above
 
 # filter after outer join

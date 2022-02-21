@@ -1409,8 +1409,7 @@ func EqualsRefOfConvertType(a, b *ConvertType) bool {
 	return a.Type == b.Type &&
 		a.Charset == b.Charset &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
-		EqualsRefOfLiteral(a.Scale, b.Scale) &&
-		a.Operator == b.Operator
+		EqualsRefOfLiteral(a.Scale, b.Scale)
 }
 
 // EqualsRefOfConvertUsingExpr does deep equals between the two objects.

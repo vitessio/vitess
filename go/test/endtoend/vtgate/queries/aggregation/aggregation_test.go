@@ -118,7 +118,7 @@ func TestEqualFilterOnScatter(t *testing.T) {
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a, val1 from aggr_test group by val1 having a = 1.00", `[[INT64(1) VARCHAR("a")] [INT64(1) VARCHAR("b")] [INT64(1) VARCHAR("c")] [INT64(1) VARCHAR("d")] [INT64(1) VARCHAR("e")]]`)
 
-			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) = 5", `expr cannot be converted, not supported`) // will fail since `count(*)` is a FuncExpr
+			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) = 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
 		})
 	}
 }
@@ -151,7 +151,7 @@ func TestNotEqualFilterOnScatter(t *testing.T) {
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != \"5\"", `[]`)
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a != 5.00", `[]`)
 
-			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) != 5", `expr cannot be converted, not supported`) // will fail since `count(*)` is a FuncExpr
+			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) != 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
 		})
 	}
 }
@@ -183,7 +183,7 @@ func TestLessFilterOnScatter(t *testing.T) {
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < \"5\"", `[]`)
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a < 6.00", `[[INT64(5)]]`)
 
-			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) < 5", `expr cannot be converted, not supported`) // will fail since `count(*)` is a FuncExpr
+			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) < 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
 		})
 	}
 }
@@ -216,7 +216,7 @@ func TestLessEqualFilterOnScatter(t *testing.T) {
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= \"5\"", `[[INT64(5)]]`)
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a <= 5.00", `[[INT64(5)]]`)
 
-			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) <= 5", `expr cannot be converted, not supported`) // will fail since `count(*)` is a FuncExpr
+			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) <= 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
 		})
 	}
 }
@@ -249,7 +249,7 @@ func TestGreaterFilterOnScatter(t *testing.T) {
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > \"5\"", `[]`)
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a > 4.00", `[[INT64(5)]]`)
 
-			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) > 5", `expr cannot be converted, not supported`) // will fail since `count(*)` is a FuncExpr
+			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) > 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
 		})
 	}
 }
@@ -282,7 +282,7 @@ func TestGreaterEqualFilterOnScatter(t *testing.T) {
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= \"5\"", `[[INT64(5)]]`)
 			utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) as a from aggr_test having a >= 5.00", `[[INT64(5)]]`)
 
-			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `expr cannot be converted, not supported`) // will fail since `count(*)` is a FuncExpr
+			utils.AssertContainsError(t, conn, "select /*vt+ PLANNER=gen4 */ 1 from aggr_test having count(*) >= 5", `expr cannot be translated, not supported`) // will fail since `count(*)` is a FuncExpr
 		})
 	}
 }

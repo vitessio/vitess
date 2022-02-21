@@ -84,9 +84,9 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 			return evalExpr, nil
 		}
 	}
-	evalExpr, err := evalengine.Convert(astExpr, nil)
+	evalExpr, err := evalengine.Translate(astExpr, nil)
 	if err != nil {
-		if !strings.Contains(err.Error(), evalengine.ErrConvertExprNotSupported) {
+		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err
 		}
 		evalExpr = &evalengine.Column{Offset: len(ec.tabletExpressions)}

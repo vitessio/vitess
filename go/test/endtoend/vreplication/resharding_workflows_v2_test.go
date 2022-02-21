@@ -98,6 +98,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	} else {
 		args = append(args, "Reshard")
 	}
+	if BypassLagCheck {
+		args = append(args, "-max_replication_lag_allowed=2542087h")
+	}
 
 	switch action {
 	case workflowActionCreate:
