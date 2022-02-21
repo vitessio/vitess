@@ -19,7 +19,6 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
-	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -470,12 +469,12 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 		}
 
 	case sqltypes.IsNumber(typ):
-		v1cast := borrow()
-		v2cast := borrow()
+		v1cast := borrowEvalResult()
+		v2cast := borrowEvalResult()
 
 		defer func() {
-			erpool.Put(v1cast)
-			erpool.Put(v2cast)
+			v1cast.unborrow()
+			v2cast.unborrow()
 		}()
 
 		if err := v1cast.setValueCast(v1, typ); err != nil {
@@ -536,16 +535,4 @@ func minmax(v1, v2 sqltypes.Value, min bool, collation collations.ID) (sqltypes.
 		return v1, nil
 	}
 	return v2, nil
-}
-
-var erpool = sync.Pool{
-	New: func() interface{} {
-		return &EvalResult{}
-	},
-}
-
-func borrow() *EvalResult {
-	er := erpool.Get().(*EvalResult)
-	er.flags_ = 0
-	return er
 }
