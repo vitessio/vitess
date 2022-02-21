@@ -264,9 +264,9 @@ docker_bootstrap_pull:
 
 
 define build_docker_image
-	# Fix permissions before copying files, to avoid AUFS bug.
 	${info Building ${2}}
-	chmod -R o=g *;
+	# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
+	chmod -R o=rx *;
 	docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
 endef
 
