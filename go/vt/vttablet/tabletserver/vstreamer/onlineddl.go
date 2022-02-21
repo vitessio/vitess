@@ -68,6 +68,7 @@ func (vs *vstreamer) sendVEventsForOnlineDDLMigrations(materializedTable string)
 		vs.vschema.aliasTable(table.materializedTable, table.mysqlTable)
 		vevents = append(vevents, vevent)
 	}
+	log.Infof("sendVEventsForOnlineDDLMigrations sending events %+v", vevents)
 	if len(vevents) > 0 {
 		if err := vs.send(vevents); err != nil {
 			return err
@@ -77,7 +78,7 @@ func (vs *vstreamer) sendVEventsForOnlineDDLMigrations(materializedTable string)
 }
 
 func (vs *vstreamer) getActiveOnlineDDLMigrations(materializedTable string) ([]*onlineDDLMigrationsTable, error) {
-	log.Infof("getActiveOnlineDDLMigrations")
+	log.Infof("getActiveOnlineDDLMigrations for %s", materializedTable)
 	var tables []*onlineDDLMigrationsTable
 	query := "select migration_uuid, mysql_table, materialized_table from _vt.schema_migrations where migration_status IN ('queued', 'ready', 'running') and materialized_table != ''"
 	conn, err := vs.cp.Connect(vs.ctx)
@@ -102,6 +103,7 @@ func (vs *vstreamer) getActiveOnlineDDLMigrations(materializedTable string) ([]*
 		}
 		tables = append(tables, table)
 	}
+	log.Infof("getActiveOnlineDDLMigrations returns %+v", tables)
 	return tables, nil
 }
 

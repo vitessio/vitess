@@ -34,6 +34,7 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		execVtgateQuery(t, conn, database, string(query))
 	}
 }
+
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)

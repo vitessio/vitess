@@ -19,5 +19,7 @@ insert into `Lead`(`Lead-id`, name) values (x'02BD00987932461E8820C908E84BAE', '
 insert into `Lead`(`Lead-id`, name) values (x'02BD00987932461E8820C908E84BAF', 'fff');
 insert into `Lead`(`Lead-id`, name) values (x'02BD00987932461E8820C908E84BAD', 'ddd');
 insert into `Lead`(`Lead-id`, name) values (x'02BD00987932461E8820C908E84BAC', 'ccc');
+insert into `Lead`(`Lead-id`, name) values (x'02BD00987932461E8820C908E84BAA', 'aaa');
+insert into `Lead`(`Lead-id`, name) values (x'02BD00987932461E8820C908E84BAB', 'bbb');
 insert into `Lead-1` select * from `Lead`;
 

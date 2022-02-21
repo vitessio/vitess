@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -59,13 +61,24 @@ func completeOnlineDDL(t *testing.T, keyspace, uuid string) {
 }
 
 const (
+	// 	Case 1. Online DDL ALTER is started after Reshard and completed before cutover: table should have the new schema after cutover
 	case1Ddl    = "ALTER TABLE customer ADD COLUMN description varchar(20) NOT NULL;"
 	case1Update = "update customer set description = concat('cust-', cid)"
+	enableCase1 = false
+
+	//  Case 2: Online DDL ALTER is started before Reshard starts and completed after it starts:
+	case2Ddl    = "ALTER TABLE `Lead` ADD COLUMN description varchar(64) NOT NULL;"
+	case2Update = "update `Lead` set description = concat('Lead-id-', md5(`Lead-id`))"
+	enableCase2 = false
+
+	//  Case 3: Online DDL ALTER is started before Reshard starts and completed after it ends:
+	case3Ddl    = "ALTER TABLE `Lead-1` ADD COLUMN description varchar(64) NOT NULL;"
+	case3Update = "update `Lead-1` set description = concat('Lead1-', md5(`Lead`))"
+	enableCase3 = true
 )
 
 // TestOnlineDDLsDuringReshard validates that tables participating in online ddls do the right thing during reshard
-// 	Case 1. Online DDL is started after Reshard and completed before cutover: table should have the new schema after cutover
-
+// for the use cases defined above
 func TestOnlineDDLsDuringReshard(t *testing.T) {
 	cellName := "zone1"
 	unshardedKeyspaceName := "product"
@@ -110,25 +123,30 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 	}
 	ksWorkflow = fmt.Sprintf("%s.%s", shardedKeyspaceName, workflowName)
 
-	//uuidLead := createOnlineDDL(t, shardedKeyspaceName, "ALTER TABLE `Lead` ADD COLUMN description varchar(20) NOT NULL;")
-
+	var case1Uuid, case2Uuid, case3Uuid string
+	if enableCase2 {
+		case2Uuid = createOnlineDDL(t, shardedKeyspaceName, case2Ddl)
+	}
 	err = tstWorkflowExec(t, defaultCellName, workflowName, shardedKeyspaceName, shardedKeyspaceName, "", workflowActionCreate, "", "80-", "80-c0,c0-")
 	require.NoError(t, err)
 
-	targetTab1 = ks.Shards["80-c0"].Tablets["zone1-400"].Vttablet
-	targetTab2 = ks.Shards["c0-"].Tablets["zone1-500"].Vttablet
+	targetTab1 = vc.getPrimaryTablet(t, shardedKeyspaceName, "80-c0")
+	targetTab2 = vc.getPrimaryTablet(t, shardedKeyspaceName, "c0-")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
 
-	//status := waitForMigrationStatus(t, vtgateConn, uuidLead, shardedKeyspaceName, 2, 20*time.Second, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusFailed)
-	//require.NotEqual(t, schema.OnlineDDLStatusFailed, status)
-	//completeOnlineDDL(t, shardedKeyspaceName, uuidLead)
-	//execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "update `Lead` set description = 'Lead-abc';")
+	if enableCase2 {
+		completeOnlineDDL(t, shardedKeyspaceName, case2Uuid)
+		execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case2Update)
+	}
 
-	//uuidLead1 := createOnlineDDL(t, shardedKeyspaceName, "ALTER TABLE `Lead-1` ADD COLUMN description varchar(20) NOT NULL;")
-	case1Uuid := createOnlineDDL(t, shardedKeyspaceName, case1Ddl)
+	case1Uuid = createOnlineDDL(t, shardedKeyspaceName, case1Ddl)
 	completeOnlineDDL(t, shardedKeyspaceName, case1Uuid)
 	execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case1Update)
+
+	if enableCase3 {
+		case3Uuid = createOnlineDDL(t, shardedKeyspaceName, case3Ddl)
+	}
 
 	waitForLowLag(t, shardedKeyspaceName, workflowName)
 	vdiff(t, ksWorkflow, "")
@@ -137,15 +155,39 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 	}
 	require.Nil(t, vdiffError)
 
-	//switch traffic for reshard
+	// complete Reshard
 	err = tstWorkflowExec(t, defaultCellName, workflowName, shardedKeyspaceName, shardedKeyspaceName, "", workflowActionSwitchTraffic, "", "", "")
 	require.NoError(t, err)
 
-	//completeOnlineDDL(t, shardedKeyspaceName, uuidLead1)
-	//execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "update `Lead-1` set description = 'Lead1-abc';")
+	if enableCase3 {
+		completeOnlineDDL(t, shardedKeyspaceName, case3Uuid)
+		execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case3Update)
+	}
+	if enableCase1 {
+		customerRS := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from customer")
+		require.NotNil(t, customerRS)
+		require.Equal(t, customerRS.Named().Row().AsInt64("cnt", -1), 3)
+		customerRS = execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from customer where description = ''")
+		require.NotNil(t, customerRS)
+		require.Equal(t, customerRS.Named().Row().AsInt64("cnt", -1), 0)
+	}
+	if enableCase2 {
+		customerLead := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead`")
+		require.NotNil(t, customerLead)
+		require.Equal(t, customerLead.Named().Row().AsInt64("cnt", -1), 6)
+		customerLead = execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead` where description = ''")
+		require.NotNil(t, customerLead)
+		require.Equal(t, customerLead.Named().Row().AsInt64("cnt", -1), 0)
+	}
 
-	// todo: add explicit checks for expectation of each case
-
+	if enableCase3 {
+		customerLead1 := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead-1`")
+		require.NotNil(t, customerLead1)
+		require.Equal(t, customerLead1.Named().Row().AsInt64("cnt", -1), 6)
+		customerLead1 = execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead-1` where description = ''")
+		require.NotNil(t, customerLead1)
+		require.Equal(t, customerLead1.Named().Row().AsInt64("cnt", -1), 0)
+	}
 }
 
 // waitForMigrationStatus waits for a migration to reach one of the provided statuses
@@ -155,9 +197,9 @@ func waitForMigrationStatus(t *testing.T, vtgateConn *mysql.Conn, uuid, keyspace
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a", sqltypes.StringBindVariable(uuid))
 	require.NoError(t, err)
 
-	statusesMap := map[string]bool{}
+	statusMap := map[string]bool{}
 	for _, status := range expectStatuses {
-		statusesMap[string(status)] = true
+		statusMap[string(status)] = true
 	}
 	startTime := time.Now()
 	lastKnownStatus := ""
@@ -167,9 +209,10 @@ func waitForMigrationStatus(t *testing.T, vtgateConn *mysql.Conn, uuid, keyspace
 		require.NoError(t, err)
 		for _, row := range qr.Named().Rows {
 			lastKnownStatus = row["migration_status"].ToString()
-			if statusesMap[lastKnownStatus] {
+			if statusMap[lastKnownStatus] {
 				countMatchedShards++
 			}
+			log.Infof("Uuid %s, Status %s, Shard %s", row["migration_context"], lastKnownStatus, row["shard"])
 		}
 		if countMatchedShards == numShards {
 			return schema.OnlineDDLStatus(lastKnownStatus)
