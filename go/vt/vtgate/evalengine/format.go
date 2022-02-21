@@ -185,3 +185,31 @@ func (b *BitwiseNotExpr) format(buf *formatter, depth int) {
 	buf.WriteByte('~')
 	b.Inner.format(buf, depth)
 }
+
+func (c *ConvertExpr) format(buf *formatter, depth int) {
+	buf.WriteString("CONVERT(")
+	c.Inner.format(buf, depth)
+	buf.WriteString(", ")
+
+	switch {
+	case c.HasLength && c.HasScale:
+		fmt.Fprintf(buf, ", %s(%d,%d)", c.Type, c.Length, c.Scale)
+	case c.HasLength:
+		fmt.Fprintf(buf, ", %s(%d)", c.Type, c.Length)
+	default:
+		fmt.Fprintf(buf, ", %s", c.Type)
+	}
+	if c.Collation != collations.Unknown {
+		buf.WriteString(" CHARACTER SET ")
+		buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
+	}
+	buf.WriteByte(')')
+}
+
+func (c *ConvertUsingExpr) format(buf *formatter, depth int) {
+	buf.WriteString("CONVERT(")
+	c.Inner.format(buf, depth)
+	buf.WriteString(" USING ")
+	buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
+	buf.WriteByte(')')
+}

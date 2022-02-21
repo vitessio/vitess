@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -45,21 +47,37 @@ func knownBadQuery(expr Expr) bool {
 
 var errKnownBadQuery = errors.New("this query is known to give bad results in MySQL")
 
-func testSingle(t *testing.T, query string) (EvalResult, error) {
+func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := ConvertEx(astExpr, LookupDefaultCollation(255), true)
+	converted, err := TranslateEx(astExpr, LookupDefaultCollation(collations.CollationUtf8mb4ID), simplify)
 	if err == nil {
 		if knownBadQuery(converted) {
-			return EvalResult{}, errKnownBadQuery
+			return nil, errKnownBadQuery
 		}
-		return EnvWithBindVars(nil, 255).Evaluate(converted)
+		return converted, nil
+	}
+	return nil, err
+}
+
+func testSingle(t *testing.T, query string) (EvalResult, error) {
+	converted, err := convert(t, query, true)
+	if err == nil {
+		return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).Evaluate(converted)
 	}
 	return EvalResult{}, err
+}
+
+func testSingleType(t *testing.T, query string) (sqltypes.Type, error) {
+	converted, err := convert(t, query, false)
+	if err == nil {
+		return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).TypeOf(converted)
+	}
+	return 0, err
 }
 
 func TestMySQLGolden(t *testing.T) {
@@ -118,6 +136,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT WEIGHT_STRING(0x1234 as char(12))`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
+	eval, err := testSingleType(t, `SELECT --9223372036854775808`)
+	t.Logf("eval=%s err=%v", eval.String(), err) // want value=""
 }

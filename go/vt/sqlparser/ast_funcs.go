@@ -1174,8 +1174,6 @@ func (op UnaryExprOperator) ToString() string {
 		return TildaStr
 	case BangOp:
 		return BangStr
-	case BinaryOp:
-		return BinaryStr
 	case NStringOp:
 		return NStringStr
 	default:
@@ -1210,18 +1208,6 @@ func (dir OrderDirection) ToString() string {
 		return DescScr
 	default:
 		return "Unknown OrderDirection"
-	}
-}
-
-// ToString returns the operator as a string
-func (op ConvertTypeOperator) ToString() string {
-	switch op {
-	case NoOperator:
-		return NoOperatorStr
-	case CharacterSetOp:
-		return CharacterSetStr
-	default:
-		return "Unknown ConvertTypeOperator"
 	}
 }
 

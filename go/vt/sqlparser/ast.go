@@ -2163,15 +2163,11 @@ func (ListArg) iColTuple()   {}
 
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
-	Type     string
-	Length   *Literal
-	Scale    *Literal
-	Operator ConvertTypeOperator
-	Charset  string
+	Type    string
+	Length  *Literal
+	Scale   *Literal
+	Charset string
 }
-
-// ConvertTypeOperator is an enum for ConvertType.Operator
-type ConvertTypeOperator int8
 
 // GroupBy represents a GROUP BY clause.
 type GroupBy []Expr

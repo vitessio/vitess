@@ -34,7 +34,7 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *physical.Vindex) 
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
 	}
 
-	expr, err := evalengine.Convert(op.Value, ctx.SemTable)
+	expr, err := evalengine.Translate(op.Value, ctx.SemTable)
 	if err != nil {
 		return nil, err
 	}
