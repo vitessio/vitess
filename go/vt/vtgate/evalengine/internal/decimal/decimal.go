@@ -386,7 +386,7 @@ func NewFromFloat32(value float32) Decimal {
 func (d Decimal) Copy() Decimal {
 	d.ensureInitialized()
 	return Decimal{
-		value: &(*d.value),
+		value: new(big.Int).Set(d.value),
 		exp:   d.exp,
 	}
 }
