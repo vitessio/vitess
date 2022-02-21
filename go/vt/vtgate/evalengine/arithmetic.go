@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
