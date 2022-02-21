@@ -343,7 +343,7 @@ func (er *EvalResult) truncate(size int) {
 	case sqltypes.VarBinary:
 		if size > len(er.bytes_) {
 			pad := make([]byte, size)
-			_ = append(pad[:0], er.bytes_...)
+			copy(pad, er.bytes_)
 			er.bytes_ = pad
 		} else {
 			er.bytes_ = er.bytes_[:size]
