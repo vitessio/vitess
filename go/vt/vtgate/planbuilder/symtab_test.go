@@ -195,7 +195,7 @@ func TestGetReturnType(t *testing.T) {
 		output      querypb.Type
 		expectedErr error
 	}{{
-		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("abs"), Exprs: sqlparser.SelectExprs{
+		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Abs"), Exprs: sqlparser.SelectExprs{
 			&sqlparser.AliasedExpr{
 				Expr: &sqlparser.ColName{
 					Name: sqlparser.NewColIdent("A"),
@@ -220,7 +220,7 @@ func TestGetReturnType(t *testing.T) {
 		output:      querypb.Type_INT64,
 		expectedErr: nil,
 	}, {
-		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("abs"), Exprs: sqlparser.SelectExprs{
+		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Abs"), Exprs: sqlparser.SelectExprs{
 			&sqlparser.StarExpr{},
 		}},
 		expectedErr: fmt.Errorf("cannot evaluate return type for *sqlparser.FuncExpr"),
