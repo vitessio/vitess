@@ -172,6 +172,16 @@ func newVCursorImpl(
 	}, nil
 }
 
+// HasSystemVariables returns whether the session has set system variables or not
+func (vc *vcursorImpl) HasSystemVariables() bool {
+	return vc.safeSession.HasSystemVariables()
+}
+
+// GetSystemVariables takes a visitor function that will save each system variables of the session
+func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
+	vc.safeSession.GetSystemVariables(f)
+}
+
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
@@ -745,6 +755,11 @@ func (vc *vcursorImpl) SetSessionEnableSystemSettings(allow bool) error {
 // GetSessionEnableSystemSettings implements the SessionActions interface
 func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
 	return vc.safeSession.GetSessionEnableSystemSettings()
+}
+
+// GetEnableSetVar implements the SessionActions interface
+func (vc *vcursorImpl) GetEnableSetVar() bool {
+	return vc.safeSession.GetEnableSetVar()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface
