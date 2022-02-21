@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -192,6 +193,11 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	}
 	var url, file, versionFile string
 	dbType = strings.ToLower(dbType)
+
+	// This currently only supports x86_64 linux
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return fmt.Errorf("downloadDBTypeVersion() only supports x86_64 linux, current test environment is %s %s", runtime.GOARCH, runtime.GOOS)
+	}
 
 	if dbType == "mysql" && majorVersion == "5.7" {
 		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar.gz"

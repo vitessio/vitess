@@ -269,6 +269,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		// both sides are actually different.
 		if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
 			for i := range dr.ExtraRowsSourceDiffs {
+				foundMatch := false
 				for j := range dr.ExtraRowsTargetDiffs {
 					if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
 						dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
@@ -277,10 +278,22 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 						dr.ExtraRowsTarget--
 						dr.ProcessedRows--
 						dr.MatchingRows++
+						foundMatch = true
 						break
 					}
 				}
+				// If we didn't find a match then the tables are in fact different and we can short circuit the second pass
+				if !foundMatch {
+					break
+				}
 			}
+		}
+		// We can now trim the extra rows diffs on both sides to the maxVDiffReportSampleRows value
+		if len(dr.ExtraRowsSourceDiffs) > maxVDiffReportSampleRows {
+			dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxVDiffReportSampleRows-1]
+		}
+		if len(dr.ExtraRowsTargetDiffs) > maxVDiffReportSampleRows {
+			dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxVDiffReportSampleRows-1]
 		}
 		diffReports[table] = dr
 	}
@@ -302,16 +315,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			for i, rs := range dr.ExtraRowsSourceDiffs {
 				wr.Logger().Printf("\tSample extra row in source %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
-				if i == maxVDiffReportSampleRows {
-					break
-				}
 			}
 			for i, rs := range dr.ExtraRowsTargetDiffs {
 				wr.Logger().Printf("\tSample extra row in target %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
-				if i == maxVDiffReportSampleRows {
-					break
-				}
 			}
 			for i, rs := range dr.MismatchedRowsSample {
 				wr.Logger().Printf("\tSample rows with mismatch %v:\n", i)
