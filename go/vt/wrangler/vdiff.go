@@ -17,10 +17,10 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -56,17 +56,20 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// At most how many samples we should show for row differences in the final report
+const maxVDiffReportSampleRows = 10
+
 // DiffReport is the summary of differences for one table.
 type DiffReport struct {
-	ProcessedRows         int
-	MatchingRows          int
-	MismatchedRows        int
-	ExtraRowsSource       int
-	ExtraRowsSourceSample []*RowDiff
-	ExtraRowsTarget       int
-	ExtraRowsTargetSample []*RowDiff
-	MismatchedRowsSample  []*DiffMismatch
-	TableName             string
+	ProcessedRows        int
+	MatchingRows         int
+	MismatchedRows       int
+	ExtraRowsSource      int
+	ExtraRowsSourceDiffs []*RowDiff
+	ExtraRowsTarget      int
+	ExtraRowsTargetDiffs []*RowDiff
+	MismatchedRowsSample []*DiffMismatch
+	TableName            string
 }
 
 // DiffMismatch is a sample of row diffs between source and target.
@@ -103,9 +106,9 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex          int  // index of the column in the filter's select
-	weightStringIndex int  // index of the weight_string() requested for each text column
-	isPK              bool // is this column part of the primary key
+	colIndex  int                  // index of the column in the filter's select
+	collation collations.Collation // is the collation of the column, if any
+	isPK      bool                 // is this column part of the primary key
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -151,7 +154,8 @@ type shardStreamer struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr string,
-	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool) (map[string]*DiffReport, error) {
+	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool,
+	maxExtraRowsToCompare int) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
@@ -254,11 +258,43 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, err
 		}
 		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, &rowsToCompare, debug, onlyPks)
+		dr, err := td.diff(ctx, &rowsToCompare, debug, onlyPks, maxExtraRowsToCompare)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
 		dr.TableName = table
+		// If the only difference is the order in which the rows were returned
+		// by MySQL on each side then we'll have the same number of extras on
+		// both sides. If that's the case, then let's see if the extra rows on
+		// both sides are actually different.
+		if (dr.ExtraRowsSource == dr.ExtraRowsTarget) && (dr.ExtraRowsSource <= maxExtraRowsToCompare) {
+			for i := range dr.ExtraRowsSourceDiffs {
+				foundMatch := false
+				for j := range dr.ExtraRowsTargetDiffs {
+					if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
+						dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs[:i], dr.ExtraRowsSourceDiffs[i+1:]...)
+						dr.ExtraRowsSource--
+						dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs[:j], dr.ExtraRowsTargetDiffs[j+1:]...)
+						dr.ExtraRowsTarget--
+						dr.ProcessedRows--
+						dr.MatchingRows++
+						foundMatch = true
+						break
+					}
+				}
+				// If we didn't find a match then the tables are in fact different and we can short circuit the second pass
+				if !foundMatch {
+					break
+				}
+			}
+		}
+		// We can now trim the extra rows diffs on both sides to the maxVDiffReportSampleRows value
+		if len(dr.ExtraRowsSourceDiffs) > maxVDiffReportSampleRows {
+			dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxVDiffReportSampleRows-1]
+		}
+		if len(dr.ExtraRowsTargetDiffs) > maxVDiffReportSampleRows {
+			dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxVDiffReportSampleRows-1]
+		}
 		diffReports[table] = dr
 	}
 	if format == "json" {
@@ -276,11 +312,11 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			wr.Logger().Printf("\tMismatchedRows: %v\n", dr.MismatchedRows)
 			wr.Logger().Printf("\tExtraRowsSource: %v\n", dr.ExtraRowsSource)
 			wr.Logger().Printf("\tExtraRowsTarget: %v\n", dr.ExtraRowsTarget)
-			for i, rs := range dr.ExtraRowsSourceSample {
+			for i, rs := range dr.ExtraRowsSourceDiffs {
 				wr.Logger().Printf("\tSample extra row in source %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
 			}
-			for i, rs := range dr.ExtraRowsTargetSample {
+			for i, rs := range dr.ExtraRowsTargetDiffs {
 				wr.Logger().Printf("\tSample extra row in target %v:\n", i)
 				formatSampleRow(wr.Logger(), rs, debug)
 			}
@@ -483,18 +519,11 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	// Start with adding all columns for comparison.
 	td.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
 	for i := range td.compareCols {
+		td.compareCols[i].colIndex = i
 		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
-		typ, ok := fields[colname]
+		_, ok := fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v", colname, table.Name)
-		}
-		td.compareCols[i].colIndex = i
-		if sqltypes.IsText(typ) {
-			// For text columns, we need to additionally pull their weight string values for lexical comparisons.
-			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, wrapWeightString(sourceSelect.SelectExprs[i]))
-			targetSelect.SelectExprs = append(targetSelect.SelectExprs, wrapWeightString(targetSelect.SelectExprs[i]))
-			// Update the column number to point at the weight_string column instead.
-			td.compareCols[i].weightStringIndex = len(sourceSelect.SelectExprs) - 1
 		}
 	}
 
@@ -557,10 +586,12 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 	ob := make([]engine.OrderByParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		weightStringCol := -1
-		if cpk.weightStringIndex != cpk.colIndex {
-			weightStringCol = cpk.weightStringIndex
+		// if the collation is nil or unknown, use binary collation to compare as bytes
+		if cpk.collation == nil {
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: collations.CollationBinaryID})
+		} else {
+			ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation.ID()})
 		}
-		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -918,7 +949,7 @@ func humanInt(n int64) string {
 //-----------------------------------------------------------------
 // tableDiffer
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool, maxExtraRowsToCompare int) (*DiffReport, error) {
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
 	dr := &DiffReport{}
@@ -960,7 +991,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
 			}
-			dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample, diffRow)
+			dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 
 			// drain target, update count
 			count, err := targetExecutor.drain(ctx)
@@ -978,7 +1009,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			if err != nil {
 				return nil, vterrors.Wrap(err, "unexpected error generating diff")
 			}
-			dr.ExtraRowsSourceSample = append(dr.ExtraRowsTargetSample, diffRow)
+			dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
 
 			count, err := sourceExecutor.drain(ctx)
 			if err != nil {
@@ -997,23 +1028,23 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		case err != nil:
 			return nil, err
 		case c < 0:
-			if dr.ExtraRowsSource < 10 {
+			if dr.ExtraRowsSource < maxExtraRowsToCompare {
 				diffRow, err := td.genRowDiff(td.sourceExpression, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				dr.ExtraRowsSourceSample = append(dr.ExtraRowsTargetSample, diffRow)
+				dr.ExtraRowsSourceDiffs = append(dr.ExtraRowsSourceDiffs, diffRow)
 			}
 			dr.ExtraRowsSource++
 			advanceTarget = false
 			continue
 		case c > 0:
-			if dr.ExtraRowsTarget < 10 {
+			if dr.ExtraRowsTarget < maxExtraRowsToCompare {
 				diffRow, err := td.genRowDiff(td.targetExpression, targetRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
 				}
-				dr.ExtraRowsTargetSample = append(dr.ExtraRowsTargetSample, diffRow)
+				dr.ExtraRowsTargetDiffs = append(dr.ExtraRowsTargetDiffs, diffRow)
 			}
 			dr.ExtraRowsTarget++
 			advanceSource = false
@@ -1021,13 +1052,14 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		}
 
 		// c == 0
-		// Compare non-pk values.
+		// Compare the non-pk values.
 		c, err = td.compare(sourceRow, targetRow, td.compareCols, true)
 		switch {
 		case err != nil:
 			return nil, err
 		case c != 0:
-			if dr.MismatchedRows < 10 {
+			// We don't do a second pass to compare mismatched rows so we can cap the slice here
+			if dr.MismatchedRows < maxVDiffReportSampleRows {
 				sourceDiffRow, err := td.genRowDiff(td.targetExpression, sourceRow, debug, onlyPks)
 				if err != nil {
 					return nil, vterrors.Wrap(err, "unexpected error generating diff")
@@ -1051,29 +1083,16 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 			continue
 		}
 		compareIndex := col.colIndex
-		// This detects if we are using weight_string() to compare this (text) column.
-		// If either source or target weight_string is null we fallback to a byte compare for text columns
-		if !sourceRow[col.weightStringIndex].IsNull() && sourceRow[col.colIndex].IsText() &&
-			!targetRow[col.weightStringIndex].IsNull() && targetRow[col.colIndex].IsText() &&
-			col.weightStringIndex > col.colIndex {
-			compareIndex = col.weightStringIndex
-		}
 		var c int
 		var err error
-		if sourceRow[compareIndex].IsText() && targetRow[compareIndex].IsText() {
-			srowBytes, err := sourceRow[compareIndex].ToBytes()
-			if err != nil {
-				return 0, err
-			}
-			trowBytes, err := targetRow[compareIndex].ToBytes()
-			if err != nil {
-				return 0, err
-			}
-			c = bytes.Compare(srowBytes, trowBytes)
+		var collationID collations.ID
+		// if the collation is nil or unknown, use binary collation to compare as bytes
+		if col.collation == nil {
+			collationID = collations.CollationBinaryID
 		} else {
-			// TODO(king-11) make collation aware
-			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collations.Unknown)
+			collationID = col.collation.ID()
 		}
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collationID)
 		if err != nil {
 			return 0, err
 		}
@@ -1210,19 +1229,6 @@ func removeExprKeyrange(node sqlparser.Expr) sqlparser.Expr {
 func isFuncKeyrange(expr sqlparser.Expr) bool {
 	funcExpr, ok := expr.(*sqlparser.FuncExpr)
 	return ok && funcExpr.Name.EqualString("in_keyrange")
-}
-
-func wrapWeightString(expr sqlparser.SelectExpr) *sqlparser.AliasedExpr {
-	return &sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name: sqlparser.NewColIdent("weight_string"),
-			Exprs: []sqlparser.SelectExpr{
-				&sqlparser.AliasedExpr{
-					Expr: expr.(*sqlparser.AliasedExpr).Expr,
-				},
-			},
-		},
-	}
 }
 
 func formatSampleRow(logger logutil.Logger, rd *RowDiff, debug bool) {
