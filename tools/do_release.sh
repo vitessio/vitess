@@ -79,10 +79,10 @@ function updateJava () {
 # Second argument is the Vitess Operator version
 function updateVitessOperatorExample () {
   vtop_example_files=$(find -E $ROOT/examples/operator -name "*.yaml")
-  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:$1/g" $vtop_example_files
-  sed -i.bak -E "s/vitess\/lite:(.*)-mysql80/vitess\/lite:$1-mysql80/g" $(find -E $ROOT/examples/operator -name "*.md")
+  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:v$1/g" $vtop_example_files
+  sed -i.bak -E "s/vitess\/lite:(.*)-mysql80/vitess\/lite:v$1-mysql80/g" $(find -E $ROOT/examples/operator -name "*.md")
   if [ "$2" != "" ]; then
-  		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$2/g" $vtop_example_files
+  		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:v$2/g" $vtop_example_files
   fi
   rm -f $(find -E $ROOT/examples/operator -regex ".*.(md|yaml).bak")
 }
