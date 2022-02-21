@@ -100,7 +100,7 @@ nextLevel:
 			if l != r || !lok || !rok {
 				break
 			}
-			if fastleft.Level() != level || fastleft.Level() != level {
+			if fastleft.Level() != level || fastright.Level() != level {
 				break
 			}
 		}
