@@ -231,7 +231,6 @@ var decimals = []string{
 	"123.45", "-12345", "-12221.55",
 	"-123.45", "12345", "12221.55",
 	"5", "-6.0", "-1.0",
-	"", "+", "-",
 	"0.", "1.",
 	"99999999999999999999.99999999999999999999",
 	"999999999999999999",
@@ -268,7 +267,10 @@ func BenchmarkDecimalParsing(b *testing.B) {
 }
 
 func TestRoundtrip(t *testing.T) {
-	for _, in := range decimals {
+	var bad = []string{"", "+", "-"}
+	var cases = append(decimals, bad...)
+
+	for _, in := range cases {
 		d, err1 := NewFromString(in)
 		d2, err2 := NewFromMySQL([]byte(in))
 
@@ -283,9 +285,7 @@ func TestRoundtrip(t *testing.T) {
 		if strings.HasPrefix(expected, ".") {
 			expected = "0" + expected
 		}
-		if strings.HasSuffix(expected, ".") {
-			expected = expected[:len(expected)-1]
-		}
+		expected = strings.TrimSuffix(expected, ".")
 		if d.StringMySQL() != expected {
 			t.Errorf("roundtrip(1) %q -> %q", expected, d.StringMySQL())
 		}
@@ -293,4 +293,29 @@ func TestRoundtrip(t *testing.T) {
 			t.Errorf("roundtrip(2) %q -> %q", expected, d2.StringMySQL())
 		}
 	}
+}
+
+func BenchmarkFormatting(b *testing.B) {
+	var parsed = make([]Decimal, 0, len(decimals))
+	for _, dc := range decimals {
+		parsed = append(parsed, RequireFromString(dc))
+	}
+
+	b.Run("FormatMySQL(8)", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for _, dec := range parsed {
+				_ = dec.FormatMySQL(8)
+			}
+		}
+	})
+
+	b.Run("format", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for _, dec := range parsed {
+				_ = dec.format(make([]byte, 0, 10), false)
+			}
+		}
+	})
 }
