@@ -68,7 +68,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	if ins.Action == sqlparser.ReplaceAct {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
-	return buildInsertShardedPlan(ins, vschemaTable)
+	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
 
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engine.Primitive, error) {
@@ -115,7 +115,11 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (eng
 	return eins, nil
 }
 
-func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engine.Primitive, error) {
+func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+	rows, isRowValues := ins.Rows.(sqlparser.Values)
+	if !isRowValues {
+		return buildInsertSelectPlan(ins, table, reservedVars, vschema)
+	}
 	eins := engine.NewSimpleInsert(
 		engine.InsertSharded,
 		table,
@@ -143,18 +147,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 
 	eins.QueryTimeout = queryTimeout(directives)
 
-	var rows sqlparser.Values
-	switch insertValues := ins.Rows.(type) {
-	case *sqlparser.Select, *sqlparser.Union:
-		return nil, errors.New("unsupported: insert into select")
-	case sqlparser.Values:
-		rows = insertValues
-		if hasSubquery(rows) {
-			return nil, errors.New("unsupported: simpleProjection in insert values")
-		}
-	default:
-		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
-	}
 	for _, value := range rows {
 		if len(ins.Columns) != len(value) {
 			return nil, errors.New("column list doesn't match values")
@@ -184,7 +176,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 			for rowNum, row := range rows {
 				innerpv, err := evalengine.Translate(row[colNum], semantics.EmptySemTable())
 				if err != nil {
-					return nil, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
+					return nil, err
 				}
 				routeValues[vIdx][colIdx][rowNum] = innerpv
 			}
@@ -204,6 +196,92 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
 	return eins, nil
+}
+
+// buildInsertSelectPlan builds a s
+func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+	if ins.Ignore || ins.OnDup != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert using select with ignore/on duplicate")
+	}
+	if table.AutoIncrement != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert using select with auto-inc table")
+	}
+	if len(ins.Columns) == 0 {
+		if !table.ColumnListAuthoritative {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "insert should contain column list or the table should have authoritative columns in vschema")
+		}
+		populateInsertColumnlist(ins, table)
+	}
+
+	var selectStmt sqlparser.SelectStatement
+	var configuredPlanner selectPlanner
+	var err error
+	switch stmt := ins.Rows.(type) {
+	case *sqlparser.Select:
+		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
+		if err != nil {
+			return nil, err
+		}
+		selectStmt = stmt
+	case *sqlparser.Union:
+		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
+		if err != nil {
+			return nil, err
+		}
+		selectStmt = stmt
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert plan with %T", ins.Rows)
+	}
+	// Override the locking with `for update` to lock the rows for inserting the data.
+	selectStmt.SetLock(sqlparser.ForUpdateLock)
+
+	plan, err := configuredPlanner(selectStmt, reservedVars, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	eins := engine.NewSimpleInsert(
+		engine.InsertSelect,
+		table,
+		table.Keyspace,
+	)
+	eins.Input = plan
+
+	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
+		eins.MultiShardAutocommit = true
+	}
+	eins.QueryTimeout = queryTimeout(directives)
+
+	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
+	var colVindexes []*vindexes.ColumnVindex
+	for _, colVindex := range eins.Table.ColumnVindexes {
+		if colVindex.IgnoreInDML() {
+			continue
+		}
+		colVindexes = append(colVindexes, colVindex)
+	}
+	eins.ColVindexes = colVindexes
+
+	vv := make([][]int, len(colVindexes))
+	for idx, colVindex := range colVindexes {
+		for _, col := range colVindex.Columns {
+			vv[idx] = append(vv[idx], findColumn(ins, col))
+		}
+	}
+	eins.VindexValueOffset = vv
+	return eins, nil
+}
+
+// findColumn returns the column index where it is placed on the insert column list.
+// Otherwise, return -1 when not found.
+func findColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
+	for i, column := range ins.Columns {
+		if col.Equal(column) {
+			return i
+		}
+	}
+	return -1
 }
 
 func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
@@ -247,7 +325,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 
 		pv, err := evalengine.Translate(row[colNum], semantics.EmptySemTable())
 		if err != nil {
-			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
+			return err
 		}
 		autoIncValues = append(autoIncValues, pv)
 		row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
@@ -264,10 +342,9 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 // findOrAddColumn finds the position of a column in the insert. If it's
 // absent it appends it to the with NULL values and returns that position.
 func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
-	for i, column := range ins.Columns {
-		if col.Equal(column) {
-			return i
-		}
+	colNum := findColumn(ins, col)
+	if colNum >= 0 {
+		return colNum
 	}
 	ins.Columns = append(ins.Columns, col)
 	rows := ins.Rows.(sqlparser.Values)

@@ -1294,7 +1294,7 @@ Gen4 plan same as above
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
-"could not compute value for vindex or auto-inc column: column access not supported here"
+"column access not supported here"
 Gen4 plan same as above
 
 # insert invalid table
@@ -3184,6 +3184,38 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
+  }
+}
+Gen4 plan same as above
+
+# insert using select with simple table.
+"insert into music(id, user_id) select * from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into music(id, user_id) select * from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` for update",
+        "Table": "`user`"
+      }
+    ]
   }
 }
 Gen4 plan same as above
