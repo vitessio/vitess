@@ -47,8 +47,8 @@ type (
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
+		InsertRows
 		iSelectStatement()
-		iInsertRows()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
