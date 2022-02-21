@@ -514,7 +514,7 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 					return err
 				}
 
-				evalExpr, err := evalengine.Convert(expr, nil)
+				evalExpr, err := evalengine.Translate(expr, nil)
 				if err != nil {
 					return err
 				}

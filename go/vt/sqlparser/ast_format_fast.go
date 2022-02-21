@@ -1737,8 +1737,7 @@ func (node *ConvertType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(')')
 	}
 	if node.Charset != "" {
-		buf.WriteString(node.Operator.ToString())
-		buf.WriteByte(' ')
+		buf.WriteString(" character set ")
 		buf.WriteString(node.Charset)
 	}
 }

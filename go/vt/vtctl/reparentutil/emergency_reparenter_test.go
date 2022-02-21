@@ -1371,7 +1371,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 	}
 
-	_ = SetDurabilityPolicy("none", nil)
+	_ = SetDurabilityPolicy("none")
 	for _, tt := range tests {
 		tt := tt
 
@@ -2207,7 +2207,7 @@ func TestEmergencyReparenterCounters(t *testing.T) {
 	ersCounter.Set(0)
 	ersSuccessCounter.Set(0)
 	ersFailureCounter.Set(0)
-	_ = SetDurabilityPolicy("none", nil)
+	_ = SetDurabilityPolicy("none")
 
 	emergencyReparentOps := EmergencyReparentOptions{}
 	tmc := &testutil.TabletManagerClient{
@@ -2600,7 +2600,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		},
 	}
 
-	_ = SetDurabilityPolicy("none", nil)
+	_ = SetDurabilityPolicy("none")
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -2691,7 +2691,7 @@ func TestEmergencyReparenter_checkIfConstraintsSatisfied(t *testing.T) {
 		},
 	}
 
-	_ = SetDurabilityPolicy("none", nil)
+	_ = SetDurabilityPolicy("none")
 	erp := NewEmergencyReparenter(nil, nil, nil)
 
 	for _, testcase := range testcases {
@@ -3740,7 +3740,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_ = SetDurabilityPolicy("none", nil)
+			_ = SetDurabilityPolicy("none")
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)

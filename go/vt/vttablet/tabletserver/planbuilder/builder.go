@@ -51,7 +51,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
-		v, err := evalengine.Convert(nextVal.Expr, semantics.EmptySemTable())
+		v, err := evalengine.Translate(nextVal.Expr, semantics.EmptySemTable())
 		if err != nil {
 			return nil, err
 		}

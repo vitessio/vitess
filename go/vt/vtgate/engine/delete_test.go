@@ -500,7 +500,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 				Keyspace: ks.Keyspace,
 				Vindex:   ks.Vindexes["rg_vdx"],
 				Values: []evalengine.Expr{
-					&evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
+					evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)},
 					evalengine.NewLiteralInt(3),
 				},
 			},
