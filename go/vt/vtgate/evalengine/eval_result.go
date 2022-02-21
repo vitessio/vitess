@@ -23,6 +23,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -1055,4 +1056,20 @@ func newEvalResultNumeric(v sqltypes.Value) (er EvalResult, err error) {
 func newEvalRaw(typ sqltypes.Type, raw []byte) (er EvalResult) {
 	er.setRaw(typ, raw, collations.TypedCollation{})
 	return
+}
+
+var evalResultPool = sync.Pool{
+	New: func() interface{} {
+		return &EvalResult{}
+	},
+}
+
+func borrowEvalResult() *EvalResult {
+	return evalResultPool.Get().(*EvalResult)
+}
+
+func (er *EvalResult) unborrow() {
+	er.flags_ = 0
+	er.type_ = 0
+	evalResultPool.Put(er)
 }
