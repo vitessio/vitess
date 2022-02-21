@@ -34,15 +34,20 @@ var builtinFunctions = map[string]builtin{
 	"greatest":  &builtinMultiComparison{name: "GREATEST", cmp: 1},
 	"least":     &builtinMultiComparison{name: "LEAST", cmp: -1},
 	"collation": builtinCollation{},
-	"isnull":    builtinIsNull{},
 	"bit_count": builtinBitCount{},
 	"hex":       builtinHex{},
+}
+
+var builtinFunctionsRewrite = map[string]builtinRewrite{
+	"isnull": builtinIsNullRewrite,
 }
 
 type builtin interface {
 	call(*ExpressionEnv, []EvalResult, *EvalResult)
 	typeof(*ExpressionEnv, []Expr) (sqltypes.Type, flag)
 }
+
+type builtinRewrite func([]Expr, TranslationLookup) (Expr, error)
 
 type CallExpr struct {
 	Arguments TupleExpr
@@ -239,8 +244,14 @@ func compareAllBinary(args []EvalResult, result *EvalResult, cmp int) {
 	result.setRaw(sqltypes.VarBinary, candidateB, collationBinary)
 }
 
+type argError string
+
+func (err argError) Error() string {
+	return fmt.Sprintf("Incorrect parameter count in the call to native function '%s'", string(err))
+}
+
 func throwArgError(fname string) {
-	panic(evalError{fmt.Errorf("Incorrect parameter count in the call to native function '%s'", fname)})
+	panic(evalError{argError(fname)})
 }
 
 type builtinMultiComparison struct {
@@ -332,17 +343,15 @@ func (builtinCollation) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, fl
 	return sqltypes.VarChar, 0
 }
 
-type builtinIsNull struct{}
-
-func (builtinIsNull) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	result.setBool(args[0].null())
-}
-
-func (builtinIsNull) typeof(_ *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
 	if len(args) != 1 {
-		throwArgError("ISNULL")
+		return nil, argError("ISNULL")
 	}
-	return sqltypes.Int64, 0
+	return &IsExpr{
+		UnaryExpr: UnaryExpr{args[0]},
+		Op:        sqlparser.IsNullOp,
+		Check:     func(er *EvalResult) bool { return er.null() },
+	}, nil
 }
 
 type builtinBitCount struct{}

@@ -317,12 +317,6 @@ func translateIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup Transl
 }
 
 func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, error) {
-	method := fn.Name.Lowered()
-	call, ok := builtinFunctions[method]
-	if !ok {
-		return nil, translateExprNotSupported(fn)
-	}
-
 	var args TupleExpr
 	var aliases []sqlparser.ColIdent
 	for _, expr := range fn.Exprs {
@@ -337,12 +331,23 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 		args = append(args, convertedExpr)
 		aliases = append(aliases, aliased.As)
 	}
-	return &CallExpr{
-		Arguments: args,
-		Aliases:   aliases,
-		Method:    method,
-		F:         call,
-	}, nil
+
+	method := fn.Name.Lowered()
+
+	if rewrite, ok := builtinFunctionsRewrite[method]; ok {
+		return rewrite(args, lookup)
+	}
+
+	if call, ok := builtinFunctions[method]; ok {
+		return &CallExpr{
+			Arguments: args,
+			Aliases:   aliases,
+			Method:    method,
+			F:         call,
+		}, nil
+	}
+
+	return nil, translateExprNotSupported(fn)
 }
 
 func translateIntegral(lit *sqlparser.Literal, lookup TranslationLookup) (int, bool, error) {
