@@ -42,7 +42,7 @@ type (
 		binary(left, right []byte) []byte
 	}
 
-	BitWiseShiftOp interface {
+	BitwiseShiftOp interface {
 		BitwiseOp
 		numeric(num, shift uint64) uint64
 		binary(num []byte, shift uint64) []byte
@@ -74,9 +74,17 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv, result *EvalResult) {
 
 		result.setRaw(sqltypes.VarBinary, out, collationBinary)
 	} else {
-		inner.makeIntegral()
+		inner.makeUnsignedIntegral()
 		result.setUint64(^inner.uint64())
 	}
+}
+
+func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	tt, f := b.Inner.typeof(env)
+	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
+		return sqltypes.VarBinary, f
+	}
+	return sqltypes.Uint64, f
 }
 
 func (o OpBitShiftRight) BitwiseOp() string                { return ">>" }
@@ -192,12 +200,12 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			}
 			result.setRaw(sqltypes.VarBinary, op.binary(b1, b2), collationBinary)
 		} else {
-			l.makeIntegral()
-			r.makeIntegral()
+			l.makeUnsignedIntegral()
+			r.makeUnsignedIntegral()
 			result.setUint64(op.numeric(l.uint64(), r.uint64()))
 		}
 
-	case BitWiseShiftOp:
+	case BitwiseShiftOp:
 		/*
 			The result type depends on whether the bit argument is evaluated as a binary string or number:
 			Binary-string evaluation occurs when the bit argument has a binary string type, and is not a hexadecimal
@@ -205,22 +213,37 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l.bitwiseBinaryString() {
-			r.makeIntegral()
+			r.makeUnsignedIntegral()
 			result.setRaw(sqltypes.VarBinary, op.binary(l.bytes(), r.uint64()), collationBinary)
 		} else {
-			l.makeIntegral()
-			r.makeIntegral()
+			l.makeUnsignedIntegral()
+			r.makeUnsignedIntegral()
 			result.setUint64(op.numeric(l.uint64(), r.uint64()))
 		}
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv) sqltypes.Type {
-	return sqltypes.Uint64
+func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	t1, f1 := bit.Left.typeof(env)
+	t2, f2 := bit.Right.typeof(env)
+
+	switch bit.Op.(type) {
+	case BitwiseBinaryOp:
+		if t1 == sqltypes.VarBinary && t2 == sqltypes.VarBinary &&
+			(f1&(flagHex|flagBit) == 0 || f2&(flagHex|flagBit) == 0) {
+			return sqltypes.VarBinary, f1 | f2
+		}
+	case BitwiseShiftOp:
+		if t1 == sqltypes.VarBinary && (f1&(flagHex|flagBit)) == 0 {
+			return sqltypes.VarBinary, f1 | f2
+		}
+	}
+
+	return sqltypes.Uint64, f1 | f2
 }
 
 var _ BitwiseBinaryOp = (*OpBitAnd)(nil)
 var _ BitwiseBinaryOp = (*OpBitOr)(nil)
 var _ BitwiseBinaryOp = (*OpBitXor)(nil)
-var _ BitWiseShiftOp = (*OpBitShiftLeft)(nil)
-var _ BitWiseShiftOp = (*OpBitShiftRight)(nil)
+var _ BitwiseShiftOp = (*OpBitShiftLeft)(nil)
+var _ BitwiseShiftOp = (*OpBitShiftRight)(nil)

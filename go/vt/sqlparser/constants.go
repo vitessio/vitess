@@ -160,7 +160,6 @@ const (
 	UMinusStr   = "-"
 	TildaStr    = "~"
 	BangStr     = "!"
-	BinaryStr   = "binary "
 	Armscii8Str = "_armscii8"
 	ASCIIStr    = "_ascii"
 	Big5Str     = "_big5"
@@ -206,7 +205,6 @@ const (
 
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
-	NoOperatorStr   = ""
 
 	// CollateAndCharset.Type
 	CollateStr = " collate"
@@ -442,7 +440,6 @@ const (
 	UMinusOp
 	TildaOp
 	BangOp
-	BinaryOp
 	NStringOp
 )
 
@@ -459,12 +456,6 @@ const (
 const (
 	AscOrder OrderDirection = iota
 	DescOrder
-)
-
-// Constant for Enum Type - ConvertTypeOperator
-const (
-	NoOperator ConvertTypeOperator = iota
-	CharacterSetOp
 )
 
 // Constant for Enum Type - IndexHintsType

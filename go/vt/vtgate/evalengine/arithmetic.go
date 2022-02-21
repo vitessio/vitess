@@ -19,8 +19,6 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
-	"math"
-	"os"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -560,7 +558,6 @@ func floatPlusAny(v1 float64, v2 *EvalResult, out *EvalResult) error {
 		return err
 	}
 	add := v1 + v2f
-	fmt.Fprintf(os.Stderr, "%f (%v) + %f (%v) = %f (%v)\n", v1, math.Signbit(v1), v2f, math.Signbit(v2f), add, math.Signbit(add))
 	out.setFloat(add)
 	return nil
 }
@@ -584,7 +581,8 @@ func floatTimesAny(v1 float64, v2 *EvalResult, out *EvalResult) error {
 }
 
 const roundingModeArithmetic = decimal.ToZero
-const roundingModeFormat = decimal.ToNearestEven
+const roundingModeFormat = decimal.ToNearestAway
+const roundingModeIntegerConversion = decimal.ToNearestAway
 
 var decimalContextSQL = decimal.Context{
 	MaxScale:      30,
@@ -617,6 +615,14 @@ func newDecimalInt64(x int64) *decimalResult {
 	var result decimalResult
 	result.num.Context = decimalContextSQL
 	result.num.SetMantScale(x, 0)
+	return &result
+}
+
+func newDecimalFloat64(f float64) *decimalResult {
+	var result decimalResult
+	result.num.Context = decimalContextSQL
+	result.num.SetFloat64(f)
+	result.frac = result.num.Scale()
 	return &result
 }
 
