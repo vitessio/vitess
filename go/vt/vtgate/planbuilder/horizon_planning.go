@@ -902,6 +902,9 @@ func pushAggrOnRoute(
 		if err != nil {
 			return nil, nil, err
 		}
+		if wsCol >= 0 {
+			sel.GroupBy = append(sel.GroupBy, weightStringFor(expr.WeightStrExpr))
+		}
 		groupingOffsets = append(groupingOffsets, offsets{
 			col:   col,
 			wsCol: wsCol,
