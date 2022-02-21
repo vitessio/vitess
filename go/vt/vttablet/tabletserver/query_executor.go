@@ -393,6 +393,8 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
 	case rules.QRFailRetry:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
+	case rules.QRBuffer:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "disallowed/unimplemented due to rule: %s", desc)
 	}
 
 	// Skip ACL check for queries against the dummy dual table

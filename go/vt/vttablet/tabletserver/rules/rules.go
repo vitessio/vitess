@@ -537,6 +537,7 @@ const (
 	QRContinue = Action(iota)
 	QRFail
 	QRFailRetry
+	QRBuffer
 )
 
 // MarshalJSON marshals to JSON.
@@ -548,6 +549,8 @@ func (act Action) MarshalJSON() ([]byte, error) {
 		str = "FAIL"
 	case QRFailRetry:
 		str = "FAIL_RETRY"
+	case QRBuffer:
+		str = "BUFFER"
 	default:
 		str = "INVALID"
 	}
@@ -918,6 +921,8 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 				qr.act = QRFail
 			case "FAIL_RETRY":
 				qr.act = QRFailRetry
+			case "BUFFER":
+				qr.act = QRBuffer
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid Action %s", sv)
 			}
