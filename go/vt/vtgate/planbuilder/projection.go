@@ -42,7 +42,7 @@ var _ logicalPlan = (*projection)(nil)
 func (p *projection) WireupGen4(semTable *semantics.SemTable) error {
 	columns := make([]evalengine.Expr, 0, len(p.columns))
 	for _, expr := range p.columns {
-		convert, err := evalengine.Convert(expr, semTable)
+		convert, err := evalengine.Translate(expr, semTable)
 		if err != nil {
 			return err
 		}
