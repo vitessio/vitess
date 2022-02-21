@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,297 +19,257 @@ package reparentutil
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
-var (
-	primaryTablet = &topodatapb.Tablet{
+func TestDurabilityNone(t *testing.T) {
+	err := SetDurabilityPolicy("none")
+	require.NoError(t, err)
+
+	promoteRule := PromotionRule(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  1,
+			Cell: "cell1",
+			Uid:  100,
 		},
 		Type: topodatapb.TabletType_PRIMARY,
-	}
-	replicaTablet = &topodatapb.Tablet{
+	})
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, PromotionRule(nil))
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  2,
+			Cell: "cell1",
+			Uid:  100,
 		},
 		Type: topodatapb.TabletType_REPLICA,
-	}
-	rdonlyTablet = &topodatapb.Tablet{
+	})
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  3,
+			Cell: "cell1",
+			Uid:  100,
 		},
 		Type: topodatapb.TabletType_RDONLY,
-	}
-	replicaCrossCellTablet = &topodatapb.Tablet{
+	})
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-2",
-			Uid:  2,
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_SPARE,
+	})
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
+	assert.Equal(t, 0, SemiSyncAckers(nil))
+	assert.Equal(t, false, IsReplicaSemiSync(nil, nil))
+}
+
+func TestDurabilitySemiSync(t *testing.T) {
+	err := SetDurabilityPolicy("semi_sync")
+	require.NoError(t, err)
+
+	promoteRule := PromotionRule(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_PRIMARY,
+	})
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
 		},
 		Type: topodatapb.TabletType_REPLICA,
-	}
-	rdonlyCrossCellTablet = &topodatapb.Tablet{
+	})
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-2",
-			Uid:  3,
+			Cell: "cell1",
+			Uid:  100,
 		},
 		Type: topodatapb.TabletType_RDONLY,
-	}
-)
+	})
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
 
-func TestSemiSyncAckersForPrimary(t *testing.T) {
-	tests := []struct {
-		name               string
-		durabilityPolicy   string
-		primary            *topodatapb.Tablet
-		allTablets         []*topodatapb.Tablet
-		wantSemiSyncAckers []*topodatapb.Tablet
-	}{
-		{
-			name:               "no other tablets",
-			durabilityPolicy:   "none",
-			primary:            primaryTablet,
-			allTablets:         []*topodatapb.Tablet{primaryTablet},
-			wantSemiSyncAckers: nil,
-		}, {
-			name:               "'none' durability policy",
-			durabilityPolicy:   "none",
-			primary:            primaryTablet,
-			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
-			wantSemiSyncAckers: nil,
-		}, {
-			name:               "'semi_sync' durability policy",
-			durabilityPolicy:   "semi_sync",
-			primary:            primaryTablet,
-			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
-			wantSemiSyncAckers: []*topodatapb.Tablet{replicaTablet, replicaCrossCellTablet},
-		}, {
-			name:               "'cross_cell' durability policy",
-			durabilityPolicy:   "cross_cell",
-			primary:            primaryTablet,
-			allTablets:         []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet},
-			wantSemiSyncAckers: []*topodatapb.Tablet{replicaCrossCellTablet},
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy)
-			require.NoError(t, err, "error setting durability policy")
-			semiSyncAckers := SemiSyncAckersForPrimary(tt.primary, tt.allTablets)
-			require.Equal(t, tt.wantSemiSyncAckers, semiSyncAckers)
-		})
-	}
+		Type: topodatapb.TabletType_SPARE,
+	})
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
+	assert.Equal(t, 1, SemiSyncAckers(nil))
+	assert.Equal(t, true, IsReplicaSemiSync(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+		Type: topodatapb.TabletType_PRIMARY,
+	}, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_REPLICA,
+	}))
+	assert.Equal(t, false, IsReplicaSemiSync(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+		Type: topodatapb.TabletType_PRIMARY,
+	}, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_EXPERIMENTAL,
+	}))
 }
 
-func TestRevokeForTablet(t *testing.T) {
-	tests := []struct {
-		name             string
-		durabilityPolicy string
-		primaryEligible  *topodatapb.Tablet
-		allTablets       []*topodatapb.Tablet
-		tabletsReached   []*topodatapb.Tablet
-		revoked          bool
-	}{
-		{
-			name:             "'none' durability policy - not revoked",
-			durabilityPolicy: "none",
-			primaryEligible:  primaryTablet,
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			tabletsReached: []*topodatapb.Tablet{
-				replicaTablet, replicaCrossCellTablet, rdonlyTablet, rdonlyCrossCellTablet,
-			},
-			revoked: false,
-		}, {
-			name:             "'none' durability policy - revoked",
-			durabilityPolicy: "none",
-			primaryEligible:  primaryTablet,
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, rdonlyTablet, rdonlyCrossCellTablet,
-			},
-			revoked: true,
-		}, {
-			name:             "'semi_sync' durability policy - revoked",
-			durabilityPolicy: "semi_sync",
-			primaryEligible:  primaryTablet,
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			tabletsReached: []*topodatapb.Tablet{
-				replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet,
-			},
-			revoked: true,
-		}, {
-			name:             "'semi_sync' durability policy - not revoked",
-			durabilityPolicy: "semi_sync",
-			primaryEligible:  primaryTablet,
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			tabletsReached: []*topodatapb.Tablet{
-				replicaTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: false,
-		}, {
-			name:             "'cross_cell' durability policy - revoked",
-			durabilityPolicy: "cross_cell",
-			primaryEligible:  primaryTablet,
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			tabletsReached: []*topodatapb.Tablet{
-				replicaCrossCellTablet,
-			},
-			revoked: true,
-		}, {
-			name:             "'cross_cell' durability policy - not revoked",
-			durabilityPolicy: "cross_cell",
-			primaryEligible:  primaryTablet,
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			tabletsReached: []*topodatapb.Tablet{
-				replicaTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: false,
-		}, {
-			name:             "'cross_cell' durability policy - primary in list",
-			durabilityPolicy: "cross_cell",
-			primaryEligible:  primaryTablet,
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet,
-			},
-			revoked: true,
+func TestDurabilityCrossCell(t *testing.T) {
+	err := SetDurabilityPolicy("cross_cell")
+	require.NoError(t, err)
+
+	promoteRule := PromotionRule(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy)
-			require.NoError(t, err)
-			out := RevokeForTablet(tt.primaryEligible, tt.tabletsReached, tt.allTablets)
-			require.Equal(t, tt.revoked, out)
-		})
-	}
+		Type: topodatapb.TabletType_PRIMARY,
+	})
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_REPLICA,
+	})
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_RDONLY,
+	})
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_SPARE,
+	})
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
+	assert.Equal(t, 1, SemiSyncAckers(nil))
+	assert.Equal(t, false, IsReplicaSemiSync(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}))
+	assert.Equal(t, true, IsReplicaSemiSync(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell2",
+		},
+	}))
+	assert.Equal(t, false, IsReplicaSemiSync(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_EXPERIMENTAL,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell2",
+		},
+	}))
 }
 
-func TestRevoked(t *testing.T) {
-	tests := []struct {
-		name             string
-		durabilityPolicy string
-		tabletsReached   []*topodatapb.Tablet
-		allTablets       []*topodatapb.Tablet
-		revoked          bool
+func TestError(t *testing.T) {
+	err := SetDurabilityPolicy("unknown")
+	assert.EqualError(t, err, "durability policy unknown not found")
+}
+
+func TestDurabilityTest(t *testing.T) {
+	cellName := "zone2"
+	durabilityRules := &durabilityTest{}
+
+	testcases := []struct {
+		tablet        *topodatapb.Tablet
+		promotionRule promotionrule.CandidatePromotionRule
 	}{
 		{
-			name:             "'none' durability policy - all tablets revoked",
-			durabilityPolicy: "none",
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: cellName,
+					Uid:  0,
+				},
+				Type: topodatapb.TabletType_SPARE,
 			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: true,
+			promotionRule: promotionrule.MustNot,
 		}, {
-			name:             "'semi_sync' durability policy - all tablets revoked",
-			durabilityPolicy: "semi_sync",
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: cellName,
+					Uid:  200,
+				},
 			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: true,
+			promotionRule: promotionrule.Prefer,
 		}, {
-			name:             "'cross_cell' durability policy - all tablets revoked",
-			durabilityPolicy: "cross_cell",
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: cellName,
+					Uid:  2,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
 			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: true,
+			promotionRule: promotionrule.Neutral,
 		}, {
-			name:             "'none' durability policy - revoked",
-			durabilityPolicy: "none",
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet,
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: cellName,
+					Uid:  4,
+				},
+				Type: topodatapb.TabletType_BACKUP,
 			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: true,
-		}, {
-			name:             "'semi_sync' durability policy - revoked",
-			durabilityPolicy: "semi_sync",
-			tabletsReached: []*topodatapb.Tablet{
-				replicaTablet, replicaCrossCellTablet, rdonlyTablet,
-			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: true,
-		}, {
-			name:             "'cross_cell' durability policy - revoked",
-			durabilityPolicy: "cross_cell",
-			tabletsReached: []*topodatapb.Tablet{
-				replicaCrossCellTablet,
-			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: true,
-		}, {
-			name:             "'none' durability policy - not revoked",
-			durabilityPolicy: "none",
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: false,
-		}, {
-			name:             "'semi_sync' durability policy - not revoked",
-			durabilityPolicy: "semi_sync",
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: false,
-		}, {
-			name:             "'cross_cell' durability policy - not revoked",
-			durabilityPolicy: "cross_cell",
-			tabletsReached: []*topodatapb.Tablet{
-				primaryTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			allTablets: []*topodatapb.Tablet{
-				primaryTablet, replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
-			},
-			revoked: false,
+			promotionRule: promotionrule.MustNot,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := SetDurabilityPolicy(tt.durabilityPolicy)
-			require.NoError(t, err)
-			out := Revoked(tt.tabletsReached, tt.allTablets)
-			require.Equal(t, tt.revoked, out)
+
+	for _, testcase := range testcases {
+		t.Run(topoproto.TabletAliasString(testcase.tablet.Alias), func(t *testing.T) {
+			rule := durabilityRules.promotionRule(testcase.tablet)
+			assert.Equal(t, testcase.promotionRule, rule)
 		})
 	}
 }
