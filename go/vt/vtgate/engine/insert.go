@@ -668,6 +668,18 @@ func (ins *Insert) description() PrimitiveDescription {
 		"MultiShardAutocommit": ins.MultiShardAutocommit,
 		"QueryTimeout":         ins.QueryTimeout,
 	}
+	if len(ins.VindexValueOffset) > 0 {
+		valuesOffsets := map[string]string{}
+		for idx, ints := range ins.VindexValueOffset {
+			if len(ins.ColVindexes) < idx {
+				panic("ins.ColVindexes and ins.VindexValueOffset do not line up")
+			}
+			vindex := ins.ColVindexes[idx]
+			marshal, _ := json.Marshal(ints)
+			valuesOffsets[vindex.Name] = string(marshal)
+		}
+		other["VindexOffsetFromSelect"] = valuesOffsets
+	}
 	return PrimitiveDescription{
 		OperatorType:     "Insert",
 		Keyspace:         ins.Keyspace,
