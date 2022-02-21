@@ -188,6 +188,10 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 
 // TableNames returns the table names for all tables in the plan.
 func (plan *Plan) TableNames() (names []string) {
+	if len(plan.AllTables) == 0 {
+		tableName := plan.TableName()
+		return []string{tableName.String()}
+	}
 	for _, table := range plan.AllTables {
 		names = append(names, table.Name.String())
 	}
