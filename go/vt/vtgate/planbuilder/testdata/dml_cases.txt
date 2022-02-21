@@ -3203,6 +3203,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "TableName": "music",
+    "VindexOffsetFromSelect": {
+      "music_user_map": "[0]",
+      "user_index": "[1]"
+    },
     "Inputs": [
       {
         "OperatorType": "Route",
