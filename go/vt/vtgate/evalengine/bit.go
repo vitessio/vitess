@@ -42,7 +42,7 @@ type (
 		binary(left, right []byte) []byte
 	}
 
-	BitWiseShiftOp interface {
+	BitwiseShiftOp interface {
 		BitwiseOp
 		numeric(num, shift uint64) uint64
 		binary(num []byte, shift uint64) []byte
@@ -205,7 +205,7 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			result.setUint64(op.numeric(l.uint64(), r.uint64()))
 		}
 
-	case BitWiseShiftOp:
+	case BitwiseShiftOp:
 		/*
 			The result type depends on whether the bit argument is evaluated as a binary string or number:
 			Binary-string evaluation occurs when the bit argument has a binary string type, and is not a hexadecimal
@@ -233,7 +233,7 @@ func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 			(f1&(flagHex|flagBit) == 0 || f2&(flagHex|flagBit) == 0) {
 			return sqltypes.VarBinary, f1 | f2
 		}
-	case BitWiseShiftOp:
+	case BitwiseShiftOp:
 		if t1 == sqltypes.VarBinary && (f1&(flagHex|flagBit)) == 0 {
 			return sqltypes.VarBinary, f1 | f2
 		}
@@ -245,5 +245,5 @@ func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 var _ BitwiseBinaryOp = (*OpBitAnd)(nil)
 var _ BitwiseBinaryOp = (*OpBitOr)(nil)
 var _ BitwiseBinaryOp = (*OpBitXor)(nil)
-var _ BitWiseShiftOp = (*OpBitShiftLeft)(nil)
-var _ BitWiseShiftOp = (*OpBitShiftRight)(nil)
+var _ BitwiseShiftOp = (*OpBitShiftLeft)(nil)
+var _ BitwiseShiftOp = (*OpBitShiftRight)(nil)
