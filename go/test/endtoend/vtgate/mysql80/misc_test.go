@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+
 	"github.com/google/go-cmp/cmp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -112,6 +114,114 @@ func TestVersionCommentWorks(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	exec(t, conn, "/*!80000 SET SESSION information_schema_stats_expiry=0 */")
+}
+
+func TestSystemVariables(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcs := []struct {
+		name        string
+		value       string
+		expectation string
+		comment     string
+	}{
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`},
+		{name: "sql_mode", value: "'only_full_group_by'", expectation: `[[VARCHAR("only_full_group_by")]]`, comment: "/* comment */"},
+		{name: "sql_mode", value: "' '", expectation: `[[VARCHAR(" ")]]`, comment: "/* comment */"},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name+tc.value, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set %s=%s", tc.name, tc.value))
+			utils.AssertMatches(t, conn, fmt.Sprintf("select %s @@%s", tc.comment, tc.name), tc.expectation)
+		})
+	}
+}
+
+func TestUseSystemAndUserVariables(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set @@sql_mode = 'only_full_group_by,strict_trans_tables'")
+	utils.Exec(t, conn, "select 1 from information_schema.table_constraints")
+
+	utils.Exec(t, conn, "set @var = @@sql_mode")
+	utils.AssertMatches(t, conn, "select @var", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
+
+	utils.Exec(t, conn, "create table t(name varchar(100))")
+	utils.Exec(t, conn, "insert into t(name) values (@var)")
+
+	utils.AssertMatches(t, conn, "select name from t", `[[VARCHAR("only_full_group_by,strict_trans_tables")]]`)
+
+	utils.Exec(t, conn, "delete from t where name = @var")
+	utils.AssertMatches(t, conn, "select name from t", `[]`)
+
+	utils.Exec(t, conn, "drop table t")
+}
+
+func BenchmarkReservedConnWhenSettingSysVar(b *testing.B) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(b, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("create table t(id int)", 1000, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	defer func() {
+		_, err = conn.ExecuteFetch("drop table t", 1000, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}()
+
+	_, err = conn.ExecuteFetch("set @@sql_mode = 'only_full_group_by,strict_trans_tables', @@sql_big_selects = 0, @@sql_safe_updates = 1, @@foreign_key_checks = 0", 1000, true)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	f := func(i int) {
+		_, err = conn.ExecuteFetch(fmt.Sprintf("insert into t(id) values (%d)", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("select id from t where id = %d limit 1", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("update t set id = 1 where id = %d", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("delete from t where id = %d", i), 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	// warmup, plan and cache the plans
+	f(0)
+
+	benchmarkName := "Use SET_VAR"
+	for i := 0; i < 2; i++ {
+		b.Run(benchmarkName, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				f(i)
+			}
+		})
+
+		// setting another sysvar that does not support SET_VAR, the next iteration of benchmark will use reserved connection
+		_, err = conn.ExecuteFetch("set @@sql_warnings = 1", 1, true)
+		if err != nil {
+			b.Fatal(err)
+		}
+		benchmarkName = "Use reserved connections"
+	}
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
