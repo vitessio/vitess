@@ -182,7 +182,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tabletTypeFunc)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tabletTypeFunc, tsv.onlineDDLExecutorToggleTableBuffer)
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
@@ -224,6 +224,34 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerDebugEnvHandler()
 
 	return tsv
+}
+
+// onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
+// uses it to start/stop query buffering for a given table.
+// It is onlineDDLExecutor's responsibility to make sure beffering is stopped after some definite amount of time.
+// There are two layers to buffering/unbuffering:
+// 1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
+//    for all new queries (see Execute() function and call to GetPlan())
+// 2. affecting already existing rules. a Rule has a isCancelled function which it invokes; we supply that
+//    function here so that when onlineDDLExecutor stops buffering, that rule function returns "false"
+func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(tableName string, bufferQueries bool) {
+	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
+
+	if bufferQueries {
+		cancelledFunc := func() bool {
+			// Will be called by the rule; the rule is cancelled when queryRuleSource is gone, which happens
+			// when onlineDDLExecutor invokes onlineDDLExecutorToggleTableBuffer with bufferQueries==false
+			return !tsv.qe.queryRuleSources.HasSource(queryRuleSource)
+		}
+
+		tsv.RegisterQueryRuleSource(queryRuleSource)
+		bufferRules := rules.New()
+		bufferRules.Add(rules.NewBufferedTableQueryRule(tableName, "buffered for cut-over", cancelledFunc))
+		tsv.SetQueryRules(queryRuleSource, bufferRules)
+	} else {
+		tsv.UnRegisterQueryRuleSource(queryRuleSource) // new rules will not have buffering
+		// also this affects calls to cancelledFunc()
+	}
 }
 
 // InitDBConfig initializes the db config variables for TabletServer. You must call this function

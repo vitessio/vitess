@@ -140,11 +140,12 @@ type mysqlVariables struct {
 
 // Executor wraps and manages the execution of a gh-ost migration.
 type Executor struct {
-	env            tabletenv.Env
-	pool           *connpool.Pool
-	tabletTypeFunc func() topodatapb.TabletType
-	ts             *topo.Server
-	tabletAlias    *topodatapb.TabletAlias
+	env                   tabletenv.Env
+	pool                  *connpool.Pool
+	tabletTypeFunc        func() topodatapb.TabletType
+	ts                    *topo.Server
+	toggleBufferTableFunc func(tableName string, bufferQueries bool)
+	tabletAlias           *topodatapb.TabletAlias
 
 	keyspace string
 	shard    string
@@ -201,7 +202,10 @@ func newGCTableRetainTime() time.Time {
 }
 
 // NewExecutor creates a new gh-ost executor.
-func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
+func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server,
+	tabletTypeFunc func() topodatapb.TabletType,
+	toggleBufferTableFunc func(tableName string, bufferQueries bool),
+) *Executor {
 	return &Executor{
 		env:         env,
 		tabletAlias: proto.Clone(tabletAlias).(*topodatapb.TabletAlias),
@@ -210,9 +214,10 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 			Size:               databasePoolSize,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
-		tabletTypeFunc: tabletTypeFunc,
-		ts:             ts,
-		ticks:          timer.NewTimer(*migrationCheckInterval),
+		tabletTypeFunc:        tabletTypeFunc,
+		ts:                    ts,
+		toggleBufferTableFunc: toggleBufferTableFunc,
+		ticks:                 timer.NewTimer(*migrationCheckInterval),
 	}
 }
 
@@ -648,10 +653,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	if err != nil {
 		return err
 	}
-	shardInfo, err := e.ts.GetShard(ctx, e.keyspace, e.shard)
-	if err != nil {
-		return err
-	}
 
 	// information about source tablet
 	onlineDDL, _, err := e.readMigration(ctx, s.workflow)
@@ -669,24 +670,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	// Preparation is complete. We proceed to cut-over.
-
-	// lock keyspace:
-	{
-		lctx, unlockKeyspace, err := e.ts.LockKeyspace(ctx, e.keyspace, "OnlineDDLCutOver")
-		if err != nil {
-			return err
-		}
-		// lctx has the lock info, needed for UpdateShardFields
-		ctx = lctx
-		defer unlockKeyspace(&err)
-	}
-	toggleWrites := func(allowWrites bool) error {
-		if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
-			err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, allowWrites, []string{onlineDDL.Table})
-			return err
-		}); err != nil {
-			return err
-		}
+	toggleBuffering := func(bufferQueries bool) error {
+		e.toggleBufferTableFunc(onlineDDL.Table, bufferQueries)
 		if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
 			return err
 		}
@@ -695,11 +680,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
-			toggleWrites(true)
+			toggleBuffering(false)
 		})
 	}
 	// stop writes on source:
-	if err := toggleWrites(false); err != nil {
+	if err := toggleBuffering(true); err != nil {
 		return err
 	}
 	defer reenableWritesOnce()
