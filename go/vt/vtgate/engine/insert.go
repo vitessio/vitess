@@ -323,15 +323,19 @@ func (ins *Insert) getInsertSelectQueries(vcursor VCursor, bindVars map[string]*
 	if colVindexes == nil {
 		colVindexes = ins.Table.ColumnVindexes
 	}
+
+	if len(colVindexes) != len(ins.VindexValueOffset) {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex value offsets and vindex info do not match")
+	}
+
 	// Here we go over the incoming rows and extract values for the vindexes we need to update
 	shardingCols := make([][]sqltypes.Row, len(colVindexes))
 	for _, inputRow := range rows {
 		for colIdx := range colVindexes {
-			row := make(sqltypes.Row, 0, len(ins.VindexValueOffset))
-			for _, valueOffsets := range ins.VindexValueOffset {
-				for _, offset := range valueOffsets {
-					row = append(row, inputRow[offset])
-				}
+			offsets := ins.VindexValueOffset[colIdx]
+			row := make(sqltypes.Row, 0, len(offsets))
+			for _, offset := range offsets {
+				row = append(row, inputRow[offset])
 			}
 			shardingCols[colIdx] = append(shardingCols[colIdx], row)
 		}
@@ -660,7 +664,7 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys []sqltypes.
 
 // processOwned creates vindex entries for the values of an owned column.
 func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys []sqltypes.Row, colVindex *vindexes.ColumnVindex, ksids []ksID) error {
-	if ins.Opcode == InsertSharded {
+	if ins.Opcode == InsertSharded || ins.Opcode == InsertSelect {
 		return colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexColumnsKeys, ksids, false /* ignoreMode */)
 	}
 

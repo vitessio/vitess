@@ -1534,3 +1534,86 @@ func TestInsertSelectSimple(t *testing.T) {
 			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix` +
 			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
 }
+
+func TestInsertSelectOwned(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {Type: "hash"},
+					"onecol": {
+						Type: "lookup",
+						Params: map[string]string{
+							"table": "lkp1",
+							"from":  "from",
+							"to":    "toc"},
+						Owner: "t1"}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}, {
+							Name:    "onecol",
+							Columns: []string{"c3"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	ins := &Insert{
+		Opcode:   InsertSelect,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_insert",
+		Table:    ks.Tables["t1"],
+		VindexValueOffset: [][]int{
+			{1}, // The primary vindex has a single column as sharding key
+			{0}, // the onecol vindex uses the 'name' column
+		},
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"name|id",
+				"varchar|int64"),
+			"a|1",
+			"a|3",
+			"b|2")}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+
+		// the select query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+
+		// insert values into the owned lookup vindex
+		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1), (:from_2, :toc_2) from_0: type:VARCHAR value:"a" from_1: type:VARCHAR value:"a" from_2: type:VARCHAR value:"b" toc_0: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" toc_1: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" toc_2: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
+
+		// Values 0 1 2 come from the id column
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c),DestinationKeyspaceID(06e7ea22ce92708f)`,
+
+		// insert values into the main table
+		`ExecuteMultiShard ` +
+			// first we insert two rows on the 20- shard
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+
+			// next we insert one row on the -20 shard
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix ` +
+			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
+			`true false`})
+}
