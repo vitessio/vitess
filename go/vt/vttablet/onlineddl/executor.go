@@ -672,8 +672,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
 		e.toggleBufferTableFunc(onlineDDL.Table, bufferQueries)
-		if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
-			return err
+		if !bufferQueries {
+			// release
+			if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
