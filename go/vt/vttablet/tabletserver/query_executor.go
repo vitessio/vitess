@@ -61,7 +61,10 @@ type QueryExecutor struct {
 	tabletType     topodatapb.TabletType
 }
 
-const streamRowsSize = 256
+const (
+	streamRowsSize         = 256
+	maxQueryBufferDuration = 10 * time.Second
+)
 
 var streamResultPool = sync.Pool{New: func() interface{} {
 	return &sqltypes.Result{
@@ -387,16 +390,31 @@ func (qre *QueryExecutor) checkPermissions() error {
 		remoteAddr = ci.RemoteAddr()
 		username = ci.Username()
 	}
-	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
-	switch action {
-	case rules.QRFail:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
-	case rules.QRFailRetry:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
-	case rules.QRBuffer:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "disallowed/unimplemented due to rule: %s", desc)
-	}
 
+	ctx, cancel := context.WithTimeout(qre.ctx, maxQueryBufferDuration)
+	defer cancel()
+	for goodToProceed := false; !goodToProceed; {
+		action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+		switch action {
+		case rules.QRFail:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
+		case rules.QRFailRetry:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
+		case rules.QRBuffer:
+			// We buffer up to some timeout. The timeout is determined by ctx.Done().
+			// If we're not at timeout yet, then we sleep for a short amount of time before
+			// resuming the loop.
+			select {
+			case <-time.After(time.Second):
+				// keep iteration
+			case <-ctx.Done():
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout in rule: %s", desc)
+			}
+		default:
+			// no rules against this query. leave the loop
+			goodToProceed = true
+		}
+	}
 	// Skip ACL check for queries against the dummy dual table
 	if qre.plan.TableName().String() == "dual" {
 		return nil

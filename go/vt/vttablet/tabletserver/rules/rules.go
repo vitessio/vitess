@@ -37,6 +37,10 @@ import (
 
 //-----------------------------------------------
 
+const (
+	bufferedTableRuleName = "buffered_table"
+)
+
 // Rules is used to store and execute rules for the tabletserver.
 type Rules struct {
 	rules []*Rule
@@ -211,6 +215,9 @@ type Rule struct {
 
 	// Action to be performed on trigger
 	act Action
+
+	// a rule can be dynamically cancelled. This function determines whether it is cancelled
+	isCancelledFunc func() bool
 }
 
 type namedRegexp struct {
@@ -235,6 +242,12 @@ func (nr namedRegexp) Equal(other namedRegexp) bool {
 func NewQueryRule(description, name string, act Action) (qr *Rule) {
 	// We ignore act because there's only one action right now
 	return &Rule{Description: description, Name: name, act: act}
+}
+
+// NewQueryRule creates a new Rule.
+func NewBufferedTableQueryRule(tableName string, description string, isCancelledFunc func() bool) (qr *Rule) {
+	// We ignore act because there's only one action right now
+	return &Rule{isCancelledFunc: isCancelledFunc, Description: description, Name: bufferedTableRuleName, tableNames: []string{tableName}, act: QRBuffer}
 }
 
 // Equal returns true if other is equal to this Rule, otherwise false.
@@ -266,6 +279,7 @@ func (qr *Rule) Copy() (newqr *Rule) {
 		leadingComment:  qr.leadingComment,
 		trailingComment: qr.trailingComment,
 		act:             qr.act,
+		isCancelledFunc: qr.isCancelledFunc,
 	}
 	if qr.plans != nil {
 		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
@@ -462,6 +476,9 @@ func (qr *Rule) GetAction(
 	bindVars map[string]*querypb.BindVariable,
 	marginComments sqlparser.MarginComments,
 ) Action {
+	if qr.isCancelledFunc != nil && qr.isCancelledFunc() {
+		return QRContinue
+	}
 	if !reMatch(qr.leadingComment.Regexp, marginComments.Leading) {
 		return QRContinue
 	}

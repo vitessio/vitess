@@ -59,6 +59,14 @@ func (qri *Map) UnRegisterSource(ruleSource string) {
 	delete(qri.queryRulesMap, ruleSource)
 }
 
+// HasSource checks if given source name exists
+func (qri *Map) HasSource(ruleSource string) bool {
+	qri.mu.Lock()
+	defer qri.mu.Unlock()
+	_, ok := qri.queryRulesMap[ruleSource]
+	return ok
+}
+
 // SetRules takes an external Rules structure and overwrite one of the
 // internal Rules as designated by ruleSource parameter.
 func (qri *Map) SetRules(ruleSource string, newRules *Rules) error {
