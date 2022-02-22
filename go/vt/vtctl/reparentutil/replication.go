@@ -154,6 +154,7 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 // StopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
+// Apart from the status maps, it also returns the tablets reached as a list
 func StopReplicationAndBuildStatusMaps(
 	ctx context.Context,
 	tmc tmclient.TabletManagerClient,
@@ -163,7 +164,7 @@ func StopReplicationAndBuildStatusMaps(
 	ignoredTablets sets.String,
 	tabletToWaitFor *topodatapb.TabletAlias,
 	logger logutil.Logger,
-) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus, error) {
+) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus, []*topodatapb.Tablet, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
@@ -245,15 +246,15 @@ func StopReplicationAndBuildStatusMaps(
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)
 	if len(errRecorder.Errors) <= 1 {
-		return statusMap, primaryStatusMap, nil
+		return statusMap, primaryStatusMap, tabletsReachable, nil
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
 	revokeSuccessful := haveRevoked(tabletsReachable, allTablets)
 	if !revokeSuccessful {
-		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
+		return nil, nil, nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}
 
-	return statusMap, primaryStatusMap, nil
+	return statusMap, primaryStatusMap, tabletsReachable, nil
 }
 
 // WaitForRelayLogsToApply blocks execution waiting for the given tablet's relay
