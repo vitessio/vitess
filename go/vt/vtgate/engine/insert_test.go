@@ -1478,21 +1478,13 @@ func TestInsertSelectSimple(t *testing.T) {
 			"sharded": {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
-					"hash": {
-						Type: "hash",
-					},
-				},
+					"hash": {Type: "hash"}},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "hash",
-							Columns: []string{"id"},
-						}},
-					},
-				},
-			},
-		},
-	}
+							Columns: []string{"id"}}}}}}}}
+
 	vs := vindexes.BuildVSchema(invschema)
 	ks := vs.Keyspaces["sharded"]
 
@@ -1508,30 +1500,37 @@ func TestInsertSelectSimple(t *testing.T) {
 			FieldQuery: "dummy_field_query",
 			RoutingParameters: &RoutingParameters{
 				Opcode:   Scatter,
-				Keyspace: ks.Keyspace,
-			},
-		},
-	}
-	for _, colVindex := range ks.Tables["t1"].ColumnVindexes {
-		if colVindex.IgnoreInDML() {
-			continue
-		}
-		ins.ColVindexes = append(ins.ColVindexes, colVindex)
-	}
+				Keyspace: ks.Keyspace}}}
+
+	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t1"].ColumnVindexes...)
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 	vc.results = []*sqltypes.Result{
 		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("name|id", "varchar|int64"),
-			"a|1", "b|2"),
-	}
+			sqltypes.MakeTestFields(
+				"name|id",
+				"varchar|int64"),
+			"a|1",
+			"a|3",
+			"b|2")}
 
 	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
-		// select query
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+
+		// the select query
 		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
-	})
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c),DestinationKeyspaceID(06e7ea22ce92708f)`,
+
+		// two rows go to the 20- shard, and one row go to the -20 shard
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) suffix ` +
+			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
+			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1) suffix` +
+			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
 }
