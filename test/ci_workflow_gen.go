@@ -123,6 +123,7 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
+		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vtorc",
@@ -165,6 +166,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
 		return allOracleMySQLVersions
 	case clusterName == "mysql80":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vreplication_across_db_versions":
 		return []mysqlVersion{mysql80}
 	default:
 		return defaultMySQLVersions

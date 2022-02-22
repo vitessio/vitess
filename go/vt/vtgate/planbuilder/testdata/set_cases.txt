@@ -122,7 +122,8 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+        "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [
@@ -149,7 +150,8 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
+        "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')",
+        "SupportSetVar": true
       },
       {
         "Type": "SysVarSet",
@@ -158,7 +160,8 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "0"
+        "Expr": "0",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [
@@ -256,7 +259,8 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+        "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [
@@ -283,7 +287,8 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "1"
+        "Expr": "1",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [

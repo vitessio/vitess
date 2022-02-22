@@ -42,13 +42,36 @@ if [ "$GODOC_RELEASE_VERSION" == "" ]; then
 fi
 
 function updateVersionGo () {
-  echo package servenv > $ROOT/go/vt/servenv/version.go
-  echo  >> $ROOT/go/vt/servenv/version.go
-  echo "const versionName = \"$1)\"" >> $ROOT/go/vt/servenv/version.go
+
+  cat << EOF > ${ROOT}/go/vt/servenv/version.go
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package servenv
+
+// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY ./tools/do_releases.sh
+// DO NOT EDIT
+
+const versionName = "${1}"
+EOF
+
 }
 
 function updateJava () {
-  cd $ROOT/java
+  cd $ROOT/java || exit 1
   mvn versions:set -DnewVersion=$1
 }
 
@@ -56,10 +79,10 @@ function updateJava () {
 # Second argument is the Vitess Operator version
 function updateVitessOperatorExample () {
   vtop_example_files=$(find -E $ROOT/examples/operator -name "*.yaml")
-  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:$1/g" $vtop_example_files
-  sed -i.bak -E "s/vitess\/lite:(.*)-mysql80/vitess\/lite:$1-mysql80/g" $(find -E $ROOT/examples/operator -name "*.md")
+  sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:v$1/g" $vtop_example_files
+  sed -i.bak -E "s/vitess\/lite:(.*)-mysql80/vitess\/lite:v$1-mysql80/g" $(find -E $ROOT/examples/operator -name "*.md")
   if [ "$2" != "" ]; then
-  		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:$2/g" $vtop_example_files
+  		sed -i.bak -E "s/planetscale\/vitess-operator:(.*)/planetscale\/vitess-operator:v$2/g" $vtop_example_files
   fi
   rm -f $(find -E $ROOT/examples/operator -regex ".*.(md|yaml).bak")
 }
@@ -68,7 +91,7 @@ git_status_output=$(git status --porcelain)
 if [ "$git_status_output" == "" ]; then
   	echo so much clean
 else
-    echo cannot do release with dirty git state
+    echo "cannot do release with dirty git state"
     exit 1
 fi
 
