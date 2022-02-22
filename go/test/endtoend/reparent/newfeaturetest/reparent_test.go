@@ -274,3 +274,35 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
 	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[2], tablets[3]})
 }
+
+// TestERSFailFast tests that ERS will fail fast if it cannot find any tablet which can be safely promoted instead of promoting
+// a tablet and hanging while inserting a row in the reparent journal on getting semi-sync ACKs
+func TestERSFailFast(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// make tablets[1] a rdonly tablet.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	require.NoError(t, err)
+
+	// Confirm that replication is still working as intended
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	var errChan chan error
+	go func() {
+		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
+		_, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
+		require.Error(t, err)
+		errChan <- err
+	}()
+
+	select {
+	case err = <-errChan:
+		require.Contains(t, err.Error(), "no valid candidates for emergency reparent")
+	case <-time.After(60 * time.Second):
+		require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
+	}
+}
