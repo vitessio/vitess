@@ -639,6 +639,14 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
 		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
+
+		// todo: copy over workflow type in ig.AddRow
+		if params["workflow_type"] == string(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) &&
+			sgtid.Shard != vre.shard {
+			log.Infof("Found Online DDL Workflow not for this shard %s: sgtid %s", vre.shard, sgtid)
+			continue
+		}
+
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])

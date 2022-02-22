@@ -49,6 +49,7 @@ func createOnlineDDL(t *testing.T, keyspace, ddl string) string {
 // "complete"s a migration started with createOnlineDDL(). We need to wait for the migration to catchup and complete.
 func completeOnlineDDL(t *testing.T, keyspace, uuid string) {
 	// need to osExec() here because execVtgateQuery() takes a different query serving route. Latter calls txConnExec() instead of Execute() in query_executor.go
+	log.Infof("Completing Online DDL %s", uuid)
 	query := fmt.Sprintf("use %s; alter vitess_migration '%s' complete;", keyspace, uuid)
 	output, err := osExec(t, "mysql", []string{"-u", "vtdba", "-P", fmt.Sprintf("%d", vc.ClusterConfig.vtgateMySQLPort),
 		"--host=127.0.0.1", "-e", query})
@@ -58,6 +59,7 @@ func completeOnlineDDL(t *testing.T, keyspace, uuid string) {
 
 	status := waitForMigrationStatus(t, vtgateConn, uuid, keyspace, 2, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	require.NotEqual(t, schema.OnlineDDLStatusFailed, status)
+	log.Infof("Completed Online DDL %s", uuid)
 }
 
 const (
@@ -139,10 +141,11 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 		completeOnlineDDL(t, shardedKeyspaceName, case2Uuid)
 		execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case2Update)
 	}
-
-	case1Uuid = createOnlineDDL(t, shardedKeyspaceName, case1Ddl)
-	completeOnlineDDL(t, shardedKeyspaceName, case1Uuid)
-	execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case1Update)
+	if enableCase1 {
+		case1Uuid = createOnlineDDL(t, shardedKeyspaceName, case1Ddl)
+		completeOnlineDDL(t, shardedKeyspaceName, case1Uuid)
+		execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case1Update)
+	}
 
 	if enableCase3 {
 		case3Uuid = createOnlineDDL(t, shardedKeyspaceName, case3Ddl)
@@ -158,7 +161,7 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 	// complete Reshard
 	err = tstWorkflowExec(t, defaultCellName, workflowName, shardedKeyspaceName, shardedKeyspaceName, "", workflowActionSwitchTraffic, "", "", "")
 	require.NoError(t, err)
-
+	log.Infof("Reshard completed")
 	if enableCase3 {
 		completeOnlineDDL(t, shardedKeyspaceName, case3Uuid)
 		execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case3Update)

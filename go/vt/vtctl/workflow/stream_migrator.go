@@ -54,6 +54,7 @@ const (
 	StreamTypeUnknown = StreamType(iota)
 	StreamTypeSharded
 	StreamTypeReference
+	StreamTypeOnlineDDL
 )
 
 // StreamMigrator contains information needed to migrate a stream
@@ -205,9 +206,9 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 
 	switch constraint {
 	case "":
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
+		query = fmt.Sprintf("select id, workflow, source, pos, workflow_type from _vt.vreplication where db_name=%s and workflow != %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
 	default:
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s and %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()), constraint)
+		query = fmt.Sprintf("select id, workflow, source, pos, workflow_type from _vt.vreplication where db_name=%s and workflow != %s and %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()), constraint)
 	}
 
 	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, ti.Tablet, query)
@@ -218,7 +219,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 	qr := sqltypes.Proto3ToResult(p3qr)
 	tabletStreams := make([]*VReplicationStream, 0, len(qr.Rows))
 
-	for _, row := range qr.Rows {
+	for _, row := range qr.Rows { // todo: change to Named()
 		id, err := evalengine.ToInt64(row[0])
 		if err != nil {
 			return nil, err
@@ -232,6 +233,11 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
 		}
 
+		workflowType, err := row[4].ToInt64()
+		if err != nil {
+			return nil, err
+		}
+
 		var bls binlogdatapb.BinlogSource
 		rowBytes, err := row[2].ToBytes()
 		if err != nil {
@@ -241,11 +247,13 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			return nil, err
 		}
 
-		isReference, err := sm.blsIsReference(&bls)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "blsIsReference")
+		isReference := false
+		if workflowType != int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+			isReference, err = sm.blsIsReference(&bls)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "blsIsReference")
+			}
 		}
-
 		if isReference {
 			sm.ts.Logger().Infof("readTabletStreams: ignoring reference table %+v", &bls)
 			continue
@@ -297,7 +305,7 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			}
 		}
 
-		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("workflow_type != %d", binlogdatapb.VReplicationWorkflowType_ONLINEDDL))
+		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), "") // including online ddl streams
 		if err != nil {
 			return err
 		}
@@ -564,10 +572,11 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 
 				rule.Filter = buf.String()
 			}
-
+			log.Infof("Adding row for target %s: workflow %s, shard %s, position %s, binlogsource %v",
+				target.GetPrimary().AliasString(), vrs.Workflow, vrs.BinlogSource.Shard, vrs.Position.String())
 			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "")
 		}
-
+		log.Infof("Adding row sql %s: %s", target.GetPrimary().AliasString(), ig.String())
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
 		return err
 	})
@@ -600,7 +609,6 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 	tabletStreams = VReplicationStreams(tabletStreams).Copy().ToSlice()
 	for _, vrs := range tabletStreams {
 		streamType := StreamTypeUnknown
-
 		for _, rule := range vrs.BinlogSource.Filter.Rules {
 			typ, err := sm.templatizeRule(ctx, rule)
 			if err != nil {
@@ -608,21 +616,21 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 			}
 
 			switch typ {
-			case StreamTypeSharded:
+			case StreamTypeSharded, StreamTypeOnlineDDL:
 				if streamType == StreamTypeReference {
 					return nil, fmt.Errorf("cannot migrate streams with a mix of reference and sharded tables: %v", vrs.BinlogSource)
 				}
-				streamType = StreamTypeSharded
+				streamType = typ
 			case StreamTypeReference:
-				if streamType == StreamTypeSharded {
+				if streamType == StreamTypeSharded || streamType == StreamTypeOnlineDDL {
 					return nil, fmt.Errorf("cannot migrate streams with a mix of reference and sharded tables: %v", vrs.BinlogSource)
 				}
 				streamType = StreamTypeReference
 			}
 		}
 
-		if streamType == StreamTypeSharded {
-			shardedStreams = append(shardedStreams, vrs)
+		if streamType == StreamTypeSharded || streamType == StreamTypeOnlineDDL { // online ddl streams are also to be migrated
+			shardedStreams = append(shardedStreams, vrs) // todo: rename shardedStreams since online ddl streams are also now part of it? or at least add comments!
 		}
 	}
 
@@ -632,11 +640,16 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 // templatizeRule replaces keyrange values with {{.}}.
 // This can then be used by go's template package to substitute other keyrange values.
 func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb.Rule) (StreamType, error) {
+	if schema.IsInternalOperationTableName(rule.Match) && schema.IsOnlineDDLTableName(rule.Match) {
+		return StreamTypeOnlineDDL, nil
+	}
+	if schema.IsInternalOperationTableName(rule.Match) {
+		return StreamTypeUnknown, fmt.Errorf("internal online ddl table %v not supported", rule.Match)
+	}
+
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	if !ok {
-		if !schema.IsInternalOperationTableName(rule.Match) {
-			return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
-		}
+		return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
 
 	if vtable.Type == vindexes.TypeReference {
@@ -675,7 +688,6 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 	if sel.Where != nil {
 		expr = sel.Where.Expr
 	}
-
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, subexpr := range exprs {
 		funcExpr, ok := subexpr.(*sqlparser.FuncExpr)
@@ -686,9 +698,9 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 		var krExpr sqlparser.SelectExpr
 		switch len(funcExpr.Exprs) {
 		case 1:
-			krExpr = funcExpr.Exprs[0]
+			krExpr = funcExpr.Exprs[0] // example: "in_keyrange('-80')", same as "-80"
 		case 3:
-			krExpr = funcExpr.Exprs[2]
+			krExpr = funcExpr.Exprs[2] // example: "in_keyrange(col, 'hash', '-80')"
 		default:
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}

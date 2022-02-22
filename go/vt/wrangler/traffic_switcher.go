@@ -532,7 +532,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			return 0, nil, err
 		}
 
-		ts.Logger().Infof("Migrating streams")
+		ts.Logger().Infof("Migrating streams for workflow %s", ts.workflow)
 		if err := sw.migrateStreams(ctx, sm); err != nil {
 			ts.Logger().Errorf("migrateStreams failed: %v", err)
 			sw.cancelMigration(ctx, sm)
@@ -577,6 +577,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		ts.Logger().Errorf("finalize failed: %v", err)
 		return 0, nil, err
 	}
+
 	if reverseReplication {
 		if err := sw.startReverseVReplication(ctx); err != nil {
 			ts.Logger().Errorf("startReverseVReplication failed: %v", err)
