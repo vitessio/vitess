@@ -759,7 +759,7 @@ func (d Decimal) Float64() (f float64, ok bool) {
 //     -12.345
 //
 func (d Decimal) String() string {
-	return string(d.format(make([]byte, 0, 10), true))
+	return string(d.formatFast(0, false, true))
 }
 
 // StringFixed returns a rounded fixed-point string with places digits after
@@ -776,17 +776,19 @@ func (d Decimal) String() string {
 // 	   NewFromFloat(545).StringFixed(-1) // output: "550"
 //
 func (d Decimal) StringFixed(places int32) string {
+	// The StringFixed method allows for negative precision, which
+	// MySQL doesn't support, so we cannot round this using the string
+	// based rounding in formatFast. We must round the old-fashioned way.
 	rounded := d.Round(places)
-	return string(rounded.format(make([]byte, 0, 10), false))
+	return string(rounded.formatFast(0, false, false))
 }
 
 func (d Decimal) StringMySQL() string {
-	return string(d.format(make([]byte, 0, 10), false))
+	return string(d.formatFast(0, false, false))
 }
 
 func (d Decimal) FormatMySQL(frac int32) []byte {
-	rounded := d.Round(frac)
-	return rounded.format(make([]byte, 0, 10), false)
+	return d.formatFast(int(frac), true, false)
 }
 
 // Round rounds the decimal to places decimal places.
@@ -819,50 +821,6 @@ func (d Decimal) Round(places int32) Decimal {
 	}
 
 	return ret
-}
-
-func (d Decimal) format(buf []byte, trimTrailingZeros bool) []byte {
-	if d.exp >= 0 {
-		return d.rescale(0).value.Append(buf, 10)
-	}
-
-	rawfmt := d.value.Append(nil, 10)
-	if d.value.Sign() < 0 {
-		rawfmt = rawfmt[1:]
-		buf = append(buf, '-')
-	}
-
-	var fractionalPart []byte
-
-	dExpInt := int(d.exp)
-	if len(rawfmt) > -dExpInt {
-		buf = append(buf, rawfmt[:len(rawfmt)+dExpInt]...)
-		fractionalPart = rawfmt[len(rawfmt)+dExpInt:]
-	} else {
-		buf = append(buf, '0')
-		num0s := -dExpInt - len(rawfmt)
-		fractionalPart = make([]byte, 0, num0s+len(rawfmt))
-		for z := 0; z < num0s; z++ {
-			fractionalPart = append(fractionalPart, '0')
-		}
-		fractionalPart = append(fractionalPart, rawfmt...)
-	}
-
-	if trimTrailingZeros {
-		i := len(fractionalPart) - 1
-		for ; i >= 0; i-- {
-			if fractionalPart[i] != '0' {
-				break
-			}
-		}
-		fractionalPart = fractionalPart[:i+1]
-	}
-
-	if len(fractionalPart) > 0 {
-		buf = append(buf, '.')
-		buf = append(buf, fractionalPart...)
-	}
-	return buf
 }
 
 func (d *Decimal) ensureInitialized() {
