@@ -645,7 +645,7 @@ Gen4 error: can't push predicates on concatenate
 
 # insert having subquery in row values
 "insert into user(id, name) values ((select 1 from user where id = 1), 'A')"
-"expr cannot be converted, not supported: (select 1 from `user` where id = 1)"
+"expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
 Gen4 plan same as above
 
 # join with USING construct
