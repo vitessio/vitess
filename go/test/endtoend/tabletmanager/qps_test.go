@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -47,8 +48,8 @@ func TestQPS(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Sanity Check
-	exec(t, vtGateConn, "delete from t1")
-	exec(t, vtGateConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	utils.Exec(t, vtGateConn, "delete from t1")
+	utils.Exec(t, vtGateConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// Test that VtTabletStreamHealth reports a QPS >0.0.
@@ -62,7 +63,7 @@ func TestQPS(t *testing.T) {
 	for n < 15 {
 		n++
 		// Run queries via vtGate so that they are counted.
-		exec(t, vtGateConn, "select * from t1")
+		utils.Exec(t, vtGateConn, "select * from t1")
 	}
 
 	// This may take up to 5 seconds to become true because we sample the query
