@@ -190,7 +190,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	// Enforce health check because it's not running by default as
 	// tablets may not be started with it, or may not run it in time.
 	_ = ci.VtctlclientProcess.ExecuteCommand("RunHealthCheck", vttablet.Alias)
-	streamHealth, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", vttablet.Alias)
+	streamHealth, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", vttablet.Alias)
 	require.Nil(t, err)
 
 	var streamHealthResponse querypb.StreamHealthResponse
@@ -409,7 +409,7 @@ func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, 
 	startTime := time.Now()
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
 	for {
-		output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+		output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--", "--server", server)
 		require.Nil(t, err)
 		if strings.Contains(output, msg) || (time.Now().After(startTime.Add(2 * time.Minute))) {
 			break
@@ -425,11 +425,11 @@ func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, 
 
 	// Check that it's possible to change the max rate on the throttler.
 	newRate := "unlimited"
-	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerSetMaxRate", "--server", server, newRate)
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerSetMaxRate", "--", "--server", server, newRate)
 	require.Nil(t, err)
 	assert.Contains(t, output, msg)
 
-	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--", "--server", server)
 	require.Nil(t, err)
 	for _, name := range names {
 		str := fmt.Sprintf("| %s | %s |", name, newRate)
@@ -441,7 +441,7 @@ func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, 
 // checkThrottlerServiceConfiguration checks the vtctl (Get|Update|Reset)ThrottlerConfiguration commands.
 func checkThrottlerServiceConfiguration(t *testing.T, server string, names []string, ci cluster.LocalProcessCluster) {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput(
-		"UpdateThrottlerConfiguration", "--server", server,
+		"UpdateThrottlerConfiguration", "--", "--server", server,
 		"--copy_zero_values",
 		"target_replication_lag_sec:12345 "+
 			"max_replication_lag_sec:65789 "+
@@ -461,7 +461,7 @@ func checkThrottlerServiceConfiguration(t *testing.T, server string, names []str
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
 	assert.Contains(t, output, msg)
 
-	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--", "--server", server)
 	require.Nil(t, err)
 	for _, name := range names {
 		str := fmt.Sprintf("| %s | target_replication_lag_sec:12345 ", name)
@@ -471,12 +471,12 @@ func checkThrottlerServiceConfiguration(t *testing.T, server string, names []str
 	assert.Contains(t, output, msg)
 
 	// Reset clears our configuration values.
-	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ResetThrottlerConfiguration", "--server", server)
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ResetThrottlerConfiguration", "--", "--server", server)
 	require.Nil(t, err)
 	assert.Contains(t, output, msg)
 
 	// Check that the reset configuration no longer has our values.
-	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--", "--server", server)
 	require.Nil(t, err)
 	assert.NotContains(t, output, "target_replication_lag_sec:12345")
 	assert.Contains(t, output, msg)

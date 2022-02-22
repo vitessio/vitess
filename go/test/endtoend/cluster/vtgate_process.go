@@ -71,34 +71,34 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
 func (vtgate *VtgateProcess) Setup() (err error) {
 
 	args := []string{
-		"-topo_implementation", vtgate.CommonArg.TopoImplementation,
-		"-topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
-		"-topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
-		"-log_dir", vtgate.LogDir,
-		"-log_queries_to_file", vtgate.FileToLogQueries,
-		"-port", fmt.Sprintf("%d", vtgate.Port),
-		"-grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
-		"-mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
-		"-mysql_server_socket_path", vtgate.MySQLServerSocketPath,
-		"-cell", vtgate.Cell,
-		"-cells_to_watch", vtgate.CellsToWatch,
-		"-tablet_types_to_wait", vtgate.TabletTypesToWait,
-		"-gateway_implementation", vtgate.GatewayImplementation,
-		"-service_map", vtgate.ServiceMap,
-		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
+		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
+		"--topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
+		"--log_dir", vtgate.LogDir,
+		"--log_queries_to_file", vtgate.FileToLogQueries,
+		"--port", fmt.Sprintf("%d", vtgate.Port),
+		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
+		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
+		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
+		"--cell", vtgate.Cell,
+		"--cells_to_watch", vtgate.CellsToWatch,
+		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
+		"--gateway_implementation", vtgate.GatewayImplementation,
+		"--service_map", vtgate.ServiceMap,
+		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 	}
 	if vtgate.PlannerVersion > 0 {
-		args = append(args, "-planner_version", vtgate.PlannerVersion.String())
+		args = append(args, "--planner_version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
-		args = append(args, "-enable_system_settings")
+		args = append(args, "--enable_system_settings")
 	}
 	vtgate.proc = exec.Command(
 		vtgate.Binary,
 		args...,
 	)
 	if *isCoverage {
-		vtgate.proc.Args = append(vtgate.proc.Args, "-test.coverprofile="+getCoveragePath("vtgate.out"))
+		vtgate.proc.Args = append(vtgate.proc.Args, "--test.coverprofile="+getCoveragePath("vtgate.out"))
 	}
 
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)

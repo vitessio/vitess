@@ -30,8 +30,8 @@ var (
 	vtdataroot            string
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{"-tablet_refresh_interval", "10ms"}
-	extraVtctldArgs       = []string{"-remote_operation_timeout", "600s", "-topo_etcd_lease_ttl", "120"}
+	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}
+	extraVtctldArgs       = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -401,14 +401,14 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 
 	options := []string{
-		"-queryserver-config-schema-reload-time", "5",
-		"-enable-lag-throttler",
-		"-heartbeat_enable",
-		"-heartbeat_interval", "250ms",
-	} //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+		"--queryserver-config-schema-reload-time", "5",
+		"--enable-lag-throttler",
+		"--heartbeat_enable",
+		"--heartbeat_interval", "250ms",
+	} //FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 
 	if mainClusterConfig.vreplicationCompressGTID {
-		options = append(options, "-vreplication_store_compressed_gtid=true")
+		options = append(options, "--vreplication_store_compressed_gtid=true")
 	}
 
 	vttablet := cluster.VttabletProcessInstance(
@@ -531,7 +531,7 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	}
 	log.Infof("Deleting Shard %s", shardName)
 	//TODO how can we avoid the use of even_if_serving?
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DeleteShard", "-recursive", "-even_if_serving", ksName+"/"+shardName); err != nil {
+	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DeleteShard", "--", "--recursive", "--even_if_serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
 	}
 

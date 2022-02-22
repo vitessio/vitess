@@ -51,7 +51,7 @@ func TestPrimaryElection(t *testing.T) {
 // verify replication is setup
 func TestSingleKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"-clusters_to_watch", "ks"}, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks"}, "test_config.json")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -65,7 +65,7 @@ func TestSingleKeyspace(t *testing.T) {
 // verify replication is setup
 func TestKeyspaceShard(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"-clusters_to_watch", "ks/0"}, "test_config.json")
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks/0"}, "test_config.json")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 

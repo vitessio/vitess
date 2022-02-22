@@ -69,9 +69,9 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1"}
 
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
@@ -198,7 +198,7 @@ func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
 // Tests that some SQL statements fail properly during PreflightSchema.
 func testSchemaChangePreflightErrorPartially(t *testing.T) {
 	createNewTable := fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 5)) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "-sql", createNewTable, keyspaceName)
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", createNewTable, keyspaceName)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "already exists"))
 
@@ -213,7 +213,7 @@ func testSchemaChangePreflightErrorPartially(t *testing.T) {
 //is the MySQL behavior the user expects.
 func testDropNonExistentTables(t *testing.T) {
 	dropNonExistentTable := "DROP TABLE nonexistent_table;"
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "-sql", dropNonExistentTable, keyspaceName)
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", dropNonExistentTable, keyspaceName)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "Unknown table"))
 
@@ -277,7 +277,7 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	// (The different charset won't be corrected on the destination shard
 	//  because we use "CREATE DATABASE IF NOT EXISTS" and this doesn't fail if
 	//  there are differences in the options e.g. the character set.)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", "-json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", "--", "--json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
 	require.Nil(t, err)
 
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))

@@ -85,14 +85,14 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-gc_check_interval", "5s",
-			"-gc_purge_check_interval", "5s",
-			"-table_gc_lifecycle", "hold,purge,evac,drop",
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--enable_replication_reporter",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--gc_check_interval", "5s",
+			"--gc_purge_check_interval", "5s",
+			"--table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false

@@ -96,7 +96,7 @@ func ClusterWrapper(isMulti bool) (int, error) {
 	ClusterInstance = nil
 	ClusterInstance = cluster.NewCluster(cell, hostname)
 
-	ClusterInstance.VtctldExtraArgs = append(ClusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
+	ClusterInstance.VtctldExtraArgs = append(ClusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	if err := ClusterInstance.StartTopo(); err != nil {
 		return 1, err
@@ -134,7 +134,7 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 	var mysqlProcesses []*exec.Cmd
 	var extraArgs []string
 	if isMulti {
-		extraArgs = []string{"-db-credentials-file", dbCredentialFile}
+		extraArgs = []string{"--db-credentials-file", dbCredentialFile}
 	}
 
 	for _, shardName := range shardNames {
@@ -226,17 +226,17 @@ func AssignMysqlPortFromKs1ToKs2() {
 func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType querypb.Type, isMulti bool, isExternal bool) {
 	defer cluster.PanicHandler(t)
 	if isExternal {
-		commonTabletArg = append(commonTabletArg, "-db_host", "127.0.0.1")
-		commonTabletArg = append(commonTabletArg, "-disable_active_reparents")
+		commonTabletArg = append(commonTabletArg, "--db_host", "127.0.0.1")
+		commonTabletArg = append(commonTabletArg, "--disable_active_reparents")
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
-				tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-db_port", fmt.Sprintf("%d", tablet.MySQLPort))
+				tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "--db_port", fmt.Sprintf("%d", tablet.MySQLPort))
 				tablet.VttabletProcess.DbPassword = dbPwd
 			}
 		}
 	}
 	if isMulti {
-		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 	}
 	// Start the primary and rdonly of 1st shard
 	shard1 := keyspace.Shards[0]
@@ -309,7 +309,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	}
 	vtgateInstance := ClusterInstance.NewVtgateInstance()
 	vtgateInstance.MySQLServerSocketPath = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("mysql-%s.sock", keyspaceName))
-	vtgateInstance.ExtraArgs = []string{"-retry-count", fmt.Sprintf("%d", 2), "-tablet_protocol", "grpc", "-normalize_queries", "-tablet_refresh_interval", "2s"}
+	vtgateInstance.ExtraArgs = []string{"--retry-count", fmt.Sprintf("%d", 2), "--tablet_protocol", "grpc", "--normalize_queries", "--tablet_refresh_interval", "2s"}
 	err = vtgateInstance.Setup()
 	vtgateInstances = append(vtgateInstances, vtgateInstance)
 	require.NoError(t, err)
@@ -393,12 +393,12 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
-	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
+	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--",
 		"--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
 	require.NoError(t, err)
 
-	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
+	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--",
 		"--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
 	require.NoError(t, err)
@@ -407,7 +407,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	require.NoError(t, err)
 
 	// Initial clone (online).
-	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone", "--",
 		"--offline=false",
 		"--exclude_tables", "unrelated",
 		"--chunk_count", "10",
@@ -430,7 +430,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	insertSQL := fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, ksid, "msg4", ksid)
 	sharding.ExecuteOnTablet(t, insertSQL, *shard22.PrimaryTablet(), keyspaceName, true)
 
-	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone", "--",
 		"--exclude_tables", "unrelated",
 		"--chunk_count", "10",
 		"--min_rows_per_chunk", "1",
@@ -508,7 +508,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
 				ClusterInstance.GetAndReservePort(),
 				"--use_v3_resharding_mode=true",
-				"SplitDiff",
+				"SplitDiff", "--",
 				"--min_healthy_rdonly_tablets", "1",
 				fmt.Sprintf("%s/%s", keyspaceName, shard))
 			require.NoError(t, err)
@@ -547,7 +547,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
 	//move replica back and forth
-	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "-reverse", shard1Ks, "replica")
+	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "--", "--reverse", shard1Ks, "replica")
 
 	// After a backwards migration, queryservice should be enabled on source and disabled on destinations
 	sharding.CheckTabletQueryService(t, *sourceTablet, "SERVING", false, *ClusterInstance)

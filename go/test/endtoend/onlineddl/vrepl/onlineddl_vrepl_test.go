@@ -161,20 +161,20 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--migration_check_interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"-ddl_strategy", "online",
+			"--ddl_strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -477,7 +477,7 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("PRS shard -80", func(t *testing.T) {
 				// migration has started and is throttled. We now run PRS
-				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", keyspaceName+"/-80", "-new_primary", shards[0].Vttablets[reparentTabletIndex].Alias)
+				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", shards[0].Vttablets[reparentTabletIndex].Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
 			})
 

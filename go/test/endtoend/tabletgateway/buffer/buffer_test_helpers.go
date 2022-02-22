@@ -216,7 +216,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance := cluster.NewCluster(cell, hostname)
 
 	// Start topo server
-	clusterInstance.VtctldExtraArgs = []string{"-remote_operation_timeout", "30s", "-topo_etcd_lease_ttl", "40"}
+	clusterInstance.VtctldExtraArgs = []string{"--remote_operation_timeout", "30s", "--topo_etcd_lease_ttl", "40"}
 	if err := clusterInstance.StartTopo(); err != nil {
 		return nil, 1
 	}
@@ -227,22 +227,22 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		SchemaSQL: sqlSchema,
 		VSchema:   bt.VSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"-health_check_interval", "1s",
-		"-queryserver-config-transaction-timeout", "20",
+	clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s",
+		"--queryserver-config-transaction-timeout", "20",
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 		return nil, 1
 	}
 
 	clusterInstance.VtGateExtraArgs = []string{
-		"-enable_buffer",
+		"--enable_buffer",
 		// Long timeout in case failover is slow.
-		"-buffer_window", "10m",
-		"-buffer_max_failover_duration", "10m",
-		"-buffer_min_time_between_failovers", "20m",
-		"-gateway_implementation", "tabletgateway",
-		"-buffer_implementation", "keyspace_events",
-		"-tablet_refresh_interval", "1s",
+		"--buffer_window", "10m",
+		"--buffer_max_failover_duration", "10m",
+		"--buffer_min_time_between_failovers", "20m",
+		"--gateway_implementation", "tabletgateway",
+		"--buffer_implementation", "keyspace_events",
+		"--tablet_refresh_interval", "1s",
 	}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)
 

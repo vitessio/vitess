@@ -57,21 +57,21 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 
 	vtworker.proc = exec.Command(
 		vtworker.Binary,
-		"-log_dir", vtworker.LogDir,
-		"-port", fmt.Sprintf("%d", vtworker.Port),
-		"-executefetch_retry_time", vtworker.ExecuteRetryTime,
-		"-tablet_manager_protocol", "grpc",
-		"-tablet_protocol", "grpc",
-		"-topo_implementation", vtworker.CommonArg.TopoImplementation,
-		"-topo_global_server_address", vtworker.CommonArg.TopoGlobalAddress,
-		"-topo_global_root", vtworker.CommonArg.TopoGlobalRoot,
-		"-service_map", vtworker.ServiceMap,
-		"-grpc_port", fmt.Sprintf("%d", vtworker.GrpcPort),
-		"-cell", cell,
-		"-command_display_interval", "10ms",
+		"--log_dir", vtworker.LogDir,
+		"--port", fmt.Sprintf("%d", vtworker.Port),
+		"--executefetch_retry_time", vtworker.ExecuteRetryTime,
+		"--tablet_manager_protocol", "grpc",
+		"--tablet_protocol", "grpc",
+		"--topo_implementation", vtworker.CommonArg.TopoImplementation,
+		"--topo_global_server_address", vtworker.CommonArg.TopoGlobalAddress,
+		"--topo_global_root", vtworker.CommonArg.TopoGlobalRoot,
+		"--service_map", vtworker.ServiceMap,
+		"--grpc_port", fmt.Sprintf("%d", vtworker.GrpcPort),
+		"--cell", cell,
+		"--command_display_interval", "10ms",
 	)
 	if *isCoverage {
-		vtworker.proc.Args = append(vtworker.proc.Args, "-test.coverprofile=vtworker.out", "-test.v")
+		vtworker.proc.Args = append(vtworker.proc.Args, "--test.coverprofile=vtworker.out", "-test.v")
 	}
 	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
@@ -143,10 +143,10 @@ func (vtworker *VtworkerProcess) TearDown() error {
 
 // ExecuteCommand executes any vtworker command
 func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
-	args = append([]string{"-vtworker_client_protocol", "grpc",
-		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
+	args = append([]string{"--vtworker_client_protocol", "grpc",
+		"--server", vtworker.Server, "--log_dir", vtworker.LogDir, "--stderrthreshold", "info"}, args...)
 	if *isCoverage {
-		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtworkerclient-exec-cmd.out")}, args...)
+		args = append([]string{"--test.coverprofile=" + getCoveragePath("vtworkerclient-exec-cmd.out")}, args...)
 	}
 	tmpProcess := exec.Command(
 		"vtworkerclient",
@@ -157,8 +157,8 @@ func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 }
 
 func (vtworker *VtworkerProcess) ExecuteCommandInBg(args ...string) (*exec.Cmd, error) {
-	args = append([]string{"-vtworker_client_protocol", "grpc",
-		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
+	args = append([]string{"--vtworker_client_protocol", "grpc",
+		"--server", vtworker.Server, "--log_dir", vtworker.LogDir, "--stderrthreshold", "info"}, args...)
 	tmpProcess := exec.Command(
 		"vtworkerclient",
 		args...,
@@ -170,19 +170,19 @@ func (vtworker *VtworkerProcess) ExecuteCommandInBg(args ...string) (*exec.Cmd, 
 // ExecuteVtworkerCommand executes any vtworker command
 func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, args ...string) (err error) {
 	args = append([]string{
-		"-port", fmt.Sprintf("%d", port),
-		"-executefetch_retry_time", vtworker.ExecuteRetryTime,
-		"-tablet_manager_protocol", "grpc",
-		"-tablet_protocol", "grpc",
-		"-topo_implementation", vtworker.CommonArg.TopoImplementation,
-		"-topo_global_server_address", vtworker.CommonArg.TopoGlobalAddress,
-		"-topo_global_root", vtworker.CommonArg.TopoGlobalRoot,
-		"-service_map", vtworker.ServiceMap,
-		"-grpc_port", fmt.Sprintf("%d", grpcPort),
-		"-cell", vtworker.Cell,
-		"-log_dir", vtworker.LogDir, "-stderrthreshold", "1"}, args...)
+		"--port", fmt.Sprintf("%d", port),
+		"--executefetch_retry_time", vtworker.ExecuteRetryTime,
+		"--tablet_manager_protocol", "grpc",
+		"--tablet_protocol", "grpc",
+		"--topo_implementation", vtworker.CommonArg.TopoImplementation,
+		"--topo_global_server_address", vtworker.CommonArg.TopoGlobalAddress,
+		"--topo_global_root", vtworker.CommonArg.TopoGlobalRoot,
+		"--service_map", vtworker.ServiceMap,
+		"--grpc_port", fmt.Sprintf("%d", grpcPort),
+		"--cell", vtworker.Cell,
+		"--log_dir", vtworker.LogDir, "--stderrthreshold", "1"}, args...)
 	if *isCoverage {
-		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtworker-exec-cmd.out")}, args...)
+		args = append([]string{"--test.coverprofile=" + getCoveragePath("vtworker-exec-cmd.out")}, args...)
 	}
 	tmpProcess := exec.Command(
 		"vtworker",
