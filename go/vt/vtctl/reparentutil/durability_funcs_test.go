@@ -313,3 +313,70 @@ func Test_haveRevoked(t *testing.T) {
 		})
 	}
 }
+
+func TestEstablishForTablet(t *testing.T) {
+	tests := []struct {
+		name             string
+		durabilityPolicy string
+		primaryEligible  *topodatapb.Tablet
+		tabletsReached   []*topodatapb.Tablet
+		canEstablish     bool
+	}{
+		{
+			name:             "'none' durability policy - primary not reached",
+			durabilityPolicy: "none",
+			primaryEligible:  primaryTablet,
+			tabletsReached: []*topodatapb.Tablet{
+				replicaTablet, replicaCrossCellTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			canEstablish: false,
+		}, {
+			name:             "'semi_sync' durability policy - not established",
+			durabilityPolicy: "semi_sync",
+			primaryEligible:  primaryTablet,
+			tabletsReached: []*topodatapb.Tablet{
+				primaryTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			canEstablish: false,
+		}, {
+			name:             "'cross_cell' durability policy - not established",
+			durabilityPolicy: "cross_cell",
+			primaryEligible:  primaryTablet,
+			tabletsReached: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet, rdonlyCrossCellTablet, rdonlyTablet,
+			},
+			canEstablish: false,
+		}, {
+			name:             "'none' durability policy - established",
+			durabilityPolicy: "none",
+			primaryEligible:  primaryTablet,
+			tabletsReached: []*topodatapb.Tablet{
+				primaryTablet,
+			},
+			canEstablish: true,
+		}, {
+			name:             "'semi_sync' durability policy - established",
+			durabilityPolicy: "semi_sync",
+			primaryEligible:  primaryTablet,
+			tabletsReached: []*topodatapb.Tablet{
+				primaryTablet, replicaTablet,
+			},
+			canEstablish: true,
+		}, {
+			name:             "'cross_cell' durability policy - established",
+			durabilityPolicy: "cross_cell",
+			primaryEligible:  primaryTablet,
+			tabletsReached: []*topodatapb.Tablet{
+				primaryTablet, replicaCrossCellTablet,
+			},
+			canEstablish: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := SetDurabilityPolicy(tt.durabilityPolicy)
+			require.NoError(t, err)
+			require.Equalf(t, tt.canEstablish, EstablishForTablet(tt.primaryEligible, tt.tabletsReached), "EstablishForTablet(%v, %v)", tt.primaryEligible, tt.tabletsReached)
+		})
+	}
+}
