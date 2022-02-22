@@ -17,8 +17,14 @@ limitations under the License.
 package decimal
 
 import (
+	"bytes"
+	"math"
+	"math/big"
+	"math/rand"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDecimalAdd(t *testing.T) {
@@ -295,27 +301,117 @@ func TestRoundtrip(t *testing.T) {
 	}
 }
 
-func BenchmarkFormatting(b *testing.B) {
-	var parsed = make([]Decimal, 0, len(decimals))
-	for _, dc := range decimals {
-		parsed = append(parsed, RequireFromString(dc))
+func TestRoundtripStress(t *testing.T) {
+	var count = 1000000
+	if testing.Short() {
+		count = 100
 	}
 
-	b.Run("FormatMySQL(8)", func(b *testing.B) {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for n := 0; n < count; n++ {
+		fb := strconv.AppendFloat(nil, rng.NormFloat64(), 'f', -1, 64)
+		d, err := NewFromMySQL(fb)
+		if err != nil {
+			t.Fatalf("failed to parse %q: %v", fb, err)
+		}
+		str := d.String()
+		if str != string(fb) {
+			t.Fatalf("bad roundtrip: %q -> %q", fb, str)
+		}
+	}
+}
+
+func BenchmarkFormatting(b *testing.B) {
+	const Count = 10000
+	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	var parsed = make([]Decimal, 0, Count)
+	for i := 0; i < Count; i++ {
+		parsed = append(parsed, NewFromFloat(rng.NormFloat64()))
+	}
+
+	b.Run("StringFixed(8)", func(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for _, dec := range parsed {
-				_ = dec.FormatMySQL(8)
+				_ = dec.StringFixed(8)
 			}
 		}
 	})
 
-	b.Run("format", func(b *testing.B) {
+	b.Run("formatwithPrecision(8)", func(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for _, dec := range parsed {
-				_ = dec.format(make([]byte, 0, 10), false)
+				_ = dec.formatFast(8, true, false)
 			}
 		}
 	})
+
+	b.Run("formatFast", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for _, dec := range parsed {
+				_ = dec.formatFast(0, false, false)
+			}
+		}
+	})
+
+	b.Run("formatSlow", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for _, dec := range parsed {
+				_ = dec.formatSlow(false)
+			}
+		}
+	})
+}
+
+var bigBases = []uint64{
+	3141592653589793238,
+	math.MaxUint64,
+	1,
+	1000000000000000000,
+}
+
+func TestFormatFast(t *testing.T) {
+	for _, base := range bigBases {
+		for _, neg := range []bool{false, true} {
+			b := new(big.Int).SetUint64(base)
+			if neg {
+				b = b.Neg(b)
+			}
+			for exp := -100; exp <= 100; exp++ {
+				var d = Decimal{value: b, exp: int32(exp)}
+
+				expect := d.formatSlow(false)
+				got := d.formatFast(0, false, false)
+
+				if !bytes.Equal(expect, got) {
+					t.Errorf("base: %de%d\nwant: %q\ngot:  %q", base, exp, expect, got)
+				}
+			}
+		}
+	}
+}
+
+func TestFormatAndRound(t *testing.T) {
+	for _, neg := range []bool{false, true} {
+		b := new(big.Int).SetUint64(bigBases[0])
+		if neg {
+			b = b.Neg(b)
+		}
+		for prec := int32(1); prec < 32; prec++ {
+			for exp := -100; exp <= 100; exp++ {
+				var d = Decimal{value: b, exp: int32(exp)}
+
+				expect := d.StringFixed(prec)
+				got := string(d.formatFast(int(prec), true, false))
+
+				if expect != got {
+					t.Errorf("base: %de%d prec %d\nwant: %q\ngot:  %q", bigBases[0], exp, prec, expect, got)
+				}
+			}
+		}
+	}
 }
