@@ -70,13 +70,13 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
-	exec(t, conn, createMessage)
+	utils.MustMatch(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, createMessage)
 	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
 
-	defer exec(t, conn, "drop table vitess_message")
+	defer utils.Exec(t, conn, "drop table vitess_message")
 
-	exec(t, streamConn, "set workload = 'olap'")
+	utils.Exec(t, streamConn, "set workload = 'olap'")
 	err = streamConn.ExecuteStreamFetch("stream * from vitess_message")
 	require.NoError(t, err)
 
@@ -98,7 +98,7 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	utils.MustMatch(t, wantFields, gotFields)
 
-	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
+	utils.Exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
 
 	// account for jitter in timings, maxJitter uses the current hardcoded value for jitter in message_manager.go
 	jitter := int64(0)
@@ -115,7 +115,7 @@ func TestMessage(t *testing.T) {
 	}
 	utils.MustMatch(t, want, got)
 
-	qr := exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	qr := utils.Exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch := getTimeEpoch(qr)
 	jitter += epoch * maxJitter
 	// epoch could be 0 or 1, depending on how fast the row is updated
@@ -135,7 +135,7 @@ func TestMessage(t *testing.T) {
 	// Consume the resend.
 	_, err = streamConn.FetchNext(nil)
 	require.NoError(t, err)
-	qr = exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	qr = utils.Exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch = getTimeEpoch(qr)
 	jitter += epoch * maxJitter
 	// epoch could be 1 or 2, depending on how fast the row is updated
@@ -153,12 +153,12 @@ func TestMessage(t *testing.T) {
 	}
 
 	// Ack the message.
-	qr = exec(t, conn, "update vitess_message set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	qr = utils.Exec(t, conn, "update vitess_message set time_acked = 123, time_next = null where id = 1 and time_acked is null")
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 
 	// Within 3+1 seconds, the row should be deleted.
 	time.Sleep(4 * time.Second)
-	qr = exec(t, conn, "select time_acked, epoch from vitess_message where id = 1")
+	qr = utils.Exec(t, conn, "select time_acked, epoch from vitess_message where id = 1")
 	assert.Equal(t, 0, len(qr.Rows))
 }
 
@@ -190,11 +190,11 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
-	exec(t, conn, createThreeColMessage)
-	defer exec(t, conn, "drop table vitess_message3")
+	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, createThreeColMessage)
+	defer utils.Exec(t, conn, "drop table vitess_message3")
 
-	exec(t, streamConn, "set workload = 'olap'")
+	utils.Exec(t, streamConn, "set workload = 'olap'")
 	err = streamConn.ExecuteStreamFetch("stream * from vitess_message3")
 	require.NoError(t, err)
 
@@ -219,7 +219,7 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	utils.MustMatch(t, wantFields, gotFields)
 
-	exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
+	utils.Exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
 
 	got, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
@@ -231,7 +231,7 @@ func TestThreeColMessage(t *testing.T) {
 	utils.MustMatch(t, want, got)
 
 	// Verify Ack.
-	qr := exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	qr := utils.Exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 }
 
