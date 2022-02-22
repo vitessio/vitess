@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
 )
 
 func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
@@ -50,7 +49,7 @@ func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string
 	t.Helper()
 	qr := Exec(t, conn, query)
 	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+	assert.Equal(t, SortString(expected), SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
 }
 
 func AssertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {

@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 
