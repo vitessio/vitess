@@ -702,6 +702,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// query executor, it passed the ACLs and is _about to_ execute. This will be nicer to those queries:
 	// they will be able to complete before the rename, rather than block briefly on the rename only to find
 	// the table no longer exists.
+	time.Sleep(100 * time.Millisecond)
 	parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, swapTableName)
 	if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 		return err
