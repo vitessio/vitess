@@ -48,4 +48,6 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 	utils.AssertMatches(t, conn, `select id, num from s_tbl order by id`, `[[INT64(1) INT64(2)] [INT64(3) INT64(4)] [INT64(10) INT64(40)] [INT64(30) INT64(80)]]`)
 	utils.AssertMatches(t, conn, `select id, num from u_tbl order by id`, `[[INT64(1) INT64(2)] [INT64(3) INT64(4)] [INT64(10) INT64(40)] [INT64(30) INT64(80)]]`)
+
+	utils.AssertMatches(t, conn, `select num from num_vdx_tbl order by num`, `[[INT64(2)] [INT64(4)] [INT64(40)] [INT64(80)]]`)
 }
