@@ -477,12 +477,16 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 	case sqltypes.Tuple:
 		tuple := make([]EvalResult, len(bvar.Values))
 		for i, value := range bvar.Values {
-			tuple[i].setBindVar1(value.Type, value.Value, collations.TypedCollation{})
+			if err := tuple[i].setValue(sqltypes.MakeTrusted(value.Type, value.Value), collations.TypedCollation{}); err != nil {
+				throwEvalError(err)
+			}
 		}
 		result.setTuple(tuple)
 
 	default:
-		result.setBindVar1(typ, bvar.Value, bv.coll)
+		if err := result.setValue(sqltypes.MakeTrusted(typ, bvar.Value), bv.coll); err != nil {
+			throwEvalError(err)
+		}
 	}
 }
 
@@ -500,11 +504,9 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 
 // eval implements the Expr interface
 func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
-	value := env.Row[c.Offset]
-	if err := result.setValue(value); err != nil {
+	if err := result.setValue(env.Row[c.Offset], c.coll); err != nil {
 		throwEvalError(err)
 	}
-	result.replaceCollation(c.coll)
 }
 
 // typeof implements the Expr interface
