@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"

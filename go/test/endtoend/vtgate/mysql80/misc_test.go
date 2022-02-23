@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 

@@ -26,7 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
+	cmp "vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -70,7 +72,7 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	utils.MustMatch(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	cmp.MustMatch(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	utils.Exec(t, conn, createMessage)
 	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
 
@@ -96,7 +98,7 @@ func TestMessage(t *testing.T) {
 		}
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, wantFields, gotFields)
+	cmp.MustMatch(t, wantFields, gotFields)
 
 	utils.Exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
 
@@ -113,7 +115,7 @@ func TestMessage(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewVarChar("hello world"),
 	}
-	utils.MustMatch(t, want, got)
+	cmp.MustMatch(t, want, got)
 
 	qr := utils.Exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch := getTimeEpoch(qr)
@@ -217,7 +219,7 @@ func TestThreeColMessage(t *testing.T) {
 		}
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, wantFields, gotFields)
+	cmp.MustMatch(t, wantFields, gotFields)
 
 	utils.Exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
 
@@ -228,7 +230,7 @@ func TestThreeColMessage(t *testing.T) {
 		sqltypes.NewVarChar("hello world"),
 		sqltypes.NewInt64(3),
 	}
-	utils.MustMatch(t, want, got)
+	cmp.MustMatch(t, want, got)
 
 	// Verify Ack.
 	qr := utils.Exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")

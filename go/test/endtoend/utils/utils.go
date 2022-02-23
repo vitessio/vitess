@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,7 +51,7 @@ func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string
 	t.Helper()
 	qr := Exec(t, conn, query)
 	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(t, SortString(expected), SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
 }
 
 func AssertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {

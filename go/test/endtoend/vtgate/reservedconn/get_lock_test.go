@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/sync2"
 
