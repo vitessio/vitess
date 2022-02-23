@@ -34,7 +34,7 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	got := fmt.Sprintf("%v", qr.Rows)
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+		t.Errorf("Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
 	}
 }
 
