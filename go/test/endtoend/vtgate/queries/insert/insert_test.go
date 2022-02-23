@@ -73,3 +73,31 @@ func TestFailureInsertSelect(t *testing.T) {
 	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select 100,200,300", `Column count doesn't match value count at row 1`)
 	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select 100", `Column count doesn't match value count at row 1`)
 }
+
+func TestAutoIncInsertSelect(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.Exec(t, conn, `delete from s_tbl`)
+	defer utils.Exec(t, conn, `delete from u_tbl`)
+
+	utils.Exec(t, conn, "insert into user_tbl(region_id, name) values (1,'A'),(1,'B'),(3,'B'),(3,'C')")
+
+	qr := utils.Exec(t, conn, "insert into user_tbl(region_id, name) select region_id, name from user_tbl")
+	require.EqualValues(t, 4, qr.RowsAffected)
+	require.EqualValues(t, 5, qr.InsertID)
+
+	qr = utils.Exec(t, conn, "insert into user_tbl(id, region_id, name) select null, region_id, name from user_tbl where id = 1")
+	require.EqualValues(t, 1, qr.RowsAffected)
+	require.EqualValues(t, 9, qr.InsertID)
+
+	qr = utils.Exec(t, conn, "insert into user_tbl(id, region_id, name) select 100, region_id, name from user_tbl where id = 1")
+	require.EqualValues(t, 1, qr.RowsAffected)
+	require.EqualValues(t, 100, qr.InsertID)
+
+	//	utils.AssertMatches(t, conn, `select * from user_tbl order by id`, ``)
+
+}
