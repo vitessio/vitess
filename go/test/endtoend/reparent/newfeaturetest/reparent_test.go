@@ -291,17 +291,17 @@ func TestERSFailFast(t *testing.T) {
 	// Confirm that replication is still working as intended
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
-	var errChan chan error
+	strChan := make(chan string)
 	go func() {
 		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
-		_, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
+		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
 		require.Error(t, err)
-		errChan <- err
+		strChan <- out
 	}()
 
 	select {
-	case err = <-errChan:
-		require.Contains(t, err.Error(), "no valid candidates for emergency reparent")
+	case out := <-strChan:
+		require.Contains(t, out, "no valid candidates for emergency reparent")
 	case <-time.After(60 * time.Second):
 		require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
 	}
