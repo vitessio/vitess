@@ -2865,7 +2865,9 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	span.Annotate("keyspace", req.Keyspace)
 	keyspace := req.Keyspace
 
-	resp := vtctldatapb.ValidateSchemaKeyspaceResponse{}
+	resp := vtctldatapb.ValidateSchemaKeyspaceResponse{
+		Results: []string{},
+	}
 
 	shards, err := s.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -2874,6 +2876,32 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	}
 
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
+
+	// Initiate individual shard results first
+	for _, shard := range shards {
+		resp.ResultsByShard[shard] = &vtctldatapb.ValidateShardResponse{
+			Results: []string{},
+		}
+	}
+
+	if req.IncludeVschema {
+		results, err := s.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{
+			Keyspace:      keyspace,
+			Shards:        shards,
+			ExcludeTables: req.ExcludeTables,
+			IncludeViews:  req.IncludeViews,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if len(results.Results) > 0 {
+			resp.Results = append(resp.Results, results.Results...)
+			for shard, shardResults := range resp.ResultsByShard {
+				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, shardResults.Results...)
+			}
+		}
+	}
 
 	sort.Strings(shards)
 
@@ -2894,27 +2922,21 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 
 			si, err := s.ts.GetShard(ctx, keyspace, shard)
 
-			shardResp := vtctldatapb.ValidateShardResponse{
-				Results: []string{},
-			}
-
 			m.Lock()
 			defer m.Unlock()
 
 			if err != nil {
 				errMessage := fmt.Sprintf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
-				shardResp.Results = append(shardResp.Results, errMessage)
+				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
 				resp.Results = append(resp.Results, errMessage)
-				resp.ResultsByShard[shard] = &shardResp
 				return
 			}
 
 			if !si.HasPrimary() {
 				if !req.SkipNoPrimary {
 					errMessage := fmt.Sprintf("no primary in shard %v/%v", keyspace, shard)
-					shardResp.Results = append(shardResp.Results, errMessage)
+					resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
 					resp.Results = append(resp.Results, errMessage)
-					resp.ResultsByShard[shard] = &shardResp
 				}
 				return
 			}
@@ -2924,9 +2946,8 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 				referenceSchema, err = schematools.GetSchema(ctx, s.ts, s.tmc, referenceAlias, nil, []string{} /*excludeTables*/, false /*includeViews*/)
 				if err != nil {
 					errMessage := fmt.Sprintf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, []string{} /*excludeTables*/, false /*includeViews*/, err)
-					shardResp.Results = append(shardResp.Results, errMessage)
+					resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
 					resp.Results = append(resp.Results, errMessage)
-					resp.ResultsByShard[shard] = &shardResp
 					return
 				}
 			}
@@ -2934,9 +2955,8 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 			aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 			if err != nil {
 				errMessage := fmt.Sprintf("FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
-				shardResp.Results = append(shardResp.Results, errMessage)
+				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
 				resp.Results = append(resp.Results, errMessage)
-				resp.ResultsByShard[shard] = &shardResp
 				return
 			}
 
@@ -2964,107 +2984,14 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 			if aliasErrs.HasErrors() {
 				for _, err := range aliasErrs.Errors {
 					errMessage := err.Error()
-					shardResp.Results = append(shardResp.Results, errMessage)
+					resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
 					resp.Results = append(resp.Results, errMessage)
 				}
 			}
-
-			resp.ResultsByShard[shard] = &shardResp
 		}(shard)
 	}
 
 	wg.Wait()
-
-	return &resp, nil
-}
-
-// ValidateVersionKeyspace validates all versions are the same in all
-// tablets in a keyspace
-func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctldatapb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
-	keyspace := req.Keyspace
-	shards, err := s.ts.GetShardNames(ctx, keyspace)
-	resp := vtctldatapb.ValidateVersionKeyspaceResponse{
-		Results:        []string{},
-		ResultsByShard: make(map[string]*vtctldatapb.ValidateShardResponse, len(shards)),
-	}
-
-	if err != nil {
-		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err))
-		return &resp, nil
-	}
-
-	if len(shards) == 0 {
-		resp.Results = append(resp.Results, fmt.Sprintf("no shards in keyspace %v", keyspace))
-		return &resp, nil
-	}
-
-	si, err := s.ts.GetShard(ctx, keyspace, shards[0])
-	if err != nil {
-		resp.Results = append(resp.Results, fmt.Sprintf("unable to find primary shard %v/%v", keyspace, shards[0]))
-		return &resp, nil
-	}
-	if !si.HasPrimary() {
-		resp.Results = append(resp.Results, fmt.Sprintf("no primary in shard %v/%v", keyspace, shards[0]))
-		return &resp, nil
-	}
-
-	referenceAlias := si.PrimaryAlias
-	referenceVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: referenceAlias})
-	if err != nil {
-		resp.Results = append(resp.Results, fmt.Sprintf("unable to get reference version of first shard's primary tablet: %v", err))
-		return &resp, nil
-	}
-
-	var validateVersionKeyspaceResponseMutex sync.Mutex
-
-	for _, shard := range shards {
-		validateVersionKeyspaceResponseMutex.Lock()
-		shardResp := vtctldatapb.ValidateShardResponse{
-			Results: []string{},
-		}
-
-		var (
-			validateShardResponseMutex sync.Mutex
-			tabletWaitGroup            sync.WaitGroup
-		)
-
-		aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
-		if err != nil {
-			errMessage := fmt.Sprintf("unable to find tablet aliases in shard %v: %v", shard, err)
-			shardResp.Results = append(shardResp.Results, errMessage)
-			resp.Results = append(resp.Results, errMessage)
-			resp.ResultsByShard[shard] = &shardResp
-			validateVersionKeyspaceResponseMutex.Unlock()
-			continue
-		}
-
-		for _, alias := range aliases {
-			if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
-				continue
-			}
-
-			tabletWaitGroup.Add(1)
-			go func(alias *topodatapb.TabletAlias, m *sync.Mutex) {
-				validateShardResponseMutex.Lock()
-				defer validateShardResponseMutex.Unlock()
-				defer tabletWaitGroup.Done()
-				replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: alias})
-				if err != nil {
-					shardResp.Results = append(shardResp.Results, fmt.Sprintf("unable to get version for tablet %v: %v", alias, err))
-					return
-				}
-
-				if referenceVersion.Version != replicaVersion.Version {
-					shardResp.Results = append(shardResp.Results, fmt.Sprintf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(referenceAlias), referenceVersion, topoproto.TabletAliasString(alias), replicaVersion))
-				}
-			}(alias, &validateShardResponseMutex)
-		}
-
-		tabletWaitGroup.Wait()
-		resp.Results = append(resp.Results, shardResp.Results...)
-		resp.ResultsByShard[shard] = &shardResp
-		validateVersionKeyspaceResponseMutex.Unlock()
-	}
 
 	return &resp, nil
 }
@@ -3246,6 +3173,170 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 	close(results)
 	<-done
 
+	return &resp, nil
+}
+
+// ValidateVersionKeyspace validates all versions are the same in all
+// tablets in a keyspace
+func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctldatapb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	keyspace := req.Keyspace
+	shards, err := s.ts.GetShardNames(ctx, keyspace)
+	resp := vtctldatapb.ValidateVersionKeyspaceResponse{
+		Results:        []string{},
+		ResultsByShard: make(map[string]*vtctldatapb.ValidateShardResponse, len(shards)),
+	}
+
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err))
+		return &resp, nil
+	}
+
+	if len(shards) == 0 {
+		resp.Results = append(resp.Results, fmt.Sprintf("no shards in keyspace %v", keyspace))
+		return &resp, nil
+	}
+
+	si, err := s.ts.GetShard(ctx, keyspace, shards[0])
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("unable to find primary shard %v/%v", keyspace, shards[0]))
+		return &resp, nil
+	}
+	if !si.HasPrimary() {
+		resp.Results = append(resp.Results, fmt.Sprintf("no primary in shard %v/%v", keyspace, shards[0]))
+		return &resp, nil
+	}
+
+	referenceAlias := si.PrimaryAlias
+	referenceVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: referenceAlias})
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("unable to get reference version of first shard's primary tablet: %v", err))
+		return &resp, nil
+	}
+
+	var validateVersionKeyspaceResponseMutex sync.Mutex
+
+	for _, shard := range shards {
+		validateVersionKeyspaceResponseMutex.Lock()
+		shardResp := vtctldatapb.ValidateShardResponse{
+			Results: []string{},
+		}
+
+		var (
+			validateShardResponseMutex sync.Mutex
+			tabletWaitGroup            sync.WaitGroup
+		)
+
+		aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+		if err != nil {
+			errMessage := fmt.Sprintf("unable to find tablet aliases in shard %v: %v", shard, err)
+			shardResp.Results = append(shardResp.Results, errMessage)
+			resp.Results = append(resp.Results, errMessage)
+			resp.ResultsByShard[shard] = &shardResp
+			validateVersionKeyspaceResponseMutex.Unlock()
+			continue
+		}
+
+		for _, alias := range aliases {
+			if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
+				continue
+			}
+
+			tabletWaitGroup.Add(1)
+			go func(alias *topodatapb.TabletAlias, m *sync.Mutex) {
+				validateShardResponseMutex.Lock()
+				defer validateShardResponseMutex.Unlock()
+				defer tabletWaitGroup.Done()
+				replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: alias})
+				if err != nil {
+					shardResp.Results = append(shardResp.Results, fmt.Sprintf("unable to get version for tablet %v: %v", alias, err))
+					return
+				}
+
+				if referenceVersion.Version != replicaVersion.Version {
+					shardResp.Results = append(shardResp.Results, fmt.Sprintf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(referenceAlias), referenceVersion, topoproto.TabletAliasString(alias), replicaVersion))
+				}
+			}(alias, &validateShardResponseMutex)
+		}
+
+		tabletWaitGroup.Wait()
+		resp.Results = append(resp.Results, shardResp.Results...)
+		resp.ResultsByShard[shard] = &shardResp
+		validateVersionKeyspaceResponseMutex.Unlock()
+	}
+
+	return &resp, nil
+}
+
+// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
+func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest) (*vtctldatapb.ValidateVSchemaResponse, error) {
+	keyspace := req.Keyspace
+	shards := req.Shards
+	excludeTables := req.ExcludeTables
+	includeViews := req.IncludeViews
+
+	vschm, err := s.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return nil, fmt.Errorf("GetVSchema(%s) failed: %v", keyspace, err)
+	}
+
+	resp := vtctldatapb.ValidateVSchemaResponse{
+		Results:        []string{},
+		ResultsByShard: make(map[string]*vtctldatapb.ValidateShardResponse, len(shards)),
+	}
+
+	var (
+		wg    sync.WaitGroup
+		mutex sync.Mutex
+	)
+
+	wg.Add(len(shards))
+
+	for _, shard := range shards {
+		go func(shard string) {
+			mutex.Lock()
+			defer wg.Done()
+			defer mutex.Unlock()
+
+			shardResult := vtctldatapb.ValidateShardResponse{
+				Results: []string{},
+			}
+
+			notFoundTables := []string{}
+			si, err := s.ts.GetShard(ctx, keyspace, shard)
+			if err != nil {
+				errorMessage := fmt.Sprintf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
+				shardResult.Results = append(shardResult.Results, errorMessage)
+				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+				return
+			}
+			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, nil, excludeTables, includeViews)
+			if err != nil {
+				errorMessage := fmt.Sprintf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
+					excludeTables, includeViews, keyspace, shard, err,
+				)
+				shardResult.Results = append(shardResult.Results, errorMessage)
+				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+				return
+			}
+			for _, tableDef := range primarySchema.TableDefinitions {
+				if _, ok := vschm.Tables[tableDef.Name]; !ok {
+					if !schema.IsInternalOperationTableName(tableDef.Name) {
+						notFoundTables = append(notFoundTables, tableDef.Name)
+					}
+				}
+			}
+			if len(notFoundTables) > 0 {
+				errorMessage := fmt.Sprintf("%v/%v has tables that are not in the vschema: %v", keyspace, shard, notFoundTables)
+				shardResult.Results = append(shardResult.Results, errorMessage)
+				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+			}
+			resp.ResultsByShard[shard] = &shardResult
+		}(shard)
+	}
+	wg.Wait()
 	return &resp, nil
 }
 

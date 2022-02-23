@@ -997,3 +997,15 @@ message ValidateVersionKeyspaceResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
+
+message ValidateVSchemaRequest {
+  string keyspace = 1;
+  repeated string shards = 2;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
+}
+
+message ValidateVSchemaResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
+}
