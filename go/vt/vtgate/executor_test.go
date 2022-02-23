@@ -1707,7 +1707,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	r.normalize = true
 	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false)
 
-	query1 := "select * from music_user_map where id = 1"
+	query1 := "select * from music_user_map WHERE  id = 1"
 	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
 	assertCacheSize(t, r.plans, 0)
 	wantSQL := "select * from music_user_map where id = :vtg1 /* comment */"
@@ -1715,10 +1715,29 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
 	}
 
-	_, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
-	assertCacheSize(t, r.plans, 1)
+	// For prepared statements, we want to make sure we do *not* normalize
+	query2 := "select * from music_user_map WHERE  id = :prep"
+	_, logStats2 := getPlanCached(t, r, emptyvc, query2, makeComments(" /* comment */"), map[string]*querypb.BindVariable{"prep": sqltypes.Uint64BindVariable(1)}, true /* skipQueryPlanCache */)
+	assertCacheSize(t, r.plans, 0)
+	wantSQL = "select * from music_user_map WHERE  id = :prep /* comment */"
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
+	}
+
+	// For prepared statements, we want to make sure we do *not* normalize, but still can cache
+	_, logStats3 := getPlanCached(t, r, emptyvc, query2, makeComments(" /* comment */"), map[string]*querypb.BindVariable{"prep": sqltypes.Uint64BindVariable(1)}, false /* skipQueryPlanCache */)
+	assertCacheSize(t, r.plans, 1)
+	wantSQL = "select * from music_user_map WHERE  id = :prep /* comment */"
+	if logStats3.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats3.SQL)
+	}
+
+	// Make sure cache fetch works as exepected
+	_, logStats4 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */)
+	assertCacheSize(t, r.plans, 2)
+	wantSQL = "select * from music_user_map where id = :vtg1 /* comment */"
+	if logStats4.SQL != wantSQL {
+		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
 
 	// Skip cache using directive
