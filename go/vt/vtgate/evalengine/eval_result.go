@@ -848,7 +848,7 @@ func (er *EvalResult) makeDecimal(m, d int32) {
 	case sqltypes.Decimal:
 		dec = er.decimal()
 	case sqltypes.Float64, sqltypes.Float32:
-		dec = decimal.NewFromFloat(er.float64())
+		dec = decimal.NewFromFloatMySQL(er.float64())
 	case sqltypes.Int64:
 		dec = decimal.NewFromInt(er.int64())
 	case sqltypes.Uint64:
