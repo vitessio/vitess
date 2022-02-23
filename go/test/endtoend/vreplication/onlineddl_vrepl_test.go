@@ -157,7 +157,6 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 		require.FailNowf(t, "vdiff failed", "", vdiffError)
 	}
 	require.Nil(t, vdiffError)
-
 	// complete Reshard
 	err = tstWorkflowExec(t, defaultCellName, workflowName, shardedKeyspaceName, shardedKeyspaceName, "", workflowActionSwitchTraffic, "", "", "")
 	require.NoError(t, err)

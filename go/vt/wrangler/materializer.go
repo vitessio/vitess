@@ -1153,7 +1153,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
-		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes)
+		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes, binlogdatapb.VReplicationWorkflowType(mz.ms.MaterializationIntent))
 	}
 	return ig.String(), nil
 }

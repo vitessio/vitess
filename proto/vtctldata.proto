@@ -44,6 +44,7 @@ message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
 }
 
+// Deprecated: replaced by binlogdatapb.VReplicationWorkflowType
 // MaterializationIntent describes the reason for creating the Materialize flow
 enum MaterializationIntent {
   // CUSTOM is the default value

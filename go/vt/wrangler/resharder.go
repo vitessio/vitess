@@ -59,10 +59,11 @@ type resharder struct {
 }
 
 type refStream struct {
-	workflow    string
-	bls         *binlogdatapb.BinlogSource
-	cell        string
-	tabletTypes string
+	workflow     string
+	bls          *binlogdatapb.BinlogSource
+	cell         string
+	tabletTypes  string
+	workflowType binlogdatapb.VReplicationWorkflowType
 }
 
 // Reshard initiates a resharding workflow.
@@ -182,7 +183,7 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 	err := rs.forAll(rs.sourceShards, func(source *topo.ShardInfo) error {
 		sourcePrimary := rs.sourcePrimaries[source.ShardName()]
 
-		query := fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name=%s and message != 'FROZEN'", encodeString(sourcePrimary.DbName()))
+		query := fmt.Sprintf("select workflow, source, cell, tablet_types, workflow_type from _vt.vreplication where db_name=%s and message != 'FROZEN'", encodeString(sourcePrimary.DbName()))
 		p3qr, err := rs.wr.tmc.VReplicationExec(ctx, sourcePrimary.Tablet, query)
 		if err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", sourcePrimary.Tablet, query)
@@ -226,12 +227,15 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 				continue
 			}
 			key := fmt.Sprintf("%s:%s:%s", workflow, bls.Keyspace, bls.Shard)
+			i, _ := row[4].ToInt64()
+			workflowType := binlogdatapb.VReplicationWorkflowType(i)
 			if mustCreate {
 				rs.refStreams[key] = &refStream{
-					workflow:    workflow,
-					bls:         &bls,
-					cell:        row[2].ToString(),
-					tabletTypes: row[3].ToString(),
+					workflow:     workflow,
+					bls:          &bls,
+					cell:         row[2].ToString(),
+					tabletTypes:  row[3].ToString(),
+					workflowType: workflowType,
 				}
 			} else {
 				if !ref[key] {
@@ -329,11 +333,11 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				Filter:        filter,
 				StopAfterCopy: rs.stopAfterCopy,
 			}
-			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes)
+			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes, binlogdatapb.VReplicationWorkflowType_RESHARD)
 		}
 
 		for _, rstream := range rs.refStreams {
-			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes)
+			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes, rstream.workflowType)
 		}
 		query := ig.String()
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {

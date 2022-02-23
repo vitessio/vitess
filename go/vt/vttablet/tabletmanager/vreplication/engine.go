@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -630,6 +631,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	}
 
 	// Use the reference row to copy other fields like cell, tablet_types, etc.
+	// todo: change params map to typed struct
 	params, err := readRow(dbClient, refid)
 	if err != nil {
 		log.Errorf("transitionJournal: %v", err)
@@ -641,15 +643,17 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
 
 		// todo: copy over workflow type in ig.AddRow
-		if params["workflow_type"] == string(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) &&
+		i, _ := strconv.ParseInt(params["workflow_type"], 10, 64)
+		workflowType := binlogdatapb.VReplicationWorkflowType(i)
+		if workflowType == binlogdatapb.VReplicationWorkflowType_ONLINEDDL &&
 			sgtid.Shard != vre.shard {
-			log.Infof("Found Online DDL Workflow not for this shard %s: sgtid %s", vre.shard, sgtid)
+			log.Infof("Found Online DDL Workflow which is not for this shard %s: sgtid %s", vre.shard, sgtid)
 			continue
 		}
 
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType)
 		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)

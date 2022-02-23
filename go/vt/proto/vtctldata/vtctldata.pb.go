@@ -47,6 +47,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Deprecated: replaced by binlogdatapb.VReplicationWorkflowType
 // MaterializationIntent describes the reason for creating the Materialize flow
 type MaterializationIntent int32
 

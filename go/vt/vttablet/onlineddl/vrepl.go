@@ -513,7 +513,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
-	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY")
+	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY", binlogdatapb.VReplicationWorkflowType_ONLINEDDL)
 
 	return ig.String(), nil
 }

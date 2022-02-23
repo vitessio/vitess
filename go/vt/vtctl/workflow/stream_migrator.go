@@ -237,7 +237,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		if err != nil {
 			return nil, err
 		}
-
+		log.Infof("WorkflowType %d, casted %d", workflowType, binlogdatapb.VReplicationWorkflowType(workflowType))
 		var bls binlogdatapb.BinlogSource
 		rowBytes, err := row[2].ToBytes()
 		if err != nil {
@@ -269,6 +269,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			Workflow:     workflowName,
 			BinlogSource: &bls,
 			Position:     pos,
+			WorkflowType: binlogdatapb.VReplicationWorkflowType(workflowType),
 		})
 	}
 	return tabletStreams, nil
@@ -572,11 +573,8 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 
 				rule.Filter = buf.String()
 			}
-			log.Infof("Adding row for target %s: workflow %s, shard %s, position %s, binlogsource %v",
-				target.GetPrimary().AliasString(), vrs.Workflow, vrs.BinlogSource.Shard, vrs.Position.String())
-			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "")
+			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "", vrs.WorkflowType)
 		}
-		log.Infof("Adding row sql %s: %s", target.GetPrimary().AliasString(), ig.String())
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
 		return err
 	})

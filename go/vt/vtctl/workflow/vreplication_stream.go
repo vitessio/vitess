@@ -34,6 +34,7 @@ type VReplicationStream struct {
 	Workflow     string
 	BinlogSource *binlogdatapb.BinlogSource
 	Position     mysql.Position
+	WorkflowType binlogdatapb.VReplicationWorkflowType
 }
 
 // VReplicationStreams wraps a slice of VReplicationStream objects to provide
@@ -88,6 +89,7 @@ func (streams VReplicationStreams) Copy() VReplicationStreams {
 			Workflow:     vrs.Workflow,
 			BinlogSource: proto.Clone(vrs.BinlogSource).(*binlogdatapb.BinlogSource),
 			Position:     vrs.Position,
+			WorkflowType: vrs.WorkflowType,
 		}
 	}
 
