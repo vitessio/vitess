@@ -158,6 +158,8 @@ type Generate struct {
 	// values will be generated based on how many were not
 	// supplied (NULL).
 	Values evalengine.Expr
+	// Insert using Select, offset for auto increment column
+	Offset int
 }
 
 // InsertOpcode is a number representing the opcode
@@ -821,6 +823,10 @@ func (ins *Insert) description() PrimitiveDescription {
 			valuesOffsets[vindex.Name] = strings.Join(res, ", ")
 		}
 		other["VindexValues"] = valuesOffsets
+	}
+
+	if ins.Generate != nil && ins.Generate.Values == nil {
+		other["AutoIncrement"] = fmt.Sprintf("%s:%d", ins.Generate.Keyspace.Name, ins.Generate.Offset)
 	}
 
 	if len(ins.VindexValueOffset) > 0 {

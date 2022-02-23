@@ -278,11 +278,6 @@ Gen4 plan same as above
 "unsupported: DML cannot change vindex column"
 Gen4 plan same as above
 
-# sharded insert from select
-"insert into user(id) select 1 from dual"
-"unsupported: insert using select with auto-inc table"
-Gen4 plan same as above
-
 # sharded replace no vindex
 "replace into user(val) values(1, 'foo')"
 "unsupported: REPLACE INTO with sharded schema"
@@ -379,11 +374,6 @@ Gen4 plan same as above
 # select is_free_lock with non-dual table
 "select is_free_lock('xyz') from user"
 "is_free_lock('xyz') allowed only with dual"
-Gen4 plan same as above
-
-# insert using select get_lock from table
-"insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
-"unsupported: insert using select with auto-inc table"
 Gen4 plan same as above
 
 # union with SQL_CALC_FOUND_ROWS 
