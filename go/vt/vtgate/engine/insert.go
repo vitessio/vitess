@@ -422,6 +422,9 @@ func (ins *Insert) execInsertFromSelect(vcursor VCursor, bindVars map[string]*qu
 	if err != nil {
 		return nil, err
 	}
+	if len(result.Rows) == 0 {
+		return &sqltypes.Result{}, nil
+	}
 
 	insertID, err := ins.processGenerateFromRows(vcursor, result.Rows)
 	if err != nil {
@@ -517,40 +520,52 @@ func (ins *Insert) processGenerateFromRows(vcursor VCursor, rows []sqltypes.Row)
 	if ins.Generate == nil {
 		return 0, nil
 	}
-	count := int64(0)
+	var count int64
 	offset := ins.Generate.Offset
-	for _, val := range rows {
-		if val[offset].IsNull() {
-			count++
+	genColPresent := offset < len(rows[0])
+	if genColPresent {
+		for _, val := range rows {
+			if val[offset].IsNull() {
+				count++
+			}
 		}
+	} else {
+		count = int64(len(rows))
+	}
+
+	if count == 0 {
+		return 0, nil
 	}
 
 	// If generation is needed, generate the requested number of values (as one call).
-	if count != 0 {
-		rss, _, err := vcursor.ResolveDestinations(ins.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
-		if err != nil {
-			return 0, err
-		}
-		if len(rss) != 1 {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
-		}
-		bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-		qr, err := vcursor.ExecuteStandalone(ins.Generate.Query, bindVars, rss[0])
-		if err != nil {
-			return 0, err
-		}
-		// If no rows are returned, it's an internal error, and the code
-		// must panic, which will be caught and reported.
-		insertID, err = evalengine.ToInt64(qr.Rows[0][0])
-		if err != nil {
-			return 0, err
-		}
+	rss, _, err := vcursor.ResolveDestinations(ins.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+	if err != nil {
+		return 0, err
+	}
+	if len(rss) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
+	}
+	bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
+	qr, err := vcursor.ExecuteStandalone(ins.Generate.Query, bindVars, rss[0])
+	if err != nil {
+		return 0, err
+	}
+	// If no rows are returned, it's an internal error, and the code
+	// must panic, which will be caught and reported.
+	insertID, err = evalengine.ToInt64(qr.Rows[0][0])
+	if err != nil {
+		return 0, err
 	}
 
 	used := insertID
-	for _, val := range rows {
-		if val[offset].IsNull() {
-			val[offset] = sqltypes.NewInt64(used)
+	for idx, val := range rows {
+		if genColPresent {
+			if val[offset].IsNull() {
+				val[offset] = sqltypes.NewInt64(used)
+				used++
+			}
+		} else {
+			rows[idx] = append(val, sqltypes.NewInt64(used))
 			used++
 		}
 	}

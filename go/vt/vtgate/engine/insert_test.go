@@ -1708,3 +1708,91 @@ func TestInsertSelectGenerate(t *testing.T) {
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
 	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 2})
 }
+
+func TestInsertSelectGenerateNotProvided(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	ins := &Insert{
+		Opcode:   InsertSelect,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_insert",
+		Table:    ks.Tables["t1"],
+		VindexValueOffset: [][]int{
+			{1}}, // The primary vindex has a single column as sharding key
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.Generate = &Generate{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks2",
+			Sharded: false,
+		},
+		Query:  "dummy_generate",
+		Offset: 2,
+	}
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		// This is the result from the input SELECT
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"name|id",
+				"varchar|int64"),
+			"a|1",
+			"a|2",
+			"b|3"),
+		// This is the result for the sequence query
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"nextval",
+				"int64",
+			),
+			"10",
+		),
+		{InsertID: 1},
+	}
+
+	result, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		// this is the input query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
+
+		// this is the sequence table query
+		`ExecuteStandalone dummy_generate n: type:INT64 value:"3" ks2 -20`,
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) suffix ` +
+			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c0_2: type:INT64 value:"10" ` +
+			`_c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"3" _c2_2: type:INT64 value:"12"} ` +
+			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) suffix ` +
+			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2" _c1_2: type:INT64 value:"11"} ` +
+			`true false`,
+	})
+
+	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
+	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 10})
+}
