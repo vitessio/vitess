@@ -232,6 +232,22 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert plan with %T", ins.Rows)
 	}
+	// validate the columns to match on insert and select
+	if len(ins.Columns) < selectStmt.GetColumnCount() {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
+	}
+	if len(ins.Columns) > selectStmt.GetColumnCount() {
+		sel := sqlparser.GetFirstSelect(selectStmt)
+		var hasStarExpr bool
+		for _, sExpr := range sel.SelectExprs {
+			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
+				break
+			}
+		}
+		if !hasStarExpr {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
+		}
+	}
 	// Override the locking with `for update` to lock the rows for inserting the data.
 	selectStmt.SetLock(sqlparser.ForUpdateLock)
 

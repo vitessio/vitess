@@ -51,3 +51,25 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 	utils.AssertMatches(t, conn, `select num from num_vdx_tbl order by num`, `[[INT64(2)] [INT64(4)] [INT64(40)] [INT64(80)]]`)
 }
+
+func TestFailureInsertSelect(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.Exec(t, conn, `delete from s_tbl`)
+	defer utils.Exec(t, conn, `delete from u_tbl`)
+
+	utils.Exec(t, conn, "insert into s_tbl(id, num) values (1,2),(3,4)")
+	utils.Exec(t, conn, "insert into u_tbl(id, num) values (1,2),(3,4)")
+
+	// primary key same
+	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `Duplicate entry '1' for key 's_tbl.PRIMARY' (errno 1062) (sqlstate 23000)`)
+	// lookup key same
+	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
+	// mismatch column count
+	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select 100,200,300", `Column count doesn't match value count at row 1`)
+	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select 100", `Column count doesn't match value count at row 1`)
+}
