@@ -37,6 +37,11 @@ var (
 	primary key(id)
 ) Engine=InnoDB;
 
+create table num_vdx_tbl(
+	num bigint,
+	keyspace_id varbinary(20),
+	primary key(num)
+) Engine=InnoDB;
 `
 
 	sVSchema = `
@@ -45,6 +50,15 @@ var (
   "vindexes": {
     "hash": {
       "type": "hash"
+    },
+    "num_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "num_vdx_tbl",
+        "from": "num",
+        "to": "keyspace_id"
+      },
+      "owner": "s_tbl"
     }
   },
   "tables": {
@@ -52,6 +66,18 @@ var (
       "column_vindexes": [
         {
           "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "num",
+          "name": "num_vdx"
+        }
+      ]
+    },
+    "num_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "num",
           "name": "hash"
         }
       ]
