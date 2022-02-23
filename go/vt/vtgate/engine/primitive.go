@@ -153,6 +153,10 @@ type (
 
 		SetSessionEnableSystemSettings(bool) error
 		GetSessionEnableSystemSettings() bool
+		GetEnableSetVar() bool
+
+		GetSystemVariables(func(k string, v string))
+		HasSystemVariables() bool
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)

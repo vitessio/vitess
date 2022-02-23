@@ -37,6 +37,13 @@ type (
 		SQLNode
 	}
 
+	// SupportOptimizerHint represents a statement that accepts optimizer hints.
+	SupportOptimizerHint interface {
+		iSupportOptimizerHint()
+		SetComments(comments Comments)
+		GetComments() Comments
+	}
+
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
@@ -695,6 +702,14 @@ func (TableOptions) iAlterOption()             {}
 func (*ExplainStmt) iExplain() {}
 func (*ExplainTab) iExplain()  {}
 
+func (*Delete) iSupportOptimizerHint()  {}
+func (*Insert) iSupportOptimizerHint()  {}
+func (*Stream) iSupportOptimizerHint()  {}
+func (*Update) iSupportOptimizerHint()  {}
+func (*VStream) iSupportOptimizerHint() {}
+func (*Select) iSupportOptimizerHint()  {}
+func (*Union) iSupportOptimizerHint()   {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
 	return true
@@ -1217,6 +1232,31 @@ func (node *RevertMigration) SetComments(comments Comments) {
 	node.Comments = comments
 }
 
+// SetComments for Delete
+func (node *Delete) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Insert
+func (node *Insert) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Stream
+func (node *Stream) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Update
+func (node *Update) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for VStream
+func (node *VStream) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
 // GetComments implements DDLStatement.
 func (node *RenameTable) GetComments() Comments {
 	// irrelevant
@@ -1256,6 +1296,31 @@ func (node *DropView) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *AlterView) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements SupportOptimizerHint.
+func (node *Delete) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Insert.
+func (node *Insert) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Stream.
+func (node *Stream) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Update.
+func (node *Update) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements VStream.
+func (node *VStream) GetComments() Comments {
 	return node.Comments
 }
 
@@ -2163,15 +2228,11 @@ func (ListArg) iColTuple()   {}
 
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
-	Type     string
-	Length   *Literal
-	Scale    *Literal
-	Operator ConvertTypeOperator
-	Charset  string
+	Type    string
+	Length  *Literal
+	Scale   *Literal
+	Charset string
 }
-
-// ConvertTypeOperator is an enum for ConvertType.Operator
-type ConvertTypeOperator int8
 
 // GroupBy represents a GROUP BY clause.
 type GroupBy []Expr

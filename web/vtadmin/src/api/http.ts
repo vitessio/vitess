@@ -19,6 +19,7 @@ import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
 import { TabletDebugVars } from '../util/tabletDebugVars';
+import { isReadOnlyMode } from '../util/env';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -32,6 +33,14 @@ import { TabletDebugVars } from '../util/tabletDebugVars';
  */
 export const vtfetch = async (endpoint: string, options: RequestInit = {}): Promise<HttpOkResponse> => {
     try {
+        if (isReadOnlyMode() && options.method && options.method.toLowerCase() !== 'get') {
+            // Any UI controls that ultimately trigger a write request should be hidden when in read-only mode,
+            // so getting to this point (where we actually execute a write request) is an error.
+            // So: we fail obnoxiously, as failing silently (e.g, logging and returning an empty "ok" response)
+            // could imply to the user that a write action succeeded.
+            throw new Error(`Cannot execute write request in read-only mode: ${options.method} ${endpoint}`);
+        }
+
         const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
         const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = { ...vtfetchOpts(), ...options };

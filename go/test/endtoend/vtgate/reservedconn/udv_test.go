@@ -100,7 +100,7 @@ func TestSetUDV(t *testing.T) {
 		expectedRows: `[]`,
 	}, {
 		query:        "select @foo = @bar, @dd, @tt",
-		expectedRows: `[[DECIMAL(1) DATE("2020-10-20") TIME("10:15:00")]]`, rowsReturned: 1,
+		expectedRows: `[[INT64(1) DATE("2020-10-20") TIME("10:15:00")]]`, rowsReturned: 1,
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
