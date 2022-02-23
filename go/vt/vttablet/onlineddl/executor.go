@@ -661,12 +661,17 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 
-	// A bit early on, we create the table swap query. We do so here and not at cut-over time
-	// just because there might just be an error, and we prefer to bail out now, and not
-	// proceeed with all the locks involved in the cut-over operation
-	swapQuery, _, err := e.generateSwapTablesStatement(ctx, onlineDDL.Table, vreplTable)
+	// A bit early on, we generate a name for the swap table
+	swapTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
 		return err
+	}
+	if isVreplicationTestSuite {
+		// The testing suite may inject queries internally from the server via a recurring EVENT.
+		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
+		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
+		// the original table. We will actually make the table disappear, creating a void.
+		swapTableName = fmt.Sprintf("%s_before", onlineDDL.Table)
 	}
 
 	// Preparation is complete. We proceed to cut-over.
@@ -692,18 +697,27 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	defer reenableWritesOnce()
 
-	if isVreplicationTestSuite {
-		// The testing suite may inject queries internally from the server via a recurring EVENT.
-		// Those queries are unaffected by UpdateSourceDeniedTables() because they don't go through Vitess.
-		// We therefore hard-rename the table here, such that the queries will hard-fail.
-		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-			onlineDDL.Table, beforeTableName,
-		)
-		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
-			return err
-		}
+	// swap out the table
+	// TODO(shlomi): possibly give a fraction of a second for a scenario where a query is in
+	// query executor, it passed the ACLs and is _about to_ execute. This will be nicer to those queries:
+	// they will be able to complete before the rename, rather than block briefly on the rename only to find
+	// the table no longer exists.
+	parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, swapTableName)
+	if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+		return err
 	}
+	// We have just greated a gaping hole, the original table does not exist.
+	// we expect to fill that hole by swapping in the vrepl table. But if anything goes wrong we prepare
+	// to rename the table back:
+	defer func() {
+		if _, err := e.renameTableIfApplicable(ctx, swapTableName, onlineDDL.Table); err != nil {
+			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot rename back swapped table: %v into %v: %v", swapTableName, onlineDDL.Table, err)
+		}
+	}()
+	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
+	// that some leftover query finds the table is not actually there anymore...
+	// At any case, there's definitely no more writes to the table since it does not exist. We can
+	// safely take the (GTID) pos now.
 	postWritesPos, err := e.primaryPosition(ctx)
 	if err != nil {
 		return err
@@ -753,7 +767,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 			defer conn.Close()
-			if _, err = conn.ExecuteFetch(swapQuery, 0, false); err != nil {
+
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
+				vreplTable, onlineDDL.Table,
+				swapTableName, vreplTable,
+			)
+			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
 		}
@@ -2231,8 +2250,32 @@ func (e *Executor) generateSwapTablesStatement(ctx context.Context, tableName1, 
 	return parsed.Query, swapTableName, nil
 }
 
-func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+// renameTableIfApplicable renames a table, but first validates that the original name exists and that the
+// target name does not exist. If either these conditions fail, the function exits silently and without error.
+func (e *Executor) renameTableIfApplicable(ctx context.Context, fromTableName, toTableName string) (attemptMade bool, err error) {
+	exists, err := e.tableExists(ctx, fromTableName)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		// can't rename from table when it does not exist
+		return false, nil
+	}
+	exists, err = e.tableExists(ctx, toTableName)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		// can't rename into an existing table
+		return false, nil
+	}
 
+	parsed := sqlparser.BuildParsedQuery(sqlRenameTable, fromTableName, toTableName)
+	_, err = e.execQuery(ctx, parsed.Query)
+	return true, err
+}
+
+func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
 	artifactViewName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
 		return err
