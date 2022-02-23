@@ -81,23 +81,22 @@ func TestAutoIncInsertSelect(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	defer utils.Exec(t, conn, `delete from s_tbl`)
-	defer utils.Exec(t, conn, `delete from u_tbl`)
+	defer utils.Exec(t, conn, `delete from user_tbl`)
 
-	utils.Exec(t, conn, "insert into user_tbl(region_id, name) values (1,'A'),(1,'B'),(3,'B'),(3,'C')")
+	utils.Exec(t, conn, "insert into user_tbl(region_id, name) values (1,'A'),(3,'C')")
 
 	qr := utils.Exec(t, conn, "insert into user_tbl(region_id, name) select region_id, name from user_tbl")
-	require.EqualValues(t, 4, qr.RowsAffected)
-	require.EqualValues(t, 5, qr.InsertID)
+	require.EqualValues(t, 2, qr.RowsAffected)
+	require.EqualValues(t, 3, qr.InsertID)
 
 	qr = utils.Exec(t, conn, "insert into user_tbl(id, region_id, name) select null, region_id, name from user_tbl where id = 1")
 	require.EqualValues(t, 1, qr.RowsAffected)
-	require.EqualValues(t, 9, qr.InsertID)
+	require.EqualValues(t, 5, qr.InsertID)
 
 	qr = utils.Exec(t, conn, "insert into user_tbl(id, region_id, name) select 100, region_id, name from user_tbl where id = 1")
 	require.EqualValues(t, 1, qr.RowsAffected)
-	require.EqualValues(t, 100, qr.InsertID)
+	require.EqualValues(t, 0, qr.InsertID)
 
-	//	utils.AssertMatches(t, conn, `select * from user_tbl order by id`, ``)
+	utils.AssertMatches(t, conn, `select id from user_tbl order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(100)]]`)
 
 }

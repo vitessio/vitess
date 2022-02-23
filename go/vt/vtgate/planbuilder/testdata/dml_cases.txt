@@ -3460,11 +3460,11 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# insert using select get_lock from table
-"insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
+# insert using select with sharding column is autoinc and not present in the insert column query
+"insert into user(pattern) SELECT 1"
 {
   "QueryType": "INSERT",
-  "Original": "insert into user(pattern) SELECT GET_LOCK('xyz1', 10)",
+  "Original": "insert into user(pattern) SELECT 1",
   "Instructions": {
     "OperatorType": "Insert",
     "Variant": "Select",
@@ -3479,20 +3479,29 @@ Gen4 plan same as above
     "VindexOffsetFromSelect": {
       "costly_map": "[-1]",
       "name_user_map": "[-1]",
-      "user_index": "[-1]"
+      "user_index": "[1]"
     },
     "Inputs": [
       {
-        "OperatorType": "Lock",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "TargetDestination": "KeyspaceID(00)",
-        "FieldQuery": "select GET_LOCK('xyz1', 10) from dual where 1 != 1",
-        "Query": "select GET_LOCK('xyz1', 10) from dual for update"
+        "OperatorType": "Projection",
+        "Columns": [
+          "1"
+        ],
+        "Expressions": [
+          "INT64(1)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
       }
     ]
   }
 }
+Gen4 plan same as above
+
+# insert using select with sharding column is not an autoinc and not present in the insert column query
+"insert into user_extra(pattern) SELECT 1"
+"insert query does not have sharding column 'user_id' in the column list"
 Gen4 plan same as above

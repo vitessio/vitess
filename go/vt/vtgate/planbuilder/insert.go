@@ -237,11 +237,6 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 
 	applyCommentDirectives(ins, eins)
 
-	// Fill out the 3-d Values structure
-	eins.ColVindexes = setColVindexes(eins)
-	eins.VindexValueOffset = extractColVindexOffsets(ins, eins.ColVindexes)
-	generateInsertSelectQuery(ins, eins)
-
 	if eins.Table.AutoIncrement != nil {
 		colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
 		eins.Generate = &engine.Generate{
@@ -250,6 +245,15 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 			Offset:   colNum,
 		}
 	}
+
+	// Fill out the 3-d Values structure
+	eins.ColVindexes = setColVindexes(eins)
+	eins.VindexValueOffset, err = extractColVindexOffsets(ins, eins.ColVindexes)
+	if err != nil {
+		return nil, err
+	}
+
+	generateInsertSelectQuery(ins, eins)
 	return eins, nil
 }
 
@@ -313,14 +317,19 @@ func setColVindexes(eins *engine.Insert) []*vindexes.ColumnVindex {
 	return colVindexes
 }
 
-func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.ColumnVindex) [][]int {
+func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.ColumnVindex) ([][]int, error) {
 	vv := make([][]int, len(colVindexes))
 	for idx, colVindex := range colVindexes {
 		for _, col := range colVindex.Columns {
-			vv[idx] = append(vv[idx], findColumn(ins, col))
+			colNum := findColumn(ins, col)
+			// sharding column values should be provided in the insert.
+			if colNum == -1 && idx == 0 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "insert query does not have sharding column '%v' in the column list", col)
+			}
+			vv[idx] = append(vv[idx], colNum)
 		}
 	}
-	return vv
+	return vv, nil
 }
 
 // findColumn returns the column index where it is placed on the insert column list.
