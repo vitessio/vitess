@@ -29,8 +29,6 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-
-	"vitess.io/vitess/go/hack"
 )
 
 // MyMaxScale is the largest scale on a decimal that MySQL supports
@@ -269,29 +267,14 @@ func NewFromMySQL(s []byte) (Decimal, error) {
 	if myintg+myfrac > MyMaxBigDigits {
 		fractional = fractional[:int((MyMaxBigDigits-myintg)*9)]
 	}
-
-	var (
-		dValue = new(big.Int)
-		exp    = -int32(len(fractional))
-		ok     bool
-	)
-
-	if len(fractional) > 0 {
-		var composite strings.Builder
-		composite.Grow(len(integral) + len(fractional))
-		composite.Write(integral)
-		composite.Write(fractional)
-		_, ok = dValue.SetString(composite.String(), 10)
-	} else {
-		_, ok = dValue.SetString(hack.String(integral), 10)
-	}
-	if !ok {
-		panic("big.SetString failed to parse integral")
+	value, err := parseLargeDecimal(integral, fractional)
+	if err != nil {
+		return Decimal{}, err
 	}
 	if neg {
-		dValue.Neg(dValue)
+		value.Neg(value)
 	}
-	return Decimal{value: dValue, exp: exp}, nil
+	return Decimal{value: value, exp: -int32(len(fractional))}, nil
 }
 
 // NewFromString returns a new Decimal from a string representation.
