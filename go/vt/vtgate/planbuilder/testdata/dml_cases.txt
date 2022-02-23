@@ -3331,3 +3331,18 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# insert using select with more columns in insert
+"insert into music(id, user_id) select 1"
+"Column count doesn't match value count at row 1"
+Gen4 plan same as above
+
+# insert using select with more columns in select
+"insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id"
+"Column count doesn't match value count at row 1"
+Gen4 plan same as above
+
+# insert using select with more columns in select after accounting for star column
+"insert into music(id, user_id) select id, *, 2 from user"
+"Column count doesn't match value count at row 1"
+Gen4 plan same as above
