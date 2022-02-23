@@ -49,3 +49,8 @@ jobs:
       - name: Run prettier
         if: always()
         run: npm run lint:prettier
+
+    # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
+    concurrency: 
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
