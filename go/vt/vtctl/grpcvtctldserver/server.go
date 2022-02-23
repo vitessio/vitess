@@ -2912,9 +2912,6 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		wg              sync.WaitGroup
 	)
 
-	// TO DO: Use `IncludeVschema` parameter to determine whether or not to also add results from ValidateVschema to the results array.
-	// Unimplemented for now because ValidateVSchema method is out of scope.
-
 	for _, shard := range shards[0:] {
 		wg.Add(1)
 		go func(shard string) {
@@ -3216,7 +3213,6 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 	var validateVersionKeyspaceResponseMutex sync.Mutex
 
 	for _, shard := range shards {
-		validateVersionKeyspaceResponseMutex.Lock()
 		shardResp := vtctldatapb.ValidateShardResponse{
 			Results: []string{},
 		}
@@ -3230,6 +3226,7 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 		if err != nil {
 			errMessage := fmt.Sprintf("unable to find tablet aliases in shard %v: %v", shard, err)
 			shardResp.Results = append(shardResp.Results, errMessage)
+			validateVersionKeyspaceResponseMutex.Lock()
 			resp.Results = append(resp.Results, errMessage)
 			resp.ResultsByShard[shard] = &shardResp
 			validateVersionKeyspaceResponseMutex.Unlock()
@@ -3243,22 +3240,25 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 
 			tabletWaitGroup.Add(1)
 			go func(alias *topodatapb.TabletAlias, m *sync.Mutex) {
-				validateShardResponseMutex.Lock()
-				defer validateShardResponseMutex.Unlock()
 				defer tabletWaitGroup.Done()
 				replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: alias})
 				if err != nil {
+					validateShardResponseMutex.Lock()
 					shardResp.Results = append(shardResp.Results, fmt.Sprintf("unable to get version for tablet %v: %v", alias, err))
+					validateShardResponseMutex.Unlock()
 					return
 				}
 
 				if referenceVersion.Version != replicaVersion.Version {
+					validateShardResponseMutex.Lock()
 					shardResp.Results = append(shardResp.Results, fmt.Sprintf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(referenceAlias), referenceVersion, topoproto.TabletAliasString(alias), replicaVersion))
+					validateShardResponseMutex.Unlock()
 				}
 			}(alias, &validateShardResponseMutex)
 		}
 
 		tabletWaitGroup.Wait()
+		validateVersionKeyspaceResponseMutex.Lock()
 		resp.Results = append(resp.Results, shardResp.Results...)
 		resp.ResultsByShard[shard] = &shardResp
 		validateVersionKeyspaceResponseMutex.Unlock()
@@ -3285,17 +3285,15 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	}
 
 	var (
-		wg    sync.WaitGroup
-		mutex sync.Mutex
+		wg sync.WaitGroup
+		m  sync.Mutex
 	)
 
 	wg.Add(len(shards))
 
 	for _, shard := range shards {
 		go func(shard string) {
-			mutex.Lock()
 			defer wg.Done()
-			defer mutex.Unlock()
 
 			shardResult := vtctldatapb.ValidateShardResponse{
 				Results: []string{},
@@ -3306,8 +3304,10 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 			if err != nil {
 				errorMessage := fmt.Sprintf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
 				shardResult.Results = append(shardResult.Results, errorMessage)
+				m.Lock()
 				resp.Results = append(resp.Results, errorMessage)
 				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
 				return
 			}
 			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, nil, excludeTables, includeViews)
@@ -3316,8 +3316,10 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 					excludeTables, includeViews, keyspace, shard, err,
 				)
 				shardResult.Results = append(shardResult.Results, errorMessage)
+				m.Lock()
 				resp.Results = append(resp.Results, errorMessage)
 				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
 				return
 			}
 			for _, tableDef := range primarySchema.TableDefinitions {
@@ -3330,10 +3332,14 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 			if len(notFoundTables) > 0 {
 				errorMessage := fmt.Sprintf("%v/%v has tables that are not in the vschema: %v", keyspace, shard, notFoundTables)
 				shardResult.Results = append(shardResult.Results, errorMessage)
+				m.Lock()
 				resp.Results = append(resp.Results, errorMessage)
 				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
 			}
+			m.Lock()
 			resp.ResultsByShard[shard] = &shardResult
+			m.Unlock()
 		}(shard)
 	}
 	wg.Wait()
