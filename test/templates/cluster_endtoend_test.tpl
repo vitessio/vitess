@@ -19,6 +19,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Check for changes in relevant files
+      uses: dorny/paths-filter@v2
       id: changes
       with:
         filters: |
