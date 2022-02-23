@@ -191,7 +191,7 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 		expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 		sel, isSel := node.Select.(*sqlparser.Select)
 		if !isSel {
-			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
+			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "unsupported: pushing projection '%s' on %T", sqlparser.String(expr), node.Select)
 		}
 
 		// if we are trying to push a projection that belongs to a DerivedTable
@@ -390,10 +390,18 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 		if err != nil {
 			return 0, false, err
 		}
-		if added {
+		if added && ctx.SemTable.DirectDeps(expr.Expr).NumberOfTables() > 0 {
 			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
 		}
-		return offset, false, nil
+		if added {
+			for _, source := range node.sources[1:] {
+				_, _, err := pushProjection(ctx, expr, source, inner, reuseCol, hasAggregation)
+				if err != nil {
+					return 0, false, err
+				}
+			}
+		}
+		return offset, added, nil
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
