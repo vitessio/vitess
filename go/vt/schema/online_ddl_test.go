@@ -207,7 +207,7 @@ func TestNewOnlineDDL(t *testing.T) {
 	}
 	strategies := []*DDLStrategySetting{
 		NewDDLStrategySetting(DDLStrategyDirect, ""),
-		NewDDLStrategySetting(DDLStrategyOnline, ""),
+		NewDDLStrategySetting(DDLStrategyVitess, ""),
 		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
 	}
 	require.True(t, strategies[0].IsSkipTopo())
@@ -238,18 +238,18 @@ func TestNewOnlineDDL(t *testing.T) {
 		var err error
 		var onlineDDL *OnlineDDL
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
 		assert.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(onlineDDL.UUID))
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc")
 		assert.Error(t, err)
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.NoError(t, err)
 		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.UUID)
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.Error(t, err)
 	})
 }
@@ -261,6 +261,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 		parseError      bool
 		isError         bool
 		expectErrorText string
+		isView          bool
 	}
 	tests := map[string]expect{
 		"alter table t add column i int, drop column d": {sqls: []string{"alter table t add column i int, drop column d"}},
@@ -274,11 +275,14 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"create index i_idx on t(id, `ts`, name(12))":   {sqls: []string{"alter table t add index i_idx (id, ts, `name`(12))"}},
 		"create unique index i_idx on t(id)":            {sqls: []string{"alter table t add unique index i_idx (id)"}},
 		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add index i_idx (id) using btree"}},
+		"create view v as select * from t":              {sqls: []string{"create view v as select * from t"}, isView: true},
+		"alter view v as select * from t":               {sqls: []string{"alter view v as select * from t"}, isView: true},
+		"drop view v":                                   {sqls: []string{"drop view v"}, isView: true},
+		"drop view if exists v":                         {sqls: []string{"drop view if exists v"}, isView: true},
 		"create index with syntax error i_idx on t(id)": {parseError: true},
 		"select * from t":                               {notDDL: true},
 		"drop database t":                               {notDDL: true},
 		"truncate table t":                              {isError: true},
-		"drop view t":                                   {isError: true},
 		"rename table t to t1":                          {isError: true},
 		"alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)":                                                                                      {isError: true, expectErrorText: "syntax error"},
 		"alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)":                                                                                     {isError: true, expectErrorText: "foreign key constraints are not supported"},
@@ -301,7 +305,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 			}
 			assert.True(t, ok)
 
-			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
+			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
 			if expect.isError {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), expect.expectErrorText)
@@ -316,6 +320,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 				sql = strings.ReplaceAll(sql, "\n", "")
 				sql = strings.ReplaceAll(sql, "\t", "")
 				sqls = append(sqls, sql)
+				assert.Equal(t, expect.isView, onlineDDL.IsView())
 			}
 			assert.Equal(t, expect.sqls, sqls)
 		})
@@ -327,6 +332,9 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 		`create table t (id int primary key)`,
 		`alter table t drop primary key`,
 		`drop table if exists t`,
+		`create view v as select * from t`,
+		`drop view v`,
+		`alter view v as select * from t`,
 		`revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'`,
 	}
 	strategySetting := NewDDLStrategySetting(DDLStrategyGhost, `-singleton -declarative --max-load="Threads_running=5"`)

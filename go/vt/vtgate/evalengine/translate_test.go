@@ -35,7 +35,7 @@ These tests should in theory live in the sqltypes package but they live here so 
 exercise both expression conversion and evaluation in the same test file
 */
 
-func TestConvertSimplification(t *testing.T) {
+func TestTranslateSimplification(t *testing.T) {
 	type ast struct {
 		literal, err string
 	}
@@ -86,6 +86,8 @@ func TestConvertSimplification(t *testing.T) {
 		{"coalesce(NULL, 2, NULL, 4)", ok("COALESCE(NULL, INT64(2), NULL, INT64(4))"), ok("INT64(2)")},
 		{"coalesce(NULL, NULL)", ok("COALESCE(NULL, NULL)"), ok("NULL")},
 		{"coalesce(NULL)", ok("COALESCE(NULL)"), ok("NULL")},
+		{"weight_string('foobar')", ok(`WEIGHT_STRING(VARCHAR("foobar"))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R")`)},
+		{"weight_string('foobar' as char(12))", ok(`WEIGHT_STRING(VARCHAR("foobar") AS CHAR(12))`), ok(`VARBINARY("\x00F\x00O\x00O\x00B\x00A\x00R\x00 \x00 \x00 \x00 \x00 \x00 ")`)},
 	}
 
 	for _, tc := range testCases {
@@ -96,7 +98,7 @@ func TestConvertSimplification(t *testing.T) {
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := ConvertEx(astExpr, LookupDefaultCollation(45), false)
+			converted, err := TranslateEx(astExpr, LookupDefaultCollation(45), false)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -110,7 +112,7 @@ func TestConvertSimplification(t *testing.T) {
 				t.Errorf("mismatch (simplify=false): got %s, expected %s", FormatExpr(converted), tc.converted.literal)
 			}
 
-			simplified, err := ConvertEx(astExpr, LookupDefaultCollation(45), true)
+			simplified, err := TranslateEx(astExpr, LookupDefaultCollation(45), true)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
@@ -263,7 +265,7 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, LookupDefaultCollation(45))
+			sqltypesExpr, err := Translate(astExpr, LookupDefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := EnvWithBindVars(
@@ -307,7 +309,7 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, LookupDefaultCollation(45))
+			sqltypesExpr, err := Translate(astExpr, LookupDefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 

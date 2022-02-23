@@ -671,25 +671,6 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
-    "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where user_extra.user_id = 5",
-    "Table": "`user`, user_extra",
-    "Values": [
-      "INT64(5)"
-    ],
-    "Vindex": "user_index"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "EqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
     "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
     "Query": "select user_extra.id from `user`, user_extra where user_extra.user_id = 5 and `user`.id = user_extra.user_id",
     "Table": "`user`, user_extra",
@@ -699,6 +680,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Multi-route unique vindex constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
@@ -3156,7 +3138,6 @@ Gen4 plan same as above
 
 # left join where clauses where we can optimize into an inner join
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5"
-"unsupported: cross-shard left join and where clause"
 {
   "QueryType": "SELECT",
   "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5",
@@ -3194,15 +3175,15 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # this query lead to a nil pointer error
 "select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)"
-"unsupported: cross-shard left join and where clause"
-Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
+"expr cannot be translated, not supported: foo(user_extra.foobar)"
+Gen4 plan same as above
 
 # filter after outer join
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.id is null"
-"unsupported: cross-shard left join and where clause"
 {
   "QueryType": "SELECT",
   "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.id is null",
@@ -3254,6 +3235,7 @@ Gen4 error: expr cannot be converted, not supported: foo(user_extra.foobar)
     ]
   }
 }
+Gen4 plan same as above
 
 #subquery on other table
 "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')"
@@ -3923,6 +3905,25 @@ Gen4 plan same as above
     "FieldQuery": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where 1 != 1",
     "Query": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
     "Table": "unsharded_a, unsharded_b"
+  }
+}
+Gen4 plan same as above
+
+# filter on outer join should not be used for routing
+"select user.col from user_extra left outer join user on user_extra.user_id = user.id WHERE user.id IS NULL"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user_extra left outer join user on user_extra.user_id = user.id WHERE user.id IS NULL",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from user_extra left join `user` on user_extra.user_id = `user`.id where 1 != 1",
+    "Query": "select `user`.col from user_extra left join `user` on user_extra.user_id = `user`.id where `user`.id is null",
+    "Table": "`user`, user_extra"
   }
 }
 Gen4 plan same as above

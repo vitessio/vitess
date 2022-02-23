@@ -256,7 +256,7 @@ func (vp *vplayer) updateHeartbeat(tm int64) error {
 	if err != nil {
 		return err
 	}
-	if _, err := vp.vr.dbClient.Execute(update); err != nil {
+	if _, err := withDDL.Exec(vp.vr.vre.ctx, update, vp.vr.dbClient.ExecuteFetch, vp.vr.dbClient.ExecuteFetch); err != nil {
 		return fmt.Errorf("error %v updating time", err)
 	}
 	return nil

@@ -18,6 +18,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -591,58 +592,62 @@ func (node *PartitionSpec) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
-	if !node.Maxvalue {
-		buf.WriteString("partition ")
-		node.Name.formatFast(buf)
-		buf.WriteString(" values less than (")
-		node.Limit.formatFast(buf)
-		buf.WriteByte(')')
+	buf.WriteString("partition ")
+	node.Name.formatFast(buf)
+	if node.ValueRange != nil {
+		buf.WriteByte(' ')
+		node.ValueRange.formatFast(buf)
+	}
+}
+
+// formatFast formats the node
+func (node *PartitionValueRange) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("values ")
+	buf.WriteString(node.Type.ToString())
+	if node.Maxvalue {
+		buf.WriteString(" maxvalue")
 	} else {
-		buf.WriteString("partition ")
-		node.Name.formatFast(buf)
-		buf.WriteString(" values less than (maxvalue)")
+		buf.WriteByte(' ')
+		node.Range.formatFast(buf)
 	}
 }
 
 // formatFast formats the node.
 func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("partition by")
-	if node.isHASH {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
+	if node.IsLinear {
+		buf.WriteString(" linear")
+	}
+
+	switch node.Type {
+	case HashType:
+		buf.WriteString(" hash (")
+		node.Expr.formatFast(buf)
+		buf.WriteByte(')')
+	case KeyType:
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != 0 {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteString(" hash")
+		buf.WriteByte(' ')
+		node.ColList.formatFast(buf)
+	case RangeType, ListType:
+		buf.WriteByte(' ')
+		buf.WriteString(node.Type.ToString())
 		if node.Expr != nil {
 			buf.WriteString(" (")
 			node.Expr.formatFast(buf)
 			buf.WriteByte(')')
+		} else {
+			buf.WriteString(" columns ")
+			node.ColList.formatFast(buf)
 		}
 	}
-	if node.isKEY {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
-		}
-		buf.WriteString(" key")
-		if node.KeyAlgorithm != "" {
-			buf.WriteString(" algorithm = ")
-			buf.WriteString(node.KeyAlgorithm)
-		}
-		if node.KeyColList != nil {
-			buf.WriteByte(' ')
-			node.KeyColList.formatFast(buf)
-		}
-	}
-	if node.RangeOrList != "" {
-		buf.WriteByte(' ')
-		buf.WriteString(node.RangeOrList)
-		buf.WriteByte(' ')
-		node.ExprOrCol.formatFast(buf)
-	}
-	if node.Partitions != "" {
+
+	if node.Partitions != -1 {
 		buf.WriteString(" partitions ")
-		buf.WriteString(node.Partitions)
+		buf.WriteString(fmt.Sprintf("%d", node.Partitions))
 	}
 	if node.SubPartition != nil {
 		buf.WriteByte(' ')
@@ -663,50 +668,28 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("subpartition by")
-	if node.isHASH {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
-		}
-		buf.WriteString(" hash")
-		if node.Expr != nil {
-			buf.WriteString(" (")
-			node.Expr.formatFast(buf)
-			buf.WriteByte(')')
-		}
+	if node.IsLinear {
+		buf.WriteString(" linear")
 	}
-	if node.isKEY {
-		if node.Linear != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.Linear)
-		}
-		buf.WriteString(" key")
-		if node.KeyAlgorithm != "" {
-			buf.WriteString(" algorithm = ")
-			buf.WriteString(node.KeyAlgorithm)
-		}
-		if node.KeyColList != nil {
-			buf.WriteString(" (")
-			node.KeyColList.formatFast(buf)
-			buf.WriteByte(')')
-		}
-	}
-	if node.SubPartitions != "" {
-		buf.WriteString(" subpartitions ")
-		buf.WriteString(node.SubPartitions)
-	}
-}
 
-// formatFast formats the node.
-func (node *ExprOrColumns) formatFast(buf *TrackedBuffer) {
-	if node.Expr != nil {
-		buf.WriteByte('(')
+	switch node.Type {
+	case HashType:
+		buf.WriteString(" hash (")
 		node.Expr.formatFast(buf)
 		buf.WriteByte(')')
+	case KeyType:
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != 0 {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
+		}
+		buf.WriteByte(' ')
+		node.ColList.formatFast(buf)
 	}
-	if node.ColumnList != nil {
-		buf.WriteString("columns ")
-		node.ColumnList.formatFast(buf)
+
+	if node.SubPartitions != -1 {
+		buf.WriteString(" subpartitions ")
+		buf.WriteString(fmt.Sprintf("%d", node.SubPartitions))
 	}
 }
 
@@ -1618,6 +1601,21 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *WeightStringFuncExpr) formatFast(buf *TrackedBuffer) {
+	if node.As != nil {
+		buf.WriteString("weight_string(")
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteString(" as ")
+		node.As.formatFast(buf)
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString("weight_string(")
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node.
 func (node *CurTimeFuncExpr) formatFast(buf *TrackedBuffer) {
 	if node.Fsp != nil {
 		buf.WriteString(node.Name.String())
@@ -1739,8 +1737,7 @@ func (node *ConvertType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(')')
 	}
 	if node.Charset != "" {
-		buf.WriteString(node.Operator.ToString())
-		buf.WriteByte(' ')
+		buf.WriteString(" character set ")
 		buf.WriteString(node.Charset)
 	}
 }
@@ -2066,23 +2063,27 @@ func (node *CreateTable) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *CreateView) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("create")
+	buf.WriteString("create ")
+	node.Comments.formatFast(buf)
 	if node.IsReplace {
-		buf.WriteString(" or replace")
+		buf.WriteString("or replace ")
 	}
 	if node.Algorithm != "" {
-		buf.WriteString(" algorithm = ")
+		buf.WriteString("algorithm = ")
 		buf.WriteString(node.Algorithm)
+		buf.WriteByte(' ')
 	}
-	if node.Definer != "" {
-		buf.WriteString(" definer = ")
-		buf.WriteString(node.Definer)
+	if node.Definer != nil {
+		buf.WriteString("definer = ")
+		node.Definer.formatFast(buf)
+		buf.WriteByte(' ')
 	}
 	if node.Security != "" {
-		buf.WriteString(" sql security ")
+		buf.WriteString("sql security ")
 		buf.WriteString(node.Security)
+		buf.WriteByte(' ')
 	}
-	buf.WriteString(" view ")
+	buf.WriteString("view ")
 	node.ViewName.formatFast(buf)
 	node.Columns.formatFast(buf)
 	buf.WriteString(" as ")
@@ -2115,20 +2116,24 @@ func (node *UnlockTables) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *AlterView) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("alter")
+	buf.WriteString("alter ")
+	node.Comments.formatFast(buf)
 	if node.Algorithm != "" {
-		buf.WriteString(" algorithm = ")
+		buf.WriteString("algorithm = ")
 		buf.WriteString(node.Algorithm)
+		buf.WriteByte(' ')
 	}
-	if node.Definer != "" {
-		buf.WriteString(" definer = ")
-		buf.WriteString(node.Definer)
+	if node.Definer != nil {
+		buf.WriteString("definer = ")
+		node.Definer.formatFast(buf)
+		buf.WriteByte(' ')
 	}
 	if node.Security != "" {
-		buf.WriteString(" sql security ")
+		buf.WriteString("sql security ")
 		buf.WriteString(node.Security)
+		buf.WriteByte(' ')
 	}
-	buf.WriteString(" view ")
+	buf.WriteString("view ")
 	node.ViewName.formatFast(buf)
 	node.Columns.formatFast(buf)
 	buf.WriteString(" as ")
@@ -2137,6 +2142,14 @@ func (node *AlterView) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" with ")
 		buf.WriteString(node.CheckOption)
 		buf.WriteString(" check option")
+	}
+}
+
+func (definer *Definer) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(definer.Name)
+	if definer.Address != "" {
+		buf.WriteByte('@')
+		buf.WriteString(definer.Address)
 	}
 }
 
@@ -2161,11 +2174,13 @@ func (node *DropTable) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *DropView) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("drop ")
+	node.Comments.formatFast(buf)
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.WriteString("drop view")
+	buf.WriteString("view")
 	buf.WriteString(exists)
 	buf.WriteByte(' ')
 	node.FromTables.formatFast(buf)
@@ -2192,6 +2207,11 @@ func (node *AlterTable) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(prefix)
 		buf.WriteByte(' ')
 		node.PartitionSpec.formatFast(buf)
+	}
+	if node.PartitionOption != nil {
+		buf.WriteString(prefix)
+		buf.WriteByte(' ')
+		node.PartitionOption.formatFast(buf)
 	}
 }
 

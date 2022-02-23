@@ -290,6 +290,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfDefault(a, b)
+	case *Definer:
+		b, ok := inB.(*Definer)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDefiner(a, b)
 	case *Delete:
 		b, ok := inB.(*Delete)
 		if !ok {
@@ -350,12 +356,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfExplainTab(a, b)
-	case *ExprOrColumns:
-		b, ok := inB.(*ExprOrColumns)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfExprOrColumns(a, b)
 	case Exprs:
 		b, ok := inB.(Exprs)
 		if !ok {
@@ -614,6 +614,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfPartitionSpec(a, b)
+	case *PartitionValueRange:
+		b, ok := inB.(*PartitionValueRange)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionValueRange(a, b)
 	case Partitions:
 		b, ok := inB.(Partitions)
 		if !ok {
@@ -932,6 +938,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfVindexSpec(a, b)
+	case *WeightStringFuncExpr:
+		b, ok := inB.(*WeightStringFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWeightStringFuncExpr(a, b)
 	case *When:
 		b, ok := inB.(*When)
 		if !ok {
@@ -1087,6 +1099,7 @@ func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
 		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
+		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption) &&
 		EqualsComments(a.Comments, b.Comments)
 }
 
@@ -1099,12 +1112,13 @@ func EqualsRefOfAlterView(a, b *AlterView) bool {
 		return false
 	}
 	return a.Algorithm == b.Algorithm &&
-		a.Definer == b.Definer &&
 		a.Security == b.Security &&
 		a.CheckOption == b.CheckOption &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
+		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterVschema does deep equals between the two objects.
@@ -1395,8 +1409,7 @@ func EqualsRefOfConvertType(a, b *ConvertType) bool {
 	return a.Type == b.Type &&
 		a.Charset == b.Charset &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
-		EqualsRefOfLiteral(a.Scale, b.Scale) &&
-		a.Operator == b.Operator
+		EqualsRefOfLiteral(a.Scale, b.Scale)
 }
 
 // EqualsRefOfConvertUsingExpr does deep equals between the two objects.
@@ -1452,13 +1465,14 @@ func EqualsRefOfCreateView(a, b *CreateView) bool {
 		return false
 	}
 	return a.Algorithm == b.Algorithm &&
-		a.Definer == b.Definer &&
 		a.Security == b.Security &&
 		a.CheckOption == b.CheckOption &&
 		a.IsReplace == b.IsReplace &&
 		EqualsTableName(a.ViewName, b.ViewName) &&
+		EqualsRefOfDefiner(a.Definer, b.Definer) &&
 		EqualsColumns(a.Columns, b.Columns) &&
-		EqualsSelectStatement(a.Select, b.Select)
+		EqualsSelectStatement(a.Select, b.Select) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
@@ -1482,6 +1496,18 @@ func EqualsRefOfDefault(a, b *Default) bool {
 		return false
 	}
 	return a.ColName == b.ColName
+}
+
+// EqualsRefOfDefiner does deep equals between the two objects.
+func EqualsRefOfDefiner(a, b *Definer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Address == b.Address
 }
 
 // EqualsRefOfDelete does deep equals between the two objects.
@@ -1573,7 +1599,8 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 		return false
 	}
 	return a.IfExists == b.IfExists &&
-		EqualsTableNames(a.FromTables, b.FromTables)
+		EqualsTableNames(a.FromTables, b.FromTables) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.
@@ -1609,18 +1636,6 @@ func EqualsRefOfExplainTab(a, b *ExplainTab) bool {
 	}
 	return a.Wild == b.Wild &&
 		EqualsTableName(a.Table, b.Table)
-}
-
-// EqualsRefOfExprOrColumns does deep equals between the two objects.
-func EqualsRefOfExprOrColumns(a, b *ExprOrColumns) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsExpr(a.Expr, b.Expr) &&
-		EqualsColumns(a.ColumnList, b.ColumnList)
 }
 
 // EqualsExprs does deep equals between the two objects.
@@ -2109,9 +2124,8 @@ func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Maxvalue == b.Maxvalue &&
-		EqualsColIdent(a.Name, b.Name) &&
-		EqualsExpr(a.Limit, b.Limit)
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsRefOfPartitionValueRange(a.ValueRange, b.ValueRange)
 }
 
 // EqualsRefOfPartitionOption does deep equals between the two objects.
@@ -2122,14 +2136,11 @@ func EqualsRefOfPartitionOption(a, b *PartitionOption) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Linear == b.Linear &&
-		a.isHASH == b.isHASH &&
-		a.isKEY == b.isKEY &&
+	return a.IsLinear == b.IsLinear &&
 		a.KeyAlgorithm == b.KeyAlgorithm &&
-		a.RangeOrList == b.RangeOrList &&
 		a.Partitions == b.Partitions &&
-		EqualsColumns(a.KeyColList, b.KeyColList) &&
-		EqualsRefOfExprOrColumns(a.ExprOrCol, b.ExprOrCol) &&
+		a.Type == b.Type &&
+		EqualsColumns(a.ColList, b.ColList) &&
 		EqualsExpr(a.Expr, b.Expr) &&
 		EqualsRefOfSubPartition(a.SubPartition, b.SubPartition) &&
 		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
@@ -2150,6 +2161,19 @@ func EqualsRefOfPartitionSpec(a, b *PartitionSpec) bool {
 		EqualsRefOfLiteral(a.Number, b.Number) &&
 		EqualsTableName(a.TableName, b.TableName) &&
 		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
+}
+
+// EqualsRefOfPartitionValueRange does deep equals between the two objects.
+func EqualsRefOfPartitionValueRange(a, b *PartitionValueRange) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Maxvalue == b.Maxvalue &&
+		a.Type == b.Type &&
+		EqualsValTuple(a.Range, b.Range)
 }
 
 // EqualsPartitions does deep equals between the two objects.
@@ -2492,12 +2516,11 @@ func EqualsRefOfSubPartition(a, b *SubPartition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Linear == b.Linear &&
-		a.isHASH == b.isHASH &&
-		a.isKEY == b.isKEY &&
+	return a.IsLinear == b.IsLinear &&
 		a.KeyAlgorithm == b.KeyAlgorithm &&
 		a.SubPartitions == b.SubPartitions &&
-		EqualsColumns(a.KeyColList, b.KeyColList) &&
+		a.Type == b.Type &&
+		EqualsColumns(a.ColList, b.ColList) &&
 		EqualsExpr(a.Expr, b.Expr)
 }
 
@@ -2803,6 +2826,18 @@ func EqualsRefOfVindexSpec(a, b *VindexSpec) bool {
 		EqualsSliceOfVindexParam(a.Params, b.Params)
 }
 
+// EqualsRefOfWeightStringFuncExpr does deep equals between the two objects.
+func EqualsRefOfWeightStringFuncExpr(a, b *WeightStringFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfConvertType(a.As, b.As)
+}
+
 // EqualsRefOfWhen does deep equals between the two objects.
 func EqualsRefOfWhen(a, b *When) bool {
 	if a == b {
@@ -2974,6 +3009,87 @@ func EqualsAlterOption(inA, inB AlterOption) bool {
 			return false
 		}
 		return EqualsRefOfValidation(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
+// EqualsCallable does deep equals between the two objects.
+func EqualsCallable(inA, inB Callable) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *ConvertExpr:
+		b, ok := inB.(*ConvertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertExpr(a, b)
+	case *ConvertUsingExpr:
+		b, ok := inB.(*ConvertUsingExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertUsingExpr(a, b)
+	case *CurTimeFuncExpr:
+		b, ok := inB.(*CurTimeFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCurTimeFuncExpr(a, b)
+	case *ExtractFuncExpr:
+		b, ok := inB.(*ExtractFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractFuncExpr(a, b)
+	case *FuncExpr:
+		b, ok := inB.(*FuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFuncExpr(a, b)
+	case *GroupConcatExpr:
+		b, ok := inB.(*GroupConcatExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGroupConcatExpr(a, b)
+	case *MatchExpr:
+		b, ok := inB.(*MatchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMatchExpr(a, b)
+	case *SubstrExpr:
+		b, ok := inB.(*SubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubstrExpr(a, b)
+	case *TimestampFuncExpr:
+		b, ok := inB.(*TimestampFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *ValuesFuncExpr:
+		b, ok := inB.(*ValuesFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfValuesFuncExpr(a, b)
+	case *WeightStringFuncExpr:
+		b, ok := inB.(*WeightStringFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWeightStringFuncExpr(a, b)
 	default:
 		// this should never happen
 		return false
@@ -3397,6 +3513,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfValuesFuncExpr(a, b)
+	case *WeightStringFuncExpr:
+		b, ok := inB.(*WeightStringFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWeightStringFuncExpr(a, b)
 	case *XorExpr:
 		b, ok := inB.(*XorExpr)
 		if !ok {

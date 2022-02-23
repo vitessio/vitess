@@ -29,7 +29,7 @@ import (
 )
 
 func TestDurabilityNone(t *testing.T) {
-	err := SetDurabilityPolicy("none", nil)
+	err := SetDurabilityPolicy("none")
 	require.NoError(t, err)
 
 	promoteRule := PromotionRule(&topodatapb.Tablet{
@@ -56,7 +56,7 @@ func TestDurabilityNone(t *testing.T) {
 }
 
 func TestDurabilitySemiSync(t *testing.T) {
-	err := SetDurabilityPolicy("semi_sync", nil)
+	err := SetDurabilityPolicy("semi_sync")
 	require.NoError(t, err)
 
 	promoteRule := PromotionRule(&topodatapb.Tablet{
@@ -88,7 +88,7 @@ func TestDurabilitySemiSync(t *testing.T) {
 }
 
 func TestDurabilityCrossCell(t *testing.T) {
-	err := SetDurabilityPolicy("cross_cell", nil)
+	err := SetDurabilityPolicy("cross_cell")
 	require.NoError(t, err)
 
 	promoteRule := PromotionRule(&topodatapb.Tablet{
@@ -147,20 +147,13 @@ func TestDurabilityCrossCell(t *testing.T) {
 }
 
 func TestError(t *testing.T) {
-	err := SetDurabilityPolicy("unknown", nil)
+	err := SetDurabilityPolicy("unknown")
 	assert.EqualError(t, err, "durability policy unknown not found")
 }
 
-func TestDurabilitySpecified(t *testing.T) {
-	cellName := "cell"
-	durabilityRules := newDurabilitySpecified(
-		map[string]string{
-			"cell-0000000000": string(promotionrule.Must),
-			"cell-0000000001": string(promotionrule.Prefer),
-			"cell-0000000002": string(promotionrule.Neutral),
-			"cell-0000000003": string(promotionrule.PreferNot),
-			"cell-0000000004": string(promotionrule.MustNot),
-		})
+func TestDurabilityTest(t *testing.T) {
+	cellName := "zone2"
+	durabilityRules := &durabilityTest{}
 
 	testcases := []struct {
 		tablet        *topodatapb.Tablet
@@ -172,13 +165,14 @@ func TestDurabilitySpecified(t *testing.T) {
 					Cell: cellName,
 					Uid:  0,
 				},
+				Type: topodatapb.TabletType_SPARE,
 			},
 			promotionRule: promotionrule.MustNot,
 		}, {
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: cellName,
-					Uid:  1,
+					Uid:  200,
 				},
 			},
 			promotionRule: promotionrule.Prefer,
@@ -188,22 +182,16 @@ func TestDurabilitySpecified(t *testing.T) {
 					Cell: cellName,
 					Uid:  2,
 				},
+				Type: topodatapb.TabletType_PRIMARY,
 			},
 			promotionRule: promotionrule.Neutral,
 		}, {
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: cellName,
-					Uid:  3,
-				},
-			},
-			promotionRule: promotionrule.PreferNot,
-		}, {
-			tablet: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: cellName,
 					Uid:  4,
 				},
+				Type: topodatapb.TabletType_BACKUP,
 			},
 			promotionRule: promotionrule.MustNot,
 		},

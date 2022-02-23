@@ -32,7 +32,7 @@ import (
 
 var _ Primitive = (*RevertMigration)(nil)
 
-//RevertMigration represents the instructions to perform an online schema change via vtctld
+// RevertMigration represents the instructions to perform an online schema change via vtctld
 type RevertMigration struct {
 	Keyspace          *vindexes.Keyspace
 	Stmt              *sqlparser.RevertMigration

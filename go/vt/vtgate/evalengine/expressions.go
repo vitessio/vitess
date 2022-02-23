@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"unicode/utf8"
@@ -41,7 +42,7 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		eval(env *ExpressionEnv, result *EvalResult)
-		typeof(env *ExpressionEnv) querypb.Type
+		typeof(env *ExpressionEnv) (sqltypes.Type, flag)
 		format(buf *formatter, depth int)
 		constant() bool
 		simplify(env *ExpressionEnv) error
@@ -54,7 +55,7 @@ type (
 	BindVariable struct {
 		Key        string
 		coll       collations.TypedCollation
-		coerceType querypb.Type
+		coerceType sqltypes.Type
 	}
 
 	Column struct {
@@ -80,12 +81,18 @@ var _ Expr = (*Column)(nil)
 var _ Expr = (*ArithmeticExpr)(nil)
 var _ Expr = (*ComparisonExpr)(nil)
 var _ Expr = (*InExpr)(nil)
+var _ Expr = (*IsExpr)(nil)
 var _ Expr = (*LikeExpr)(nil)
 var _ Expr = (TupleExpr)(nil)
 var _ Expr = (*CollateExpr)(nil)
 var _ Expr = (*LogicalExpr)(nil)
 var _ Expr = (*NotExpr)(nil)
 var _ Expr = (*CallExpr)(nil)
+var _ Expr = (*WeightStringCallExpr)(nil)
+var _ Expr = (*BitwiseExpr)(nil)
+var _ Expr = (*BitwiseNotExpr)(nil)
+var _ Expr = (*ConvertExpr)(nil)
+var _ Expr = (*ConvertUsingExpr)(nil)
 
 type evalError struct {
 	error
@@ -104,7 +111,8 @@ func throwCardinalityError(expected int) {
 func (env *ExpressionEnv) cardinality(expr Expr) int {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.typeof(env) == querypb.Type_TUPLE {
+		tt, _ := expr.typeof(env)
+		if tt == sqltypes.Tuple {
 			return len(expr.bvar(env).Values)
 		}
 		return 1
@@ -126,7 +134,8 @@ func (env *ExpressionEnv) ensureCardinality(expr Expr, expected int) {
 func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
 	switch expr := expr.(type) {
 	case *BindVariable:
-		if expr.typeof(env) == querypb.Type_TUPLE {
+		tt, _ := expr.typeof(env)
+		if tt == sqltypes.Tuple {
 			return nil, 1
 		}
 	case TupleExpr:
@@ -153,37 +162,58 @@ func (env *ExpressionEnv) typecheckComparison(expr1 Expr, card1 int, expr2 Expr,
 	}
 }
 
+func (env *ExpressionEnv) typecheckBinary(left, right Expr) {
+	env.typecheck(left)
+	env.ensureCardinality(left, 1)
+
+	env.typecheck(right)
+	env.ensureCardinality(right, 1)
+}
+
+func (env *ExpressionEnv) typecheckUnary(inner Expr) {
+	env.typecheck(inner)
+	env.ensureCardinality(inner, 1)
+}
+
 func (env *ExpressionEnv) typecheck(expr Expr) {
 	if expr == nil {
 		return
 	}
 
 	switch expr := expr.(type) {
+	case *ConvertExpr:
+		env.typecheckUnary(expr.Inner)
+	case *ConvertUsingExpr:
+		env.typecheckUnary(expr.Inner)
+	case *NegateExpr:
+		env.typecheckUnary(expr.Inner)
+	case *CollateExpr:
+		env.typecheckUnary(expr.Inner)
+	case *IsExpr:
+		env.typecheckUnary(expr.Inner)
+	case *BitwiseNotExpr:
+		env.typecheckUnary(expr.Inner)
+	case *WeightStringCallExpr:
+		env.typecheckUnary(expr.String)
 	case *ArithmeticExpr:
-		env.typecheck(expr.Left)
-		env.ensureCardinality(expr.Left, 1)
-
-		env.typecheck(expr.Right)
-		env.ensureCardinality(expr.Right, 1)
-
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *LogicalExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *BitwiseExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *LikeExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
 	case *ComparisonExpr:
 		left := env.cardinality(expr.Left)
 		right := env.cardinality(expr.Right)
 		env.typecheckComparison(expr.Left, left, expr.Right, right)
-
-	case *LogicalExpr:
-		env.typecheck(expr.Left)
-		env.ensureCardinality(expr.Left, 1)
-
-		env.typecheck(expr.Right)
-		env.ensureCardinality(expr.Right, 1)
-
 	case *InExpr:
 		env.typecheck(expr.Left)
 		left := env.cardinality(expr.Left)
 		right := env.cardinality(expr.Right)
 
-		if expr.Right.typeof(env) != querypb.Type_TUPLE {
+		tt, _ := expr.Right.typeof(env)
+		if tt != sqltypes.Tuple {
 			throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
 		}
 
@@ -194,21 +224,15 @@ func (env *ExpressionEnv) typecheck(expr Expr) {
 				throwCardinalityError(left)
 			}
 		}
-
-	case *LikeExpr:
-		env.typecheck(expr.Left)
-		env.ensureCardinality(expr.Left, 1)
-
-		env.typecheck(expr.Right)
-		env.ensureCardinality(expr.Right, 1)
-
 	case TupleExpr:
 		for _, subexpr := range expr {
 			env.typecheck(subexpr)
 		}
-
-	case *IsExpr:
-		env.ensureCardinality(expr.Inner, 1)
+	case *CallExpr:
+		env.typecheck(expr.Arguments)
+	case *Literal, *Column, *BindVariable: // noop
+	default:
+		panic(fmt.Sprintf("unhandled cardinality: %T", expr))
 	}
 }
 
@@ -230,7 +254,7 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
 	return
 }
 
-func (env *ExpressionEnv) TypeOf(expr Expr) (ty querypb.Type, err error) {
+func (env *ExpressionEnv) TypeOf(expr Expr) (ty sqltypes.Type, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if ee, ok := r.(evalError); ok {
@@ -240,7 +264,7 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (ty querypb.Type, err error) {
 			}
 		}
 	}()
-	ty = expr.typeof(env)
+	ty, _ = expr.typeof(env)
 	return
 }
 
@@ -262,11 +286,12 @@ var NullExpr = &Literal{}
 
 func init() {
 	NullExpr.Val.setNull()
+	NullExpr.Val.replaceCollation(collationNull)
 }
 
 // NewLiteralIntegralFromBytes returns a literal expression.
 // It tries to return an int64, but if the value is too large, it tries with an uint64
-func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
+func NewLiteralIntegralFromBytes(val []byte) (*Literal, error) {
 	if val[0] == '-' {
 		panic("NewLiteralIntegralFromBytes: negative value")
 	}
@@ -285,28 +310,28 @@ func NewLiteralIntegralFromBytes(val []byte) (Expr, error) {
 }
 
 // NewLiteralInt returns a literal expression
-func NewLiteralInt(i int64) Expr {
+func NewLiteralInt(i int64) *Literal {
 	lit := &Literal{}
 	lit.Val.setInt64(i)
 	return lit
 }
 
 // NewLiteralUint returns a literal expression
-func NewLiteralUint(i uint64) Expr {
+func NewLiteralUint(i uint64) *Literal {
 	lit := &Literal{}
 	lit.Val.setUint64(i)
 	return lit
 }
 
 // NewLiteralFloat returns a literal expression
-func NewLiteralFloat(val float64) Expr {
+func NewLiteralFloat(val float64) *Literal {
 	lit := &Literal{}
 	lit.Val.setFloat(val)
 	return lit
 }
 
 // NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
-func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
+func NewLiteralFloatFromBytes(val []byte) (*Literal, error) {
 	lit := &Literal{}
 	fval, err := strconv.ParseFloat(string(val), 64)
 	if err != nil {
@@ -316,7 +341,7 @@ func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	return lit, nil
 }
 
-func NewLiteralDecimalFromBytes(val []byte) (Expr, error) {
+func NewLiteralDecimalFromBytes(val []byte) (*Literal, error) {
 	lit := &Literal{}
 	dec, err := newDecimalString(string(val))
 	if err != nil {
@@ -327,7 +352,7 @@ func NewLiteralDecimalFromBytes(val []byte) (Expr, error) {
 }
 
 // NewLiteralString returns a literal expression
-func NewLiteralString(val []byte, collation collations.TypedCollation) Expr {
+func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal {
 	collation.Repertoire = collations.RepertoireASCII
 	for _, b := range val {
 		if b >= utf8.RuneSelf {
@@ -366,7 +391,13 @@ func parseHexNumber(val []byte) ([]byte, error) {
 	return parseHexLiteral(val[1:])
 }
 
-func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
+func NewLiteralBinary(val []byte) *Literal {
+	lit := &Literal{}
+	lit.Val.setRaw(sqltypes.VarBinary, val, collationBinary)
+	return lit
+}
+
+func NewLiteralBinaryFromHex(val []byte) (*Literal, error) {
 	raw, err := parseHexLiteral(val)
 	if err != nil {
 		return nil, err
@@ -376,7 +407,7 @@ func NewLiteralBinaryFromHex(val []byte) (Expr, error) {
 	return lit, nil
 }
 
-func NewLiteralBinaryFromHexNum(val []byte) (Expr, error) {
+func NewLiteralBinaryFromHexNum(val []byte) (*Literal, error) {
 	raw, err := parseHexNumber(val)
 	if err != nil {
 		return nil, err
@@ -442,7 +473,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 	}
 
 	switch typ {
-	case querypb.Type_TUPLE:
+	case sqltypes.Tuple:
 		tuple := make([]EvalResult, len(bvar.Values))
 		for i, value := range bvar.Values {
 			tuple[i].setBindVar1(value.Type, value.Value, collations.TypedCollation{})
@@ -455,11 +486,15 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv) querypb.Type {
-	if bv.coerceType >= 0 {
-		return bv.coerceType
+func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	bvar := bv.bvar(env)
+	if bvar.Type == sqltypes.Null {
+		return sqltypes.Null, flagNull | flagNullable
 	}
-	return bv.bvar(env).Type
+	if bv.coerceType >= 0 {
+		return bv.coerceType, 0
+	}
+	return bvar.Type, 0
 }
 
 // eval implements the Expr interface
@@ -472,16 +507,22 @@ func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv) querypb.Type {
-	return l.Val.typeof()
+func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
+	return l.Val.typeof(), l.Val.flags_
 }
 
 // typeof implements the Expr interface
-func (t TupleExpr) typeof(*ExpressionEnv) querypb.Type {
-	return querypb.Type_TUPLE
+func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
+	return sqltypes.Tuple, flagNullable
 }
 
-func (c *Column) typeof(env *ExpressionEnv) querypb.Type {
+func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	value := env.Row[c.Offset]
-	return value.Type()
+	tt := value.Type()
+	switch tt {
+	case sqltypes.Null:
+		return tt, flagNullable | flagNull
+	default:
+		return tt, 0
+	}
 }

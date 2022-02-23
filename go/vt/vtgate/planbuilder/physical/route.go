@@ -259,7 +259,7 @@ func (r *Route) makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, _ := evalengine.Convert(expr, ctx.SemTable)
+		pv, _ := evalengine.Translate(expr, ctx.SemTable)
 		if pv != nil {
 			return pv
 		}

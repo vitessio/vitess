@@ -17,16 +17,10 @@ limitations under the License.
 package evalengine
 
 import (
-	"bytes"
-	"fmt"
-	"math"
-	"os"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
@@ -35,27 +29,6 @@ import (
 // evalengine represents a numeric value extracted from
 // a Value, used for arithmetic operations.
 var zeroBytes = []byte("0")
-
-// UnsupportedComparisonError represents the error where the comparison between the two types is unsupported on vitess
-type UnsupportedComparisonError struct {
-	Type1 querypb.Type
-	Type2 querypb.Type
-}
-
-// Error function implements the error interface
-func (err UnsupportedComparisonError) Error() string {
-	return fmt.Sprintf("types are not comparable: %v vs %v", err.Type1, err.Type2)
-}
-
-// UnsupportedCollationError represents the error where the comparison using provided collation is unsupported on vitess
-type UnsupportedCollationError struct {
-	ID collations.ID
-}
-
-// Error function implements the error interface
-func (err UnsupportedCollationError) Error() string {
-	return fmt.Sprintf("cannot compare strings, collation is unknown or unsupported (collation ID: %d)", err.ID)
-}
 
 func dataOutOfRangeError(v1, v2 interface{}, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
@@ -160,7 +133,7 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 // addition, if one of the input types was Decimal, then
 // a Decimal is built. Otherwise, the final type of the
 // result is preserved.
-func NullSafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) (sqltypes.Value, error) {
+func NullSafeAdd(v1, v2 sqltypes.Value, resultType sqltypes.Type) (sqltypes.Value, error) {
 	if v1.IsNull() {
 		v1 = sqltypes.MakeTrusted(resultType, zeroBytes)
 	}
@@ -181,135 +154,6 @@ func NullSafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) (sqltypes.Value
 		return sqltypes.NULL, err
 	}
 	return out.toSQLValue(resultType), nil
-}
-
-// NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
-// NULL is the lowest value. If any value is
-// numeric, then a numeric comparison is performed after
-// necessary conversions. If none are numeric, then it's
-// a simple binary comparison. Uncomparable values return an error.
-func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
-	// Based on the categorization defined for the types,
-	// we're going to allow comparison of the following:
-	// Null, isNumber, IsBinary. This will exclude IsQuoted
-	// types that are not Binary, and Expression.
-	if v1.IsNull() {
-		if v2.IsNull() {
-			return 0, nil
-		}
-		return -1, nil
-	}
-	if v2.IsNull() {
-		return 1, nil
-	}
-
-	if isByteComparable(v1.Type()) && isByteComparable(v2.Type()) {
-		v1Bytes, err1 := v1.ToBytes()
-		if err1 != nil {
-			return 0, err1
-		}
-		v2Bytes, err2 := v2.ToBytes()
-		if err2 != nil {
-			return 0, err2
-		}
-		return bytes.Compare(v1Bytes, v2Bytes), nil
-	}
-
-	typ, err := CoerceTo(v1.Type(), v2.Type()) // TODO systay we should add a method where this decision is done at plantime
-	if err != nil {
-		return 0, err
-	}
-	var v1cast, v2cast EvalResult
-	if err := v1cast.setValueCast(v1, typ); err != nil {
-		return 0, err
-	}
-	if err := v2cast.setValueCast(v2, typ); err != nil {
-		return 0, err
-	}
-
-	if sqltypes.IsNumber(typ) {
-		return compareNumeric(&v1cast, &v2cast)
-	}
-	if sqltypes.IsText(typ) || sqltypes.IsBinary(typ) {
-		if collationID == collations.Unknown {
-			return 0, UnsupportedCollationError{
-				ID: collationID,
-			}
-		}
-		collation := collations.Local().LookupByID(collationID)
-		if collation == nil {
-			return 0, UnsupportedCollationError{
-				ID: collationID,
-			}
-		}
-		v1Bytes, err1 := v1.ToBytes()
-		if err1 != nil {
-			return 0, err1
-		}
-		v2Bytes, err2 := v2.ToBytes()
-		if err2 != nil {
-			return 0, err2
-		}
-		switch result := collation.Collate(v1Bytes, v2Bytes, false); {
-		case result < 0:
-			return -1, nil
-		case result > 0:
-			return 1, nil
-		default:
-			return 0, nil
-		}
-	}
-	return 0, UnsupportedComparisonError{
-		Type1: v1.Type(),
-		Type2: v2.Type(),
-	}
-}
-
-// isByteComparable returns true if the type is binary or date/time.
-func isByteComparable(typ querypb.Type) bool {
-	if sqltypes.IsBinary(typ) {
-		return true
-	}
-	switch typ {
-	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit:
-		return true
-	}
-	return false
-}
-
-// Min returns the minimum of v1 and v2. If one of the
-// values is NULL, it returns the other value. If both
-// are NULL, it returns NULL.
-func Min(v1, v2 sqltypes.Value, collation collations.ID) (sqltypes.Value, error) {
-	return minmax(v1, v2, true, collation)
-}
-
-// Max returns the maximum of v1 and v2. If one of the
-// values is NULL, it returns the other value. If both
-// are NULL, it returns NULL.
-func Max(v1, v2 sqltypes.Value, collation collations.ID) (sqltypes.Value, error) {
-	return minmax(v1, v2, false, collation)
-}
-
-func minmax(v1, v2 sqltypes.Value, min bool, collation collations.ID) (sqltypes.Value, error) {
-	if v1.IsNull() {
-		return v2, nil
-	}
-	if v2.IsNull() {
-		return v1, nil
-	}
-
-	n, err := NullsafeCompare(v1, v2, collation)
-	if err != nil {
-		return sqltypes.NULL, err
-	}
-
-	// XNOR construct. See tests.
-	v1isSmaller := n < 0
-	if min == v1isSmaller {
-		return v1, nil
-	}
-	return v2, nil
 }
 
 func addNumericWithError(v1, v2, out *EvalResult) error {
@@ -561,7 +405,6 @@ func floatPlusAny(v1 float64, v2 *EvalResult, out *EvalResult) error {
 		return err
 	}
 	add := v1 + v2f
-	fmt.Fprintf(os.Stderr, "%f (%v) + %f (%v) = %f (%v)\n", v1, math.Signbit(v1), v2f, math.Signbit(v2f), add, math.Signbit(add))
 	out.setFloat(add)
 	return nil
 }
@@ -585,7 +428,8 @@ func floatTimesAny(v1 float64, v2 *EvalResult, out *EvalResult) error {
 }
 
 const roundingModeArithmetic = decimal.ToZero
-const roundingModeFormat = decimal.ToNearestEven
+const roundingModeFormat = decimal.ToNearestAway
+const roundingModeIntegerConversion = decimal.ToNearestAway
 
 var decimalContextSQL = decimal.Context{
 	MaxScale:      30,
@@ -618,6 +462,14 @@ func newDecimalInt64(x int64) *decimalResult {
 	var result decimalResult
 	result.num.Context = decimalContextSQL
 	result.num.SetMantScale(x, 0)
+	return &result
+}
+
+func newDecimalFloat64(f float64) *decimalResult {
+	var result decimalResult
+	result.num.Context = decimalContextSQL
+	result.num.SetFloat64(f)
+	result.frac = result.num.Scale()
 	return &result
 }
 

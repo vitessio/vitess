@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -144,6 +146,9 @@ const (
 	HexVal
 	BitVal
 )
+
+// queryOptimizerPrefix is the prefix of an optimizer hint comment.
+const queryOptimizerPrefix = "/*+"
 
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
@@ -280,6 +285,46 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Geometry
 	}
 	return sqltypes.Null
+}
+
+// AddQueryHint adds the given string to list of comment.
+// If the list is empty, one will be created containing the query hint.
+// If the list already contains a query hint, the given string will be merged with the existing one.
+// This is done because only one query hint is allowed per query.
+func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
+	if queryHint == "" {
+		return node, nil
+	}
+	queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
+	if len(node) == 0 {
+		return Comments{queryHintCommentStr}, nil
+	}
+	var newComments Comments
+	var hasQueryHint bool
+	for _, comment := range node {
+		if strings.HasPrefix(comment, queryOptimizerPrefix) {
+			if hasQueryHint {
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
+			}
+			hasQueryHint = true
+			idx := strings.Index(comment, "*/")
+			if idx == -1 {
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
+			}
+			if strings.Contains(comment, queryHint) {
+				newComments = append(Comments{comment}, newComments...)
+				continue
+			}
+			newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
+			newComments = append(Comments{newComment}, newComments...)
+			continue
+		}
+		newComments = append(newComments, comment)
+	}
+	if !hasQueryHint {
+		newComments = append(Comments{queryHintCommentStr}, newComments...)
+	}
+	return newComments, nil
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case
@@ -1134,6 +1179,34 @@ func (op BinaryExprOperator) ToString() string {
 	}
 }
 
+// ToString returns the partition type as a string
+func (partitionType PartitionByType) ToString() string {
+	switch partitionType {
+	case HashType:
+		return HashTypeStr
+	case KeyType:
+		return KeyTypeStr
+	case ListType:
+		return ListTypeStr
+	case RangeType:
+		return RangeTypeStr
+	default:
+		return "Unknown PartitionByType"
+	}
+}
+
+// ToString returns the partition value range type as a string
+func (t PartitionValueRangeType) ToString() string {
+	switch t {
+	case LessThanType:
+		return LessThanTypeStr
+	case InType:
+		return InTypeStr
+	default:
+		return "Unknown PartitionValueRangeType"
+	}
+}
+
 // ToString returns the operator as a string
 func (op UnaryExprOperator) ToString() string {
 	switch op {
@@ -1145,8 +1218,6 @@ func (op UnaryExprOperator) ToString() string {
 		return TildaStr
 	case BangOp:
 		return BangStr
-	case BinaryOp:
-		return BinaryStr
 	case NStringOp:
 		return NStringStr
 	default:
@@ -1181,18 +1252,6 @@ func (dir OrderDirection) ToString() string {
 		return DescScr
 	default:
 		return "Unknown OrderDirection"
-	}
-}
-
-// ToString returns the operator as a string
-func (op ConvertTypeOperator) ToString() string {
-	switch op {
-	case NoOperator:
-		return NoOperatorStr
-	case CharacterSetOp:
-		return CharacterSetStr
-	default:
-		return "Unknown ConvertTypeOperator"
 	}
 }
 
@@ -1467,6 +1526,21 @@ func ToString(exprs []TableExpr) string {
 	return buf.String()
 }
 
+func formatIdentifier(id string) string {
+	buf := NewTrackedBuffer(nil)
+	formatID(buf, id, NoAt)
+	return buf.String()
+}
+
+func formatAddress(address string) string {
+	if len(address) > 0 && address[0] == '\'' {
+		return address
+	}
+	buf := NewTrackedBuffer(nil)
+	formatID(buf, address, NoAt)
+	return buf.String()
+}
+
 // ContainsAggregation returns true if the expression contains aggregation
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
@@ -1606,7 +1680,12 @@ func defaultRequiresParens(ct *ColumnType) bool {
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
 func RemoveKeyspaceFromColName(expr Expr) Expr {
-	Rewrite(expr, nil, func(cursor *Cursor) bool {
+	return RemoveKeyspace(expr).(Expr) // This hard cast is safe because we do not change the type the input
+}
+
+// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
+func RemoveKeyspace(in SQLNode) SQLNode {
+	return Rewrite(in, nil, func(cursor *Cursor) bool {
 		switch col := cursor.Node().(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
@@ -1614,7 +1693,10 @@ func RemoveKeyspaceFromColName(expr Expr) Expr {
 			}
 		}
 		return true
-	}) // This hard cast is safe because we do not change the type the input
+	})
+}
 
-	return expr
+func convertStringToInt(integer string) int {
+	val, _ := strconv.Atoi(integer)
+	return val
 }

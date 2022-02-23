@@ -68,6 +68,14 @@ func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[s
 	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
 }
 
+func (t *noopVCursor) HasSystemVariables() bool {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetSystemVariables(func(k string, v string)) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
 	panic("implement me")
 }
@@ -105,6 +113,10 @@ func (t *noopVCursor) SetSessionEnableSystemSettings(allow bool) error {
 }
 
 func (t *noopVCursor) GetSessionEnableSystemSettings() bool {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetEnableSetVar() bool {
 	panic("implement me")
 }
 
@@ -300,9 +312,12 @@ type loggingVCursor struct {
 
 	resolvedTargetTabletType topodatapb.TabletType
 
-	tableRoutes tableRoutes
-	dbDDLPlugin string
-	ksAvailable bool
+	tableRoutes     tableRoutes
+	dbDDLPlugin     string
+	ksAvailable     bool
+	inReservedConn  bool
+	systemVariables map[string]string
+	disableSetVar   bool
 }
 
 type tableRoutes struct {
@@ -319,6 +334,14 @@ func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars ma
 
 func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {
 	return f.ksAvailable
+}
+
+func (f *loggingVCursor) HasSystemVariables() bool {
+	return len(f.systemVariables) > 0
+}
+
+func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
@@ -343,10 +366,12 @@ func (f *loggingVCursor) SetSysVar(name string, expr string) {
 }
 
 func (f *loggingVCursor) NeedsReservedConn() {
+	f.log = append(f.log, "Needs Reserved Conn")
+	f.inReservedConn = true
 }
 
 func (f *loggingVCursor) InReservedConn() bool {
-	panic("implement me")
+	return f.inReservedConn
 }
 
 func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
@@ -650,6 +675,11 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 		return &sqltypes.Result{}, f.resultErr
 	}
 	return r, nil
+}
+
+func (f *loggingVCursor) GetEnableSetVar() bool {
+	f.log = append(f.log, fmt.Sprintf("SET_VAR enabled: %v", !f.disableSetVar))
+	return !f.disableSetVar
 }
 
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {

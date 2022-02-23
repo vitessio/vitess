@@ -56,7 +56,8 @@ var (
 		id bigint,
 		value varchar(16),
 		primary key(id)
-	) Engine=InnoDB;
+	) Engine=InnoDB DEFAULT CHARSET=utf8;
+	CREATE VIEW v1 AS SELECT id, value FROM t1;
 `
 
 	vSchema = `

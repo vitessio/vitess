@@ -130,7 +130,7 @@ func getBestVindexOption(exprs []sqlparser.Expr, index *vindexes.ColumnVindex) *
 		default:
 			continue
 		}
-		expr, err := evalengine.Convert(comparison.Right, semantics.EmptySemTable())
+		expr, err := evalengine.Translate(comparison.Right, semantics.EmptySemTable())
 		if err != nil {
 			continue
 		}

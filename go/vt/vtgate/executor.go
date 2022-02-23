@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
@@ -505,6 +507,23 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
+		default:
+			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
+				expr, err := sqlparser.ParseExpr(value)
+				if err != nil {
+					return err
+				}
+
+				evalExpr, err := evalengine.Translate(expr, nil)
+				if err != nil {
+					return err
+				}
+				evaluated, err := evalengine.EmptyExpressionEnv().Evaluate(evalExpr)
+				if err != nil {
+					return err
+				}
+				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value())
+			}
 		}
 	}
 
@@ -651,7 +670,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1419,11 +1438,23 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
+	setVarComment, err := prepareSetVarComment(vcursor, stmt)
+	if err != nil {
+		return nil, err
+	}
 	// Normalize if possible and retry.
-	// We do not normalize already prepared statements, by default
-	if (e.normalize && (*normalizePrepStmts || len(bindVars) == 0) && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
+	if e.canNormalizeStatement(stmt, bindVars, qo, setVarComment) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit())
+		result, err := sqlparser.PrepareAST(
+			stmt,
+			reservedVars,
+			bindVars,
+			parameterize,
+			vcursor.keyspace,
+			qo.getSelectLimit(),
+			setVarComment,
+			vcursor.safeSession.SystemVariables,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1460,6 +1491,40 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, bindVars map[string]*querypb.BindVariable, qo iQueryOption, setVarComment string) bool {
+	// We do not normalize already prepared statements, by default
+	return (e.normalize && (*normalizePrepStmts || len(bindVars) == 0) && sqlparser.CanNormalize(stmt)) ||
+		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != ""
+}
+
+func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (string, error) {
+	if vcursor == nil || vcursor.Session().InReservedConn() {
+		return "", nil
+	}
+
+	if !vcursor.Session().HasSystemVariables() {
+		return "", nil
+	}
+
+	switch stmt.(type) {
+	// If the statement is a transaction statement or a set no reserved connection / SET_VAR is needed
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set:
+		return "", nil
+	case sqlparser.SupportOptimizerHint:
+		break
+	default:
+		vcursor.NeedsReservedConn()
+		return "", nil
+	}
+
+	var res strings.Builder
+	vcursor.Session().GetSystemVariables(func(k, v string) {
+		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
+	})
+	return strings.TrimSpace(res.String()), nil
 }
 
 func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {

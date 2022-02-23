@@ -1127,7 +1127,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"RetryMax": 2,
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_across_db_versions": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_across_db_versions",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_migrate": {

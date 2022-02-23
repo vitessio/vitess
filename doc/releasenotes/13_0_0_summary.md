@@ -72,7 +72,7 @@ alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete
 This command indicates that a migration executed with `-postpone-completion` is good to complete. Behavior:
 
 - For running `ALTER`s (`online` and `gh-ost`) which are ready to cut-over: cut-over imminently (though not immediately
-    - cut-over depends on polling interval, replication lag, etc)
+  - cut-over depends on polling interval, replication lag, etc)
 - For running `ALTER`s (`online` and `gh-ost`) which are only partly through the migration: they will cut-over
   automatically when they complete their work, as if `-postpone-completion` wasn't indicated
 - For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the scheduler'
@@ -142,7 +142,7 @@ in https://github.com/vitessio/vitess/pull/9136.
 
 ### PlannedReparentShard for cluster initialization
 For setting up the cluster and electing a primary for the first time, `PlannedReparentShard` should be used
-instead of `InitShardPrimary`. 
+instead of `InitShardPrimary`.
 
 `InitShardPrimary` is a forceful command and copies over the executed gtid set from the new primary to all the other replicas. So, if the user
 isn't careful, it can lead to some replicas not being setup correctly and lead to errors in replication and recovery later.
@@ -156,7 +156,7 @@ A new flag has been added to vtctl, vtctld and vtworker binaries which allows th
 
 If semi-sync is not being used then `-durability_policy` should be set to `none`. This is also the default option.
 
-If semi-sync is being used then `-durability_policy` should be set to `semi_sync` and `-enable_semi_sync` should be set in vttablets. 
+If semi-sync is being used then `-durability_policy` should be set to `semi_sync` and `-enable_semi_sync` should be set in vttablets.
 
 ## Incompatible Changes
 ### Error message change when vttablet row limit exceeded:
@@ -183,6 +183,7 @@ If semi-sync is being used then `-durability_policy` should be set to `semi_sync
   ```shell
   W0112 09:38:59.169264   35943 tabletserver.go:1503] Row count exceeded 10000 (errno 10001) (sqlstate HY000) ...
   ```
+* If you were using -queryserver-config-terse-errors to redact some log messages containing bind vars in 13.0-SNAPSHOT, you should now instead enable -sanitize_log_messages which sanitizes all log messages containing sensitive info
 
 ### Column types for textual queries now match MySQL's behavior
 
@@ -200,3 +201,9 @@ languages may now start returning as "string" values that were previously return
 
 Support for `discoverygateway` is being dropped. `tabletgateway` is now the only supported implementation. Scripts using
 this flag should be updated to remove the flag as it will be deleted in the next release.
+
+### web/vtctld2 is deprecated and can optionally be turned off
+
+The vtctld2 web interface is no longer maintained and is planned for removal in Vitess 16. Motivation for this change and a roadmap to removing [the web/vtctld2 codebase](https://github.com/vitessio/vitess/tree/main/web/vtctld2) is given in https://github.com/vitessio/vitess/issues/9686.
+
+Vitess operators can optionally disable the vtctld2 web interface ahead of time by calling the `vtctld` process with the flag `enable_vtctld_ui=false`. For more details on this flag, see https://github.com/vitessio/vitess/pull/9614.
