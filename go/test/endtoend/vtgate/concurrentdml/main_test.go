@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
