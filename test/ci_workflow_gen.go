@@ -101,6 +101,7 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
+		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vtorc",
@@ -122,6 +123,7 @@ var (
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
+		"vreplication_across_db_versions",
 	}
 )
 

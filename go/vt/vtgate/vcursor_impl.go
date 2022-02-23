@@ -172,6 +172,16 @@ func newVCursorImpl(
 	}, nil
 }
 
+// HasSystemVariables returns whether the session has set system variables or not
+func (vc *vcursorImpl) HasSystemVariables() bool {
+	return vc.safeSession.HasSystemVariables()
+}
+
+// GetSystemVariables takes a visitor function that will save each system variables of the session
+func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
+	vc.safeSession.GetSystemVariables(f)
+}
+
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
@@ -310,14 +320,22 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	// Looks for any sharded keyspace if present, otherwise take any keyspace.
+	var keyspaces = make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
 	for _, ks := range vc.vschema.Keyspaces {
-		keyspace = ks.Keyspace
-		if keyspace.Sharded {
-			return keyspace, nil
+		keyspaces = append(keyspaces, ks.Keyspace)
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+
+	// Look for any sharded keyspace if present, otherwise take the first keyspace,
+	// sorted alphabetically
+	for _, ks := range keyspaces {
+		if ks.Sharded {
+			return ks, nil
 		}
 	}
-	return keyspace, nil
+	return keyspaces[0], nil
 }
 
 func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
@@ -737,6 +755,11 @@ func (vc *vcursorImpl) SetSessionEnableSystemSettings(allow bool) error {
 // GetSessionEnableSystemSettings implements the SessionActions interface
 func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
 	return vc.safeSession.GetSessionEnableSystemSettings()
+}
+
+// GetEnableSetVar implements the SessionActions interface
+func (vc *vcursorImpl) GetEnableSetVar() bool {
+	return vc.safeSession.GetEnableSetVar()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface
