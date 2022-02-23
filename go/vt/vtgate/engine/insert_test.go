@@ -1566,9 +1566,8 @@ func TestInsertSelectOwned(t *testing.T) {
 		Query:    "dummy_insert",
 		Table:    ks.Tables["t1"],
 		VindexValueOffset: [][]int{
-			{1}, // The primary vindex has a single column as sharding key
-			{0}, // the onecol vindex uses the 'name' column
-		},
+			{1},  // The primary vindex has a single column as sharding key
+			{0}}, // the onecol vindex uses the 'name' column
 		Input: &Route{
 			Query:      "dummy_select",
 			FieldQuery: "dummy_field_query",
