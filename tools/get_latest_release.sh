@@ -25,7 +25,8 @@ target_release=""
 base_release_branch=$(echo "$1" | grep -E 'release-[0-9]*.0$')
 if [ "$base_release_branch" != "" ]; then
   major_release=$(echo "$base_release_branch" | sed 's/release-*//' | sed 's/\.0//')
-  target_release="release-$((major_release-1)).0"
+  target_major_release=$((major_release-1))
+  target_release=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.[0-9]*$' | sed 's/[a-z0-9]* refs\/tags\/v//' | awk -v FS=. -v RELEASE=$target_major_release '{if ($1 == RELEASE) print; }' | sort -nr | head -n1)
 else
   target_release="release-$(git show-ref | grep -E 'refs/remotes/origin/release-[0-9]*\.0$' | sed 's/[a-z0-9]* refs\/remotes\/origin\/release-//' | sort -nr | head -n1)"
 fi
