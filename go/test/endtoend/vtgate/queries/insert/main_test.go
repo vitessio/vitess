@@ -42,6 +42,13 @@ create table num_vdx_tbl(
 	keyspace_id varbinary(20),
 	primary key(num)
 ) Engine=InnoDB;
+
+create table user_tbl(
+	id bigint,
+    region_id bigint,
+	name varchar(50),
+	primary key(id)
+) Engine=InnoDB;
 `
 
 	sVSchema = `
@@ -81,22 +88,45 @@ create table num_vdx_tbl(
           "name": "hash"
         }
       ]
+    },
+    "user_tbl": {
+      "auto_increment":{
+	      "column" : "id",
+		  "sequence" : "uks.user_seq"
+	  },
+      "column_vindexes": [
+        {
+          "column": "region_id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }`
 
-	uSchemaSQL = `create table u_tbl(
+	uSchemaSQL = `create table user_seq (
+	id int default 0, 
+	next_id bigint default null, 
+	cache bigint default null, 
+	primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB;
+
+create table u_tbl(
 	id bigint,
 	num bigint,
 	primary key(id)
 ) Engine=InnoDB;
 
+insert into user_seq(id, next_id, cache) values (0, 1, 1000);
 `
 
 	uVSchema = `
 {
   "tables": {
-    "u_tbl": {}
+    "u_tbl": {},
+    "user_seq": {
+       "type":   "sequence"
+    }
   }
 }`
 )
