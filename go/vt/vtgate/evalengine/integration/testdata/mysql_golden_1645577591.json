@@ -1,0 +1,10 @@
+[
+  {
+    "Query": "SELECT FLOOR(1.00001)",
+    "Value": "INT64(1)"
+  },
+  {
+    "Query": "SELECT FLOOR(NULL)",
+    "Value": "NULL"
+  }
+]
