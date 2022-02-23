@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -292,4 +294,25 @@ func waitForCatchUp(
 		return err
 	}
 	return nil
+}
+
+// filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any constraint failures and can make forward progress on being promoted
+func filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) []*topodatapb.Tablet {
+	var restrictedValidTablets []*topodatapb.Tablet
+	for _, tablet := range validTablets {
+		// Remove tablets which have MustNot promote rule since they must never be promoted
+		if PromotionRule(tablet) == promotionrule.MustNot {
+			continue
+		}
+		// If ERS is configured to prevent cross cell promotions, remove any tablet not from the same cell as the previous primary
+		if opts.PreventCrossCellPromotion && prevPrimary != nil && tablet.Alias.Cell != prevPrimary.Alias.Cell {
+			continue
+		}
+		// Remove any tablet which cannot make forward progress using the list of tablets we have reached
+		if !EstablishForTablet(tablet, tabletsReachable) {
+			continue
+		}
+		restrictedValidTablets = append(restrictedValidTablets, tablet)
+	}
+	return restrictedValidTablets
 }

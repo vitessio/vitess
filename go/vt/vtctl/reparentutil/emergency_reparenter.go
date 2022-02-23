@@ -147,6 +147,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		validCandidates            map[string]mysql.Position
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
+		tabletsReachable           []*topodatapb.Tablet
 		validReplacementCandidates []*topodatapb.Tablet
 		betterCandidate            *topodatapb.Tablet
 		isIdeal                    bool
@@ -177,7 +178,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	statusMap, primaryStatusMap, _, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
+	statusMap, primaryStatusMap, tabletsReachable, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -211,13 +212,22 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// In case the user has specified a tablet specifically, then it is selected, as long as it is the most advanced.
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
+	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules
 	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
 	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
 
+	// After finding the intermediate source, we want to filter the valid candidate list by the following criterion -
+	// 1. Only keep the tablets which can make progress after being promoted (have sufficient reachable semi-sync ackers)
+	// 2. Remove the tablets with the Must_not promote rule
+	// 3. Remove cross-cell tablets if PreventCrossCellPromotion is specified
+	// Our final primary candidate MUST belong to this list of valid candidates
+	validCandidateTablets = filterValidCandidates(validCandidateTablets, tabletsReachable, prevPrimary, opts)
+
 	// check whether the intermediate source candidate selected is ideal or if it can be improved later
+	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list
 	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
@@ -619,6 +629,10 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 		}
 	}()
 
+	if len(validCandidates) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
+	}
+
 	if opts.NewPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
@@ -689,8 +703,8 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 		}
 	}
 
-	// return the one that we have if nothing is found
-	return intermediateSource, nil
+	// return any valid tablet
+	return findCandidateAnyCell(intermediateSource, validCandidates), nil
 }
 
 // checkIfConstraintsSatisfied is used to check whether the constraints for ERS are satisfied or not.
