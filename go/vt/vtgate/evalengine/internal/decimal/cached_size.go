@@ -17,13 +17,19 @@ limitations under the License.
 
 package decimal
 
-func (cached *Big) CachedSize(alloc bool) int64 {
+import hack "vitess.io/vitess/go/hack"
+
+func (cached *Decimal) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(16)
+	}
+	// field value *math/big.Int
+	if cached.value != nil {
+		size += hack.RuntimeAllocSize(int64(32))
 	}
 	return size
 }

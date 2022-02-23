@@ -25,6 +25,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 type (
@@ -446,6 +447,16 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 				"For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%s').",
 				"", // TODO: column name
 			)
+		}
+		if convert.Length > decimal.MyMaxPrecision {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too-big precision %d specified for '%s'. Maximum is %d.",
+				convert.Length, sqlparser.String(expr.Expr), decimal.MyMaxPrecision)
+		}
+		if convert.Scale > decimal.MyMaxScale {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too big scale %d specified for column '%s'. Maximum is %d.",
+				convert.Scale, sqlparser.String(expr.Expr), decimal.MyMaxScale)
 		}
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID

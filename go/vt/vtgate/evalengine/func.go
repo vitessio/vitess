@@ -185,20 +185,19 @@ func compareAllFloat(args []EvalResult, result *EvalResult, cmp int) {
 
 func compareAllDecimal(args []EvalResult, result *EvalResult, cmp int) {
 	candidateD := args[0].coerceToDecimal()
-	maxFrac := candidateD.frac
+	maxFrac := args[0].length_
 
 	for _, arg := range args[1:] {
 		thisD := arg.coerceToDecimal()
-		if (cmp < 0) == (thisD.num.Cmp(&candidateD.num) < 0) {
+		if (cmp < 0) == (thisD.Cmp(candidateD) < 0) {
 			candidateD = thisD
 		}
-		if thisD.frac > maxFrac {
-			maxFrac = thisD.frac
+		if arg.length_ > maxFrac {
+			maxFrac = arg.length_
 		}
 	}
 
-	candidateD.frac = maxFrac
-	result.setDecimal(candidateD)
+	result.setDecimal(candidateD, maxFrac)
 }
 
 func compareAllText(args []EvalResult, result *EvalResult, cmp int) {
