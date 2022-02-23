@@ -324,7 +324,6 @@ func (ins *Insert) getInsertSelectQueries(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 	rows []sqltypes.Row,
-	id int64,
 ) ([]*srvtopo.ResolvedShard, []*querypb.BoundQuery, error) {
 	colVindexes := ins.ColVindexes
 	if colVindexes == nil {
@@ -429,7 +428,7 @@ func (ins *Insert) execInsertFromSelect(vcursor VCursor, bindVars map[string]*qu
 		return nil, err
 	}
 
-	rss, queries, err := ins.getInsertSelectQueries(vcursor, bindVars, result.Rows, insertID)
+	rss, queries, err := ins.getInsertSelectQueries(vcursor, bindVars, result.Rows)
 	if err != nil {
 		return nil, err
 	}
@@ -518,7 +517,7 @@ func (ins *Insert) processGenerateFromRows(vcursor VCursor, rows []sqltypes.Row)
 	if ins.Generate == nil {
 		return 0, nil
 	}
-	var count int64 = 0
+	count := int64(0)
 	offset := ins.Generate.Offset
 	for _, val := range rows {
 		if val[offset].IsNull() {
