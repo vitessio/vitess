@@ -244,8 +244,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if !isIdeal {
 		// we now reparent all the tablets to start replicating from the intermediate source
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
-		// it also returns the list of the tablets that started replication successfully including itself. These are the candidates that we can use to find a replacement
-		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, statusMap, opts)
+		// it also returns the list of the tablets that started replication successfully including itself part of the validCandidateTablets list.
+		// These are the candidates that we can use to find a replacement.
+		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, statusMap, validCandidateTablets, opts)
 		if err != nil {
 			return err
 		}
@@ -427,17 +428,28 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	source *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	validCandidateTablets []*topodatapb.Tablet,
 	opts EmergencyReparentOptions,
 ) ([]*topodatapb.Tablet, error) {
 	// we reparent all the other tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	validCandidatesForImprovement, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
 	if err != nil {
 		return nil, err
 	}
 
 	// also include the current tablet for being considered as part of valid candidates for ERS promotion
-	validCandidatesForImprovement = append(validCandidatesForImprovement, source)
+	reachableTablets = append(reachableTablets, source)
+
+	// The only valid candidates for improvement are the ones which are reachable and part of the valid candidate list
+	// Here we need to be careful not to mess up the ordering of tablets in validCandidateTablets since the list is sorted by the
+	// replication positions
+	var validCandidatesForImprovement []*topodatapb.Tablet
+	for _, tablet := range validCandidateTablets {
+		if topoproto.IsTabletInList(tablet, reachableTablets) {
+			validCandidatesForImprovement = append(validCandidatesForImprovement, tablet)
+		}
+	}
 	return validCandidatesForImprovement, nil
 }
 

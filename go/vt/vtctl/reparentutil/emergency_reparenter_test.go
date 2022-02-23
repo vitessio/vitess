@@ -3523,7 +3523,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			tabletInfo := tt.tabletMap[tt.newSourceTabletAlias]
 
 			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
-			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps)
+			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, nil, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
