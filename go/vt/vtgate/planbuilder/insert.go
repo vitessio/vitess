@@ -270,6 +270,7 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		}
 	}
 	eins.VindexValueOffset = vv
+	generateInsertSelectQuery(ins, eins)
 	return eins, nil
 }
 
@@ -306,6 +307,17 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 		eins.Mid[rowNum] = midBuf.String()
 		midBuf.Reset()
 	}
+	suffixBuf.Myprintf("%v", node.OnDup)
+	eins.Suffix = suffixBuf.String()
+}
+
+func generateInsertSelectQuery(node *sqlparser.Insert, eins *engine.Insert) {
+	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	prefixBuf.Myprintf("insert %v%sinto %v%v ",
+		node.Comments, node.Ignore.ToString(),
+		node.Table, node.Columns)
+	eins.Prefix = prefixBuf.String()
 	suffixBuf.Myprintf("%v", node.OnDup)
 	eins.Suffix = suffixBuf.String()
 }
