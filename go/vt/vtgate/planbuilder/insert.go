@@ -210,45 +210,20 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		populateInsertColumnlist(ins, table)
 	}
 
-	var selectStmt sqlparser.SelectStatement
-	var configuredPlanner selectPlanner
-	var err error
-	switch stmt := ins.Rows.(type) {
-	case *sqlparser.Select:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
-		if err != nil {
-			return nil, err
-		}
-		selectStmt = stmt
-	case *sqlparser.Union:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
-		if err != nil {
-			return nil, err
-		}
-		selectStmt = stmt
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert plan with %T", ins.Rows)
+	selectStmt, queryPlanner, err := getStatementAndPlanner(ins, vschema)
+	if err != nil {
+		return nil, err
 	}
+
 	// validate the columns to match on insert and select
-	if len(ins.Columns) < selectStmt.GetColumnCount() {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
+	if err := checkColumnCounts(ins, selectStmt); err != nil {
+		return nil, err
 	}
-	if len(ins.Columns) > selectStmt.GetColumnCount() {
-		sel := sqlparser.GetFirstSelect(selectStmt)
-		var hasStarExpr bool
-		for _, sExpr := range sel.SelectExprs {
-			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
-				break
-			}
-		}
-		if !hasStarExpr {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
-		}
-	}
+
 	// Override the locking with `for update` to lock the rows for inserting the data.
 	selectStmt.SetLock(sqlparser.ForUpdateLock)
 
-	plan, err := configuredPlanner(selectStmt, reservedVars, vschema)
+	plan, err := queryPlanner(selectStmt, reservedVars, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -260,29 +235,11 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	)
 	eins.Input = plan
 
-	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		eins.MultiShardAutocommit = true
-	}
-	eins.QueryTimeout = queryTimeout(directives)
+	applyCommentDirectives(ins, eins)
 
-	// Fill out the 3-d Values structure. Please see documentation of Insert.Values for details.
-	var colVindexes []*vindexes.ColumnVindex
-	for _, colVindex := range eins.Table.ColumnVindexes {
-		if colVindex.IgnoreInDML() {
-			continue
-		}
-		colVindexes = append(colVindexes, colVindex)
-	}
-	eins.ColVindexes = colVindexes
-
-	vv := make([][]int, len(colVindexes))
-	for idx, colVindex := range colVindexes {
-		for _, col := range colVindex.Columns {
-			vv[idx] = append(vv[idx], findColumn(ins, col))
-		}
-	}
-	eins.VindexValueOffset = vv
+	// Fill out the 3-d Values structure
+	eins.ColVindexes = setColVindexes(eins)
+	eins.VindexValueOffset = extractColVindexOffsets(ins, eins.ColVindexes)
 	generateInsertSelectQuery(ins, eins)
 
 	if eins.Table.AutoIncrement != nil {
@@ -294,6 +251,76 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		}
 	}
 	return eins, nil
+}
+
+func getStatementAndPlanner(
+	ins *sqlparser.Insert,
+	vschema plancontext.VSchema,
+) (selectStmt sqlparser.SelectStatement, configuredPlanner selectPlanner, err error) {
+	switch stmt := ins.Rows.(type) {
+	case *sqlparser.Select:
+		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
+		selectStmt = stmt
+	case *sqlparser.Union:
+		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
+		selectStmt = stmt
+	default:
+		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert plan with %T", ins.Rows)
+	}
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return selectStmt, configuredPlanner, nil
+}
+
+func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStatement) error {
+	if len(ins.Columns) < selectStmt.GetColumnCount() {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
+	}
+	if len(ins.Columns) > selectStmt.GetColumnCount() {
+		sel := sqlparser.GetFirstSelect(selectStmt)
+		var hasStarExpr bool
+		for _, sExpr := range sel.SelectExprs {
+			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
+				break
+			}
+		}
+		if !hasStarExpr {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
+		}
+	}
+	return nil
+}
+
+func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
+	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
+	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
+		eins.MultiShardAutocommit = true
+	}
+	eins.QueryTimeout = queryTimeout(directives)
+}
+
+func setColVindexes(eins *engine.Insert) []*vindexes.ColumnVindex {
+	var colVindexes []*vindexes.ColumnVindex
+	for _, colVindex := range eins.Table.ColumnVindexes {
+		if colVindex.IgnoreInDML() {
+			continue
+		}
+		colVindexes = append(colVindexes, colVindex)
+	}
+	return colVindexes
+}
+
+func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.ColumnVindex) [][]int {
+	vv := make([][]int, len(colVindexes))
+	for idx, colVindex := range colVindexes {
+		for _, col := range colVindex.Columns {
+			vv[idx] = append(vv[idx], findColumn(ins, col))
+		}
+	}
+	return vv
 }
 
 // findColumn returns the column index where it is placed on the insert column list.
