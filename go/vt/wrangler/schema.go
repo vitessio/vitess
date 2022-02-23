@@ -109,13 +109,17 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 
 // ValidateSchemaKeyspace will diff the schema from all the tablets in the keyspace.
 func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoPrimary bool, includeVSchema bool) error {
-	_, err := wr.VtctldServer().ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+	res, err := wr.VtctldServer().ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace:       keyspace,
 		ExcludeTables:  excludeTables,
 		IncludeViews:   includeViews,
 		IncludeVschema: includeVSchema,
 		SkipNoPrimary:  skipNoPrimary,
 	})
+
+	if len(res.Results) > 0 {
+		return fmt.Errorf("schema diffs: %v", res.Results)
+	}
 
 	return err
 }
