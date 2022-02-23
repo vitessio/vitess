@@ -112,6 +112,9 @@ type Config struct {
 	// do not suppport initialization through snapshot files.
 	SnapshotFile string
 
+	// Enable system settings to be changed per session at the database connection level
+	EnableSystemSettings bool
+
 	// TransactionMode is SINGLE, MULTI or TWOPC
 	TransactionMode string
 
