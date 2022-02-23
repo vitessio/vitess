@@ -16,6 +16,12 @@ limitations under the License.
 
 package decimal
 
+import (
+	"fmt"
+	"math/big"
+	"math/bits"
+)
+
 func appendZeroes(buf []byte, n int) []byte {
 	const zeroes = "0000000000000000"
 	for n >= len(zeroes) {
@@ -305,4 +311,90 @@ func roundString(b []byte, prec int) []byte {
 		prec++
 	}
 	return b[:prec]
+}
+
+func mulWW(x, y big.Word) (z1, z0 big.Word) {
+	zz1, zz0 := bits.Mul(uint(x), uint(y))
+	return big.Word(zz1), big.Word(zz0)
+}
+
+func mulAddWWW(x, y, c big.Word) (z1, z0 big.Word) {
+	z1, zz0 := mulWW(x, y)
+	if z0 = zz0 + c; z0 < zz0 {
+		z1++
+	}
+	return z1, z0
+}
+
+func mulAddVWW(z, x []big.Word, y, r big.Word) (c big.Word) {
+	c = r
+	for i := range z {
+		c, z[i] = mulAddWWW(x[i], y, c)
+	}
+	return c
+}
+
+func mulAddWW(z, x []big.Word, y, r big.Word) []big.Word {
+	m := len(x)
+	z = z[:m+1]
+	z[m] = mulAddVWW(z[0:m], x, y, r)
+	return z
+}
+
+func pow(x big.Word, n int) (p big.Word) {
+	// n == sum of bi * 2**i, for 0 <= i < imax, and bi is 0 or 1
+	// thus x**n == product of x**(2**i) for all i where bi == 1
+	// (Russian Peasant Method for exponentiation)
+	p = 1
+	for n > 0 {
+		if n&1 != 0 {
+			p *= x
+		}
+		x *= x
+		n >>= 1
+	}
+	return
+}
+
+func parseLargeDecimal(integral, fractional []byte) (*big.Int, error) {
+	const (
+		b1 = big.Word(10)
+		bn = big.Word(1e19)
+		n  = 19
+	)
+	var (
+		di     = big.Word(0) // 0 <= di < b1**i < bn
+		i      = 0           // 0 <= i < n
+		z      = make([]big.Word, 0, 5)
+		chunks = [2][]byte{integral, fractional}
+	)
+
+	for _, partial := range chunks {
+		for _, ch := range partial {
+			var d1 big.Word
+			switch {
+			case ch == '.':
+				continue
+			case '0' <= ch && ch <= '9':
+				d1 = big.Word(ch - '0')
+			default:
+				return nil, fmt.Errorf("unexpected character %q", ch)
+			}
+
+			// collect d1 in di
+			di = di*b1 + d1
+			i++
+
+			// if di is "full", add it to the result
+			if i == n {
+				z = mulAddWW(z, z, bn, di)
+				di = 0
+				i = 0
+			}
+		}
+	}
+	if i > 0 {
+		z = mulAddWW(z, z, pow(b1, i), di)
+	}
+	return new(big.Int).SetBits(z), nil
 }
