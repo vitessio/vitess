@@ -77,6 +77,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 		if c.HasScale {
 			d = c.Scale
 		}
+		if m == 0 && d == 0 {
+			m = 10
+		}
 		result.makeDecimal(int32(m), int32(d))
 	case "DOUBLE", "REAL":
 		result.makeFloat()

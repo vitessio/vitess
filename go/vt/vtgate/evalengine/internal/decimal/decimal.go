@@ -33,6 +33,26 @@ import (
 	"vitess.io/vitess/go/hack"
 )
 
+// MyMaxScale is the largest scale on a decimal that MySQL supports
+const MyMaxScale = 30
+
+// MyMaxPrecision is the largest precision on a decimal that MySQL supports
+const MyMaxPrecision = 65
+
+// MyMaxBigDigits is the largest amount of "big digits" that MySQL supports
+// See: myBigDigits
+const MyMaxBigDigits = 9
+
+// myBigDigits returns how many "big digits" would be used by
+// MySQL's base-10 decimal implementation to store these many decimal
+// digits. Note that our big decimal implementation (which is the
+// Go stdlib's big.Int) is base-2^64, but we still need this helper
+// to figure out how much we must round some numbers to match
+// MySQL's behavior.
+func myBigDigits(digits int32) int32 {
+	return (digits + 8) / 9
+}
+
 // divisionPrecision is the number of decimal places in the result when it
 // doesn't divide exactly.
 //
@@ -223,30 +243,50 @@ func NewFromMySQL(s []byte) (Decimal, error) {
 		}
 	}
 
-	var intString string
-	var exp int32
+	var fractional, integral []byte
 	if pIndex := bytes.IndexByte(s, '.'); pIndex >= 0 {
 		if bytes.IndexByte(s[pIndex+1:], '.') != -1 {
 			return Decimal{}, fmt.Errorf("can't convert %s to decimal: too many .s", original)
 		}
 		if pIndex+1 < len(s) {
-			var buf strings.Builder
-			buf.Grow(len(s))
-			buf.Write(s[:pIndex])
-			buf.Write(s[pIndex+1:])
-			intString = buf.String()
+			integral = s[:pIndex]
+			fractional = s[pIndex+1:]
 		} else {
-			intString = hack.String(s[:pIndex])
+			integral = s[:pIndex]
 		}
-		exp = -int32(len(s[pIndex+1:]))
 	} else {
-		intString = hack.String(s)
+		integral = s
 	}
 
-	dValue := new(big.Int)
-	_, ok := dValue.SetString(intString, 10)
+	// Check if the size of this bigint would fit in the limits
+	// that MySQL has by default. To do that, we must convert the
+	// length of our integral and fractional part to "mysql digits"
+	myintg := myBigDigits(int32(len(integral)))
+	myfrac := myBigDigits(int32(len(fractional)))
+	if myintg > MyMaxBigDigits {
+		return largestForm(MyMaxPrecision, 0, neg), nil
+	}
+	if myintg+myfrac > MyMaxBigDigits {
+		fractional = fractional[:int((MyMaxBigDigits-myintg)*9)]
+	}
+
+	var (
+		dValue = new(big.Int)
+		exp    = -int32(len(fractional))
+		ok     bool
+	)
+
+	if len(fractional) > 0 {
+		var composite strings.Builder
+		composite.Grow(len(integral) + len(fractional))
+		composite.Write(integral)
+		composite.Write(fractional)
+		_, ok = dValue.SetString(composite.String(), 10)
+	} else {
+		_, ok = dValue.SetString(hack.String(integral), 10)
+	}
 	if !ok {
-		return Decimal{}, fmt.Errorf("can't convert %s to decimal", original)
+		panic("big.SetString failed to parse integral")
 	}
 	if neg {
 		dValue.Neg(dValue)
@@ -364,7 +404,7 @@ func NewFromFloat(value float64) Decimal {
 	if value == 0 {
 		return New(0, 0)
 	}
-	dec, err := NewFromMySQL(strconv.AppendFloat(nil, value, 'f', -1, 64))
+	dec, err := NewFromString(strconv.FormatFloat(value, 'f', -1, 64))
 	if err != nil {
 		panic(err)
 	}
@@ -375,7 +415,18 @@ func NewFromFloat32(value float32) Decimal {
 	if value == 0 {
 		return New(0, 0)
 	}
-	dec, err := NewFromMySQL(strconv.AppendFloat(nil, float64(value), 'f', -1, 32))
+	dec, err := NewFromString(strconv.FormatFloat(float64(value), 'f', -1, 32))
+	if err != nil {
+		panic(err)
+	}
+	return dec
+}
+
+func NewFromFloatMySQL(value float64) Decimal {
+	if value == 0 {
+		return New(0, 0)
+	}
+	dec, err := NewFromMySQL(strconv.AppendFloat(nil, value, 'f', -1, 64))
 	if err != nil {
 		panic(err)
 	}
@@ -526,10 +577,6 @@ func (d Decimal) Mul(d2 Decimal) Decimal {
 	return d.mul(d2)
 }
 
-func roundBase10(digits int32) int32 {
-	return (digits + 8) / 9
-}
-
 func (d Decimal) Div(d2 Decimal, scaleIncr int32) Decimal {
 	if d.Sign() == 0 {
 		return Zero
@@ -537,13 +584,13 @@ func (d Decimal) Div(d2 Decimal, scaleIncr int32) Decimal {
 
 	s1 := -d.exp
 	s2 := -d2.exp
-	fracLeft := roundBase10(s1)
-	fracRight := roundBase10(s2)
+	fracLeft := myBigDigits(s1)
+	fracRight := myBigDigits(s2)
 	scaleIncr -= fracLeft - s1 + fracRight - s2
 	if scaleIncr < 0 {
 		scaleIncr = 0
 	}
-	scale := roundBase10(fracLeft+fracRight+scaleIncr) * 9
+	scale := myBigDigits(fracLeft+fracRight+scaleIncr) * 9
 	q, _ := d.quoRem(d2, scale)
 	return q
 }
@@ -858,7 +905,7 @@ func min(x, y int32) int32 {
 //	largestForm(1, 1) => 9.9
 //	largestForm(5, 0) => 99999
 //  largestForm(0, 5) => 0.99999
-func largestForm(integral, fractional int32) Decimal {
+func largestForm(integral, fractional int32, neg bool) Decimal {
 	// nines is just a very long string of nines; to find the
 	// largest form of a large decimal, we parse as many nines
 	// as digits are in the form, then adjust the exponent
@@ -871,24 +918,79 @@ func largestForm(integral, fractional int32) Decimal {
 		"99999999999999999999999999999999999999999999999999" +
 		"99999999999999999999999999999999999999999999999999"
 
-	digits := int(integral + fractional)
-	if digits < len(limitsBigTab) {
-		return Decimal{value: limitsBigTab[digits], exp: -fractional}
+	var num *big.Int
+	switch digits := int(integral + fractional); {
+	case digits < len(limitsBigTab):
+		num = limitsBigTab[digits]
+		if neg {
+			num = new(big.Int).Neg(num)
+		}
+	case digits < len(nines):
+		num, _ = new(big.Int).SetString(nines[:digits], 10)
+		if neg {
+			num = num.Neg(num)
+		}
+	default:
+		panic("largestForm: too large")
 	}
-	if digits < len(nines) {
-		num, _ := new(big.Int).SetString(nines[:digits], 10)
-		return Decimal{value: num, exp: -fractional}
+	return Decimal{value: num, exp: -fractional}
+}
+
+// bigLength returns the number of digits in x.
+func bigLength(x *big.Int) int {
+	if x.Sign() == 0 {
+		return 1
 	}
-	panic("largestForm: too large")
+
+	var (
+		m  uint64
+		nb = uint64(x.BitLen())
+	)
+
+	// overflowCutoff is the largest number where N * 0x268826A1 <= 1<<63 - 1
+	const overflowCutoff = 14267572532
+	if nb > overflowCutoff {
+		// Given the identity ``log_n a + log_n b = log_n a*b''
+		// and ``(1<<63 - 1) / overflowCutoff < overFlowCutoff''
+		// we can break nb into two factors: overflowCutoff and X.
+
+		// overflowCutoff / log10(2)
+		m = 1<<32 - 1
+		nb = (nb / overflowCutoff) + (nb % overflowCutoff)
+	}
+
+	// 0x268826A1/2^31 is an approximation of log10(2). See ilog10.
+	// The more accurate approximation 0x268826A13EF3FE08/2^63 overflows.
+	m += ((nb + 1) * 0x268826A1) >> 31
+
+	if x.CmpAbs(bigPow10(m)) < 0 {
+		return int(m)
+	}
+	return int(m + 1)
+}
+
+func (d Decimal) precision() int32 {
+	return int32(bigLength(d.value))
 }
 
 func (d Decimal) Clamp(integral, fractional int32) Decimal {
-	limit := largestForm(integral, fractional)
+	d.ensureInitialized()
+
+	xl := d.exp + d.precision()
+	yl := integral
+	neg := d.value.Sign() < 0
+
+	if xl != yl {
+		if xl < yl {
+			return d
+		}
+		return largestForm(integral, fractional, neg)
+	}
+
+	limit := largestForm(integral, fractional, neg)
 	if d.CmpAbs(limit) <= 0 {
 		return d
 	}
-	if d.value.Sign() < 0 {
-		return limit.NegInPlace()
-	}
 	return limit
+
 }
