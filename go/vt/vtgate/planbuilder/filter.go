@@ -41,7 +41,7 @@ type (
 )
 
 var _ logicalPlan = (*filter)(nil)
-var _ evalengine.ConverterLookup = (*simpleConverterLookup)(nil)
+var _ evalengine.TranslationLookup = (*simpleConverterLookup)(nil)
 
 func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	offset, added, err := pushProjection(s.ctx, &sqlparser.AliasedExpr{Expr: col}, s.plan, true, true, false)
@@ -68,7 +68,7 @@ func newFilter(ctx *plancontext.PlanningContext, plan logicalPlan, expr sqlparse
 		ctx:  ctx,
 		plan: plan,
 	}
-	predicate, err := evalengine.Convert(expr, scl)
+	predicate, err := evalengine.Translate(expr, scl)
 	if err != nil {
 		return nil, err
 	}

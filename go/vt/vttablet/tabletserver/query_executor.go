@@ -758,7 +758,6 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-
 	if qre.tsv.config.AnnotateQueries {
 		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
 		if username == "" {

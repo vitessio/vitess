@@ -1292,7 +1292,7 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ")")
 	}
 	if node.Charset != "" {
-		buf.astPrintf(node, "%s %s", node.Operator.ToString(), node.Charset)
+		buf.astPrintf(node, " character set %s", node.Charset)
 	}
 }
 
