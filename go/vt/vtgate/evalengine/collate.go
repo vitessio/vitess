@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -47,6 +48,10 @@ func (c *CollateExpr) eval(env *ExpressionEnv, out *EvalResult) {
 		throwEvalError(vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error()))
 	}
 	out.replaceCollation(c.TypedCollation)
+}
+
+func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	return c.Inner.typeof(env)
 }
 
 type LookupDefaultCollation collations.ID
