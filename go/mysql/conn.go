@@ -1098,6 +1098,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 	case ComStmtExecute:
+		// flush is called at the end of this block.
+		// We cannot encapsulate it with a defer inside a func because
+		// we have to return from this func if it fails.
+		c.startWriterBuffering()
+
 		queryStart := time.Now()
 		stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
 		c.recycleReadPacket()
@@ -1176,6 +1181,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		timings.Record(queryTimingKey, queryStart)
+		if err := c.flush(); err != nil {
+			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+			return err
+		}
+
 	case ComStmtSendLongData:
 		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
