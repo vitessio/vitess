@@ -203,9 +203,6 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	if ins.Ignore || ins.OnDup != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert using select with ignore/on duplicate")
 	}
-	if table.AutoIncrement != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert using select with auto-inc table")
-	}
 	if len(ins.Columns) == 0 {
 		if !table.ColumnListAuthoritative {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "insert should contain column list or the table should have authoritative columns in vschema")
@@ -287,6 +284,15 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	}
 	eins.VindexValueOffset = vv
 	generateInsertSelectQuery(ins, eins)
+
+	if eins.Table.AutoIncrement != nil {
+		colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
+		eins.Generate = &engine.Generate{
+			Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
+			Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eins.Table.AutoIncrement.Sequence.Name)),
+			Offset:   colNum,
+		}
+	}
 	return eins, nil
 }
 
@@ -374,12 +380,14 @@ func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
 	if colNum >= 0 {
 		return colNum
 	}
+	colOffset := len(ins.Columns)
 	ins.Columns = append(ins.Columns, col)
-	rows := ins.Rows.(sqlparser.Values)
-	for i := range rows {
-		rows[i] = append(rows[i], &sqlparser.NullVal{})
+	if rows, ok := ins.Rows.(sqlparser.Values); ok {
+		for i := range rows {
+			rows[i] = append(rows[i], &sqlparser.NullVal{})
+		}
 	}
-	return len(ins.Columns) - 1
+	return colOffset
 }
 
 // isVindexChanging returns true if any of the update

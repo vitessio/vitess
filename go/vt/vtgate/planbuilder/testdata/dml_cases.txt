@@ -3346,3 +3346,153 @@ Gen4 plan same as above
 "insert into music(id, user_id) select id, *, 2 from user"
 "Column count doesn't match value count at row 1"
 Gen4 plan same as above
+
+# insert using select with auto-inc column using vitess sequence, sequence column not present
+"insert into user_extra(user_id) select id from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id) select id from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:1",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# insert using select with auto-inc column using vitess sequence, sequence column present
+"insert into user_extra(id, user_id) select null, id from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(id, user_id) select null, id from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select null, id from `user` where 1 != 1",
+        "Query": "select null, id from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# sharded insert from select
+"insert into user(id) select 1 from dual"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(id) select 1 from dual",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:0",
+    "MultiShardAutocommit": false,
+    "TableName": "user",
+    "VindexOffsetFromSelect": {
+      "costly_map": "[-1]",
+      "name_user_map": "[-1]",
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Columns": [
+          "1"
+        ],
+        "Expressions": [
+          "INT64(1)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# insert using select get_lock from table
+"insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(pattern) SELECT GET_LOCK('xyz1', 10)",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:1",
+    "MultiShardAutocommit": false,
+    "TableName": "user",
+    "VindexOffsetFromSelect": {
+      "costly_map": "[-1]",
+      "name_user_map": "[-1]",
+      "user_index": "[-1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Lock",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "KeyspaceID(00)",
+        "FieldQuery": "select GET_LOCK('xyz1', 10) from dual where 1 != 1",
+        "Query": "select GET_LOCK('xyz1', 10) from dual for update"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
