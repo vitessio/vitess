@@ -125,4 +125,12 @@ func TestUnownedVindexInsertSelect(t *testing.T) {
 
 	// inserting non-existing record in order_tbl.
 	utils.AssertContainsError(t, conn, "insert into oevent_tbl(oid, ename) select 1000, 'dispatched'", `could not map [INT64(1000)] to a keyspace id`)
+
+	// id is the sharding column, oid is unknowned lookup which points to region_id,
+	// the verify step should pass as we are inserting the same region_id to id
+	qr = utils.Exec(t, conn, "insert into oextra_tbl(id, oid) select region_id, oid from order_tbl")
+	require.EqualValues(t, 4, qr.RowsAffected)
+
+	// mismatch value, verify step will fail. oid 100 is mapped to region_id 1, in this test trying to insert 100 with 2.
+	utils.AssertContainsError(t, conn, "insert into oextra_tbl(id, oid) select 2, 100", `values [[INT64(100)]] for column [oid] does not map to keyspace ids`)
 }
