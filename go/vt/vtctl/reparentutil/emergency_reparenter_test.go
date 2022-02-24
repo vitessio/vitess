@@ -3996,7 +3996,6 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		name                 string
 		emergencyReparentOps EmergencyReparentOptions
 		intermediateSource   *topodatapb.Tablet
-		prevPrimary          *topodatapb.Tablet
 		validCandidates      []*topodatapb.Tablet
 		tabletMap            map[string]*topo.TabletInfo
 		err                  string
@@ -4187,7 +4186,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return

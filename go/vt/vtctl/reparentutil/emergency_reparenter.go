@@ -229,7 +229,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
-	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
+	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// try to find a better candidate using the list we got back
 		// We prefer to choose a candidate which is in the same cell as our previous primary and of the best possible durability rule.
 		// However, if there is an explicit request from the user to promote a specific tablet, then we choose that tablet.
-		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, prevPrimary, validReplacementCandidates, tabletMap, opts)
+		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, opts)
 		if err != nil {
 			return err
 		}
@@ -604,13 +604,12 @@ func (erp *EmergencyReparenter) reparentReplicas(
 // intermediateSourceIsIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
 func (erp *EmergencyReparenter) intermediateSourceIsIdeal(
 	intermediateSource *topodatapb.Tablet,
-	prevPrimary *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
 ) (bool, error) {
 	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, prevPrimary, validCandidates, tabletMap, opts)
+	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, opts)
 	if err != nil {
 		return false, err
 	}
@@ -620,7 +619,6 @@ func (erp *EmergencyReparenter) intermediateSourceIsIdeal(
 // identifyPrimaryCandidate is used to find the final candidate for ERS promotion
 func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	intermediateSource *topodatapb.Tablet,
-	prevPrimary *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
