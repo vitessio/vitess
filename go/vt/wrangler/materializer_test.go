@@ -1671,11 +1671,13 @@ func TestExternalizeVindex(t *testing.T) {
 		},
 	}
 	fields := sqltypes.MakeTestFields(
-		"id|state|message",
-		"int64|varbinary|varbinary",
+		"id|state|message|source",
+		"int64|varbinary|varbinary|blob",
 	)
-	running := sqltypes.MakeTestResult(fields, "1|Running|msg")
-	stopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy")
+	sourceStopAfterCopy := `keyspace:"sourceKs",shard:"0",filter:{rules:{match:"owned" filter:"select * from t1 where in_keyrange(col1, 'sourceKs.hash', '-80')"}} stop_after_copy:true`
+	sourceKeepRunningAfterCopy := `keyspace:"sourceKs",shard:"0",filter:{rules:{match:"owned" filter:"select * from t1 where in_keyrange(col1, 'sourceKs.hash', '-80')"}}`
+	running := sqltypes.MakeTestResult(fields, "1|Running|msg|"+sourceKeepRunningAfterCopy)
+	stopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy|"+sourceStopAfterCopy)
 	testcases := []struct {
 		input        string
 		vrResponse   *sqltypes.Result
@@ -1698,9 +1700,9 @@ func TestExternalizeVindex(t *testing.T) {
 		input: "sourceks.bad",
 		err:   "table name in vindex should be of the form keyspace.table: unqualified",
 	}, {
-		input:      "sourceks.owned",
-		vrResponse: running,
-		err:        "is not in Stopped after copy state",
+		input:        "sourceks.owned",
+		vrResponse:   running,
+		expectDelete: true,
 	}, {
 		input:      "sourceks.unowned",
 		vrResponse: stopped,
@@ -1712,7 +1714,7 @@ func TestExternalizeVindex(t *testing.T) {
 			t.Fatal(err)
 		}
 		if tcase.vrResponse != nil {
-			validationQuery := "select id, state, message from _vt.vreplication where workflow='lkp_vdx' and db_name='vt_targetks'"
+			validationQuery := "select id, state, message, source from _vt.vreplication where workflow='lkp_vdx' and db_name='vt_targetks'"
 			env.tmc.expectVRQuery(200, validationQuery, tcase.vrResponse)
 			env.tmc.expectVRQuery(210, validationQuery, tcase.vrResponse)
 		}
