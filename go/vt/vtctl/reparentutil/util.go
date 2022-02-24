@@ -228,12 +228,12 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 }
 
 func findCandidate(
-	newPrimary *topodatapb.Tablet,
+	intermediateSource *topodatapb.Tablet,
 	possibleCandidates []*topodatapb.Tablet,
 ) *topodatapb.Tablet {
 	// check whether the one we have selected as the source belongs to the candidate list provided
 	for _, candidate := range possibleCandidates {
-		if topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias) {
+		if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
 			return candidate
 		}
 	}

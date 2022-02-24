@@ -1053,3 +1053,92 @@ func TestRestrictValidCandidates(t *testing.T) {
 		})
 	}
 }
+
+func Test_findCandidate(t *testing.T) {
+	tests := []struct {
+		name               string
+		intermediateSource *topodatapb.Tablet
+		possibleCandidates []*topodatapb.Tablet
+		candidate          *topodatapb.Tablet
+	}{
+		{
+			name:      "empty possible candidates list",
+			candidate: nil,
+		}, {
+			name: "intermediate source in possible candidates list",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  103,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+				},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				},
+			},
+		}, {
+			name: "intermediate source not in possible candidates list",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  104,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+				},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := findCandidate(tt.intermediateSource, tt.possibleCandidates)
+			if tt.candidate == nil {
+				require.Nil(t, res)
+			} else {
+				require.NotNil(t, res)
+				require.Equal(t, topoproto.TabletAliasString(tt.candidate.Alias), topoproto.TabletAliasString(res.Alias))
+			}
+		})
+	}
+}
