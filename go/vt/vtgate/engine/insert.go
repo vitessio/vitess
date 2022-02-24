@@ -341,6 +341,10 @@ func (ins *Insert) getInsertSelectQueries(
 			offsets := ins.VindexValueOffset[colIdx]
 			row := make(sqltypes.Row, 0, len(offsets))
 			for _, offset := range offsets {
+				if offset == -1 { // value not provided from select query
+					row = append(row, sqltypes.NULL)
+					continue
+				}
 				row = append(row, inputRow[offset])
 			}
 			shardingCols[colIdx] = append(shardingCols[colIdx], row)
