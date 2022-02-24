@@ -85,6 +85,7 @@ func (p *Pool) findPool(size int) *sizedPool {
 		return p.pools[0]
 	}
 
+	// ceil(Log2(size/minSize))
 	div := uint32((size - 1) >> p.log2min)
 	idx := bits.Len32(div)
 
