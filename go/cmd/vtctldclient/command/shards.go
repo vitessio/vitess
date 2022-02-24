@@ -134,6 +134,7 @@ func commandCreateShard(cmd *cobra.Command, args []string) error {
 var deleteShardsOptions = struct {
 	Recursive     bool
 	EvenIfServing bool
+	Force         bool
 }{}
 
 func commandDeleteShards(cmd *cobra.Command, args []string) error {
@@ -148,6 +149,7 @@ func commandDeleteShards(cmd *cobra.Command, args []string) error {
 		Shards:        shards,
 		EvenIfServing: deleteShardsOptions.EvenIfServing,
 		Recursive:     deleteShardsOptions.Recursive,
+		Force:         deleteShardsOptions.Force,
 	})
 
 	if err != nil {
@@ -329,6 +331,7 @@ func init() {
 
 	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.Recursive, "recursive", "r", false, "Also delete all tablets belonging to the shard. This is required to delete a non-empty shard.")
 	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.EvenIfServing, "even-if-serving", "f", false, "Remove the shard even if it is serving. Use with caution.")
+	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.Force, "force", "f", false, "Remove the shard even if it cannot be locked; this should only be used for cleanup operations.")
 	Root.AddCommand(DeleteShards)
 
 	Root.AddCommand(GetShard)
