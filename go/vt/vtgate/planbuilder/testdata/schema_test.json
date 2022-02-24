@@ -433,13 +433,6 @@
           ]
         }
       }
-    },
-    "test": {
-      "tables": {
-        "managers": {},
-        "properties": {},
-        "supervisions": {}
-      }
     }
   }
 }
