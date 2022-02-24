@@ -1053,3 +1053,103 @@ func TestRestrictValidCandidates(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterValidCandidates(t *testing.T) {
+	var (
+		primaryTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  1,
+			},
+			Type: topodatapb.TabletType_PRIMARY,
+		}
+		replicaTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  2,
+			},
+			Type: topodatapb.TabletType_REPLICA,
+		}
+		rdonlyTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  3,
+			},
+			Type: topodatapb.TabletType_RDONLY,
+		}
+		replicaCrossCellTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-2",
+				Uid:  2,
+			},
+			Type: topodatapb.TabletType_REPLICA,
+		}
+		rdonlyCrossCellTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-2",
+				Uid:  3,
+			},
+			Type: topodatapb.TabletType_RDONLY,
+		}
+	)
+	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
+	tests := []struct {
+		name             string
+		durability       string
+		validTablets     []*topodatapb.Tablet
+		tabletsReachable []*topodatapb.Tablet
+		prevPrimary      *topodatapb.Tablet
+		opts             EmergencyReparentOptions
+		filteredTablets  []*topodatapb.Tablet
+	}{
+		{
+			name:             "filter must not",
+			durability:       "none",
+			validTablets:     allTablets,
+			tabletsReachable: allTablets,
+			filteredTablets:  []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
+		}, {
+			name:             "filter cross cell",
+			durability:       "none",
+			validTablets:     allTablets,
+			tabletsReachable: allTablets,
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone-1",
+				},
+			},
+			opts: EmergencyReparentOptions{
+				PreventCrossCellPromotion: true,
+			},
+			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaTablet},
+		}, {
+			name:             "filter establish",
+			durability:       "cross_cell",
+			validTablets:     []*topodatapb.Tablet{primaryTablet, replicaTablet},
+			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			filteredTablets:  nil,
+		}, {
+			name:       "filter mixed",
+			durability: "cross_cell",
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone-2",
+				},
+			},
+			opts: EmergencyReparentOptions{
+				PreventCrossCellPromotion: true,
+			},
+			validTablets:     allTablets,
+			tabletsReachable: allTablets,
+			filteredTablets:  []*topodatapb.Tablet{replicaCrossCellTablet},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := SetDurabilityPolicy(tt.durability)
+			require.NoError(t, err)
+			tabletList := filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.prevPrimary, tt.opts)
+			require.EqualValues(t, tt.filteredTablets, tabletList)
+		})
+	}
+}
