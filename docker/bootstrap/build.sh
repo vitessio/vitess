@@ -43,8 +43,8 @@ if [[ ! -f bootstrap.sh ]]; then
   exit 1
 fi
 
-# To avoid AUFS permission issues, files must allow access by "other"
-chmod -R o=g *
+# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
+chmod -R o=rx *;
 
 arch=$(uname -m)
 [ "$arch" == "aarch64" ] && [ $flavor != "common" ] && arch_ext='-arm64v8'

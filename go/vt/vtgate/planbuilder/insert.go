@@ -182,7 +182,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 			routeValues[vIdx][colIdx] = make([]evalengine.Expr, len(rows))
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				innerpv, err := evalengine.Convert(row[colNum], semantics.EmptySemTable())
+				innerpv, err := evalengine.Translate(row[colNum], semantics.EmptySemTable())
 				if err != nil {
 					return nil, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
 				}
@@ -245,7 +245,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 			row[colNum] = &sqlparser.NullVal{}
 		}
 
-		pv, err := evalengine.Convert(row[colNum], semantics.EmptySemTable())
+		pv, err := evalengine.Translate(row[colNum], semantics.EmptySemTable())
 		if err != nil {
 			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}

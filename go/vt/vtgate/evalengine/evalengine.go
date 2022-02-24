@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 // Cast converts a Value to the target type.
@@ -158,7 +159,7 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 		case sqltypes.Float64:
 			v1.setFloat(float64(v1.int64()))
 		case sqltypes.Decimal:
-			v1.setDecimal(newDecimalInt64(v1.int64()))
+			v1.setDecimal(decimal.NewFromInt(v1.int64()), 0)
 		}
 	case sqltypes.Uint64:
 		switch v2.typeof() {
@@ -170,7 +171,7 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 		case sqltypes.Float64:
 			v1.setFloat(float64(v1.uint64()))
 		case sqltypes.Decimal:
-			v1.setDecimal(newDecimalUint64(v1.uint64()))
+			v1.setDecimal(decimal.NewFromUint(v1.uint64()), 0)
 		}
 	case sqltypes.Float64:
 		switch v2.typeof() {
@@ -182,7 +183,7 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 			}
 			v2.setFloat(float64(v2.uint64()))
 		case sqltypes.Decimal:
-			f, ok := v2.decimal().num.Float64()
+			f, ok := v2.decimal().Float64()
 			if !ok {
 				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 			}
@@ -191,11 +192,11 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 	case sqltypes.Decimal:
 		switch v2.typeof() {
 		case sqltypes.Int64:
-			v2.setDecimal(newDecimalInt64(v2.int64()))
+			v2.setDecimal(decimal.NewFromInt(v2.int64()), 0)
 		case sqltypes.Uint64:
-			v2.setDecimal(newDecimalUint64(v2.uint64()))
+			v2.setDecimal(decimal.NewFromUint(v2.uint64()), 0)
 		case sqltypes.Float64:
-			f, ok := v1.decimal().num.Float64()
+			f, ok := v1.decimal().Float64()
 			if !ok {
 				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 			}
@@ -229,7 +230,7 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 			return -1, nil
 		}
 	case sqltypes.Decimal:
-		return v1.decimal().num.Cmp(&v2.decimal().num), nil
+		return v1.decimal().Cmp(v2.decimal()), nil
 	}
 
 	// v1>v2
