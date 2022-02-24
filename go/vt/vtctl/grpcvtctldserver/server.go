@@ -593,6 +593,34 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("recursive", req.Recursive)
+	span.Annotate("force", req.Force)
+
+	lctx, unlock, lerr := s.ts.LockKeyspace(ctx, req.Keyspace, "DeleteKeyspace")
+	switch {
+	case lerr == nil:
+		ctx = lctx
+	case !req.Force:
+		return nil, lerr
+	default:
+		log.Warningf("%s: failed to lock keyspace %s for deletion, but force=true, proceeding anyway ...", lerr, req.Keyspace)
+	}
+
+	var err error
+	if unlock != nil {
+		defer func() {
+			// Attempting to unlock a keyspace we successfully deleted results
+			// in ts.unlockKeyspace returning an error, which can make the
+			// overall RPC _seem_ like it failed.
+			//
+			// So, we do this extra checking to allow for specifically this
+			// scenario to result in "success."
+			origErr := err
+			unlock(&err)
+			if origErr == nil && topo.IsErrType(err, topo.NoNode) {
+				err = nil
+			}
+		}()
+	}
 
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
 	if err != nil {
@@ -607,10 +635,12 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 		log.Infof("Deleting all %d shards (and their tablets) in keyspace %v", len(shards), req.Keyspace)
 		recursive := true
 		evenIfServing := true
+		force := req.Force
 
 		for _, shard := range shards {
 			log.Infof("Recursively deleting shard %v/%v", req.Keyspace, shard)
-			if err := deleteShard(ctx, s.ts, req.Keyspace, shard, recursive, evenIfServing); err != nil {
+			err = deleteShard(ctx, s.ts, req.Keyspace, shard, recursive, evenIfServing, force)
+			if err != nil {
 				return nil, fmt.Errorf("cannot delete shard %v/%v: %w", req.Keyspace, shard, err)
 			}
 		}
@@ -631,7 +661,8 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 		}
 	}
 
-	if err := s.ts.DeleteKeyspace(ctx, req.Keyspace); err != nil {
+	err = s.ts.DeleteKeyspace(ctx, req.Keyspace)
+	if err != nil {
 		return nil, err
 	}
 
@@ -646,9 +677,10 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 	span.Annotate("num_shards", len(req.Shards))
 	span.Annotate("even_if_serving", req.EvenIfServing)
 	span.Annotate("recursive", req.Recursive)
+	span.Annotate("force", req.Force)
 
 	for _, shard := range req.Shards {
-		if err := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing); err != nil {
+		if err := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing, req.Force); err != nil {
 			return nil, err
 		}
 	}
