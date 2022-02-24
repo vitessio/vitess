@@ -71,7 +71,28 @@ create table oevent_tbl(
 create table oextra_tbl(
 	id bigint,
     oid varchar(20),
-	primary key(id, oid)
+	primary key(id)
+) Engine=InnoDB;
+
+create table auto_tbl(
+	id bigint,
+    unq_col bigint,
+    nonunq_col bigint,
+	primary key(id),
+    unique(unq_col)
+) Engine=InnoDB;
+
+create table unq_idx(
+    unq_col bigint,
+    keyspace_id varbinary(20),
+	primary key(unq_col)
+) Engine=InnoDB;
+
+create table nonunq_idx(
+    nonunq_col bigint,
+	id bigint,
+    keyspace_id varbinary(20),
+	primary key(nonunq_col, id)
 ) Engine=InnoDB;
 `
 
@@ -99,6 +120,26 @@ create table oextra_tbl(
         "to": "keyspace_id"
       },
       "owner": "order_tbl"
+    },
+    "unq_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "unq_idx",
+        "from": "unq_col",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "auto_tbl"
+    },
+    "nonunq_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "nonunq_idx",
+        "from": "nonunq_col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "auto_tbl"
     }
   },
   "tables": {
@@ -173,11 +214,54 @@ create table oextra_tbl(
           "name": "oid_vdx"
         }
       ]
+    },
+    "auto_tbl": {
+      "auto_increment":{
+	      "column" : "id",
+		  "sequence" : "uks.auto_seq"
+	  },
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "unq_col",
+          "name": "unq_vdx"
+        },
+        {
+          "columns": ["nonunq_col","id"],
+          "name": "nonunq_vdx"
+        }
+      ]
+    },
+    "unq_idx": {
+      "column_vindexes": [
+        {
+          "column": "unq_col",
+          "name": "hash"
+        }
+      ]
+    },
+    "nonunq_idx": {
+      "column_vindexes": [
+        {
+          "column": "nonunq_col",
+          "name": "hash"
+        }
+      ]
     }
   }
 }`
 
 	uSchemaSQL = `create table user_seq (
+	id int default 0, 
+	next_id bigint default null, 
+	cache bigint default null, 
+	primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB;
+
+create table auto_seq (
 	id int default 0, 
 	next_id bigint default null, 
 	cache bigint default null, 
@@ -191,6 +275,7 @@ create table u_tbl(
 ) Engine=InnoDB;
 
 insert into user_seq(id, next_id, cache) values (0, 1, 1000);
+insert into auto_seq(id, next_id, cache) values (0, 666, 1000);
 `
 
 	uVSchema = `
@@ -198,6 +283,9 @@ insert into user_seq(id, next_id, cache) values (0, 1, 1000);
   "tables": {
     "u_tbl": {},
     "user_seq": {
+       "type":   "sequence"
+    },
+    "auto_seq": {
        "type":   "sequence"
     }
   }
