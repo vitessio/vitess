@@ -169,8 +169,10 @@ func TestPoolWeirdMaxSize(t *testing.T) {
 func TestFuzz(t *testing.T) {
 	maxTestSize := 16384
 	for i := 0; i < 20000; i++ {
-		minSize := rand.Intn(maxTestSize)
+
+		minSize := 1024
 		maxSize := rand.Intn(maxTestSize-minSize) + minSize
+
 		p := New(minSize, maxSize)
 		bufSize := rand.Intn(maxTestSize)
 		buf := p.Get(bufSize)
@@ -194,10 +196,13 @@ func TestFuzz(t *testing.T) {
 func BenchmarkPool(b *testing.B) {
 	pool := New(2, 16384)
 	b.SetParallelism(16)
+	rands := randIntSlice(pool.maxSize)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
+		k := 0
 		for pb.Next() {
-			randomSize := rand.Intn(pool.maxSize)
+			i := k % len(rands)
+			randomSize := rands[i]
 			data := pool.Get(randomSize)
 			pool.Put(data)
 		}
@@ -207,12 +212,24 @@ func BenchmarkPool(b *testing.B) {
 func BenchmarkPoolGet(b *testing.B) {
 	pool := New(2, 16384)
 	b.SetParallelism(16)
+	rands := randIntSlice(pool.maxSize)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
+		k := 0
 		for pb.Next() {
-			randomSize := rand.Intn(pool.maxSize)
+			i := k % len(rands)
+			randomSize := rands[i]
 			data := pool.Get(randomSize)
 			_ = data
+			k++
 		}
 	})
+}
+
+func randIntSlice(max int) (r []int) {
+	 r = make([]int, 1024*1024)
+	 for i := range r {
+		 r[i] = rand.Intn(max)
+	 }
+	 return
 }
