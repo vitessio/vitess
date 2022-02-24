@@ -120,5 +120,9 @@ func TestUnownedVindexInsertSelect(t *testing.T) {
 	utils.Exec(t, conn, "use `sks/80-`")
 	utils.AssertMatches(t, conn, `select count(*) from order_tbl o join oevent_tbl oe on o.oid = oe.oid`, `[[INT64(1)]]`)
 
-	utils.AssertContainsError(t, conn, "insert into oevent_tbl(oid, ename) select 1000, 'dispatched'", `ssss`)
+	// resetting the target
+	utils.Exec(t, conn, "use `sks`")
+
+	// inserting non-existing record in order_tbl.
+	utils.AssertContainsError(t, conn, "insert into oevent_tbl(oid, ename) select 1000, 'dispatched'", `could not map [INT64(1000)] to a keyspace id`)
 }
