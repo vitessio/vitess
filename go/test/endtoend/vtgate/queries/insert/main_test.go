@@ -49,6 +49,24 @@ create table user_tbl(
 	name varchar(50),
 	primary key(id)
 ) Engine=InnoDB;
+
+create table order_tbl(
+	oid bigint,
+    region_id bigint,
+	primary key(oid, region_id)
+) Engine=InnoDB;
+
+create table oid_vdx_tbl(
+	oid bigint,
+	keyspace_id varbinary(20),
+	primary key(oid)
+) Engine=InnoDB;
+
+create table oevent_tbl(
+	oid bigint,
+    ename varchar(20),
+	primary key(oid, ename)
+) Engine=InnoDB;
 `
 
 	sVSchema = `
@@ -66,6 +84,15 @@ create table user_tbl(
         "to": "keyspace_id"
       },
       "owner": "s_tbl"
+    },
+    "oid_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "oid_vdx_tbl",
+        "from": "oid",
+        "to": "keyspace_id"
+      },
+      "owner": "order_tbl"
     }
   },
   "tables": {
@@ -98,6 +125,34 @@ create table user_tbl(
         {
           "column": "region_id",
           "name": "hash"
+        }
+      ]
+    },
+    "order_tbl": {
+      "column_vindexes": [
+        {
+          "column": "region_id",
+          "name": "hash"
+        },
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "oid_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "hash"
+        }
+      ]
+    },
+    "oevent_tbl": {
+      "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "oid_vdx"
         }
       ]
     }
