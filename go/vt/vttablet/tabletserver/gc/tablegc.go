@@ -58,7 +58,7 @@ var gcLifecycle = flag.String("table_gc_lifecycle", "hold,purge,evac,drop", "Sta
 
 var (
 	sqlPurgeTable       = `delete from %a limit 50`
-	sqlShowVtTables     = `show tables like '\_vt\_%'`
+	sqlShowVtTables     = `show full tables like '\_vt\_%'`
 	sqlDropTable        = "drop table if exists `%a`"
 	purgeReentranceFlag int64
 )
@@ -66,6 +66,7 @@ var (
 // transitionRequest encapsulates a request to transition a table to next state
 type transitionRequest struct {
 	fromTableName string
+	isBaseTable   bool
 	toGCState     schema.TableGCState
 	uuid          string
 }
@@ -300,23 +301,24 @@ func (collector *TableGC) nextState(fromState schema.TableGCState) *schema.Table
 
 // generateTansition creates a transition request, based on current state and taking configured lifecycleStates
 // into consideration (we may skip some states)
-func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName, uuid string) *transitionRequest {
+func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName string, isBaseTable bool, uuid string) *transitionRequest {
 	nextState := collector.nextState(fromState)
 	if nextState == nil {
 		return nil
 	}
 	return &transitionRequest{
 		fromTableName: fromTableName,
+		isBaseTable:   isBaseTable,
 		toGCState:     *nextState,
 		uuid:          uuid,
 	}
 }
 
 // submitTransitionRequest generates and queues a transition request for a given table
-func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName, uuid string) {
+func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName string, isBaseTable bool, uuid string) {
 	log.Infof("TableGC: submitting transition request for %s", fromTableName)
 	go func() {
-		transition := collector.generateTansition(ctx, fromState, fromTableName, uuid)
+		transition := collector.generateTansition(ctx, fromState, fromTableName, isBaseTable, uuid)
 		if transition != nil {
 			collector.transitionRequestsChan <- transition
 		}
@@ -368,6 +370,8 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 
 	for _, row := range res.Rows {
 		tableName := row[0].ToString()
+		tableType := row[1].ToString()
+		isBaseTable := (tableType == "BASE TABLE")
 
 		shouldTransition, state, uuid, err := collector.shouldTransitionTable(tableName)
 
@@ -384,15 +388,20 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 
 		if state == schema.HoldTableGCState {
 			// Hold period expired. Moving to next state
-			collector.submitTransitionRequest(ctx, state, tableName, uuid)
+			collector.submitTransitionRequest(ctx, state, tableName, isBaseTable, uuid)
 		}
 		if state == schema.PurgeTableGCState {
-			// This table needs to be purged. Make sure to enlist it (we may already have)
-			collector.addPurgingTable(tableName)
+			if isBaseTable {
+				// This table needs to be purged. Make sure to enlist it (we may already have)
+				collector.addPurgingTable(tableName)
+			} else {
+				// This is a view. We don't need to delete rows from views. Just transition into next phase
+				collector.submitTransitionRequest(ctx, state, tableName, isBaseTable, uuid)
+			}
 		}
 		if state == schema.EvacTableGCState {
 			// This table was in EVAC state for the required period. It will transition into DROP state
-			collector.submitTransitionRequest(ctx, state, tableName, uuid)
+			collector.submitTransitionRequest(ctx, state, tableName, isBaseTable, uuid)
 		}
 		if state == schema.DropTableGCState {
 			// This table needs to be dropped immediately.
@@ -484,7 +493,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 			// we happen to know at this time that the table is in PURGE state,
 			// I mean, that's why we're here. We can hard code that.
 			_, _, uuid, _, _ := schema.AnalyzeGCTableName(tableName)
-			collector.submitTransitionRequest(ctx, schema.PurgeTableGCState, tableName, uuid)
+			collector.submitTransitionRequest(ctx, schema.PurgeTableGCState, tableName, true, uuid)
 			collector.removePurgingTable(tableName)
 			// finished with this table. Maybe more tables are looking to be purged.
 			// Trigger another call to purge(), instead of waiting a full purgeReentranceInterval cycle
@@ -539,9 +548,12 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 	t := time.Now().UTC()
 	switch transition.toGCState {
 	case schema.EvacTableGCState:
-		// in EVAC state  we want the table pages to evacuate from the buffer pool. We therefore
-		// set the timestamp to some point the future, which we self determine
-		t = t.Add(evacHours * time.Hour)
+		if transition.isBaseTable {
+			// in EVAC state  we want the table pages to evacuate from the buffer pool. We therefore
+			// set the timestamp to some point the future, which we self determine
+			t = t.Add(evacHours * time.Hour)
+		}
+		// Views don't need evac. t remains "now"
 	}
 
 	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(transition.fromTableName, transition.toGCState, transition.uuid, t)
