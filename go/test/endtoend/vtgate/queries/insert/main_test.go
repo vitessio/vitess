@@ -67,6 +67,12 @@ create table oevent_tbl(
     ename varchar(20),
 	primary key(oid, ename)
 ) Engine=InnoDB;
+
+create table oextra_tbl(
+	id bigint,
+    oid varchar(20),
+	primary key(id, oid)
+) Engine=InnoDB;
 `
 
 	sVSchema = `
@@ -150,6 +156,18 @@ create table oevent_tbl(
     },
     "oevent_tbl": {
       "column_vindexes": [
+        {
+          "column": "oid",
+          "name": "oid_vdx"
+        }
+      ]
+    },
+    "oextra_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
         {
           "column": "oid",
           "name": "oid_vdx"
