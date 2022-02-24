@@ -1258,12 +1258,12 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 // a bit different than for rdonly / replica to guarantee a smooth transition.
 //
 // The order is as follows:
-// - Add BlacklistedTables on the source shard map for master
-// - Refresh the source master, so it stops writing on the tables
-// - Get the source master position, wait until destination master reaches it
-// - Clear SourceShard on the destination Shard
-// - Refresh the destination master, so its stops its filtered
-//   replication and starts accepting writes
+//   - Add BlacklistedTables on the source shard map for master
+//   - Refresh the source master, so it stops writing on the tables
+//   - Get the source master position, wait until destination master reaches it
+//   - Clear SourceShard on the destination Shard
+//   - Refresh the destination master, so its stops its filtered
+//     replication and starts accepting writes
 func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, tables []string, ev *events.MigrateServedFrom, filteredReplicationWaitTime time.Duration) error {
 	// Read the data we need
 	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)

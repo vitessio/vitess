@@ -264,7 +264,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		if err != nil {
 			wr.Logger().Printf("Error converting report to json: %v", err.Error())
 		}
-		jsonOutput += fmt.Sprintf("%s", json)
+		jsonOutput += string(json)
 		wr.logger.Printf("%s", jsonOutput)
 	} else {
 		for table, dr := range diffReports {
