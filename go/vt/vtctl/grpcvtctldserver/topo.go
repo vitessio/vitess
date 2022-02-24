@@ -48,7 +48,7 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 		// We locked the shard, all good
 		ctx = lctx
 	case !force:
-		return fmt.Errorf("failed to lock %s/%s: %w", keyspace, shard, lerr)
+		return fmt.Errorf("failed to lock %s/%s; if you really want to delete this shard, re-run with Force=true: %w", keyspace, shard, lerr)
 	default:
 		// Failed to lock, but force=true. Warn and continue
 		log.Warningf("%s: failed to lock shard %s/%s for deletion, but force=true, proceeding anyway ...", lerr, keyspace, shard)
