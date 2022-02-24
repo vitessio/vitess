@@ -98,5 +98,27 @@ func TestAutoIncInsertSelect(t *testing.T) {
 	require.EqualValues(t, 0, qr.InsertID)
 
 	utils.AssertMatches(t, conn, `select id from user_tbl order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(100)]]`)
+}
 
+func TestUnownedVindexInsertSelect(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.Exec(t, conn, `delete from order_tbl`)
+	defer utils.Exec(t, conn, `delete from oevent_tbl`)
+
+	utils.Exec(t, conn, "insert into order_tbl(oid, region_id) values (100,1),(300,2),(600,3),(700,4)")
+
+	qr := utils.Exec(t, conn, "insert into oevent_tbl(oid, ename) select oid, 'dispatched' from order_tbl")
+	require.EqualValues(t, 4, qr.RowsAffected)
+
+	utils.Exec(t, conn, "use `sks/-80`")
+	utils.AssertMatches(t, conn, `select count(*) from order_tbl o join oevent_tbl oe on o.oid = oe.oid`, `[[INT64(3)]]`)
+	utils.Exec(t, conn, "use `sks/80-`")
+	utils.AssertMatches(t, conn, `select count(*) from order_tbl o join oevent_tbl oe on o.oid = oe.oid`, `[[INT64(1)]]`)
+
+	utils.AssertContainsError(t, conn, "insert into oevent_tbl(oid, ename) select 1000, 'dispatched'", `ssss`)
 }
