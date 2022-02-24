@@ -1279,7 +1279,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "failed to be upgraded to primary",
 		},
 		{
-			name:                 "constraint failure - promotion-rule",
+			name:                 "promotion-rule - no valid candidates for emergency reparent",
 			durability:           "none",
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
@@ -1392,10 +1392,10 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shard:            "-",
 			ts:               memorytopo.NewServer("zone1"),
 			shouldErr:        true,
-			errShouldContain: "elected primary does not satisfy promotion rule constraint",
+			errShouldContain: "no valid candidates for emergency reparent",
 		},
 		{
-			name:                 "constraint failure - cross-cell",
+			name:                 "cross cell - no valid candidates",
 			durability:           "none",
 			emergencyReparentOps: EmergencyReparentOptions{PreventCrossCellPromotion: true},
 			tmc: &testutil.TabletManagerClient{
@@ -1520,7 +1520,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shard:            "-",
 			ts:               memorytopo.NewServer("zone1", "zone2"),
 			shouldErr:        true,
-			errShouldContain: "elected primary does not satisfy geographic constraint",
+			errShouldContain: "no valid candidates for emergency reparent",
 		},
 	}
 
