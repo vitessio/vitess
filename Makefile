@@ -131,6 +131,9 @@ vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
+demo:
+	go install ./examples/demo/demo.go
+
 codegen: asthelpergen sizegen parser astfmtgen
 
 visitor: asthelpergen
@@ -170,7 +173,7 @@ cleanall: clean
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
 
-unit_test: build dependency_check
+unit_test: build dependency_check demo
 	echo $$(date): Running unit tests
 	tools/unit_test_runner.sh
 
