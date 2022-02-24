@@ -117,6 +117,10 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		SkipNoPrimary:  skipNoPrimary,
 	})
 
+	for _, result := range res.Results {
+		wr.Logger().Printf("%s\n", result)
+	}
+
 	if len(res.Results) > 0 {
 		return fmt.Errorf("schema diffs: %v", res.Results)
 	}
