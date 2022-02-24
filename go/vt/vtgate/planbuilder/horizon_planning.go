@@ -844,10 +844,14 @@ func pushAggrOnRoute(
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
 	}
 
+	// creating a copy of the original grouping list so we can re order it later
+	originalGrouping := make([]abstract.GroupBy, len(grouping))
 	vtgateAggregation := make([]*engine.AggregateParams, 0, len(aggregations))
 	// aggIdx keeps track of the index of the aggregations we have processed so far. Starts with 0, goes all the way to len(aggregations)
 	aggrIdx := 0
 	if !ignoreOutputOrder {
+		copy(originalGrouping, grouping)
+
 		// If we care for the output order, we first sort the aggregations and the groupBys independently
 		// Then we run a merge sort on the two lists. This ensures that we start pushing the aggregations and groupBys in the ascending order
 		// So their ordering in the SELECT statement of the route matches what we intended
@@ -911,7 +915,21 @@ func pushAggrOnRoute(
 		})
 	}
 
-	return groupingOffsets, vtgateAggregation, nil
+	if ignoreOutputOrder {
+		return groupingOffsets, vtgateAggregation, nil
+	}
+
+	// re-ordering the output slice to match the input order
+	orderedGroupingOffsets := make([]offsets, 0, len(grouping))
+	for _, og := range originalGrouping {
+		for i, g := range grouping {
+			if og.Inner == g.Inner {
+				orderedGroupingOffsets = append(orderedGroupingOffsets, groupingOffsets[i])
+				break
+			}
+		}
+	}
+	return orderedGroupingOffsets, vtgateAggregation, nil
 }
 
 // addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
