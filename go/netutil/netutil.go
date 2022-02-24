@@ -25,12 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // byPriorityWeight sorts records by ascending priority and weight.
 type byPriorityWeight []*net.SRV
