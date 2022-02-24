@@ -3580,6 +3580,10 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 				},
 			},
 		}, {
+			name:            "empty valid list",
+			validCandidates: nil,
+			err:             "no valid candidates for emergency reparent",
+		}, {
 			name: "explicit request for a primary tablet not in valid list",
 			emergencyReparentOps: EmergencyReparentOptions{NewPrimaryAlias: &topodatapb.TabletAlias{
 				Cell: "zone1",
@@ -3587,7 +3591,14 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			}},
 			intermediateSource: nil,
 			prevPrimary:        nil,
-			validCandidates:    nil,
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
