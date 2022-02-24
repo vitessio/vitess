@@ -327,6 +327,9 @@ message DeleteKeyspaceRequest {
   // before deleting the keyspace. It is an error to call DeleteKeyspace on a
   // non-empty keyspace without also specifying Recursive.
   bool recursive = 2;
+  // Force allows a keyspace to be deleted even if the keyspace lock cannot be
+  // obtained. This should only be used to force-clean a keyspace.
+  bool force = 3;
 }
 
 message DeleteKeyspaceResponse {
@@ -343,6 +346,9 @@ message DeleteShardsRequest {
   // EvenIfServing allows a shard to be deleted even if it is serving, which is
   // normally an error. Use with caution.
   bool even_if_serving = 4;
+  // Force allows a shard to be deleted even if the shard lock cannot be
+  // obtained. This should only be used to force-clean a shard.
+  bool force = 5;
 }
 
 message DeleteShardsResponse {

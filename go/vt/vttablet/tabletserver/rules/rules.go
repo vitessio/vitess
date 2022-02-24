@@ -156,10 +156,10 @@ func (qrs *Rules) MarshalJSON() ([]byte, error) {
 // FilterByPlan creates a new Rules by prefiltering on the query and planId. This allows
 // us to create query plan specific Rules out of the original Rules. In the new rules,
 // query, plans and tableNames predicates are empty.
-func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *Rules) {
+func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
 	var newrules []*Rule
 	for _, qr := range qrs.rules {
-		if newrule := qr.FilterByPlan(query, planid, tableName); newrule != nil {
+		if newrule := qr.FilterByPlan(query, planid, tableNames); newrule != nil {
 			newrules = append(newrules, newrule)
 		}
 	}
@@ -436,14 +436,14 @@ Error:
 // The new Rule will contain all the original constraints other
 // than the plan and query. If the plan and query don't match the Rule,
 // then it returns nil.
-func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *Rule) {
+func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNames []string) (newqr *Rule) {
 	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
 	if !planMatch(qr.plans, planid) {
 		return nil
 	}
-	if !tableMatch(qr.tableNames, tableName) {
+	if !tableMatch(qr.tableNames, tableNames) {
 		return nil
 	}
 	newqr = qr.Copy()
@@ -498,12 +498,16 @@ func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
 	return false
 }
 
-func tableMatch(tableNames []string, tableName string) bool {
+func tableMatch(tableNames []string, otherNames []string) bool {
 	if tableNames == nil {
 		return true
 	}
-	for _, t := range tableNames {
-		if t == tableName {
+	otherNamesMap := map[string]bool{}
+	for _, name := range otherNames {
+		otherNamesMap[name] = true
+	}
+	for _, name := range tableNames {
+		if otherNamesMap[name] {
 			return true
 		}
 	}
