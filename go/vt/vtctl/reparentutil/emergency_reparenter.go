@@ -708,17 +708,6 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	return findCandidateAnyCell(intermediateSource, validCandidates), nil
 }
 
-// checkIfConstraintsSatisfied is used to check whether the constraints for ERS are satisfied or not.
-func (erp *EmergencyReparenter) checkIfConstraintsSatisfied(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
-	if opts.PreventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
-		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
-	}
-	if PromotionRule(newPrimary) == promotionrule.MustNot {
-		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy promotion rule constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
-	}
-	return nil
-}
-
 func (erp *EmergencyReparenter) promoteNewPrimary(
 	ctx context.Context,
 	ev *events.Reparent,
