@@ -2008,6 +2008,16 @@ func (m *DeleteKeyspaceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Force {
+		i--
+		if m.Force {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
 	if m.Recursive {
 		i--
 		if m.Recursive {
@@ -2090,6 +2100,16 @@ func (m *DeleteShardsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Force {
+		i--
+		if m.Force {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
 	}
 	if m.EvenIfServing {
 		i--
@@ -8503,6 +8523,9 @@ func (m *DeleteKeyspaceRequest) SizeVT() (n int) {
 	if m.Recursive {
 		n += 2
 	}
+	if m.Force {
+		n += 2
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -8537,6 +8560,9 @@ func (m *DeleteShardsRequest) SizeVT() (n int) {
 		n += 2
 	}
 	if m.EvenIfServing {
+		n += 2
+	}
+	if m.Force {
 		n += 2
 	}
 	if m.unknownFields != nil {
@@ -15771,6 +15797,26 @@ func (m *DeleteKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Recursive = bool(v != 0)
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -15947,6 +15993,26 @@ func (m *DeleteShardsRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.EvenIfServing = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Force", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Force = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

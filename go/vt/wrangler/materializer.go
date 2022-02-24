@@ -26,6 +26,7 @@ import (
 	"sync"
 	"text/template"
 
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
@@ -755,7 +756,7 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 		if err != nil {
 			return err
 		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, fmt.Sprintf("select id, state, message from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetPrimary.DbName())))
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, fmt.Sprintf("select id, state, message, source from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetPrimary.DbName())))
 		if err != nil {
 			return err
 		}
@@ -767,8 +768,17 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 			}
 			state := row[1].ToString()
 			message := row[2].ToString()
-			if sourceVindex.Owner == "" {
-				// If there's no owner, all streams need to be running.
+			var bls binlogdatapb.BinlogSource
+			sourceBytes, err := row[3].ToBytes()
+			if err != nil {
+				return err
+			}
+			if err := prototext.Unmarshal(sourceBytes, &bls); err != nil {
+				return err
+			}
+			if sourceVindex.Owner == "" || !bls.StopAfterCopy {
+				// If there's no owner or we've requested that the workflow NOT be stopped
+				// after the copy phase completes, then all streams need to be running.
 				if state != binlogplayer.BlpRunning {
 					return fmt.Errorf("stream %d for %v.%v is not in Running state: %v", id, targetShard.Keyspace(), targetShard.ShardName(), state)
 				}
