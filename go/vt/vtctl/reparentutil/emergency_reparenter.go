@@ -674,35 +674,19 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 
 	// If the user requested for prevention of cross cell promotion then we should only search for valid candidates in the same cell
 	// otherwise we can search in any cell
-	if opts.PreventCrossCellPromotion {
-		// find candidates in the same cell from the preferred candidates list
-		candidate = findCandidateSameCell(intermediateSource, prevPrimary, preferredCandidates)
-		if candidate != nil {
-			return candidate, nil
-		}
-		// we do not have a preferred candidate in the same cell
-	} else {
-		// find candidates in any cell from the preferred candidates list
-		candidate = findCandidateAnyCell(intermediateSource, preferredCandidates)
-		if candidate != nil {
-			return candidate, nil
-		}
+
+	// find candidates in any cell from the preferred candidates list
+	candidate = findCandidateAnyCell(intermediateSource, preferredCandidates)
+	if candidate != nil {
+		return candidate, nil
 	}
 
 	// repeat the same process for the neutral candidates list
-	if opts.PreventCrossCellPromotion {
-		// find candidates in the same cell from the neutral candidates list
-		candidate = findCandidateSameCell(intermediateSource, prevPrimary, neutralReplicas)
-		if candidate != nil {
-			return candidate, nil
-		}
-		// we do not have a neutral candidate in the same cell
-	} else {
-		// find candidates in any cell from the neutral candidates list
-		candidate = findCandidateAnyCell(intermediateSource, neutralReplicas)
-		if candidate != nil {
-			return candidate, nil
-		}
+
+	// find candidates in any cell from the neutral candidates list
+	candidate = findCandidateAnyCell(intermediateSource, neutralReplicas)
+	if candidate != nil {
+		return candidate, nil
 	}
 
 	// return any valid tablet
