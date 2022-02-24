@@ -181,6 +181,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 
 var deleteKeyspaceOptions = struct {
 	Recursive bool
+	Force     bool
 }{}
 
 func commandDeleteKeyspace(cmd *cobra.Command, args []string) error {
@@ -190,6 +191,7 @@ func commandDeleteKeyspace(cmd *cobra.Command, args []string) error {
 	_, err := client.DeleteKeyspace(commandCtx, &vtctldatapb.DeleteKeyspaceRequest{
 		Keyspace:  ks,
 		Recursive: deleteKeyspaceOptions.Recursive,
+		Force:     deleteKeyspaceOptions.Force,
 	})
 
 	if err != nil {
@@ -387,6 +389,7 @@ func init() {
 	Root.AddCommand(CreateKeyspace)
 
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")
+	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Force, "force", "f", false, "Delete the keyspace even if it cannot be locked; this should only be used for cleanup operations.")
 	Root.AddCommand(DeleteKeyspace)
 
 	Root.AddCommand(FindAllShardsInKeyspace)
