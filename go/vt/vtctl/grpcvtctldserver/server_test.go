@@ -1417,18 +1417,20 @@ func TestDeleteCellsAlias(t *testing.T) {
 func TestDeleteKeyspace(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
+	type testcase struct {
 		name                       string
 		keyspaces                  []*vtctldatapb.Keyspace
 		shards                     []*vtctldatapb.Shard
 		srvKeyspaces               map[string]map[string]*topodatapb.SrvKeyspace
+		before                     func(t *testing.T, ts *topo.Server, tt testcase) func()
 		topoErr                    error
 		req                        *vtctldatapb.DeleteKeyspaceRequest
 		expected                   *vtctldatapb.DeleteKeyspaceResponse
 		expectedRemainingKeyspaces []string
 		expectedRemainingShards    map[string][]string
 		shouldErr                  bool
-	}{
+	}
+	tests := []testcase{
 		{
 			name: "success",
 			keyspaces: []*vtctldatapb.Keyspace{
@@ -1556,6 +1558,67 @@ func TestDeleteKeyspace(t *testing.T) {
 			},
 			shouldErr: true,
 		},
+		{
+			name: "keyspace is locked",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:       nil,
+			srvKeyspaces: nil,
+			topoErr:      nil,
+			before: func(t *testing.T, ts *topo.Server, tt testcase) func() {
+				_, unlock, err := ts.LockKeyspace(context.Background(), tt.req.Keyspace, "test.DeleteKeyspace")
+				require.NoError(t, err, "failed to lock keyspace %s before test", tt.req.Keyspace)
+				return func() {
+					unlock(&err)
+					if !topo.IsErrType(err, topo.NoNode) {
+						assert.NoError(t, err, "error while unlocking keyspace %s after test", tt.req.Keyspace)
+					}
+				}
+			},
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected:                   nil,
+			expectedRemainingKeyspaces: []string{"testkeyspace"},
+			expectedRemainingShards: map[string][]string{
+				"testkeyspace": nil,
+			},
+			shouldErr: true,
+		},
+		{
+			name: "keyspace is locked with force",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:       nil,
+			srvKeyspaces: nil,
+			topoErr:      nil,
+			before: func(t *testing.T, ts *topo.Server, tt testcase) func() {
+				_, unlock, err := ts.LockKeyspace(context.Background(), tt.req.Keyspace, "test.DeleteKeyspace")
+				require.NoError(t, err, "failed to lock keyspace %s before test", tt.req.Keyspace)
+				return func() {
+					unlock(&err)
+					if !topo.IsErrType(err, topo.NoNode) {
+						assert.NoError(t, err, "error while unlocking keyspace %s after test", tt.req.Keyspace)
+					}
+				}
+			},
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "testkeyspace",
+				Force:    true,
+			},
+			expected:                   &vtctldatapb.DeleteKeyspaceResponse{},
+			expectedRemainingKeyspaces: nil,
+			expectedRemainingShards:    nil,
+			shouldErr:                  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1566,7 +1629,9 @@ func TestDeleteKeyspace(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+			defer cancel()
+
 			ts, topofactory := memorytopo.NewServerAndFactory(cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
@@ -1607,6 +1672,12 @@ func TestDeleteKeyspace(t *testing.T) {
 				utils.MustMatch(t, tt.expectedRemainingShards, remainingShards)
 			}()
 
+			if tt.before != nil {
+				if after := tt.before(t, ts, tt); after != nil {
+					defer after()
+				}
+			}
+
 			resp, err := vtctld.DeleteKeyspace(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1623,18 +1694,20 @@ func TestDeleteKeyspace(t *testing.T) {
 func TestDeleteShards(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
+	type testcase struct {
 		name                    string
 		shards                  []*vtctldatapb.Shard
 		tablets                 []*topodatapb.Tablet
 		replicationGraphs       []*topo.ShardReplicationInfo
 		srvKeyspaces            map[string]map[string]*topodatapb.SrvKeyspace
 		topoErr                 error
+		before                  func(t *testing.T, ts *topo.Server, tt testcase) func()
 		req                     *vtctldatapb.DeleteShardsRequest
 		expected                *vtctldatapb.DeleteShardsResponse
 		expectedRemainingShards []*vtctldatapb.Shard
 		shouldErr               bool
-	}{
+	}
+	tests := []testcase{
 		{
 			name: "success",
 			shards: []*vtctldatapb.Shard{
@@ -1985,6 +2058,78 @@ func TestDeleteShards(t *testing.T) {
 			},
 			shouldErr: false,
 		},
+		{
+			name: "shard is locked",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			topoErr: nil,
+			before: func(t *testing.T, ts *topo.Server, tt testcase) func() {
+				shard := tt.req.Shards[0]
+				_, unlock, err := ts.LockShard(context.Background(), shard.Keyspace, shard.Name, "test.DeleteShard")
+				require.NoError(t, err, "failed to lock shard %s/%s before test", shard.Keyspace, shard.Name)
+				return func() {
+					unlock(&err)
+					if !topo.IsErrType(err, topo.NoNode) {
+						assert.NoError(t, err, "error while unlocking shard %s/%s after test", shard.Keyspace, shard.Name)
+					}
+				}
+			},
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected: nil,
+			expectedRemainingShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard is locked with force",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			topoErr: nil,
+			before: func(t *testing.T, ts *topo.Server, tt testcase) func() {
+				shard := tt.req.Shards[0]
+				_, unlock, err := ts.LockShard(context.Background(), shard.Keyspace, shard.Name, "test.DeleteShard")
+				require.NoError(t, err, "failed to lock shard %s/%s before test", shard.Keyspace, shard.Name)
+				return func() {
+					unlock(&err)
+					if !topo.IsErrType(err, topo.NoNode) {
+						assert.NoError(t, err, "error while unlocking shard %s/%s after test", shard.Keyspace, shard.Name)
+					}
+				}
+			},
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+				Force: true,
+			},
+			expected:                &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{},
+			shouldErr:               false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1995,7 +2140,9 @@ func TestDeleteShards(t *testing.T) {
 
 			cells := []string{"zone1", "zone2", "zone3"}
 
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+			defer cancel()
+
 			ts, topofactory := memorytopo.NewServerAndFactory(cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
@@ -2033,6 +2180,12 @@ func TestDeleteShards(t *testing.T) {
 
 					assert.ElementsMatch(t, tt.expectedRemainingShards, actualShards)
 				}()
+			}
+
+			if tt.before != nil {
+				if after := tt.before(t, ts, tt); after != nil {
+					defer after()
+				}
 			}
 
 			resp, err := vtctld.DeleteShards(ctx, tt.req)
