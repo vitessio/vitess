@@ -139,8 +139,12 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 // ValidateVersionKeyspace validates all versions are the same in all
 // tablets in a keyspace
 func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string) error {
-	_, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
+	res, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
 		Keyspace: keyspace,
 	})
+
+	if len(res.Results) > 0 {
+		return fmt.Errorf("version diffs: %v", res.Results)
+	}
 	return err
 }
