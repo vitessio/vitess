@@ -1395,6 +1395,127 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "no valid candidates for emergency reparent",
 		},
 		{
+			name:       "proposed primary - must not promotion rule",
+			durability: "none",
+			emergencyReparentOps: EmergencyReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000102": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000102": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "proposed primary",
+				},
+			},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			ts:               memorytopo.NewServer("zone1"),
+			shouldErr:        true,
+			errShouldContain: "proposed primary zone1-0000000102 has a must not promotion rule",
+		},
+		{
 			name:                 "cross cell - no valid candidates",
 			durability:           "none",
 			emergencyReparentOps: EmergencyReparentOptions{PreventCrossCellPromotion: true},
@@ -1521,6 +1642,264 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			ts:               memorytopo.NewServer("zone1", "zone2"),
 			shouldErr:        true,
 			errShouldContain: "no valid candidates for emergency reparent",
+		},
+		{
+			name:       "proposed primary in a different cell",
+			durability: "none",
+			emergencyReparentOps: EmergencyReparentOptions{
+				PreventCrossCellPromotion: true,
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000102": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000102": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "proposed primary",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "failed previous primary",
+				},
+			},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			ts:               memorytopo.NewServer("zone1", "zone2"),
+			shouldErr:        true,
+			errShouldContain: "proposed primary zone1-0000000102 is is a different cell as the previous primary",
+		},
+		{
+			name:       "proposed primary cannot make progress",
+			durability: "cross_cell",
+			emergencyReparentOps: EmergencyReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000102": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000102": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "proposed primary",
+				},
+			},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			ts:               memorytopo.NewServer("zone1"),
+			shouldErr:        true,
+			errShouldContain: "proposed primary zone1-0000000102 will not be able to make forward progress on being promoted",
 		},
 	}
 
