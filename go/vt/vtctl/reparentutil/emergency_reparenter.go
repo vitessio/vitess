@@ -224,7 +224,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// 2. Remove the tablets with the Must_not promote rule
 	// 3. Remove cross-cell tablets if PreventCrossCellPromotion is specified
 	// Our final primary candidate MUST belong to this list of valid candidates
-	validCandidateTablets = erp.filterValidCandidates(validCandidateTablets, tabletsReachable, prevPrimary, opts)
+	validCandidateTablets, err = erp.filterValidCandidates(validCandidateTablets, tabletsReachable, prevPrimary, opts)
+	if err != nil {
+		return err
+	}
 
 	// check whether the intermediate source candidate selected is ideal or if it can be improved later
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list
@@ -739,26 +742,35 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 }
 
 // filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any constraint failures and can make forward progress on being promoted
-func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) []*topodatapb.Tablet {
+func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
 	var restrictedValidTablets []*topodatapb.Tablet
 	for _, tablet := range validTablets {
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 		// Remove tablets which have MustNot promote rule since they must never be promoted
 		if PromotionRule(tablet) == promotionrule.MustNot {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it has the Must Not promote rule", tabletAliasStr)
+			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s has a must not promotion rule", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+			}
 			continue
 		}
 		// If ERS is configured to prevent cross cell promotions, remove any tablet not from the same cell as the previous primary
 		if opts.PreventCrossCellPromotion && prevPrimary != nil && tablet.Alias.Cell != prevPrimary.Alias.Cell {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it isn't in the same cell as the previous primary", tabletAliasStr)
+			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is is a different cell as the previous primary", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+			}
 			continue
 		}
 		// Remove any tablet which cannot make forward progress using the list of tablets we have reached
 		if !EstablishForTablet(tablet, tabletsReachable) {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it will not be able to make forward progress on promotion with the tablets currently reachable", tabletAliasStr)
+			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s will not be able to make forward progress on being promoted", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+			}
 			continue
 		}
 		restrictedValidTablets = append(restrictedValidTablets, tablet)
 	}
-	return restrictedValidTablets
+	return restrictedValidTablets, nil
 }

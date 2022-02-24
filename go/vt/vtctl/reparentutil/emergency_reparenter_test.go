@@ -4117,6 +4117,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 		prevPrimary      *topodatapb.Tablet
 		opts             EmergencyReparentOptions
 		filteredTablets  []*topodatapb.Tablet
+		errShouldContain string
 	}{
 		{
 			name:             "filter must not",
@@ -4158,6 +4159,35 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			validTablets:     allTablets,
 			tabletsReachable: allTablets,
 			filteredTablets:  []*topodatapb.Tablet{replicaCrossCellTablet},
+		}, {
+			name:             "error - requested primary must not",
+			durability:       "none",
+			validTablets:     allTablets,
+			tabletsReachable: allTablets,
+			opts: EmergencyReparentOptions{
+				NewPrimaryAlias: rdonlyTablet.Alias,
+			},
+			errShouldContain: "proposed primary zone-1-0000000003 has a must not promotion rule",
+		}, {
+			name:             "error - requested primary not in same cell",
+			durability:       "none",
+			validTablets:     allTablets,
+			tabletsReachable: allTablets,
+			prevPrimary:      primaryTablet,
+			opts: EmergencyReparentOptions{
+				PreventCrossCellPromotion: true,
+				NewPrimaryAlias:           replicaCrossCellTablet.Alias,
+			},
+			errShouldContain: "proposed primary zone-2-0000000002 is is a different cell as the previous primary",
+		}, {
+			name:             "error - requested primary cannot establish",
+			durability:       "cross_cell",
+			validTablets:     allTablets,
+			tabletsReachable: []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
+			opts: EmergencyReparentOptions{
+				NewPrimaryAlias: primaryTablet.Alias,
+			},
+			errShouldContain: "proposed primary zone-1-0000000001 will not be able to make forward progress on being promoted",
 		},
 	}
 	for _, tt := range tests {
@@ -4166,8 +4196,14 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			require.NoError(t, err)
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			tabletList := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.prevPrimary, tt.opts)
-			require.EqualValues(t, tt.filteredTablets, tabletList)
+			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.prevPrimary, tt.opts)
+			if tt.errShouldContain != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errShouldContain)
+			} else {
+				require.NoError(t, err)
+				require.EqualValues(t, tt.filteredTablets, tabletList)
+			}
 		})
 	}
 }
