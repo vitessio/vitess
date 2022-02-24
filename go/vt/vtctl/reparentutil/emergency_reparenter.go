@@ -269,24 +269,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
-	// now we check if all the constraints are satisfied. If they are not, then we should exit
-	constraintFailure := erp.checkIfConstraintsSatisfied(newPrimary, prevPrimary, opts)
-	if constraintFailure != nil {
-		erp.logger.Errorf("have to override promotion because of constraint failure - %v", constraintFailure)
-		// we want to send both the errors to the user, constraint failure and also any error encountered in undoing the promotion
-		defer func() {
-			if err != nil {
-				err = vterrors.Errorf(vtrpc.Code_ABORTED, "error in undoing promotion - %v, constraint failure - %v", err, constraintFailure)
-			} else {
-				err = constraintFailure
-			}
-		}()
-		// we now try to undo are changes. We can do so by promoting the previous primary instead of the new one we selected
-		if prevPrimary == nil {
-			return vterrors.Errorf(vtrpc.Code_ABORTED, "could not undo promotion, since shard record has no primary information")
-		}
-		newPrimary = prevPrimary
-	}
+	// The new primary which will be promoted will always belong to the validCandidateTablets list because -
+	// 	1. 	if the intermediate source is ideal - then we know the intermediate source was in the validCandidateTablets list
+	// 		since we used that list
+	//	2. 	if the intermediate source isn't ideal - we take the intersection of the validCandidateTablets list and the one we
+	//		were able to reach during the promotion of intermediate source, as possible candidates. So the final candidate (even if
+	//		it is the intermediate source itself) will belong to the list
+	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
 	err = erp.promoteNewPrimary(ctx, ev, newPrimary, opts, tabletMap, statusMap)
