@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/require"
@@ -1139,6 +1141,79 @@ func Test_findCandidate(t *testing.T) {
 				require.NotNil(t, res)
 				require.Equal(t, topoproto.TabletAliasString(tt.candidate.Alias), topoproto.TabletAliasString(res.Alias))
 			}
+		})
+	}
+}
+
+func Test_getTabletsWithPromotionRules(t *testing.T) {
+	var (
+		primaryTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  1,
+			},
+			Type: topodatapb.TabletType_PRIMARY,
+		}
+		replicaTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  2,
+			},
+			Type: topodatapb.TabletType_REPLICA,
+		}
+		rdonlyTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-1",
+				Uid:  3,
+			},
+			Type: topodatapb.TabletType_RDONLY,
+		}
+		replicaCrossCellTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-2",
+				Uid:  2,
+			},
+			Type: topodatapb.TabletType_REPLICA,
+		}
+		rdonlyCrossCellTablet = &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone-2",
+				Uid:  3,
+			},
+			Type: topodatapb.TabletType_RDONLY,
+		}
+	)
+	allTablets := []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, replicaCrossCellTablet, rdonlyCrossCellTablet}
+	tests := []struct {
+		name            string
+		tablets         []*topodatapb.Tablet
+		rule            promotionrule.CandidatePromotionRule
+		filteredTablets []*topodatapb.Tablet
+	}{
+		{
+			name:            "filter candidates with Neutral promotion rule",
+			tablets:         allTablets,
+			rule:            promotionrule.Neutral,
+			filteredTablets: []*topodatapb.Tablet{primaryTablet, replicaTablet, replicaCrossCellTablet},
+		},
+		{
+			name:            "filter candidates with MustNot promotion rule",
+			tablets:         allTablets,
+			rule:            promotionrule.MustNot,
+			filteredTablets: []*topodatapb.Tablet{rdonlyTablet, rdonlyCrossCellTablet},
+		},
+		{
+			name:            "filter candidates with Must promotion rule",
+			tablets:         allTablets,
+			rule:            promotionrule.Must,
+			filteredTablets: nil,
+		},
+	}
+	_ = SetDurabilityPolicy("none")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := getTabletsWithPromotionRules(tt.tablets, tt.rule)
+			require.EqualValues(t, tt.filteredTablets, res)
 		})
 	}
 }
