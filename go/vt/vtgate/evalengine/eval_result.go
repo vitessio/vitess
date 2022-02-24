@@ -685,27 +685,15 @@ func (er *EvalResult) setValueIntegralNumeric(v sqltypes.Value) error {
 func (er *EvalResult) setValue(value sqltypes.Value, collation collations.TypedCollation) error {
 	var err error
 	switch value.Type() {
-	case sqltypes.Int32:
-		var ival int32
-		ival, err = value.ToInt32()
-		er.setInt64(int64(ival))
-	case sqltypes.Int64:
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
 		var ival int64
 		ival, err = value.ToInt64()
 		er.setInt64(ival)
-	case sqltypes.Uint32:
-		var uval uint32
-		uval, err = value.ToUint32()
-		er.setUint64(uint64(uval))
-	case sqltypes.Uint64:
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
 		var uval uint64
 		uval, err = value.ToUint64()
 		er.setUint64(uval)
-	case sqltypes.Float32:
-		var fval float32
-		fval, err = value.ToFloat32()
-		er.setFloat(float64(fval))
-	case sqltypes.Float64:
+	case sqltypes.Float32, sqltypes.Float64:
 		var fval float64
 		fval, err = value.ToFloat64()
 		er.setFloat(fval)
