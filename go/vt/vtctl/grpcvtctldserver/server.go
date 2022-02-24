@@ -600,7 +600,7 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 	case lerr == nil:
 		ctx = lctx
 	case !req.Force:
-		return nil, lerr
+		return nil, fmt.Errorf("failed to lock %s; if you really want to delete this keyspace, re-run with Force=true: %w", req.Keyspace, lerr)
 	default:
 		log.Warningf("%s: failed to lock keyspace %s for deletion, but force=true, proceeding anyway ...", lerr, req.Keyspace)
 	}
