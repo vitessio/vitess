@@ -79,21 +79,42 @@ func (c *Collation_utf8mb4_uca_0900) Collate(left, right []byte, rightIsPrefix b
 		levelsToCompare = c.levelsForCompare
 		itleft          = c.uca.Iterator(left)
 		itright         = c.uca.Iterator(right)
+
+		fastleft, _  = itleft.(*uca.FastIterator900)
+		fastright, _ = itright.(*uca.FastIterator900)
 	)
 
 	defer itleft.Done()
 	defer itright.Done()
 
 nextLevel:
-	for {
-		l, lok = itleft.Next()
-		r, rok = itright.Next()
+	if fastleft != nil {
+		for {
+			if cmp := fastleft.FastForward32(fastright); cmp != 0 {
+				return cmp
+			}
 
-		if l != r || !lok || !rok {
-			break
+			l, lok = fastleft.Next()
+			r, rok = fastright.Next()
+
+			if l != r || !lok || !rok {
+				break
+			}
+			if fastleft.Level() != level || fastright.Level() != level {
+				break
+			}
 		}
-		if itleft.Level() != level || itright.Level() != level {
-			break
+	} else {
+		for {
+			l, lok = itleft.Next()
+			r, rok = itright.Next()
+
+			if l != r || !lok || !rok {
+				break
+			}
+			if itleft.Level() != level || itright.Level() != level {
+				break
+			}
 		}
 	}
 
@@ -129,13 +150,13 @@ func (c *Collation_utf8mb4_uca_0900) WeightString(dst, src []byte, numCodepoints
 		var chunk [16]byte
 		for {
 			for cap(dst)-len(dst) >= 16 {
-				n := fast.NextChunk(dst[len(dst) : len(dst)+16])
+				n := fast.NextWeightBlock64(dst[len(dst) : len(dst)+16])
 				if n <= 0 {
 					goto performPadding
 				}
 				dst = dst[:len(dst)+n]
 			}
-			n := fast.NextChunk(chunk[:16])
+			n := fast.NextWeightBlock64(chunk[:16])
 			if n <= 0 {
 				goto performPadding
 			}
@@ -171,7 +192,7 @@ func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) HashCode {
 		var chunk [16]byte
 		var n int
 		for {
-			n = fast.NextChunk(chunk[:16])
+			n = fast.NextWeightBlock64(chunk[:16])
 			if n < 16 {
 				break
 			}

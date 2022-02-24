@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache"
@@ -592,4 +593,104 @@ func TestPlanCachePollution(t *testing.T) {
 	}()
 
 	wg.Wait()
+}
+
+func TestAddQueryStats(t *testing.T) {
+	testcases := []struct {
+		name                      string
+		planType                  planbuilder.PlanType
+		tableName                 string
+		queryCount                int64
+		duration                  time.Duration
+		mysqlTime                 time.Duration
+		rowsAffected              int64
+		rowsReturned              int64
+		errorCount                int64
+		expectedQueryCounts       string
+		expectedQueryTimes        string
+		expectedQueryRowsAffected string
+		expectedQueryRowsReturned string
+		expectedQueryRowCounts    string
+		expectedQueryErrorCounts  string
+	}{
+		{
+			name:                      "select query",
+			planType:                  planbuilder.PlanSelect,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              0,
+			rowsReturned:              15,
+			errorCount:                0,
+			expectedQueryCounts:       `{"A.Select": 1}`,
+			expectedQueryTimes:        `{"A.Select": 10}`,
+			expectedQueryRowsAffected: `{}`,
+			expectedQueryRowsReturned: `{"A.Select": 15}`,
+			expectedQueryRowCounts:    `{"A.Select": 0}`,
+			expectedQueryErrorCounts:  `{"A.Select": 0}`,
+		}, {
+			name:                      "select into query",
+			planType:                  planbuilder.PlanSelect,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              15,
+			rowsReturned:              0,
+			errorCount:                0,
+			expectedQueryCounts:       `{"A.Select": 1}`,
+			expectedQueryTimes:        `{"A.Select": 10}`,
+			expectedQueryRowsAffected: `{"A.Select": 15}`,
+			expectedQueryRowsReturned: `{"A.Select": 0}`,
+			expectedQueryRowCounts:    `{"A.Select": 15}`,
+			expectedQueryErrorCounts:  `{"A.Select": 0}`,
+		}, {
+			name:                      "error",
+			planType:                  planbuilder.PlanSelect,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              0,
+			rowsReturned:              0,
+			errorCount:                1,
+			expectedQueryCounts:       `{"A.Select": 1}`,
+			expectedQueryTimes:        `{"A.Select": 10}`,
+			expectedQueryRowsAffected: `{}`,
+			expectedQueryRowsReturned: `{"A.Select": 0}`,
+			expectedQueryRowCounts:    `{"A.Select": 0}`,
+			expectedQueryErrorCounts:  `{"A.Select": 1}`,
+		}, {
+			name:                      "insert query",
+			planType:                  planbuilder.PlanInsert,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              15,
+			rowsReturned:              0,
+			errorCount:                0,
+			expectedQueryCounts:       `{"A.Insert": 1}`,
+			expectedQueryTimes:        `{"A.Insert": 10}`,
+			expectedQueryRowsAffected: `{"A.Insert": 15}`,
+			expectedQueryRowsReturned: `{}`,
+			expectedQueryRowCounts:    `{"A.Insert": 15}`,
+			expectedQueryErrorCounts:  `{"A.Insert": 0}`,
+		},
+	}
+
+	t.Parallel()
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			config := tabletenv.NewDefaultConfig()
+			config.DB = newDBConfigs(fakesqldb.New(t))
+			env := tabletenv.NewEnv(config, "TestAddQueryStats_"+testcase.name)
+			se := schema.NewEngine(env)
+			qe := NewQueryEngine(env, se)
+			qe.AddStats(testcase.planType, testcase.tableName, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount)
+			assert.Equal(t, testcase.expectedQueryCounts, qe.queryCounts.String())
+			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
+			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
+			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
+			assert.Equal(t, testcase.expectedQueryRowCounts, qe.queryRowCounts.String())
+			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
+		})
+	}
 }

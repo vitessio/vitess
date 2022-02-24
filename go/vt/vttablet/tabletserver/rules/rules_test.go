@@ -181,6 +181,43 @@ func TestFilterByPlan(t *testing.T) {
 	if got != want {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
+	{
+		// test multiple tables:
+		qrs1 := qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a", "other_table")
+		want := compacted(`[{
+			"Description":"rule 2",
+			"Name":"r2",
+			"BindVarConds":[{
+				"Name":"a",
+				"OnAbsent":true,
+				"Operator":""
+			}],
+			"Action":"FAIL"
+		}]`)
+		got = marshalled(qrs1)
+		if got != want {
+			t.Errorf("qrs1:\n%s, want\n%s", got, want)
+		}
+
+	}
+	{
+		// test multiple tables:
+		qrs1 := qrs.FilterByPlan("insert", planbuilder.PlanSelect, "other_table", "a")
+		want := compacted(`[{
+			"Description":"rule 2",
+			"Name":"r2",
+			"BindVarConds":[{
+				"Name":"a",
+				"OnAbsent":true,
+				"Operator":""
+			}],
+			"Action":"FAIL"
+		}]`)
+		got = marshalled(qrs1)
+		if got != want {
+			t.Errorf("qrs1:\n%s, want\n%s", got, want)
+		}
+	}
 
 	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a")
 	got = marshalled(qrs1)

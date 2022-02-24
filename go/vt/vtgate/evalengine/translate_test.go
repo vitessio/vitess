@@ -35,7 +35,7 @@ These tests should in theory live in the sqltypes package but they live here so 
 exercise both expression conversion and evaluation in the same test file
 */
 
-func TestConvertSimplification(t *testing.T) {
+func TestTranslateSimplification(t *testing.T) {
 	type ast struct {
 		literal, err string
 	}
@@ -98,7 +98,7 @@ func TestConvertSimplification(t *testing.T) {
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := ConvertEx(astExpr, LookupDefaultCollation(45), false)
+			converted, err := TranslateEx(astExpr, LookupDefaultCollation(45), false)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -112,7 +112,7 @@ func TestConvertSimplification(t *testing.T) {
 				t.Errorf("mismatch (simplify=false): got %s, expected %s", FormatExpr(converted), tc.converted.literal)
 			}
 
-			simplified, err := ConvertEx(astExpr, LookupDefaultCollation(45), true)
+			simplified, err := TranslateEx(astExpr, LookupDefaultCollation(45), true)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
@@ -158,6 +158,12 @@ func TestEvaluate(t *testing.T) {
 	}, {
 		expression: ":exp",
 		expected:   sqltypes.NewInt64(66),
+	}, {
+		expression: ":int32_bind_variable",
+		expected:   sqltypes.NewInt64(20),
+	}, {
+		expression: ":uint32_bind_variable",
+		expected:   sqltypes.NewUint64(21),
 	}, {
 		expression: ":uint64_bind_variable",
 		expected:   sqltypes.NewUint64(22),
@@ -265,13 +271,15 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, LookupDefaultCollation(45))
+			sqltypesExpr, err := Translate(astExpr, LookupDefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := EnvWithBindVars(
 				map[string]*querypb.BindVariable{
 					"exp":                  sqltypes.Int64BindVariable(66),
 					"string_bind_variable": sqltypes.StringBindVariable("bar"),
+					"int32_bind_variable":  sqltypes.Int32BindVariable(20),
+					"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
 				}, 0)
@@ -309,7 +317,7 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, LookupDefaultCollation(45))
+			sqltypesExpr, err := Translate(astExpr, LookupDefaultCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 

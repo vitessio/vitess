@@ -23,18 +23,39 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
+type flag uint16
+
 const (
-	flagHex = 1 << iota
-	flagBit
+	// flagNull marks that this value is null; implies flagNullable
+	flagNull flag = 1 << 0
+	// flagNullable marks that this value CAN be null
+	flagNullable flag = 1 << 1
+
+	// flagIntegerUdf marks that this value is math.MinInt64, and will underflow if negated
+	flagIntegerUdf flag = 1 << 5
+	// flagIntegerCap marks that this value is (-math.MinInt64),
+	// and should be promoted to flagIntegerUdf if negated
+	flagIntegerCap flag = 1 << 6
+	// flagIntegerOvf marks that this value will overflow if negated
+	flagIntegerOvf flag = 1 << 7
+
+	// flagHex marks that this value originated from a hex literal
+	flagHex flag = 1 << 8
+	// flagBit marks that this value originated from a bit literal
+	flagBit flag = 1 << 9
+
+	// flagIntegerRange are the flags that mark overflow/underflow in integers
+	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 )
 
 type (
@@ -52,8 +73,8 @@ type (
 		// Must not be accessed directly: call EvalResult.typeof() instead.
 		// For most expression types, this is known ahead of time and calling typeof() does not require
 		// an evaluation, so the type of an expression can be known without evaluating it.
-		type_  int16  //nolint
-		flags_ uint16 //nolint
+		type_  int16 //nolint
+		flags_ flag  //nolint
 		// collation_ is the collation of this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.collation() instead.
 		collation_ collations.TypedCollation //nolint
@@ -69,12 +90,10 @@ type (
 		tuple_ *[]EvalResult //nolint
 		// decimal_ is the numeric decimal for this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.decimal() instead.
-		decimal_ *decimalResult //nolint
-	}
-
-	decimalResult struct {
-		num  decimal.Big
-		frac int
+		decimal_ decimal.Decimal //nolint
+		// length_ is the display length of this eval result; right now this only applies
+		// to Decimal results, but in the future it may also work for CHAR
+		length_ int32 //nolint
 	}
 )
 
@@ -83,7 +102,10 @@ type (
 func (er *EvalResult) init(env *ExpressionEnv, expr Expr) {
 	er.expr = expr
 	er.env = env
-	er.type_ = int16(expr.typeof(env))
+
+	var tt sqltypes.Type
+	tt, er.flags_ = expr.typeof(env)
+	er.type_ = int16(tt)
 }
 
 const typecheckEval = false
@@ -110,13 +132,12 @@ func (er *EvalResult) resolve() {
 
 func (er *EvalResult) typeof() sqltypes.Type {
 	if er.type_ < 0 {
-		er.resolve()
+		panic("er.type_ < 0")
 	}
 	return sqltypes.Type(er.type_)
 }
 
-func (er *EvalResult) hasFlag(f uint16) bool {
-	er.resolve()
+func (er *EvalResult) hasFlag(f flag) bool {
 	return (er.flags_ & f) != 0
 }
 
@@ -144,7 +165,7 @@ func (er *EvalResult) int64() int64 {
 	return int64(er.numeric_)
 }
 
-func (er *EvalResult) decimal() *decimalResult {
+func (er *EvalResult) decimal() decimal.Decimal {
 	er.resolve()
 	return er.decimal_
 }
@@ -165,16 +186,25 @@ func (er *EvalResult) string() string {
 }
 
 func (er *EvalResult) value() sqltypes.Value {
+	if er.null() {
+		return sqltypes.NULL
+	}
 	return sqltypes.MakeTrusted(er.typeof(), er.toRawBytes())
 }
 
 func (er *EvalResult) null() bool {
-	return er.typeof() == sqltypes.Null
+	if !er.hasFlag(flagNullable) {
+		return false
+	}
+	if er.hasFlag(flagNull) {
+		return true
+	}
+	er.resolve()
+	return er.hasFlag(flagNull)
 }
 
 func (er *EvalResult) setNull() {
-	er.type_ = int16(sqltypes.Null)
-	er.collation_ = collationNull
+	er.flags_ |= flagNullable | flagNull
 }
 
 func (er *EvalResult) setBool(b bool) {
@@ -224,12 +254,21 @@ func (er *EvalResult) setInt64(i int64) {
 	er.type_ = int16(sqltypes.Int64)
 	er.numeric_ = uint64(i)
 	er.collation_ = collationNumeric
+	if i == math.MinInt64 {
+		er.flags_ |= flagIntegerUdf
+	}
 }
 
 func (er *EvalResult) setUint64(u uint64) {
 	er.type_ = int16(sqltypes.Uint64)
 	er.numeric_ = u
 	er.collation_ = collationNumeric
+	if u == math.MaxInt64+1 {
+		er.flags_ |= flagIntegerCap
+	}
+	if u > math.MaxInt64+1 {
+		er.flags_ |= flagIntegerOvf
+	}
 }
 
 func (er *EvalResult) setFloat(f float64) {
@@ -238,10 +277,12 @@ func (er *EvalResult) setFloat(f float64) {
 	er.collation_ = collationNumeric
 }
 
-func (er *EvalResult) setDecimal(dec *decimalResult) {
+func (er *EvalResult) setDecimal(dec decimal.Decimal, frac int32) {
 	er.type_ = int16(sqltypes.Decimal)
 	er.decimal_ = dec
 	er.collation_ = collationNumeric
+	er.length_ = frac
+	er.clearFlags(flagIntegerRange)
 }
 
 func (er *EvalResult) setTuple(t []EvalResult) {
@@ -253,24 +294,66 @@ func (er *EvalResult) setTuple(t []EvalResult) {
 func (er *EvalResult) makeBinary() {
 	er.resolve()
 	if er.bytes_ == nil {
-		panic("called makeBinary on non-textual")
+		er.bytes_ = er.toRawBytes()
 	}
 	er.type_ = int16(sqltypes.VarBinary)
 	er.collation_ = collationBinary
 	er.clearFlags(flagBit | flagHex)
 }
 
-func (er *EvalResult) clearFlags(flags uint16) {
-	er.flags_ &= ^flags
+func (er *EvalResult) clearFlags(f flag) {
+	er.flags_ &= ^f
 }
 
 func (er *EvalResult) makeTextual(collation collations.ID) {
 	er.resolve()
 	if er.bytes_ == nil {
-		panic("called makeTextual on non-textual")
+		er.bytes_ = er.toRawBytes()
 	}
-	er.type_ = int16(sqltypes.VarChar)
 	er.collation_.Collation = collation
+	er.type_ = int16(sqltypes.VarChar)
+}
+
+func (er *EvalResult) makeTextualAndConvert(collation collations.ID) bool {
+	er.resolve()
+	if er.bytes_ == nil {
+		er.bytes_ = er.toRawBytes()
+	}
+	if er.collation_.Collation == collations.Unknown {
+		er.collation_.Collation = collations.CollationBinaryID
+	}
+
+	var err error
+	environment := collations.Local()
+	fromCollation := environment.LookupByID(er.collation_.Collation)
+	toCollation := environment.LookupByID(collation)
+	er.bytes_, err = collations.Convert(nil, toCollation, er.bytes_, fromCollation)
+	if err != nil {
+		er.setNull()
+		return false
+	}
+
+	er.collation_.Collation = collation
+	er.type_ = int16(sqltypes.VarChar)
+	return true
+}
+
+func (er *EvalResult) truncate(size int) {
+	switch er.typeof() {
+	case sqltypes.VarBinary:
+		if size > len(er.bytes_) {
+			pad := make([]byte, size)
+			copy(pad, er.bytes_)
+			er.bytes_ = pad
+		} else {
+			er.bytes_ = er.bytes_[:size]
+		}
+	case sqltypes.VarChar:
+		collation := collations.Local().LookupByID(er.collation().Collation)
+		er.bytes_ = collations.Slice(collation, er.bytes_, 0, size)
+	default:
+		panic("called EvalResult.truncate on non-quoted")
+	}
 }
 
 func (er *EvalResult) replaceCollation(collation collations.TypedCollation) {
@@ -301,11 +384,11 @@ func (er *EvalResult) setValue(v sqltypes.Value) error {
 		}
 		er.setFloat(fval)
 	case v.Type() == sqltypes.Decimal:
-		dec, err := newDecimalString(v.RawStr())
+		dec, err := decimal.NewFromMySQL(v.Raw())
 		if err != nil {
 			return err
 		}
-		er.setDecimal(dec)
+		er.setDecimal(dec, -dec.Exponent())
 	default:
 		er.setRaw(v.Type(), v.Raw(), collations.TypedCollation{})
 	}
@@ -415,15 +498,16 @@ func (er *EvalResult) textual() bool {
 }
 
 func (er *EvalResult) truthy() boolean {
-	switch er.typeof() {
-	case sqltypes.Null:
+	if er.null() {
 		return boolNULL
+	}
+	switch er.typeof() {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64, sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		return makeboolean(er.uint64() != 0)
 	case sqltypes.Float64, sqltypes.Float32:
 		return makeboolean(er.float64() != 0.0)
 	case sqltypes.Decimal:
-		return makeboolean(!er.decimal().num.IsZero())
+		return makeboolean(!er.decimal().IsZero())
 	case sqltypes.VarBinary, sqltypes.VarChar:
 		return makeboolean(parseStringToFloat(er.string()) != 0.0)
 	case sqltypes.Tuple:
@@ -456,6 +540,9 @@ func FormatFloat(typ sqltypes.Type, f float64) []byte {
 }
 
 func (er *EvalResult) toRawBytes() []byte {
+	if er.null() {
+		return nil
+	}
 	switch er.typeof() {
 	case sqltypes.Int64, sqltypes.Int32:
 		return strconv.AppendInt(nil, er.int64(), 10)
@@ -464,10 +551,7 @@ func (er *EvalResult) toRawBytes() []byte {
 	case sqltypes.Float64, sqltypes.Float32:
 		return FormatFloat(sqltypes.Float64, er.float64())
 	case sqltypes.Decimal:
-		dec := er.decimal()
-		return dec.num.FormatCustom(dec.frac, roundingModeFormat)
-	case sqltypes.Null:
-		return nil
+		return er.decimal().FormatMySQL(er.length_)
 	default:
 		return er.bytes()
 	}
@@ -501,7 +585,7 @@ func (er *EvalResult) toSQLValue(resultType sqltypes.Type) sqltypes.Value {
 			return sqltypes.MakeTrusted(resultType, FormatFloat(resultType, er.float64()))
 		case sqltypes.Decimal:
 			dec := er.decimal()
-			return sqltypes.MakeTrusted(resultType, dec.num.FormatCustom(dec.frac, roundingModeFormat))
+			return sqltypes.MakeTrusted(resultType, dec.FormatMySQL(er.length_))
 		}
 	default:
 		return sqltypes.MakeTrusted(resultType, er.bytes())
@@ -644,6 +728,12 @@ func (er *EvalResult) setBindVar1(typ sqltypes.Type, value []byte, collation col
 		}
 		// TODO: type32
 		er.setInt64(ival)
+	case sqltypes.Uint32:
+		ival, err := strconv.ParseUint(string(value), 10, 32)
+		if err != nil {
+			throwEvalError(err)
+		}
+		er.setUint64(ival)
 	case sqltypes.Uint64:
 		uval, err := strconv.ParseUint(string(value), 10, 64)
 		if err != nil {
@@ -657,11 +747,11 @@ func (er *EvalResult) setBindVar1(typ sqltypes.Type, value []byte, collation col
 		}
 		er.setFloat(fval)
 	case sqltypes.Decimal:
-		dec, err := newDecimalString(string(value))
+		dec, err := decimal.NewFromMySQL(value)
 		if err != nil {
 			throwEvalError(err)
 		}
-		er.setDecimal(dec)
+		er.setDecimal(dec, -dec.Exponent())
 	case sqltypes.HexNum:
 		raw, err := parseHexNumber(value)
 		if err != nil {
@@ -737,26 +827,39 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 }
 
 func (er *EvalResult) makeFloat() {
+	er.makeNumeric()
 	switch er.typeof() {
 	case sqltypes.Float64, sqltypes.Float32:
-		return
 	case sqltypes.Decimal:
-		if f, ok := er.coerceDecimalToFloat(); ok {
-			er.setFloat(f)
-			return
-		}
+		f, _ := er.coerceDecimalToFloat()
+		er.setFloat(f)
 	case sqltypes.Uint64:
 		er.setFloat(float64(er.uint64()))
-		return
 	case sqltypes.Int64:
 		er.setFloat(float64(er.int64()))
-		return
 	}
-	if er.bytes() != nil {
-		er.setFloat(parseStringToFloat(er.string()))
-		return
+}
+
+func (er *EvalResult) makeDecimal(m, d int32) {
+	er.makeNumeric()
+
+	var dec decimal.Decimal
+	switch er.typeof() {
+	case sqltypes.Decimal:
+		dec = er.decimal()
+	case sqltypes.Float64, sqltypes.Float32:
+		dec = decimal.NewFromFloatMySQL(er.float64())
+	case sqltypes.Int64:
+		dec = decimal.NewFromInt(er.int64())
+	case sqltypes.Uint64:
+		dec = decimal.NewFromUint(er.uint64())
 	}
-	er.setFloat(0)
+
+	er.setDecimal(dec.Clamp(m-d, d), d)
+}
+
+func (er *EvalResult) isHexLiteral() bool {
+	return er.typeof() == sqltypes.VarBinary && er.hasFlag(flagHex)
 }
 
 func (er *EvalResult) makeNumeric() {
@@ -764,7 +867,7 @@ func (er *EvalResult) makeNumeric() {
 	if er.numeric() {
 		return
 	}
-	if er.typeof() == sqltypes.VarBinary && er.hasFlag(flagHex) {
+	if er.isHexLiteral() {
 		raw := er.bytes()
 		if len(raw) > 8 {
 			// overflow
@@ -783,15 +886,46 @@ func (er *EvalResult) makeNumeric() {
 	er.setFloat(parseStringToFloat(er.string()))
 }
 
-func (er *EvalResult) makeIntegral() {
+func (er *EvalResult) makeUnsignedIntegral() {
 	er.makeNumeric()
 	switch er.typeof() {
+	case sqltypes.Uint64:
+		// noop
+	case sqltypes.Int64:
+		er.type_ = int16(sqltypes.Uint64)
 	case sqltypes.Float64:
-		er.setUint64(uint64(er.float64()))
+		f := math.Round(er.float64())
+		er.setUint64(uint64(f))
 	case sqltypes.Decimal:
-		dec := er.decimal()
-		u, _ := dec.num.Uint64()
-		er.setUint64(u)
+		dec := er.decimal().Round(0)
+		if dec.Sign() < 0 {
+			i, _ := dec.Int64()
+			er.setUint64(uint64(i))
+		} else {
+			u, _ := dec.Uint64()
+			er.setUint64(u)
+		}
+	default:
+		panic("BUG: bad type from makeNumeric")
+	}
+}
+
+func (er *EvalResult) makeSignedIntegral() {
+	er.makeNumeric()
+	switch er.typeof() {
+	case sqltypes.Int64:
+		// noop
+	case sqltypes.Uint64:
+		er.type_ = int16(sqltypes.Int64)
+	case sqltypes.Float64:
+		f := math.Round(er.float64())
+		er.setInt64(int64(f))
+	case sqltypes.Decimal:
+		dec := er.decimal().Round(0)
+		i, _ := dec.Int64()
+		er.setInt64(i)
+	default:
+		panic("BUG: bad type from makeNumeric")
 	}
 }
 
@@ -800,10 +934,9 @@ func (er *EvalResult) negateNumeric() {
 	switch er.typeof() {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 		i := er.int64()
-		if i == math.MinInt64 {
-			dec := newDecimalInt64(i)
-			dec.num.SetSignbit(false)
-			er.setDecimal(dec)
+		if er.hasFlag(flagIntegerUdf) {
+			dec := decimal.NewFromInt(i).NegInPlace()
+			er.setDecimal(dec, 0)
 		} else {
 			er.setInt64(-i)
 		}
@@ -811,34 +944,23 @@ func (er *EvalResult) negateNumeric() {
 		u := er.uint64()
 		if er.hasFlag(flagHex) {
 			er.setFloat(-float64(u))
-		} else if u > math.MaxInt64+1 {
-			dec := newDecimalUint64(u)
-			dec.num.SetSignbit(true)
-			er.setDecimal(dec)
+		} else if er.hasFlag(flagIntegerOvf) {
+			dec := decimal.NewFromUint(u).NegInPlace()
+			er.setDecimal(dec, 0)
 		} else {
 			er.setInt64(-int64(u))
 		}
 	case sqltypes.Float32, sqltypes.Float64:
 		er.setFloat(-er.float64())
 	case sqltypes.Decimal:
-		dec := er.decimal()
-		if !dec.num.IsZero() {
-			dec.num.SetSignbit(!dec.num.Signbit())
+		if !er.decimal_.IsZero() {
+			er.decimal_ = er.decimal_.Neg()
 		}
 	}
 }
 
 func (er *EvalResult) coerceDecimalToFloat() (float64, bool) {
-	dec := &er.decimal().num
-	if f, ok := dec.Float64(); ok {
-		return f, true
-	}
-
-	// normal form for decimal did not fit in float64, attempt reduction before giving up
-	var reduced decimal.Big
-	reduced.Copy(dec)
-	reduced.Reduce()
-	return reduced.Float64()
+	return er.decimal().Float64()
 }
 
 func (er *EvalResult) coerceToFloat() (float64, error) {
@@ -857,12 +979,12 @@ func (er *EvalResult) coerceToFloat() (float64, error) {
 	}
 }
 
-func (er *EvalResult) coerceToDecimal() *decimalResult {
+func (er *EvalResult) coerceToDecimal() decimal.Decimal {
 	switch er.typeof() {
 	case sqltypes.Int64:
-		return newDecimalInt64(er.int64())
+		return decimal.NewFromInt(er.int64())
 	case sqltypes.Uint64:
-		return newDecimalUint64(er.uint64())
+		return decimal.NewFromUint(er.uint64())
 	case sqltypes.Float64:
 		panic("should never coerce FLOAT64 to DECIMAL")
 	case sqltypes.Decimal:
@@ -870,6 +992,10 @@ func (er *EvalResult) coerceToDecimal() *decimalResult {
 	default:
 		panic("bad numeric type")
 	}
+}
+
+func (er *EvalResult) String() string {
+	return er.value().String()
 }
 
 func newEvalUint64(u uint64) (er EvalResult) {
@@ -887,11 +1013,6 @@ func newEvalFloat(f float64) (er EvalResult) {
 	return
 }
 
-func newEvalDecimal(dec *decimalResult) (er EvalResult) {
-	er.setDecimal(dec)
-	return
-}
-
 func newEvalResult(v sqltypes.Value) (er EvalResult, err error) {
 	err = er.setValue(v)
 	return
@@ -905,4 +1026,20 @@ func newEvalResultNumeric(v sqltypes.Value) (er EvalResult, err error) {
 func newEvalRaw(typ sqltypes.Type, raw []byte) (er EvalResult) {
 	er.setRaw(typ, raw, collations.TypedCollation{})
 	return
+}
+
+var evalResultPool = sync.Pool{
+	New: func() interface{} {
+		return &EvalResult{}
+	},
+}
+
+func borrowEvalResult() *EvalResult {
+	return evalResultPool.Get().(*EvalResult)
+}
+
+func (er *EvalResult) unborrow() {
+	er.flags_ = 0
+	er.type_ = 0
+	evalResultPool.Put(er)
 }

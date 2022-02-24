@@ -25,7 +25,7 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
 	{
@@ -48,6 +48,8 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 	}
 	// field SessionStateChanges string
 	size += hack.RuntimeAllocSize(int64(len(cached.SessionStateChanges)))
+	// field Info string
+	size += hack.RuntimeAllocSize(int64(len(cached.Info)))
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {

@@ -203,3 +203,7 @@ func (Charset_utf8mb4) DecodeRune(p []byte) (rune, int) {
 func (Charset_utf8mb4) SupportsSupplementaryChars() bool {
 	return true
 }
+
+func (Charset_utf8mb4) Validate(p []byte) bool {
+	return utf8.Valid(p)
+}
