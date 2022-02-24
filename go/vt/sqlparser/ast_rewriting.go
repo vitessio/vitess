@@ -363,8 +363,6 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
-	case *JoinCondition:
-		er.rewriteJoinCondition(cursor, node)
 	case *NotExpr:
 		switch inner := node.Expr.(type) {
 		case *ComparisonExpr:
@@ -441,48 +439,6 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 	}
 
 	return false, i
-}
-
-func (er *astRewriter) rewriteJoinCondition(cursor *Cursor, node *JoinCondition) {
-	if node.Using != nil && !er.hasStarInSelect {
-		joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
-		if !ok {
-			// this is not possible with the current AST
-			return
-		}
-		leftTable, leftOk := joinTableExpr.LeftExpr.(*AliasedTableExpr)
-		rightTable, rightOk := joinTableExpr.RightExpr.(*AliasedTableExpr)
-		if !(leftOk && rightOk) {
-			// we only deal with simple FROM A JOIN B USING queries at the moment
-			return
-		}
-		lft, err := leftTable.TableName()
-		if err != nil {
-			er.err = err
-			return
-		}
-		rgt, err := rightTable.TableName()
-		if err != nil {
-			er.err = err
-			return
-		}
-		newCondition := &JoinCondition{}
-		for _, colIdent := range node.Using {
-			lftCol := NewColNameWithQualifier(colIdent.String(), lft)
-			rgtCol := NewColNameWithQualifier(colIdent.String(), rgt)
-			cmp := &ComparisonExpr{
-				Operator: EqualOp,
-				Left:     lftCol,
-				Right:    rgtCol,
-			}
-			if newCondition.On == nil {
-				newCondition.On = cmp
-			} else {
-				newCondition.On = &AndExpr{Left: newCondition.On, Right: cmp}
-			}
-		}
-		cursor.Replace(newCondition)
-	}
 }
 
 func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
