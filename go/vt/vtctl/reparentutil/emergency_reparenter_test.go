@@ -3253,20 +3253,21 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                 string
-		emergencyReparentOps EmergencyReparentOptions
-		tmc                  *testutil.TabletManagerClient
-		unlockTopo           bool
-		newSourceTabletAlias string
-		ts                   *topo.Server
-		keyspace             string
-		shard                string
-		tablets              []*topodatapb.Tablet
-		tabletMap            map[string]*topo.TabletInfo
-		statusMap            map[string]*replicationdatapb.StopReplicationStatus
-		shouldErr            bool
-		errShouldContain     string
-		result               []*topodatapb.Tablet
+		name                  string
+		emergencyReparentOps  EmergencyReparentOptions
+		tmc                   *testutil.TabletManagerClient
+		unlockTopo            bool
+		newSourceTabletAlias  string
+		ts                    *topo.Server
+		keyspace              string
+		shard                 string
+		tablets               []*topodatapb.Tablet
+		validCandidateTablets []*topodatapb.Tablet
+		tabletMap             map[string]*topo.TabletInfo
+		statusMap             map[string]*replicationdatapb.StopReplicationStatus
+		shouldErr             bool
+		errShouldContain      string
+		result                []*topodatapb.Tablet
 	}{
 		{
 			name:                 "success",
@@ -3366,6 +3367,27 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 					Hostname: "requires force start",
 				},
 			},
+			validCandidateTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Hostname: "requires force start",
+				},
+			},
 		},
 		{
 			name:                 "all replicas failed",
@@ -3414,6 +3436,27 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 							Uid:  102,
 						},
 					},
+				},
+			},
+			validCandidateTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Hostname: "requires force start",
 				},
 			},
 			statusMap:        map[string]*replicationdatapb.StopReplicationStatus{},
@@ -3475,6 +3518,27 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			shard:     "-",
 			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
+			validCandidateTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Hostname: "requires force start",
+				},
+			},
 			result: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -3489,8 +3553,105 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                 "success - filter using valid candidate list",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+			},
+			newSourceTabletAlias: "zone1-0000000100",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Hostname: "primary-elect",
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Hostname: "requires force start",
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": { // forceStart = false
+					Before: &replicationdatapb.Status{
+						IoThreadRunning:  false,
+						SqlThreadRunning: false,
+					},
+				},
+				"zone1-0000000102": { // forceStart = true
+					Before: &replicationdatapb.Status{
+						IoThreadRunning:  true,
+						SqlThreadRunning: true,
+					},
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
+			shouldErr: false,
+			result: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			validCandidateTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+		},
 	}
 
+	_ = SetDurabilityPolicy("none")
 	for _, tt := range tests {
 		tt := tt
 
@@ -3523,7 +3684,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			tabletInfo := tt.tabletMap[tt.newSourceTabletAlias]
 
 			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
-			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, nil, tt.emergencyReparentOps)
+			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.validCandidateTablets, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -3531,7 +3692,10 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.result, res)
+			require.Equal(t, len(tt.result), len(res))
+			for idx, tablet := range res {
+				assert.EqualValues(t, topoproto.TabletAliasString(tt.result[idx].Alias), topoproto.TabletAliasString(tablet.Alias))
+			}
 		})
 	}
 }
