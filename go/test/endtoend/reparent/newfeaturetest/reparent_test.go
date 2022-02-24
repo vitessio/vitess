@@ -301,7 +301,7 @@ func TestERSFailFast(t *testing.T) {
 
 	select {
 	case out := <-strChan:
-		require.Contains(t, out, "no valid candidates for emergency reparent")
+		require.Contains(t, out, "proposed primary zone1-0000000103 will not be able to make forward progress on being promoted")
 	case <-time.After(60 * time.Second):
 		require.Fail(t, "Emergency Reparent Shard did not fail in 60 seconds")
 	}
