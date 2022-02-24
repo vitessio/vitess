@@ -68,7 +68,7 @@ func TestFailureInsertSelect(t *testing.T) {
 	utils.Exec(t, conn, "insert into u_tbl(id, num) values (1,2),(3,4)")
 
 	// primary key same
-	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `Duplicate entry '1' for key 's_tbl.PRIMARY' (errno 1062) (sqlstate 23000)`)
+	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select id, num*20 from s_tbl where id = 1", `AlreadyExists desc = Duplicate entry '1' for key`)
 	// lookup key same
 	utils.AssertContainsError(t, conn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
 	// mismatch column count
