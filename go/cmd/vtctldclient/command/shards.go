@@ -31,27 +31,36 @@ import (
 var (
 	// CreateShard makes a CreateShard gRPC request to a vtctld.
 	CreateShard = &cobra.Command{
-		Use:  "CreateShard <keyspace/shard>",
-		Args: cobra.ExactArgs(1),
-		RunE: commandCreateShard,
+		Use:   "CreateShard [--force|-f] [--include-parent|-p] <keyspace/shard>",
+		Short: "Creates the specified shard in the topology.",
+		Args:  cobra.ExactArgs(1),
+		RunE:  commandCreateShard,
 	}
 	// DeleteShards makes a DeleteShards gRPC request to a vtctld.
 	DeleteShards = &cobra.Command{
-		Use:  "DeleteShards <keyspace/shard> [<keyspace/shard> ...]",
+		Use:   "DeleteShards [--recursive|-r] [--even-if-serving] [--force|-f] <keyspace/shard> [<keyspace/shard> ...]",
+		Short: "Deletes the specified shards from the topology.",
+		Long: `Deletes the specified shards from the topology.
+
+In recursive mode, it also deletes all tablets belonging to the shard.
+Otherwise, the shard must be empty (have no tablets) or returns an error for
+that shard.`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: commandDeleteShards,
 	}
 	// GetShard makes a GetShard gRPC request to a vtctld.
 	GetShard = &cobra.Command{
-		Use:  "GetShard <keyspace/shard>",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetShard,
+		Use:   "GetShard <keyspace/shard>",
+		Short: "Returns information about a shard in the topology.",
+		Args:  cobra.ExactArgs(1),
+		RunE:  commandGetShard,
 	}
 	// RemoveShardCell makes a RemoveShardCell gRPC request to a vtctld.
 	RemoveShardCell = &cobra.Command{
-		Use:  "RemoveShardCell <keyspace/shard> <cell>",
-		Args: cobra.ExactArgs(2),
-		RunE: commandRemoveShardCell,
+		Use:   "RemoveShardCell [--force|-f] [--recursive|-r] <keyspace/shard> <cell>",
+		Short: "Remove the specified cell from the specified shard's Cells list.",
+		Args:  cobra.ExactArgs(2),
+		RunE:  commandRemoveShardCell,
 	}
 	// SetShardIsPrimaryServing makes a SetShardIsPrimaryServing gRPC call to a
 	// vtctld.
@@ -134,6 +143,7 @@ func commandCreateShard(cmd *cobra.Command, args []string) error {
 var deleteShardsOptions = struct {
 	Recursive     bool
 	EvenIfServing bool
+	Force         bool
 }{}
 
 func commandDeleteShards(cmd *cobra.Command, args []string) error {
@@ -148,6 +158,7 @@ func commandDeleteShards(cmd *cobra.Command, args []string) error {
 		Shards:        shards,
 		EvenIfServing: deleteShardsOptions.EvenIfServing,
 		Recursive:     deleteShardsOptions.Recursive,
+		Force:         deleteShardsOptions.Force,
 	})
 
 	if err != nil {
@@ -328,7 +339,8 @@ func init() {
 	Root.AddCommand(CreateShard)
 
 	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.Recursive, "recursive", "r", false, "Also delete all tablets belonging to the shard. This is required to delete a non-empty shard.")
-	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.EvenIfServing, "even-if-serving", "f", false, "Remove the shard even if it is serving. Use with caution.")
+	DeleteShards.Flags().BoolVar(&deleteShardsOptions.EvenIfServing, "even-if-serving", false, "Remove the shard even if it is serving. Use with caution.")
+	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.Force, "force", "f", false, "Remove the shard even if it cannot be locked; this should only be used for cleanup operations.")
 	Root.AddCommand(DeleteShards)
 
 	Root.AddCommand(GetShard)
