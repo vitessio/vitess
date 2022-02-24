@@ -55,21 +55,23 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return plan, nil
 	}
 
-	qp, err := abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
+	var err error
+	hp.qp, err = abstract.CreateQPFromSelect(hp.sel, ctx.SemTable)
 	if err != nil {
 		return nil, err
 	}
 
-	hp.qp = qp
-
 	needAggrOrHaving := hp.qp.NeedsAggregation() || hp.sel.Having != nil
 	canShortcut := isRoute && !needAggrOrHaving && len(hp.qp.OrderExprs) == 0
+	needsOrdering := len(hp.qp.OrderExprs) > 0
 
 	if needAggrOrHaving {
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
 		}
+		// if we already did sorting, we don't need to do it again
+		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
 	} else {
 		if canShortcut {
 			err = planSingleShardRoutePlan(hp.sel, rb)
@@ -85,7 +87,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	// If we didn't already take care of ORDER BY during aggregation planning, we need to handle it now
-	if !qp.CanPushDownSorting && len(hp.qp.OrderExprs) > 0 {
+	if needsOrdering {
 		plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
 		if err != nil {
 			return nil, err

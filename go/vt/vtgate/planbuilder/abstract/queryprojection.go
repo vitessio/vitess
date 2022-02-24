@@ -209,7 +209,7 @@ func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *seman
 		}
 		if sqlparser.IsNull(weightStrExpr) {
 			// ORDER BY null can safely be ignored
-			return nil
+			continue
 		}
 		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
 			Inner: &sqlparser.Order{
