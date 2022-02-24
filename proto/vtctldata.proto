@@ -605,6 +605,14 @@ message GetVSchemaRequest {
   string keyspace = 1;
 }
 
+message GetVersionRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetVersionResponse {
+  string version = 1;
+}
+
 message GetVSchemaResponse {
   vschema.Keyspace v_schema = 1;
 }
@@ -964,6 +972,19 @@ message ValidateKeyspaceResponse {
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
 
+message ValidateSchemaKeyspaceRequest {
+  string keyspace = 1;
+  repeated string exclude_tables = 2;
+  bool include_views = 3;
+  bool skip_no_primary = 4;
+  bool include_vschema = 5;
+}
+
+message ValidateSchemaKeyspaceResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
 message ValidateShardRequest {
   string keyspace = 1;
   string shard = 2;
@@ -972,4 +993,25 @@ message ValidateShardRequest {
 
 message ValidateShardResponse {
   repeated string results = 1;
+}
+
+message ValidateVersionKeyspaceRequest {
+  string keyspace = 1;
+}
+
+message ValidateVersionKeyspaceResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message ValidateVSchemaRequest {
+  string keyspace = 1;
+  repeated string shards = 2;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
+}
+
+message ValidateVSchemaResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
 }

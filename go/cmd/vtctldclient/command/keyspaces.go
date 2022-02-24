@@ -104,6 +104,19 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		Args:                  cobra.RangeArgs(1, 3),
 		RunE:                  commandSetKeyspaceShardingInfo,
 	}
+	ValidateSchemaKeyspace = &cobra.Command{
+		Use:                   "ValidateSchemaKeyspace [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace>",
+		Aliases:               []string{"validateschemakeyspace"},
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandValidateSchemaKeyspace,
+	}
+	ValidateVersionKeyspace = &cobra.Command{
+		Use:     "ValidateVersionKeyspace <keyspace>",
+		Aliases: []string{"validateversionkeyspace"},
+		Args:    cobra.ExactArgs(1),
+		RunE:    commandValidateVersionKeyspace,
+	}
 )
 
 var createKeyspaceOptions = struct {
@@ -391,6 +404,59 @@ func commandSetKeyspaceShardingInfo(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var validateSchemaKeyspaceOptions = struct {
+	ExcludeTables  []string
+	IncludeViews   bool
+	SkipNoPrimary  bool
+	IncludeVSchema bool
+}{}
+
+func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	ks := cmd.Flags().Arg(0)
+	resp, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       ks,
+		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
+		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVSchema,
+		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
+		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	ks := cmd.Flags().Arg(0)
+	resp, err := client.ValidateVersionKeyspace(commandCtx, &vtctldatapb.ValidateVersionKeyspaceRequest{
+		Keyspace: ks,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 func init() {
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.Force, "force", "f", false, "Proceeds even if the keyspace already exists. Does not overwrite the existing keyspace record")
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.AllowEmptyVSchema, "allow-empty-vschema", "e", false, "Allows a new keyspace to have no vschema")
@@ -421,4 +487,12 @@ func init() {
 
 	SetKeyspaceShardingInfo.Flags().BoolVarP(&setKeyspaceShardingInfoOptions.Force, "force", "f", false, "Updates fields even if they are already set. Use caution before passing force to this command.")
 	Root.AddCommand(SetKeyspaceShardingInfo)
+
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards")
+	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison")
+	Root.AddCommand(ValidateSchemaKeyspace)
+
+	Root.AddCommand(ValidateVersionKeyspace)
 }
