@@ -2900,6 +2900,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 			for shard, shardResults := range resp.ResultsByShard {
 				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, shardResults.Results...)
 			}
+			return &resp, nil
 		}
 	}
 
@@ -2940,11 +2941,8 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 
 			if referenceSchema == nil {
 				referenceAlias = si.PrimaryAlias
-				referenceSchema, err = schematools.GetSchema(ctx, s.ts, s.tmc, referenceAlias, nil, []string{} /*excludeTables*/, false /*includeViews*/)
+				referenceSchema, err = schematools.GetSchema(ctx, s.ts, s.tmc, referenceAlias, nil, req.ExcludeTables /*excludeTables*/, req.IncludeViews /*includeViews*/)
 				if err != nil {
-					errMessage := fmt.Sprintf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, []string{} /*excludeTables*/, false /*includeViews*/, err)
-					resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
-					resp.Results = append(resp.Results, errMessage)
 					return
 				}
 			}
@@ -3239,7 +3237,7 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 			}
 
 			tabletWaitGroup.Add(1)
-			go func(alias *topodatapb.TabletAlias, m *sync.Mutex) {
+			go func(alias *topodatapb.TabletAlias, m *sync.Mutex, ctx context.Context) {
 				defer tabletWaitGroup.Done()
 				replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: alias})
 				if err != nil {
@@ -3254,7 +3252,7 @@ func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctlda
 					shardResp.Results = append(shardResp.Results, fmt.Sprintf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(referenceAlias), referenceVersion, topoproto.TabletAliasString(alias), replicaVersion))
 					validateShardResponseMutex.Unlock()
 				}
-			}(alias, &validateShardResponseMutex)
+			}(alias, &validateShardResponseMutex, ctx)
 		}
 
 		tabletWaitGroup.Wait()
@@ -3353,7 +3351,6 @@ func StartServer(s *grpc.Server, ts *topo.Server) {
 
 // Helper function to get version of a tablet from its debug vars
 var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
-	fmt.Printf("Tablet addr: %v", tabletAddr)
 	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
 	if err != nil {
 		return "", err
