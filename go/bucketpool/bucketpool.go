@@ -18,6 +18,7 @@ package bucketpool
 
 import (
 	"math"
+	"math/bits"
 	"sync"
 )
 
@@ -41,6 +42,9 @@ type Pool struct {
 	minSize int
 	maxSize int
 	pools   []*sizedPool
+
+	// precompute Log2(minSize)
+	log2min int
 }
 
 // New returns Pool which has buckets from minSize to maxSize.
@@ -50,6 +54,13 @@ func New(minSize, maxSize int) *Pool {
 	if maxSize < minSize {
 		panic("maxSize can't be less than minSize")
 	}
+	if maxSize > math.MaxUint32 {
+		panic("maxSize can't be greater than MaxUint32")
+	}
+
+	assertPowerOfTwo(minSize)
+	log2min := bits.Len32(uint32(minSize) - 1)
+
 	const multiplier = 2
 	var pools []*sizedPool
 	curSize := minSize
@@ -62,6 +73,7 @@ func New(minSize, maxSize int) *Pool {
 		minSize: minSize,
 		maxSize: maxSize,
 		pools:   pools,
+		log2min: log2min,
 	}
 }
 
@@ -69,11 +81,14 @@ func (p *Pool) findPool(size int) *sizedPool {
 	if size > p.maxSize {
 		return nil
 	}
-	idx := int(math.Ceil(math.Log2(float64(size) / float64(p.minSize))))
-	if idx < 0 {
-		idx = 0
+	if size < p.minSize {
+		return p.pools[0]
 	}
-	if idx > len(p.pools)-1 {
+
+	div := uint32((size - 1) >> p.log2min)
+	idx := bits.Len32(div)
+
+	if idx >= len(p.pools) {
 		return nil
 	}
 	return p.pools[idx]
@@ -104,4 +119,10 @@ func (p *Pool) Put(b *[]byte) {
 func makeSlicePointer(size int) *[]byte {
 	data := make([]byte, size)
 	return &data
+}
+
+func assertPowerOfTwo(size int) {
+	if bits.OnesCount64(uint64(size)) != 1 {
+		panic("expected power of 2 size")
+	}
 }
