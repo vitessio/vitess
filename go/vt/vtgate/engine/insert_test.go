@@ -1796,3 +1796,78 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
 	expectResult(t, "Execute", result, &sqltypes.Result{InsertID: 10})
 }
+
+func TestInsertSelectUnowned(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {Type: "hash"},
+					"onecol": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "lkp1",
+							"from":  "from",
+							"to":    "toc"},
+						Owner: "t1"}},
+				Tables: map[string]*vschemapb.Table{
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "onecol",
+							Columns: []string{"id"}}}}}}}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	ins := &Insert{
+		Opcode:   InsertSelect,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_insert",
+		Table:    ks.Tables["t2"],
+		VindexValueOffset: [][]int{
+			{0}}, // the onecol vindex as unowned lookup sharding column
+		Input: &Route{
+			Query:      "dummy_select",
+			FieldQuery: "dummy_field_query",
+			RoutingParameters: &RoutingParameters{
+				Opcode:   Scatter,
+				Keyspace: ks.Keyspace}}}
+
+	ins.ColVindexes = append(ins.ColVindexes, ks.Tables["t2"].ColumnVindexes...)
+	ins.Prefix = "prefix "
+	ins.Suffix = " suffix"
+
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "3", "2"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|tocol", "int64|int64"), "1|1", "3|2", "2|3"),
+	}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+
+		// the select query
+		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
+
+		// select values into the unowned lookup vindex for routing
+		`Execute select from, toc from lkp1 where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"3"} values:{type:INT64 value:"2"} false`,
+
+		// values from lookup vindex resolved to destination
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(31),DestinationKeyspaceID(32),DestinationKeyspaceID(33)`,
+
+		// insert values into the main table
+		`ExecuteMultiShard ` +
+			// first we insert two rows on the 20- shard
+			`sharded.20-: prefix values (:_c0_0), (:_c2_0) suffix ` +
+			`{_c0_0: type:INT64 value:"1" _c2_0: type:INT64 value:"2"} ` +
+
+			// next we insert one row on the -20 shard
+			`sharded.-20: prefix values (:_c1_0) suffix ` +
+			`{_c1_0: type:INT64 value:"3"} ` +
+			`true false`})
+}
