@@ -234,14 +234,14 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "(2|3) ASC COLLATE latin1_swedish_ci, 1 ASC, (2|3) ASC COLLATE latin1_swedish_ci",
+    "OrderBy": "(0|2) ASC COLLATE latin1_swedish_ci, 1 ASC, (0|2) ASC COLLATE latin1_swedish_ci",
     "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum(1) AS k",
-        "GroupBy": "(2|3) COLLATE latin1_swedish_ci",
+        "GroupBy": "(0|2) COLLATE latin1_swedish_ci",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -250,9 +250,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by textcol1, weight_string(textcol1)",
-            "OrderBy": "(2|3) ASC COLLATE latin1_swedish_ci",
-            "Query": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` group by textcol1, weight_string(textcol1) order by textcol1 asc",
+            "FieldQuery": "select textcol1, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1, weight_string(textcol1)",
+            "OrderBy": "(0|2) ASC COLLATE latin1_swedish_ci",
+            "Query": "select textcol1, count(*) as k, weight_string(textcol1) from `user` group by textcol1, weight_string(textcol1) order by textcol1 asc",
             "Table": "`user`"
           }
         ]
