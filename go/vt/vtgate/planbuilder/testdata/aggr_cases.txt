@@ -1757,7 +1757,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(4) AS count(*)",
-    "GroupBy": "(0|5), (1|6), (2|7), (3|8)",
+    "GroupBy": "(3|8), (1|6), (0|5), (2|7)",
     "ResultColumns": 5,
     "Inputs": [
       {
@@ -1810,7 +1810,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(4) AS count(*)",
-    "GroupBy": "(2|5), (1|6), (0|7), (3|8)",
+    "GroupBy": "(3|8), (1|6), (0|5), (2|7)",
     "ResultColumns": 5,
     "Inputs": [
       {
@@ -1820,9 +1820,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(c), weight_string(b), weight_string(a), weight_string(d) from `user` where 1 != 1 group by c, weight_string(c), b, weight_string(b), a, weight_string(a), d, weight_string(d)",
-        "OrderBy": "(3|8) ASC, (1|6) ASC, (0|7) ASC, (2|5) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(c), weight_string(b), weight_string(a), weight_string(d) from `user` group by c, weight_string(c), b, weight_string(b), a, weight_string(a), d, weight_string(d) order by d asc, b asc, a asc, c asc",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c), weight_string(d) from `user` where 1 != 1 group by a, weight_string(a), b, weight_string(b), c, weight_string(c), d, weight_string(d)",
+        "OrderBy": "(3|8) ASC, (1|6) ASC, (0|5) ASC, (2|7) ASC",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c), weight_string(d) from `user` group by a, weight_string(a), b, weight_string(b), c, weight_string(c), d, weight_string(d) order by d asc, b asc, a asc, c asc",
         "Table": "`user`"
       }
     ]
@@ -1863,7 +1863,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(3) AS count(*)",
-    "GroupBy": "(0|4), (1|5), (2|6)",
+    "GroupBy": "(0|4), (2|6), (1|5)",
     "ResultColumns": 4,
     "Inputs": [
       {
