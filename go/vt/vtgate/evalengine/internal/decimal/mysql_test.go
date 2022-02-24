@@ -338,22 +338,17 @@ func TestLargeDecimals(t *testing.T) {
 	}
 }
 
-func Test1(t *testing.T) {
-	original := "3.14159265358979323846264338327950288419716939937510582097494459314159265358979323846264338327950288419716939937510582097494459"
-	expected := "3.141592653589793238462643383279502884197169399375105820974944593141592653"
-
-	d, err := NewFromMySQL([]byte(original))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got := d.StringMySQL()
-	if got != expected {
-		p1, i1, f1 := decompose(got)
-		p2, i2, f2 := decompose(expected)
-		t.Errorf("failed to parse decimal in MySQL format\ngot:  %s\nwant: %s\ngot:  prec=%d integral=%d fractional=%d\nwant: prec=%d integral=%d fractional=%d",
-			got, expected, p1, i1, f1, p2, i2, f2,
-		)
+func TestVeryLargeDecimals(t *testing.T) {
+	for i := 0; i <= 65; i++ {
+		integral := bytes.Repeat([]byte{'9'}, i)
+		integral = append(integral, '.')
+		for j := 0; j <= 65; j++ {
+			decimal := append(integral, bytes.Repeat([]byte{'9'}, j)...)
+			_, err := NewFromMySQL(decimal)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 }
 
