@@ -478,6 +478,11 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) *int 
 	return nil
 }
 
+// AlignGroupByAndOrderBy aligns the group by and order by columns, so they are in the same order
+// The GROUP BY clause is a set - the order between the elements does not make any difference,
+// so we can simply re-arrange the column order
+// We are also free to add more ORDER BY columns than the user asked for which we leverage,
+// so the input is already ordered according to the GROUP BY columns used
 func (qp *QueryProjection) AlignGroupByAndOrderBy() {
 	// The ORDER BY can be performed before the OA
 
