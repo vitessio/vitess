@@ -51,7 +51,6 @@ func (p *projection) WireupGen4(semTable *semantics.SemTable) error {
 	p.primitive = &engine.Projection{
 		Cols:  p.columnNames,
 		Exprs: columns,
-		Input: p.source.Primitive(),
 	}
 
 	return p.source.WireupGen4(semTable)
@@ -93,6 +92,7 @@ func (p *projection) Primitive() engine.Primitive {
 	if p.primitive == nil {
 		panic("WireUp not yet run")
 	}
+	p.primitive.Input = p.source.Primitive()
 	return p.primitive
 }
 
