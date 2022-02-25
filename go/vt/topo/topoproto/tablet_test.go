@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -73,7 +73,8 @@ func TestParseTabletAlias(t *testing.T) {
 	}
 }
 
-func TestTabletsInList(t *testing.T) {
+func TestIsTabletsInList(t *testing.T) {
+	t.Parallel()
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone-1",
@@ -118,8 +119,9 @@ func TestTabletsInList(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			out := TabletInList(testcase.tablet, testcase.allTablets)
-			require.Equal(t, testcase.isInList, out)
+			t.Parallel()
+			out := IsTabletInList(testcase.tablet, testcase.allTablets)
+			assert.Equal(t, testcase.isInList, out)
 		})
 	}
 }
