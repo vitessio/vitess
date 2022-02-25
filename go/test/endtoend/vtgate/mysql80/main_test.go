@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -55,6 +57,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtGatePlannerVersion = querypb.ExecuteOptions_Gen4
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"-enable_system_settings=true",
 			"-mysql_server_version=8.0.16-7",

@@ -171,7 +171,7 @@ func (collector *TableGC) Open() (err error) {
 	}
 
 	log.Info("TableGC: opening")
-	collector.pool.Open(collector.env.Config().DB.AppWithDB(), collector.env.Config().DB.DbaWithDB(), collector.env.Config().DB.AppDebugWithDB())
+	collector.pool.Open(collector.env.Config().DB.AllPrivsWithDB(), collector.env.Config().DB.DbaWithDB(), collector.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&collector.isOpen, 1)
 
 	for _, t := range collector.tickers {

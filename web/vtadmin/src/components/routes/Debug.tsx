@@ -9,6 +9,7 @@ import { warn, danger, success, info } from '../Snackbar';
 import { Tab } from '../tabs/Tab';
 import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
+import Toggle from '../toggle/Toggle';
 import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
 
@@ -17,6 +18,7 @@ export const Debug = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
     const [formData, setFormData] = React.useState<{ [key: string]: any }>({});
+    const [enabled, setEnabled] = React.useState(false);
 
     return (
         <ContentContainer>
@@ -166,7 +168,10 @@ export const Debug = () => {
                         ))}
                     </div>
                 </section>
-
+                <section>
+                    <h3 className="mt-12 mb-8">Toggle</h3>
+                    <Toggle enabled={enabled} onChange={() => setEnabled(!enabled)} />
+                </section>
                 <section>
                     <h3 className="mt-12 mb-8">Select</h3>
                     <div className={style.dropdownContainer}>

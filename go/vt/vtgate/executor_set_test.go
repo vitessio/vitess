@@ -470,7 +470,7 @@ func TestSetUDVFromTabletInput(t *testing.T) {
 	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
 	require.NoError(t, err)
 
-	want := map[string]*querypb.BindVariable{"foo": sqltypes.BytesBindVariable([]byte("abc"))}
+	want := map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}
 	utils.MustMatch(t, want, primarySession.UserDefinedVariables, "")
 }
 

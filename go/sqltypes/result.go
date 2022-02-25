@@ -34,6 +34,7 @@ type Result struct {
 	Rows                [][]Value        `json:"rows"`
 	SessionStateChanges string           `json:"session_state_changes"`
 	StatusFlags         uint16           `json:"status_flags"`
+	Info                string           `json:"info"`
 }
 
 //goland:noinspection GoUnusedConst

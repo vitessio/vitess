@@ -27,6 +27,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testCaseSetVar struct {
+	in, expected, setVarComment string
+}
+
+type testCaseSysVar struct {
+	in, expected string
+	sysVar       map[string]string
+}
+
 type myTestCase struct {
 	in, expected                                                       string
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
@@ -297,7 +306,7 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset) // passing `ks` just to test that no rewriting happens as it is not system schema
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", nil) // passing `ks` just to test that no rewriting happens as it is not system schema
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -326,6 +335,85 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
 			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
 			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
+		})
+	}
+}
+
+func TestRewritesWithSetVarComment(in *testing.T) {
+	tests := []testCaseSetVar{{
+		in:            "select 1",
+		expected:      "select 1",
+		setVarComment: "",
+	}, {
+		in:            "select 1",
+		expected:      "select /*+ AA(a) */ 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "insert /* toto */ into t(id) values(1)",
+		expected:      "insert /*+ AA(a) */ /* toto */ into t(id) values(1)",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "select  /* toto */ * from t union select * from s",
+		expected:      "select /*+ AA(a) */ /* toto */ * from t union select /*+ AA(a) */ * from s",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "vstream /* toto */ * from t1",
+		expected:      "vstream /*+ AA(a) */ /* toto */ * from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "stream /* toto */ t from t1",
+		expected:      "stream /*+ AA(a) */ /* toto */ t from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "update /* toto */ t set id = 1",
+		expected:      "update /*+ AA(a) */ /* toto */ t set id = 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "delete /* toto */ from t",
+		expected:      "delete /*+ AA(a) */ /* toto */ from t",
+		setVarComment: "AA(a)",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil)
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+func TestRewritesSysVar(in *testing.T) {
+	tests := []testCaseSysVar{{
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = @@sql_mode as `@x = @@sql_mode` from dual",
+	}, {
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
+		sysVar:   map[string]string{"sql_mode": "' '"},
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar)
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
 		})
 	}
 }
@@ -369,7 +457,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset)
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil)
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)

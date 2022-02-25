@@ -384,6 +384,7 @@ message QueryResult {
   uint64 rows_affected = 2;
   uint64 insert_id = 3;
   repeated Row rows = 4;
+  string info = 6;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
