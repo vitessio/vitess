@@ -61,9 +61,8 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return nil, err
 	}
 
-	needAggrOrHaving := hp.sel.Having != nil
-	canShortcut := isRoute && !needAggrOrHaving && len(hp.qp.OrderExprs) == 0
 	needsOrdering := len(hp.qp.OrderExprs) > 0
+	canShortcut := isRoute && !(hp.sel.Having != nil) && !needsOrdering
 
 	if hp.qp.NeedsAggregation() {
 		plan, err = hp.planAggregations(ctx, plan)
@@ -481,6 +480,14 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, hp.qp.ProjectionError
 	}
 
+	return hp.planAggrUsingOA(ctx, plan, grouping)
+}
+
+func (hp *horizonPlanning) planAggrUsingOA(
+	ctx *plancontext.PlanningContext,
+	plan logicalPlan,
+	grouping []abstract.GroupBy,
+) (*orderedAggregate, error) {
 	oa := &orderedAggregate{
 		groupByKeys: make([]*engine.GroupByParams, 0, len(grouping)),
 	}
@@ -497,6 +504,8 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		}
 	}
 
+	// here we are building up the grouping keys for the OA,
+	// but they are lacking the input offsets because we have yet to push the columns down
 	for _, expr := range grouping {
 		oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{
 			Expr:        expr.Inner,
@@ -510,6 +519,8 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, err
 	}
 
+	// If we have a distinct aggregating expression,
+	// we handle it by pushing it down to the underlying input as a grouping column
 	distinctGroupBy, offset, aggrs, err := hp.handleDistinctAggr(ctx, aggregationExprs)
 	if err != nil {
 		return nil, err
@@ -525,6 +536,7 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, err
 	}
 
+	// Next we add the aggregation expressions and grouping offsets to the OA
 	addColumnsToOA(ctx, oa, distinctGroupBy, aggrParams, offset, groupings, aggregationExprs)
 
 	aggPlan, err = hp.planOrderBy(ctx, order, aggPlan)
@@ -536,7 +548,6 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		logicalPlanCommon: newBuilderCommon(aggPlan),
 		weightStrings:     make(map[*resultColumn]int),
 	}
-
 	return oa, nil
 }
 
