@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -155,8 +154,12 @@ func TestShardedKeyspace(t *testing.T) {
 
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
 	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "schemas differ on table vt_select_test:\n"+shard1Primary.Alias+": CREATE TABLE"))
-	//log.Info(output)
+	// We should assert that there is a schema difference and that both the shard primaries are involved in it.
+	// However, we cannot assert in which order the two primaries will occur since the underlying function does not guarantee that
+	// We could have an output here like `schemas differ ... shard1Primary ... differs from: shard2Primary ...` or `schemas differ ... shard2Primary ... differs from: shard1Primary ...`
+	assert.Contains(t, output, "schemas differ on table vt_select_test:")
+	assert.Contains(t, output, shard1Primary.Alias+": CREATE TABLE")
+	assert.Contains(t, output, shard2Primary.Alias+": CREATE TABLE")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateVersionShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 	require.Nil(t, err)
