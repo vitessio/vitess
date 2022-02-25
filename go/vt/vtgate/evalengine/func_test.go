@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_buildinABS_call(t *testing.T) {
+func Test_buildinAbs_call(t *testing.T) {
 	type args struct {
 		env    *ExpressionEnv
 		args   []EvalResult
@@ -69,7 +69,7 @@ func Test_buildinABS_call(t *testing.T) {
 
 				}
 			}()
-			bu := buildinABS{}
+			bu := builtinAbs{}
 			bu.call(tt.args.env, tt.args.args, tt.args.result)
 		})
 	}
