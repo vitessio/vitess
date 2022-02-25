@@ -35,11 +35,12 @@ func SemiSyncAckersForPrimary(primary *topodatapb.Tablet, allTablets []*topodata
 	return
 }
 
-// RevokeForTablet checks whether we have reached enough tablets such that the given primary eligible tablet cannot accept any new writes
-func RevokeForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
-	// if we have reached the primaryEligible tablet and stopped its replication, then it will not
+// haveRevokedForTablet checks whether we have reached enough tablets such that the given primary eligible tablet cannot accept any new writes
+// The tablets reached should have their replication stopped and must be set to read only.
+func haveRevokedForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+	// if we have reached the primaryEligible tablet and stopped its replication and marked it read only, then it will not
 	// accept any new writes
-	if topoproto.TabletInList(primaryEligible, tabletsReached) {
+	if topoproto.IsTabletInList(primaryEligible, tabletsReached) {
 		return true
 	}
 
@@ -57,13 +58,15 @@ func RevokeForTablet(primaryEligible *topodatapb.Tablet, tabletsReached []*topod
 	return len(allSemiSyncAckers)-len(semiSyncAckersReached) < numOfSemiSyncAcksRequired
 }
 
-// Revoked checks whether we have reached enough tablets to guarantee that no tablet eligible to become a primary can accept any write
-func Revoked(tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+// haveRevoked checks whether we have reached enough tablets to guarantee that no tablet eligible to become a primary can accept any write
+// All the tablets reached must have their replication stopped and set to read only for us to guarantee that we have revoked access
+// from all the primary eligible tablets (prevent them from accepting any new writes)
+func haveRevoked(tabletsReached []*topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
 	for _, tablet := range allTablets {
 		if PromotionRule(tablet) == promotionrule.MustNot {
 			continue
 		}
-		if !RevokeForTablet(tablet, tabletsReached, allTablets) {
+		if !haveRevokedForTablet(tablet, tabletsReached, allTablets) {
 			return false
 		}
 	}

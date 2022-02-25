@@ -248,7 +248,7 @@ func StopReplicationAndBuildStatusMaps(
 		return statusMap, primaryStatusMap, nil
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
-	revokeSuccessful := Revoked(tabletsReachable, allTablets)
+	revokeSuccessful := haveRevoked(tabletsReachable, allTablets)
 	if !revokeSuccessful {
 		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}

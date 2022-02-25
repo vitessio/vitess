@@ -106,7 +106,7 @@ func TestSemiSyncAckersForPrimary(t *testing.T) {
 	}
 }
 
-func TestRevokeForTablet(t *testing.T) {
+func Test_haveRevokedForTablet(t *testing.T) {
 	tests := []struct {
 		name             string
 		durabilityPolicy string
@@ -198,13 +198,13 @@ func TestRevokeForTablet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
-			out := RevokeForTablet(tt.primaryEligible, tt.tabletsReached, tt.allTablets)
+			out := haveRevokedForTablet(tt.primaryEligible, tt.tabletsReached, tt.allTablets)
 			require.Equal(t, tt.revoked, out)
 		})
 	}
 }
 
-func TestRevoked(t *testing.T) {
+func Test_haveRevoked(t *testing.T) {
 	tests := []struct {
 		name             string
 		durabilityPolicy string
@@ -308,7 +308,7 @@ func TestRevoked(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
-			out := Revoked(tt.tabletsReached, tt.allTablets)
+			out := haveRevoked(tt.tabletsReached, tt.allTablets)
 			require.Equal(t, tt.revoked, out)
 		})
 	}
