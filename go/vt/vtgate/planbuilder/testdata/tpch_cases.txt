@@ -32,18 +32,9 @@ Gen4 error: unsupported: cross-shard correlated subquery
             "Inputs": [
               {
                 "OperatorType": "Projection",
-                "Columns": [
-                  "",
-                  "revenue",
-                  "",
-                  "",
-                  "",
-                  "",
-                  ""
-                ],
                 "Expressions": [
                   "[COLUMN 0]",
-                  "[COLUMN 6] * [COLUMN 7]",
+                  "[COLUMN 6] * [COLUMN 7] as revenue",
                   "[COLUMN 2]",
                   "[COLUMN 4]",
                   "[COLUMN 5]",
@@ -78,15 +69,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           },
                           {
                             "OperatorType": "Projection",
-                            "Columns": [
-                              "count(*)",
-                              "",
-                              "",
-                              "",
-                              ""
-                            ],
                             "Expressions": [
-                              "[COLUMN 4] * [COLUMN 5]",
+                              "[COLUMN 4] * [COLUMN 5] as count(*)",
                               "[COLUMN 3]",
                               "[COLUMN 2]",
                               "[COLUMN 1]",
@@ -175,14 +159,9 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
         "Inputs": [
           {
             "OperatorType": "Projection",
-            "Columns": [
-              "",
-              "revenue",
-              ""
-            ],
             "Expressions": [
               "[COLUMN 0]",
-              "[COLUMN 2] * [COLUMN 3]",
+              "[COLUMN 2] * [COLUMN 3] as revenue",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -202,13 +181,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
-                        "Columns": [
-                          "revenue",
-                          "",
-                          ""
-                        ],
                         "Expressions": [
-                          "[COLUMN 3] * [COLUMN 4]",
+                          "[COLUMN 3] * [COLUMN 4] as revenue",
                           "[COLUMN 2]",
                           "[COLUMN 1]"
                         ],
@@ -225,11 +199,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                             "Inputs": [
                               {
                                 "OperatorType": "Projection",
-                                "Columns": [
-                                  "count(*)"
-                                ],
                                 "Expressions": [
-                                  "[COLUMN 2] * [COLUMN 3]"
+                                  "[COLUMN 2] * [COLUMN 3] as count(*)"
                                 ],
                                 "Inputs": [
                                   {
@@ -273,13 +244,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                               },
                               {
                                 "OperatorType": "Projection",
-                                "Columns": [
-                                  "revenue",
-                                  "",
-                                  ""
-                                ],
                                 "Expressions": [
-                                  "[COLUMN 3] * [COLUMN 4]",
+                                  "[COLUMN 3] * [COLUMN 4] as revenue",
                                   "[COLUMN 2]",
                                   "[COLUMN 1]"
                                 ],
@@ -333,13 +299,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                       },
                       {
                         "OperatorType": "Projection",
-                        "Columns": [
-                          "count(*)",
-                          "",
-                          ""
-                        ],
                         "Expressions": [
-                          "[COLUMN 2] * [COLUMN 3]",
+                          "[COLUMN 2] * [COLUMN 3] as count(*)",
                           "[COLUMN 1]",
                           "[COLUMN 0]"
                         ],
@@ -485,27 +446,10 @@ Gen4 error: pushAggregation *planbuilder.simpleProjection
             "Inputs": [
               {
                 "OperatorType": "Projection",
-                "Columns": [
-                  "",
-                  "",
-                  "revenue",
-                  "",
-                  "",
-                  "",
-                  "",
-                  "",
-                  "",
-                  "",
-                  "",
-                  "",
-                  "",
-                  "",
-                  ""
-                ],
                 "Expressions": [
                   "[COLUMN 0]",
                   "[COLUMN 2]",
-                  "[COLUMN 14] * [COLUMN 15]",
+                  "[COLUMN 14] * [COLUMN 15] as revenue",
                   "[COLUMN 4]",
                   "[COLUMN 8]",
                   "[COLUMN 10]",
@@ -536,13 +480,8 @@ Gen4 error: pushAggregation *planbuilder.simpleProjection
                         "Inputs": [
                           {
                             "OperatorType": "Projection",
-                            "Columns": [
-                              "revenue",
-                              "",
-                              ""
-                            ],
                             "Expressions": [
-                              "[COLUMN 3] * [COLUMN 4]",
+                              "[COLUMN 3] * [COLUMN 4] as revenue",
                               "[COLUMN 2]",
                               "[COLUMN 1]"
                             ],
@@ -588,25 +527,8 @@ Gen4 error: pushAggregation *planbuilder.simpleProjection
                           },
                           {
                             "OperatorType": "Projection",
-                            "Columns": [
-                              "count(*)",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              "",
-                              ""
-                            ],
                             "Expressions": [
-                              "[COLUMN 14] * [COLUMN 15]",
+                              "[COLUMN 14] * [COLUMN 15] as count(*)",
                               "[COLUMN 13]",
                               "[COLUMN 12]",
                               "[COLUMN 11]",
@@ -700,16 +622,10 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
     "Inputs": [
       {
         "OperatorType": "Projection",
-        "Columns": [
-          "",
-          "high_line_count",
-          "low_line_count",
-          ""
-        ],
         "Expressions": [
           "[COLUMN 0]",
-          "[COLUMN 2] * [COLUMN 3]",
-          "[COLUMN 4] * [COLUMN 5]",
+          "[COLUMN 2] * [COLUMN 3] as high_line_count",
+          "[COLUMN 4] * [COLUMN 5] as low_line_count",
           "[COLUMN 1]"
         ],
         "Inputs": [
@@ -925,11 +841,8 @@ Gen4 error: unsupported: group by on: *planbuilder.joinGen4
     "Inputs": [
       {
         "OperatorType": "Projection",
-        "Columns": [
-          "revenue"
-        ],
         "Expressions": [
-          "[COLUMN 0] * [COLUMN 1]"
+          "[COLUMN 0] * [COLUMN 1] as revenue"
         ],
         "Inputs": [
           {
@@ -1003,14 +916,9 @@ Gen4 error: unsupported: cross-shard correlated subquery
             "Inputs": [
               {
                 "OperatorType": "Projection",
-                "Columns": [
-                  "",
-                  "numwait",
-                  ""
-                ],
                 "Expressions": [
                   "[COLUMN 0]",
-                  "[COLUMN 2] * [COLUMN 3]",
+                  "[COLUMN 2] * [COLUMN 3] as numwait",
                   "[COLUMN 1]"
                 ],
                 "Inputs": [
@@ -1030,13 +938,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                         "Inputs": [
                           {
                             "OperatorType": "Projection",
-                            "Columns": [
-                              "numwait",
-                              "",
-                              ""
-                            ],
                             "Expressions": [
-                              "[COLUMN 3] * [COLUMN 4]",
+                              "[COLUMN 3] * [COLUMN 4] as numwait",
                               "[COLUMN 2]",
                               "[COLUMN 1]"
                             ],
@@ -1082,13 +985,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           },
                           {
                             "OperatorType": "Projection",
-                            "Columns": [
-                              "numwait",
-                              "",
-                              ""
-                            ],
                             "Expressions": [
-                              "[COLUMN 2] * [COLUMN 3]",
+                              "[COLUMN 2] * [COLUMN 3] as numwait",
                               "[COLUMN 1]",
                               "[COLUMN 0]"
                             ],

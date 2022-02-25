@@ -131,14 +131,18 @@ func (p *Projection) Inputs() []Primitive {
 // description implements the Primitive interface
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
-	for _, e := range p.Exprs {
-		exprs = append(exprs, evalengine.FormatExpr(e))
+	for idx, e := range p.Exprs {
+		expr := evalengine.FormatExpr(e)
+		alias := p.Cols[idx]
+		if alias != "" {
+			expr += " as " + alias
+		}
+		exprs = append(exprs, expr)
 	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",
 		Other: map[string]interface{}{
 			"Expressions": exprs,
-			"Columns":     p.Cols,
 		},
 	}
 }
