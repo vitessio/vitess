@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 type flag uint16
@@ -90,12 +90,10 @@ type (
 		tuple_ *[]EvalResult //nolint
 		// decimal_ is the numeric decimal for this result. It may be uninitialized.
 		// Must not be accessed directly: call EvalResult.decimal() instead.
-		decimal_ *decimalResult //nolint
-	}
-
-	decimalResult struct {
-		num  decimal.Big
-		frac int
+		decimal_ decimal.Decimal //nolint
+		// length_ is the display length of this eval result; right now this only applies
+		// to Decimal results, but in the future it may also work for CHAR
+		length_ int32 //nolint
 	}
 )
 
@@ -167,7 +165,7 @@ func (er *EvalResult) int64() int64 {
 	return int64(er.numeric_)
 }
 
-func (er *EvalResult) decimal() *decimalResult {
+func (er *EvalResult) decimal() decimal.Decimal {
 	er.resolve()
 	return er.decimal_
 }
@@ -279,10 +277,11 @@ func (er *EvalResult) setFloat(f float64) {
 	er.collation_ = collationNumeric
 }
 
-func (er *EvalResult) setDecimal(dec *decimalResult) {
+func (er *EvalResult) setDecimal(dec decimal.Decimal, frac int32) {
 	er.type_ = int16(sqltypes.Decimal)
 	er.decimal_ = dec
 	er.collation_ = collationNumeric
+	er.length_ = frac
 	er.clearFlags(flagIntegerRange)
 }
 
@@ -359,71 +358,6 @@ func (er *EvalResult) truncate(size int) {
 
 func (er *EvalResult) replaceCollation(collation collations.TypedCollation) {
 	er.collation_ = collation
-}
-
-func (er *EvalResult) setValue(v sqltypes.Value) error {
-	switch {
-	case v.IsBinary() || v.IsText():
-		// TODO: collation
-		er.setRaw(sqltypes.VarBinary, v.Raw(), collations.TypedCollation{})
-	case v.IsSigned():
-		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		er.setInt64(ival)
-	case v.IsUnsigned():
-		uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		er.setUint64(uval)
-	case v.IsFloat():
-		fval, err := strconv.ParseFloat(v.RawStr(), 64)
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		er.setFloat(fval)
-	case v.Type() == sqltypes.Decimal:
-		dec, err := newDecimalString(v.RawStr())
-		if err != nil {
-			return err
-		}
-		er.setDecimal(dec)
-	default:
-		er.setRaw(v.Type(), v.Raw(), collations.TypedCollation{})
-	}
-	return nil
-}
-
-func (er *EvalResult) setValueIntegralNumeric(v sqltypes.Value) error {
-	switch {
-	case v.IsSigned():
-		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		er.setInt64(ival)
-		return nil
-	case v.IsUnsigned():
-		uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		er.setUint64(uval)
-		return nil
-	}
-
-	// For other types, do best effort.
-	if ival, err := strconv.ParseInt(v.RawStr(), 10, 64); err == nil {
-		er.setInt64(ival)
-		return nil
-	}
-	if uval, err := strconv.ParseUint(v.RawStr(), 10, 64); err == nil {
-		er.setUint64(uval)
-		return nil
-	}
-	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", v.RawStr())
 }
 
 // Value allows for retrieval of the value we expose for public consumption
@@ -508,7 +442,7 @@ func (er *EvalResult) truthy() boolean {
 	case sqltypes.Float64, sqltypes.Float32:
 		return makeboolean(er.float64() != 0.0)
 	case sqltypes.Decimal:
-		return makeboolean(!er.decimal().num.IsZero())
+		return makeboolean(!er.decimal().IsZero())
 	case sqltypes.VarBinary, sqltypes.VarChar:
 		return makeboolean(parseStringToFloat(er.string()) != 0.0)
 	case sqltypes.Tuple:
@@ -552,8 +486,7 @@ func (er *EvalResult) toRawBytes() []byte {
 	case sqltypes.Float64, sqltypes.Float32:
 		return FormatFloat(sqltypes.Float64, er.float64())
 	case sqltypes.Decimal:
-		dec := er.decimal()
-		return dec.num.FormatCustom(dec.frac, roundingModeFormat)
+		return er.decimal().FormatMySQL(er.length_)
 	default:
 		return er.bytes()
 	}
@@ -587,7 +520,7 @@ func (er *EvalResult) toSQLValue(resultType sqltypes.Type) sqltypes.Value {
 			return sqltypes.MakeTrusted(resultType, FormatFloat(resultType, er.float64()))
 		case sqltypes.Decimal:
 			dec := er.decimal()
-			return sqltypes.MakeTrusted(resultType, dec.num.FormatCustom(dec.frac, roundingModeFormat))
+			return sqltypes.MakeTrusted(resultType, dec.FormatMySQL(er.length_))
 		}
 	default:
 		return sqltypes.MakeTrusted(resultType, er.bytes())
@@ -632,29 +565,21 @@ func (er *EvalResult) setValueCast(v sqltypes.Value, typ sqltypes.Type) error {
 	case typ == sqltypes.Null:
 		er.setNull()
 		return nil
-	case sqltypes.IsFloat(typ) || typ == sqltypes.Decimal:
+
+	case sqltypes.IsFloat(typ):
 		switch {
 		case v.IsSigned():
-			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
-			}
+			ival, err := v.ToInt64()
 			er.setFloat(float64(ival))
-			return nil
+			return err
 		case v.IsUnsigned():
-			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
-			}
+			uval, err := v.ToUint64()
 			er.setFloat(float64(uval))
-			return nil
+			return err
 		case v.IsFloat() || v.Type() == sqltypes.Decimal:
-			fval, err := strconv.ParseFloat(v.RawStr(), 64)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
-			}
+			fval, err := v.ToFloat64()
 			er.setFloat(fval)
-			return nil
+			return err
 		case v.IsText() || v.IsBinary():
 			er.setFloat(parseStringToFloat(v.RawStr()))
 			return nil
@@ -662,22 +587,40 @@ func (er *EvalResult) setValueCast(v sqltypes.Value, typ sqltypes.Type) error {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
 
+	case typ == sqltypes.Decimal:
+		var dec decimal.Decimal
+		switch {
+		case v.IsIntegral() || v.Type() == sqltypes.Decimal:
+			var err error
+			dec, err = decimal.NewFromMySQL(v.Raw())
+			if err != nil {
+				return err
+			}
+		case v.IsFloat():
+			fval, err := v.ToFloat64()
+			if err != nil {
+				return err
+			}
+			dec = decimal.NewFromFloat(fval)
+		case v.IsText() || v.IsBinary():
+			fval := parseStringToFloat(v.RawStr())
+			dec = decimal.NewFromFloat(fval)
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
+		}
+		er.setDecimal(dec, -dec.Exponent())
+		return nil
+
 	case sqltypes.IsSigned(typ):
 		switch {
 		case v.IsSigned():
-			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
-			}
+			ival, err := v.ToInt64()
 			er.setInt64(ival)
-			return nil
+			return err
 		case v.IsUnsigned():
-			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
-			}
+			uval, err := v.ToUint64()
 			er.setInt64(int64(uval))
-			return nil
+			return err
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
 		}
@@ -685,19 +628,13 @@ func (er *EvalResult) setValueCast(v sqltypes.Value, typ sqltypes.Type) error {
 	case sqltypes.IsUnsigned(typ):
 		switch {
 		case v.IsSigned():
-			uval, err := strconv.ParseInt(v.RawStr(), 10, 64)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
-			}
-			er.setUint64(uint64(uval))
-			return nil
+			ival, err := v.ToInt64()
+			er.setUint64(uint64(ival))
+			return err
 		case v.IsUnsigned():
-			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
-			}
+			uval, err := v.ToUint64()
 			er.setUint64(uval)
-			return nil
+			return err
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
 		}
@@ -715,62 +652,79 @@ func (er *EvalResult) setValueCast(v sqltypes.Value, typ sqltypes.Type) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }
 
-func (er *EvalResult) setBindVar1(typ sqltypes.Type, value []byte, collation collations.TypedCollation) {
-	switch typ {
-	case sqltypes.Int64:
-		ival, err := strconv.ParseInt(string(value), 10, 64)
+func (er *EvalResult) setValueIntegralNumeric(v sqltypes.Value) error {
+	switch {
+	case v.IsSigned():
+		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
 		if err != nil {
-			ival = 0
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		er.setInt64(ival)
-	case sqltypes.Int32:
-		ival, err := strconv.ParseInt(string(value), 10, 32)
+		return nil
+	case v.IsUnsigned():
+		uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
 		if err != nil {
-			ival = 0
-		}
-		// TODO: type32
-		er.setInt64(ival)
-	case sqltypes.Uint64:
-		uval, err := strconv.ParseUint(string(value), 10, 64)
-		if err != nil {
-			uval = 0
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		er.setUint64(uval)
-	case sqltypes.Float64:
-		fval, err := strconv.ParseFloat(string(value), 64)
-		if err != nil {
-			fval = 0
-		}
+		return nil
+	}
+
+	// For other types, do best effort.
+	if ival, err := strconv.ParseInt(v.RawStr(), 10, 64); err == nil {
+		er.setInt64(ival)
+		return nil
+	}
+	if uval, err := strconv.ParseUint(v.RawStr(), 10, 64); err == nil {
+		er.setUint64(uval)
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", v.RawStr())
+}
+
+func (er *EvalResult) setValue(value sqltypes.Value, collation collations.TypedCollation) error {
+	var err error
+	switch value.Type() {
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
+		var ival int64
+		ival, err = value.ToInt64()
+		er.setInt64(ival)
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
+		var uval uint64
+		uval, err = value.ToUint64()
+		er.setUint64(uval)
+	case sqltypes.Float32, sqltypes.Float64:
+		var fval float64
+		fval, err = value.ToFloat64()
 		er.setFloat(fval)
 	case sqltypes.Decimal:
-		dec, err := newDecimalString(string(value))
-		if err != nil {
-			throwEvalError(err)
-		}
-		er.setDecimal(dec)
+		var dec decimal.Decimal
+		dec, err = decimal.NewFromMySQL(value.Raw())
+		er.setDecimal(dec, -dec.Exponent())
 	case sqltypes.HexNum:
-		raw, err := parseHexNumber(value)
-		if err != nil {
-			throwEvalError(err)
-		}
+		var raw []byte
+		raw, err = parseHexNumber(value.Raw())
 		er.setBinaryHex(raw)
 	case sqltypes.HexVal:
-		raw, err := parseHexLiteral(value[2 : len(value)-1])
-		if err != nil {
-			throwEvalError(err)
-		}
+		var hex = value.Raw()
+		var raw []byte
+		raw, err = parseHexLiteral(hex[2 : len(hex)-1])
 		er.setBinaryHex(raw)
 	case sqltypes.VarChar, sqltypes.Text:
-		er.setRaw(sqltypes.VarChar, value, collation)
+		er.setRaw(sqltypes.VarChar, value.Raw(), collation)
 	case sqltypes.VarBinary:
-		er.setRaw(sqltypes.VarBinary, value, collationBinary)
+		er.setRaw(sqltypes.VarBinary, value.Raw(), collationBinary)
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
-		er.setRaw(typ, value, collationNumeric)
+		er.setRaw(value.Type(), value.Raw(), collationNumeric)
 	case sqltypes.Null:
 		er.setNull()
 	default:
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, typ.String()))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+	}
+	return nil
 }
 
 // CoerceTo takes two input types, and decides how they should be coerced before compared
@@ -836,35 +790,22 @@ func (er *EvalResult) makeFloat() {
 	}
 }
 
-func (er *EvalResult) makeDecimal(m, d int) {
+func (er *EvalResult) makeDecimal(m, d int32) {
 	er.makeNumeric()
 
-	var dec *decimalResult
+	var dec decimal.Decimal
 	switch er.typeof() {
 	case sqltypes.Decimal:
 		dec = er.decimal()
 	case sqltypes.Float64, sqltypes.Float32:
-		dec = newDecimalFloat64(er.float64())
+		dec = decimal.NewFromFloatMySQL(er.float64())
 	case sqltypes.Int64:
-		dec = newDecimalInt64(er.int64())
+		dec = decimal.NewFromInt(er.int64())
 	case sqltypes.Uint64:
-		dec = newDecimalUint64(er.uint64())
+		dec = decimal.NewFromUint(er.uint64())
 	}
 
-	var clamp decimal.Big
-	clamp.Context = decimalContextSQL
-	clamp.LargestForm(m-d, d)
-
-	neg := dec.num.Signbit()
-	dec.num.SetSignbit(false)
-
-	if dec.num.Cmp(&clamp) > 0 {
-		dec.num = clamp
-	}
-
-	dec.num.SetSignbit(neg)
-	dec.frac = d
-	er.setDecimal(dec)
+	er.setDecimal(dec.Clamp(m-d, d), d)
 }
 
 func (er *EvalResult) isHexLiteral() bool {
@@ -906,14 +847,12 @@ func (er *EvalResult) makeUnsignedIntegral() {
 		f := math.Round(er.float64())
 		er.setUint64(uint64(f))
 	case sqltypes.Decimal:
-		dec := er.decimal()
-		dec.num.Context.RoundingMode = roundingModeIntegerConversion
-		dec.num.RoundToInt()
-		if dec.num.Signbit() {
-			i, _ := dec.num.Int64()
+		dec := er.decimal().Round(0)
+		if dec.Sign() < 0 {
+			i, _ := dec.Int64()
 			er.setUint64(uint64(i))
 		} else {
-			u, _ := dec.num.Uint64()
+			u, _ := dec.Uint64()
 			er.setUint64(u)
 		}
 	default:
@@ -932,10 +871,8 @@ func (er *EvalResult) makeSignedIntegral() {
 		f := math.Round(er.float64())
 		er.setInt64(int64(f))
 	case sqltypes.Decimal:
-		dec := er.decimal()
-		dec.num.Context.RoundingMode = roundingModeIntegerConversion
-		dec.num.RoundToInt()
-		i, _ := dec.num.Int64()
+		dec := er.decimal().Round(0)
+		i, _ := dec.Int64()
 		er.setInt64(i)
 	default:
 		panic("BUG: bad type from makeNumeric")
@@ -948,9 +885,8 @@ func (er *EvalResult) negateNumeric() {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
 		i := er.int64()
 		if er.hasFlag(flagIntegerUdf) {
-			dec := newDecimalInt64(i)
-			dec.num.SetSignbit(false)
-			er.setDecimal(dec)
+			dec := decimal.NewFromInt(i).NegInPlace()
+			er.setDecimal(dec, 0)
 		} else {
 			er.setInt64(-i)
 		}
@@ -959,33 +895,22 @@ func (er *EvalResult) negateNumeric() {
 		if er.hasFlag(flagHex) {
 			er.setFloat(-float64(u))
 		} else if er.hasFlag(flagIntegerOvf) {
-			dec := newDecimalUint64(u)
-			dec.num.SetSignbit(true)
-			er.setDecimal(dec)
+			dec := decimal.NewFromUint(u).NegInPlace()
+			er.setDecimal(dec, 0)
 		} else {
 			er.setInt64(-int64(u))
 		}
 	case sqltypes.Float32, sqltypes.Float64:
 		er.setFloat(-er.float64())
 	case sqltypes.Decimal:
-		dec := er.decimal()
-		if !dec.num.IsZero() {
-			dec.num.SetSignbit(!dec.num.Signbit())
+		if !er.decimal_.IsZero() {
+			er.decimal_ = er.decimal_.Neg()
 		}
 	}
 }
 
 func (er *EvalResult) coerceDecimalToFloat() (float64, bool) {
-	dec := &er.decimal().num
-	if f, ok := dec.Float64(); ok {
-		return f, true
-	}
-
-	// normal form for decimal did not fit in float64, attempt reduction before giving up
-	var reduced decimal.Big
-	reduced.Copy(dec)
-	reduced.Reduce()
-	return reduced.Float64()
+	return er.decimal().Float64()
 }
 
 func (er *EvalResult) coerceToFloat() (float64, error) {
@@ -1004,12 +929,12 @@ func (er *EvalResult) coerceToFloat() (float64, error) {
 	}
 }
 
-func (er *EvalResult) coerceToDecimal() *decimalResult {
+func (er *EvalResult) coerceToDecimal() decimal.Decimal {
 	switch er.typeof() {
 	case sqltypes.Int64:
-		return newDecimalInt64(er.int64())
+		return decimal.NewFromInt(er.int64())
 	case sqltypes.Uint64:
-		return newDecimalUint64(er.uint64())
+		return decimal.NewFromUint(er.uint64())
 	case sqltypes.Float64:
 		panic("should never coerce FLOAT64 to DECIMAL")
 	case sqltypes.Decimal:
@@ -1035,16 +960,6 @@ func newEvalInt64(i int64) (er EvalResult) {
 
 func newEvalFloat(f float64) (er EvalResult) {
 	er.setFloat(f)
-	return
-}
-
-func newEvalDecimal(dec *decimalResult) (er EvalResult) {
-	er.setDecimal(dec)
-	return
-}
-
-func newEvalResult(v sqltypes.Value) (er EvalResult, err error) {
-	err = er.setValue(v)
 	return
 }
 

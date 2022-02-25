@@ -25,14 +25,13 @@ jobs:
           label: Skip Upgrade Downgrade
 
   get_latest_release:
-    timeout-minutes: 5
     if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
     name: Get latest release
     runs-on: ubuntu-latest
     needs:
       - get_upgrade_downgrade_label
     outputs:
-      latest_release: ${{ steps.set-outpout.outputs.matrix }}
+      latest_release: ${{ steps.output-latest-release-branch.outputs.latest_release_branch }}
 
     steps:
       - name: Check out to HEAD
@@ -40,28 +39,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get latest major release of Vitess
+      - name: Set output with latest release branch
+        id: output-latest-release-branch
         run: |
-          last_major_releases=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.0$' | sed 's/[a-z0-9]* refs\/tags\/v//' | sort -nr | head -n1)
-          echo "latest_releases=$(echo "$last_major_releases" | awk ' BEGIN { ORS = ""; print "["; } { print "\/\@{\\\"project\\\":\\\"v"$0"\\\"}\/\@"; } END { print "]"; }' | sed "s^\/\@\/\@^, ^g;s^\/\@^^g")" >> $GITHUB_ENV
-
-      - name: Set output
-        id: set-outpout
-        run: |
-          echo "::set-output name=matrix::{\"include\":${{ env.latest_releases }} }"
+          latest_release_branch=$(./tools/get_latest_release.sh ${{github.base_ref}})
+          echo $latest_release_branch
+          echo "::set-output name=latest_release_branch::${latest_release_branch}"
 
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
+    if: always() && (needs.get_latest_release.result == 'success')
     name: Run Upgrade Downgrade Test Backup Manual
     runs-on: ubuntu-latest
     needs:
       - get_upgrade_downgrade_label
       - get_latest_release
-    strategy:
-      fail-fast: false
-      matrix: ${{fromJSON(needs.get_latest_release.outputs.latest_release)}}
 
     steps:
     - name: Set up Go
@@ -118,10 +111,10 @@ jobs:
         sudo apt-get install percona-xtrabackup-24
 
     # Checkout to the last release of Vitess
-    - name: Checkout to the other version's code (${{ matrix.project }})
+    - name: Checkout to the other version's code (${{ needs.get_latest_release.outputs.latest_release }})
       uses: actions/checkout@v2
       with:
-        ref: ${{ matrix.project }}
+        ref: ${{ needs.get_latest_release.outputs.latest_release }}
 
     - name: Get dependencies for the last release
       run: |
