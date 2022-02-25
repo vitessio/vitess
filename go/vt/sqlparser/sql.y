@@ -1487,10 +1487,6 @@ account_name_str:
   {
     $$ = string($1)
   }
-| column_name_safe_reserved_keyword
-  {
-    $$ = string($1)
-  }
 
 account_name:
   account_name_str '@' account_name_str
@@ -6152,6 +6148,7 @@ column_name_safe_reserved_keyword:
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
+| COMMENT_KEYWORD
 
 openb:
   '('
