@@ -19,14 +19,14 @@ package vreplication
 var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Stop writes on keyspace product, tables [Lead,Lead-1,customer]:",
+	"Stop writes on keyspace product, tables [Lead,Lead-1,customer,db_order_test]:",
 	"/       Keyspace product, Shard 0 at Position",
 	"Wait for VReplication on stopped streams to catchup for upto 30s",
 	"Create reverse replication workflow p2c_reverse",
 	"Create journal entries on source databases",
-	"Enable writes on keyspace customer tables [Lead,Lead-1,customer]",
+	"Enable writes on keyspace customer tables [Lead,Lead-1,customer,db_order_test]",
 	"Switch routing from keyspace product to keyspace customer",
-	"Routing rules for tables [Lead,Lead-1,customer] will be updated",
+	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
 	"SwitchWrites completed, freeze and delete vreplication streams on:",
 	"       tablet 200 ",
 	"       tablet 300 ",
@@ -41,8 +41,8 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace product",
-	"Switch reads for tables [Lead,Lead-1,customer] to keyspace customer for tablet types [REPLICA,RDONLY]",
-	"Routing rules for tables [Lead,Lead-1,customer] will be updated",
+	"Switch reads for tables [Lead,Lead-1,customer,db_order_test] to keyspace customer for tablet types [REPLICA,RDONLY]",
+	"Routing rules for tables [Lead,Lead-1,customer,db_order_test] will be updated",
 	"Unlock keyspace product",
 }
 
@@ -93,7 +93,8 @@ var dryRunResultsDropSourcesDropCustomerShard = []string{
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table Lead",
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table Lead-1",
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer",
-	"Denied tables [Lead,Lead-1,customer] will be removed from:",
+	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table db_order_test",
+	"Denied tables [Lead,Lead-1,customer,db_order_test] will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
 	"Delete reverse vreplication streams on source:",
 	"	Keyspace product Shard 0 Workflow p2c_reverse DbName vt_product Tablet 100",
@@ -112,7 +113,8 @@ var dryRunResultsDropSourcesRenameCustomerShard = []string{
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table Lead",
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table Lead-1",
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer",
-	"Denied tables [Lead,Lead-1,customer] will be removed from:",
+	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table db_order_test",
+	"Denied tables [Lead,Lead-1,customer,db_order_test] will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
 	"Delete reverse vreplication streams on source:",
 	"	Keyspace product Shard 0 Workflow p2c_reverse DbName vt_product Tablet 100",

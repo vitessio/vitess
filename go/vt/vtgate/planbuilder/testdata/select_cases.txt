@@ -2529,15 +2529,18 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select N'string' from dual",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Reference",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select N'string' from dual where 1 != 1",
-    "Query": "select N'string' from dual",
-    "Table": "dual"
+    "OperatorType": "Projection",
+    "Columns": [
+      "N'string'"
+    ],
+    "Expressions": [
+      "VARCHAR(\"string\")"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
   }
 }
 Gen4 plan same as above

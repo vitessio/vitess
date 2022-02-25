@@ -400,6 +400,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"schemadiff_vrepl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/schemadiff/vrepl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "schemadiff_vrepl",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
@@ -1127,6 +1136,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_across_db_versions": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_across_db_versions",
 			"RetryMax": 1,
 			"Tags": []
 		},

@@ -85,8 +85,6 @@ func precedenceFor(in Expr) Precendence {
 			return P4
 		case BangOp:
 			return P3
-		case BinaryOp:
-			return P2
 		}
 	case *IntervalExpr:
 		return P1

@@ -243,18 +243,16 @@ func (v Value) RawStr() string {
 // match MySQL's representation for hex encoded binary data or newer types.
 // If the value is not convertible like in the case of Expression, it returns an error.
 func (v Value) ToBytes() ([]byte, error) {
-	if v.typ == Expression {
+	switch v.typ {
+	case Expression:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes")
+	case HexVal:
+		return v.decodeHexVal()
+	case HexNum:
+		return v.decodeHexNum()
+	default:
+		return v.val, nil
 	}
-	if v.typ == HexVal {
-		dv, err := v.decodeHexVal()
-		return dv, err
-	}
-	if v.typ == HexNum {
-		dv, err := v.decodeHexNum()
-		return dv, err
-	}
-	return v.val, nil
 }
 
 // Len returns the length.
@@ -268,7 +266,7 @@ func (v Value) ToInt64() (int64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseInt(v.ToString(), 10, 64)
+	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
 // ToFloat64 returns the value as MySQL would return it as a float64.
@@ -277,7 +275,7 @@ func (v Value) ToFloat64() (float64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseFloat(v.ToString(), 64)
+	return strconv.ParseFloat(v.RawStr(), 64)
 }
 
 // ToUint64 returns the value as MySQL would return it as a uint64.
@@ -286,7 +284,7 @@ func (v Value) ToUint64() (uint64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseUint(v.ToString(), 10, 64)
+	return strconv.ParseUint(v.RawStr(), 10, 64)
 }
 
 // ToBool returns the value as a bool value
