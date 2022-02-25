@@ -557,11 +557,8 @@ Gen4 plan same as above
   "Original": "select database() from dual",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "database()"
-    ],
     "Expressions": [
-      ":__vtdbname"
+      ":__vtdbname as database()"
     ],
     "Inputs": [
       {
@@ -1660,11 +1657,8 @@ Gen4 plan same as above
   "Original": "select 42",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "42"
-    ],
     "Expressions": [
-      "INT64(42)"
+      "INT64(42) as 42"
     ],
     "Inputs": [
       {
@@ -1701,11 +1695,8 @@ Gen4 plan same as above
   "Original": "select 42+2",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "42 + 2"
-    ],
     "Expressions": [
-      "INT64(44)"
+      "INT64(44) as 42 + 2"
     ],
     "Inputs": [
       {
@@ -2149,11 +2140,8 @@ Gen4 plan same as above
   "Original": "((((select 1))))",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "1"
-    ],
     "Expressions": [
-      "INT64(1)"
+      "INT64(1) as 1"
     ],
     "Inputs": [
       {
@@ -2530,11 +2518,8 @@ Gen4 plan same as above
   "Original": "select N'string' from dual",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "N'string'"
-    ],
     "Expressions": [
-      "VARCHAR(\"string\")"
+      "VARCHAR(\"string\") as N'string'"
     ],
     "Inputs": [
       {

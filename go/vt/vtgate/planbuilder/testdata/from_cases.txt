@@ -3293,11 +3293,8 @@ Gen4 plan same as above
   "Original": "select last_insert_id()",
   "Instructions": {
     "OperatorType": "Projection",
-    "Columns": [
-      "last_insert_id()"
-    ],
     "Expressions": [
-      ":__lastInsertId"
+      ":__lastInsertId as last_insert_id()"
     ],
     "Inputs": [
       {
