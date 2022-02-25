@@ -49,7 +49,7 @@ jobs:
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
+    if: always() && (needs.get_latest_release.result == 'success')
     name: Run Upgrade Downgrade Test Backup Manual
     runs-on: ubuntu-latest
     needs:
