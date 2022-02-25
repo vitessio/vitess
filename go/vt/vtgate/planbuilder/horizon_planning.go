@@ -306,9 +306,6 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 		}
 		node.Cols = append(node.Cols, column)
 		return len(node.Cols) - 1, true, nil
-	case *pulloutSubquery:
-		// push projection to the outer query
-		return pushProjection(ctx, expr, node.underlying, inner, reuseCol, hasAggregation)
 	case *simpleProjection:
 		offset, _, err := pushProjection(ctx, expr, node.input, inner, true, hasAggregation)
 		if err != nil {
@@ -346,12 +343,10 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 			return 0, false, err
 		}
 		return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
-	case *limit:
-		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
-	case *distinct:
-		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
-	case *filter:
-		return pushProjection(ctx, expr, node.input, inner, reuseCol, hasAggregation)
+	case *limit, *projection, *pulloutSubquery, *distinct, *filter:
+		// All of these either push to the single source, or push to the LHS
+		src := node.Inputs()[0]
+		return pushProjection(ctx, expr, src, inner, reuseCol, hasAggregation)
 	case *semiJoin:
 		passDownReuseCol := reuseCol
 		if !reuseCol {
@@ -1189,7 +1184,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 	case *vindexFunc:
 		// This is evaluated at VTGate only, so weight_string function cannot be used.
 		return hp.createMemorySortPlan(ctx, plan, orderExprs /* useWeightStr */, false)
-	case *limit, *semiJoin, *filter, *pulloutSubquery:
+	case *limit, *semiJoin, *filter, *pulloutSubquery, *projection:
 		inputs := plan.Inputs()
 		if len(inputs) == 0 {
 			break
