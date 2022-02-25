@@ -1,15 +1,15 @@
-name: vtadmin-web build
+name: vtadmin-web unit tests
 
 # In specifying the 'paths' property, we need to include the path to this workflow .yml file. 
 # See https://github.community/t/trigger-a-workflow-on-change-to-the-yml-file-itself/17792/4)
 on:
   push:
     paths:
-      - '.github/workflows/vtadmin_web_build.yml'
+      - '.github/workflows/vtadmin_web_unit_tests.yml'
       - 'web/vtadmin/**'
   pull_request:
     paths:
-      - '.github/workflows/vtadmin_web_build.yml'
+      - '.github/workflows/vtadmin_web_unit_tests.yml'
       - 'web/vtadmin/**'
 
 defaults:
@@ -17,7 +17,7 @@ defaults:
     working-directory: ./web/vtadmin
 
 jobs:
-  build:
+  unit-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -30,9 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build front-end
-        run: npm run build
-
+      - name: Run unit tests
+        run: CI=true npm run test
+        
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
     concurrency: 
       group: ${{ github.workflow }}-${{ github.ref }}
