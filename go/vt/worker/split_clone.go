@@ -1289,7 +1289,7 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 					bls.Tables = scw.tables
 				}
 				// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative throttler is enabled by default.
-				qr, err := exc.vreplicationExec(cancelableCtx, binlogplayer.CreateVReplication("SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), dbName))
+				qr, err := exc.vreplicationExec(cancelableCtx, binlogplayer.CreateVReplication("SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), dbName, binlogdatapb.VReplicationWorkflowType_RESHARD))
 				if err != nil {
 					handleError(vterrors.Wrap(err, "vreplication queries failed"))
 					cancel()

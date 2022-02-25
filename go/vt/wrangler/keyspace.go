@@ -154,7 +154,7 @@ func (wr *Wrangler) SplitClone(ctx context.Context, keyspace string, from, to []
 				Shard:    source.ShardName(),
 				Filter:   filter,
 			}
-			cmd := binlogplayer.CreateVReplicationState("VSplitClone", bls, "", binlogplayer.BlpStopped, primary.DbName())
+			cmd := binlogplayer.CreateVReplicationState("VSplitClone", bls, "", binlogplayer.BlpStopped, primary.DbName(), binlogdatapb.VReplicationWorkflowType_MOVETABLES)
 			qr, err := wr.TabletManagerClient().VReplicationExec(ctx, primary.Tablet, cmd)
 			if err != nil {
 				return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.PrimaryAlias, cmd)
@@ -202,7 +202,7 @@ func (wr *Wrangler) VerticalSplitClone(ctx context.Context, fromKeyspace, toKeys
 		Shard:    source.ShardName(),
 		Filter:   filter,
 	}
-	cmd := binlogplayer.CreateVReplicationState("VSplitClone", bls, "", binlogplayer.BlpStopped, primary.DbName())
+	cmd := binlogplayer.CreateVReplicationState("VSplitClone", bls, "", binlogplayer.BlpStopped, primary.DbName(), binlogdatapb.VReplicationWorkflowType_MOVETABLES)
 	qr, err := wr.TabletManagerClient().VReplicationExec(ctx, primary.Tablet, cmd)
 	if err != nil {
 		return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.PrimaryAlias, cmd)
@@ -851,7 +851,7 @@ func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, d
 				Shard:    dest.ShardName(),
 				KeyRange: kr,
 			}
-			qr, err := wr.VReplicationExec(ctx, sourceShard.PrimaryAlias, binlogplayer.CreateVReplicationState("ReversedResharding", bls, primaryPositions[j], binlogplayer.BlpStopped, dbName))
+			qr, err := wr.VReplicationExec(ctx, sourceShard.PrimaryAlias, binlogplayer.CreateVReplicationState("ReversedResharding", bls, primaryPositions[j], binlogplayer.BlpStopped, dbName, binlogdatapb.VReplicationWorkflowType_RESHARD))
 			if err != nil {
 				return err
 			}
