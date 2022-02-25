@@ -61,11 +61,11 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		return nil, err
 	}
 
-	needAggrOrHaving := hp.qp.NeedsAggregation() || hp.sel.Having != nil
+	needAggrOrHaving := hp.sel.Having != nil
 	canShortcut := isRoute && !needAggrOrHaving && len(hp.qp.OrderExprs) == 0
 	needsOrdering := len(hp.qp.OrderExprs) > 0
 
-	if needAggrOrHaving {
+	if hp.qp.NeedsAggregation() {
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
@@ -469,7 +469,12 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		if err != nil {
 			return nil, err
 		}
-		return plan, nil
+		resultPlan, err := hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
+		if err != nil {
+			return nil, err
+		}
+
+		return resultPlan, nil
 	}
 
 	if hp.qp.ProjectionError != nil {
@@ -505,16 +510,22 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		return nil, err
 	}
 
-	aggPlan, groupings, aggrParams, err := hp.pushAggregation(ctx, plan, grouping, aggregationExprs, false)
+	distinctGroupBy, offset, aggrs, err := hp.handleDistinctAggr(ctx, aggregationExprs)
 	if err != nil {
 		return nil, err
 	}
 
-	oa.aggregates = aggrParams
-	for i, grouping := range groupings {
-		oa.groupByKeys[i].KeyCol = grouping.col
-		oa.groupByKeys[i].WeightStringCol = grouping.wsCol
+	if distinctGroupBy != nil {
+		grouping = append(grouping, *distinctGroupBy)
+		order = append(order, distinctGroupBy.AsOrderBy())
 	}
+
+	aggPlan, groupings, aggrParams, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
+	if err != nil {
+		return nil, err
+	}
+
+	addColumnsToOA(ctx, oa, distinctGroupBy, aggrParams, offset, groupings, aggregationExprs)
 
 	aggPlan, err = hp.planOrderBy(ctx, order, aggPlan)
 	if err != nil {
@@ -527,6 +538,84 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 	}
 
 	return oa, nil
+}
+
+func addColumnsToOA(
+	ctx *plancontext.PlanningContext,
+	oa *orderedAggregate,
+	distinctGroupBy *abstract.GroupBy,
+	aggrParams []*engine.AggregateParams,
+	offset int,
+	groupings []offsets,
+	aggregationExprs []abstract.Aggr,
+) {
+	if distinctGroupBy == nil {
+		oa.aggregates = aggrParams
+	} else {
+		addDistinctAggr := func() {
+			// the last grouping we pushed is the one we added for the distinct aggregation
+			o := groupings[len(groupings)-1]
+			a := aggregationExprs[offset]
+			collID := ctx.SemTable.CollationForExpr(distinctGroupBy.Inner)
+			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
+				Opcode:      a.OpCode,
+				Col:         o.col,
+				KeyCol:      o.col,
+				WAssigned:   o.wsCol >= 0,
+				WCol:        o.wsCol,
+				Alias:       a.Alias,
+				Expr:        a.Func,
+				CollationID: collID,
+			})
+		}
+		if offset == 0 {
+			// if distinct is the first, we handle it here outside
+			// the for loop if it is the only aggregation we are doing
+			addDistinctAggr()
+		}
+		for idx, aggrParam := range aggrParams {
+			if idx == offset && offset > 0 {
+				addDistinctAggr()
+			}
+			oa.aggregates = append(oa.aggregates, aggrParam)
+		}
+		// the last grouping should not be treated as a grouping column by the OA
+		groupings = groupings[:len(groupings)-1]
+	}
+
+	for i, grouping := range groupings {
+		oa.groupByKeys[i].KeyCol = grouping.col
+		oa.groupByKeys[i].WeightStringCol = grouping.wsCol
+	}
+}
+
+func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, exprs []abstract.Aggr) (
+	distinct *abstract.GroupBy, offset int, aggrs []abstract.Aggr, err error) {
+	for i, expr := range exprs {
+		if !expr.Distinct {
+			aggrs = append(aggrs, expr)
+			continue
+		}
+		if distinct != nil {
+			err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
+			return
+		}
+		aliasedExpr, ok := expr.Func.Exprs[0].(*sqlparser.AliasedExpr)
+		if !ok {
+			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(expr.Original))
+			return
+		}
+		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr, ctx.SemTable)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		offset = i
+		distinct = &abstract.GroupBy{
+			Inner:         inner,
+			WeightStrExpr: innerWS,
+		}
+	}
+	return
 }
 
 func (hp *horizonPlanning) planAggregationWithoutOA(ctx *plancontext.PlanningContext, plan logicalPlan) error {
@@ -846,7 +935,7 @@ func pushAggrOnRoute(
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
 	}
 
-	// creating a copy of the original grouping list so we can re order it later
+	// creating a copy of the original grouping list, so we can reorder it later
 	originalGrouping := make([]abstract.GroupBy, len(grouping))
 	vtgateAggregation := make([]*engine.AggregateParams, 0, len(aggregations))
 	// aggIdx keeps track of the index of the aggregations we have processed so far. Starts with 0, goes all the way to len(aggregations)
@@ -904,7 +993,12 @@ func pushAggrOnRoute(
 	sel.GroupBy = make([]sqlparser.Expr, 0, len(grouping))
 	for _, expr := range grouping {
 		sel.GroupBy = append(sel.GroupBy, expr.Inner)
-		col, wsCol, err := wrapAndPushExpr(ctx, expr.Inner, expr.WeightStrExpr, plan)
+		collID := ctx.SemTable.CollationForExpr(expr.Inner)
+		wsExpr := expr.WeightStrExpr
+		if collID != collations.Unknown {
+			wsExpr = nil
+		}
+		col, wsCol, err := wrapAndPushExpr(ctx, expr.Inner, wsExpr, plan)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1121,7 +1215,13 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []abstract
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset, weightStringOffset, err := wrapAndPushExpr(ctx, order.Inner.Expr, order.WeightStrExpr, plan)
+		collID := ctx.SemTable.CollationForExpr(order.Inner.Expr)
+		wsExpr := order.WeightStrExpr
+		if collID != collations.Unknown {
+			wsExpr = nil
+		}
+
+		offset, weightStringOffset, err := wrapAndPushExpr(ctx, order.Inner.Expr, wsExpr, plan)
 		if err != nil {
 			return nil, err
 		}

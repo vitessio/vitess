@@ -402,7 +402,8 @@ type Aggr struct {
 	OpCode   engine.AggregateOpcode
 	Alias    string
 	// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
-	Index *int
+	Index    *int
+	Distinct bool
 }
 
 func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
@@ -426,7 +427,12 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 		}
 
 		if fExpr.Distinct {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "todo: distinct aggr column '%s'", funcName)
+			switch opcode {
+			case engine.AggregateCount:
+				opcode = engine.AggregateCountDistinct
+			case engine.AggregateSum:
+				opcode = engine.AggregateSumDistinct
+			}
 		}
 
 		var alias string
@@ -443,6 +449,7 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 			OpCode:   opcode,
 			Alias:    alias,
 			Index:    &idxCopy,
+			Distinct: fExpr.Distinct,
 		})
 	}
 	return
