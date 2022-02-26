@@ -274,7 +274,29 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 	}
 	defer conn.Recycle()
 
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
+	getColumnsQuery := `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
+	   ORDER BY ORDINAL_POSITION`
+	getColumnsQuery = fmt.Sprintf(getColumnsQuery, dbName, table)
+	qr, err := conn.ExecuteFetch(getColumnsQuery, 10000, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	if qr == nil || len(qr.Rows) == 0 {
+		return nil, nil, fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, table, getColumnsQuery)
+	}
+	selectColumns := ""
+
+	for _, row := range qr.Rows {
+		col := row[0].ToString()
+		if selectColumns != "" {
+			selectColumns += ", "
+		}
+		selectColumns += sqlescape.EscapeID(col)
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s.%s WHERE 1=0", selectColumns, sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
+	qr, err = conn.ExecuteFetch(query, 0, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -309,16 +331,13 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 		return nil, err
 	}
 	// sql uses column name aliases to guarantee lower case sensitivity.
-	sql := fmt.Sprintf(`
-		SELECT
-			table_name AS table_name,
-			ordinal_position AS ordinal_position,
-			column_name AS column_name
-		FROM information_schema.key_column_usage
-		WHERE table_schema = '%s'
-			AND table_name IN %s
-			AND constraint_name='PRIMARY'
-		ORDER BY table_name, ordinal_position`, dbName, tableList)
+	sql := `SELECT table_name as table_name, ordinal_position as ordinal_position, COLUMN_NAME as column_name
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = '%s'
+		AND TABLE_NAME IN %s
+		AND COLUMN_KEY = 'PRI'
+		ORDER BY table_name, ordinal_position;`
+	sql = fmt.Sprintf(sql, dbName, tableList)
 	qr, err := conn.ExecuteFetch(sql, len(tables)*100, true)
 	if err != nil {
 		return nil, err

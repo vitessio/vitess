@@ -22,16 +22,17 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // LoadTable creates a Table from the schema info in the database.
-func LoadTable(conn *connpool.DBConn, tableName string, comment string) (*Table, error) {
+func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment string) (*Table, error) {
 	ta := NewTable(tableName)
 	sqlTableName := sqlparser.String(ta.Name)
-	if err := fetchColumns(ta, conn, sqlTableName); err != nil {
+	if err := fetchColumns(ta, conn, databaseName, sqlTableName); err != nil {
 		return nil, err
 	}
 	switch {
@@ -47,8 +48,31 @@ func LoadTable(conn *connpool.DBConn, tableName string, comment string) (*Table,
 	return ta, nil
 }
 
-func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
-	qr, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
+func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
+	ctx := tabletenv.LocalContext()
+	getColumnsQuery := `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
+	   ORDER BY ORDINAL_POSITION`
+	getColumnsQuery = fmt.Sprintf(getColumnsQuery, databaseName, sqlTableName)
+	qr, err := conn.Exec(ctx, getColumnsQuery, 10000, true)
+	if err != nil {
+		return err
+	}
+	if qr == nil || len(qr.Rows) == 0 {
+		return fmt.Errorf("unable to get columns for table %s.%s using query %s", databaseName, sqlTableName, getColumnsQuery)
+	}
+	selectColumns := ""
+
+	for _, row := range qr.Rows {
+		col := row[0].ToString()
+		if selectColumns != "" {
+			selectColumns += ", "
+		}
+		selectColumns += sqlescape.EscapeID(col)
+	}
+	query := fmt.Sprintf("select %s from %s where 1 != 1", selectColumns, sqlTableName)
+	qr, err = conn.Exec(ctx, query, 0, true)
 	if err != nil {
 		return err
 	}

@@ -617,6 +617,14 @@ func expectData(t *testing.T, table string, values [][]string) {
 	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)
 }
 
+func expectQueryResult(t *testing.T, query string, values [][]string) {
+	t.Helper()
+	err := compareQueryResults(t, query, values, env.Mysqld.FetchSuperQuery)
+	if err != nil {
+		require.FailNow(t, "data mismatch", err)
+	}
+}
+
 func customExpectData(t *testing.T, table string, values [][]string, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
@@ -626,24 +634,35 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 	} else {
 		query = fmt.Sprintf("select * from %s", table)
 	}
+	err := compareQueryResults(t, query, values, exec)
+	if err != nil {
+		require.FailNow(t, "data mismatch", err)
+	}
+}
+
+func compareQueryResults(t *testing.T, query string, values [][]string,
+	exec func(ctx context.Context, query string) (*sqltypes.Result, error)) error {
+
+	t.Helper()
 	qr, err := exec(context.Background(), query)
 	if err != nil {
-		t.Error(err)
-		return
+		return err
 	}
 	if len(values) != len(qr.Rows) {
-		t.Fatalf("row counts don't match: %v, want %v", qr.Rows, values)
+		return fmt.Errorf("row counts don't match: %v, want %v", qr.Rows, values)
 	}
 	for i, row := range values {
 		if len(row) != len(qr.Rows[i]) {
-			t.Fatalf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
+			return fmt.Errorf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
 		}
 		for j, val := range row {
 			if got := qr.Rows[i][j].ToString(); got != val {
-				t.Errorf("Mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
+				return fmt.Errorf("Mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
 			}
 		}
 	}
+
+	return nil
 }
 
 func validateQueryCountStat(t *testing.T, phase string, want int64) {
