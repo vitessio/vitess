@@ -28,6 +28,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+const getColumnNamesQuery = `SELECT COLUMN_NAME as column_name
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
+	   ORDER BY ORDINAL_POSITION`
+
 // LoadTable creates a Table from the schema info in the database.
 func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment string) (*Table, error) {
 	ta := NewTable(tableName)
@@ -48,31 +53,36 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment st
 	return ta, nil
 }
 
-func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
-	ctx := tabletenv.LocalContext()
-	getColumnsQuery := `SELECT COLUMN_NAME
-       FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
-	   ORDER BY ORDINAL_POSITION`
-	getColumnsQuery = fmt.Sprintf(getColumnsQuery, databaseName, sqlTableName)
-	qr, err := conn.Exec(ctx, getColumnsQuery, 10000, true)
+func getColumnsList(conn *connpool.DBConn, dbName, tableName string) (string, error) {
+	query := fmt.Sprintf(getColumnNamesQuery, dbName, dbName)
+	qr, err := conn.Exec(tabletenv.LocalContext(), query, 10000, true)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if qr == nil || len(qr.Rows) == 0 {
-		return fmt.Errorf("unable to get columns for table %s.%s using query %s", databaseName, sqlTableName, getColumnsQuery)
+		return "", fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query)
 	}
 	selectColumns := ""
 
-	for _, row := range qr.Rows {
-		col := row[0].ToString()
+	for _, row := range qr.Named().Rows {
+		col := row["column_name"].ToString()
 		if selectColumns != "" {
 			selectColumns += ", "
 		}
 		selectColumns += sqlescape.EscapeID(col)
 	}
-	query := fmt.Sprintf("select %s from %s where 1 != 1", selectColumns, sqlTableName)
-	qr, err = conn.Exec(ctx, query, 0, true)
+	return selectColumns, nil
+}
+
+func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
+	ctx := tabletenv.LocalContext()
+
+	columnListString, err := getColumnsList(conn, databaseName, sqlTableName)
+	if err != nil {
+		return err
+	}
+	query := fmt.Sprintf("select %s from %s where 1 != 1", columnListString, sqlTableName)
+	qr, err := conn.Exec(ctx, query, 0, true)
 	if err != nil {
 		return err
 	}

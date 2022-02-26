@@ -44,6 +44,7 @@ import (
 )
 
 const baseShowTablesPattern = `SELECT t\.table_name.*`
+const getColumnNamesQueryPattern = `SELECT COLUMN_NAME.*`
 
 var mustMatch = utils.MustMatchFn(".Mutex")
 
