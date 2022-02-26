@@ -277,6 +277,10 @@ func (d Decimal) abs() Decimal {
 	}
 }
 
+func (d Decimal) Abs() Decimal {
+	return d.abs()
+}
+
 // Add returns d + d2.
 func (d Decimal) Add(d2 Decimal) Decimal {
 	rd, rd2 := RescalePair(d, d2)

@@ -12,28 +12,45 @@ func Test_buildinAbs_call(t *testing.T) {
 		result *EvalResult
 	}
 
-	int1 := newEvalInt64(-2)
-	int2 := newEvalInt64(-9223372036854775807)
+	int1 := newEvalInt64(0)
+	int2 := newEvalInt64(1)
+	int3 := newEvalInt64(-2)
+	int4 := newEvalInt64(-9223372036854775807)
 	//临界值处理
-	int3 := newEvalInt64(math.MinInt64)
-	dec1, _ := newDecimalString("-0.12")
-	dec2, _ := newDecimalString("12.5")
+	int5 := newEvalInt64(math.MinInt64)
+
+	dec1 := newEvalFloat(-1.2)
+	dec2 := newEvalFloat(12.5)
 
 	tests := []struct {
 		name string
 		args args
 		err  string
 	}{
-		{name: "test_int64_(-2)", args: args{
+		{name: "test_int64_(0)", args: args{
 			env: nil,
 			args: []EvalResult{
 				int1,
 			},
 			result: &EvalResult{},
-		}}, {name: "test_int64_(-9223372036854775807)", args: args{
+		}},
+		{name: "test_int64_(1)", args: args{
 			env: nil,
 			args: []EvalResult{
 				int2,
+			},
+			result: &EvalResult{},
+		}},
+		{name: "test_int64_(-2)", args: args{
+			env: nil,
+			args: []EvalResult{
+				int3,
+			},
+			result: &EvalResult{},
+		}}, {name: "test_int64_(-9223372036854775807)", args: args{
+			env: nil,
+			args: []EvalResult{
+				int4,
 			},
 			result: &EvalResult{},
 		},
@@ -41,22 +58,22 @@ func Test_buildinAbs_call(t *testing.T) {
 		{name: "test_int64_(math.MinInt64)", args: args{
 			env: nil,
 			args: []EvalResult{
-				int3,
+				int5,
 			},
 			result: &EvalResult{},
 		},
 		},
-		{name: "test_decimal_(-0.12)", args: args{
+		{name: "test_float_(-1.2)", args: args{
 			env: nil,
 			args: []EvalResult{
-				newEvalDecimal(dec1),
+				dec1,
 			},
 			result: &EvalResult{},
 		},
-		}, {name: "test_decimal_(12.5)", args: args{
+		}, {name: "test_float_(12.5)", args: args{
 			env: nil,
 			args: []EvalResult{
-				newEvalDecimal(dec2),
+				dec2,
 			},
 			result: &EvalResult{},
 		},

@@ -423,8 +423,8 @@ func (builtinAbs) call(env *ExpressionEnv, args []EvalResult, result *EvalResult
 		}
 	case sqltypes.Decimal:
 		res := toabs.decimal()
-		res.num.Abs(&res.num)
-		result.setDecimal(res)
+		res = res.Abs()
+		result.setDecimal(res, toabs.length_)
 	case sqltypes.Float64:
 		res := toabs.float64()
 		res = math.Abs(res)
