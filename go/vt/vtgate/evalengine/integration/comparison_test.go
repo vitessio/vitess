@@ -572,3 +572,14 @@ func TestCharsetConversionOperators(t *testing.T) {
 		}
 	}
 }
+
+func TestCeil(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+	var input = []string{
+		"0", "1", "1.123", "-1.23", "NULL",
+	}
+	for _, v := range input {
+		compareRemoteQuery(t, conn, fmt.Sprintf(" SELECT CEIL(%s)", v))
+	}
+}

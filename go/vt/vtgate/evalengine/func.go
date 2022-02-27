@@ -36,6 +36,7 @@ var builtinFunctions = map[string]builtin{
 	"collation": builtinCollation{},
 	"bit_count": builtinBitCount{},
 	"hex":       builtinHex{},
+	"ceil":      builtinCeil{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
@@ -593,4 +594,25 @@ func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
 		return sqltypes.Blob
 	}
 	return sqltypes.VarChar
+}
+
+type builtinCeil struct{}
+
+func (builtinCeil) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	if args[0].null() {
+		result.setNull()
+		return
+	}
+	args[0].makeFloat()
+	arg2FLoat := args[0].float64()
+	val := math.Ceil(arg2FLoat)
+	result.setInt64(int64(val))
+}
+
+func (builtinCeil) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("CEIL")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
 }
