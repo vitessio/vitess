@@ -38,7 +38,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-func TestInvisibleColumns(t *testing.T) {
+func TestPlayerInvisibleColumns(t *testing.T) {
 
 	if env.DBMajorVersion != 8 && env.DBPatchVersion < 23 {
 		log.Infof("invisible columns not supported in %d:%d:%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion)
