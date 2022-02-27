@@ -572,3 +572,61 @@ func TestCharsetConversionOperators(t *testing.T) {
 		}
 	}
 }
+
+func TestFunctionLog2(t *testing.T) {
+
+	var charsets = []string{
+		"-2", "-2.0", "-2.2", "0", "2", "2.0", "2.2", "abc", "8.0",
+		"1.0e0", "1.5e0", "-1.5e0", "1.1e0",
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, rhs := range charsets {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT log2(%s)", rhs))
+	}
+}
+
+func TestFunctionLog10(t *testing.T) {
+
+	var charsets = []string{
+		"-2", "-2.0", "-2.2", "0", "2", "2.0", "2.2", "abc", "8.0",
+		"1.0e0", "1.5e0", "-1.5e0", "1.1e0",
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, rhs := range charsets {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT log10(%s)", rhs))
+	}
+}
+
+func TestFunctionLog(t *testing.T) {
+
+	var charsets = []string{
+		"-2", "2.0", "2.2", "2", "0", "2.0", "-2.2", "abc", "8.0", "1", "8",
+		"1.0e0", "2", "-1.5e0", "1.1e0",
+	}
+
+	var charsets1 = []string{
+		"2", "-2.0", "-2", "0", "2", "2.0", "2.2", "abc", "2", "8", "1",
+		"2", "1.5e0", "-1.5e0", "1.1e0",
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, rhs := range charsets {
+		compareRemoteQuery(t, conn, fmt.Sprintf("SELECT log2(%s)", rhs))
+	}
+
+	for pos := 0; pos < len(charsets); pos++ {
+		query := fmt.Sprintf("SELECT log(%s)", charsets[:pos])
+		compareRemoteQuery(t, conn, query)
+
+		query = fmt.Sprintf("SELECT log(%s,%s)", charsets[:pos], charsets1[:pos])
+		compareRemoteQuery(t, conn, query)
+	}
+}

@@ -36,6 +36,9 @@ var builtinFunctions = map[string]builtin{
 	"collation": builtinCollation{},
 	"bit_count": builtinBitCount{},
 	"hex":       builtinHex{},
+	"log":       builtinLog{},
+	"log2":      builtinLog2{},
+	"log10":     builtinLog10{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
@@ -593,4 +596,75 @@ func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
 		return sqltypes.Blob
 	}
 	return sqltypes.VarChar
+}
+
+type builtinLog struct{}
+
+func (builtinLog) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	if inarg.null() {
+		result.setNull()
+		return
+	}
+	inarg.makeFloat()
+	if len(args) < 2 {
+		result.setFloat(math.Log(inarg.float64()))
+	} else {
+		inarg1 := &args[1]
+		inarg1.makeFloat()
+		result.setFloat(math.Log(inarg1.float64()) / math.Log(inarg.float64()))
+	}
+}
+
+func (builtinLog) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) < 1 || len(args) > 2 {
+		throwArgError("LOG")
+	}
+
+	tt, f := args[0].typeof(env)
+	return tt, f
+}
+
+type builtinLog2 struct{}
+
+func (builtinLog2) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	if inarg.null() {
+		result.setNull()
+		return
+	}
+	inarg.makeFloat()
+	res := math.Log2(inarg.float64())
+	result.setFloat(res)
+}
+
+func (builtinLog2) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) < 1 {
+		throwArgError("LOG2")
+	}
+
+	tt, f := args[0].typeof(env)
+	return tt, f
+}
+
+type builtinLog10 struct{}
+
+func (builtinLog10) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	inarg := &args[0]
+	if inarg.null() {
+		result.setNull()
+		return
+	}
+	inarg.makeFloat()
+	res := math.Log10(inarg.float64())
+	result.setFloat(res)
+}
+
+func (builtinLog10) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) < 1 {
+		throwArgError("LOG10")
+	}
+
+	tt, f := args[0].typeof(env)
+	return tt, f
 }
