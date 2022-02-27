@@ -39,9 +39,7 @@ import (
 )
 
 func TestPlayerInvisibleColumns(t *testing.T) {
-
-	if env.DBMajorVersion != 8 && env.DBPatchVersion < 23 {
-		log.Infof("invisible columns not supported in %d:%d:%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion)
+	if !supportsInvisibleColumns() {
 		t.Skip()
 	}
 	defer deleteTablet(addTablet(100))

@@ -23,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"context"
 
 	"github.com/stretchr/testify/require"
@@ -1441,7 +1444,20 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 	})
 }
 
+func supportsInvisibleColumns() bool {
+	if env.DBType == string(mysqlctl.FlavorMySQL) && env.DBMajorVersion >= 8 &&
+		(env.DBMinorVersion > 0 || env.DBPatchVersion >= 23) {
+		return true
+	}
+	log.Infof("invisible columns not supported in %d.%d.%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion)
+	return false
+}
+
 func TestCopyInvisibleColumns(t *testing.T) {
+	if !supportsInvisibleColumns() {
+		t.Skip()
+	}
+
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
