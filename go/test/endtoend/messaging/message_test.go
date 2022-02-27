@@ -72,7 +72,7 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
-	cmp.MustMatch(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	utils.Exec(t, conn, createMessage)
 	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
 
