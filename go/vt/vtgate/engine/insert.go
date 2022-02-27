@@ -47,6 +47,10 @@ type (
 		// Opcode is the execution opcode.
 		Opcode InsertOpcode
 
+		// Ignore is for INSERT IGNORE and INSERT...ON DUPLICATE KEY constructs
+		// for sharded cases.
+		Ignore bool
+
 		// Keyspace specifies the keyspace to send the query to.
 		Keyspace *vindexes.Keyspace
 
@@ -130,6 +134,7 @@ func NewSimpleInsert(opcode InsertOpcode, table *vindexes.Table, keyspace *vinde
 // NewInsert creates a new Insert.
 func NewInsert(
 	opcode InsertOpcode,
+	ignore bool,
 	keyspace *vindexes.Keyspace,
 	vindexValues [][][]evalengine.Expr,
 	table *vindexes.Table,
@@ -139,6 +144,7 @@ func NewInsert(
 ) *Insert {
 	return &Insert{
 		Opcode:       opcode,
+		Ignore:       ignore,
 		Keyspace:     keyspace,
 		VindexValues: vindexValues,
 		Table:        table,
@@ -175,19 +181,15 @@ const (
 	// for each ColVindex. If the table has an Autoinc column,
 	// A Generate subplan must be created.
 	InsertSharded
-	// InsertShardedIgnore is for INSERT IGNORE and
-	// INSERT...ON DUPLICATE KEY constructs.
-	InsertShardedIgnore
 	// InsertSelect is for routing an insert statement
 	// based on rows returned from the select statement.
 	InsertSelect
 )
 
 var insName = map[InsertOpcode]string{
-	InsertUnsharded:     "InsertUnsharded",
-	InsertSharded:       "InsertSharded",
-	InsertShardedIgnore: "InsertShardedIgnore",
-	InsertSelect:        "InsertSelect",
+	InsertUnsharded: "InsertUnsharded",
+	InsertSharded:   "InsertSharded",
+	InsertSelect:    "InsertSelect",
 }
 
 // String returns the opcode
@@ -229,7 +231,7 @@ func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	switch ins.Opcode {
 	case InsertUnsharded:
 		return ins.execInsertUnsharded(vcursor, bindVars)
-	case InsertSharded, InsertShardedIgnore:
+	case InsertSharded:
 		return ins.execInsertSharded(vcursor, bindVars)
 	case InsertSelect:
 		return ins.execInsertFromSelect(vcursor, bindVars)
@@ -661,7 +663,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	for vIdx, colVindex := range colVindexes {
 		for rowNum, rowColumnKeys := range vindexRowsValues[vIdx] {
 			if keyspaceIDs[rowNum] == nil {
-				// InsertShardedIgnore: skip the row.
+				// InsertIgnore: skip the row.
 				continue
 			}
 			for colIdx, vindexKey := range rowColumnKeys {
@@ -730,7 +732,7 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys []sqltypes.
 			keyspaceIDs[i] = d
 		case key.DestinationNone:
 			// No valid keyspace id, we may return an error.
-			if ins.Opcode != InsertShardedIgnore {
+			if !ins.Ignore {
 				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
 			}
 		default:
@@ -743,11 +745,11 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys []sqltypes.
 
 // processOwned creates vindex entries for the values of an owned column.
 func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys []sqltypes.Row, colVindex *vindexes.ColumnVindex, ksids []ksID) error {
-	if ins.Opcode == InsertSharded || ins.Opcode == InsertSelect {
+	if !ins.Ignore {
 		return colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexColumnsKeys, ksids, false /* ignoreMode */)
 	}
 
-	// InsertShardedIgnore
+	// InsertIgnore
 	var createIndexes []int
 	var createKeys []sqltypes.Row
 	var createKsids []ksID
@@ -844,7 +846,7 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys []sqltypes.
 		for i, v := range verified {
 			rowNum := verifyIndexes[i]
 			if !v {
-				if ins.Opcode != InsertShardedIgnore {
+				if !ins.Ignore {
 					mismatchVindexKeys = append(mismatchVindexKeys, vindexColumnsKeys[rowNum])
 					continue
 				}
@@ -917,6 +919,9 @@ func (ins *Insert) description() PrimitiveDescription {
 			valuesOffsets[vindex.Name] = string(marshal)
 		}
 		other["VindexOffsetFromSelect"] = valuesOffsets
+	}
+	if ins.Ignore {
+		other["InsertIgnore"] = true
 	}
 	return PrimitiveDescription{
 		OperatorType:     "Insert",

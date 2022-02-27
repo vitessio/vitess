@@ -199,6 +199,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	// A single row insert should be autocommitted
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -230,6 +231,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	// Multiple rows are not autocommitted by default
 	ins = NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -265,6 +267,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	// Optional flag overrides autocommit
 	ins = NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -332,6 +335,7 @@ func TestInsertShardedFail(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -379,6 +383,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -495,6 +500,7 @@ func TestInsertShardedOwned(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -601,6 +607,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -675,6 +682,7 @@ func TestInsertShardedGeo(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: region, id
@@ -784,7 +792,8 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
-		InsertShardedIgnore,
+		InsertSharded,
+		true,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -940,7 +949,8 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
-		InsertShardedIgnore,
+		InsertSharded,
+		true,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1036,6 +1046,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1159,7 +1170,8 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	ks := vs.Keyspaces["sharded"]
 
 	ins := NewInsert(
-		InsertShardedIgnore,
+		InsertSharded,
+		true,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1261,6 +1273,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1335,6 +1348,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id
@@ -1446,6 +1460,7 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 
 	ins := NewInsert(
 		InsertSharded,
+		false,
 		ks.Keyspace,
 		[][][]evalengine.Expr{{
 			// colVindex columns: id

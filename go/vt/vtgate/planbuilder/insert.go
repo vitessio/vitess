@@ -125,14 +125,12 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 		table,
 		table.Keyspace,
 	)
-	if ins.Ignore {
-		eins.Opcode = engine.InsertShardedIgnore
-	}
+	eins.Ignore = bool(ins.Ignore)
 	if ins.OnDup != nil {
 		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
 			return nil, errors.New("unsupported: DML cannot change vindex column")
 		}
-		eins.Opcode = engine.InsertShardedIgnore
+		eins.Ignore = true
 	}
 	if len(ins.Columns) == 0 {
 		if table.ColumnListAuthoritative {
