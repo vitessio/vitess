@@ -113,6 +113,8 @@ order by table_name, ordinal_position`
 from _vt.schemacopy 
 where table_schema = database() 
 order by table_name, ordinal_position`
+
+	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to

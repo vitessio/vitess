@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -54,18 +56,23 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment st
 }
 
 func getColumnsList(conn *connpool.DBConn, dbName, tableName string) (string, error) {
-	query := fmt.Sprintf(getColumnNamesQuery, dbName, dbName)
+	query := fmt.Sprintf(getColumnNamesQuery, dbName, sqlescape.UnescapeID(tableName))
 	qr, err := conn.Exec(tabletenv.LocalContext(), query, 10000, true)
 	if err != nil {
 		return "", err
 	}
 	if qr == nil || len(qr.Rows) == 0 {
-		return "", fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query)
+		err = fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query)
+		log.Errorf("%s", fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query))
+		return "", err
 	}
 	selectColumns := ""
 
 	for _, row := range qr.Named().Rows {
 		col := row["column_name"].ToString()
+		if col == "" {
+			continue
+		}
 		if selectColumns != "" {
 			selectColumns += ", "
 		}
@@ -76,10 +83,15 @@ func getColumnsList(conn *connpool.DBConn, dbName, tableName string) (string, er
 
 func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
 	ctx := tabletenv.LocalContext()
-
-	columnListString, err := getColumnsList(conn, databaseName, sqlTableName)
+	var columnListString string
+	var err error
+	columnListString, err = getColumnsList(conn, databaseName, sqlTableName)
 	if err != nil {
 		return err
+	}
+	// added for handling tests where information_schema.columns is not available. TODO: fix tests, so that we don't need this
+	if columnListString == "" {
+		columnListString = "*"
 	}
 	query := fmt.Sprintf("select %s from %s where 1 != 1", columnListString, sqlTableName)
 	qr, err := conn.Exec(ctx, query, 0, true)
