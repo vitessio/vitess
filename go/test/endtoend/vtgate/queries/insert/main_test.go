@@ -53,6 +53,7 @@ create table user_tbl(
 create table order_tbl(
 	oid bigint,
     region_id bigint,
+	cust_no bigint unique key,
 	primary key(oid, region_id)
 ) Engine=InnoDB;
 
