@@ -1,0 +1,108 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package evalengine
+
+import (
+	"strconv"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+)
+
+type (
+	builtinAscii     struct{}
+	builtinBin       struct{}
+	builtinBitLength struct{}
+)
+
+func (builtinAscii) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	toascii := &args[0]
+	if toascii.null() {
+		result.setNull()
+		return
+	}
+
+	toascii.makeBinary()
+	result.setInt64(int64(toascii.bytes()[0]))
+}
+
+func (builtinAscii) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("ASCII")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
+}
+
+func (builtinBin) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	tobin := &args[0]
+	if tobin.null() {
+		result.setNull()
+		return
+	}
+
+	var str string
+	switch t := tobin.typeof(); {
+	case sqltypes.IsNumber(t):
+		tobin.makeUnsignedIntegral()
+		str = strconv.FormatUint(tobin.uint64(), 2)
+	case sqltypes.IsText(t):
+		toint64, _ := strconv.ParseInt(tobin.string(), 10, 64)
+		str = strconv.FormatUint(uint64(toint64), 2)
+	default:
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported BIN argument: %s", t.String()))
+	}
+
+	result.setString(str, collations.TypedCollation{
+		Collation:    env.DefaultCollation,
+		Coercibility: collations.CoerceImplicit,
+		Repertoire:   collations.RepertoireASCII,
+	})
+}
+
+func (builtinBin) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("BIN")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.VarChar, f
+}
+
+func (builtinBitLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	arg1 := &args[0]
+	if arg1.null() {
+		result.setNull()
+		return
+	}
+
+	switch t := arg1.typeof(); {
+	case sqltypes.IsQuoted(t):
+		result.setInt64(int64(8 * len(arg1.bytes())))
+	default:
+		result.setInt64(int64(8 * len(arg1.toRawBytes())))
+	}
+}
+
+func (builtinBitLength) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("BIT_LENGTH")
+	}
+	_, f := args[0].typeof(env)
+	return sqltypes.Int64, f
+}

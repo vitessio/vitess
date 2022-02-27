@@ -30,12 +30,15 @@ import (
 )
 
 var builtinFunctions = map[string]builtin{
-	"coalesce":  builtinCoalesce{},
-	"greatest":  &builtinMultiComparison{name: "GREATEST", cmp: 1},
-	"least":     &builtinMultiComparison{name: "LEAST", cmp: -1},
-	"collation": builtinCollation{},
-	"bit_count": builtinBitCount{},
-	"hex":       builtinHex{},
+	"coalesce":   builtinCoalesce{},
+	"greatest":   &builtinMultiComparison{name: "GREATEST", cmp: 1},
+	"least":      &builtinMultiComparison{name: "LEAST", cmp: -1},
+	"collation":  builtinCollation{},
+	"bit_count":  builtinBitCount{},
+	"hex":        builtinHex{},
+	"ascii":      builtinAscii{},
+	"bin":        builtinBin{},
+	"bit_length": builtinBitLength{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
