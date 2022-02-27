@@ -174,3 +174,44 @@ func TestLookupCasesIncInsertSelect(t *testing.T) {
 	utils.AssertMatches(t, conn, `select nonunq_col, id from nonunq_idx order by nonunq_col, id`,
 		`[[INT64(3) INT64(1)] [INT64(3) INT64(2)]]`)
 }
+
+func TestIgnoreInsertSelect(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.Exec(t, conn, `delete from order_tbl`)
+
+	utils.Exec(t, conn, "insert into order_tbl(region_id, oid, cust_no) values (1,1,100),(1,2,200),(1,3,300)")
+
+	// inserting same rows, throws error.
+	utils.AssertContainsError(t, conn, "insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl", `lookup.Create: Code: ALREADY_EXISTS`)
+	// inserting same rows with ignore
+	qr := utils.Exec(t, conn, "insert ignore into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl")
+	assert.EqualValues(t, 0, qr.RowsAffected)
+	utils.AssertMatches(t, conn, "select count(*) from order_tbl", `[[INT64(3)]]`)
+
+	// inserting row with ignore with cust_no non-unique
+	qr = utils.Exec(t, conn, "insert ignore into order_tbl(region_id, oid, cust_no) select 1, 4, 100 from order_tbl")
+	assert.EqualValues(t, 0, qr.RowsAffected)
+
+	// inserting row with ignore with cust_no unique
+	qr = utils.Exec(t, conn, "insert ignore into order_tbl(region_id, oid, cust_no) select 1, 4, 400 from order_tbl")
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, conn, "select count(*) from order_tbl", `[[INT64(4)]]`)
+
+	utils.AssertMatches(t, conn, "select oid, cust_no from order_tbl where region_id = 1 order by oid", `[[INT64(1) INT64(100)] [INT64(2) INT64(200)] [INT64(3) INT64(300)] [INT64(4) INT64(400)]]`)
+
+	// inserting row with on dup with cust_no non-unique
+	qr = utils.Exec(t, conn, "insert into order_tbl(region_id, oid, cust_no) select region_id, oid, cust_no from order_tbl where oid = 4 on duplicate key update cust_no = cust_no + 1")
+	assert.EqualValues(t, 2, qr.RowsAffected)
+	utils.AssertMatches(t, conn, "select count(*) from order_tbl", `[[INT64(4)]]`)
+
+	utils.AssertMatches(t, conn, "select oid, cust_no from order_tbl order by oid", `[[INT64(1) INT64(100)] [INT64(2) INT64(200)] [INT64(3) INT64(300)] [INT64(4) INT64(401)]]`)
+
+	// inserting on dup trying to update vindex throws error.
+	utils.AssertContainsError(t, conn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update region_id = region_id + 1", `unsupported: DML cannot change vindex column`)
+	utils.AssertContainsError(t, conn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update oid = oid + 100", `unsupported: DML cannot change vindex column`)
+}
