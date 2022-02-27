@@ -641,4 +641,4 @@ Gen4 plan same as above
 # join with USING construct
 "select user.id from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
-Gen4 error: unsupported: join with USING(column_list) clause for complex queries
+Gen4 plan same as above

@@ -754,12 +754,13 @@ Gen4 plan same as above
   "Original": "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
     "TableName": "music",
@@ -778,12 +779,13 @@ Gen4 plan same as above
   "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
     "TableName": "music",
@@ -1090,12 +1092,13 @@ Gen4 plan same as above
   "Original": "insert ignore into user(id) values (1)",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user",
@@ -1115,12 +1118,13 @@ Gen4 plan same as above
   "Original": "insert into user(id) values(1) on duplicate key update col = 2",
   "Instructions": {
     "OperatorType": "Insert",
-    "Variant": "ShardedIgnore",
+    "Variant": "Sharded",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "TargetTabletType": "PRIMARY",
+    "InsertIgnore": true,
     "MultiShardAutocommit": false,
     "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
     "TableName": "user",
