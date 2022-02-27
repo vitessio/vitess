@@ -36,7 +36,7 @@ const (
 		FROM INFORMATION_SCHEMA.COLUMNS
 		WHERE TABLE_SCHEMA = database()
 		AND COLUMN_KEY = 'PRI'
-		ORDER BY table_name, ordinal_position;`
+		ORDER BY table_name, ordinal_position`
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 
