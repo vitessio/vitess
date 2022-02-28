@@ -596,6 +596,7 @@ func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
 	return sqltypes.VarChar
 }
 
+// builtinSign function
 type builtinSign struct{}
 
 func (builtinSign) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
