@@ -85,8 +85,6 @@ func main() {
 	args := servenv.ParseFlagsWithArgs("vtctl")
 	action := args[0]
 
-	log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
-
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
@@ -152,6 +150,8 @@ func main() {
 		args = args[1:]
 		fallthrough
 	default:
+		log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
+
 		if args[0] == "--" {
 			args = args[1:]
 		}
