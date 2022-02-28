@@ -18,7 +18,13 @@ vtctlclient ApplySchema -skip_preflight -ddl_strategy='vitess' -sql "alter table
 
 ### Table lifecycle
 
+#### Views
+
 Table lifecycle now supports views. It ensures to not purge rows from views, and does not keep views in `EVAC` state (they are immediately transitioned to `DROP` state).
+
+#### Fast drops
+
+On Mysql `8.0.23` or later, the states `PURGE` and `EVAC` are automatically skipped, thanks to `8.0.23` improvement to `DROP TABLE` speed of operation.
 
 ### Compatibility
 
