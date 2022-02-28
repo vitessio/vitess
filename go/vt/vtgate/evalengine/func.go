@@ -36,6 +36,7 @@ var builtinFunctions = map[string]builtin{
 	"collation": builtinCollation{},
 	"bit_count": builtinBitCount{},
 	"hex":       builtinHex{},
+	"sign":      builtinSign{},
 }
 
 var builtinFunctionsRewrite = map[string]builtinRewrite{
@@ -593,4 +594,29 @@ func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
 		return sqltypes.Blob
 	}
 	return sqltypes.VarChar
+}
+
+type builtinSign struct{}
+
+func (builtinSign) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+	toSign := &args[0]
+	if toSign.null() {
+		result.setNull()
+	}
+
+	if toSign.float64() > 0 {
+		result.setInt64(1)
+	} else if toSign.float64() == 0 {
+		result.setInt64(0)
+	} else {
+		result.setInt64(-1)
+	}
+
+}
+
+func (builtinSign) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
+	if len(args) != 1 {
+		throwArgError("SIGN")
+	}
+	return args[0].typeof(env)
 }
