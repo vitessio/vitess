@@ -446,7 +446,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	}
 
 	switch {
-	case typ == sqltypes.VarChar || typ == sqltypes.Text:
+	case typ == sqltypes.VarChar || typ == sqltypes.Char || typ == sqltypes.Text:
 		v1Bytes := v1.Raw()
 		v2Bytes := v2.Raw()
 
