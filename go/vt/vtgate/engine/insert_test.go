@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -1885,4 +1887,135 @@ func TestInsertSelectUnowned(t *testing.T) {
 			`sharded.-20: prefix values (:_c1_0) suffix ` +
 			`{_c1_0: type:INT64 value:"3"} ` +
 			`true false`})
+}
+
+func TestInsertSelectShardingCases(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sks1": {
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"s1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}},
+			"sks2": {
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					"s2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"}}}}}},
+			"uks1": {Tables: map[string]*vschemapb.Table{"u1": {}}},
+			"uks2": {Tables: map[string]*vschemapb.Table{"u2": {}}},
+		}}
+
+	vs := vindexes.BuildVSchema(invschema)
+	sks1 := vs.Keyspaces["sks1"]
+	sks2 := vs.Keyspaces["sks2"]
+	uks1 := vs.Keyspaces["uks1"]
+	uks2 := vs.Keyspaces["uks2"]
+
+	// sharded input route.
+	sRoute := &Route{
+		Query:             "dummy_select",
+		FieldQuery:        "dummy_field_query",
+		RoutingParameters: &RoutingParameters{Opcode: Scatter, Keyspace: sks2.Keyspace}}
+
+	// unsharded input route.
+	uRoute := &Route{
+		Query:             "dummy_select",
+		FieldQuery:        "dummy_field_query",
+		RoutingParameters: &RoutingParameters{Opcode: Unsharded, Keyspace: uks2.Keyspace}}
+
+	// sks1 and sks2
+	ins := &Insert{
+		Opcode:            InsertSelect,
+		Keyspace:          sks1.Keyspace,
+		Query:             "dummy_insert",
+		Table:             sks1.Tables["s1"],
+		Prefix:            "prefix ",
+		Suffix:            " suffix",
+		ColVindexes:       sks1.Tables["s1"].ColumnVindexes,
+		VindexValueOffset: [][]int{{0}},
+		Input:             sRoute,
+	}
+
+	vc := &loggingVCursor{
+		resolvedTargetTabletType: topodatapb.TabletType_PRIMARY,
+		ksShardMap: map[string][]string{
+			"sks1": {"-20", "20-"},
+			"sks2": {"-20", "20-"},
+			"uks1": {"0"},
+			"uks2": {"0"},
+		},
+	}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1")}
+
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations sks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sks2.-20: dummy_select {} sks2.20-: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+
+	// sks1 and uks2
+	ins.Input = uRoute
+
+	vc.Rewind()
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations uks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks2.0: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
+		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+
+	// uks1 and sks2
+	ins = &Insert{
+		Opcode:   InsertUnsharded,
+		Keyspace: uks1.Keyspace,
+		Query:    "dummy_insert",
+		Table:    uks1.Tables["s1"],
+		Prefix:   "prefix ",
+		Suffix:   " suffix",
+		Input:    sRoute,
+	}
+
+	vc.Rewind()
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations sks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sks2.-20: dummy_select {} sks2.20-: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
+
+	// uks1 and uks2
+	ins.Input = uRoute
+
+	vc.Rewind()
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		// the select query
+		`ResolveDestinations uks2 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks2.0: dummy_select {} false false`,
+
+		// the query exec
+		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) suffix {_c0_0: type:INT64 value:"1"} true true`})
 }
