@@ -3,9 +3,9 @@ import { UseMutationResult } from 'react-query';
 import { Icon, Icons } from '../../Icon';
 import { TextInput } from '../../TextInput';
 
-interface Mutation extends UseMutationResult {
+type Mutation = UseMutationResult & {
     mutate: () => void;
-}
+};
 
 interface DangerActionProps {
     title: string;

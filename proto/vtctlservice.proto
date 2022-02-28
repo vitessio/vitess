@@ -122,6 +122,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetVersion returns the version of a tablet from its debug vars.
+  rpc GetVersion(vtctldata.GetVersionRequest) returns (vtctldata.GetVersionResponse) {};
   // GetVSchema returns the vschema for a keyspace.
   rpc GetVSchema(vtctldata.GetVSchemaRequest) returns (vtctldata.GetVSchemaResponse) {};
   // GetWorkflows returns a list of workflows for the given keyspace.
@@ -237,7 +239,13 @@ service Vtctld {
   // ValidateKeyspace validates that all nodes reachable from the specified
   // keyspace are consistent.
   rpc ValidateKeyspace(vtctldata.ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+  // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+  rpc ValidateSchemaKeyspace(vtctldata.ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
   // ValidateShard validates that all nodes reachable from the specified shard
   // are consistent.
   rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
+  // ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+  rpc ValidateVersionKeyspace(vtctldata.ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
+  // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences.
+  rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
 }

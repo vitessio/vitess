@@ -3220,7 +3220,28 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews, *skipNoPrimary, *includeVSchema)
+	resp, err := wr.VtctldServer().ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       keyspace,
+		ExcludeTables:  excludeTableArray,
+		IncludeViews:   *includeViews,
+		SkipNoPrimary:  *skipNoPrimary,
+		IncludeVschema: *includeVSchema,
+	})
+
+	if err != nil {
+		wr.Logger().Errorf("%s\n", err.Error())
+		return err
+	}
+
+	for _, result := range resp.Results {
+		wr.Logger().Printf("%s\n", result)
+	}
+
+	if len(resp.Results) > 0 {
+		return fmt.Errorf("%s", resp.Results[0])
+	}
+
+	return nil
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3441,7 +3462,21 @@ func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 	}
 
 	keyspace := subFlags.Arg(0)
-	return wr.ValidateVersionKeyspace(ctx, keyspace)
+	res, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{Keyspace: keyspace})
+
+	if err != nil {
+		return err
+	}
+
+	for _, result := range res.Results {
+		wr.Logger().Printf("%s\n", result)
+	}
+
+	if len(res.Results) > 0 {
+		return fmt.Errorf("%s", res.Results[0])
+	}
+
+	return nil
 }
 
 func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

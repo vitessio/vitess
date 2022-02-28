@@ -253,12 +253,19 @@ func TestBackupTransformImpl(t *testing.T) {
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
 	defer replica2.VttabletProcess.TearDown()
+	// We restart replication here because semi-sync will not be set correctly on tablet startup since
+	// we deprecated enable_semi_sync. StartReplication RPC fixes the semi-sync settings by consulting the
+	// durability policies set.
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica2.Alias)
+	require.NoError(t, err)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StartReplication", replica2.Alias)
+	require.NoError(t, err)
 
 	// validate that semi-sync is enabled for replica, disable for rdOnly
 	if replica2.Type == "replica" {
-		verifyReplicationStatus(t, replica2, "ON")
+		verifySemiSyncStatus(t, replica2, "ON")
 	} else if replica2.Type == "rdonly" {
-		verifyReplicationStatus(t, replica2, "OFF")
+		verifySemiSyncStatus(t, replica2, "OFF")
 	}
 
 	// validate that new replica has all the data
@@ -334,8 +341,8 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 
 }
 
-// verifyReplicationStatus validates the replication status in tablet.
-func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
+// verifySemiSyncStatus validates the replication status in tablet.
+func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 	require.Nil(t, err)
 	assert.Equal(t, expectedStatus, status)

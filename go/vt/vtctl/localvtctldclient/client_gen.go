@@ -191,6 +191,11 @@ func (client *localVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb
 	return client.s.GetVSchema(ctx, in)
 }
 
+// GetVersion is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetVersion(ctx context.Context, in *vtctldatapb.GetVersionRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVersionResponse, error) {
+	return client.s.GetVersion(ctx, in)
+}
+
 // GetWorkflows is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetWorkflows(ctx context.Context, in *vtctldatapb.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetWorkflowsResponse, error) {
 	return client.s.GetWorkflows(ctx, in)
@@ -336,7 +341,22 @@ func (client *localVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctl
 	return client.s.ValidateKeyspace(ctx, in)
 }
 
+// ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	return client.s.ValidateSchemaKeyspace(ctx, in)
+}
+
 // ValidateShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
 	return client.s.ValidateShard(ctx, in)
+}
+
+// ValidateVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateVSchema(ctx context.Context, in *vtctldatapb.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVSchemaResponse, error) {
+	return client.s.ValidateVSchema(ctx, in)
+}
+
+// ValidateVersionKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateVersionKeyspace(ctx context.Context, in *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	return client.s.ValidateVersionKeyspace(ctx, in)
 }
