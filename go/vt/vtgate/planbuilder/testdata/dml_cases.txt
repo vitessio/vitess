@@ -811,7 +811,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded select id from unsharded_auto",
+    "Query": "insert into unsharded select id from unsharded_auto for update",
     "TableName": "unsharded"
   }
 }
@@ -831,7 +831,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded select id from unsharded join unsharded_auto",
+    "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
     "TableName": "unsharded"
   }
 }
@@ -1322,7 +1322,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded select 1 from dual union select 1 from dual",
+    "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
     "TableName": "unsharded"
   }
 }
@@ -1500,7 +1500,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "replace into unsharded select id from unsharded_auto",
+    "Query": "replace into unsharded select id from unsharded_auto for update",
     "TableName": "unsharded"
   }
 }
@@ -2599,11 +2599,11 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1)",
+    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1) for update",
     "TableName": "user_privacy_consents"
   }
 }
-Gen4 plan same as above
+Gen4 error: unsupported: unable to split predicates to derived table: not :__sq_has_values1
 
 # Delete on backfilling unique lookup vindex should be a scatter
 "delete from zlookup_unique.t1 where c2 = 20"
@@ -3560,7 +3560,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded(col) select col from unsharded_auto",
+    "Query": "insert into unsharded(col) select col from unsharded_auto for update",
     "TableName": "unsharded"
   }
 }
@@ -3640,10 +3640,64 @@ Gen4 plan same as above
 
 # unsharded different keyspace
 "insert into unsharded(col) select col from unsharded_tab"
-"unsupported: sharded subquery in insert values"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from unsharded_tab",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "FieldQuery": "select col from unsharded_tab where 1 != 1",
+        "Query": "select col from unsharded_tab for update",
+        "Table": "unsharded_tab"
+      }
+    ]
+  }
+}
 Gen4 plan same as above
 
 # unsharded insert table, sharded select table
 "insert into unsharded(col) select col from t1"
-"unsupported: sharded subquery in insert values"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from t1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from t1 where 1 != 1",
+        "Query": "select col from t1 for update",
+        "Table": "t1"
+      }
+    ]
+  }
+}
 Gen4 plan same as above
