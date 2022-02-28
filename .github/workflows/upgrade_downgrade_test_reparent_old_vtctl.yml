@@ -49,7 +49,7 @@ jobs:
           echo "::set-output name=latest_release_branch::${latest_release_branch}"
 
   upgrade_downgrade_test:
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
+    if: always() && (needs.get_latest_release.result == 'success')
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
     needs:

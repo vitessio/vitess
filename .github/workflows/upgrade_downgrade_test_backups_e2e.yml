@@ -48,7 +48,7 @@ jobs:
 
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'false')
+    if: always() && (needs.get_latest_release.result == 'success')
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-18.04
     needs:
