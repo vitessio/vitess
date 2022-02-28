@@ -37,8 +37,10 @@ type ReplicationStatus struct {
 	FilePosition          Position
 	FileRelayLogPosition  Position
 	SourceServerID        uint
-	IOThreadRunning       bool
-	SQLThreadRunning      bool
+	IOState               ReplicationState
+	LastIOError           string
+	SQLState              ReplicationState
+	LastSQLError          string
 	ReplicationLagSeconds uint
 	ReplicationLagUnknown bool
 	SourceHost            string
@@ -47,28 +49,43 @@ type ReplicationStatus struct {
 	SourceUUID            SID
 }
 
-// ReplicationRunning returns true iff both the IO and SQL threads are
+// ReplicationRunning returns true if both the IO and SQL threads are
 // running.
 func (s *ReplicationStatus) ReplicationRunning() bool {
-	return s.IOThreadRunning && s.SQLThreadRunning
+	return s.IOState == ReplicationStateRunning && s.SQLState == ReplicationStateRunning
+}
+
+// ReplicationConnectingWithoutError returns true if both the SQL thread is running and the IO_Thread
+// is connecting and we there's no IO_error from the last attempt to connect to the source.
+func (s *ReplicationStatus) ReplicationConnectingWithoutError() bool {
+	return s.SQLState == ReplicationStateRunning && s.IOState == ReplicationStateConnecting && s.LastIOError == ""
 }
 
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
-	return &replicationdatapb.Status{
+	replstatus := replicationdatapb.Status{
 		Position:              EncodePosition(s.Position),
 		RelayLogPosition:      EncodePosition(s.RelayLogPosition),
 		FilePosition:          EncodePosition(s.FilePosition),
 		FileRelayLogPosition:  EncodePosition(s.FileRelayLogPosition),
 		SourceServerId:        uint32(s.SourceServerID),
-		IoThreadRunning:       s.IOThreadRunning,
-		SqlThreadRunning:      s.SQLThreadRunning,
 		ReplicationLagSeconds: uint32(s.ReplicationLagSeconds),
 		SourceHost:            s.SourceHost,
 		SourcePort:            int32(s.SourcePort),
 		ConnectRetry:          int32(s.ConnectRetry),
 		SourceUuid:            s.SourceUUID.String(),
+		LastIoError:           s.LastIOError,
+		LastSqlError:          s.LastSQLError,
 	}
+	if s.IOState == ReplicationStateRunning {
+		replstatus.IoThreadRunning = true
+	} else if s.IOState == ReplicationStateConnecting {
+		replstatus.IoThreadConnecting = true
+	}
+	if s.SQLState == ReplicationStateRunning {
+		replstatus.SqlThreadRunning = true
+	}
+	return &replstatus
 }
 
 // ProtoToReplicationStatus translates a proto Status, or panics.
@@ -96,20 +113,31 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 			panic(vterrors.Wrapf(err, "cannot decode SourceUUID"))
 		}
 	}
-	return ReplicationStatus{
+	replstatus := ReplicationStatus{
 		Position:              pos,
 		RelayLogPosition:      relayPos,
 		FilePosition:          filePos,
 		FileRelayLogPosition:  fileRelayPos,
 		SourceServerID:        uint(s.SourceServerId),
-		IOThreadRunning:       s.IoThreadRunning,
-		SQLThreadRunning:      s.SqlThreadRunning,
 		ReplicationLagSeconds: uint(s.ReplicationLagSeconds),
 		SourceHost:            s.SourceHost,
 		SourcePort:            int(s.SourcePort),
 		ConnectRetry:          int(s.ConnectRetry),
 		SourceUUID:            sid,
 	}
+	if s.IoThreadRunning {
+		replstatus.IOState = ReplicationStateRunning
+	} else if s.IoThreadConnecting {
+		replstatus.IOState = ReplicationStateConnecting
+	} else {
+		replstatus.IOState = ReplicationStateStopped
+	}
+	if s.SqlThreadRunning {
+		replstatus.SQLState = ReplicationStateRunning
+	} else {
+		replstatus.SQLState = ReplicationStateStopped
+	}
+	return replstatus
 }
 
 // FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
