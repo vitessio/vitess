@@ -3328,7 +3328,7 @@ Gen4 plan same as above
   }
 }
 
-# aggregation spread out across three routes -- TODO remove the duplicate `count(*)`
+# aggregation spread out across three routes
 "select count(u.textcol1), count(ue.foo), us.bar from user u join user_extra ue on u.foo = ue.bar join unsharded us on ue.bar = us.baz group by us.bar"
 "unsupported: cross-shard query with aggregates"
 {
@@ -3387,7 +3387,7 @@ Gen4 plan same as above
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "3,4,-2,1,-3,2",
+                        "JoinColumnIndexes": "2,3,-2,1,-3,1",
                         "JoinVars": {
                           "ue_bar": 0
                         },
@@ -3411,8 +3411,8 @@ Gen4 plan same as above
                               "Name": "main",
                               "Sharded": false
                             },
-                            "FieldQuery": "select count(*), count(*), us.bar, weight_string(us.bar) from unsharded as us where 1 != 1 group by us.bar, weight_string(us.bar)",
-                            "Query": "select count(*), count(*), us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar group by us.bar, weight_string(us.bar)",
+                            "FieldQuery": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where 1 != 1 group by us.bar, weight_string(us.bar)",
+                            "Query": "select count(*), us.bar, weight_string(us.bar) from unsharded as us where us.baz = :ue_bar group by us.bar, weight_string(us.bar)",
                             "Table": "unsharded"
                           }
                         ]
