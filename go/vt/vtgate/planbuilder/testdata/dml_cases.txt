@@ -3509,3 +3509,141 @@ Gen4 plan same as above
 "insert into user_extra(pattern) SELECT 1"
 "insert query does not have sharding column 'user_id' in the column list"
 Gen4 plan same as above
+
+# sharded same keyspace
+"insert into user_extra(user_id, col) select col1, col2 from user"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select col1, col2 from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# unsharded same keyspace
+"insert into unsharded(col) select col from unsharded_auto"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from unsharded_auto",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into unsharded(col) select col from unsharded_auto",
+    "TableName": "unsharded"
+  }
+}
+Gen4 plan same as above
+
+# sharded different keyspace
+"insert into user_extra(user_id, col) select col1, col2 from t1"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from t1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from t1 where 1 != 1",
+        "Query": "select col1, col2 from t1 for update",
+        "Table": "t1"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# sharded insert table, unsharded select table
+"insert into user_extra(user_id, col) select col1, col2 from unsharded_tab"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from unsharded_tab",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
+        "Query": "select col1, col2 from unsharded_tab for update",
+        "Table": "unsharded_tab"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# unsharded different keyspace
+"insert into unsharded(col) select col from unsharded_tab"
+"unsupported: sharded subquery in insert values"
+Gen4 plan same as above
+
+# unsharded insert table, sharded select table
+"insert into unsharded(col) select col from t1"
+"unsupported: sharded subquery in insert values"
+Gen4 plan same as above
