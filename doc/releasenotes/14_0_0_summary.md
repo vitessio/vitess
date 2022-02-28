@@ -16,6 +16,10 @@ vtctlclient ApplySchema -skip_preflight -ddl_strategy='vitess' -sql "alter table
 
 - `vtctl ApplySchema -uuid_list='...'` now rejects a migration if an existing migration has the same UUID but with different `migration_context`.
 
+### Table lifecycle
+
+Table lifecycle now supports views. It ensures to not purge rows from views, and does not keep views in `EVAC` state (they are immediately transitioned to `DROP` state).
+
 ### Compatibility
 
 #### Join with `USING`
