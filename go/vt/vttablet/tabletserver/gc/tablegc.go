@@ -179,6 +179,24 @@ func (collector *TableGC) Open() (err error) {
 		t.Resume()
 	}
 
+	conn, err := dbconnpool.NewDBConnection(context.Background(), collector.env.Config().DB.AllPrivsWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	serverSupportsFastDrops, err := conn.SupportsFastDropTable()
+	if err != nil {
+		return err
+	}
+	if serverSupportsFastDrops {
+		// MySQL 8.0.23 and onwards supports fast DROP TABLE operations. This means we don't have to
+		// go through the purging & evac cycle: once the table has been held for long enough, we can just
+		// move on to dropping it. Dropping a large table in 8.0.23 is expected to take several seconds, and
+		// should not block other queries or place any locks on the buffer pool.
+		delete(collector.lifecycleStates, schema.PurgeTableGCState)
+		delete(collector.lifecycleStates, schema.EvacTableGCState)
+	}
+
 	return nil
 }
 
