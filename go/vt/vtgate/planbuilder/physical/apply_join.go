@@ -86,12 +86,15 @@ func (a *ApplyJoin) Clone() abstract.PhysicalOperator {
 	}
 	columnsClone := make([]int, len(a.Columns))
 	copy(columnsClone, a.Columns)
+	lhsColumns := make([]*sqlparser.ColName, len(a.LHSColumns))
+	copy(lhsColumns, a.LHSColumns)
 	return &ApplyJoin{
-		LHS:       a.LHS.Clone(),
-		RHS:       a.RHS.Clone(),
-		Columns:   columnsClone,
-		Vars:      varsClone,
-		LeftJoin:  a.LeftJoin,
-		Predicate: sqlparser.CloneExpr(a.Predicate),
+		LHS:        a.LHS.Clone(),
+		RHS:        a.RHS.Clone(),
+		Columns:    columnsClone,
+		Vars:       varsClone,
+		LeftJoin:   a.LeftJoin,
+		Predicate:  sqlparser.CloneExpr(a.Predicate),
+		LHSColumns: lhsColumns,
 	}
 }

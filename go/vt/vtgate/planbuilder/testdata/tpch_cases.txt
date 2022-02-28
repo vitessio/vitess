@@ -80,7 +80,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "-3,-4,-5,-6,-2,1",
+                                "JoinColumnIndexes": "-4,-5,-6,-7,-2,1",
                                 "JoinVars": {
                                   "o_custkey": 0
                                 },
@@ -93,8 +93,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select o_custkey, count(*), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where 1 != 1 group by o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
-                                    "Query": "select o_custkey, count(*), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where o_orderdate \u003c date('1995-03-15') and o_orderkey = :l_orderkey group by o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
+                                    "FieldQuery": "select o_custkey, count(*), weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
+                                    "Query": "select o_custkey, count(*), weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority) from orders where o_orderdate \u003c date('1995-03-15') and o_orderkey = :l_orderkey group by o_custkey, weight_string(o_custkey), o_orderdate, weight_string(o_orderdate), o_shippriority, weight_string(o_shippriority)",
                                     "Table": "orders",
                                     "Values": [
                                       ":l_orderkey"
@@ -200,13 +200,17 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "[COLUMN 2] * [COLUMN 3] as count(*)"
+                                  "[COLUMN 6] * [COLUMN 7] as count(*)",
+                                  "[COLUMN 5]",
+                                  "[COLUMN 4]",
+                                  "[COLUMN 3]",
+                                  "[COLUMN 2]"
                                 ],
                                 "Inputs": [
                                   {
                                     "OperatorType": "Join",
                                     "Variant": "Join",
-                                    "JoinColumnIndexes": "-2,1,-3,2",
+                                    "JoinColumnIndexes": "-2,1,-2,-5,1,3,-3,2",
                                     "JoinVars": {
                                       "o_custkey": 0
                                     },
@@ -219,8 +223,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select o_custkey, o_orderkey, count(*) from orders where 1 != 1",
-                                        "Query": "select o_custkey, o_orderkey, count(*) from orders where o_orderdate \u003e= date('1994-01-01') and o_orderdate \u003c date('1994-01-01') + interval '1' year",
+                                        "FieldQuery": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
+                                        "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey) from orders where o_orderdate \u003e= date('1994-01-01') and o_orderdate \u003c date('1994-01-01') + interval '1' year group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey)",
                                         "Table": "orders"
                                       },
                                       {
@@ -230,8 +234,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select c_nationkey, count(*) from customer where 1 != 1",
-                                        "Query": "select c_nationkey, count(*) from customer where c_custkey = :o_custkey",
+                                        "FieldQuery": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where 1 != 1 group by c_nationkey, weight_string(c_nationkey)",
+                                        "Query": "select c_nationkey, count(*), weight_string(c_nationkey) from customer where c_custkey = :o_custkey group by c_nationkey, weight_string(c_nationkey)",
                                         "Table": "customer",
                                         "Values": [
                                           ":o_custkey"
@@ -266,8 +270,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                                           "Name": "main",
                                           "Sharded": true
                                         },
-                                        "FieldQuery": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1",
-                                        "Query": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_orderkey = :o_orderkey",
+                                        "FieldQuery": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where 1 != 1 group by l_suppkey, weight_string(l_suppkey)",
+                                        "Query": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where l_orderkey = :o_orderkey group by l_suppkey, weight_string(l_suppkey)",
                                         "Table": "lineitem",
                                         "Values": [
                                           ":o_orderkey"
@@ -308,7 +312,7 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "-3,-4,-2,1",
+                            "JoinColumnIndexes": "-4,-5,-2,1",
                             "JoinVars": {
                               "n_regionkey": 0
                             },
@@ -321,8 +325,8 @@ Gen4 error: unsupported: group by in a query having a correlated subquery
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select n_regionkey, count(*), n_name, weight_string(n_name) from nation where 1 != 1 group by n_name, weight_string(n_name)",
-                                "Query": "select n_regionkey, count(*), n_name, weight_string(n_name) from nation where n_nationkey = :s_nationkey group by n_name, weight_string(n_name)",
+                                "FieldQuery": "select n_regionkey, count(*), weight_string(n_regionkey), n_name, weight_string(n_name) from nation where 1 != 1 group by n_regionkey, weight_string(n_regionkey), n_name, weight_string(n_name)",
+                                "Query": "select n_regionkey, count(*), weight_string(n_regionkey), n_name, weight_string(n_name) from nation where n_nationkey = :s_nationkey group by n_regionkey, weight_string(n_regionkey), n_name, weight_string(n_name)",
                                 "Table": "nation",
                                 "Values": [
                                   ":s_nationkey"
@@ -489,7 +493,7 @@ Gen4 error: pushAggregation *planbuilder.simpleProjection
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "-2,-2,-4,-3,1",
+                                "JoinColumnIndexes": "-2,-2,-5,-3,1",
                                 "JoinVars": {
                                   "o_orderkey": 0
                                 },
@@ -502,8 +506,8 @@ Gen4 error: pushAggregation *planbuilder.simpleProjection
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select o_orderkey, o_custkey, count(*), weight_string(o_custkey) from orders where 1 != 1 group by o_custkey, weight_string(o_custkey)",
-                                    "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_custkey) from orders where o_orderdate \u003e= date('1993-10-01') and o_orderdate \u003c date('1993-10-01') + interval '3' month group by o_custkey, weight_string(o_custkey)",
+                                    "FieldQuery": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where 1 != 1 group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
+                                    "Query": "select o_orderkey, o_custkey, count(*), weight_string(o_orderkey), weight_string(o_custkey) from orders where o_orderdate \u003e= date('1993-10-01') and o_orderdate \u003c date('1993-10-01') + interval '3' month group by o_orderkey, weight_string(o_orderkey), o_custkey, weight_string(o_custkey)",
                                     "Table": "orders"
                                   },
                                   {
@@ -548,7 +552,7 @@ Gen4 error: pushAggregation *planbuilder.simpleProjection
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "-3,-4,-5,-6,-7,-8,-9,-10,2,3,-11,-12,-13,-14,-2,1",
+                                "JoinColumnIndexes": "-4,-5,-6,-7,-8,-9,-10,-11,2,3,-12,-13,-14,-15,-2,1",
                                 "JoinVars": {
                                   "c_nationkey": 0
                                 },
@@ -561,8 +565,8 @@ Gen4 error: pushAggregation *planbuilder.simpleProjection
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select c_nationkey, count(*), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment) from customer where 1 != 1 group by c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment)",
-                                    "Query": "select c_nationkey, count(*), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment) from customer where c_custkey = :o_custkey group by c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment)",
+                                    "FieldQuery": "select c_nationkey, count(*), weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment) from customer where 1 != 1 group by c_nationkey, weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment)",
+                                    "Query": "select c_nationkey, count(*), weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment) from customer where c_custkey = :o_custkey group by c_nationkey, weight_string(c_nationkey), c_custkey, weight_string(c_custkey), c_name, weight_string(c_name), c_acctbal, weight_string(c_acctbal), c_phone, weight_string(c_phone), c_address, weight_string(c_address), c_comment, weight_string(c_comment)",
                                     "Table": "customer",
                                     "Values": [
                                       ":o_custkey"
@@ -947,7 +951,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "-2,-2,-4,-3,1",
+                                "JoinColumnIndexes": "-2,-2,-5,-3,1",
                                 "JoinVars": {
                                   "l1_l_orderkey": 0
                                 },
@@ -960,8 +964,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_suppkey) from lineitem as l1 where 1 != 1 group by l1.l_suppkey, weight_string(l1.l_suppkey)",
-                                    "Query": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_suppkey) from lineitem as l1 where l1.l_receiptdate \u003e l1.l_commitdate and exists (select l2.l_orderkey, l2.l_partkey, l2.l_suppkey, l2.l_linenumber, l2.l_quantity, l2.l_extendedprice, l2.l_discount, l2.l_tax, l2.l_returnflag, l2.l_linestatus, l2.l_shipdate, l2.l_commitdate, l2.l_receiptdate, l2.l_shipinstruct, l2.l_shipmode, l2.l_comment from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey) and not exists (select l3.l_orderkey, l3.l_partkey, l3.l_suppkey, l3.l_linenumber, l3.l_quantity, l3.l_extendedprice, l3.l_discount, l3.l_tax, l3.l_returnflag, l3.l_linestatus, l3.l_shipdate, l3.l_commitdate, l3.l_receiptdate, l3.l_shipinstruct, l3.l_shipmode, l3.l_comment from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate) group by l1.l_suppkey, weight_string(l1.l_suppkey)",
+                                    "FieldQuery": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where 1 != 1 group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
+                                    "Query": "select l1.l_orderkey, l1.l_suppkey, count(*) as numwait, weight_string(l1.l_orderkey), weight_string(l1.l_suppkey) from lineitem as l1 where l1.l_receiptdate \u003e l1.l_commitdate and exists (select l2.l_orderkey, l2.l_partkey, l2.l_suppkey, l2.l_linenumber, l2.l_quantity, l2.l_extendedprice, l2.l_discount, l2.l_tax, l2.l_returnflag, l2.l_linestatus, l2.l_shipdate, l2.l_commitdate, l2.l_receiptdate, l2.l_shipinstruct, l2.l_shipmode, l2.l_comment from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey) and not exists (select l3.l_orderkey, l3.l_partkey, l3.l_suppkey, l3.l_linenumber, l3.l_quantity, l3.l_extendedprice, l3.l_discount, l3.l_tax, l3.l_returnflag, l3.l_linestatus, l3.l_shipdate, l3.l_commitdate, l3.l_receiptdate, l3.l_shipinstruct, l3.l_shipmode, l3.l_comment from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate) group by l1.l_orderkey, weight_string(l1.l_orderkey), l1.l_suppkey, weight_string(l1.l_suppkey)",
                                     "Table": "lineitem"
                                   },
                                   {
@@ -994,7 +998,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "-3,-4,-2,1",
+                                "JoinColumnIndexes": "-4,-5,-2,1",
                                 "JoinVars": {
                                   "s_nationkey": 0
                                 },
@@ -1007,8 +1011,8 @@ Gen4 error: unsupported: cross-shard correlated subquery
                                       "Name": "main",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select s_nationkey, count(*) as numwait, s_name, weight_string(s_name) from supplier where 1 != 1 group by s_name, weight_string(s_name)",
-                                    "Query": "select s_nationkey, count(*) as numwait, s_name, weight_string(s_name) from supplier where exists (select l2.l_orderkey, l2.l_partkey, l2.l_suppkey, l2.l_linenumber, l2.l_quantity, l2.l_extendedprice, l2.l_discount, l2.l_tax, l2.l_returnflag, l2.l_linestatus, l2.l_shipdate, l2.l_commitdate, l2.l_receiptdate, l2.l_shipinstruct, l2.l_shipmode, l2.l_comment from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey) and not exists (select l3.l_orderkey, l3.l_partkey, l3.l_suppkey, l3.l_linenumber, l3.l_quantity, l3.l_extendedprice, l3.l_discount, l3.l_tax, l3.l_returnflag, l3.l_linestatus, l3.l_shipdate, l3.l_commitdate, l3.l_receiptdate, l3.l_shipinstruct, l3.l_shipmode, l3.l_comment from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate) and s_suppkey = :l1_l_suppkey group by s_name, weight_string(s_name)",
+                                    "FieldQuery": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where 1 != 1 group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
+                                    "Query": "select s_nationkey, count(*) as numwait, weight_string(s_nationkey), s_name, weight_string(s_name) from supplier where exists (select l2.l_orderkey, l2.l_partkey, l2.l_suppkey, l2.l_linenumber, l2.l_quantity, l2.l_extendedprice, l2.l_discount, l2.l_tax, l2.l_returnflag, l2.l_linestatus, l2.l_shipdate, l2.l_commitdate, l2.l_receiptdate, l2.l_shipinstruct, l2.l_shipmode, l2.l_comment from lineitem as l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey != l1.l_suppkey) and not exists (select l3.l_orderkey, l3.l_partkey, l3.l_suppkey, l3.l_linenumber, l3.l_quantity, l3.l_extendedprice, l3.l_discount, l3.l_tax, l3.l_returnflag, l3.l_linestatus, l3.l_shipdate, l3.l_commitdate, l3.l_receiptdate, l3.l_shipinstruct, l3.l_shipmode, l3.l_comment from lineitem as l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey != l1.l_suppkey and l3.l_receiptdate \u003e l3.l_commitdate) and s_suppkey = :l1_l_suppkey group by s_nationkey, weight_string(s_nationkey), s_name, weight_string(s_name)",
                                     "Table": "supplier",
                                     "Values": [
                                       ":l1_l_suppkey"
