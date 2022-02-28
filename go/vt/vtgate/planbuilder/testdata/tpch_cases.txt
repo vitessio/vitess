@@ -784,7 +784,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS max(total_revenue)",
+        "Aggregates": "max(0) AS max(total_revenue)",
         "Inputs": [
           {
             "OperatorType": "Route",

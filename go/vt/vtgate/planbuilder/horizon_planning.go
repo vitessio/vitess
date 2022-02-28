@@ -574,16 +574,13 @@ func addColumnsToOA(
 				CollationID: collID,
 			})
 		}
-		if offset == 0 {
-			// if distinct is the first, we handle it here outside
-			// the for loop if it is the only aggregation we are doing
-			addDistinctAggr()
-		}
-		for idx, aggrParam := range aggrParams {
-			if idx == offset && offset > 0 {
+		for i := 0; i <= offset || i <= len(aggrParams); i++ {
+			if i == offset {
 				addDistinctAggr()
 			}
-			oa.aggregates = append(oa.aggregates, aggrParam)
+			if i < len(aggrParams) {
+				oa.aggregates = append(oa.aggregates, aggrParams[i])
+			}
 		}
 		// the last grouping should not be treated as a grouping column by the OA
 		groupings = groupings[:len(groupings)-1]
@@ -614,6 +611,10 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr, ctx.SemTable)
 		if err != nil {
 			return nil, 0, nil, err
+		}
+		if exprHasVindex(ctx.VSchema, ctx.SemTable, innerWS, false) {
+			aggrs = append(aggrs, expr)
+			continue
 		}
 		offset = i
 		distinct = &abstract.GroupBy{
@@ -1052,8 +1053,15 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) *e
 		sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
 		offset = len(sel.SelectExprs) - 1
 	}
+
+	opcode := engine.AggregateSum
+	switch aggregation.OpCode {
+	case engine.AggregateMin, engine.AggregateMax:
+		opcode = aggregation.OpCode
+	}
+
 	param := &engine.AggregateParams{
-		Opcode: engine.AggregateSum,
+		Opcode: opcode,
 		Col:    offset,
 		Alias:  aggregation.Alias,
 		Expr:   aggregation.Func,
@@ -1678,6 +1686,10 @@ func isJoin(plan logicalPlan) bool {
 }
 
 func exprHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr) bool {
+	return exprHasVindex(vschema, semTable, expr, true)
+}
+
+func exprHasVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUnique bool) bool {
 	col, isCol := expr.(*sqlparser.ColName)
 	if !isCol {
 		return false
@@ -1696,7 +1708,7 @@ func exprHasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTab
 		return false
 	}
 	for _, vindex := range vschemaTable.ColumnVindexes {
-		if len(vindex.Columns) > 1 || !vindex.IsUnique() {
+		if len(vindex.Columns) > 1 || hasToBeUnique && !vindex.IsUnique() {
 			return false
 		}
 		if col.Name.Equal(vindex.Columns[0]) {
