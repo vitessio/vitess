@@ -238,24 +238,9 @@ Gen4 plan same as above
 "unsupported: multi-shard or vindex write statement"
 Gen4 plan same as above
 
-# unsharded insert with cross-shard join"
-"insert into unsharded select u.col from user u join user u1"
-"unsupported: sharded subquery in insert values"
-Gen4 plan same as above
-
-# unsharded insert with mismatched keyspaces"
-"insert into unsharded select col from user where id=1"
-"unsupported: sharded subquery in insert values"
-Gen4 plan same as above
-
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
 "unsupported: auto-inc and select in insert"
-Gen4 plan same as above
-
-# unsharded insert, with sharded subquery in insert value
-"insert into unsharded values((select 1 from user), 1)"
-"unsupported: sharded subquery in insert values"
 Gen4 plan same as above
 
 # unsharded insert, no col list with auto-inc

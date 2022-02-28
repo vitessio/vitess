@@ -58,12 +58,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		vschemaTable = tval.vschemaTable
 	}
 	if !rb.eroute.Keyspace.Sharded {
-		if pb.finalizeUnshardedDMLSubqueries(reservedVars, ins) {
-			vschema.WarnUnshardedOnly("subqueries can't be sharded for INSERT")
-		} else {
-			return nil, errors.New("unsupported: sharded subquery in insert values")
-		}
-		return buildInsertUnshardedPlan(ins, vschemaTable)
+		return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
 	}
 	if ins.Action == sqlparser.ReplaceAct {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
@@ -71,7 +66,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
 
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engine.Primitive, error) {
+func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertUnsharded,
 		table,
@@ -83,7 +78,15 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (eng
 		if eins.Table.AutoIncrement != nil {
 			return nil, errors.New("unsupported: auto-inc and select in insert")
 		}
-		eins.Query = generateQuery(ins)
+		plan, err := subquerySelectPlan(ins, vschema, reservedVars, false)
+		if err != nil {
+			return nil, err
+		}
+		if route, ok := plan.(*engine.Route); ok && !route.Keyspace.Sharded && table.Keyspace.Name == route.Keyspace.Name {
+			eins.Query = generateQuery(ins)
+			return eins, nil
+		}
+		eins.Input = plan
 		return eins, nil
 	case sqlparser.Values:
 		rows = insertValues
@@ -198,25 +201,11 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		populateInsertColumnlist(ins, table)
 	}
 
-	selectStmt, queryPlanner, err := getStatementAndPlanner(ins, vschema)
-	if err != nil {
-		return nil, err
-	}
-
-	// validate the columns to match on insert and select
-	if err := checkColumnCounts(ins, selectStmt); err != nil {
-		return nil, err
-	}
-
-	// Override the locking with `for update` to lock the rows for inserting the data.
-	selectStmt.SetLock(sqlparser.ForUpdateLock)
-
-	plan, err := queryPlanner(selectStmt, reservedVars, vschema)
-	if err != nil {
-		return nil, err
-	}
-
 	// select plan will be taken as input to insert rows into the table.
+	plan, err := subquerySelectPlan(ins, vschema, reservedVars, true)
+	if err != nil {
+		return nil, err
+	}
 	eins.Input = plan
 
 	// auto-increment column is added explicility if not provided.
@@ -232,6 +221,26 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 
 	generateInsertSelectQuery(ins, eins)
 	return eins, nil
+}
+
+func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (engine.Primitive, error) {
+	selectStmt, queryPlanner, err := getStatementAndPlanner(ins, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	// validate the columns to match on insert and select
+	// for sharded insert table only
+	if sharded {
+		if err := checkColumnCounts(ins, selectStmt); err != nil {
+			return nil, err
+		}
+	}
+
+	// Override the locking with `for update` to lock the rows for inserting the data.
+	selectStmt.SetLock(sqlparser.ForUpdateLock)
+
+	return queryPlanner(selectStmt, reservedVars, vschema)
 }
 
 func getStatementAndPlanner(
