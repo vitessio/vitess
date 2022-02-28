@@ -3400,8 +3400,8 @@ Gen4 plan same as above
                               "Name": "user",
                               "Sharded": true
                             },
-                            "FieldQuery": "select ue.bar, count(*), count(ue.foo) from user_extra as ue where 1 != 1",
-                            "Query": "select ue.bar, count(*), count(ue.foo) from user_extra as ue where ue.bar = :u_foo",
+                            "FieldQuery": "select ue.bar, count(*), count(ue.foo), weight_string(ue.bar) from user_extra as ue where 1 != 1 group by ue.bar, weight_string(ue.bar)",
+                            "Query": "select ue.bar, count(*), count(ue.foo), weight_string(ue.bar) from user_extra as ue where ue.bar = :u_foo group by ue.bar, weight_string(ue.bar)",
                             "Table": "user_extra"
                           },
                           {
