@@ -42,10 +42,10 @@ func Add(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -63,10 +63,10 @@ func Subtract(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -85,10 +85,10 @@ func Multiply(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -107,10 +107,10 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 
@@ -142,10 +142,10 @@ func NullSafeAdd(v1, v2 sqltypes.Value, resultType sqltypes.Type) (sqltypes.Valu
 	}
 
 	var lv1, lv2, out EvalResult
-	if err := lv1.setValue(v1); err != nil {
+	if err := lv1.setValue(v1, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
-	if err := lv2.setValue(v2); err != nil {
+	if err := lv2.setValue(v2, collationNumeric); err != nil {
 		return sqltypes.NULL, err
 	}
 

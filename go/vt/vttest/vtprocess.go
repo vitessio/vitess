@@ -226,6 +226,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-planner_version", args.PlannerVersion,
 		fmt.Sprintf("-enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("-enable_direct_ddl=%t", args.EnableDirectDDL),
+		fmt.Sprintf("-enable_system_settings=%t", args.EnableSystemSettings),
 	}...)
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)

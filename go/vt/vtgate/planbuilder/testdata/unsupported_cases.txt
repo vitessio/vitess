@@ -642,3 +642,8 @@ Gen4 error: unsupported: aggregation on unions
 "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'"
 "unsupported: filtering on results of cross-shard subquery"
 Gen4 error: can't push predicates on concatenate
+
+# join with USING construct
+"select user.id from user join user_extra using(id)"
+"unsupported: join with USING(column_list) clause for complex queries"
+Gen4 error: unsupported: join with USING(column_list) clause for complex queries

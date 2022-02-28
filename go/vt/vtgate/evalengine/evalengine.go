@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"math"
-	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -100,27 +99,11 @@ func ToInt64(v sqltypes.Value) (int64, error) {
 // ToFloat64 converts Value to float64.
 func ToFloat64(v sqltypes.Value) (float64, error) {
 	var num EvalResult
-	if err := num.setValue(v); err != nil {
+	if err := num.setValue(v, collationNumeric); err != nil {
 		return 0, err
 	}
-	switch num.typeof() {
-	case sqltypes.Int64:
-		return float64(num.int64()), nil
-	case sqltypes.Uint64:
-		return float64(num.uint64()), nil
-	case sqltypes.Float64:
-		return num.float64(), nil
-	}
-
-	if num.textual() {
-		fval, err := strconv.ParseFloat(string(v.Raw()), 64)
-		if err != nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return fval, nil
-	}
-
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert to float: %s", v.String())
+	num.makeFloat()
+	return num.float64(), nil
 }
 
 // ToNative converts Value to a native go type.
