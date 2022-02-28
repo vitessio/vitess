@@ -16,7 +16,6 @@ func Test_buildinAbs_call(t *testing.T) {
 	int2 := newEvalInt64(1)
 	int3 := newEvalInt64(-2)
 	int4 := newEvalInt64(-9223372036854775807)
-	//临界值处理
 	int5 := newEvalInt64(math.MinInt64)
 
 	dec1 := newEvalFloat(-1.2)
