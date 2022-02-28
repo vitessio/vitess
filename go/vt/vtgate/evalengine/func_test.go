@@ -20,7 +20,7 @@ func Test_buildinAbs_call(t *testing.T) {
 	int5 := newEvalInt64(math.MinInt64)
 
 	dec1 := newEvalFloat(-1.2)
-	dec2 := newEvalFloat(12.5)
+	dec2 := newEvalFloat(-1.5e1)
 
 	tests := []struct {
 		name string
@@ -70,7 +70,7 @@ func Test_buildinAbs_call(t *testing.T) {
 			},
 			result: &EvalResult{},
 		},
-		}, {name: "test_float_(12.5)", args: args{
+		}, {name: "test_float_(-1.5e1)", args: args{
 			env: nil,
 			args: []EvalResult{
 				dec2,
