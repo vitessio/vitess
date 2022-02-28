@@ -215,3 +215,20 @@ func TestIgnoreInsertSelect(t *testing.T) {
 	utils.AssertContainsError(t, conn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update region_id = region_id + 1", `unsupported: DML cannot change vindex column`)
 	utils.AssertContainsError(t, conn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update oid = oid + 100", `unsupported: DML cannot change vindex column`)
 }
+
+func TestInsertSelectUnshardedUsingSharded(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.Exec(t, conn, `delete from s_tbl`)
+	defer utils.Exec(t, conn, `delete from u_tbl`)
+
+	utils.Exec(t, conn, "insert into s_tbl(id, num) values (1,2),(3,4)")
+
+	qr := utils.Exec(t, conn, "insert into u_tbl(id, num) select id, num from s_tbl where id in (1,3)")
+	assert.EqualValues(t, 2, qr.RowsAffected)
+	utils.AssertMatches(t, conn, `select id, num from u_tbl order by id`, `[[INT64(1) INT64(2)] [INT64(3) INT64(4)]]`)
+}
