@@ -24,8 +24,8 @@ import (
 
 func TestStatusReplicationRunning(t *testing.T) {
 	input := &ReplicationStatus{
-		IOThreadRunning:  true,
-		SQLThreadRunning: true,
+		IOState:  ReplicationStatusToState(true),
+		SQLState: ReplicationStatusToState(true),
 	}
 	want := true
 	if got := input.ReplicationRunning(); got != want {
@@ -35,8 +35,8 @@ func TestStatusReplicationRunning(t *testing.T) {
 
 func TestStatusIOThreadNotRunning(t *testing.T) {
 	input := &ReplicationStatus{
-		IOThreadRunning:  false,
-		SQLThreadRunning: true,
+		IOState:  ReplicationStatusToState(false),
+		SQLState: ReplicationStatusToState(true),
 	}
 	want := false
 	if got := input.ReplicationRunning(); got != want {
@@ -46,8 +46,8 @@ func TestStatusIOThreadNotRunning(t *testing.T) {
 
 func TestStatusSQLThreadNotRunning(t *testing.T) {
 	input := &ReplicationStatus{
-		IOThreadRunning:  true,
-		SQLThreadRunning: false,
+		IOState:  ReplicationStatusToState(true),
+		SQLState: ReplicationStatusToState(false),
 	}
 	want := false
 	if got := input.ReplicationRunning(); got != want {

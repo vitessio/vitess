@@ -48,6 +48,30 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.LastSqlError) > 0 {
+		i -= len(m.LastSqlError)
+		copy(dAtA[i:], m.LastSqlError)
+		i = encodeVarint(dAtA, i, uint64(len(m.LastSqlError)))
+		i--
+		dAtA[i] = 0x7a
+	}
+	if len(m.LastIoError) > 0 {
+		i -= len(m.LastIoError)
+		copy(dAtA[i:], m.LastIoError)
+		i = encodeVarint(dAtA, i, uint64(len(m.LastIoError)))
+		i--
+		dAtA[i] = 0x72
+	}
+	if m.IoThreadConnecting {
+		i--
+		if m.IoThreadConnecting {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x68
+	}
 	if len(m.SourceUuid) > 0 {
 		i -= len(m.SourceUuid)
 		copy(dAtA[i:], m.SourceUuid)
@@ -289,6 +313,17 @@ func (m *Status) SizeVT() (n int) {
 		n += 1 + sov(uint64(m.SourceServerId))
 	}
 	l = len(m.SourceUuid)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.IoThreadConnecting {
+		n += 2
+	}
+	l = len(m.LastIoError)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.LastSqlError)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -680,6 +715,90 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.SourceUuid = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 13:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IoThreadConnecting", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IoThreadConnecting = bool(v != 0)
+		case 14:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LastIoError", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LastIoError = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 15:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LastSqlError", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LastSqlError = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
