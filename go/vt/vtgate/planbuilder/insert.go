@@ -87,6 +87,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 			return eins, nil
 		}
 		eins.Input = plan
+		generateInsertSelectQuery(ins, eins)
 		return eins, nil
 	case sqlparser.Values:
 		rows = insertValues

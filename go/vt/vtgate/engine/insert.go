@@ -256,6 +256,28 @@ func (ins *Insert) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 }
 
 func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	query := ins.Query
+	if ins.Input != nil {
+		result, err := vcursor.ExecutePrimitive(ins.Input, bindVars, false)
+		if err != nil {
+			return nil, err
+		}
+		if len(result.Rows) == 0 {
+			return &sqltypes.Result{}, nil
+		}
+		var mids sqlparser.Values
+		for r, inputRow := range result.Rows {
+			row := sqlparser.ValTuple{}
+			for c, value := range inputRow {
+				bvName := insertVarOffset(r, c)
+				bindVars[bvName] = sqltypes.ValueBindVariable(value)
+				row = append(row, sqlparser.NewArgument(bvName))
+			}
+			mids = append(mids, row)
+		}
+		query = ins.Prefix + sqlparser.String(mids) + ins.Suffix
+	}
+
 	insertID, err := ins.processGenerateFromValues(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -272,7 +294,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if err != nil {
 		return nil, err
 	}
-	result, err := execShard(vcursor, ins.Query, bindVars, rss[0], true, true /* canAutocommit */)
+	result, err := execShard(vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}
