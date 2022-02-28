@@ -1036,10 +1036,25 @@ func pushAggrOnRoute(
 
 // addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
 func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) *engine.AggregateParams {
-	sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
+	// TODO: removing duplicated aggregation expression should also be done at the join level
+	offset := -1
+	for i, expr := range sel.SelectExprs {
+		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
+		if !isAliasedExpr {
+			continue
+		}
+		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Func) {
+			offset = i
+			break
+		}
+	}
+	if offset == -1 {
+		sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
+		offset = len(sel.SelectExprs) - 1
+	}
 	param := &engine.AggregateParams{
 		Opcode: engine.AggregateSum,
-		Col:    len(sel.SelectExprs) - 1,
+		Col:    offset,
 		Alias:  aggregation.Alias,
 		Expr:   aggregation.Func,
 	}
