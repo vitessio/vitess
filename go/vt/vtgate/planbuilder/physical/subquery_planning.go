@@ -241,6 +241,7 @@ func createCorrelatedSubqueryOp(
 	resultOuterOp := newOuter
 	vars := map[string]int{}
 	bindVars := map[*sqlparser.ColName]string{}
+	var lhsCols []*sqlparser.ColName
 	for _, pred := range preds {
 		var rewriteError error
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
@@ -269,6 +270,7 @@ func createCorrelatedSubqueryOp(
 						rewriteError = err
 						return false
 					}
+					lhsCols = append(lhsCols, node)
 					columnIndex := columnIndexes[0]
 					vars[bindVar] = columnIndex
 					resultOuterOp = newOuterOp
@@ -287,9 +289,10 @@ func createCorrelatedSubqueryOp(
 		}
 	}
 	return &CorrelatedSubQueryOp{
-		Outer:     resultOuterOp,
-		Inner:     innerOp,
-		Extracted: extractedSubquery,
-		Vars:      vars,
+		Outer:      resultOuterOp,
+		Inner:      innerOp,
+		Extracted:  extractedSubquery,
+		Vars:       vars,
+		LHSColumns: lhsCols,
 	}, nil
 }
