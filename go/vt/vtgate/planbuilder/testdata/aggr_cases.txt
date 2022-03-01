@@ -2310,9 +2310,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1 group by `user`.a, weight_string(`user`.a)",
             "OrderBy": "(0|1) ASC",
-            "Query": "select `user`.a, weight_string(`user`.a) from `user` order by `user`.a asc",
+            "Query": "select `user`.a, weight_string(`user`.a) from `user` group by `user`.a, weight_string(`user`.a) order by `user`.a asc",
             "Table": "`user`"
           },
           {
