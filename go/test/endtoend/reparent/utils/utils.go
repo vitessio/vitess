@@ -97,19 +97,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
-	if err != nil {
-		t.Fatalf("Error starting topo: %s", err.Error())
-	}
+	require.NoError(t, err, "Error starting topo")
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cells[0])
-	if err != nil {
-		t.Fatalf("Error managing topo: %s", err.Error())
-	}
+	require.NoError(t, err, "Error managing topo")
 	numCell := 1
 	for numCell < len(cells) {
 		err = clusterInstance.VtctlProcess.AddCellInfo(cells[numCell])
-		if err != nil {
-			t.Fatalf("Error managing topo: %s", err.Error())
-		}
+		require.NoError(t, err, "Error managing topo")
 		numCell++
 	}
 
@@ -152,9 +146,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
-	if err != nil {
-		t.Fatalf("Cannot launch cluster: %s", err.Error())
-	}
+	require.NoError(t, err, "Cannot launch cluster")
 
 	//Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
@@ -162,9 +154,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		for _, tablet := range shard.Vttablets {
 			log.Infof("Starting MySql for tablet %v", tablet.Alias)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				t.Fatalf("Error starting start mysql: %s", err.Error())
-			}
+			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 		}
 	}
@@ -172,7 +162,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			t.Fatalf("Error starting mysql: %s", err.Error())
+			clusterInstance.PrintMysqlctlLogFiles()
+			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
 	}
 
@@ -224,19 +215,13 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
-	if err != nil {
-		t.Fatalf("Error starting topo: %s", err.Error())
-	}
+	require.NoError(t, err, "Error starting topo")
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cells[0])
-	if err != nil {
-		t.Fatalf("Error managing topo: %s", err.Error())
-	}
+	require.NoError(t, err, "Error managing topo")
 	numCell := 1
 	for numCell < len(cells) {
 		err = clusterInstance.VtctlProcess.AddCellInfo(cells[numCell])
-		if err != nil {
-			t.Fatalf("Error managing topo: %s", err.Error())
-		}
+		require.NoError(t, err, "Error managing topo")
 		numCell++
 	}
 
@@ -279,9 +264,7 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
-	if err != nil {
-		t.Fatalf("Cannot launch cluster: %s", err.Error())
-	}
+	require.NoError(t, err, "Cannot launch cluster")
 
 	//Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
@@ -289,9 +272,7 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 		for _, tablet := range shard.Vttablets {
 			log.Infof("Starting MySql for tablet %v", tablet.Alias)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				t.Fatalf("Error starting start mysql: %s", err.Error())
-			}
+			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 		}
 	}
@@ -299,7 +280,8 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			t.Fatalf("Error starting mysql: %s", err.Error())
+			clusterInstance.PrintMysqlctlLogFiles()
+			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
 	}
 
