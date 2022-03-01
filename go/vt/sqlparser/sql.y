@@ -303,7 +303,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
-%type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement
+%type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -515,6 +515,7 @@ command:
 | kill_statement
 | grant_statement
 | revoke_statement
+| flush_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -2002,6 +2003,7 @@ statement_list_statement:
 | grant_statement
 | revoke_statement
 | begin_end_block
+| flush_statement
 
 create_table_prefix:
   CREATE temp_opt TABLE not_exists_opt table_name
@@ -3133,6 +3135,12 @@ rename_user_list:
 | rename_user_list ',' account_name TO account_name
   {
     $$ = append($1, AccountRename{From: $3, To: $5})
+  }
+
+flush_statement:
+  FLUSH PRIVILEGES
+  {
+    $$ = &FlushPrivileges{}
   }
 
 drop_statement:

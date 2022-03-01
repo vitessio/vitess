@@ -2304,6 +2304,9 @@ var (
 			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
 			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
 		}, {
+			input: "FLUSH PRIVILEGES",
+			output: "flush privileges",
+		}, {
 			input:  "SHOW GRANTS",
 			output: "show grants",
 		}, {

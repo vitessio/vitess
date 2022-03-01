@@ -353,6 +353,7 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
+func (*FlushPrivileges) iStatement()   {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*BeginEndBlock) iStatement()     {}
@@ -2816,6 +2817,14 @@ type Rollback struct{}
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
+}
+
+// FlushPrivileges represents a FlushPrivileges statement.
+type FlushPrivileges struct{}
+
+// Format formats the node.
+func (node *FlushPrivileges) Format(buf *TrackedBuffer) {
+	buf.WriteString("flush privileges")
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
