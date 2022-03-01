@@ -192,14 +192,12 @@ func (txs *TxSerializer) lockLocked(ctx context.Context, key, table string) (boo
 			}
 		} else {
 			txs.queueExceeded.Add(table, 1)
-			var errMsgKey string
 			if txs.env.Config().TerseErrors {
-				errMsgKey = txs.sanitizeKey(key)
-			} else {
-				errMsgKey = key
+				return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
+					"hot row protection: too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, txs.maxQueueSize, txs.sanitizeKey(key))
 			}
 			return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-				"hot row protection: too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, txs.maxQueueSize, errMsgKey)
+				"hot row protection: too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, txs.maxQueueSize, key)
 		}
 	}
 
@@ -275,16 +273,16 @@ func (txs *TxSerializer) unlockLocked(key string, returnSlot bool) {
 		delete(txs.queues, key)
 
 		if q.max > 1 {
-			var keyToLog string
+			var logMsg string
 			if txs.env.Config().SanitizeLogMessages {
-				keyToLog = txs.sanitizeKey(key)
+				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, txs.sanitizeKey(key))
 			} else {
-				keyToLog = key
+				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, key)
 			}
 			if txs.dryRun {
-				txs.logDryRun.Infof("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, keyToLog)
+				txs.logDryRun.Infof(logMsg)
 			} else {
-				txs.log.Infof("%v simultaneous transactions (%v in total) for the same row range (%v) were queued.", q.max, q.count, keyToLog)
+				txs.log.Infof(logMsg)
 			}
 		}
 
@@ -402,7 +400,9 @@ func (txs *TxSerializer) sanitizeKey(key string) string {
 	var sanitizedKey string
 	whereLoc := strings.Index(strings.ToLower(key), "where")
 	if whereLoc != -1 {
-		sanitizedKey = key[:whereLoc]
+		sanitizedKey = key[:whereLoc] + "... [REDACTED]"
+	} else {
+		sanitizedKey = key
 	}
-	return sanitizedKey + "... [REDACTED]"
+	return sanitizedKey
 }
