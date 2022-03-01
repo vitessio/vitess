@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/bits"
 	"strconv"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
