@@ -59,6 +59,7 @@ func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	}
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	var rows [][]sqltypes.Value
+	env.Fields = result.Fields
 	for _, row := range result.Rows {
 		env.Row = row
 		evalResult, err := env.Evaluate(f.Predicate)
@@ -82,6 +83,7 @@ func (f *Filter) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
+		env.Fields = results.Fields
 		for _, row := range results.Rows {
 			env.Row = row
 			evalResult, err := env.Evaluate(f.Predicate)
