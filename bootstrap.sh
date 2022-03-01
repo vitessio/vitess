@@ -105,13 +105,44 @@ install_protoc() {
   case $(get_arch) in
       aarch64)  local target=aarch_64;;
       x86_64)  local target=x86_64;;
+      arm64) case "$platform" in
+          osx) local use_homebrew=1;;
+          *) echo "ERROR: unsupported architecture"; exit 1;;
+      esac;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
-  # This is how we'd download directly from source:
-  # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
-  unzip "protoc-$version-$platform-${target}.zip"
+  # TODO (ajm188): remove this branch after protoc includes signed protoc binaries for M1 Macs.
+  if [[ "$use_homebrew" -eq 1 ]]; then
+    cat >&2 <<WARNING
+WARN: Protobuf does not have a protoc binary for arm64 macos.
+Checking for homebrew installation. Altertatively, you may install the x86-64
+version if you have Rosetta installed; your mileage may vary.
+
+See https://github.com/protocolbuffers/protobuf/issues/9397.
+WARNING
+
+    if [[ -z "$(command -v brew)" ]]; then
+      echo "Could not find \`brew\` command. Please install homebrew and retry." >&2;
+      exit 1;
+    fi
+
+    brew install protobuf;
+    protobuf_base="$(brew list protobuf | grep -E 'LICENSE$' | sed 's:/LICENSE$::')"
+    if [[ -z "$protobuf_base" ]]; then
+      echo "Could not find \`protobuf\` directory after installing. Please verify the output of \`brew info protobuf\`" >&2;
+      exit 1;
+    fi
+
+    ln -snf "${protobuf_base}/bin" "${dist}/bin"
+    ln -snf "${protobuf_base}/include" "${dist}/include"
+  else
+    # This is how we'd download directly from source:
+    # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+    $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
+    unzip "protoc-$version-$platform-${target}.zip"
+  fi
+
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 
