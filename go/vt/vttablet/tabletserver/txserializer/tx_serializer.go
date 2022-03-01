@@ -395,7 +395,8 @@ func newQueueForFirstTransaction(concurrentTransactions int) *queue {
 // sensitive info removed.
 // This is needed because the internal key is e.g. 'tbl1 where col1="foo"'
 // and the WHERE clause can contain sensitive information that should not
-// be shown so we we strip everything after the first WHERE clause.
+// be shown so we we strip everything after the first WHERE keyword.
+// e.g. 'tbl1 where col1="foo" and col2="bar"' -> 'tbl1 ... [REDACTED]'
 func (txs *TxSerializer) sanitizeKey(key string) string {
 	var sanitizedKey string
 	whereLoc := strings.Index(strings.ToLower(key), "where")

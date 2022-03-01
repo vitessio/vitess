@@ -110,14 +110,14 @@ func TestKeySanitization(t *testing.T) {
 	want := "t1 ... [REDACTED]"
 	got := txs.sanitizeKey(key)
 	if got != want {
-		t.Errorf("Key sanitization error: got = %v, want = %v", got, want)
+		t.Errorf("key sanitization error: got = %v, want = %v", got, want)
 	}
 	// without a where clause
 	key = "t1"
 	want = "t1"
 	got = txs.sanitizeKey(key)
 	if got != want {
-		t.Errorf("Key sanitization error: got = %v, want = %v", got, want)
+		t.Errorf("key sanitization error: got = %v, want = %v", got, want)
 	}
 }
 
