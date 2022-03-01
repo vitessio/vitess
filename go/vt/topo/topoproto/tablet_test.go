@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -68,5 +70,58 @@ func TestParseTabletAlias(t *testing.T) {
 		if alias.Uid != expectedAlias.Uid {
 			t.Fatalf("Uid parsed from tabletAlias: %s is %d but expected %d", aliasStr, alias.Uid, expectedAlias.Uid)
 		}
+	}
+}
+
+func TestIsTabletsInList(t *testing.T) {
+	t.Parallel()
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  1,
+		},
+	}
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  2,
+		},
+	}
+	tablet3 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  3,
+		},
+	}
+	testcases := []struct {
+		name       string
+		tablet     *topodatapb.Tablet
+		allTablets []*topodatapb.Tablet
+		isInList   bool
+	}{
+		{
+			name:       "empty list",
+			tablet:     tablet1,
+			allTablets: nil,
+			isInList:   false,
+		}, {
+			name:       "tablet in list",
+			tablet:     tablet2,
+			allTablets: []*topodatapb.Tablet{tablet1, tablet2, tablet3},
+			isInList:   true,
+		}, {
+			name:       "tablet not in list",
+			tablet:     tablet1,
+			allTablets: []*topodatapb.Tablet{tablet2, tablet3},
+			isInList:   false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			t.Parallel()
+			out := IsTabletInList(testcase.tablet, testcase.allTablets)
+			assert.Equal(t, testcase.isInList, out)
+		})
 	}
 }
