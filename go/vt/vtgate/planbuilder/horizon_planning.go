@@ -62,7 +62,9 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	needsOrdering := len(hp.qp.OrderExprs) > 0
 	canShortcut := isRoute && !(hp.sel.Having != nil) && !needsOrdering
 
-	if hp.qp.NeedsAggregation() {
+	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
+	// so it probably has aggregations
+	if hp.qp.NeedsAggregation() || hp.sel.Having != nil {
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
@@ -89,11 +91,6 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	plan, err = hp.planHaving(ctx, plan)
-	if err != nil {
-		return nil, err
 	}
 
 	plan, err = hp.planDistinct(ctx, plan)
@@ -447,10 +444,6 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 }
 
 func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	if !hp.qp.NeedsAggregation() {
-		return plan, nil
-	}
-
 	isPushable := !isJoin(plan)
 	grouping := hp.qp.GetGrouping()
 	vindexOverlapWithGrouping := hasUniqueVindex(ctx.VSchema, ctx.SemTable, grouping)
@@ -480,7 +473,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	ctx *plancontext.PlanningContext,
 	plan logicalPlan,
 	grouping []abstract.GroupBy,
-) (*orderedAggregate, error) {
+) (logicalPlan, error) {
 	oa := &orderedAggregate{
 		groupByKeys: make([]*engine.GroupByParams, 0, len(grouping)),
 	}
@@ -541,7 +534,8 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		logicalPlanCommon: newBuilderCommon(aggPlan),
 		weightStrings:     make(map[*resultColumn]int),
 	}
-	return oa, nil
+
+	return hp.planHaving(ctx, oa)
 }
 
 func addColumnsToOA(
