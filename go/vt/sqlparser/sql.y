@@ -218,7 +218,7 @@ func yyOldPosition(yylex interface{}) int {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH MODIFY CHANGE
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD MODIFY CHANGE
 %token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
@@ -239,7 +239,7 @@ func yyOldPosition(yylex interface{}) int {
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
 %token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
-%token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS
+%token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
 %token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE
 
@@ -1082,6 +1082,12 @@ grant_statement:
 | GRANT PROXY ON account_name TO account_name_list with_grant_opt
   {
     $$ = &GrantProxy{On: $4, To: $6, WithGrantOption: $7}
+  }
+
+flush_statement:
+  FLUSH PRIVILEGES
+  {
+    $$ = &FlushPrivileges{}
   }
 
 revoke_statement:
@@ -3135,12 +3141,6 @@ rename_user_list:
 | rename_user_list ',' account_name TO account_name
   {
     $$ = append($1, AccountRename{From: $3, To: $5})
-  }
-
-flush_statement:
-  FLUSH PRIVILEGES
-  {
-    $$ = &FlushPrivileges{}
   }
 
 drop_statement:
