@@ -1,0 +1,49 @@
+name: Operator Example
+
+on: [push, pull_request]
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Operator Example')
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Operator Example
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: |
+          # Setup MySQL 8.0
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+          sudo apt-get update
+
+          sudo apt-get install -y mysql-client make unzip g++ curl git wget eatmydata
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          go mod download
+
+      - name: Build
+        run: |
+          make build
+
+      - name: Start minikube
+        uses: medyagh/setup-minikube@master
+        with:
+          cpus: 2
+          memory: 4000m
+          kubernetes-version: v1.22.7
+
+      - name: Kubectl
+        run: |
+          kubectl get pods -A
