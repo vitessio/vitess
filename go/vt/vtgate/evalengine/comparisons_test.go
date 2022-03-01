@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -1302,4 +1303,80 @@ func BenchmarkNullSafeComparison(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestAbsCall(t *testing.T) {
+	type args struct {
+		env    *ExpressionEnv
+		args   []EvalResult
+		result *EvalResult
+	}
+
+	tests := []struct {
+		name string
+		args args
+		err  string
+	}{
+		{name: "test_int64_(0)", args: args{
+			env: nil,
+			args: []EvalResult{
+				newEvalInt64(0),
+			},
+			result: &EvalResult{},
+		}},
+		{name: "test_int64_(1)", args: args{
+			env: nil,
+			args: []EvalResult{
+				newEvalInt64(1),
+			},
+			result: &EvalResult{},
+		}},
+		{name: "test_int64_(-2)", args: args{
+			env: nil,
+			args: []EvalResult{
+				newEvalInt64(-2),
+			},
+			result: &EvalResult{},
+		}}, {name: "test_int64_(-9223372036854775807)", args: args{
+			env: nil,
+			args: []EvalResult{
+				newEvalInt64(-9223372036854775807),
+			},
+			result: &EvalResult{},
+		},
+		},
+		{name: "test_int64_(math.MinInt64)", args: args{
+			env: nil,
+			args: []EvalResult{
+				newEvalInt64(math.MinInt64),
+			},
+			result: &EvalResult{},
+		},
+		},
+		{name: "test_float_(-1.2)", args: args{
+			env: nil,
+			args: []EvalResult{
+				newEvalFloat(-1.2),
+			},
+			result: &EvalResult{},
+		},
+		}, {name: "test_float_(-1.5e1)", args: args{
+			env: nil,
+			args: []EvalResult{
+				newEvalFloat(-1.5e1),
+			},
+			result: &EvalResult{},
+		},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if err := recover(); err != nil {
+				}
+			}()
+			bu := builtinAbs{}
+			bu.call(tt.args.env, tt.args.args, tt.args.result)
+		})
+	}
 }
