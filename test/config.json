@@ -69,6 +69,17 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"operator_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/operator_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"local_example": {
 			"File": "",
 			"Args": [],
