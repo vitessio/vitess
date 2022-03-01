@@ -59,12 +59,12 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	var inner EvalResult
 	inner.init(env, b.Inner)
 
-	if inner.null() {
+	if inner.isNull() {
 		result.setNull()
 		return
 	}
 
-	if inner.bitwiseBinaryString() {
+	if inner.isBitwiseBinaryString() {
 		in := inner.bytes()
 		out := make([]byte, len(in))
 
@@ -176,7 +176,7 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	l.init(env, bit.Left)
 	r.init(env, bit.Right)
 
-	if l.null() || r.null() {
+	if l.isNull() || r.isNull() {
 		result.setNull()
 		return
 	}
@@ -212,7 +212,7 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			literal, bit literal, or NULL literal. Numeric evaluation occurs otherwise, with argument conversion to an
 			unsigned 64-bit integer as necessary.
 		*/
-		if l.bitwiseBinaryString() {
+		if l.isBitwiseBinaryString() {
 			r.makeUnsignedIntegral()
 			result.setRaw(sqltypes.VarBinary, op.binary(l.bytes(), r.uint64()), collationBinary)
 		} else {
