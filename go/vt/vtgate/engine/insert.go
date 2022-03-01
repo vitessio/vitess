@@ -541,7 +541,7 @@ func (ins *Insert) processGenerateFromValues(vcursor VCursor, bindVars map[strin
 	return insertID, nil
 }
 
-// processGenerateFromValues generates new values using a sequence if necessary.
+// processGenerateFromRows generates new values using a sequence if necessary.
 // If no value was generated, it returns 0. Values are generated only
 // for cases where none are supplied.
 func (ins *Insert) processGenerateFromRows(vcursor VCursor, rows []sqltypes.Row) (insertID int64, err error) {

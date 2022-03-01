@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ func TestSimpleInsertSelect(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "insert into s_tbl(id, num) select id*10, num*20 from s_tbl")
 	assert.EqualValues(t, 2, qr.RowsAffected)
-	utils.Exec(t, conn, "insert into u_tbl(id, num) select id*10, num*20 from u_tbl")
+	qr = utils.Exec(t, conn, "insert into u_tbl(id, num) select id*10, num*20 from u_tbl")
 	assert.EqualValues(t, 2, qr.RowsAffected)
 
 	utils.AssertMatches(t, conn, `select id, num from s_tbl order by id`, `[[INT64(1) INT64(2)] [INT64(3) INT64(4)] [INT64(10) INT64(40)] [INT64(30) INT64(80)]]`)
@@ -136,7 +136,7 @@ func TestUnownedVindexInsertSelect(t *testing.T) {
 	// resetting the target
 	utils.Exec(t, conn, "use `sks`")
 
-	// inserting non-existing record in order_tbl.
+	// inserting non-existing record in oevent_tbl.
 	utils.AssertContainsError(t, conn, "insert into oevent_tbl(oid, ename) select 1000, 'dispatched'", `could not map [INT64(1000)] to a keyspace id`)
 
 	// id is the sharding column, oid is unknowned lookup which points to region_id,
