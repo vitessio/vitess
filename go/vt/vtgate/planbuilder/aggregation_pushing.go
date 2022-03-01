@@ -43,10 +43,13 @@ func (hp *horizonPlanning) pushAggregation(
 			return nil, nil, nil, err
 		}
 		newPlan = plan
-
 		return
+
 	case *joinGen4:
 		return hp.pushAggrOnJoin(ctx, grouping, aggregations, plan, ignoreOutputOrder)
+
+	case *semiJoin:
+		return hp.pushAggrOnSemiJoin(ctx, grouping, aggregations, plan, ignoreOutputOrder)
 
 	default:
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "pushAggregation %T", plan)
@@ -295,6 +298,42 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		return nil, nil, nil, err
 	}
 	return pusher.resultPlan(), outputGroupings, outputAggrs, err
+}
+
+/*
+pushAggrOnSemiJoin works similarly to pushAggrOnJoin, but it's simpler, because we don't get any inputs from the RHS,
+so there are no aggregations or groupings that have to be sent to the RHS
+
+We do however need to add the columns used in the subquery coming from the LHS to the grouping.
+That way we get the aggregation grouped by the column we need to use to decide if the row should
+*/
+func (hp *horizonPlanning) pushAggrOnSemiJoin(
+	ctx *plancontext.PlanningContext,
+	grouping []abstract.GroupBy,
+	aggregations []abstract.Aggr,
+	join *semiJoin,
+	ignoreOutputOrder bool,
+) (logicalPlan, []offsets, []*engine.AggregateParams, error) {
+	// We need to group by the columns used in the join condition.
+	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
+	lhsCols, err := hp.createGroupingsForColumns(ctx, join.LHSColumns)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	totalGrouping := append(grouping, lhsCols...)
+	newLHS, groupingOffsets, aggrParams, err := hp.pushAggregation(ctx, join.lhs, totalGrouping, aggregations, ignoreOutputOrder)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	join.lhs = newLHS
+
+	outputGroupings := make([]offsets, 0, len(grouping))
+	for idx := range grouping {
+		outputGroupings = append(outputGroupings, groupingOffsets[idx])
+	}
+
+	return join, outputGroupings, aggrParams, nil
 }
 
 func (hp *horizonPlanning) filteredPushAggregation(
