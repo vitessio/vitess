@@ -55,8 +55,8 @@ func (s *ReplicationStatus) ReplicationRunning() bool {
 	return s.IOState == ReplicationStateRunning && s.SQLState == ReplicationStateRunning
 }
 
-// ReplicationConnectingWithoutError returns true if both the SQL thread is running and the IO_Thread
-// is connecting and we there's no IO_error from the last attempt to connect to the source.
+// ReplicationConnectingWithoutError returns true if both the SQL thread(s) is running and the
+// IO thread is connecting and there's no IO error from the last attempt to connect to the source.
 func (s *ReplicationStatus) ReplicationConnectingWithoutError() bool {
 	return s.SQLState == ReplicationStateRunning && s.IOState == ReplicationStateConnecting && s.LastIOError == ""
 }
