@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
 	"strings"
 
 	"golang.org/x/text/encoding"
@@ -685,10 +684,10 @@ func IsSchemaApplyError(err error) bool {
 type ReplicationState int
 
 const (
-	ReplicationStateRunning ReplicationState = iota
+	ReplicationStateUnknown ReplicationState = iota
 	ReplicationStateStopped
 	ReplicationStateConnecting
-	ReplicationStateUnknown
+	ReplicationStateRunning
 )
 
 // ReplicationStatusToState converts a value you have for the IO thread(s) or SQL
@@ -698,16 +697,16 @@ const (
 // off,no,false == ReplicationStateStopped
 // connecting == ReplicationStateConnecting
 // anything else == ReplicationStateUnknown
-func ReplicationStatusToState(s interface{}) ReplicationState {
-	status := strings.ToLower(fmt.Sprintf("%v", s))
+func ReplicationStatusToState(s string) ReplicationState {
 	// Group Replication uses ON instead of Yes
-	if status == "yes" || status == "on" || status == "true" {
+	switch strings.ToLower(s) {
+	case "yes", "on", "true":
 		return ReplicationStateRunning
-	} else if status == "no" || status == "off" || status == "false" {
+	case "no", "off", "false":
 		return ReplicationStateStopped
-	} else if status == "connecting" {
+	case "connecting":
 		return ReplicationStateConnecting
-	} else {
+	default:
 		return ReplicationStateUnknown
 	}
 }
