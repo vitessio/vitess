@@ -102,6 +102,17 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	}
 }
 
+func TestKeySanitization(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	txs := New(tabletenv.NewEnv(config, "TxSerializerTest"))
+	key := "t1 where c1='foo'"
+	want := "t1 ... [REDACTED]"
+	got := txs.sanitizeKey(key)
+	if got != want {
+		t.Errorf("Key sanitization error: got = %v, want = %v", got, want)
+	}
+}
+
 func TestTxSerializer(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.HotRowProtection.MaxQueueSize = 2
