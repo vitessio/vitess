@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
-
+	"strconv"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -599,19 +599,20 @@ func aggregatedType(env *ExpressionEnv, expr []Expr) sqltypes.Type {
 
 type builtinFloor struct{}
 
-func (builtinFloor) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
+func (builtinFloor) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	if args[0].null() {
 		result.setNull()
 		return
 	}
 
 	args[0].makeFloat()
-	thisF, err := args[0].Value().ToFloat64()
-	if err != nil {
-		throwEvalError(err)
-	}
+	val := strconv.FormatFloat(math.Floor(args[0].float64()), 'f', -1, 64)
 
-	result.setInt64(int64(math.Floor(thisF)))
+	result.setString(val, collations.TypedCollation{
+		Collation:    env.DefaultCollation,
+		Coercibility: collations.CoerceImplicit,
+		Repertoire:   collations.CollationUtf8mb4ID,
+	})
 }
 
 func (builtinFloor) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {

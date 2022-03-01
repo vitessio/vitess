@@ -519,3 +519,19 @@ func TestCharsetConversionOperators(t *testing.T) {
 		}
 	}
 }
+
+func TestNumericFuncFloor(t *testing.T) {
+	var numbers = []string{
+		`0`, `-1`, `1`, `0.0`, `1.0`, `-1.0`, `1.0E0`, `-1.0E0`, `0.0E0`,
+		strconv.FormatFloat(math.MaxFloat64, 'E', -1, 64),
+		strconv.FormatFloat(math.MaxFloat32, 'E', -1, 32),
+		`NULL`, `1.10aa`, `-1.10aa`, `0.1.99`, `-0.1.99`, `.99`,
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, number := range numbers {
+		compareRemoteQuery(t, conn, fmt.Sprintf(" SELECT FLOOR('%s')", number))
+	}
+}
