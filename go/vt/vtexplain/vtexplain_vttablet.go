@@ -425,6 +425,13 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 
 		tEnv.tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
+		var colTypes []*querypb.Field
+		var colValues [][]sqltypes.Value
+		colType := &querypb.Field{
+			Name: "column_type",
+			Type: sqltypes.VarChar,
+		}
+		colTypes = append(colTypes, colType)
 		for _, col := range ddl.GetTableSpec().Columns {
 			colName := strings.ToLower(col.Name.String())
 			rowType := &querypb.Field{
@@ -433,9 +440,15 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			}
 			rowTypes = append(rowTypes, rowType)
 			tEnv.tableColumns[table][colName] = col.Type.SQLType()
+			colValues = append(colValues, []sqltypes.Value{sqltypes.NewVarChar(colName)})
 		}
 		tEnv.schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
 			Fields: rowTypes,
+		}
+		query := fmt.Sprintf(`SELECT COLUMN_NAME as column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = database() AND TABLE_NAME = '%s' ORDER BY ORDINAL_POSITION`, table)
+		tEnv.schemaQueries[query] = &sqltypes.Result{
+			Fields: colTypes,
+			Rows:   colValues,
 		}
 	}
 
@@ -493,7 +506,6 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		}
 
 		tableColumnMap := map[sqlparser.TableIdent]map[string]querypb.Type{}
-
 		for _, table := range tables {
 			if table == nil {
 				continue

@@ -97,7 +97,7 @@ type DB struct {
 	data map[string]*ExpectedResult
 	// rejectedData maps tolower(query) to an error.
 	rejectedData map[string]error
-	// patternData is a list of regexp to results.
+	// patternData is a map of regexp queries to results.
 	patternData map[string]exprResult
 	// queryCalled keeps track of how many times a query was called.
 	queryCalled map[string]int
@@ -121,6 +121,8 @@ type DB struct {
 	// queryPatternUserCallback stores optional callbacks when a query with a pattern is called
 	queryPatternUserCallback map[*regexp.Regexp]func(string)
 
+	// if fakesqldb is asked to serve queries or query patterns that it has not been explicitly told about it will
+	// error out by default. However if you set this flag then any unmatched query results in an empty result
 	neverFail bool
 }
 
@@ -191,6 +193,7 @@ func New(t testing.TB) *DB {
 		db.listener.Accept()
 	}()
 
+	db.AddQuery("use `fakesqldb`", &sqltypes.Result{})
 	// Return the db.
 	return db
 }
@@ -275,6 +278,7 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
+		DbName:     "fakesqldb",
 	})
 }
 
@@ -284,6 +288,7 @@ func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
+		DbName:     "fakesqldb",
 	})
 }
 
@@ -403,7 +408,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("query: '%s' is not supported on %v", query, db.name)
+	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
 	log.Errorf("Query not found: %s", query)
 	return err
 }
@@ -415,7 +420,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	// when creating a connection to the database, we send an initial query to set the connection's
 	// collation, we want to skip the query check if we get such initial query.
 	// this is done to ease the test readability.
-	if strings.HasPrefix(query, "SET collation_connection =") {
+	if strings.HasPrefix(query, "SET collation_connection =") || strings.EqualFold(query, "use `fakesqldb`") {
 		return &sqltypes.Result{}, nil
 	}
 
@@ -727,4 +732,27 @@ func (db *DB) VerifyAllExecutedOrFail() {
 
 func (db *DB) SetNeverFail(neverFail bool) {
 	db.neverFail = neverFail
+}
+
+func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
+	// pattern for selecting explicit list of columns where database is specified
+	selectQueryPattern := fmt.Sprintf("select .* from `%s`.`%s` where 1 != 1", db.name, table)
+	db.AddQueryPattern(selectQueryPattern, result)
+
+	// pattern for selecting explicit list of columns where database is not specified
+	selectQueryPattern = fmt.Sprintf("select .* from %s where 1 != 1", table)
+	db.AddQueryPattern(selectQueryPattern, result)
+
+	// mock query for returning columns from information_schema.columns based on specified result
+	var cols []string
+	for _, field := range result.Fields {
+		cols = append(cols, field.Name)
+	}
+	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table), sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"column_name",
+			"varchar",
+		),
+		cols...,
+	))
 }

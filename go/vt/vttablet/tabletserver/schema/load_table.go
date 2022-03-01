@@ -30,10 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-const getColumnNamesQuery = `SELECT COLUMN_NAME as column_name
-       FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
-	   ORDER BY ORDINAL_POSITION`
+const getColumnNamesQuery = `SELECT COLUMN_NAME as column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = '%s' ORDER BY ORDINAL_POSITION`
 
 // LoadTable creates a Table from the schema info in the database.
 func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment string) (*Table, error) {
@@ -56,7 +53,13 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment st
 }
 
 func getColumnsList(conn *connpool.DBConn, dbName, tableName string) (string, error) {
-	query := fmt.Sprintf(getColumnNamesQuery, dbName, sqlescape.UnescapeID(tableName))
+	var query string
+	if dbName == "" {
+		dbName = "database()"
+	} else {
+		dbName = fmt.Sprintf("'%s'", dbName)
+	}
+	query = fmt.Sprintf(getColumnNamesQuery, dbName, sqlescape.UnescapeID(tableName))
 	qr, err := conn.Exec(tabletenv.LocalContext(), query, 10000, true)
 	if err != nil {
 		return "", err

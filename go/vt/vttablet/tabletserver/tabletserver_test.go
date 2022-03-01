@@ -2307,7 +2307,7 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}
-	addMockQueriesForTable(db, "test_table", &sqltypes.Result{
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -2322,7 +2322,7 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.VarChar,
 		}},
 	})
-	addMockQueriesForTable(db, "msg", &sqltypes.Result{
+	db.MockQueriesForTable("msg", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "id",
 			Type: sqltypes.Int64,

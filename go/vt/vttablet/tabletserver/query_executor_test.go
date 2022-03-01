@@ -1427,7 +1427,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}
-	addMockQueriesForTable(db, "test_table", &sqltypes.Result{
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -1439,7 +1439,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int32,
 		}},
 	})
-	addMockQueriesForTable(db, "seq", &sqltypes.Result{
+	db.MockQueriesForTable("seq", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "id",
 			Type: sqltypes.Int32,
@@ -1454,7 +1454,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
-	addMockQueriesForTable(db, "msg", &sqltypes.Result{
+	db.MockQueriesForTable("msg", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "id",
 			Type: sqltypes.Int64,
@@ -1475,20 +1475,4 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
-}
-
-func addMockQueriesForTable(db *fakesqldb.DB, table string, result *sqltypes.Result) {
-	selectQueryPattern := fmt.Sprintf("select .* from %s where 1 != 1", table)
-	db.AddQueryPattern(selectQueryPattern, result)
-	var cols []string
-	for _, field := range result.Fields {
-		cols = append(cols, field.Name)
-	}
-	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		cols...,
-	))
 }

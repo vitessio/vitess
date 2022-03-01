@@ -44,7 +44,6 @@ import (
 )
 
 const baseShowTablesPattern = `SELECT t\.table_name.*`
-const getColumnNamesQueryPattern = `SELECT COLUMN_NAME.*`
 
 var mustMatch = utils.MustMatchFn(".Mutex")
 
@@ -114,7 +113,7 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
 	})
-	db.AddQueryPattern("select .* from test_table_03 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk1",
 			Type: sqltypes.Int32,
@@ -126,27 +125,13 @@ func TestOpenAndReload(t *testing.T) {
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_03"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"pk1", "pk2", "val",
-	))
 
-	db.AddQueryPattern("select .* from test_table_04 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_04"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"pk",
-	))
 
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
@@ -312,20 +297,12 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
-	db.AddQueryPattern("select .* from test_table_04 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_04"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"mypk",
-	))
-
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
 		Rows: [][]sqltypes.Value{
@@ -378,33 +355,19 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
-	db.AddQueryPattern("select .* from test_table_03 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_03"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"mypk",
-	))
 
-	db.AddQueryPattern("select .* from test_table_04 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_04", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_04"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"pk",
-	))
 
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
@@ -470,7 +433,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			mysql.BaseShowTablesRow("test_table", false, ""),
 		},
 	})
-	db.AddQueryPattern("select .* from test_table where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
 		// this will cause NewTable error, as it expects zero rows.
 		Fields: []*querypb.Field{
 			{
@@ -481,14 +444,6 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			{sqltypes.NewVarBinary("")},
 		},
 	})
-	// table does not exist, but need to send a dummy column name for ensuring it calls the query declared above
-	db.AddQueryPattern(queryForTable("test_table"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"dummy",
-	))
 
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, db)
@@ -539,7 +494,7 @@ func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Du
 func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
-	return dbconfigs.NewTestDBConfigs(cp, cp, "")
+	return dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 }
 
 func initialSchema() map[string]*Table {
@@ -653,8 +608,4 @@ func AddFakeInnoDBReadRowsResult(db *fakesqldb.DB, value int) *fakesqldb.Expecte
 		"varchar|int64"),
 		fmt.Sprintf("Innodb_rows_read|%d", value),
 	))
-}
-
-func queryForTable(table string) string {
-	return fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table)
 }

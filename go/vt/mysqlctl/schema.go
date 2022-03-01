@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -27,8 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
@@ -266,37 +265,50 @@ func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, table
 	return result, nil
 }
 
-// GetColumns returns the columns of table.
-func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer conn.Recycle()
+const (
+	GetColumnNamesQuery = `SELECT COLUMN_NAME as column_name
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
+		ORDER BY ORDINAL_POSITION`
+	GetFieldsQuery = "SELECT %s FROM %s.%s WHERE 1=0"
+)
 
-	getColumnsQuery := `SELECT COLUMN_NAME
-       FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
-	   ORDER BY ORDINAL_POSITION`
-	getColumnsQuery = fmt.Sprintf(getColumnsQuery, dbName, table)
-	qr, err := conn.ExecuteFetch(getColumnsQuery, 10000, true)
+func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sqltypes.Result, error)) (string, error) {
+	query := fmt.Sprintf(GetColumnNamesQuery, dbName, sqlescape.UnescapeID(tableName))
+	qr, err := exec(query, 10000, true)
 	if err != nil {
-		return nil, nil, err
+		return "", err
 	}
 	if qr == nil || len(qr.Rows) == 0 {
-		return nil, nil, fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, table, getColumnsQuery)
+		err = fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query)
+		log.Errorf("%s", fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query))
+		return "", err
 	}
 	selectColumns := ""
 
-	for _, row := range qr.Rows {
-		col := row[0].ToString()
+	for _, row := range qr.Named().Rows {
+		col := row["column_name"].ToString()
+		if col == "" {
+			continue
+		}
 		if selectColumns != "" {
 			selectColumns += ", "
 		}
 		selectColumns += sqlescape.EscapeID(col)
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s.%s WHERE 1=0", selectColumns, sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
-	qr, err = conn.ExecuteFetch(query, 0, true)
+	return selectColumns, nil
+}
+
+func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Result, error)) ([]*querypb.Field, []string, error) {
+	selectColumns, err := GetColumnsList(dbName, table, exec)
+	if err != nil {
+		return nil, nil, err
+	}
+	if selectColumns == "" {
+		selectColumns = "*"
+	}
+	query := fmt.Sprintf(GetFieldsQuery, selectColumns, sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
+	qr, err := exec(query, 0, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -306,7 +318,16 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 		columns[i] = field.Name
 	}
 	return qr.Fields, columns, nil
+}
 
+// GetColumns returns the columns of table.
+func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer conn.Recycle()
+	return GetColumns(dbName, table, conn.ExecuteFetch)
 }
 
 // GetPrimaryKeyColumns returns the primary key columns of table.

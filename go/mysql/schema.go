@@ -116,6 +116,7 @@ from _vt.schemacopy
 where table_schema = database() 
 order by table_name, ordinal_position`
 
+	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 )
 

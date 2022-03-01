@@ -17,12 +17,11 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -170,7 +169,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 
 func mockLoadTableQueries(db *fakesqldb.DB) {
 	db.ClearQueryPattern()
-	db.AddQueryPattern("select .* from test_table where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -182,18 +181,11 @@ func mockLoadTableQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(getColumnNamesQueryPattern, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"pk", "name", "addr",
-	))
 }
 
 func mockMessageTableQueries(db *fakesqldb.DB) {
 	db.ClearQueryPattern()
-	db.AddQueryPattern("select .* from test_table where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "id",
 			Type: sqltypes.Int64,
@@ -214,11 +206,4 @@ func mockMessageTableQueries(db *fakesqldb.DB) {
 			Type: sqltypes.VarBinary,
 		}},
 	})
-	db.AddQueryPattern(getColumnNamesQueryPattern, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"id", "priority", "time_next", "epoch", "time_acked", "message",
-	))
 }

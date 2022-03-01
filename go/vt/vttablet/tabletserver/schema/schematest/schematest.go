@@ -19,8 +19,6 @@ limitations under the License.
 package schematest
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -76,49 +74,28 @@ func AddDefaultQueries(db *fakesqldb.DB) {
 		},
 	})
 
-	db.AddQueryPattern("select .* from test_table_01 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_01", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_01"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"pk",
-	))
 
-	db.AddQueryPattern("select .* from test_table_02 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_02", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_02"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"pk",
-	))
 
-	db.AddQueryPattern("select .* from test_table_03 where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("test_table_03"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"pk",
-	))
 
-	db.AddQueryPattern("select .* from seq where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("seq", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "id",
 			Type: sqltypes.Int32,
@@ -133,15 +110,8 @@ func AddDefaultQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("seq"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"id", "next_id", "cache", "increment",
-	))
 
-	db.AddQueryPattern("select .* from msg where 1 != 1", &sqltypes.Result{
+	db.MockQueriesForTable("msg", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "id",
 			Type: sqltypes.Int64,
@@ -162,19 +132,8 @@ func AddDefaultQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
-	db.AddQueryPattern(queryForTable("msg"), sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"column_name",
-			"varchar",
-		),
-		"id", "priority", "time_next", "epoch", "time_acked", "message",
-	))
 
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
 
-}
-
-func queryForTable(table string) string {
-	return fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table)
 }
