@@ -43,15 +43,14 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
 		env.Row = row
-		resRow := make([]sqltypes.Value, 0, len(p.Exprs))
 		for _, exp := range p.Exprs {
 			result, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
-			resRow = append(resRow, result.Value())
+			row = append(row, result.Value())
 		}
-		rows = append(rows, resRow)
+		rows = append(rows, row)
 	}
 	if wantfields {
 		err := p.addFields(env, result)
