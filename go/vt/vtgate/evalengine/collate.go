@@ -75,8 +75,8 @@ func mergeCollations(left, right *EvalResult) (collations.ID, error) {
 		return lc.Collation, nil
 	}
 
-	lt := left.textual()
-	rt := right.textual()
+	lt := left.isTextual()
+	rt := right.isTextual()
 	if !lt || !rt {
 		if lt {
 			return lc.Collation, nil
