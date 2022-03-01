@@ -661,21 +661,25 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 
-	// A bit early on, we generate a name for the swap table
-	swapTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	// A bit early on, we generate names for stowaway and temporary tables
+	stowawayTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
 		return err
 	}
-	if isVreplicationTestSuite {
-		// The testing suite may inject queries internally from the server via a recurring EVENT.
-		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
-		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
-		// the original table. We will actually make the table disappear, creating a void.
-		swapTableName = fmt.Sprintf("%s_before", onlineDDL.Table)
+	readOnlyTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return err
 	}
+	trashTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return err
+	}
+	fmt.Printf("======= ZZZ cutOverVReplMigration stowawayTableName=%v, shard=%v\n", stowawayTableName, e.shard)
+	fmt.Printf("======= ZZZ cutOverVReplMigration scrapTableName=%v, shard=%v\n", trashTableName, e.shard)
 
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
+		fmt.Printf("======= ZZZ toggleBuffering bufferQueries=%v, shard=%v\n", bufferQueries, e.shard)
 		e.toggleBufferTableFunc(onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
 			// release
@@ -688,14 +692,18 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
+			fmt.Printf("======= ZZZ reenableWritesOnce!: %v, shard=%v\n", onlineDDL.Table, e.shard)
 			toggleBuffering(false)
 		})
 	}
 	// stop writes on source:
-	if err := toggleBuffering(true); err != nil {
+	err = toggleBuffering(true)
+	defer reenableWritesOnce()
+	if err != nil {
 		return err
 	}
-	defer reenableWritesOnce()
+
+	fmt.Printf("======= ZZZ toggleBuffering now buffered!, shard=%v\n", e.shard)
 
 	// swap out the table
 	// TODO(shlomi): possibly give a fraction of a second for a scenario where a query is in
@@ -703,16 +711,80 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// they will be able to complete before the rename, rather than block briefly on the rename only to find
 	// the table no longer exists.
 	time.Sleep(100 * time.Millisecond)
-	parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, swapTableName)
-	if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-		return err
+	if isVreplicationTestSuite {
+		// The testing suite may inject queries internally from the server via a recurring EVENT.
+		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
+		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
+		// the original table. We will actually make the table disappear, creating a void.
+		testSuiteBeforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
+		fmt.Printf("======= ZZZ will rename: %v, shard=%v\n", parsed.Query, e.shard)
+		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+		fmt.Printf("======= ZZZ renamed!: %v, shard=%v\n", parsed.Query, e.shard)
+	} else {
+		// real production
+		{
+			// Apply CREATE TABLE for read-only imposter table
+			parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, readOnlyTableName, onlineDDL.Table)
+			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+				fmt.Printf("======= ZZZ creating readonly table: %v err=%v\n", parsed.Query, err)
+				return err
+			}
+		}
+
+		{
+			query := fmt.Sprintf("alter table `%s` add column `_impossible_%s` int not null", readOnlyTableName, onlineDDL.UUID)
+			fmt.Printf("======= ZZZ creating readonly table: %v\n", query)
+			if _, err := e.execQuery(ctx, query); err != nil {
+				fmt.Printf("======= ZZZ creating readonly table: %v err=%v\n", query, err)
+				return err
+			}
+		}
+
+		// {
+		// 	// Apply CREATE TABLE for read-only imposter table
+		// 	parsed := sqlparser.BuildParsedQuery(sqlCreateReadOnlyTable, readOnlyTableName, readOnlyTableName, readOnlyTableName, onlineDDL.Table)
+		// 	fmt.Printf("======= ZZZ creating readonly table: %v\n", parsed.Query)
+		// 	if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+		// 		fmt.Printf("======= ZZZ creating readonly table: %v err=%v\n", parsed.Query, err)
+		// 		return err
+		// 	}
+		// }
+
+		{
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
+				onlineDDL.Table, stowawayTableName,
+				readOnlyTableName, onlineDDL.Table,
+			)
+			fmt.Printf("======= ZZZ instating readonly table: %v\n", parsed.Query)
+			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+				fmt.Printf("======= ZZZ instating readonly table: %v err=%v\n", parsed.Query, err)
+				return err
+			}
+		}
+
+		// query, _, err := e.generateSwapTablesStatement(ctx, onlineDDL.Table, stowawayTableName)
+		// if err != nil {
+		// 	fmt.Printf("======= ZZZ error0: %v\n", err)
+		// }
+		// fmt.Printf("======= ZZZ will swap view into place: %v\n", stowawayTableName)
+		// if _, err := e.execQuery(ctx, query); err != nil {
+		// 	fmt.Printf("======= ZZZ error1: %v\n", err)
+		// 	return err
+		// }
+		// fmt.Printf("======= ZZZ view swapped into place!: %v\n", stowawayTableName)
 	}
+
 	// We have just greated a gaping hole, the original table does not exist.
 	// we expect to fill that hole by swapping in the vrepl table. But if anything goes wrong we prepare
 	// to rename the table back:
 	defer func() {
-		if _, err := e.renameTableIfApplicable(ctx, swapTableName, onlineDDL.Table); err != nil {
-			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot rename back swapped table: %v into %v: %v", swapTableName, onlineDDL.Table, err)
+		fmt.Printf("======= ZZZ will rename back if applicable!: %v to %v, shard=%v\n", stowawayTableName, onlineDDL.Table, e.shard)
+		if _, _, err := e.renameTableIfApplicable(ctx, stowawayTableName, onlineDDL.Table); err != nil {
+			fmt.Printf("======= ZZZ will rename back if applicable!: %v to %v, err=%v, shard=%v\n", stowawayTableName, onlineDDL.Table, err, e.shard)
+			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot rename back swapped table: %v into %v: %v", stowawayTableName, onlineDDL.Table, err)
 		}
 	}()
 	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
@@ -754,11 +826,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	{
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
-			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
 			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-				vreplTable, afterTableName,
+				vreplTable, testSuiteAfterTableName,
 			)
-			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
 		} else {
@@ -769,16 +841,26 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			}
 			defer conn.Close()
 
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
+			parsed := sqlparser.BuildParsedQuery(sqlRenameThreeTables,
+				onlineDDL.Table, trashTableName,
 				vreplTable, onlineDDL.Table,
-				swapTableName, vreplTable,
+				stowawayTableName, vreplTable,
 			)
-			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			// parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
+			// 	vreplTable, onlineDDL.Table,
+			// 	swapTableName, vreplTable,
+			// )
+			fmt.Printf("======= ZZZ will rename three tables: %v\n", parsed.Query)
+
+			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+				fmt.Printf("======= ZZZ will rename three tables ERROR: %v, err=%v, shard=%v\n", parsed.Query, err, e.shard)
 				return err
 			}
+			fmt.Printf("======= ZZZ renamed!!! three tables: %v\n", parsed.Query)
 		}
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+	fmt.Printf("======= ZZZ e.ownedRunningMigrations.Delete! %v, shard=%v\n", onlineDDL.UUID, e.shard)
 
 	go func() {
 		// Tables are swapped! Let's take the opportunity to ReloadSchema now
@@ -790,10 +872,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Error on ReloadSchema while cutting over vreplication migration UUID: %+v", onlineDDL.UUID)
 		}
 	}()
+	fmt.Printf("======= ZZZ schema reload %v, shard=%v\n", onlineDDL.UUID, e.shard)
 
 	// Tables are now swapped! Migration is successful
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
+	fmt.Printf("======= ZZZ reenableWritesOnce done %v, shard=%v\n", onlineDDL.UUID, e.shard)
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied)
+	fmt.Printf("======= ZZZ e.onSchemaMigrationStatus(complete) done %v, shard=%v\n", onlineDDL.UUID, e.shard)
 	return nil
 
 	// deferred function will re-enable writes now
@@ -2251,29 +2336,43 @@ func (e *Executor) generateSwapTablesStatement(ctx context.Context, tableName1, 
 	return parsed.Query, swapTableName, nil
 }
 
-// renameTableIfApplicable renames a table, but first validates that the original name exists and that the
-// target name does not exist. If either these conditions fail, the function exits silently and without error.
-func (e *Executor) renameTableIfApplicable(ctx context.Context, fromTableName, toTableName string) (attemptMade bool, err error) {
+// renameTableIfApplicable renames a table, but first validates that the original name exists. If not, nothing happens.
+// If the target table exists, it is renamed away.
+func (e *Executor) renameTableIfApplicable(ctx context.Context, fromTableName, toTableName string) (attemptMade bool, renamedExistingTable string, err error) {
+	fmt.Printf("======= ZZZ renameTableIfApplicable 0: %v to %v\n", fromTableName, toTableName)
 	exists, err := e.tableExists(ctx, fromTableName)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	if !exists {
 		// can't rename from table when it does not exist
-		return false, nil
+		return false, "", nil
 	}
+	fmt.Printf("======= ZZZ renameTableIfApplicable 1: %v to %v\n", fromTableName, toTableName)
 	exists, err = e.tableExists(ctx, toTableName)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	if exists {
-		// can't rename into an existing table
-		return false, nil
+		// target table exists, we will force rename it away
+		renamedExistingTable, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+		if err != nil {
+			return false, "", err
+		}
+
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
+			toTableName, renamedExistingTable,
+			fromTableName, toTableName,
+		)
+		_, err = e.execQuery(ctx, parsed.Query)
+		return true, renamedExistingTable, err
 	}
+	fmt.Printf("======= ZZZ renameTableIfApplicable 2: %v to %v\n", fromTableName, toTableName)
 
 	parsed := sqlparser.BuildParsedQuery(sqlRenameTable, fromTableName, toTableName)
 	_, err = e.execQuery(ctx, parsed.Query)
-	return true, err
+	fmt.Printf("======= ZZZ renameTableIfApplicable 2: %v to %v, err=%v\n", fromTableName, toTableName, err)
+	return true, "", err
 }
 
 func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
@@ -2730,10 +2829,12 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 // isVReplMigrationReadyToCutOver sees if the vreplication migration has completed the row copy
 // and is up to date with the binlogs.
 func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplStream) (isReady bool, err error) {
+	fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver workflow=%v\n", s.workflow)
 	// Check all the cases where migration is still running:
 	{
 		// when ready to cut-over, pos must have some value
 		if s.pos == "" {
+			fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver 0 false workflow=%v\n", s.workflow)
 			return false, nil
 		}
 	}
@@ -2751,12 +2852,14 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		timeNow := time.Now()
 		timeUpdated := time.Unix(s.timeUpdated, 0)
 		if durationDiff(timeNow, timeUpdated) > vreplicationCutOverThreshold {
+			fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver 1 false workflow=%v\n", s.workflow)
 			return false, nil
 		}
 		// Let's look at transaction timestamp. This gets written by any ongoing
 		// writes on the server (whether on this table or any other table)
 		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
 		if durationDiff(timeNow, transactionTimestamp) > vreplicationCutOverThreshold {
+			fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver 2 false workflow=%v\n", s.workflow)
 			return false, nil
 		}
 	}
@@ -2767,42 +2870,53 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 			sqltypes.Int64BindVariable(s.id),
 		)
 		if err != nil {
+			fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver 3 workflow=%v, err=%v\n", s.workflow, err)
 			return false, err
 		}
 		r, err := e.execQuery(ctx, query)
 		if err != nil {
+			fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver 4 workflow=%v, err=%v\n", s.workflow, err)
 			return false, err
 		}
 		csRow := r.Named().Row()
 		if csRow == nil {
+			fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver 5 workflow=%v, err=%v\n", s.workflow, err)
 			return false, err
 		}
 		count := csRow.AsInt64("cnt", 0)
 		if count > 0 {
 			// Still copying
+			fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver 6 workflow=%v, err=%v\n", s.workflow, err)
 			return false, nil
 		}
 	}
 
+	fmt.Printf("======= ZZZ isVReplMigrationReadyToCutOver t true workflow=%v, err=%v\n", s.workflow, err)
 	return true, nil
 }
 
 // isVReplMigrationRunning sees if there is a VReplication migration actively running
 func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (isRunning bool, s *VReplStream, err error) {
+	fmt.Printf("======= ZZZ isVReplMigrationRunning uuid=%v\n", uuid)
 	s, err = e.readVReplStream(ctx, uuid, true)
 	if err != nil {
+		fmt.Printf("======= ZZZ isVReplMigrationRunning 0 uuid=%v, err=%v\n", uuid, err)
 		return false, s, err
 	}
 	if s == nil {
+		fmt.Printf("======= ZZZ isVReplMigrationRunning 1 uuid=%v, err=%v\n", uuid, err)
 		return false, s, nil
 	}
 	if strings.Contains(strings.ToLower(s.message), "error") {
+		fmt.Printf("======= ZZZ isVReplMigrationRunning 2 uuid=%v, err=%v\n", uuid, s.message)
 		return false, s, nil
 	}
 	switch s.state {
 	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+		fmt.Printf("======= ZZZ isVReplMigrationRunning 3 YES uuid=%v, err=%v\n", uuid, err)
 		return true, s, nil
 	}
+	fmt.Printf("======= ZZZ isVReplMigrationRunning 4 uuid=%v, err=%v\n", uuid, err)
 	return false, s, nil
 }
 
