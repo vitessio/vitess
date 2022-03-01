@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -42,8 +44,8 @@ func TestTopoCustomRule(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
-	exec(t, conn, "delete from t1")
-	exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
+	utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("r")] [VARCHAR("s")]]`)
 
 	// create empty topoCustomRuleFile.
@@ -111,7 +113,7 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Empty the table
-	exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "delete from t1")
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes

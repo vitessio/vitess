@@ -263,7 +263,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
-    "TableName": "sbtest16"
+    "TableName": "sbtest16",
+    "VindexValues": {
+      "hash": "INT64(42)"
+    }
   }
 }
 Gen4 plan same as above

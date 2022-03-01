@@ -23,9 +23,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
