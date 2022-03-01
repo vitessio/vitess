@@ -271,8 +271,8 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 		ReplicationLagSeconds: fmd.ReplicationLagSeconds,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
-		IOState:    mysql.ReplicationStatusToState(fmd.Replicating && fmd.IOThreadRunning),
-		SQLState:   mysql.ReplicationStatusToState(fmd.Replicating),
+		IOState:    mysql.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating && fmd.IOThreadRunning)),
+		SQLState:   mysql.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating)),
 		SourceHost: fmd.CurrentSourceHost,
 		SourcePort: fmd.CurrentSourcePort,
 	}, nil
