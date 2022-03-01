@@ -332,7 +332,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list
 %type <with> with_clause
-%type <tableExpr> table_reference table_factor join_table common_table_expression
+%type <tableExpr> table_reference table_function table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -3907,6 +3907,7 @@ table_references:
 table_reference:
   table_factor
 | join_table
+| table_function
 
 table_factor:
   aliased_table_name
@@ -4030,6 +4031,12 @@ partition_list:
 | partition_list ',' sql_id
   {
     $$ = append($$, $3)
+  }
+
+table_function:
+  ID openb argument_expression_list_opt closeb
+  {
+    $$ = &TableFuncExpr{Name: string($1), Exprs: $3}
   }
 
 // There is a grammar conflict here:
