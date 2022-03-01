@@ -129,14 +129,19 @@ func TestAggrOnJoin(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
+	utils.Exec(t, conn, "delete from aggr_test")
+	utils.Exec(t, conn, "delete from t3")
+
 	utils.Exec(t, conn, "insert into t3(id5, id6, id7) values(1,1,1), (2,2,4), (3,2,4), (4,1,2), (5,1,1), (6,3,6)")
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
-	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) from aggr_test join t3 on aggr_test.val2 = t3.id7", "[[INT64(8)]]")
+
 	defer func() {
 		utils.Exec(t, conn, "set workload = oltp")
 		utils.Exec(t, conn, "delete from aggr_test")
 		utils.Exec(t, conn, "delete from t3")
 	}()
+
+	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) from aggr_test join t3 on aggr_test.val2 = t3.id7", "[[INT64(8)]]")
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
