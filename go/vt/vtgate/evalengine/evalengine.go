@@ -288,7 +288,7 @@ func compareDateAndString(l, r *EvalResult) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-	case l.textual():
+	case l.isTextual():
 		rTime, err = parseDate(r)
 		if err != nil {
 			return 0, err
