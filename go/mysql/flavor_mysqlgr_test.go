@@ -33,8 +33,8 @@ func TestMysqlGRParsePrimaryGroupMember(t *testing.T) {
 	parsePrimaryGroupMember(&res, rows)
 	assert.Equal(t, "host1", res.SourceHost)
 	assert.Equal(t, 10, res.SourcePort)
-	assert.Equal(t, ReplicationStateStopped, res.IOState)
-	assert.Equal(t, ReplicationStateStopped, res.SQLState)
+	assert.Equal(t, ReplicationStateUnknown, res.IOState)
+	assert.Equal(t, ReplicationStateUnknown, res.SQLState)
 }
 
 func TestMysqlGRReplicationApplierLagParse(t *testing.T) {
