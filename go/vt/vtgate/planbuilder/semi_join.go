@@ -33,16 +33,22 @@ type semiJoin struct {
 	gen4Plan
 	rhs  logicalPlan
 	lhs  logicalPlan
-	vars map[string]int
 	cols []int
+
+	vars map[string]int
+
+	// LHSColumns are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the vars field
+	LHSColumns []*sqlparser.ColName
 }
 
 // newSemiJoin builds a new semiJoin.
-func newSemiJoin(lhs, rhs logicalPlan, vars map[string]int) *semiJoin {
+func newSemiJoin(lhs, rhs logicalPlan, vars map[string]int, lhsCols []*sqlparser.ColName) *semiJoin {
 	return &semiJoin{
-		rhs:  rhs,
-		lhs:  lhs,
-		vars: vars,
+		rhs:        rhs,
+		lhs:        lhs,
+		vars:       vars,
+		LHSColumns: lhsCols,
 	}
 }
 

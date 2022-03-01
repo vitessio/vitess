@@ -59,7 +59,7 @@ func transformCorrelatedSubQueryPlan(ctx *plancontext.PlanningContext, op *physi
 	if err != nil {
 		return nil, err
 	}
-	return newSemiJoin(outer, inner, op.Vars), nil
+	return newSemiJoin(outer, inner, op.Vars, op.LHSColumns), nil
 }
 
 func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalPlan, n *physical.SubQueryOp) logicalPlan {
