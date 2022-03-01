@@ -2146,9 +2146,6 @@ var (
 			input:  "DROP USER `User``Name`",
 			output: "drop user `User``Name`@`%`",
 		}, {
-			input:  "DROP USER user@rank",
-			output: "drop user `user`@`rank`",
-		}, {
 			input:  "DROP USER ''",
 			output: "drop user ``@`%`",
 		}, {
@@ -3016,6 +3013,15 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:  "select status from t",
 			output: "select `status` from t",
+		}, {
+			input:  "select comment from t",
+			output: "select `comment` from t",
+		}, {
+			input:  "select table_commment AS Comment FROM information_schema.TABLES",
+			output: "select table_commment as `Comment` from information_schema.`TABLES`",
+		}, {
+			input:  "select 1 as comment",
+			output: "select 1 as `comment` from dual",
 		}, {
 			input:  "select variables from t",
 			output: "select `variables` from t",
@@ -4361,6 +4367,163 @@ func TestParseDjangoQueries(t *testing.T) {
 		if err != nil {
 			t.Error(scanner.Text())
 			t.Errorf(" Error: %v", err)
+		}
+	}
+}
+
+var correctlyDoParse = []string{"avg", "bit_and", "bit_or", "bit_xor", "count", "json_arrayagg", "json_objectagg", "max", "min",
+	"status", "std", "stddev", "stddev_pop", "stddev_samp", "sum", "value", "variance", "var_pop", "var_samp", "comment_keyword", "array",
+	"count", "max", "min", "std", "stddev", "stddev_pop", "stddev_samp", "sum", "system", "value", "variance", "var_pop", "var_samp",
+	"json_arrayagg", "json_objectagg", "json_table", "min",
+	"status", "avg", "action", "active", "admin", "against", "authentication", "before", "begin", "bigint",
+	"serial", "bit", "blob", "bool", "boolean", "buckets", "cascade", "catalog_name", "change", "char", "character", "charset",
+	"check", "cipher", "class_origin", "client", "clone", "collation", "columns", "column_name", "commit", "committed", "component",
+	"constraint", "constraint_catalog", "constraint_name", "constraint_schema", "contains", "cursor_name", "data", "date", "datetime",
+	"day", "decimal", "declare", "definer", "definition", "description", "double", "duplicate", "each", "enforced", "engines", "enum",
+	"except", "exclude", "expansion", "expire", "fields", "fixed", "float_type", "flush", "foreign", "fulltext", "geomcollection",
+	"geometry", "geometrycollection", "get_master_public_key", "global", "grants", "histogram", "history", "inactive", "indexes",
+	"initial", "int", "integer", "invisible", "invoker", "isolation", "issuer", "json", "keys", "key_block_size", "language", "last_insert_id",
+	"less", "level", "lines", "linestring", "load", "local", "locked", "longblob", "longtext", "low_priority", "master_compression_algorithms",
+	"master_public_key_path", "master_tls_ciphersuites", "master_zstd_compression_level", "max_connections_per_hour", "max_queries_per_hour",
+	"max_updates_per_hour", "max_user_connections", "mediumblob", "mediumint", "mediumtext", "message_text", "mode", "modify", "multilinestring",
+	"multipoint", "multipolygon", "mysql_errno", "names", "national", "nchar", "nested", "network_namespace", "never", "no", "nowait", "nulls",
+	"numeric", "offset", "oj", "old", "only", "optimize", "option", "optional", "optionally", "ordinality", "organization", "others", "partition",
+	"path", "persist", "persist_only", "plugins", "point", "polygon", "precedes", "preceding", "precision", "primary", "privilege_checks_user",
+	"privileges", "proxy", "query", "random", "range", "read", "real", "reference", "release", "reorganize", "repair", "repeatable", "replication",
+	"require_row_format", "resignal", "resource", "respect", "restart", "restrict", "retain", "reuse", "role", "rollback", "routine", "rows",
+	"savepoint", "schemas", "schema_name", "secondary", "secondary_engine", "secondary_load", "secondary_unload", "security", "sequence",
+	"serializable", "session", "share", "signal", "signed", "skip", "slave", "smallint", "spatial", "sqlstate", "srid", "ssl", "start",
+	"starting", "stream", "subclass_origin", "subject", "tables", "tablespace", "table_name", "temporary", "text", "than", "thread_priority",
+	"ties", "time", "timestamp", "tinyblob", "tinyint", "tinytext", "transaction", "triggers", "truncate", "unbounded", "uncommitted",
+	"unsigned", "unused", "user", "varbinary", "varchar", "variables", "varying", "vcpu", "view", "visible", "warnings", "work", "write",
+	"x509", "year", "zerofil"}
+var correctlyDontParse = []string{"auto_increment", "add", "and", "alter", "mod", "asc", "as", "between", "binary", "by",
+	"call", "case", "collate", "convert", "connection", "create", "cross", "current", "current_date", "current_time", "current_timestamp", "database", "databases", "default", "delete",
+	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "event", "execute",
+	"exists", "explain", "failed_login_attempts", "false", "file", "first", "following", "for", "force", "from", "function",
+	"grant", "group", "grouping", "groups", "having", "identified", "if", "ignore", "in", "inout", "index", "inner", "insert",
+	"interval", "into", "is", "join", "key", "kill", "left",
+	"like", "limit", "localtime", "localtimestamp", "lock", "match", "maxvalue", "mod", "modifies",
+	"natural", "next", "none", "not", "null", "of", "off", "on", "or", "order", "out", "outer", "over", "password",
+	"password_lock_time", "procedure", "process", "reads", "recursive", "references", "regexp", "reload", "rename",
+	"replace", "require", "revoke", "right", "schema", "select", "separator", "set", "show", "shutdown", "sql", "straight_join", "substr", "substring", "super", "table", "then",
+	"timestampadd", "timestampdiff", "to", "trigger", "true", "union", "unique", "unlock", "update", "usage", "use", "using",
+	"utc_date", "utc_time", "utc_timestamp", "values", "when", "where", "window",
+	"with"}
+
+// TODO: There could be some inconsistencies here with MySQL but broadly correct.
+var incorrectlyDontParse = []string{"after", "attribute"}
+var incorrectlyParse = []string{"percent_rank", "last_value", "first_value", "nth_value", "dense_rank", "rank", "row_number", "cume_dist", "lead", "lag", "ntile", "lateral", "member"}
+var incorrectlyParseForNonSelect = []string{
+	"auto_increment", "add", "and", "alter", "mod", "asc", "as", "between", "binary", "by",
+	"call", "case", "collate", "convert", "connection", "create", "cross", "current", "current_date", "current_time", "current_timestamp", "database", "databases", "default", "delete",
+	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "event", "execute",
+	"exists", "explain", "failed_login_attempts", "false", "file", "first", "following", "for", "force", "from", "function",
+	"grant", "group", "grouping", "groups", "having", "identified", "if", "ignore", "in", "inout", "index", "inner", "insert",
+	"interval", "into", "is", "join", "key", "kill", "left",
+	"like", "limit", "localtime", "localtimestamp", "lock", "match", "maxvalue", "mod", "modifies",
+	"natural", "next", "none", "not", "null", "of", "off", "on", "or", "order", "out", "outer", "over", "password",
+	"password_lock_time", "procedure", "process", "reads", "recursive", "references", "regexp", "reload", "rename",
+	"replace", "require", "revoke", "right", "schema", "select", "separator", "set", "show", "shutdown", "sql", "straight_join", "substr", "substring", "super", "table", "then",
+	"timestampadd", "timestampdiff", "to", "trigger", "true", "union", "unique", "unlock", "update", "usage", "use", "using",
+	"utc_date", "utc_time", "utc_timestamp", "values", "when", "where", "window", "with",
+}
+
+// TestKeywordsCorrectlyParse ensures that certain keywords can be parsed by a series of edit queries.
+func TestKeywordsCorrectlyParse(t *testing.T) {
+	aliasTest := "SELECT 1 as %s"
+	iTest := "INSERT INTO t (%s) VALUES (1)"
+	dTest := "DELETE FROM t where %s=1"
+	uTest := "UPDATE t SET %s=1"
+	cTest := "CREATE TABLE t(%s int)"
+
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
+
+	for _, kw := range correctlyDoParse {
+		for _, query := range tests {
+			test := fmt.Sprintf(query, kw)
+			t.Run(test, func(t *testing.T) {
+				_, err := Parse(test)
+				assert.NoError(t, err)
+			})
+		}
+	}
+}
+
+// TestKeywordsThatDontParseButShould documents behavior where the parser is incorrectly throwing an error for a valid keyword.
+func TestKeywordsThatDontParseButShould(t *testing.T) {
+	aliasTest := "SELECT 1 as %s"
+	iTest := "INSERT INTO t (%s) VALUES (1)"
+	dTest := "DELETE FROM t where %s=1"
+	uTest := "UPDATE t SET %s=1"
+	cTest := "CREATE TABLE t(%s int)"
+
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
+
+	for _, kw := range incorrectlyDontParse {
+		for _, query := range tests {
+			test := fmt.Sprintf(query, kw)
+			t.Run(test, func(t *testing.T) {
+				t.Skip()
+				_, err := Parse(test)
+				assert.NoError(t, err)
+			})
+		}
+	}
+}
+
+// TestKeywordsParseButShouldnt  documents bad behavior where the parser is incorrectly parsing a keyword that should error.
+func TestKeywordsParseButShouldnt(t *testing.T) {
+	aliasTest := "SELECT 1 as %s"
+	iTest := "INSERT INTO t (%s) VALUES (1)"
+	dTest := "DELETE FROM t where %s=1"
+	uTest := "UPDATE t SET %s=1"
+	cTest := "CREATE TABLE t(%s int)"
+
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
+
+	for _, kw := range incorrectlyParse {
+		for _, query := range tests {
+			test := fmt.Sprintf(query, kw)
+			t.Run(test, func(t *testing.T) {
+				t.Skip()
+				_, err := Parse(test)
+				assert.Error(t, err)
+			})
+		}
+	}
+
+	tests = []string{iTest, dTest, uTest}
+	for _, kw := range incorrectlyParseForNonSelect {
+		for _, query := range tests {
+			test := fmt.Sprintf(query, kw)
+			t.Run(test, func(t *testing.T) {
+				t.Skip()
+				_, err := Parse(test)
+				assert.Error(t, err)
+			})
+		}
+	}
+}
+
+// TestKeywordsCorrectlyDontParse ensures certain keywords should not be parsed in certain queries.
+func TestKeywordsCorrectlyDontParse(t *testing.T) {
+	aliasTest := "SELECT 1 as %s"
+	// TODO: Want all of these passing eventually
+	// iTest := "INSERT INTO t (%s) VALUES (1)"
+	// dTest := "DELETE FROM t where %s=1"
+	// uTest := "UPDATE t SET %s=1"
+	// cTest := "CREATE TABLE t(%s int)"
+
+	tests := []string{aliasTest}
+
+	for _, kw := range correctlyDontParse {
+		for _, query := range tests {
+			test := fmt.Sprintf(query, kw)
+			t.Run(test, func(t *testing.T) {
+				_, err := Parse(test)
+				assert.Error(t, err)
+			})
 		}
 	}
 }
