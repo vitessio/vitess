@@ -23,7 +23,7 @@ consul_http_port=${CONSUL_HTTP_PORT:-'8500'}
 consul_server_port=${CONSUL_SERVER_PORT:-'8300'}
 
 # Check that consul is not already running
-curl "http://${CONSUL_SERVER}:${consul_http_port}" > /dev/null 2>&1 && fail "consul is already running. Exiting."
+curl "http://${CONSUL_SERVER}:${consul_http_port}" &> /dev/null && fail "consul is already running. Exiting."
 
 set -x
 consul agent \
