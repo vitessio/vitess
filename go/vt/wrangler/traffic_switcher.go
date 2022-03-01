@@ -117,6 +117,7 @@ func (ts *trafficSwitcher) MigrationType() binlogdatapb.MigrationType      { ret
 func (ts *trafficSwitcher) ReverseWorkflowName() string                    { return ts.reverseWorkflow }
 func (ts *trafficSwitcher) SourceKeyspaceName() string                     { return ts.sourceKSSchema.Keyspace.Name }
 func (ts *trafficSwitcher) SourceKeyspaceSchema() *vindexes.KeyspaceSchema { return ts.sourceKSSchema }
+func (ts *trafficSwitcher) Tables() []string                               { return ts.tables }
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
 
 func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
