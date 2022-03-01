@@ -192,14 +192,14 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) *e
 	return param
 }
 
-func countStarAggr() abstract.Aggr {
+func countStarAggr() *abstract.Aggr {
 	f := &sqlparser.FuncExpr{
 		Name:     sqlparser.NewColIdent("count"),
 		Distinct: false,
 		Exprs:    []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
 	}
 
-	return abstract.Aggr{
+	return &abstract.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
 		Func:     f,
 		OpCode:   engine.AggregateCount,
@@ -247,27 +247,27 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	}
 
 	// Next we push the aggregations to both sides
-	lhsPlan, lhsOffsets, lhsAggregations, err := hp.pushAggregation(ctx, join.Left, lhsGrouping, lhsAggrs, true)
+	lhsPlan, lhsOffsets, lhsAggregations, err := hp.filteredPushAggregation(ctx, join.Left, lhsGrouping, lhsAggrs, true)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	rhsPlan, rhsOffsets, rhsAggregations, err := hp.pushAggregation(ctx, join.Right, rhsGrouping, rhsAggrs, true)
+
+	rhsPlan, rhsOffsets, rhsAggregations, err := hp.filteredPushAggregation(ctx, join.Right, rhsGrouping, rhsAggrs, true)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	join.Left, join.Right = lhsPlan, rhsPlan
 
-	length := getLengthOfProjection(groupingOffsets, lhsOffsets, rhsOffsets, aggregations)
+	// depending on whether we need to multiply anything before it is aggregated with the OA,
+	// we might or might not need a projection between the join and the outside
+	// the following method abstracts this away so the rest of this method doesn't
+	// have to consider whether projection is needed or not
+	pusher := getAggrPusher(aggregations, groupingOffsets, lhsOffsets, rhsOffsets, join)
 
 	// Next, we have to pass through the grouping values through the join and the projection we add on top
 	// We added new groupings to the LHS because of the join condition, so we don't want to pass through everything,
 	// just the groupings that are used by operators on top of this current one
 	outputGroupings := make([]offsets, 0, len(groupingOffsets))
-	proj := &projection{
-		source:      join,
-		columns:     make([]sqlparser.Expr, length),
-		columnNames: make([]string, length),
-	}
 	for idx, groupBy := range groupingOffsets {
 		var offset offsets
 		var f func(i int) int
@@ -282,7 +282,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		if ignoreOutputOrder {
 			outputColIdx = nil
 		}
-		outputGrouping, err := passGroupingsThroughJoinAndProj(proj, join, offset, f, outputColIdx)
+		outputGrouping, err := pusher.pushGrouping(offset, f, outputColIdx)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -290,8 +290,68 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	}
 
 	// Here we produce information about the grouping columns projected through
-	outputAggrs, err := produceOutputAggregations(aggregations, lhsAggregations, rhsAggregations, join, proj, ignoreOutputOrder)
-	return proj, outputGroupings, outputAggrs, err
+	outputAggrs, err := pusher.pushAggregation(aggregations, lhsAggregations, rhsAggregations, ignoreOutputOrder)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return pusher.resultPlan(), outputGroupings, outputAggrs, err
+}
+
+func (hp *horizonPlanning) filteredPushAggregation(
+	ctx *plancontext.PlanningContext,
+	plan logicalPlan,
+	grouping []abstract.GroupBy,
+	aggregations []*abstract.Aggr,
+	ignoreOutputOrder bool,
+) (newPlan logicalPlan, groupingOffsets []offsets, outputAggrs []*engine.AggregateParams, err error) {
+	used := make([]bool, len(aggregations))
+	var aggrs []abstract.Aggr
+
+	for idx, aggr := range aggregations {
+		if aggr != nil {
+			used[idx] = true
+			aggrs = append(aggrs, *aggr)
+		}
+	}
+	newPlan, groupingOffsets, pushedAggrs, err := hp.pushAggregation(ctx, plan, grouping, aggrs, ignoreOutputOrder)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	idx := 0
+	for _, b := range used {
+		if !b {
+			outputAggrs = append(outputAggrs, nil)
+			continue
+		}
+		outputAggrs = append(outputAggrs, pushedAggrs[idx])
+		idx++
+	}
+	return newPlan, groupingOffsets, outputAggrs, nil
+}
+
+func getAggrPusher(aggregations []abstract.Aggr, groupingOffsets []int, lhsOffsets []offsets, rhsOffsets []offsets, join *joinGen4) aggrPusher {
+	needsProjection := false
+	for _, aggregation := range aggregations {
+		switch aggregation.OpCode {
+		case engine.AggregateSum, engine.AggregateCount, engine.AggregateSumDistinct, engine.AggregateCountDistinct:
+			needsProjection = true
+		}
+		if needsProjection {
+			break
+		}
+	}
+	var pusher aggrPusher
+	if needsProjection {
+		length := getLengthOfProjection(groupingOffsets, lhsOffsets, rhsOffsets, aggregations)
+		pusher = projAggrPusher{join: join, proj: &projection{
+			source:      join,
+			columns:     make([]sqlparser.Expr, length),
+			columnNames: make([]string, length),
+		}}
+	} else {
+		pusher = joinAggrPusher{join: join}
+	}
+	return pusher
 }
 
 func getLengthOfProjection(groupingOffsets []int, lhsOffsets []offsets, rhsOffsets []offsets, aggregations []abstract.Aggr) int {
@@ -312,71 +372,46 @@ func getLengthOfProjection(groupingOffsets []int, lhsOffsets []offsets, rhsOffse
 	return length
 }
 
+func isMinOrMax(in engine.AggregateOpcode) bool {
+	switch in {
+	case engine.AggregateMin, engine.AggregateMax:
+		return true
+	default:
+		return false
+	}
+}
+
 func splitAggregationsToLeftAndRight(
 	ctx *plancontext.PlanningContext,
 	aggregations []abstract.Aggr,
 	join *joinGen4,
-) ([]abstract.Aggr, []abstract.Aggr, error) {
-	var lhsAggrs, rhsAggrs []abstract.Aggr
+) ([]*abstract.Aggr, []*abstract.Aggr, error) {
+	var lhsAggrs, rhsAggrs []*abstract.Aggr
 	for _, aggr := range aggregations {
+		newAggr := aggr
 		if isCountStar(aggr.Func) {
-			lhsAggrs = append(lhsAggrs, aggr)
-			rhsAggrs = append(rhsAggrs, aggr)
+			lhsAggrs = append(lhsAggrs, &newAggr)
+			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {
 			deps := ctx.SemTable.RecursiveDeps(aggr.Func)
+			var other *abstract.Aggr
+			// if we are sending down min/max, we don't have to multiply the results with anything
+			if !isMinOrMax(aggr.OpCode) {
+				other = countStarAggr()
+			}
 			switch {
 			case deps.IsSolvedBy(join.Left.ContainsTables()):
-				lhsAggrs = append(lhsAggrs, aggr)
-				rhsAggrs = append(rhsAggrs, countStarAggr())
+				lhsAggrs = append(lhsAggrs, &newAggr)
+				rhsAggrs = append(rhsAggrs, other)
 			case deps.IsSolvedBy(join.Right.ContainsTables()):
-				rhsAggrs = append(rhsAggrs, aggr)
-				lhsAggrs = append(lhsAggrs, countStarAggr())
+				rhsAggrs = append(rhsAggrs, &newAggr)
+				lhsAggrs = append(lhsAggrs, other)
 			default:
 				return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
 			}
 		}
 	}
 	return lhsAggrs, rhsAggrs, nil
-}
-
-func produceOutputAggregations(
-	aggregations []abstract.Aggr,
-	lhsAggregations, rhsAggregations []*engine.AggregateParams,
-	join *joinGen4,
-	proj *projection,
-	ignoreOutputOrder bool,
-) ([]*engine.AggregateParams, error) {
-	var outputAggrs []*engine.AggregateParams
-	for idx, aggr := range aggregations {
-		// create the projection expression that will multiply the incoming aggregations
-		l, r := lhsAggregations[idx], rhsAggregations[idx]
-		offset := len(join.Cols)
-		expr := &sqlparser.BinaryExpr{
-			Operator: sqlparser.MultOp,
-			Left:     sqlparser.Offset(offset),
-			Right:    sqlparser.Offset(offset + 1),
-		}
-		outputIdx := aggr.Index
-		if ignoreOutputOrder {
-			outputIdx = nil
-		}
-		output, err := proj.addColumn(outputIdx, expr, aggr.Alias)
-		if err != nil {
-			return nil, err
-		}
-
-		// pass through the output columns from the join
-		join.Cols = append(join.Cols, -(l.Col + 1))
-		join.Cols = append(join.Cols, r.Col+1)
-
-		outputAggrs = append(outputAggrs, &engine.AggregateParams{
-			Opcode: engine.AggregateSum,
-			Col:    output,
-			Alias:  aggr.Alias,
-			Expr:   aggr.Func,
-		})
-	}
-	return outputAggrs, nil
 }
 
 func splitGroupingsToLeftAndRight(
@@ -407,18 +442,133 @@ func splitGroupingsToLeftAndRight(
 	return lhsGrouping, rhsGrouping, groupingOffsets, nil
 }
 
-func passGroupingsThroughJoinAndProj(proj *projection, join *joinGen4, offset offsets, f func(int) int, outputColIdx *int) (output offsets, err error) {
-	output.col, err = proj.addColumn(outputColIdx, sqlparser.Offset(len(join.Cols)), "")
+type aggrPusher interface {
+	pushGrouping(offset offsets, f func(int) int, outputColIdx *int) (output offsets, err error)
+	pushAggregation(aggregations []abstract.Aggr, lhs, rhs []*engine.AggregateParams, ignoreOutputOrder bool) ([]*engine.AggregateParams, error)
+	resultPlan() logicalPlan
+}
+
+type projAggrPusher struct {
+	proj *projection
+	join *joinGen4
+}
+
+func (pap projAggrPusher) pushGrouping(offset offsets, f func(int) int, outputColIdx *int) (output offsets, err error) {
+	output.col, err = pap.proj.addColumn(outputColIdx, sqlparser.Offset(len(pap.join.Cols)), "")
 	if err != nil {
 		return
 	}
-	join.Cols = append(join.Cols, f(offset.col))
+	pap.join.Cols = append(pap.join.Cols, f(offset.col))
 	if offset.wsCol > -1 {
-		output.wsCol, err = proj.addColumn(nil, sqlparser.Offset(len(join.Cols)), "")
+		output.wsCol, err = pap.proj.addColumn(nil, sqlparser.Offset(len(pap.join.Cols)), "")
 		if err != nil {
 			return
 		}
-		join.Cols = append(join.Cols, f(offset.wsCol))
+		pap.join.Cols = append(pap.join.Cols, f(offset.wsCol))
 	}
 	return
+}
+
+func (pap projAggrPusher) pushAggregation(aggregations []abstract.Aggr, lhsAggregations, rhsAggregations []*engine.AggregateParams, ignoreOutputOrder bool) ([]*engine.AggregateParams, error) {
+	var outputAggrs []*engine.AggregateParams
+	for idx, aggr := range aggregations {
+		// create the projection expression that will multiply the incoming aggregations
+		l, r := lhsAggregations[idx], rhsAggregations[idx]
+		switch {
+		case l != nil && r != nil:
+			// If we have aggregation coming in from both sides, we need to multiply the two incoming values with each other
+			offset := len(pap.join.Cols)
+			expr := &sqlparser.BinaryExpr{
+				Operator: sqlparser.MultOp,
+				Left:     sqlparser.Offset(offset),
+				Right:    sqlparser.Offset(offset + 1),
+			}
+			outputIdx := aggr.Index
+			if ignoreOutputOrder {
+				outputIdx = nil
+			}
+			output, err := pap.proj.addColumn(outputIdx, expr, aggr.Alias)
+			if err != nil {
+				return nil, err
+			}
+
+			// pass through the output columns from the join
+			pap.join.Cols = append(pap.join.Cols, -(l.Col + 1))
+			pap.join.Cols = append(pap.join.Cols, r.Col+1)
+
+			outputAggrs = append(outputAggrs, &engine.AggregateParams{
+				Opcode: engine.AggregateSum,
+				Col:    output,
+				Alias:  aggr.Alias,
+				Expr:   aggr.Func,
+			})
+		default:
+			// It's an aggregation that can be safely pushed down to one side only
+			offset := len(pap.join.Cols)
+			outputIdx := aggr.Index
+			if ignoreOutputOrder {
+				outputIdx = nil
+			}
+			pap.join.Cols = append(pap.join.Cols, getJoinColOffset(l, r))
+			output, err := pap.proj.addColumn(outputIdx, sqlparser.Offset(offset), aggr.Alias)
+			if err != nil {
+				return nil, err
+			}
+
+			outputAggrs = append(outputAggrs, &engine.AggregateParams{
+				Opcode: aggr.OpCode,
+				Col:    output,
+				Alias:  aggr.Alias,
+				Expr:   aggr.Func,
+			})
+		}
+	}
+	return outputAggrs, nil
+}
+
+func (pap projAggrPusher) resultPlan() logicalPlan {
+	return pap.proj
+}
+
+type joinAggrPusher struct {
+	join *joinGen4
+}
+
+func (jap joinAggrPusher) pushGrouping(offset offsets, f func(int) int, outputColIdx *int) (output offsets, err error) {
+	output.col = len(jap.join.Cols)
+	jap.join.Cols = append(jap.join.Cols, f(offset.col))
+	if offset.wsCol > -1 {
+		output.wsCol = len(jap.join.Cols)
+		jap.join.Cols = append(jap.join.Cols, f(offset.wsCol))
+	}
+	return
+}
+
+func (jap joinAggrPusher) pushAggregation(aggregations []abstract.Aggr, lhsAggregations, rhsAggregations []*engine.AggregateParams, ignoreOutputOrder bool) ([]*engine.AggregateParams, error) {
+	var outputAggrs []*engine.AggregateParams
+	for idx, aggr := range aggregations {
+		l, r := lhsAggregations[idx], rhsAggregations[idx]
+		offset := len(jap.join.Cols)
+		jap.join.Cols = append(jap.join.Cols, getJoinColOffset(l, r))
+
+		outputAggrs = append(outputAggrs, &engine.AggregateParams{
+			Opcode: aggr.OpCode,
+			Col:    offset,
+			Alias:  aggr.Alias,
+			Expr:   aggr.Func,
+		})
+	}
+
+	return outputAggrs, nil
+}
+
+func getJoinColOffset(l *engine.AggregateParams, r *engine.AggregateParams) int {
+	if l != nil {
+		return -(l.Col + 1)
+	}
+	return r.Col + 1
+}
+
+func (jap joinAggrPusher) resultPlan() logicalPlan {
+	return jap.join
 }
