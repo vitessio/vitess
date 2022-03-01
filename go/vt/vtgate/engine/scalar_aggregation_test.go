@@ -17,9 +17,11 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -30,10 +32,10 @@ func TestEmptyRows(outer *testing.T) {
 		expectedVal string
 		expectedTyp string
 	}{{
-		// 	opcode:      AggregateCountDistinct,
-		// 	expectedVal: "0",
-		// 	expectedTyp: "int64",
-		// }, {
+		opcode:      AggregateCountDistinct,
+		expectedVal: "0",
+		expectedTyp: "int64",
+	}, {
 		opcode:      AggregateCount,
 		expectedVal: "0",
 		expectedTyp: "int64",
@@ -91,4 +93,43 @@ func TestEmptyRows(outer *testing.T) {
 			assert.Equal(wantResult, result)
 		})
 	}
+}
+
+func TestScalarAggregateStreamExecute(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"count(*)",
+		"uint64",
+	)
+	fp := &fakePrimitive{
+		allResultsInOneCall: true,
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(fields,
+				"1",
+			), sqltypes.MakeTestResult(fields,
+				"3",
+			)},
+	}
+
+	oa := &ScalarAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateCount,
+			Col:    0,
+		}},
+		Input:               fp,
+		TruncateColumnCount: 1,
+		PreProcess:          true,
+	}
+
+	var results []*sqltypes.Result
+	err := oa.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	assert.NoError(err)
+	// one for the fields, and one for the actual aggregation result
+	require.EqualValues(t, 2, len(results), "number of results")
+
+	got := fmt.Sprintf("%v", results[1].Rows)
+	assert.Equal("[[UINT64(4)]]", got)
 }

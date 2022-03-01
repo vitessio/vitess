@@ -97,7 +97,6 @@ func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*quer
 		if err != nil {
 			return nil, err
 		}
-		continue
 	}
 
 	if resultRow == nil {
@@ -120,7 +119,42 @@ func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*quer
 
 // TryStreamExecute implements the Primitive interface
 func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("todo")
+	cb := func(qr *sqltypes.Result) error {
+		return callback(qr.Truncate(sa.TruncateColumnCount))
+	}
+	var current []sqltypes.Value
+	var curDistincts []sqltypes.Value
+	var fields []*querypb.Field
+	fieldsSent := false
+
+	err := vcursor.StreamExecutePrimitive(sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
+		if len(result.Fields) != 0 && !fieldsSent {
+			fields = convertFields(result.Fields, sa.PreProcess, sa.Aggregates)
+			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
+			}
+			fieldsSent = true
+		}
+
+		// this code is very similar to the TryExecute method
+		for _, row := range result.Rows {
+			if current == nil {
+				current, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates)
+				continue
+			}
+			var err error
+			current, curDistincts, err = merge(fields, current, row, curDistincts, sa.Collations, sa.Aggregates)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}})
 }
 
 // creates the empty row for the case when we are missing grouping keys and have empty input table
