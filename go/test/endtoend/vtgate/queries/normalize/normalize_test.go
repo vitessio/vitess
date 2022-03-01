@@ -25,11 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
 )
 
 func TestNormalizeAllFields(t *testing.T) {

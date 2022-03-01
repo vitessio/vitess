@@ -39,13 +39,14 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -254,13 +255,6 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	return clusterInstance, 0
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
-}
-
 type QueryEngine interface {
 	ExpectQueries(count int)
 }
@@ -298,10 +292,10 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
+	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
 
-	//Start both threads.
+	// Start both threads.
 	readThreadInstance := &threadParams{
 		index:               1,
 		typ:                 "read",
