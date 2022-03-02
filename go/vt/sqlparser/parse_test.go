@@ -2307,6 +2307,15 @@ var (
 			input: "FLUSH PRIVILEGES",
 			output: "flush privileges",
 		}, {
+			input: "FLUSH BINARY LOGS",
+			output: "flush binary logs",
+		}, {
+			input: "FLUSH USER_RESOURCES",
+			output: "flush user_resources",
+		}, {
+			input: "FLUSH LOCAL HOSTS",
+			output: "flush local hosts",
+		}, {
 			input:  "SHOW GRANTS",
 			output: "show grants",
 		}, {

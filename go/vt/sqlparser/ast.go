@@ -353,7 +353,7 @@ func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
 func (*Rollback) iStatement()          {}
-func (*FlushPrivileges) iStatement()   {}
+func (*Flush) iStatement()   {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*BeginEndBlock) iStatement()     {}
@@ -2819,12 +2819,31 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
 }
 
-// FlushPrivileges represents a FlushPrivileges statement.
-type FlushPrivileges struct{}
+// FlushOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING
+type FlushOption struct {
+	Name string
+}
+
+// Flush represents a Flush statement.
+type Flush struct{
+	Type 	string
+	Options []*FlushOption
+}
 
 // Format formats the node.
-func (node *FlushPrivileges) Format(buf *TrackedBuffer) {
-	buf.WriteString("flush privileges")
+func (node *Flush) Format(buf *TrackedBuffer) {
+	flushStr := "flush"
+	if node.Type != "" {
+		flushStr = fmt.Sprintf("%s %s", flushStr, strings.ToLower(node.Type))
+	}
+
+	var opts []string
+	for _, opt := range node.Options {
+		opts = append(opts, strings.ToLower(opt.Name))
+	}
+	flushStr = fmt.Sprintf("%s %s", flushStr, strings.Join(opts, " "))
+
+	buf.WriteString(flushStr)
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.

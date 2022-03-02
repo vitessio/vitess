@@ -118,6 +118,8 @@ func yyOldPosition(yylex interface{}) int {
   indexInfo     *IndexInfo
   indexOption   *IndexOption
   indexOptions  []*IndexOption
+  flushOption   *FlushOption
+  flushOptions  []*FlushOption
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
@@ -241,7 +243,8 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
-%token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE
+%token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
+%token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
@@ -392,6 +395,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
 %type <str> key_type key_type_opt
+%type <str> flush_type flush_type_opt
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> definer_opt
 %type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
@@ -426,6 +430,8 @@ func yyOldPosition(yylex interface{}) int {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
+%type <flushOption> flush_option
+%type <flushOptions> flush_option_list flush_option_list_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -1082,12 +1088,6 @@ grant_statement:
 | GRANT PROXY ON account_name TO account_name_list with_grant_opt
   {
     $$ = &GrantProxy{On: $4, To: $6, WithGrantOption: $7}
-  }
-
-flush_statement:
-  FLUSH PRIVILEGES
-  {
-    $$ = &FlushPrivileges{}
   }
 
 revoke_statement:
@@ -2577,6 +2577,81 @@ column_comment:
   {
     $$ = NewStrVal($2)
   }
+
+flush_statement:
+  FLUSH flush_type_opt flush_option_list_opt
+  {
+    $$ = &Flush{Type: $2, Options: $3}
+  }
+
+flush_option_list_opt:
+  flush_option_list
+  {
+    $$ = $1
+  }
+
+flush_option_list:
+  flush_option
+  { $$ = []*FlushOption{$1} }
+| flush_option_list flush_option
+  { $$ = append($$, $2) }
+
+flush_option:
+  BINARY LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| ENGINE LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| ERROR LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| GENERAL LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| HOSTS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| LOGS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| PRIVILEGES
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| OPTIMIZER_COSTS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| SLOW LOGS
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2)}
+  }
+| STATUS
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+| USER_RESOURCES
+  {
+    $$ = &FlushOption{Name: string($1)}
+  }
+
+flush_type:
+  NO_WRITE_TO_BINLOG
+  { $$ = string($1) }
+| LOCAL
+  { $$ = string($1) }
+
+flush_type_opt:
+  { $$ = "" }
+| flush_type
+  { $$ = $1 }
 
 index_definition:
   index_info '(' index_column_list ')' index_option_list
@@ -5820,6 +5895,7 @@ reserved_keyword:
 | OF
 | OFF
 | ON
+| OPTIMIZER_COSTS
 | OR
 | ORDER
 | OUT
@@ -5845,6 +5921,7 @@ reserved_keyword:
 | SET
 | SHOW
 | SHUTDOWN
+| STATUS
 | STD
 | STDDEV
 | STDDEV_POP
@@ -5882,7 +5959,6 @@ reserved_keyword:
 | WHERE
 | WINDOW
 | WITH
-| STATUS
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -5942,8 +6018,10 @@ non_reserved_keyword:
 | DUPLICATE
 | EACH
 | ENFORCED
+| ENGINE
 | ENGINES
 | ENUM
+| ERROR
 | EXCEPT
 | EXCLUDE
 | EXPANSION
@@ -5954,12 +6032,14 @@ non_reserved_keyword:
 | FLUSH
 | FOREIGN
 | FULLTEXT
+| GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GRANTS
+| HOSTS
 | HISTOGRAM
 | HISTORY
 | INACTIVE
@@ -5983,6 +6063,7 @@ non_reserved_keyword:
 | LOAD
 | LOCAL
 | LOCKED
+| LOGS
 | LONGBLOB
 | LONGTEXT
 | LOW_PRIORITY
@@ -6045,6 +6126,7 @@ non_reserved_keyword:
 | READ
 | REAL
 | REFERENCE
+| RELAY
 | RELEASE
 | REORGANIZE
 | REPAIR
@@ -6078,6 +6160,7 @@ non_reserved_keyword:
 | SIGNED
 | SKIP
 | SLAVE
+| SLOW
 | SMALLINT
 | SPATIAL
 | SQLSTATE
@@ -6109,6 +6192,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | USER
+| USER_RESOURCES
 | VARBINARY
 | VARCHAR
 | VARIABLES
