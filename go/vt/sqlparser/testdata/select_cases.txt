@@ -14803,8 +14803,8 @@ END
 INPUT
 select hex(a) from t1 ignore key(a) where a like 'A_' order by a;
 END
-ERROR
-syntax error at position 33 near 'key'
+OUTPUT
+select hex(a) from t1 ignore index (a) where a like 'A_' order by a asc
 END
 INPUT
 select char(196 using utf8);

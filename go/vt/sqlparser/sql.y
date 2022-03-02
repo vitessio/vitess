@@ -83,6 +83,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   colName       *ColName
   indexHint    *IndexHint
   indexHints    IndexHints
+  indexHintForType IndexHintForType
   literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
@@ -363,6 +364,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHint> index_hint
+%type <indexHintForType> index_hint_for_opt
 %type <indexHints> index_hint_list index_hint_list_opt
 %type <expr> where_expression_opt
 %type <boolVal> boolean_value
@@ -4165,22 +4167,40 @@ index_hint
   }
 
 index_hint:
-  USE INDEX openb index_list closeb
+  USE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: UseOp, Indexes: $4}
+    $$ = &IndexHint{Type: UseOp, ForType:$3, Indexes: $5}
   }
-| USE INDEX openb closeb
+| USE index_or_key index_hint_for_opt openb closeb
   {
-    $$ = &IndexHint{Type: UseOp}
+    $$ = &IndexHint{Type: UseOp, ForType: $3}
   }
-| IGNORE INDEX openb index_list closeb
+| IGNORE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: IgnoreOp, Indexes: $4}
+    $$ = &IndexHint{Type: IgnoreOp, ForType: $3, Indexes: $5}
   }
-| FORCE INDEX openb index_list closeb
+| FORCE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHint{Type: ForceOp, Indexes: $4}
+    $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
   }
+
+index_hint_for_opt:
+  {
+    $$ = NoForType
+  }
+| FOR JOIN
+  {
+    $$ = JoinForType
+  }
+| FOR ORDER BY
+  {
+    $$ = OrderByForType
+  }
+| FOR GROUP BY
+  {
+    $$ = GroupByForType
+  }
+
 
 where_expression_opt:
   {

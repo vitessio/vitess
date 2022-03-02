@@ -1790,6 +1790,7 @@ func EqualsRefOfIndexHint(a, b *IndexHint) bool {
 		return false
 	}
 	return a.Type == b.Type &&
+		a.ForType == b.ForType &&
 		EqualsSliceOfColIdent(a.Indexes, b.Indexes)
 }
 
