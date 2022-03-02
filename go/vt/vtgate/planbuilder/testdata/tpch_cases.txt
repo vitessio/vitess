@@ -30,7 +30,7 @@ Gen4 plan same as above
   "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate \u003e= date('1994-01-01') and l_shipdate \u003c date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity \u003c 24",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0)",
     "Inputs": [
       {
@@ -52,7 +52,7 @@ Gen4 plan same as above
   "Original": "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate \u003e= date('1994-01-01') and l_shipdate \u003c date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity \u003c 24",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0) AS revenue",
     "Inputs": [
       {
@@ -129,7 +129,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "max(0)",
         "Inputs": [
           {
@@ -200,7 +200,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "max(0) AS max(total_revenue)",
         "Inputs": [
           {
@@ -438,7 +438,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
   "Original": "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#12' and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') and l_quantity \u003e= 1 and l_quantity \u003c= 1 + 10 and p_size between 1 and 5 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#23' and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK') and l_quantity \u003e= 10 and l_quantity \u003c= 10 + 10 and p_size between 1 and 10 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#34' and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG') and l_quantity \u003e= 20 and l_quantity \u003c= 20 + 10 and p_size between 1 and 15 and l_shipmode in ('AIR', 'AIR REG') and l_shipinstruct = 'DELIVER IN PERSON' )",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0) AS revenue",
     "Inputs": [
       {

@@ -1241,7 +1241,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0)",
             "Inputs": [
               {
@@ -1259,7 +1259,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0)",
             "Inputs": [
               {
@@ -1291,7 +1291,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Inputs": [
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0) AS s",
             "Inputs": [
               {
@@ -1309,7 +1309,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           },
           {
             "OperatorType": "Aggregate",
-            "Variant": "Ordered",
+            "Variant": "Scalar",
             "Aggregates": "count(0) AS s",
             "Inputs": [
               {
