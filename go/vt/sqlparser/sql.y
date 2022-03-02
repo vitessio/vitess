@@ -81,7 +81,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 
   ins           *Insert
   colName       *ColName
-  indexHints    *IndexHints
+  indexHint    *IndexHint
+  indexHints    IndexHints
+  indexHintForType IndexHintForType
   literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
@@ -361,7 +363,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
-%type <indexHints> index_hint_list
+%type <indexHint> index_hint
+%type <indexHintForType> index_hint_for_opt
+%type <indexHints> index_hint_list index_hint_list_opt
 %type <expr> where_expression_opt
 %type <boolVal> boolean_value
 %type <comparisonExprOperator> compare
@@ -3941,11 +3945,11 @@ derived_table:
   }
 
 aliased_table_name:
-table_name as_opt_id index_hint_list
+table_name as_opt_id index_hint_list_opt
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
-| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
+| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
@@ -4143,26 +4147,60 @@ table_id '.' '*'
     $$ = TableName{Name: $1}
   }
 
-index_hint_list:
+index_hint_list_opt:
   {
     $$ = nil
   }
-| USE INDEX openb index_list closeb
+| index_hint_list
   {
-    $$ = &IndexHints{Type: UseOp, Indexes: $4}
+    $$ = $1
   }
-| USE INDEX openb closeb
+
+index_hint_list:
+index_hint 
   {
-    $$ = &IndexHints{Type: UseOp}
+    $$ = IndexHints{$1}
   }
-| IGNORE INDEX openb index_list closeb
+| index_hint_list index_hint
   {
-    $$ = &IndexHints{Type: IgnoreOp, Indexes: $4}
+    $$ = append($1,$2)
   }
-| FORCE INDEX openb index_list closeb
+
+index_hint:
+  USE index_or_key index_hint_for_opt openb index_list closeb
   {
-    $$ = &IndexHints{Type: ForceOp, Indexes: $4}
+    $$ = &IndexHint{Type: UseOp, ForType:$3, Indexes: $5}
   }
+| USE index_or_key index_hint_for_opt openb closeb
+  {
+    $$ = &IndexHint{Type: UseOp, ForType: $3}
+  }
+| IGNORE index_or_key index_hint_for_opt openb index_list closeb
+  {
+    $$ = &IndexHint{Type: IgnoreOp, ForType: $3, Indexes: $5}
+  }
+| FORCE index_or_key index_hint_for_opt openb index_list closeb
+  {
+    $$ = &IndexHint{Type: ForceOp, ForType: $3, Indexes: $5}
+  }
+
+index_hint_for_opt:
+  {
+    $$ = NoForType
+  }
+| FOR JOIN
+  {
+    $$ = JoinForType
+  }
+| FOR ORDER BY
+  {
+    $$ = OrderByForType
+  }
+| FOR GROUP BY
+  {
+    $$ = GroupByForType
+  }
+
 
 where_expression_opt:
   {
