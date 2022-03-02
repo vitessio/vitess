@@ -17,6 +17,7 @@ limitations under the License.
 package reparentutil
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -323,7 +324,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 		canEstablish     bool
 	}{
 		{
-			name:             "'none' durability policy - primary not reached",
+			name:             "primary not reached",
 			durabilityPolicy: "none",
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
@@ -331,7 +332,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			},
 			canEstablish: false,
 		}, {
-			name:             "'semi_sync' durability policy - not established",
+			name:             "not established",
 			durabilityPolicy: "semi_sync",
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
@@ -339,7 +340,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			},
 			canEstablish: false,
 		}, {
-			name:             "'cross_cell' durability policy - not established",
+			name:             "not established",
 			durabilityPolicy: "cross_cell",
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
@@ -347,7 +348,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			},
 			canEstablish: false,
 		}, {
-			name:             "'none' durability policy - established",
+			name:             "established",
 			durabilityPolicy: "none",
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
@@ -355,7 +356,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			},
 			canEstablish: true,
 		}, {
-			name:             "'semi_sync' durability policy - established",
+			name:             "established",
 			durabilityPolicy: "semi_sync",
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
@@ -363,7 +364,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 			},
 			canEstablish: true,
 		}, {
-			name:             "'cross_cell' durability policy - established",
+			name:             "established",
 			durabilityPolicy: "cross_cell",
 			primaryEligible:  primaryTablet,
 			tabletsReached: []*topodatapb.Tablet{
@@ -373,7 +374,7 @@ func Test_canEstablishForTablet(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(fmt.Sprintf("'%s' durability policy - %s", tt.durabilityPolicy, tt.name), func(t *testing.T) {
 			err := SetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
 			require.Equalf(t, tt.canEstablish, canEstablishForTablet(tt.primaryEligible, tt.tabletsReached), "canEstablishForTablet(%v, %v)", tt.primaryEligible, tt.tabletsReached)
