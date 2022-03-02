@@ -9,7 +9,7 @@ concurrency:
 jobs:
   test:
     name: Operator Example
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -21,16 +21,6 @@ jobs:
 
       - name: Get dependencies
         run: |
-          # Setup MySQL 8.0
-          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-          sudo apt-get update
-
-          sudo apt-get install -y mysql-client make unzip g++ curl git wget eatmydata
-          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
           go mod download
 
       - name: Build
@@ -40,8 +30,9 @@ jobs:
       - name: Start minikube
         uses: medyagh/setup-minikube@master
         with:
-          # Creating minikube using two cores as GHA machines are limited to two cores.
-          cpus: 2
+          # Creating minikube using all core of the hosted runners.
+          # Equinix's c3.small.x86 has 8 cores.
+          cpus: 8
           memory: 4000m
           kubernetes-version: v1.22.7
 
