@@ -131,12 +131,47 @@ func TestAggrOnJoin(t *testing.T) {
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 
 	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) from aggr_test a join t3 t on a.val2 = t.id7", "[[INT64(8)]]")
-	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1", "[[INT64(8)]]")
+	/*
+		mysql> select count(*) from aggr_test a join t3 t on a.val2 = t.id7;
+		+----------+
+		| count(*) |
+		+----------+
+		|        8 |
+		+----------+
+		1 row in set (0.00 sec)
+	*/
+	utils.AssertMatches(
+		t,
+		conn,
+		"select /*vt+ PLANNER=gen4 */ a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1",
+		`[[VARCHAR("a") INT64(4)] [VARCHAR("b") INT64(2)] [VARCHAR("c") INT64(2)]]`,
+	)
+	/*
+		mysql> select a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1;
+		+------+----------+
+		| val1 | count(*) |
+		+------+----------+
+		| a    |        4 |
+		| b    |        2 |
+		| c    |        2 |
+		+------+----------+
+		3 rows in set (0.00 sec)
+	*/
 	utils.AssertMatches(t, conn, `
 select /*vt+ PLANNER=gen4 */ count(*) 
 from aggr_test a1 
 	join aggr_test a2 on a1.val2 = a2.id
 	join t3 t on a2.val2 = t.id7`, "[[INT64(8)]]")
+	/*mysql> select count(*)
+	-> from aggr_test a1
+	-> join aggr_test a2 on a1.val2 = a2.id
+	-> join t3 t on a2.val2 = t.id7;
+	+----------+
+	| count(*) |
+	+----------+
+	|        8 |
+	+----------+
+		1 row in set (0.00 sec)*/
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
