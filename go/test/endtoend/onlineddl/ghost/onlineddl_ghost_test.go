@@ -161,6 +161,7 @@ func TestMain(m *testing.M) {
 			"-schema_change_controller", "local",
 			"-schema_change_check_interval", "1",
 			"-online_ddl_check_interval", "3s",
+			"-gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
