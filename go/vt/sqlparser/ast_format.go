@@ -1028,7 +1028,16 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *IndexHints) Format(buf *TrackedBuffer) {
+func (node IndexHints) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node.
+func (node *IndexHint) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, " %sindex ", node.Type.ToString())
 	if len(node.Indexes) == 0 {
 		buf.astPrintf(node, "()")

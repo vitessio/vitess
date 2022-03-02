@@ -152,8 +152,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *IndexDefinition:
 		return a.rewriteRefOfIndexDefinition(parent, node, replacer)
-	case *IndexHints:
-		return a.rewriteRefOfIndexHints(parent, node, replacer)
+	case *IndexHint:
+		return a.rewriteRefOfIndexHint(parent, node, replacer)
+	case IndexHints:
+		return a.rewriteIndexHints(parent, node, replacer)
 	case *IndexInfo:
 		return a.rewriteRefOfIndexInfo(parent, node, replacer)
 	case *Insert:
@@ -490,8 +492,8 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
-		parent.(*AliasedTableExpr).Hints = newNode.(*IndexHints)
+	if !a.rewriteIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).Hints = newNode.(IndexHints)
 	}) {
 		return false
 	}
@@ -2335,7 +2337,7 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 	}
 	return true
 }
-func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -2350,7 +2352,44 @@ func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, r
 	for x, el := range node.Indexes {
 		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*IndexHints).Indexes[idx] = newNode.(ColIdent)
+				parent.(*IndexHint).Indexes[idx] = newNode.(ColIdent)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(IndexHints)
+			a.cur.revisit = false
+			return a.rewriteIndexHints(parent, node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node {
+		if !a.rewriteRefOfIndexHint(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(IndexHints)[idx] = newNode.(*IndexHint)
 			}
 		}(x)) {
 			return false

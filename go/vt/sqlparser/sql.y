@@ -81,7 +81,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 
   ins           *Insert
   colName       *ColName
-  indexHints    *IndexHints
+  indexHint    *IndexHint
+  indexHints    IndexHints
   literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
@@ -361,6 +362,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
+%type <indexHint> index_hint
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <boolVal> boolean_value
@@ -4144,24 +4146,34 @@ table_id '.' '*'
   }
 
 index_hint_list:
+index_hint 
+  {
+    $$ = IndexHints{$1}
+  }
+| index_hint_list ',' index_hint
+  {
+    $$ = append($1,$3)
+  }
+
+index_hint:
   {
     $$ = nil
   }
 | USE INDEX openb index_list closeb
   {
-    $$ = &IndexHints{Type: UseOp, Indexes: $4}
+    $$ = &IndexHint{Type: UseOp, Indexes: $4}
   }
 | USE INDEX openb closeb
   {
-    $$ = &IndexHints{Type: UseOp}
+    $$ = &IndexHint{Type: UseOp}
   }
 | IGNORE INDEX openb index_list closeb
   {
-    $$ = &IndexHints{Type: IgnoreOp, Indexes: $4}
+    $$ = &IndexHint{Type: IgnoreOp, Indexes: $4}
   }
 | FORCE INDEX openb index_list closeb
   {
-    $$ = &IndexHints{Type: ForceOp, Indexes: $4}
+    $$ = &IndexHint{Type: ForceOp, Indexes: $4}
   }
 
 where_expression_opt:
