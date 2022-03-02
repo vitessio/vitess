@@ -77,7 +77,7 @@
 			],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"local_example": {

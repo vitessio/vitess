@@ -45,12 +45,8 @@ jobs:
           memory: 4000m
           kubernetes-version: v1.22.7
 
-      - name: Kubectl
-        run: |
-          kubectl get pods -A
-
       - name: operator example
         timeout-minutes: 20
         run: |
-          which kubectl
-          eatmydata -- go run test.go -print-log -follow -docker=false -skip-build -retry=1 operator_example
+          source build.env
+          eatmydata -- go run test.go -print-log -follow -docker=false -skip-build operator_example
