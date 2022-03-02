@@ -53,4 +53,4 @@ jobs:
         timeout-minutes: 20
         run: |
           which kubectl
-          eatmydata -- go run test.go -print-log -follow -retry=1 operator_example
+          eatmydata -- go run test.go -print-log -follow -docker=false -skip-build -retry=1 operator_example
