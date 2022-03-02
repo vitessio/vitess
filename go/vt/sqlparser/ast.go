@@ -2819,7 +2819,7 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
 }
 
-// FlushOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING
+// FlushOption is used for trailing options for flush statement
 type FlushOption struct {
 	Name string
 }
@@ -2832,18 +2832,18 @@ type Flush struct{
 
 // Format formats the node.
 func (node *Flush) Format(buf *TrackedBuffer) {
-	flushStr := "flush"
-	if node.Type != "" {
-		flushStr = fmt.Sprintf("%s %s", flushStr, strings.ToLower(node.Type))
-	}
+	buf.WriteString("flush")
 
 	var opts []string
 	for _, opt := range node.Options {
 		opts = append(opts, strings.ToLower(opt.Name))
 	}
-	flushStr = fmt.Sprintf("%s %s", flushStr, strings.Join(opts, " "))
 
-	buf.WriteString(flushStr)
+	if node.Type == "" {
+		buf.Myprintf(" %s", strings.Join(opts, " "))
+	} else {
+		buf.Myprintf(" %s %s", strings.ToLower(node.Type), strings.Join(opts, " "))
+	}
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
