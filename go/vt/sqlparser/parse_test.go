@@ -2348,6 +2348,9 @@ var (
 		}, {
 			input:  "kill connection 423",
 			output: "kill connection 423",
+		},{
+			input: "SELECT * FROM information_schema.processlist",
+			output: "select * from information_schema.`processlist`",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
