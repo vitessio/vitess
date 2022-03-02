@@ -363,7 +363,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHint> index_hint
-%type <indexHints> index_hint_list
+%type <indexHints> index_hint_list index_hint_list_opt
 %type <expr> where_expression_opt
 %type <boolVal> boolean_value
 %type <comparisonExprOperator> compare
@@ -3943,11 +3943,11 @@ derived_table:
   }
 
 aliased_table_name:
-table_name as_opt_id index_hint_list
+table_name as_opt_id index_hint_list_opt
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
-| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
+| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list_opt
   {
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
@@ -4145,21 +4145,27 @@ table_id '.' '*'
     $$ = TableName{Name: $1}
   }
 
+index_hint_list_opt:
+  {
+    $$ = nil
+  }
+| index_hint_list
+  {
+    $$ = $1
+  }
+
 index_hint_list:
 index_hint 
   {
     $$ = IndexHints{$1}
   }
-| index_hint_list ',' index_hint
+| index_hint_list index_hint
   {
-    $$ = append($1,$3)
+    $$ = append($1,$2)
   }
 
 index_hint:
-  {
-    $$ = nil
-  }
-| USE INDEX openb index_list closeb
+  USE INDEX openb index_list closeb
   {
     $$ = &IndexHint{Type: UseOp, Indexes: $4}
   }
