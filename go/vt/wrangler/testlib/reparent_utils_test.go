@@ -148,10 +148,11 @@ func TestReparentTablet(t *testing.T) {
 	// which ends up making this test unpredictable.
 	replica.FakeMysqlDaemon.Replicating = true
 	replica.FakeMysqlDaemon.IOThreadRunning = true
+	replica.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	replica.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	replica.StartActionLoop(t, wr)

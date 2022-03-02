@@ -582,6 +582,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	// old primary
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
+	primary.FakeMysqlDaemon.IOThreadRunning = false
 	primary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
@@ -605,12 +606,14 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	// goodReplica1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
+	goodReplica1.FakeMysqlDaemon.IOThreadRunning = true
+	goodReplica1.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	goodReplica1.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	// simulate error that will trigger a call to RestartReplication
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
-		"RESET SLAVE",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
@@ -900,10 +903,12 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
+	goodReplica1.FakeMysqlDaemon.IOThreadRunning = true
+	goodReplica1.FakeMysqlDaemon.CurrentSourceHost = oldPrimary.Tablet.MysqlHostname
+	goodReplica1.FakeMysqlDaemon.CurrentSourcePort = int(oldPrimary.Tablet.MysqlPort)
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)

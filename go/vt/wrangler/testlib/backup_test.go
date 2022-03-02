@@ -104,6 +104,7 @@ func TestBackupRestore(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
+	primary.FakeMysqlDaemon.IOThreadRunning = false
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -123,7 +124,10 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
+	sourceTablet.FakeMysqlDaemon.IOThreadRunning = true
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
+	sourceTablet.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	sourceTablet.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -142,9 +146,9 @@ func TestBackupRestore(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
+
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
 
@@ -168,6 +172,9 @@ func TestBackupRestore(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
+	destTablet.FakeMysqlDaemon.IOThreadRunning = true
+	destTablet.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	destTablet.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -319,6 +326,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
+	primary.FakeMysqlDaemon.IOThreadRunning = false
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -338,6 +346,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
+	sourceTablet.FakeMysqlDaemon.IOThreadRunning = true
+	sourceTablet.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	sourceTablet.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -357,7 +368,6 @@ func TestBackupRestoreLagged(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -404,6 +414,9 @@ func TestBackupRestoreLagged(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
+	destTablet.FakeMysqlDaemon.IOThreadRunning = true
+	destTablet.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	destTablet.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -526,6 +539,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	primary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db)
 	primary.FakeMysqlDaemon.ReadOnly = false
 	primary.FakeMysqlDaemon.Replicating = false
+	primary.FakeMysqlDaemon.IOThreadRunning = false
 	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -544,6 +558,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
+	sourceTablet.FakeMysqlDaemon.IOThreadRunning = true
+	sourceTablet.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	sourceTablet.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -563,7 +580,6 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
-		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -582,6 +598,9 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
+	destTablet.FakeMysqlDaemon.IOThreadRunning = true
+	destTablet.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	destTablet.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	destTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
