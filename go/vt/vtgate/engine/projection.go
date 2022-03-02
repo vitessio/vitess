@@ -39,23 +39,25 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 	}
 
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
-	if wantfields {
-		err := p.addFields(env, result)
-		if err != nil {
-			return nil, err
-		}
-	}
+	env.Fields = result.Fields
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
 		env.Row = row
+		resRow := make([]sqltypes.Value, 0, len(p.Exprs))
 		for _, exp := range p.Exprs {
 			result, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
-			row = append(row, result.Value())
+			resRow = append(resRow, result.Value())
 		}
-		rows = append(rows, row)
+		rows = append(rows, resRow)
+	}
+	if wantfields {
+		err := p.addFields(env, result)
+		if err != nil {
+			return nil, err
+		}
 	}
 	result.Rows = rows
 	return result, nil
@@ -76,6 +78,7 @@ func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*quer
 		}
 	}
 	var rows [][]sqltypes.Value
+	env.Fields = result.Fields
 	for _, row := range result.Rows {
 		env.Row = row
 		for _, exp := range p.Exprs {
@@ -106,6 +109,7 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 func (p *Projection) addFields(env *evalengine.ExpressionEnv, qr *sqltypes.Result) error {
+	qr.Fields = nil
 	for i, col := range p.Cols {
 		q, err := env.TypeOf(p.Exprs[i])
 		if err != nil {
