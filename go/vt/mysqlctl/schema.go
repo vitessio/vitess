@@ -268,13 +268,19 @@ func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, table
 const (
 	GetColumnNamesQuery = `SELECT COLUMN_NAME as column_name
 		FROM INFORMATION_SCHEMA.COLUMNS
-		WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'
+		WHERE TABLE_SCHEMA = %s AND TABLE_NAME = '%s'
 		ORDER BY ORDINAL_POSITION`
-	GetFieldsQuery = "SELECT %s FROM %s.%s WHERE 1=0"
+	GetFieldsQuery = "SELECT %s FROM %s WHERE 1 != 1"
 )
 
 func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sqltypes.Result, error)) (string, error) {
-	query := fmt.Sprintf(GetColumnNamesQuery, dbName, sqlescape.UnescapeID(tableName))
+	var dbName2 string
+	if dbName == "" {
+		dbName2 = "database()"
+	} else {
+		dbName2 = fmt.Sprintf("'%s'", dbName)
+	}
+	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, sqlescape.UnescapeID(tableName))
 	qr, err := exec(query, 10000, true)
 	if err != nil {
 		return "", err
@@ -307,7 +313,11 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	if selectColumns == "" {
 		selectColumns = "*"
 	}
-	query := fmt.Sprintf(GetFieldsQuery, selectColumns, sqlescape.EscapeID(dbName), sqlescape.EscapeID(table))
+	tableSpec := sqlescape.EscapeID(sqlescape.UnescapeID(table))
+	if dbName != "" {
+		tableSpec = fmt.Sprintf("%s.%s", sqlescape.EscapeID(sqlescape.UnescapeID(dbName)), tableSpec)
+	}
+	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)
 	if err != nil {
 		return nil, nil, err
