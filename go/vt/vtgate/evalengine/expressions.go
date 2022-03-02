@@ -523,19 +523,18 @@ func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
-	f := flag(0)
-	t := sqltypes.Null
-
 	// we'll try to do the best possible with the information we have
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
 		if value.IsNull() {
-			f = flagNull | flagNullable
+			return sqltypes.Null, flagNull | flagNullable
 		}
-		t = value.Type()
+		return value.Type(), flag(0)
 	}
+
 	if c.Offset < len(env.Fields) {
-		t = env.Fields[c.Offset].Type
+		return env.Fields[c.Offset].Type, flagNullable
 	}
-	return t, f
+
+	panic("Column missing both data and field")
 }
