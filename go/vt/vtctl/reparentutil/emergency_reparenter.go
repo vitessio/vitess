@@ -210,14 +210,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// In case the user has specified a tablet specifically, then it is selected, as long as it is the most advanced.
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
-	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules
+	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
 	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
 	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
 
-	// After finding the intermediate source, we want to filter the valid candidate list by the following criterion -
+	// After finding the intermediate source, we want to filter the valid candidate list by the following criteria -
 	// 1. Only keep the tablets which can make progress after being promoted (have sufficient reachable semi-sync ackers)
 	// 2. Remove the tablets with the Must_not promote rule
 	// 3. Remove cross-cell tablets if PreventCrossCellPromotion is specified
@@ -227,8 +227,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	// check whether the intermediate source candidate selected is ideal or if it can be improved later
-	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list
+	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
+	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
 	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
@@ -431,9 +431,9 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	// also include the current tablet for being considered as part of valid candidates for ERS promotion
 	reachableTablets = append(reachableTablets, source)
 
-	// The only valid candidates for improvement are the ones which are reachable and part of the valid candidate list
-	// Here we need to be careful not to mess up the ordering of tablets in validCandidateTablets since the list is sorted by the
-	// replication positions
+	// The only valid candidates for improvement are the ones which are reachable and part of the valid candidate list.
+	// Here we need to be careful not to mess up the ordering of tablets in validCandidateTablets, since the list is sorted by the
+	// replication positions.
 	var validCandidatesForImprovement []*topodatapb.Tablet
 	for _, tablet := range validCandidateTablets {
 		if topoproto.IsTabletInList(tablet, reachableTablets) {
