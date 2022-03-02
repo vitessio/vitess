@@ -3700,7 +3700,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0)",
         "Inputs": [
           {
@@ -3730,7 +3730,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {

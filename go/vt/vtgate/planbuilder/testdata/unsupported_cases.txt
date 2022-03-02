@@ -443,7 +443,7 @@ Gen4 plan same as above
   "Original": "select id, count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(1)",
     "Inputs": [
       {

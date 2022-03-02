@@ -145,7 +145,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 	case *joinGen4, *semiJoin, *hashJoin:
 		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
-		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
+		p.truncateColumnCount = hp.sel.GetColumnCount()
 	case *memorySort:
 		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *pulloutSubquery:
@@ -336,7 +336,7 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 		return len(node.eSimpleProj.Cols) - 1, true, nil
 	case *orderedAggregate:
 		colName, isColName := expr.Expr.(*sqlparser.ColName)
-		for _, aggregate := range node.eaggr.Aggregates {
+		for _, aggregate := range node.aggregates {
 			if sqlparser.EqualsExpr(aggregate.Expr, expr.Expr) {
 				return aggregate.Col, false, nil
 			}
@@ -344,7 +344,7 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 				return aggregate.Col, false, nil
 			}
 		}
-		for _, key := range node.eaggr.GroupByKeys {
+		for _, key := range node.groupByKeys {
 			if sqlparser.EqualsExpr(key.Expr, expr.Expr) {
 				return key.KeyCol, false, nil
 			}
@@ -473,14 +473,11 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		if hp.qp.ProjectionError != nil {
 			return nil, hp.qp.ProjectionError
 		}
-		eaggr := &engine.OrderedAggregate{}
 		oa = &orderedAggregate{
 			resultsBuilder: resultsBuilder{
 				logicalPlanCommon: newBuilderCommon(plan),
 				weightStrings:     make(map[*resultColumn]int),
-				truncater:         eaggr,
 			},
-			eaggr: eaggr,
 		}
 		newPlan = oa
 		hp.vtgateGrouping = true
@@ -526,7 +523,7 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 		}
 		param.Col = offset
 		param.Expr = fExpr
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, param)
+		oa.aggregates = append(oa.aggregates, param)
 	}
 
 	for _, groupExpr := range hp.qp.GroupByExprs {
@@ -580,7 +577,7 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 }
 
 // createPushExprAndAlias creates the expression that should be pushed down to the leaves,
-// and changes the opcode so it is a distinct one if needed
+// and changes the opcode, so it is a distinct one if needed
 func (hp *horizonPlanning) createPushExprAndAlias(
 	ctx *plancontext.PlanningContext,
 	expr abstract.SelectExpr,
@@ -609,11 +606,11 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 			opcode = engine.AggregateSumDistinct
 		}
 
-		oa.eaggr.PreProcess = true
+		oa.preProcess = true
 		by := abstract.GroupBy{
 			Inner:             innerAliased.Expr,
 			WeightStrExpr:     innerAliased.Expr,
-			DistinctAggrIndex: len(oa.eaggr.Aggregates) + 1,
+			DistinctAggrIndex: len(oa.aggregates) + 1,
 		}
 		hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, by)
 	}
@@ -660,11 +657,11 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupB
 			return err
 		}
 		if groupExpr.DistinctAggrIndex == 0 {
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: ctx.SemTable.CollationForExpr(groupExpr.Inner)})
+			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: ctx.SemTable.CollationForExpr(groupExpr.Inner)})
 		} else {
 			if wsOffset != -1 {
-				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
-				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
+				node.aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
+				node.aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
 			}
 		}
 		err = planGroupByGen4(ctx, groupExpr, node.input, wsOffset != -1)
@@ -949,7 +946,7 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 
 		collationID := collations.Unknown
 		if woffset != -1 {
-			collationID = plan.eaggr.GroupByKeys[idx].CollationID
+			collationID = plan.groupByKeys[idx].CollationID
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
@@ -963,12 +960,12 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 }
 
 func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, index int, found bool) {
-	for idx, key := range plan.eaggr.GroupByKeys {
+	for idx, key := range plan.groupByKeys {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) {
 			return key.KeyCol, key.WeightStringCol, idx, true
 		}
 	}
-	for idx, aggregate := range plan.eaggr.Aggregates {
+	for idx, aggregate := range plan.aggregates {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Expr) {
 			return aggregate.Col, -1, idx, true
 		}
@@ -1041,14 +1038,11 @@ func (hp *horizonPlanning) planDistinct(ctx *plancontext.PlanningContext, plan l
 }
 
 func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan *orderedAggregate) (logicalPlan, error) {
-	eaggr := &engine.OrderedAggregate{}
 	oa := &orderedAggregate{
 		resultsBuilder: resultsBuilder{
 			logicalPlanCommon: newBuilderCommon(currPlan),
 			weightStrings:     make(map[*resultColumn]int),
-			truncater:         eaggr,
 		},
-		eaggr: eaggr,
 	}
 	for _, sExpr := range hp.qp.SelectExprs {
 		expr, err := sExpr.GetExpr()
@@ -1056,20 +1050,20 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 			return nil, err
 		}
 		found := false
-		for _, grpParam := range currPlan.eaggr.GroupByKeys {
+		for _, grpParam := range currPlan.groupByKeys {
 			if sqlparser.EqualsExpr(expr, grpParam.Expr) {
 				found = true
-				eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
+				oa.groupByKeys = append(oa.groupByKeys, grpParam)
 				break
 			}
 		}
 		if found {
 			continue
 		}
-		for _, aggrParam := range currPlan.eaggr.Aggregates {
+		for _, aggrParam := range currPlan.aggregates {
 			if sqlparser.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
-				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationForExpr(expr)})
+				oa.groupByKeys = append(oa.groupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationForExpr(expr)})
 				break
 			}
 		}
@@ -1081,8 +1075,8 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 }
 
 func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	eaggr := &engine.OrderedAggregate{}
 	var orderExprs []abstract.OrderBy
+	var groupByKeys []*engine.GroupByParams
 	for index, sExpr := range hp.qp.SelectExprs {
 		aliasExpr, err := sExpr.GetAliasedExpr()
 		if err != nil {
@@ -1107,7 +1101,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 			return nil, err
 		}
 		grpParam.WeightStringCol = wOffset
-		eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
+		groupByKeys = append(groupByKeys, grpParam)
 
 		orderExprs = append(orderExprs, abstract.OrderBy{
 			Inner:         &sqlparser.Order{Expr: inner},
@@ -1122,9 +1116,8 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 		resultsBuilder: resultsBuilder{
 			logicalPlanCommon: newBuilderCommon(innerPlan),
 			weightStrings:     make(map[*resultColumn]int),
-			truncater:         eaggr,
 		},
-		eaggr: eaggr,
+		groupByKeys: groupByKeys,
 	}
 	return oa, nil
 }
