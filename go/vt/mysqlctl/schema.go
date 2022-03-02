@@ -281,7 +281,7 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 		dbName2 = fmt.Sprintf("'%s'", dbName)
 	}
 	query := fmt.Sprintf(GetColumnNamesQuery, dbName2, sqlescape.UnescapeID(tableName))
-	qr, err := exec(query, 10000, true)
+	qr, err := exec(query, -1, true)
 	if err != nil {
 		return "", err
 	}

@@ -17,20 +17,18 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/mysqlctl"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
-
-const getColumnNamesQuery = `SELECT COLUMN_NAME as column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = '%s' ORDER BY ORDINAL_POSITION`
 
 // LoadTable creates a Table from the schema info in the database.
 func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment string) (*Table, error) {
@@ -52,56 +50,16 @@ func LoadTable(conn *connpool.DBConn, databaseName, tableName string, comment st
 	return ta, nil
 }
 
-func getColumnsList(conn *connpool.DBConn, dbName, tableName string) (string, error) {
-	var query string
-	if dbName == "" {
-		dbName = "database()"
-	} else {
-		dbName = fmt.Sprintf("'%s'", dbName)
-	}
-	query = fmt.Sprintf(getColumnNamesQuery, dbName, sqlescape.UnescapeID(tableName))
-	qr, err := conn.Exec(tabletenv.LocalContext(), query, 10000, true)
-	if err != nil {
-		return "", err
-	}
-	if qr == nil || len(qr.Rows) == 0 {
-		err = fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query)
-		log.Errorf("%s", fmt.Errorf("unable to get columns for table %s.%s using query %s", dbName, tableName, query))
-		return "", err
-	}
-	selectColumns := ""
-
-	for _, row := range qr.Named().Rows {
-		col := row["column_name"].ToString()
-		if col == "" {
-			continue
-		}
-		if selectColumns != "" {
-			selectColumns += ", "
-		}
-		selectColumns += sqlescape.EscapeID(col)
-	}
-	return selectColumns, nil
-}
-
 func fetchColumns(ta *Table, conn *connpool.DBConn, databaseName, sqlTableName string) error {
-	ctx := tabletenv.LocalContext()
-	var columnListString string
-	var err error
-	columnListString, err = getColumnsList(conn, databaseName, sqlTableName)
+	ctx := context.Background()
+	exec := func(query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
+		return conn.Exec(ctx, query, maxRows, wantFields)
+	}
+	fields, _, err := mysqlctl.GetColumns(databaseName, sqlTableName, exec)
 	if err != nil {
 		return err
 	}
-	// added for handling tests where information_schema.columns is not available. TODO: fix tests, so that we don't need this
-	if columnListString == "" {
-		columnListString = "*"
-	}
-	query := fmt.Sprintf("select %s from %s where 1 != 1", columnListString, sqlTableName)
-	qr, err := conn.Exec(ctx, query, 0, true)
-	if err != nil {
-		return err
-	}
-	ta.Fields = qr.Fields
+	ta.Fields = fields
 	return nil
 }
 
