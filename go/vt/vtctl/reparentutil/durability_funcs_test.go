@@ -314,7 +314,7 @@ func Test_haveRevoked(t *testing.T) {
 	}
 }
 
-func TestEstablishForTablet(t *testing.T) {
+func Test_canEstablishForTablet(t *testing.T) {
 	tests := []struct {
 		name             string
 		durabilityPolicy string
@@ -376,7 +376,7 @@ func TestEstablishForTablet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SetDurabilityPolicy(tt.durabilityPolicy)
 			require.NoError(t, err)
-			require.Equalf(t, tt.canEstablish, EstablishForTablet(tt.primaryEligible, tt.tabletsReached), "EstablishForTablet(%v, %v)", tt.primaryEligible, tt.tabletsReached)
+			require.Equalf(t, tt.canEstablish, canEstablishForTablet(tt.primaryEligible, tt.tabletsReached), "canEstablishForTablet(%v, %v)", tt.primaryEligible, tt.tabletsReached)
 		})
 	}
 }

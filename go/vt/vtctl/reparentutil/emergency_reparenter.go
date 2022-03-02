@@ -763,7 +763,7 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 			continue
 		}
 		// Remove any tablet which cannot make forward progress using the list of tablets we have reached
-		if !EstablishForTablet(tablet, tabletsReachable) {
+		if !canEstablishForTablet(tablet, tabletsReachable) {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it will not be able to make forward progress on promotion with the tablets currently reachable", tabletAliasStr)
 			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
 				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s will not be able to make forward progress on being promoted", topoproto.TabletAliasString(opts.NewPrimaryAlias))
