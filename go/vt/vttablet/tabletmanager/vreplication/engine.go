@@ -69,6 +69,7 @@ var withDDLInitialQueries []string
 const (
 	throttlerAppName      = "vreplication"
 	changeMasterToPrimary = `update _vt.vreplication set tablet_types = replace(lower(convert(tablet_types using utf8mb4)), 'master', 'primary') where instr(convert(tablet_types using utf8mb4), 'master');`
+	initDDLQuery          = "SELECT no_such_column__init_ddl FROM _vt.vreplication LIMIT 1"
 )
 
 func init() {
@@ -101,8 +102,9 @@ var rowsCopiedUpdateInterval = 30 * time.Second
 // Engine is the engine for handling vreplication.
 type Engine struct {
 	// mu synchronizes isOpen, cancelRetry, controllers and wg.
-	mu     sync.Mutex
-	isOpen bool
+	mu          sync.Mutex
+	isOpen      bool
+	initDDLOnce sync.Once
 	// If cancelRetry is set, then a retry loop is running.
 	// Invoking the function guarantees that there will be
 	// no more retries.
@@ -358,6 +360,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 	defer dbClient.Close()
 
+	vre.initDDLOnce.Do(func() {
+		_, _ = withDDL.Exec(vre.ctx, initDDLQuery, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	})
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
