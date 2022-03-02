@@ -123,6 +123,7 @@ func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 	}
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	env.Row = input.Rows[0]
+	env.Fields = input.Fields
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(vcursor, env)
 		if err != nil {
