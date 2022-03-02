@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
-	"strconv"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -607,19 +605,13 @@ func (builtinFloor) call(env *ExpressionEnv, args []EvalResult, result *EvalResu
 	}
 
 	args[0].makeFloat()
-	val := strconv.FormatFloat(math.Floor(args[0].float64()), 'f', -1, 64)
-
-	result.setString(val, collations.TypedCollation{
-		Collation:    env.DefaultCollation,
-		Coercibility: collations.CoerceImplicit,
-		Repertoire:   collations.CollationUtf8mb4ID,
-	})
+	result.setFloat(math.Floor(args[0].float64()))
 }
 
 func (builtinFloor) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
 	if len(args) != 1 {
 		throwArgError("FLOOR")
 	}
-
-	return args[0].typeof(env)
+	_, f := args[0].typeof(env)
+	return sqltypes.Float64, f
 }
