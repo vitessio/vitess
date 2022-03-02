@@ -1635,9 +1635,40 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	// The query sqlScheduleSingleMigration has some business logic; in the future, we can
-	// consider moving the logic outside the query and into this function's code.
-	_, err := e.execQuery(ctx, sqlScheduleSingleMigration)
+	var onlyScheduleOneMigration sync.Once
+
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
+	if err != nil {
+		return err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		postponeCompletion := row.AsBool("postpone_completion", false)
+		readyToComplete := row.AsBool("ready_to_complete", false)
+		ddlAction := row["ddl_action"].ToString()
+
+		if !readyToComplete {
+			// Whether postponsed or not, CREATE and DROP operations are inherently "ready to complete"
+			// because their operation is instantaneous.
+			switch ddlAction {
+			case sqlparser.CreateStr, sqlparser.DropStr:
+				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
+					return err
+				}
+			}
+		}
+		if ddlAction == sqlparser.AlterStr || !postponeCompletion {
+			// Any non-postponed migration can be scheduled
+			// postponed ALTER can be scheduled
+			// We only schedule a single migration i nthe execution of this function
+			onlyScheduleOneMigration.Do(func() {
+				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return err
 }
 
@@ -2831,6 +2862,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 							isReady = false
 						}
 					}
+					// Indicate to outside observers whether the migration is generally ready to complete.
+					// In the case of a postponed migration, we will not complete it, but the user will
+					// understand whether "now is a good time" or "not there yet"
+					_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
 					if postponeCompletion {
 						// override. Even if migration is ready, we do not complet it.
 						isReady = false
@@ -3381,6 +3416,18 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isView bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationIsView,
 		sqltypes.BoolBindVariable(isView),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid string, isReady bool) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationReadyToComplete,
+		sqltypes.BoolBindVariable(isReady),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
