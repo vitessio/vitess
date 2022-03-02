@@ -119,7 +119,6 @@ func yyOldPosition(yylex interface{}) int {
   indexOption   *IndexOption
   indexOptions  []*IndexOption
   flushOption   *FlushOption
-  flushOptions  []*FlushOption
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
@@ -431,7 +430,6 @@ func yyOldPosition(yylex interface{}) int {
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
 %type <flushOption> flush_option
-%type <flushOptions> flush_option_list flush_option_list_opt
 %type <str> relay_logs_attribute
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
@@ -2580,22 +2578,10 @@ column_comment:
   }
 
 flush_statement:
-  FLUSH flush_type_opt flush_option_list_opt
+  FLUSH flush_type_opt flush_option
   {
-    $$ = &Flush{Type: $2, Options: $3}
+    $$ = &Flush{Type: $2, Option: $3}
   }
-
-flush_option_list_opt:
-  flush_option_list
-  {
-    $$ = $1
-  }
-
-flush_option_list:
-  flush_option
-  { $$ = []*FlushOption{$1} }
-| flush_option_list flush_option
-  { $$ = append($$, $2) }
 
 flush_option:
   BINARY LOGS

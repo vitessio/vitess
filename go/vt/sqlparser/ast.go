@@ -2828,25 +2828,21 @@ type FlushOption struct {
 // Flush represents a Flush statement.
 type Flush struct{
 	Type 	string
-	Options []*FlushOption
+	Option *FlushOption
 }
 
 // Format formats the node.
 func (node *Flush) Format(buf *TrackedBuffer) {
 	buf.WriteString("flush")
 
-	var opts []string
-	for _, opt := range node.Options {
-		opts = append(opts, strings.ToLower(opt.Name))
-		if opt.Name == "RELAY LOGS" && opt.Channel != ""{
-			opts = append(opts, "for channel " + opt.Channel)
-		}
+	if node.Type != "" {
+		buf.Myprintf(" %s", strings.ToLower(node.Type))
 	}
 
-	if node.Type == "" {
-		buf.Myprintf(" %s", strings.Join(opts, " "))
+	if node.Option.Name == "RELAY LOGS" && node.Option.Channel != ""{
+		buf.Myprintf(" %s for channel %s", strings.ToLower(node.Option.Name), strings.ToLower(node.Option.Channel))
 	} else {
-		buf.Myprintf(" %s %s", strings.ToLower(node.Type), strings.Join(opts, " "))
+		buf.Myprintf(" %s", strings.ToLower(node.Option.Name))
 	}
 }
 

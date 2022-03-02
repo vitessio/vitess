@@ -2313,11 +2313,17 @@ var (
 			input: "FLUSH USER_RESOURCES",
 			output: "flush user_resources",
 		}, {
-			input: "FLUSH RELAY LOGS FOR CHANNEL 'connections'",
-			output: "flush relay logs for channel connections",
+			input: "FLUSH RELAY LOGS",
+			output: "flush relay logs",
 		}, {
-			input: "FLUSH LOCAL HOSTS",
-			output: "flush local hosts",
+			input: "FLUSH LOCAL RELAY LOGS FOR CHANNEL 'connections'",
+			output: "flush local relay logs for channel connections",
+		}, {
+			input: "FLUSH LOCAL OPTIMIZER_COSTS",
+			output: "flush local optimizer_costs",
+		}, {
+			input: "FLUSH NO_WRITE_TO_BINLOG HOSTS",
+			output: "flush no_write_to_binlog hosts",
 		}, {
 			input:  "SHOW GRANTS",
 			output: "show grants",
