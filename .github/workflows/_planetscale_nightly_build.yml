@@ -1,0 +1,109 @@
+name: Nightly Build
+
+on:
+  # Enable manually trigger button in UI
+  workflow_dispatch:
+
+  schedule:
+    # Every day at 5am UTC (9pm PST / 10pm PDT)
+    - cron: '0 5 * * *'
+
+env:
+  REGISTRY: us.gcr.io/planetscale-operator/vitess
+  REGISTRY_V2: us-docker.pkg.dev/planetscale-registry/prod
+  REGISTRY_DEV: us-docker.pkg.dev/planetscale-registry/dev
+
+jobs:
+  build-tag-push-lite:
+    name: vitess/lite
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        ref:
+          - main
+          - latest
+        image:
+          - mysql80
+        include:
+          # Default image is tagged as 'latest'
+          - image: mysql80
+            ref: latest
+            default: 'true'
+
+    steps:
+      - name: Checkout planetscale/vitess-private
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ matrix.ref }}
+
+      - name: Determine Build Info
+        id: build-info
+        run: |
+          echo "::set-output name=date::$(date +%F)"
+          echo "::set-output name=sha::$(git rev-parse --short HEAD)"
+          if [[ "${{ matrix.ref }}" == "latest" ]]; then
+            echo "::set-output name=suffix::-vthead"
+            echo "::set-output name=images::${{ env.REGISTRY_DEV }}/vitess/lite,${{ env.REGISTRY }}/lite"
+          else
+            echo "::set-output name=suffix::"
+            echo "::set-output name=images::${{ env.REGISTRY }}/lite,${{ env.REGISTRY_V2 }}/vitess/lite"
+          fi
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          # Vitess build context causes tar header problem with containerd
+          driver: docker
+
+      - name: Login to GCR
+        uses: docker/login-action@v1
+        with:
+          registry: us.gcr.io
+          username: _json_key
+          password: ${{ secrets.PLANETSCALE_GITHUB_PROD_SA_KEY }}
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v1
+        with:
+          registry: us-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.PLANETSCALE_GITHUB_PROD_SA_KEY }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            ${{ steps.build-info.outputs.images }}
+          flavor: |
+            latest=${{ matrix.default == 'true' }}
+          tags: |
+            ${{ matrix.image }}-${{ steps.build-info.outputs.date }}.${{ steps.build-info.outputs.sha }}${{ steps.build-info.outputs.suffix }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: docker/lite/Dockerfile.${{ matrix.image }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+          secrets: github_token=${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+
+  slack-notify:
+    name: "Send Slack Notification to #builds"
+    needs:
+      - build-tag-push-lite
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: ./.github/actions/_planetscale_slack-notify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
