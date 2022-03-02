@@ -1666,7 +1666,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		if ddlAction == sqlparser.AlterStr || !postponeCompletion {
 			// Any non-postponed migration can be scheduled
 			// postponed ALTER can be scheduled
-			// We only schedule a single migration i nthe execution of this function
+			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
 			})
