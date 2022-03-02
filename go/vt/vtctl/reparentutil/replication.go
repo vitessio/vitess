@@ -151,12 +151,12 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning, nil
 }
 
-// statusMapsAndReachableTablets stores the status maps and the tablets that were reachable
+// replicationSnapshot stores the status maps and the tablets that were reachable
 // when trying to stopReplicationAndBuildStatusMaps.
-type statusMapsAndReachableTablets struct {
+type replicationSnapshot struct {
 	statusMap        map[string]*replicationdatapb.StopReplicationStatus
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
-	tabletsReachable []*topodatapb.Tablet
+	reachableTablets []*topodatapb.Tablet
 }
 
 // stopReplicationAndBuildStatusMaps stops replication on all replicas, then
@@ -172,17 +172,17 @@ func stopReplicationAndBuildStatusMaps(
 	ignoredTablets sets.String,
 	tabletToWaitFor *topodatapb.TabletAlias,
 	logger logutil.Logger,
-) (*statusMapsAndReachableTablets, error) {
+) (*replicationSnapshot, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
 		m          sync.Mutex
 		errChan    = make(chan concurrency.Error)
 		allTablets []*topodatapb.Tablet
-		res        = &statusMapsAndReachableTablets{
+		res        = &replicationSnapshot{
 			statusMap:        map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
-			tabletsReachable: []*topodatapb.Tablet{},
+			reachableTablets: []*topodatapb.Tablet{},
 		}
 	)
 
@@ -217,7 +217,7 @@ func stopReplicationAndBuildStatusMaps(
 
 				m.Lock()
 				res.primaryStatusMap[alias] = primaryStatus
-				res.tabletsReachable = append(res.tabletsReachable, tabletInfo.Tablet)
+				res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
@@ -226,7 +226,7 @@ func stopReplicationAndBuildStatusMaps(
 		} else {
 			m.Lock()
 			res.statusMap[alias] = stopReplicationStatus
-			res.tabletsReachable = append(res.tabletsReachable, tabletInfo.Tablet)
+			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
 			m.Unlock()
 		}
 	}
@@ -259,7 +259,7 @@ func stopReplicationAndBuildStatusMaps(
 		return res, nil
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
-	revokeSuccessful := haveRevoked(res.tabletsReachable, allTablets)
+	revokeSuccessful := haveRevoked(res.reachableTablets, allTablets)
 	if !revokeSuccessful {
 		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}

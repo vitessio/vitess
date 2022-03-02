@@ -1077,8 +1077,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedStatusMap, res.statusMap, "StopReplicationStatus mismatch")
 			assert.Equal(t, tt.expectedPrimaryStatusMap, res.primaryStatusMap, "PrimaryStatusMap mismatch")
-			require.Equal(t, len(tt.expectedTabletsReachable), len(res.tabletsReachable), "TabletsReached length mismatch")
-			for idx, tablet := range res.tabletsReachable {
+			require.Equal(t, len(tt.expectedTabletsReachable), len(res.reachableTablets), "TabletsReached length mismatch")
+			for idx, tablet := range res.reachableTablets {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
 		})
