@@ -209,7 +209,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 
 // stopReplicationAndBuildStatusMapsTestTMClient implements
 // tmclient.TabletManagerClient to facilitate testing of
-// StopReplicationAndBuildStatusMaps.
+// stopReplicationAndBuildStatusMaps.
 type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	tmclient.TabletManagerClient
 
@@ -270,7 +270,7 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 	return nil, nil, assert.AnError
 }
 
-func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
+func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1068,17 +1068,17 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
-			statusMap, primaryStatusMap, tabletsReachable, err := StopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
+			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedStatusMap, statusMap, "StopReplicationStatus mismatch")
-			assert.Equal(t, tt.expectedPrimaryStatusMap, primaryStatusMap, "PrimaryStatusMap mismatch")
-			require.Equal(t, len(tt.expectedTabletsReachable), len(tabletsReachable), "TabletsReached length mismatch")
-			for idx, tablet := range tabletsReachable {
+			assert.Equal(t, tt.expectedStatusMap, res.statusMap, "StopReplicationStatus mismatch")
+			assert.Equal(t, tt.expectedPrimaryStatusMap, res.primaryStatusMap, "PrimaryStatusMap mismatch")
+			require.Equal(t, len(tt.expectedTabletsReachable), len(res.tabletsReachable), "TabletsReached length mismatch")
+			for idx, tablet := range res.tabletsReachable {
 				assert.True(t, topoproto.IsTabletInList(tablet, tt.expectedTabletsReachable), "TabletsReached[%d] not found - %s", idx, topoproto.TabletAliasString(tablet.Alias))
 			}
 		})

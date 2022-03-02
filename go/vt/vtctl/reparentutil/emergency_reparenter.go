@@ -139,15 +139,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	ersCounter.Add(1)
 
 	var (
+		statusMaps                 *statusMapsAndReachableTablets
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
-		statusMap                  map[string]*replicationdatapb.StopReplicationStatus
-		primaryStatusMap           map[string]*replicationdatapb.PrimaryStatus
 		validCandidates            map[string]mysql.Position
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
-		tabletsReachable           []*topodatapb.Tablet
 		validReplacementCandidates []*topodatapb.Tablet
 		betterCandidate            *topodatapb.Tablet
 		isIdeal                    bool
@@ -178,7 +176,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	statusMap, primaryStatusMap, tabletsReachable, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
+	statusMaps, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -190,7 +188,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// find the valid candidates for becoming the primary
 	// this is where we check for errant GTIDs and remove the tablets that have them from consideration
-	validCandidates, err = FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
+	validCandidates, err = FindValidEmergencyReparentCandidates(statusMaps.statusMap, statusMaps.primaryStatusMap)
 	if err != nil {
 		return err
 	}
@@ -203,7 +201,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Wait for all candidates to apply relay logs
-	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, statusMap, opts.WaitReplicasTimeout); err != nil {
+	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, statusMaps.statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
 	}
 
@@ -224,7 +222,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// 2. Remove the tablets with the Must_not promote rule
 	// 3. Remove cross-cell tablets if PreventCrossCellPromotion is specified
 	// Our final primary candidate MUST belong to this list of valid candidates
-	validCandidateTablets, err = erp.filterValidCandidates(validCandidateTablets, tabletsReachable, prevPrimary, opts)
+	validCandidateTablets, err = erp.filterValidCandidates(validCandidateTablets, statusMaps.tabletsReachable, prevPrimary, opts)
 	if err != nil {
 		return err
 	}
@@ -249,7 +247,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
 		// it also returns the list of the tablets that started replication successfully including itself part of the validCandidateTablets list.
 		// These are the candidates that we can use to find a replacement.
-		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, statusMap, validCandidateTablets, opts)
+		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, statusMaps.statusMap, validCandidateTablets, opts)
 		if err != nil {
 			return err
 		}
@@ -281,7 +279,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	err = erp.promoteNewPrimary(ctx, ev, newPrimary, opts, tabletMap, statusMap)
+	err = erp.promoteNewPrimary(ctx, ev, newPrimary, opts, tabletMap, statusMaps.statusMap)
 	if err != nil {
 		return err
 	}
@@ -306,7 +304,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	waiterCount := 0
 
 	for candidate := range validCandidates {
-		// When we called StopReplicationAndBuildStatusMaps, we got back two
+		// When we called stopReplicationAndBuildStatusMaps, we got back two
 		// maps: (1) the StopReplicationStatus of any replicas that actually
 		// stopped replication; and (2) the PrimaryStatus of anything that
 		// returned ErrNotReplica, which is a tablet that is either the current
