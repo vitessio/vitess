@@ -325,7 +325,7 @@ Various command flags have been deprecated and new variants provided.
 * Adds some more orchestrator tests to vtorc #8535
 #### Query Serving
 * increase conn killer check to double the tx timeout value #8649
-* Added UNION testcases and auxilary code for running tests #8797
+* Added UNION testcases and auxiliary code for running tests #8797
 * fixed regression in v3 for grouping by integer functions #8856
 #### VTAdmin
 * [vtadmin] Add a vtctld Dialer unit test #8455
