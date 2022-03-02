@@ -93,22 +93,15 @@ func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query
 		return result, err
 	}
 
-	if ddlStrategySetting.IsSkipTopo() {
-		s := Send{
-			Keyspace:          v.Keyspace,
-			TargetDestination: v.TargetDestination,
-			Query:             onlineDDL.SQL,
-			IsDML:             false,
-			SingleShardOnly:   false,
-		}
-		if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
-			return result, err
-		}
-	} else {
-		// Submit a request entry in topo. vtctld will take it from there
-		if err := vcursor.SubmitOnlineDDL(onlineDDL); err != nil {
-			return result, err
-		}
+	s := Send{
+		Keyspace:          v.Keyspace,
+		TargetDestination: v.TargetDestination,
+		Query:             onlineDDL.SQL,
+		IsDML:             false,
+		SingleShardOnly:   false,
+	}
+	if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
+		return result, err
 	}
 	result.Rows = append(result.Rows, []sqltypes.Value{
 		sqltypes.NewVarChar(onlineDDL.UUID),
