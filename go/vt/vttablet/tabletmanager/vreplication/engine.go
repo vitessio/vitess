@@ -69,7 +69,6 @@ var withDDLInitialQueries []string
 const (
 	throttlerAppName      = "vreplication"
 	changeMasterToPrimary = `update _vt.vreplication set tablet_types = replace(lower(convert(tablet_types using utf8mb4)), 'master', 'primary') where instr(convert(tablet_types using utf8mb4), 'master');`
-	queryWillFail         = "SELECT _vt_no_such_column__init_schema FROM _vt.vreplication LIMIT 1"
 )
 
 func init() {
@@ -222,7 +221,7 @@ func (vre *Engine) ensureValidSchema(ctx context.Context) error {
 		return err
 	}
 	defer dbClient.Close()
-	_, _ = withDDL.ExecIgnore(ctx, queryWillFail, dbClient.ExecuteFetch)
+	_, _ = withDDL.ExecIgnore(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch)
 	return nil
 }
 
