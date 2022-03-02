@@ -1360,7 +1360,17 @@ func (node *JoinTableExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *IndexHints) formatFast(buf *TrackedBuffer) {
+func (node IndexHints) formatFast(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node.
+func (node *IndexHint) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(' ')
 	buf.WriteString(node.Type.ToString())
 	buf.WriteString("index ")

@@ -1256,7 +1256,7 @@ func (dir OrderDirection) ToString() string {
 }
 
 // ToString returns the type as a string
-func (ty IndexHintsType) ToString() string {
+func (ty IndexHintType) ToString() string {
 	switch ty {
 	case UseOp:
 		return UseStr
@@ -1265,7 +1265,7 @@ func (ty IndexHintsType) ToString() string {
 	case ForceOp:
 		return ForceStr
 	default:
-		return "Unknown IndexHintsType"
+		return "Unknown IndexHintType"
 	}
 }
 

@@ -458,9 +458,9 @@ const (
 	DescOrder
 )
 
-// Constant for Enum Type - IndexHintsType
+// Constant for Enum Type - IndexHintType
 const (
-	UseOp IndexHintsType = iota
+	UseOp IndexHintType = iota
 	IgnoreOp
 	ForceOp
 )

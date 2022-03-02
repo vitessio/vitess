@@ -152,8 +152,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *IndexDefinition:
 		return VisitRefOfIndexDefinition(in, f)
-	case *IndexHints:
-		return VisitRefOfIndexHints(in, f)
+	case *IndexHint:
+		return VisitRefOfIndexHint(in, f)
+	case IndexHints:
+		return VisitIndexHints(in, f)
 	case *IndexInfo:
 		return VisitRefOfIndexInfo(in, f)
 	case *Insert:
@@ -413,7 +415,7 @@ func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 	if err := VisitTableIdent(in.As, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfIndexHints(in.Hints, f); err != nil {
+	if err := VisitIndexHints(in.Hints, f); err != nil {
 		return err
 	}
 	if err := VisitColumns(in.Columns, f); err != nil {
@@ -1247,7 +1249,7 @@ func VisitRefOfIndexDefinition(in *IndexDefinition, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfIndexHints(in *IndexHints, f Visit) error {
+func VisitRefOfIndexHint(in *IndexHint, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -1256,6 +1258,20 @@ func VisitRefOfIndexHints(in *IndexHints, f Visit) error {
 	}
 	for _, el := range in.Indexes {
 		if err := VisitColIdent(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func VisitIndexHints(in IndexHints, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfIndexHint(el, f); err != nil {
 			return err
 		}
 	}
