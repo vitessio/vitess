@@ -1270,6 +1270,22 @@ func (ty IndexHintType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty IndexHintForType) ToString() string {
+	switch ty {
+	case NoForType:
+		return ""
+	case JoinForType:
+		return JoinForStr
+	case GroupByForType:
+		return GroupByForStr
+	case OrderByForType:
+		return OrderByForStr
+	default:
+		return "Unknown IndexHintForType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:

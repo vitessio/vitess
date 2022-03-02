@@ -1895,6 +1895,7 @@ type JoinCondition struct {
 // More information available on https://dev.mysql.com/doc/refman/8.0/en/index-hints.html
 type IndexHint struct {
 	Type    IndexHintType
+	ForType IndexHintForType
 	Indexes []ColIdent
 }
 
@@ -1903,6 +1904,9 @@ type IndexHints []*IndexHint
 
 // IndexHintType is an enum for IndexHint.Type
 type IndexHintType int8
+
+// IndexHintForType is an enum for FOR specified in an IndexHint
+type IndexHintForType int8
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {
