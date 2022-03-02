@@ -130,7 +130,13 @@ func TestAggrOnJoin(t *testing.T) {
 	utils.Exec(t, conn, "insert into t3(id5, id6, id7) values(1,1,1), (2,2,4), (3,2,4), (4,1,2), (5,1,1), (6,3,6)")
 	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 
-	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) from aggr_test join t3 on aggr_test.val2 = t3.id7", "[[INT64(8)]]")
+	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ count(*) from aggr_test a join t3 t on a.val2 = t.id7", "[[INT64(8)]]")
+	utils.AssertMatches(t, conn, "select /*vt+ PLANNER=gen4 */ a.val1, count(*) from aggr_test a join t3 t on a.val2 = t.id7 group by a.val1", "[[INT64(8)]]")
+	utils.AssertMatches(t, conn, `
+select /*vt+ PLANNER=gen4 */ count(*) 
+from aggr_test a1 
+	join aggr_test a2 on a1.val2 = a2.id
+	join t3 t on a2.val2 = t.id7`, "[[INT64(8)]]")
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
