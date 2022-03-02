@@ -27,7 +27,6 @@ type CLIFlags struct {
 	Statement                  *string
 	PromotionRule              *string
 	ConfiguredVersion          string
-	SkipBinlogSearch           *bool
 	SkipContinuousRegistration *bool
 	EnableDatabaseUpdate       *bool
 	IgnoreRaftSetup            *bool

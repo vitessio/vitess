@@ -18,6 +18,7 @@ limitations under the License.
 package cluster
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -52,6 +53,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 		"-topo_global_server_address", orc.TopoGlobalAddress,
 		"-topo_global_root", orc.TopoGlobalRoot,
 		"-config", orc.Config,
+		"-orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "orchestrator"),
 	)
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "-test.coverprofile="+getCoveragePath("orc.out"))
@@ -60,7 +62,7 @@ func (orc *VtorcProcess) Setup() (err error) {
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
 	orc.proc.Args = append(orc.proc.Args, "-alsologtostderr", "http")
 
-	errFile, _ := os.Create(path.Join(orc.LogDir, "orc-stderr.txt"))
+	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", time.Now().UnixNano())))
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
@@ -95,7 +97,7 @@ func (orc *VtorcProcess) TearDown() error {
 		orc.proc = nil
 		return nil
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		_ = orc.proc.Process.Kill()
 		orc.proc = nil
 		return <-orc.exit

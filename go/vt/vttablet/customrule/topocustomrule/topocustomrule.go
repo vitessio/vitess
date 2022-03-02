@@ -16,7 +16,7 @@ limitations under the License.
 
 /*
 Package topocustomrule implements a topo service backed listener for query rules.
-One usage is to allow fast propagation of table blacklists.
+One usage is to allow fast propagation of table denylists.
 */
 package topocustomrule
 

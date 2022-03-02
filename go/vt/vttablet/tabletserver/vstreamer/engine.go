@@ -54,6 +54,7 @@ type Engine struct {
 
 	// keyspace is initialized by InitDBConfig
 	keyspace string
+	shard    string
 
 	// wg is incremented for every Stream, and decremented on end.
 	// Close waits for all current streams to end by waiting on wg.
@@ -130,8 +131,9 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 }
 
 // InitDBConfig initializes the target parameters for the Engine.
-func (vse *Engine) InitDBConfig(keyspace string) {
+func (vse *Engine) InitDBConfig(keyspace, shard string) {
 	vse.keyspace = keyspace
+	vse.shard = shard
 }
 
 // Open starts the Engine service.
@@ -333,7 +335,7 @@ func (vse *Engine) setWatch() {
 	}
 
 	// WatchSrvVSchema does not return until the inner func has been called at least once.
-	vse.ts.WatchSrvVSchema(context.TODO(), vse.cell, func(v *vschemapb.SrvVSchema, err error) {
+	vse.ts.WatchSrvVSchema(context.TODO(), vse.cell, func(v *vschemapb.SrvVSchema, err error) bool {
 		switch {
 		case err == nil:
 			// Build vschema down below.
@@ -342,15 +344,15 @@ func (vse *Engine) setWatch() {
 		default:
 			log.Errorf("Error fetching vschema: %v", err)
 			vse.vschemaErrors.Add(1)
-			return
+			return true
 		}
 		var vschema *vindexes.VSchema
 		if v != nil {
-			vschema, err = vindexes.BuildVSchema(v)
+			vschema = vindexes.BuildVSchema(v)
 			if err != nil {
 				log.Errorf("Error building vschema: %v", err)
 				vse.vschemaErrors.Add(1)
-				return
+				return true
 			}
 		} else {
 			vschema = &vindexes.VSchema{}
@@ -369,6 +371,7 @@ func (vse *Engine) setWatch() {
 			s.SetVSchema(vse.lvschema)
 		}
 		vse.vschemaUpdates.Add(1)
+		return true
 	})
 }
 

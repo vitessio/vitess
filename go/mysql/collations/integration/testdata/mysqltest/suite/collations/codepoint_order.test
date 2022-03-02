@@ -1,0 +1,25 @@
+--source suite/collations/include/unicode.inc
+
+insert into unicode values
+       (0x30001, _utf32 0x30001,  'In Plane 3', 'Cn'),
+       (0x40001, _utf32 0x40001,  'In Plane 4', 'Cn'),
+       (0x50001, _utf32 0x50001,  'In Plane 5', 'Cn'),
+       (0x60001, _utf32 0x60001,  'In Plane 6', 'Cn'),
+       (0x70001, _utf32 0x70001,  'In Plane 7', 'Cn'),
+       (0x80001, _utf32 0x80001,  'In Plane 8', 'Cn'),
+       (0x90001, _utf32 0x90001,  'In Plane 9', 'Cn'),
+       (0xA0001, _utf32 0xA0001,  'In Plane 10','Cn'),
+       (0xB0001, _utf32 0xB0001,  'In Plane 11','Cn'),
+       (0xC0001, _utf32 0xC0001,  'In Plane 12','Cn'),
+       (0xD0001, _utf32 0xD0001,  'In Plane 13','Cn'),
+       (0xF0001, _utf32 0xF0001,  'In Plane 15','Cn'),
+       (0x100001 ,_utf32 0x100001,'In Plane 16','Cn');
+
+
+--test:uca0900 utf8mb4_0900_bin
+select hex(convert(uc using utf32)),
+       hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_0900_bin)),
+       name from unicode
+order by uc  collate utf8mb4_0900_bin, cp;
+
+drop table if exists unicode;

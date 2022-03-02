@@ -25,6 +25,7 @@ import (
 	"io"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"context"
@@ -143,7 +144,7 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 		return nil, convertError(err, filePath)
 	}
 
-	final, err := s.resourceClient.Create(resource)
+	final, err := s.resourceClient.Create(ctx, resource, metav1.CreateOptions{})
 	if err != nil {
 		return nil, convertError(err, filePath)
 	}
@@ -169,7 +170,7 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 	var finalVersion KubernetesVersion
 
 	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		result, err := s.resourceClient.Get(resource.Name, metav1.GetOptions{})
+		result, err := s.resourceClient.Get(ctx, resource.Name, metav1.GetOptions{})
 		if err != nil && errors.IsNotFound(err) && version == nil {
 			// Update should create objects when the version is nil and the object is not found
 			createdVersion, err := s.Create(ctx, filePath, contents)
@@ -189,7 +190,7 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 		result.Data.Value = resource.Data.Value
 
 		// get result or err
-		final, err := s.resourceClient.Update(result)
+		final, err := s.resourceClient.Update(ctx, result, metav1.UpdateOptions{})
 		if err != nil {
 			return convertError(err, filePath)
 		}
@@ -217,7 +218,7 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 
 	node := s.newNodeReference(filePath)
 
-	result, err := s.resourceClient.Get(node.id, metav1.GetOptions{})
+	result, err := s.resourceClient.Get(ctx, node.id, metav1.GetOptions{})
 	if err != nil {
 		return []byte{}, nil, convertError(err, filePath)
 	}
@@ -230,6 +231,31 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	return out, KubernetesVersion(result.GetResourceVersion()), nil
 }
 
+// List is part of the topo.Conn interface.
+func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
+	nodeList, err := s.resourceClient.List(ctx, metav1.ListOptions{})
+
+	results := []topo.KVInfo{}
+	if err != nil {
+		return results, convertError(err, filePathPrefix)
+	}
+	nodes := nodeList.Items
+	if len(nodes) == 0 {
+		return results, topo.NewError(topo.NoNode, filePathPrefix)
+	}
+	for _, node := range nodes {
+		if strings.HasPrefix(node.Data.Value, filePathPrefix) {
+			results = append(results, topo.KVInfo{
+				Key:     []byte(node.Data.Key),
+				Value:   []byte(node.Data.Value),
+				Version: KubernetesVersion(node.GetResourceVersion()),
+			})
+		}
+	}
+
+	return results, nil
+}
+
 // Delete is part of the topo.Conn interface.
 func (s *Server) Delete(ctx context.Context, filePath string, version topo.Version) error {
 	log.V(7).Infof("Delete at '%s'", filePath)
@@ -237,7 +263,7 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 	node := s.newNodeReference(filePath)
 
 	// Check version before delete
-	current, err := s.resourceClient.Get(node.id, metav1.GetOptions{})
+	current, err := s.resourceClient.Get(ctx, node.id, metav1.GetOptions{})
 	if err != nil {
 		return convertError(err, filePath)
 	}
@@ -247,7 +273,7 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 		}
 	}
 
-	err = s.resourceClient.Delete(node.id, &metav1.DeleteOptions{})
+	err = s.resourceClient.Delete(ctx, node.id, metav1.DeleteOptions{})
 	if err != nil {
 		return convertError(err, filePath)
 	}

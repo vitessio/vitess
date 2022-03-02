@@ -56,6 +56,7 @@ const (
 	RevertActionStr           = "revert"
 )
 
+// when validateWalk returns true, then the child nodes are also visited
 func validateWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
 	switch node.(type) {
 	case *sqlparser.CreateTable, *sqlparser.AlterTable,
@@ -111,18 +112,18 @@ const (
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace       string          `json:"keyspace,omitempty"`
-	Table          string          `json:"table,omitempty"`
-	Schema         string          `json:"schema,omitempty"`
-	SQL            string          `json:"sql,omitempty"`
-	UUID           string          `json:"uuid,omitempty"`
-	Strategy       DDLStrategy     `json:"strategy,omitempty"`
-	Options        string          `json:"options,omitempty"`
-	RequestTime    int64           `json:"time_created,omitempty"`
-	RequestContext string          `json:"context,omitempty"`
-	Status         OnlineDDLStatus `json:"status,omitempty"`
-	TabletAlias    string          `json:"tablet,omitempty"`
-	Retries        int64           `json:"retries,omitempty"`
+	Keyspace         string          `json:"keyspace,omitempty"`
+	Table            string          `json:"table,omitempty"`
+	Schema           string          `json:"schema,omitempty"`
+	SQL              string          `json:"sql,omitempty"`
+	UUID             string          `json:"uuid,omitempty"`
+	Strategy         DDLStrategy     `json:"strategy,omitempty"`
+	Options          string          `json:"options,omitempty"`
+	RequestTime      int64           `json:"time_created,omitempty"`
+	MigrationContext string          `json:"context,omitempty"`
+	Status           OnlineDDLStatus `json:"status,omitempty"`
+	TabletAlias      string          `json:"tablet,omitempty"`
+	Retries          int64           `json:"retries,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -172,7 +173,7 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 	if err := sqlparser.Walk(validateWalk, ddlStmt); err != nil {
 		switch err {
 		case ErrForeignKeyFound:
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://code.openark.org/blog/mysql/the-problem-with-mysql-foreign-key-constraints-in-online-schema-changes")
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
 		case ErrRenameTableFound:
 			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "ALTER TABLE ... RENAME is not supported in online DDL")
 		}
@@ -181,24 +182,27 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 }
 
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
-func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (onlineDDLs [](*OnlineDDL), err error) {
+func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string) (onlineDDLs [](*OnlineDDL), err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
 		if err := onlineDDLStatementSanity(sql, ddlStmt); err != nil {
 			return err
 		}
-		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, requestContext)
+		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, migrationContext, providedUUID)
 		if err != nil {
 			return err
+		}
+		if len(onlineDDLs) > 0 && providedUUID != "" {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "UUID %s provided but multiple DDLs generated", providedUUID)
 		}
 		onlineDDLs = append(onlineDDLs, onlineDDL)
 		return nil
 	}
 	switch ddlStmt := ddlStmt.(type) {
-	case *sqlparser.CreateTable, *sqlparser.AlterTable:
+	case *sqlparser.CreateTable, *sqlparser.AlterTable, *sqlparser.CreateView, *sqlparser.AlterView:
 		if err := appendOnlineDDL(ddlStmt.GetTable().Name.String(), ddlStmt); err != nil {
 			return nil, err
 		}
-	case *sqlparser.DropTable:
+	case *sqlparser.DropTable, *sqlparser.DropView:
 		tables := ddlStmt.GetFromTables()
 		for _, table := range tables {
 			ddlStmt.SetFromTables([]sqlparser.TableName{table})
@@ -214,13 +218,22 @@ func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, 
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
+func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string) (onlineDDL *OnlineDDL, err error) {
 	if ddlStrategySetting == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "NewOnlineDDL: found nil DDLStrategySetting")
 	}
-	u, err := CreateOnlineDDLUUID()
-	if err != nil {
-		return nil, err
+	var onlineDDLUUID string
+	if providedUUID != "" {
+		if !IsOnlineDDLUUID(providedUUID) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "NewOnlineDDL: not a valid UUID: %s", providedUUID)
+		}
+		onlineDDLUUID = providedUUID
+	} else {
+		// No explicit UUID provided. We generate our own
+		onlineDDLUUID, err = CreateOnlineDDLUUID()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	{
@@ -231,8 +244,8 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		if ddlStrategySetting.IsSkipTopo() {
 			comments = sqlparser.Comments{
 				fmt.Sprintf(`/*vt+ uuid=%s context=%s table=%s strategy=%s options=%s */`,
-					encodeDirective(u),
-					encodeDirective(requestContext),
+					encodeDirective(onlineDDLUUID),
+					encodeDirective(migrationContext),
 					encodeDirective(table),
 					encodeDirective(string(ddlStrategySetting.Strategy)),
 					encodeDirective(ddlStrategySetting.Options),
@@ -270,15 +283,15 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 	}
 
 	return &OnlineDDL{
-		Keyspace:       keyspace,
-		Table:          table,
-		SQL:            sql,
-		UUID:           u,
-		Strategy:       ddlStrategySetting.Strategy,
-		Options:        ddlStrategySetting.Options,
-		RequestTime:    time.Now().UnixNano(),
-		RequestContext: requestContext,
-		Status:         OnlineDDLStatusRequested,
+		Keyspace:         keyspace,
+		Table:            table,
+		SQL:              sql,
+		UUID:             onlineDDLUUID,
+		Strategy:         ddlStrategySetting.Strategy,
+		Options:          ddlStrategySetting.Options,
+		RequestTime:      time.Now().UnixNano(),
+		MigrationContext: migrationContext,
+		Status:           OnlineDDLStatusRequested,
 	}, nil
 }
 
@@ -346,7 +359,7 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	} else {
 		return nil, err
 	}
-	if onlineDDL.RequestContext, err = decodeDirective("context"); err != nil {
+	if onlineDDL.MigrationContext, err = decodeDirective("context"); err != nil {
 		return nil, err
 	}
 	return onlineDDL, nil
@@ -372,6 +385,32 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
 }
 
+// sqlWithoutComments returns the SQL statement without comment directives. Useful for tests
+func (onlineDDL *OnlineDDL) sqlWithoutComments() (sql string, err error) {
+	sql = onlineDDL.SQL
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		// query validation and rebuilding
+		if _, err := legacyParseRevertUUID(sql); err == nil {
+			// This is a revert statement of the form "revert <uuid>". We allow this for now. Future work will
+			// make sure the statement is a valid, parseable "revert vitess_migration '<uuid>'", but we must
+			// be backwards compatible for now.
+			return sql, nil
+		}
+		// otherwise the statement should have been parseable!
+		return "", err
+	}
+
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		stmt.SetComments(nil)
+	case *sqlparser.RevertMigration:
+		stmt.SetComments(nil)
+	}
+	sql = sqlparser.String(stmt)
+	return sql, nil
+}
+
 // GetAction extracts the DDL action type from the online DDL statement
 func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
 	if _, err := onlineDDL.GetRevertUUID(); err == nil {
@@ -380,6 +419,19 @@ func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) 
 
 	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL)
 	return action, err
+}
+
+// IsView returns 'true' when the statement affects a VIEW
+func (onlineDDL *OnlineDDL) IsView() bool {
+	stmt, _, err := ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return false
+	}
+	switch stmt.(type) {
+	case *sqlparser.CreateView, *sqlparser.DropView, *sqlparser.AlterView:
+		return true
+	}
+	return false
 }
 
 // GetActionStr returns a string representation of the DDL action

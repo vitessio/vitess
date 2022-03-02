@@ -14,69 +14,76 @@
  * limitations under the License.
  */
 
-import { vtadmin as pb } from '../proto/vtadmin';
+import { vtadmin as pb, vtctldata } from '../proto/vtadmin';
+import * as errorHandler from '../errors/errorHandler';
+import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
+import { HttpOkResponse } from './responseTypes';
+import { TabletDebugVars } from '../util/tabletDebugVars';
+import { isReadOnlyMode } from '../util/env';
 
-interface HttpOkResponse {
-    ok: true;
-    result: any;
-}
+/**
+ * vtfetch makes HTTP requests against the given vtadmin-api endpoint
+ * and returns the parsed response.
+ *
+ * HttpResponse envelope types are not defined in vtadmin.proto (nor should they be)
+ * thus we have to validate the shape of the API response with more care.
+ *
+ * Note that this only validates the HttpResponse envelope; it does not
+ * do any type checking or validation on the result.
+ */
+export const vtfetch = async (endpoint: string, options: RequestInit = {}): Promise<HttpOkResponse> => {
+    try {
+        if (isReadOnlyMode() && options.method && options.method.toLowerCase() !== 'get') {
+            // Any UI controls that ultimately trigger a write request should be hidden when in read-only mode,
+            // so getting to this point (where we actually execute a write request) is an error.
+            // So: we fail obnoxiously, as failing silently (e.g, logging and returning an empty "ok" response)
+            // could imply to the user that a write action succeeded.
+            throw new Error(`Cannot execute write request in read-only mode: ${options.method} ${endpoint}`);
+        }
 
-interface HttpErrorResponse {
-    ok: false;
-}
+        const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
+        const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+        const opts = { ...vtfetchOpts(), ...options };
 
-export const MALFORMED_HTTP_RESPONSE_ERROR = 'MalformedHttpResponseError';
+        let response = null;
+        try {
+            response = await global.fetch(url, opts);
+        } catch (error) {
+            // Capture fetch() promise rejections and rethrow as HttpFetchError.
+            // fetch() promises will reject with a TypeError when a network error is
+            // encountered or CORS is misconfigured, in which case the request never
+            // makes it to the server.
+            // See https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#checking_that_the_fetch_was_successful
+            throw new HttpFetchError(url);
+        }
 
-// MalformedHttpResponseError is thrown when the JSON response envelope
-// is an unexpected shape.
-class MalformedHttpResponseError extends Error {
-    responseJson: object;
+        let json = null;
+        try {
+            json = await response.json();
+        } catch (error) {
+            throw new MalformedHttpResponseError((error as Error).message, endpoint, json, response);
+        }
 
-    constructor(message: string, responseJson: object) {
-        super(message);
-        this.name = MALFORMED_HTTP_RESPONSE_ERROR;
-        this.responseJson = responseJson;
+        if (!('ok' in json)) {
+            throw new MalformedHttpResponseError('invalid HTTP envelope', endpoint, json, response);
+        }
+
+        if (!json.ok) {
+            throw new HttpResponseNotOkError(endpoint, json, response);
+        }
+
+        return json as HttpOkResponse;
+    } catch (error) {
+        // Most commonly, react-query is the downstream consumer of
+        // errors thrown in vtfetch. Because react-query "handles" errors
+        // by propagating them to components (as it should!), any errors thrown
+        // from vtfetch are _not_ automatically logged as "unhandled errors".
+        // Instead, we catch errors and manually notify our error handling serivce(s),
+        // and then rethrow the error for react-query to propagate the usual way.
+        // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
+        errorHandler.notify(error as Error);
+        throw error;
     }
-}
-
-export const HTTP_RESPONSE_NOT_OK_ERROR = 'HttpResponseNotOkError';
-
-// HttpResponseNotOkError is throw when the `ok` is false in
-// the JSON response envelope.
-class HttpResponseNotOkError extends Error {
-    response: HttpErrorResponse | null;
-
-    constructor(endpoint: string, response: HttpErrorResponse) {
-        super(endpoint);
-        this.name = HTTP_RESPONSE_NOT_OK_ERROR;
-        this.response = response;
-    }
-}
-
-// vtfetch makes HTTP requests against the given vtadmin-api endpoint
-// and returns the parsed response.
-//
-// HttpResponse envelope types are not defined in vtadmin.proto (nor should they be)
-// thus we have to validate the shape of the API response with more care.
-//
-// Note that this only validates the HttpResponse envelope; it does not
-// do any type checking or validation on the result.
-export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
-    const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
-
-    const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
-    const opts = vtfetchOpts();
-
-    const response = await global.fetch(url, opts);
-
-    const json = await response.json();
-    if (!('ok' in json)) throw new MalformedHttpResponseError('invalid http envelope', json);
-
-    // Throw "not ok" responses so that react-query correctly interprets them as errors.
-    // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
-    if (!json.ok) throw new HttpResponseNotOkError(endpoint, json);
-
-    return json as HttpOkResponse;
 };
 
 export const vtfetchOpts = (): RequestInit => {
@@ -86,6 +93,7 @@ export const vtfetchOpts = (): RequestInit => {
             `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
         );
     }
+
     return { credentials };
 };
 
@@ -106,11 +114,27 @@ export const vtfetchEntities = async <T>(opts: {
 
     const entities = opts.extract(res);
     if (!Array.isArray(entities)) {
-        throw Error(`expected entities to be an array, got ${entities}`);
+        // Since react-query is the downstream consumer of vtfetch + vtfetchEntities,
+        // errors thrown in either function will be "handled" and will not automatically
+        // propagate as "unhandled" errors, meaning we have to log them manually.
+        const error = Error(`expected entities to be an array, got ${entities}`);
+        errorHandler.notify(error);
+        throw error;
     }
 
     return entities.map(opts.transform);
 };
+
+export const fetchBackups = async () =>
+    vtfetchEntities({
+        endpoint: '/api/backups',
+        extract: (res) => res.result.backups,
+        transform: (e) => {
+            const err = pb.ClusterBackup.verify(e);
+            if (err) throw Error(err);
+            return pb.ClusterBackup.create(e);
+        },
+    });
 
 export const fetchClusters = async () =>
     vtfetchEntities({
@@ -133,6 +157,31 @@ export const fetchGates = async () =>
             return pb.VTGate.create(e);
         },
     });
+
+export const fetchVtctlds = async () =>
+    vtfetchEntities({
+        endpoint: '/api/vtctlds',
+        extract: (res) => res.result.vtctlds,
+        transform: (e) => {
+            const err = pb.Vtctld.verify(e);
+            if (err) throw Error(err);
+            return pb.Vtctld.create(e);
+        },
+    });
+
+export interface FetchKeyspaceParams {
+    clusterID: string;
+    name: string;
+}
+
+export const fetchKeyspace = async ({ clusterID, name }: FetchKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${name}`);
+
+    const err = pb.Keyspace.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Keyspace.create(result);
+};
 
 export const fetchKeyspaces = async () =>
     vtfetchEntities({
@@ -185,13 +234,140 @@ export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
     return pb.Tablet.create(result);
 };
 
-export const fetchExperimentalTabletDebugVars = async ({ clusterID, alias }: FetchTabletParams) => {
+export interface DeleteTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const deleteTablet = async ({ clusterID, alias }: DeleteTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`, { method: 'delete' });
+
+    const err = pb.DeleteTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.DeleteTabletResponse.create(result);
+};
+
+export interface ReparentTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const reparentTablet = async ({ clusterID, alias }: ReparentTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
+
+    const err = pb.ReparentTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.ReparentTabletResponse.create(result);
+};
+
+export interface PingTabletParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const pingTablet = async ({ clusterID, alias }: PingTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/ping?cluster=${clusterID}`);
+    const err = pb.PingTabletResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.PingTabletResponse.create(result);
+};
+
+export interface RefreshStateParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const refreshState = async ({ clusterID, alias }: RefreshStateParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/refresh?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.RefreshStateResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RefreshStateResponse.create(result);
+};
+
+export interface RunHealthCheckParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/healthcheck?cluster=${clusterID}`);
+    const err = pb.RunHealthCheckResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.RunHealthCheckResponse.create(result);
+};
+
+export interface SetReadOnlyParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const setReadOnly = async ({ clusterID, alias }: SetReadOnlyParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/set_read_only?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.SetReadOnlyResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.SetReadOnlyResponse.create(result);
+};
+
+export interface SetReadWriteParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const setReadWrite = async ({ clusterID, alias }: SetReadWriteParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/set_read_write?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.SetReadWriteResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.SetReadWriteResponse.create(result);
+};
+
+export interface StartReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const startReplication = async ({ clusterID, alias }: StartReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/start_replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StartReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StartReplicationResponse.create(result);
+};
+
+export interface StopReplicationParams {
+    clusterID?: string;
+    alias: string;
+}
+
+export const stopReplication = async ({ clusterID, alias }: StopReplicationParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/stop_replication?cluster=${clusterID}`, { method: 'put' });
+    const err = pb.StopReplicationResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.StopReplicationResponse.create(result);
+};
+export interface TabletDebugVarsResponse {
+    params: FetchTabletParams;
+    data?: TabletDebugVars;
+}
+
+export const fetchExperimentalTabletDebugVars = async (params: FetchTabletParams): Promise<TabletDebugVarsResponse> => {
     if (!process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
-        return Promise.resolve({});
+        return Promise.resolve({ params });
     }
 
+    const { clusterID, alias } = params;
     const { result } = await vtfetch(`/api/experimental/tablet/${alias}/debug/vars?cluster=${clusterID}`);
-    return result;
+
+    // /debug/vars doesn't contain cluster/tablet information, so we
+    // return that as part of the response.
+    return { params, data: result };
 };
 
 export const fetchTablets = async () =>
@@ -250,4 +426,46 @@ export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, 
     if (err) throw Error(err);
 
     return pb.VTExplainResponse.create(result);
+};
+
+export interface ValidateKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+    pingTablets: boolean;
+}
+
+export const validateKeyspace = async ({ clusterID, keyspace, pingTablets }: ValidateKeyspaceParams) => {
+    const body = JSON.stringify({ pingTablets });
+
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate`, { method: 'put', body });
+    const err = vtctldata.ValidateKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateKeyspaceResponse.create(result);
+};
+
+export interface ValidateSchemaKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const validateSchemaKeyspace = async ({ clusterID, keyspace }: ValidateSchemaKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate/schema`, { method: 'put' });
+    const err = vtctldata.ValidateSchemaKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateSchemaKeyspaceResponse.create(result);
+};
+
+export interface ValidateVersionKeyspaceParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const validateVersionKeyspace = async ({ clusterID, keyspace }: ValidateVersionKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${keyspace}/validate/version`, { method: 'put' });
+    const err = vtctldata.ValidateVersionKeyspaceResponse.verify(result);
+    if (err) throw Error(err);
+
+    return vtctldata.ValidateVersionKeyspaceResponse.create(result);
 };

@@ -51,7 +51,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	defer vp.Close()
 
 	// create the source keyspace tablets
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, nil,
+	sourcePrimary := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "source", "0"))
 	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "source", "0"))
@@ -72,7 +72,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// create the destination keyspace tablets
-	destMaster := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, nil,
+	destPrimary := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_PRIMARY, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
 	destReplica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
@@ -87,9 +87,9 @@ func TestMigrateServedFrom(t *testing.T) {
 	sourceReplica.StartActionLoop(t, wr)
 	defer sourceReplica.StopActionLoop(t)
 
-	// sourceMaster will see the refresh, and has to respond to it
+	// sourcePrimary will see the refresh, and has to respond to it
 	// also will be asked about its replication position.
-	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	sourcePrimary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			5: mysql.MariadbGTID{
 				Domain:   5,
@@ -98,8 +98,8 @@ func TestMigrateServedFrom(t *testing.T) {
 			},
 		},
 	}
-	sourceMaster.StartActionLoop(t, wr)
-	defer sourceMaster.StopActionLoop(t)
+	sourcePrimary.StartActionLoop(t, wr)
+	defer sourcePrimary.StopActionLoop(t)
 
 	// destRdonly will see the refresh
 	destRdonly.StartActionLoop(t, wr)
@@ -109,15 +109,15 @@ func TestMigrateServedFrom(t *testing.T) {
 	destReplica.StartActionLoop(t, wr)
 	defer destReplica.StopActionLoop(t)
 
-	destMaster.StartActionLoop(t, wr)
-	defer destMaster.StopActionLoop(t)
+	destPrimary.StartActionLoop(t, wr)
+	defer destPrimary.StopActionLoop(t)
 
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	destMaster.TM.VREngine = vreplication.NewTestEngine(ts, "", destMaster.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+	destPrimary.TM.VREngine = vreplication.NewTestEngine(ts, "", destPrimary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	destMaster.TM.VREngine.Open(context.Background())
+	destPrimary.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -145,20 +145,20 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err := ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	expected := []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			Cells:             []string{"cell1"},
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			Cells:        []string{"cell1"},
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}
 	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, expected) {
-		t.Fatalf("rdonly type doesn't have right blacklisted tables. Expected: %v, got: %v", expected, si.TabletControls)
+		t.Fatalf("rdonly type doesn't have right list of denied tables. Expected: %v, got: %v", expected, si.TabletControls)
 	}
 
 	// migrate rdonly reverse cell
@@ -175,14 +175,14 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 
 	if len(si.TabletControls) != 0 {
-		t.Fatalf("rdonly type doesn't have right blacklisted tables. Expected: nil, got: %v", si.TabletControls)
+		t.Fatalf("rdonly type doesn't have right list of denied tables. Expected: nil, got: %v", si.TabletControls)
 	}
 
 	// Now migrate rdonly over
@@ -199,19 +199,19 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	expected = []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}
 	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, expected) {
-		t.Fatalf("rdonly type doesn't have right blacklisted tables. Expected: %v, got: %v", expected, si.TabletControls)
+		t.Fatalf("rdonly type doesn't have right list of denied tables. Expected: %v, got: %v", expected, si.TabletControls)
 	}
 
 	// migrate replica over
@@ -228,26 +228,26 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("bad initial dest ServedFrom: %+v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.TabletControls) != 2 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 		{
-			TabletType:        topodatapb.TabletType_REPLICA,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_REPLICA,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}) {
-		t.Fatalf("replica type doesn't have right blacklisted tables")
+		t.Fatalf("replica type doesn't have right list of denied tables")
 	}
 
-	// migrate master over
-	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "master"}); err != nil {
+	// migrate primary over
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "primary"}); err != nil {
 		t.Fatalf("MigrateServedFrom(master) failed: %v", err)
 	}
 
@@ -260,25 +260,25 @@ func TestMigrateServedFrom(t *testing.T) {
 		t.Fatalf("dest keyspace still is ServedFrom: %+v", ki.ServedFroms)
 	}
 
-	// check the source shard has the right blacklisted tables
+	// check the source shard has the right list of denied tables
 	si, err = ts.GetShard(ctx, "source", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.TabletControls) != 3 || !reflect.DeepEqual(si.TabletControls, []*topodatapb.Shard_TabletControl{
 		{
-			TabletType:        topodatapb.TabletType_RDONLY,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_RDONLY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 		{
-			TabletType:        topodatapb.TabletType_REPLICA,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_REPLICA,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 		{
-			TabletType:        topodatapb.TabletType_MASTER,
-			BlacklistedTables: []string{"gone1", "gone2"},
+			TabletType:   topodatapb.TabletType_PRIMARY,
+			DeniedTables: []string{"gone1", "gone2"},
 		},
 	}) {
-		t.Fatalf("master type doesn't have right blacklisted tables")
+		t.Fatalf("master type doesn't have right list of denied tables")
 	}
 }

@@ -19,7 +19,6 @@ package vtbackup
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -31,7 +30,7 @@ import (
 )
 
 var (
-	master           *cluster.Vttablet
+	primary          *cluster.Vttablet
 	replica1         *cluster.Vttablet
 	replica2         *cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
@@ -62,6 +61,7 @@ func TestMain(m *testing.M) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
+		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "-durability_policy=semi_sync")
 		// Start topo server
 		err := localCluster.StartTopo()
 		if err != nil {
@@ -84,11 +84,11 @@ func TestMain(m *testing.M) {
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
-		err = ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err
 		}
@@ -96,10 +96,10 @@ func TestMain(m *testing.M) {
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
-		master = localCluster.NewVttabletInstance("replica", 0, "")
+		primary = localCluster.NewVttabletInstance("replica", 0, "")
 		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
 		replica2 = localCluster.NewVttabletInstance("replica", 0, "")
-		shard.Vttablets = []*cluster.Vttablet{master, replica1, replica2}
+		shard.Vttablets = []*cluster.Vttablet{primary, replica1, replica2}
 
 		// Start MySql processes
 		var mysqlProcs []*exec.Cmd
@@ -127,7 +127,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Create database
-		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
+		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
 			}

@@ -18,7 +18,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -64,7 +64,7 @@ func assertNotAllowedURLTest(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -76,7 +76,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 

@@ -1,0 +1,26 @@
+{
+	"sharded": true,
+	"tables": {
+		"messages_message_lookup": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash"
+				}
+			]
+		},
+		"tokens_token_lookup": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash"
+				}
+			]
+		}
+	},
+	"vindexes": {
+		"hash": {
+			"type": "hash"
+		}
+	}
+}

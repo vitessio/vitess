@@ -481,6 +481,20 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 	if !got.Equal(want) {
 		t.Errorf("got %#v; want %#v", got, want)
 	}
+
+	sid10 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid11 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	set10 := Mysql56GTIDSet{
+		sid10: []interval{{1, 30}},
+	}
+	set11 := Mysql56GTIDSet{
+		sid11: []interval{{1, 30}},
+	}
+	got = set10.Difference(set11)
+	want = Mysql56GTIDSet{}
+	if !got.Equal(want) {
+		t.Errorf("got %#v; want %#v", got, want)
+	}
 }
 
 func TestMysql56GTIDSetSIDBlock(t *testing.T) {

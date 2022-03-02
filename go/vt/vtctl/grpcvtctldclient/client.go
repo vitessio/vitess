@@ -19,11 +19,10 @@ limitations under the License.
 package grpcvtctldclient
 
 import (
-	"flag"
-
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -31,32 +30,16 @@ import (
 
 const connClosedMsg = "grpc: the client connection is closed"
 
-// (TODO:@amason) - These flags match exactly the flags used in grpcvtctlclient.
-// If a program attempts to import both of these packages, it will panic during
-// startup due to the duplicate flags.
-//
-// For everything else I've been doing a sed s/vtctl/vtctld, but I cannot do
-// that here, since these flags are already "vtctld_*". My other options are to
-// name them "vtctld2_*" or to omit them completely.
-//
-// Not to pitch project ideas in comments, but a nice project to solve
-var (
-	cert = flag.String("vtctld_grpc_cert", "", "the cert to use to connect")
-	key  = flag.String("vtctld_grpc_key", "", "the key to use to connect")
-	ca   = flag.String("vtctld_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	name = flag.String("vtctld_grpc_server_name", "", "the server name to use to validate server certificate")
-)
-
 type gRPCVtctldClient struct {
 	cc *grpc.ClientConn
 	c  vtctlservicepb.VtctldClient
 }
 
-//go:generate -command grpcvtctldclient go run ./codegen
+//go:generate -command grpcvtctldclient go run ../vtctldclient/codegen
 //go:generate grpcvtctldclient -out client_gen.go
 
 func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclientcommon.SecureDialOption()
 	if err != nil {
 		return nil, err
 	}

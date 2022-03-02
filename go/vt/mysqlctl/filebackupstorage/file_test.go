@@ -18,7 +18,6 @@ package filebackupstorage
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -35,7 +34,7 @@ import (
 // setupFileBackupStorage creates a temporary directory, and
 // returns a FileBackupStorage based on it
 func setupFileBackupStorage(t *testing.T) *FileBackupStorage {
-	root, err := ioutil.TempDir("", "fbstest")
+	root, err := os.MkdirTemp("", "fbstest")
 	if err != nil {
 		t.Fatalf("os.TempDir failed: %v", err)
 	}

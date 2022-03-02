@@ -16,4 +16,4 @@
 
 source ./env.sh
 
-vtctlclient Reshard -tablet_types=MASTER main.main2regions '0' '-40,40-80,80-c0,c0-'
+vtctlclient Reshard -v1 -tablet_types=PRIMARY main.main2regions '0' '-40,40-80,80-c0,c0-'

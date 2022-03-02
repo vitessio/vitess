@@ -24,16 +24,16 @@ import (
 // LegacyIsReplicationLagHigh verifies that the given LegacyTabletStats refers to a tablet with high
 // replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
 func LegacyIsReplicationLagHigh(tabletStats *LegacyTabletStats) bool {
-	return float64(tabletStats.Stats.SecondsBehindMaster) > lowReplicationLag.Seconds()
+	return float64(tabletStats.Stats.ReplicationLagSeconds) > lowReplicationLag.Seconds()
 }
 
 // LegacyIsReplicationLagVeryHigh verifies that the given LegacyTabletStats refers to a tablet with very high
 // replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
 func LegacyIsReplicationLagVeryHigh(tabletStats *LegacyTabletStats) bool {
-	return float64(tabletStats.Stats.SecondsBehindMaster) > highReplicationLagMinServing.Seconds()
+	return float64(tabletStats.Stats.ReplicationLagSeconds) > highReplicationLagMinServing.Seconds()
 }
 
-// FilterLegacyStatsByReplicationLag filters the list of LegacyTabletStats by LegacyTabletStats.Stats.SecondsBehindMaster.
+// FilterLegacyStatsByReplicationLag filters the list of LegacyTabletStats by LegacyTabletStats.Stats.ReplicationLagSeconds.
 // Note that LegacyTabletStats that is non-serving or has error is ignored.
 //
 // The simplified logic:
@@ -82,7 +82,7 @@ func filterLegacyStatsByLag(tabletStatsList []*LegacyTabletStats) []*LegacyTable
 		// Pull the current replication lag for a stable sort later.
 		list = append(list, legacyTabletLagSnapshot{
 			ts:     ts,
-			replag: ts.Stats.SecondsBehindMaster})
+			replag: ts.Stats.ReplicationLagSeconds})
 	}
 
 	// Sort by replication lag.
@@ -143,7 +143,7 @@ func filterLegacyStatsByLagWithLegacyAlgorithm(tabletStatsList []*LegacyTabletSt
 		if !LegacyIsReplicationLagVeryHigh(ts) {
 			snapshots = append(snapshots, legacyTabletLagSnapshot{
 				ts:     ts,
-				replag: ts.Stats.SecondsBehindMaster})
+				replag: ts.Stats.ReplicationLagSeconds})
 		}
 	}
 	if len(snapshots) == 0 {
@@ -157,7 +157,7 @@ func filterLegacyStatsByLagWithLegacyAlgorithm(tabletStatsList []*LegacyTabletSt
 		for _, ts := range list {
 			snapshots = append(snapshots, legacyTabletLagSnapshot{
 				ts:     ts,
-				replag: ts.Stats.SecondsBehindMaster})
+				replag: ts.Stats.ReplicationLagSeconds})
 		}
 	}
 
@@ -191,7 +191,7 @@ func legacyMean(tabletStatsList []*LegacyTabletStats, idxExclude int) (uint64, e
 		if i == idxExclude {
 			continue
 		}
-		sum = sum + uint64(ts.Stats.SecondsBehindMaster)
+		sum = sum + uint64(ts.Stats.ReplicationLagSeconds)
 		count++
 	}
 	if count == 0 {

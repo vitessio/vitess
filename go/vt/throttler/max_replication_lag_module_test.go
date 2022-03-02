@@ -978,7 +978,7 @@ func tabletStats(uid, lag uint32) discovery.LegacyTabletStats {
 		Up:      true,
 		Serving: true,
 		Stats: &querypb.RealtimeStats{
-			SecondsBehindMaster: lag,
+			ReplicationLagSeconds: lag,
 		},
 		TabletExternallyReparentedTimestamp: 22,
 		LastError:                           nil,

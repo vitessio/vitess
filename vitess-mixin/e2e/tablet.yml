@@ -1,0 +1,24 @@
+externalConnections:
+  erpl:
+    flavor: FilePos
+    host: external_db_host
+    port: 3306
+    dbName: commerce
+    app:
+      user: external_db_user
+      password: external_db_password
+    dba:
+      user: external_db_user
+      password: external_db_password
+    filtered:
+      user: external_db_user
+      password: external_db_password
+    repl:
+      user: external_db_user
+      password: external_db_password
+    appdebug:
+      user: external_db_user
+      password: external_db_password
+    allprivs:
+      user: external_db_user
+      password: external_db_password

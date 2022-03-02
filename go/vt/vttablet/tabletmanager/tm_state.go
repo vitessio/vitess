@@ -66,7 +66,7 @@ type tmState struct {
 	isInSrvKeyspace          bool
 	isShardServing           map[topodatapb.TabletType]bool
 	tabletControls           map[topodatapb.TabletType]bool
-	blacklistedTables        map[topodatapb.TabletType][]string
+	deniedTables             map[topodatapb.TabletType][]string
 	tablet                   *topodatapb.Tablet
 	isPublishing             bool
 	hasCreatedMetadataTables bool
@@ -136,10 +136,10 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 	if shardInfo != nil {
 		ts.isResharding = len(shardInfo.SourceShards) > 0
 
-		ts.blacklistedTables = make(map[topodatapb.TabletType][]string)
+		ts.deniedTables = make(map[topodatapb.TabletType][]string)
 		for _, tc := range shardInfo.TabletControls {
 			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
-				ts.blacklistedTables[tc.TabletType] = tc.BlacklistedTables
+				ts.deniedTables[tc.TabletType] = tc.DeniedTables
 			}
 		}
 	}
@@ -175,27 +175,43 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	defer ts.mu.Unlock()
 	log.Infof("Changing Tablet Type: %v", tabletType)
 
-	if tabletType == topodatapb.TabletType_MASTER {
-		masterTermStartTime := logutil.TimeToProto(time.Now())
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		PrimaryTermStartTime := logutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
-		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, masterTermStartTime)
+		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, PrimaryTermStartTime)
 		if err != nil {
-			return err
+			log.Errorf("Error changing type in topo record for tablet %s :- %v\nWill keep trying to read from the toposerver", topoproto.TabletAliasString(ts.tm.tabletAlias), err)
+			// In case of a topo error, we aren't sure if the data has been written or not.
+			// We must read the data again and verify whether the previous write succeeded or not.
+			// The only way to guarantee safety is to keep retrying read until we succeed
+			for {
+				ti, errInReading := ts.tm.TopoServer.GetTablet(ctx, ts.tm.tabletAlias)
+				if errInReading != nil {
+					<-time.After(100 * time.Millisecond)
+					continue
+				}
+				if ti.Type == tabletType && proto.Equal(ti.PrimaryTermStartTime, PrimaryTermStartTime) {
+					log.Infof("Tablet record in toposerver matches, continuing operation")
+					break
+				}
+				log.Errorf("Tablet record read from toposerver does not match what we attempted to write, canceling operation")
+				return err
+			}
 		}
 		if action == DBActionSetReadWrite {
 			// We call SetReadOnly only after the topo has been updated to avoid
-			// situations where two tablets are master at the DB level but not at the vitess level
+			// situations where two tablets are primary at the DB level but not at the vitess level
 			if err := ts.tm.MysqlDaemon.SetReadOnly(false); err != nil {
 				return err
 			}
 		}
 
 		ts.tablet.Type = tabletType
-		ts.tablet.MasterTermStartTime = masterTermStartTime
+		ts.tablet.PrimaryTermStartTime = PrimaryTermStartTime
 	} else {
 		ts.tablet.Type = tabletType
-		ts.tablet.MasterTermStartTime = nil
+		ts.tablet.PrimaryTermStartTime = nil
 	}
 
 	s := topoproto.TabletTypeLString(tabletType)
@@ -233,21 +249,20 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		return
 	}
 
-	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
 	if reason != "" {
-		ts.populateLocalMetadataLocked()
 		log.Infof("Disabling query service: %v", reason)
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, false, reason); err != nil {
 			log.Errorf("SetServingType(serving=false) failed: %v", err)
 		}
 	}
 
-	if err := ts.applyBlacklist(ctx); err != nil {
-		log.Errorf("Cannot update blacklisted tables rule: %v", err)
+	if err := ts.applyDenyList(ctx); err != nil {
+		log.Errorf("Cannot update denied tables rule: %v", err)
 	}
 
 	ts.tm.replManager.SetTabletType(ts.tablet.Type)
@@ -261,7 +276,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	}
 
 	if ts.tm.VREngine != nil {
-		if ts.tablet.Type == topodatapb.TabletType_MASTER {
+		if ts.tablet.Type == topodatapb.TabletType_PRIMARY {
 			ts.tm.VREngine.Open(ts.tm.BatchCtx)
 		} else {
 			ts.tm.VREngine.Close()
@@ -281,8 +296,6 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, terTime, true, ""); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}
-
-		ts.populateLocalMetadataLocked()
 	}
 }
 
@@ -320,36 +333,36 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if ts.tabletControls[tabletType] {
 		return "TabletControl.DisableQueryService set"
 	}
-	if tabletType == topodatapb.TabletType_MASTER && ts.isResharding {
-		return "master tablet with filtered replication on"
+	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
+		return "primary tablet with filtered replication on"
 	}
 	return ""
 }
 
-func (ts *tmState) applyBlacklist(ctx context.Context) (err error) {
-	blacklistRules := rules.New()
-	blacklistedTables := ts.blacklistedTables[ts.tablet.Type]
-	if len(blacklistedTables) > 0 {
-		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), blacklistedTables)
+func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
+	denyListRules := rules.New()
+	deniedTables := ts.deniedTables[ts.tablet.Type]
+	if len(deniedTables) > 0 {
+		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), deniedTables)
 		if err != nil {
 			return err
 		}
 
 		// Verify that at least one table matches the wildcards, so
-		// that we don't add a rule to blacklist all tables
+		// that we don't add a rule to deny all tables
 		if len(tables) > 0 {
-			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-			qr := rules.NewQueryRule("enforce blacklisted tables", "blacklisted_table", rules.QRFailRetry)
+			log.Infof("Denying tables %v", strings.Join(tables, ", "))
+			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
 			}
-			blacklistRules.Add(qr)
+			denyListRules.Add(qr)
 		}
 	}
 
-	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
+	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(denyListQueryList, denyListRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", denyListQueryList, loadRuleErr)
 	}
 	return nil
 }
@@ -427,9 +440,9 @@ func (ts *tmState) retryPublish() {
 // of tmState may not be accessible due to longer mutex holds.
 // tmState uses publishForDisplay to keep these values uptodate.
 type displayState struct {
-	mu                sync.Mutex
-	tablet            *topodatapb.Tablet
-	blackListedTables []string
+	mu           sync.Mutex
+	tablet       *topodatapb.Tablet
+	deniedTables []string
 }
 
 // Note that the methods for displayState are all in tmState.
@@ -438,7 +451,7 @@ func (ts *tmState) publishForDisplay() {
 	defer ts.displayState.mu.Unlock()
 
 	ts.displayState.tablet = proto.Clone(ts.tablet).(*topodatapb.Tablet)
-	ts.displayState.blackListedTables = ts.blacklistedTables[ts.tablet.Type]
+	ts.displayState.deniedTables = ts.deniedTables[ts.tablet.Type]
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {
@@ -447,10 +460,10 @@ func (ts *tmState) Tablet() *topodatapb.Tablet {
 	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
 }
 
-func (ts *tmState) BlacklistedTables() []string {
+func (ts *tmState) DeniedTables() []string {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	return ts.displayState.blackListedTables
+	return ts.displayState.deniedTables
 }
 
 func (ts *tmState) Keyspace() string {

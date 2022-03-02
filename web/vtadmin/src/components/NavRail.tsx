@@ -18,7 +18,7 @@ import { Link, NavLink } from 'react-router-dom';
 
 import style from './NavRail.module.scss';
 import logo from '../img/vitess-icon-color.svg';
-import { useClusters, useGates, useKeyspaces, useSchemas, useTablets, useWorkflows } from '../hooks/api';
+import { useClusters, useGates, useKeyspaces, useSchemas, useTablets, useVtctlds, useWorkflows } from '../hooks/api';
 import { Icon, Icons } from './Icon';
 import { getTableDefinitions } from '../util/tableDefinitions';
 
@@ -28,6 +28,7 @@ export const NavRail = () => {
     const { data: gates = [] } = useGates();
     const { data: schemas = [] } = useSchemas();
     const { data: tablets = [] } = useTablets();
+    const { data: vtctlds = [] } = useVtctlds();
     const { data: workflows = [] } = useWorkflows();
 
     const tds = React.useMemo(() => getTableDefinitions(schemas), [schemas]);
@@ -35,7 +36,7 @@ export const NavRail = () => {
     return (
         <div className={style.container}>
             <Link className={style.logoContainer} to="/">
-                <img alt="Vitess logo" className={style.logo} src={logo} height={40}></img>
+                <img alt="Vitess logo" className="h-16 mx-auto" src={logo} height={40}></img>
             </Link>
 
             <div className={style.navLinks}>
@@ -65,9 +66,15 @@ export const NavRail = () => {
                     <li>
                         <NavRailLink icon={Icons.keyT} text="Tablets" to="/tablets" count={tablets.length} />
                     </li>
+                    <li>
+                        <NavRailLink icon={Icons.keyV} text="vtctlds" to="/vtctlds" count={vtctlds.length} />
+                    </li>
                 </ul>
 
                 <ul className={style.navList}>
+                    <li>
+                        <NavRailLink icon={Icons.download} text="Backups" to="/backups" />
+                    </li>
                     <li>
                         <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
                     </li>

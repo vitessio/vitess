@@ -128,7 +128,7 @@ olapReadPool:
   idleTimeoutSeconds: 1800
   size: 200
 oltp:
-  maxRpws: 10000
+  maxRows: 10000
   queryTimeoutSeconds: 30
   txTimeoutSeconds: 30
 oltpReadPool:
@@ -214,6 +214,7 @@ func TestFlags(t *testing.T) {
 			TransactionLimitByPrincipal: true,
 		},
 		EnforceStrictTransTables: true,
+		EnableOnlineDDL:          true,
 		DB:                       &dbconfigs.DBConfigs{},
 	}
 	assert.Equal(t, want.DB, currentConfig.DB)
@@ -260,7 +261,7 @@ func TestFlags(t *testing.T) {
 	enableConsolidator = true
 	enableConsolidatorReplicas = true
 	Init()
-	want.Consolidator = NotOnMaster
+	want.Consolidator = NotOnPrimary
 	assert.Equal(t, want, currentConfig)
 
 	enableConsolidator = true
@@ -272,7 +273,7 @@ func TestFlags(t *testing.T) {
 	enableConsolidator = false
 	enableConsolidatorReplicas = true
 	Init()
-	want.Consolidator = NotOnMaster
+	want.Consolidator = NotOnPrimary
 	assert.Equal(t, want, currentConfig)
 
 	enableConsolidator = false

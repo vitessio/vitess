@@ -18,7 +18,6 @@ package vtsql
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,7 +45,7 @@ func TestConfigParse(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		t.Parallel()
 
-		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
+		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
 		_, err = f.Write([]byte(`{
@@ -100,7 +99,7 @@ func TestConfigParse(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		t.Parallel()
 
-		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
+		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
 		_, err = f.Write([]byte(`{

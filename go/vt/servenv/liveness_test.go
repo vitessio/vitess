@@ -17,7 +17,7 @@ limitations under the License.
 package servenv
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,9 +34,9 @@ func TestLivenessHandler(t *testing.T) {
 	defer resp.Body.Close()
 
 	// Make sure we can read the body, even though it's empty.
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("ioutil.ReadAll: %v", err)
+		t.Fatalf("io.ReadAll: %v", err)
 	}
 	t.Logf("body: %q", body)
 }

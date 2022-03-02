@@ -32,6 +32,10 @@ import { Workflow } from './routes/workflow/Workflow';
 import { VTExplain } from './routes/VTExplain';
 import { Keyspace } from './routes/keyspace/Keyspace';
 import { Tablet } from './routes/tablet/Tablet';
+import { Backups } from './routes/Backups';
+import { Shard } from './routes/shard/Shard';
+import { Vtctlds } from './routes/Vtctlds';
+import { SnackbarContainer } from './Snackbar';
 
 export const App = () => {
     return (
@@ -40,9 +44,13 @@ export const App = () => {
                 <div className={style.navContainer}>
                     <NavRail />
                 </div>
-
+                <SnackbarContainer />
                 <div className={style.mainContainer}>
                     <Switch>
+                        <Route path="/backups">
+                            <Backups />
+                        </Route>
+
                         <Route path="/clusters">
                             <Clusters />
                         </Route>
@@ -53,6 +61,10 @@ export const App = () => {
 
                         <Route path="/keyspaces">
                             <Keyspaces />
+                        </Route>
+
+                        <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
+                            <Shard />
                         </Route>
 
                         <Route path="/keyspace/:clusterID/:name">
@@ -73,6 +85,10 @@ export const App = () => {
 
                         <Route path="/tablet/:clusterID/:alias">
                             <Tablet />
+                        </Route>
+
+                        <Route path="/vtctlds">
+                            <Vtctlds />
                         </Route>
 
                         <Route path="/vtexplain">

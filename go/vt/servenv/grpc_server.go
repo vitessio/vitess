@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"math"
@@ -25,12 +26,15 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"vitess.io/vitess/go/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/reflection"
 
 	"context"
 
@@ -64,6 +68,9 @@ var (
 
 	// GRPCCA is the CA to use if TLS is enabled
 	GRPCCA = flag.String("grpc_ca", "", "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
+
+	// GRPCCRL is the CRL (Certificate Revocation List) to use if TLS is enabled
+	GRPCCRL = flag.String("grpc_crl", "", "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
 
 	GRPCEnableOptionalTLS = flag.Bool("grpc_enable_optional_tls", false, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
 
@@ -131,7 +138,7 @@ func createGRPCServer() {
 
 	var opts []grpc.ServerOption
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
-		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCServerCA)
+		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCCRL, *GRPCServerCA, tls.VersionTLS12)
 		if err != nil {
 			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}
@@ -218,6 +225,17 @@ func serveGRPC() {
 	// skip if not registered
 	if GRPCPort == nil || *GRPCPort == 0 {
 		return
+	}
+
+	// register reflection to support list calls :)
+	reflection.Register(GRPCServer)
+
+	// register health service to support health checks
+	healthServer := health.NewServer()
+	healthpb.RegisterHealthServer(GRPCServer, healthServer)
+
+	for service := range GRPCServer.GetServiceInfo() {
+		healthServer.SetServingStatus(service, healthpb.HealthCheckResponse_SERVING)
 	}
 
 	// listen on the port

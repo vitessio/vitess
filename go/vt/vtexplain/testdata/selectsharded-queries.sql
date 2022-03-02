@@ -8,7 +8,8 @@ select u.id, u.name, u.nickname, n.info from user u join name_info n on u.name =
 select m.id, m.song, e.extra from music m join music_extra e on m.id = e.id where m.user_id = 100 /* join on int */;
 
 select count(*) from user where id = 1 /* point aggregate */;
-select count(*) from user where name in ('alice','bob') /* scatter aggregate */;
+select count(*) from user where name in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate */;
+select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate with batching */;
 select name, count(*) from user group by name /* scatter aggregate */;
 
 select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */;

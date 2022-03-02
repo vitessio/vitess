@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -24,24 +25,23 @@ import (
 
 var _ logicalPlan = (*distinct)(nil)
 
-// limit is the logicalPlan for engine.Limit.
-// This gets built if a limit needs to be applied
-// after rows are returned from an underlying
-// operation. Since a limit is the final operation
-// of a SELECT, most pushes are not applicable.
+// distinct is the logicalPlan for engine.Distinct.
 type distinct struct {
 	logicalPlanCommon
+	ColCollations []collations.ID
 }
 
-func newDistinct(source logicalPlan) logicalPlan {
+func newDistinct(source logicalPlan, colCollations []collations.ID) logicalPlan {
 	return &distinct{
 		logicalPlanCommon: newBuilderCommon(source),
+		ColCollations:     colCollations,
 	}
 }
 
 func (d *distinct) Primitive() engine.Primitive {
 	return &engine.Distinct{
-		Source: d.input.Primitive(),
+		Source:        d.input.Primitive(),
+		ColCollations: d.ColCollations,
 	}
 }
 

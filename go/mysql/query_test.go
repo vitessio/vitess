@@ -33,7 +33,7 @@ import (
 )
 
 // Utility function to write sql query as packets to test parseComPrepare
-func MockQueryPackets(t *testing.T, query string) []byte {
+func preparePacket(t *testing.T, query string) []byte {
 	data := make([]byte, len(query)+1+packetHeaderSize)
 	// Not sure if it makes a difference
 	pos := packetHeaderSize
@@ -130,7 +130,7 @@ func TestComStmtPrepare(t *testing.T) {
 	}()
 
 	sql := "select * from test_table where id = ?"
-	mockData := MockQueryPackets(t, sql)
+	mockData := preparePacket(t, sql)
 
 	if err := cConn.writePacket(mockData); err != nil {
 		t.Fatalf("writePacket failed: %v", err)
@@ -173,7 +173,7 @@ func TestComStmtPrepareUpdStmt(t *testing.T) {
 	}()
 
 	sql := "UPDATE test SET __bit = ?, __tinyInt = ?, __tinyIntU = ?, __smallInt = ?, __smallIntU = ?, __mediumInt = ?, __mediumIntU = ?, __int = ?, __intU = ?, __bigInt = ?, __bigIntU = ?, __decimal = ?, __float = ?, __double = ?, __date = ?, __datetime = ?, __timestamp = ?, __time = ?, __year = ?, __char = ?, __varchar = ?, __binary = ?, __varbinary = ?, __tinyblob = ?, __tinytext = ?, __blob = ?, __text = ?, __enum = ?, __set = ? WHERE __id = 0"
-	mockData := MockQueryPackets(t, sql)
+	mockData := preparePacket(t, sql)
 
 	err := cConn.writePacket(mockData)
 	require.NoError(t, err, "writePacket failed")

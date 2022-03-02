@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
@@ -80,7 +81,7 @@ type Engine struct {
 
 	tableFileSizeGauge      *stats.GaugesWithSingleLabel
 	tableAllocatedSizeGauge *stats.GaugesWithSingleLabel
-	innoDbReadRowsGauge     *stats.Gauge
+	innoDbReadRowsCounter   *stats.Counter
 }
 
 // NewEngine creates a new Engine.
@@ -100,7 +101,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
-	se.innoDbReadRowsGauge = env.Exporter().NewGauge("InnodbRowsRead", "number of rows read by mysql")
+	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
 
 	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
 	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +125,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 }
 
 // EnsureConnectionAndDB ensures that we can connect to mysql.
-// If tablet type is master and there is no db, then the database is created.
+// If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
 	ctx := tabletenv.LocalContext()
@@ -134,14 +135,14 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		se.dbCreationFailed = false
 		return nil
 	}
-	if tabletType != topodatapb.TabletType_MASTER {
+	if tabletType != topodatapb.TabletType_PRIMARY {
 		return err
 	}
 	if merr, isSQLErr := err.(*mysql.SQLError); !isSQLErr || merr.Num != mysql.ERBadDb {
 		return err
 	}
 
-	// We are master and db is not found. Let's create it.
+	// We are primary and db is not found. Let's create it.
 	// We use allprivs instead of DBA because we want db create to fail if we're read-only.
 	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsConnector())
 	if err != nil {
@@ -160,7 +161,6 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		return err
 	}
 
-	se.dbCreationFailed = false
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
 	return nil
@@ -240,9 +240,9 @@ func (se *Engine) Close() {
 	log.Info("Schema Engine: closed")
 }
 
-// MakeNonMaster clears the sequence caches to make sure that
-// they don't get accidentally reused after losing mastership.
-func (se *Engine) MakeNonMaster() {
+// MakeNonPrimary clears the sequence caches to make sure that
+// they don't get accidentally reused after losing primaryship.
+func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
@@ -339,10 +339,18 @@ func (se *Engine) reload(ctx context.Context) error {
 		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
 		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
 
-		// TODO(sougou); find a better way detect changed tables. This method
-		// seems unreliable. The endtoend test flags all tables as changed.
+		// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
+		// We also record the last time the schema was loaded (`se.lastChange`). Both are in seconds. We reload a table only when:
+		//   1. A table's underlying mysql metadata has changed: `se.lastChange >= createTime`. This can happen if a table was directly altered.
+		//      Note that we also reload if `se.lastChange == createTime` since it is possible, especially in unit tests,
+		//      that a table might be changed multiple times within the same second.
+		//
+		//   2. A table was swapped in by Online DDL: `createTime != tbl.CreateTime`. When an Online DDL migration is completed the temporary table is
+		//      renamed to the table being altered. `se.lastChange` is updated every time the schema is reloaded (default: 30m).
+		//      Online DDL can take hours. So it is possible that the `create_time` of the temporary table is before se.lastChange. Hence,
+		//      #1 will not identify the renamed table as a changed one.
 		tbl, isInTablesMap := se.tables[tableName]
-		if isInTablesMap && createTime < se.lastChange {
+		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
 			tbl.FileSize = fileSize
 			tbl.AllocatedSize = allocatedSize
 			continue
@@ -356,6 +364,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		}
 		table.FileSize = fileSize
 		table.AllocatedSize = allocatedSize
+		table.CreateTime = createTime
 		changedTables[tableName] = table
 		if isInTablesMap {
 			altered = append(altered, tableName)
@@ -373,6 +382,10 @@ func (se *Engine) reload(ctx context.Context) error {
 		if !curTables[tableName] {
 			dropped = append(dropped, tableName)
 			delete(se.tables, tableName)
+			// We can't actually delete the label from the stats, but we can set it to 0.
+			// Many monitoring tools will drop zero-valued metrics.
+			se.tableFileSizeGauge.Reset(tableName)
+			se.tableAllocatedSizeGauge.Reset(tableName)
 		}
 	}
 
@@ -381,7 +394,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		return err
 	}
 
-	// Update se.tables and se.lastChange
+	// Update se.tables
 	for k, t := range changedTables {
 		se.tables[k] = t
 	}
@@ -405,7 +418,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBCon
 			return err
 		}
 
-		se.innoDbReadRowsGauge.Set(value)
+		se.innoDbReadRowsCounter.Set(value)
 	} else {
 		log.Warningf("got strange results from 'show status': %v", readRowsData.Rows)
 	}
@@ -468,10 +481,15 @@ func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*
 	}
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	st, ok := se.tables[tableName.String()]
+	tableNameStr := tableName.String()
+	st, ok := se.tables[tableNameStr]
 	if !ok {
-		log.Infof("table %v not found in vttablet schema: current tables", tableName.String(), se.tables)
-		return nil, fmt.Errorf("table %v not found in vttablet schema", tableName.String())
+		if schema.IsInternalOperationTableName(tableNameStr) {
+			log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		} else {
+			log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+			return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
+		}
 	}
 	return newMinimalTable(st), nil
 }

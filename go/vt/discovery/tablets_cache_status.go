@@ -68,10 +68,10 @@ func (tcs *TabletsCacheStatus) StatusAsHTML() template.HTML {
 		} else if !ts.Serving {
 			color = "red"
 			extra = " (Not Serving)"
-		} else if ts.Target.TabletType == topodatapb.TabletType_MASTER {
-			extra = fmt.Sprintf(" (MasterTS: %v)", ts.MasterTermStartTime)
+		} else if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
+			extra = fmt.Sprintf(" (PrimaryTermStartTime: %v)", ts.PrimaryTermStartTime)
 		} else {
-			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.SecondsBehindMaster)
+			extra = fmt.Sprintf(" (RepLag: %v)", ts.Stats.ReplicationLagSeconds)
 		}
 		name := topoproto.TabletAliasString(ts.Tablet.Alias)
 		tLinks = append(tLinks, fmt.Sprintf(`<a href="%s" style="color:%v">%v</a>%v`, ts.getTabletDebugURL(), color, name, extra))

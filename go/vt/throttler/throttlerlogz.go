@@ -53,7 +53,7 @@ const logHeaderHTML = `
 			<th>New State</th>
 			<th>Lag Before</th>
 			<th>Recorded Ago</th>
-			<th>Master Rate</th>
+			<th>Primary Rate</th>
 			<th>Replica Rate</th>
 			<th>Old Backlog</th>
 			<th>New Backlog</th>
@@ -69,7 +69,7 @@ const logEntryHTML = `
       <td>{{.OldRate}}</td>
       <td>{{.NewRate}}</td>
       <td>{{.Alias}}</td>
-      <td>{{.LagRecordNow.Stats.SecondsBehindMaster}}s</td>
+      <td>{{.LagRecordNow.Stats.ReplicationLagSeconds}}s</td>
       <td>{{.TimeSinceLastRateChange}}</td>
       <td>{{.CurrentRate}}</td>
       <td>{{.GoodOrBad}}</td>
@@ -81,7 +81,7 @@ const logEntryHTML = `
       <td>{{.NewState}}</td>
       <td>{{.LagBefore}}</td>
       <td>{{.AgeOfBeforeLag}}</td>
-      <td>{{.MasterRate}}</td>
+      <td>{{.PrimaryRate}}</td>
       <td>{{.GuessedReplicationRate}}</td>
       <td>{{.GuessedReplicationBacklogOld}}</td>
       <td>{{.GuessedReplicationBacklogNew}}</td>

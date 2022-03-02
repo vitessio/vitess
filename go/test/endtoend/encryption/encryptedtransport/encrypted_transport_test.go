@@ -56,7 +56,7 @@ package encryptedtransport
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -107,7 +107,7 @@ func TestSecureTransport(t *testing.T) {
 	_, err := clusterSetUp(t)
 	require.Nil(t, err, "setup failed")
 
-	masterTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 
 	// creating table_acl_config.json file
@@ -130,7 +130,7 @@ func TestSecureTransport(t *testing.T) {
 	require.NoError(t, err)
 
 	// start the tablets
-	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
+	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
 		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-table-acl-config", tableACLConfigJSON, "-queryserver-config-strict-table-acl")
 		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, serverExtraArguments("vttablet-server-instance", "vttablet-client")...)
 		err = tablet.VttabletProcess.Setup()
@@ -143,7 +143,7 @@ func TestSecureTransport(t *testing.T) {
 	vtctlClientTmArgs := append(vtctlClientArgs, tmclientExtraArgs("vttablet-client-1")...)
 
 	// Reparenting
-	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardMaster", "-force", "test_keyspace/0", masterTablet.Alias)
+	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardPrimary", "-force", "test_keyspace/0", primaryTablet.Alias)
 	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlClientArgs...)
 	require.NoError(t, err)
 
@@ -152,7 +152,7 @@ func TestSecureTransport(t *testing.T) {
 	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlApplySchemaArgs...)
 	require.NoError(t, err)
 
-	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
+	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
 		var vtctlTabletArgs []string
 		vtctlTabletArgs = append(vtctlTabletArgs, tmclientExtraArgs("vttablet-client-1")...)
 		vtctlTabletArgs = append(vtctlTabletArgs, "RunHealthCheck", tablet.Alias)
@@ -189,8 +189,8 @@ func TestSecureTransport(t *testing.T) {
 	require.NoError(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run Select on table")
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
@@ -214,8 +214,8 @@ func TestSecureTransport(t *testing.T) {
 	require.NoError(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run Select on table")
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 
 	// 'vtgate client 1' is authorized to access vt_insert_test
 	callerID := &vtrpc.CallerID{
@@ -236,8 +236,8 @@ func TestSecureTransport(t *testing.T) {
 	require.NoError(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run Select on table")
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
 
 	clusterInstance.Teardown()
 }
@@ -307,7 +307,8 @@ func clusterSetUp(t *testing.T) (int, error) {
 			}
 			mysqlProcesses = append(mysqlProcesses, proc)
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
@@ -319,7 +320,8 @@ func clusterSetUp(t *testing.T) (int, error) {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+				clusterInstance.EnableSemiSync,
+				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
@@ -374,7 +376,7 @@ func tabletConnExtraArgs(name string) []string {
 }
 
 func getVitessClient(addr string) (vtgateservicepb.VitessClient, error) {
-	opt, err := grpcclient.SecureDialOption(grpcCert, grpcKey, grpcCa, grpcName)
+	opt, err := grpcclient.SecureDialOption(grpcCert, grpcKey, grpcCa, "", grpcName)
 	if err != nil {
 		return nil, err
 	}
@@ -389,12 +391,12 @@ func getVitessClient(addr string) (vtgateservicepb.VitessClient, error) {
 func setCreds(t *testing.T, name string, ca string) {
 	f1, err := os.Open(path.Join(certDirectory, "ca-cert.pem"))
 	require.NoError(t, err)
-	b1, err := ioutil.ReadAll(f1)
+	b1, err := io.ReadAll(f1)
 	require.NoError(t, err)
 
 	f2, err := os.Open(path.Join(certDirectory, ca+"-cert.pem"))
 	require.NoError(t, err)
-	b2, err := ioutil.ReadAll(f2)
+	b2, err := io.ReadAll(f2)
 	require.NoError(t, err)
 
 	caContent := append(b1, b2...)
@@ -426,7 +428,7 @@ func setSSLInfoEmpty() {
 
 func getSession() *vtgatepb.Session {
 	return &vtgatepb.Session{
-		TargetString: "test_keyspace:0@master",
+		TargetString: "test_keyspace:0@primary",
 	}
 }
 

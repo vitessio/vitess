@@ -17,10 +17,9 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"fmt"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -92,7 +91,7 @@ func (et *ExplainTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType:      topodatapb.TabletType_MASTER,
+				ServedType:      topodatapb.TabletType_PRIMARY,
 				ShardReferences: shards,
 			},
 			{
@@ -114,7 +113,12 @@ func (et *ExplainTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string
 	return srvKeyspace, nil
 }
 
+func (et *ExplainTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	ks, err := et.GetSrvKeyspace(ctx, cell, keyspace)
+	callback(ks, err)
+}
+
 // WatchSrvVSchema is part of the srvtopo.Server interface.
-func (et *ExplainTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (et *ExplainTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	callback(et.getSrvVSchema(), nil)
 }

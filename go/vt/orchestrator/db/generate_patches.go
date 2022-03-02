@@ -27,7 +27,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN last_sql_error TEXT NOT NULL AFTER exec_master_log_pos
+			ADD COLUMN last_sql_error TEXT NOT NULL AFTER exec_source_log_pos
 	`,
 	`
 		ALTER TABLE
@@ -37,7 +37,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN oracle_gtid TINYINT UNSIGNED NOT NULL AFTER slave_io_running
+			ADD COLUMN oracle_gtid TINYINT UNSIGNED NOT NULL AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -47,7 +47,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN relay_log_file varchar(128) CHARACTER SET ascii NOT NULL AFTER exec_master_log_pos
+			ADD COLUMN relay_log_file varchar(128) CHARACTER SET ascii NOT NULL AFTER exec_source_log_pos
 	`,
 	`
 		ALTER TABLE
@@ -55,12 +55,12 @@ var generateSQLPatches = []string{
 			ADD COLUMN relay_log_pos bigint unsigned NOT NULL AFTER relay_log_file
 	`,
 	`
-		DROP INDEX master_host_port_idx ON database_instance
+		DROP INDEX source_host_port_idx ON database_instance
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD INDEX master_host_port_idx_database_instance (master_host, master_port)
+			ADD INDEX source_host_port_idx_database_instance (source_host, source_port)
 	`,
 	`
 		ALTER TABLE
@@ -75,7 +75,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN has_replication_filters TINYINT UNSIGNED NOT NULL AFTER slave_io_running
+			ADD COLUMN has_replication_filters TINYINT UNSIGNED NOT NULL AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -105,7 +105,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN is_co_master TINYINT UNSIGNED NOT NULL AFTER replication_depth
+			ADD COLUMN is_co_primary TINYINT UNSIGNED NOT NULL AFTER replication_depth
 	`,
 	`
 		ALTER TABLE
@@ -115,7 +115,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER slave_lag_seconds
+			ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER replica_lag_seconds
 	`,
 	`
 		ALTER TABLE
@@ -135,12 +135,12 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN count_affected_slaves int unsigned NOT NULL
+			ADD COLUMN count_affected_replicas int unsigned NOT NULL
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN slave_hosts text CHARACTER SET ascii NOT NULL
+			ADD COLUMN replica_hosts text CHARACTER SET ascii NOT NULL
 	`,
 	`
 		ALTER TABLE hostname_unresolve
@@ -222,17 +222,17 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN participating_instances text CHARACTER SET ascii NOT NULL after slave_hosts
+			ADD COLUMN participating_instances text CHARACTER SET ascii NOT NULL after replica_hosts
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN lost_slaves text CHARACTER SET ascii NOT NULL after participating_instances
+			ADD COLUMN lost_replicas text CHARACTER SET ascii NOT NULL after participating_instances
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN all_errors text CHARACTER SET ascii NOT NULL after lost_slaves
+			ADD COLUMN all_errors text CHARACTER SET ascii NOT NULL after lost_replicas
 	`,
 	`
 		ALTER TABLE audit
@@ -288,7 +288,7 @@ var generateSQLPatches = []string{
 			MODIFY last_suggested timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 	`,
 	`
-		ALTER TABLE master_position_equivalence /* sqlite3-skip */
+		ALTER TABLE primary_position_equivalence /* sqlite3-skip */
 			MODIFY last_suggested timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 	`,
 	`
@@ -493,7 +493,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_enabled TINYINT UNSIGNED NOT NULL
+			ADD COLUMN semi_sync_primary_enabled TINYINT UNSIGNED NOT NULL
 	`,
 	`
 		ALTER TABLE
@@ -513,7 +513,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN master_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
+			ADD COLUMN source_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
 	`,
 	`
 		ALTER TABLE
@@ -523,12 +523,12 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER master_uuid
+			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER source_uuid
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN replication_sql_thread_state tinyint signed not null default 0 AFTER slave_io_running
+			ADD COLUMN replication_sql_thread_state tinyint signed not null default 0 AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -549,27 +549,27 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_timeout INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_enabled
+			ADD COLUMN semi_sync_primary_timeout INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_enabled
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_wait_for_slave_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_timeout
+			ADD COLUMN semi_sync_primary_wait_for_replica_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_timeout
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_wait_for_slave_count
+			ADD COLUMN semi_sync_primary_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_wait_for_replica_count
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_replica_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_status
+			ADD COLUMN semi_sync_replica_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_status
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_clients INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_status
+			ADD COLUMN semi_sync_primary_clients INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_status
 	`,
 	`
 		ALTER TABLE
@@ -579,7 +579,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE /* sqlite3-skip */
 			database_instance
-			MODIFY semi_sync_master_timeout BIGINT UNSIGNED NOT NULL DEFAULT 0
+			MODIFY semi_sync_primary_timeout BIGINT UNSIGNED NOT NULL DEFAULT 0
   `,
 	// Fields related to Replication Group the instance belongs to
 	`

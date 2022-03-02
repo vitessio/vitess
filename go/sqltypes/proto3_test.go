@@ -229,9 +229,8 @@ func TestQueryReponses(t *testing.T) {
 			},
 		}, {
 			Error: &vtrpcpb.RPCError{
-				LegacyCode: vtrpcpb.LegacyErrorCode_DEADLINE_EXCEEDED_LEGACY,
-				Message:    "deadline exceeded",
-				Code:       vtrpcpb.Code_DEADLINE_EXCEEDED,
+				Message: "deadline exceeded",
+				Code:    vtrpcpb.Code_DEADLINE_EXCEEDED,
 			},
 			Result: nil,
 		},

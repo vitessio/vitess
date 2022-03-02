@@ -11,9 +11,7 @@ FLAVOR="$1"
 export DEBIAN_FRONTEND=noninteractive
 
 KEYSERVERS=(
-    ha.pool.sks-keyservers.net
     keyserver.ubuntu.com
-    hkp://p80.pool.sks-keyservers.net:80
     hkp://keyserver.ubuntu.com:80
 )
 
@@ -158,6 +156,7 @@ case "${FLAVOR}" in
 mysql56|mysql57|mysql80)
     # repo.mysql.com
     add_apt_key 8C718D3B5072E1F5
+    add_apt_key 467B942D3A79BD29
     ;;
 mariadb|mariadb103)
     # digitalocean.com

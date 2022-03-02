@@ -20,7 +20,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -74,6 +75,7 @@ const (
 	PlanCallProc
 	PlanAlterMigration
 	PlanRevertMigration
+	PlanShowMigrationLogs
 	NumPlans
 )
 
@@ -105,6 +107,7 @@ var planName = []string{
 	"CallProcedure",
 	"AlterMigration",
 	"RevertMigration",
+	"ShowMigrationLogs",
 }
 
 func (pt PlanType) String() string {
@@ -149,7 +152,10 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 // Plan contains the parameters for executing a request.
 type Plan struct {
 	PlanID PlanType
-	Table  *schema.Table
+	// When the query indicates a single table
+	Table *schema.Table
+	// SELECT, UPDATE, DELETE statements may list multiple tables
+	AllTables []*schema.Table
 
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
@@ -161,7 +167,7 @@ type Plan struct {
 	FullQuery *sqlparser.ParsedQuery
 
 	// NextCount stores the count for "select next".
-	NextCount sqltypes.PlanValue
+	NextCount evalengine.Expr
 
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.
@@ -178,6 +184,18 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 		tableName = plan.Table.Name
 	}
 	return tableName
+}
+
+// TableNames returns the table names for all tables in the plan.
+func (plan *Plan) TableNames() (names []string) {
+	if len(plan.AllTables) == 0 {
+		tableName := plan.TableName()
+		return []string{tableName.String()}
+	}
+	for _, table := range plan.AllTables {
+		names = append(names, table.Name.String())
+	}
+	return names
 }
 
 // Build builds a plan based on the schema.
@@ -220,6 +238,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.RevertMigration:
 		plan, err = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}, nil
+	case *sqlparser.ShowMigrationLogs:
+		plan, err = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, sqlparser.Explain:
@@ -273,7 +293,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 		if stmt.Lock != sqlparser.NoLock {
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
-		plan.Table = lookupTable(stmt.From, tables)
+		plan.Table, plan.AllTables = lookupTables(stmt.From, tables)
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 		// pass
 	default:

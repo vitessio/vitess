@@ -163,7 +163,7 @@ public class VitessStatementTest {
     rs = statement.executeQuery(sqlShow);
     assertEquals(-1, statement.getUpdateCount());
 
-    //select on master when tx is null and autocommit is false
+    //select on primary when tx is null and autocommit is false
     when(mockConn.getAutoCommit()).thenReturn(false);
     when(mockConn.isInTransaction()).thenReturn(false);
     rs = statement.executeQuery(sqlSelect);
@@ -237,7 +237,7 @@ public class VitessStatementTest {
     when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
     VitessStatement statement = new VitessStatement(mockConn);
-    //executing dml on master
+    //executing dml on primary
     int updateCount = statement.executeUpdate(sqlUpdate);
     assertEquals(0, updateCount);
 

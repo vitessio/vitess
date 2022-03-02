@@ -27,9 +27,9 @@ import (
 
 const electionsPath = "elections"
 
-// NewMasterParticipation is part of the topo.Server interface
-func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
-	return &kubernetesMasterParticipation{
+// NewLeaderParticipation is part of the topo.Server interface
+func (s *Server) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	return &kubernetesLeaderParticipation{
 		s:    s,
 		name: name,
 		id:   id,
@@ -38,16 +38,16 @@ func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipati
 	}, nil
 }
 
-// kubernetesMasterParticipation implements topo.MasterParticipation.
+// kubernetesLeaderParticipation implements topo.LeaderParticipation.
 //
 // We use a directory (in global election path, with the name) with
 // ephemeral files in it, that contains the id.  The oldest revision
 // wins the election.
-type kubernetesMasterParticipation struct {
+type kubernetesLeaderParticipation struct {
 	// s is our parent kubernetes topo Server
 	s *Server
 
-	// name is the name of this MasterParticipation
+	// name is the name of this LeaderParticipation
 	name string
 
 	// id is the process's current id.
@@ -60,16 +60,16 @@ type kubernetesMasterParticipation struct {
 	done chan struct{}
 }
 
-func (mp *kubernetesMasterParticipation) getElectionPath() string {
+func (mp *kubernetesLeaderParticipation) getElectionPath() string {
 	return path.Join(mp.s.root, electionsPath, mp.name)
 }
 
-// WaitForMastership is part of the topo.MasterParticipation interface.
-func (mp *kubernetesMasterParticipation) WaitForMastership() (context.Context, error) {
+// WaitForLeadership is part of the topo.LeaderParticipation interface.
+func (mp *kubernetesLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
-		return nil, topo.NewError(topo.Interrupted, "mastership")
+		return nil, topo.NewError(topo.Interrupted, "Leadership")
 	default:
 	}
 
@@ -90,7 +90,7 @@ func (mp *kubernetesMasterParticipation) WaitForMastership() (context.Context, e
 		close(mp.done)
 	}()
 
-	// Try to get the mastership, by getting a lock.
+	// Try to get the primaryship, by getting a lock.
 	var err error
 	ld, err = mp.s.lock(lockCtx, electionPath, mp.id, true)
 	if err != nil {
@@ -103,17 +103,17 @@ func (mp *kubernetesMasterParticipation) WaitForMastership() (context.Context, e
 	return lockCtx, nil
 }
 
-// Stop is part of the topo.MasterParticipation interface
-func (mp *kubernetesMasterParticipation) Stop() {
+// Stop is part of the topo.LeaderParticipation interface
+func (mp *kubernetesLeaderParticipation) Stop() {
 	close(mp.stop)
 	<-mp.done
 }
 
-// GetCurrentMasterID is part of the topo.MasterParticipation interface
-func (mp *kubernetesMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
+// GetCurrentLeaderID is part of the topo.LeaderParticipation interface
+func (mp *kubernetesLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
 	id, _, err := mp.s.Get(ctx, mp.getElectionPath())
 	if err != nil {
-		// NoNode means nobody is the master
+		// NoNode means nobody is the primary
 		if topo.IsErrType(err, topo.NoNode) {
 			return "", nil
 		}

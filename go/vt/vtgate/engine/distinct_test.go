@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -32,6 +34,7 @@ func TestDistinct(t *testing.T) {
 	type testCase struct {
 		testName       string
 		inputs         *sqltypes.Result
+		collations     []collations.ID
 		expectedResult *sqltypes.Result
 		expectedError  string
 	}
@@ -57,16 +60,29 @@ func TestDistinct(t *testing.T) {
 		inputs:         r("a|b", "float64|float64", "0.1|0.2", "0.1|0.3", "0.1|0.4", "0.1|0.5"),
 		expectedResult: r("a|b", "float64|float64", "0.1|0.2", "0.1|0.3", "0.1|0.4", "0.1|0.5"),
 	}, {
-		testName:      "varchar columns",
+		testName:      "varchar columns without collations",
 		inputs:        r("myid", "varchar", "monkey", "horse"),
-		expectedError: "types does not support hashcode yet: VARCHAR",
+		expectedError: "text type with an unknown/unsupported collation cannot be hashed",
+	}, {
+		testName:       "varchar columns with collations",
+		collations:     []collations.ID{collations.ID(0x21)},
+		inputs:         r("myid", "varchar", "monkey", "horse", "Horse", "Monkey", "horses", "MONKEY"),
+		expectedResult: r("myid", "varchar", "monkey", "horse", "horses"),
+	}, {
+		testName:       "mixed columns",
+		collations:     []collations.ID{collations.ID(0x21), collations.Unknown},
+		inputs:         r("myid|id", "varchar|int64", "monkey|1", "horse|1", "Horse|1", "Monkey|1", "horses|1", "MONKEY|2"),
+		expectedResult: r("myid|id", "varchar|int64", "monkey|1", "horse|1", "horses|1", "MONKEY|2"),
 	}}
 
 	for _, tc := range testCases {
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
-			distinct := &Distinct{Source: &fakePrimitive{results: []*sqltypes.Result{tc.inputs}}}
+			distinct := &Distinct{
+				Source:        &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
+				ColCollations: tc.collations,
+			}
 
-			qr, err := distinct.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
+			qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 				got := fmt.Sprintf("%v", qr.Rows)
@@ -77,7 +93,10 @@ func TestDistinct(t *testing.T) {
 			}
 		})
 		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
-			distinct := &Distinct{Source: &fakePrimitive{results: []*sqltypes.Result{tc.inputs}}}
+			distinct := &Distinct{
+				Source:        &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
+				ColCollations: tc.collations,
+			}
 
 			result, err := wrapStreamExecute(distinct, &noopVCursor{ctx: context.Background()}, nil, true)
 

@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -29,10 +32,10 @@ import (
 func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID:     PlanSelect,
-		Table:      lookupTable(sel.From, tables),
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateLimitQuery(sel),
 	}
+	plan.Table, plan.AllTables = lookupTables(sel.From, tables)
 
 	if sel.Where != nil {
 		comp, ok := sel.Where.Expr.(*sqlparser.ComparisonExpr)
@@ -45,10 +48,10 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(*sqlparser.Nextval); ok {
 		if plan.Table == nil || plan.Table.Type != schema.Sequence {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.String(sel.From))
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}
 		plan.PlanID = PlanNextval
-		v, err := sqlparser.NewPlanValue(nextVal.Expr)
+		v, err := evalengine.Translate(nextVal.Expr, semantics.EmptySemTable())
 		if err != nil {
 			return nil, err
 		}
@@ -63,8 +66,8 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID: PlanUpdate,
-		Table:  lookupTable(upd.TableExprs, tables),
 	}
+	plan.Table, plan.AllTables = lookupTables(upd.TableExprs, tables)
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
 	if upd.Where != nil {
@@ -93,8 +96,8 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID: PlanDelete,
-		Table:  lookupTable(del.TableExprs, tables),
 	}
+	plan.Table, plan.AllTables = lookupTables(del.TableExprs, tables)
 
 	if del.Where != nil {
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -173,11 +176,20 @@ func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	}
 }
 
-func lookupTable(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) *schema.Table {
-	if len(tableExprs) > 1 {
-		return nil
+func lookupTables(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) (singleTable *schema.Table, allTables []*schema.Table) {
+	for _, tableExpr := range tableExprs {
+		if t := lookupSingleTable(tableExpr, tables); t != nil {
+			allTables = append(allTables, t)
+		}
 	}
-	aliased, ok := tableExprs[0].(*sqlparser.AliasedTableExpr)
+	if len(allTables) == 1 {
+		singleTable = allTables[0]
+	}
+	return singleTable, allTables
+}
+
+func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.Table) *schema.Table {
+	aliased, ok := tableExpr.(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil
 	}

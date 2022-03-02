@@ -49,7 +49,7 @@ type vexecPlannerParams struct {
 // vexecPlanner generates and executes a plan
 type vexecPlanner interface {
 	params() *vexecPlannerParams
-	exec(ctx context.Context, masterAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error)
+	exec(ctx context.Context, primaryAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error)
 	dryRun(ctx context.Context) error
 }
 
@@ -72,14 +72,14 @@ func newVReplicationPlanner(vx *vexec) vexecPlanner {
 }
 func (p vreplicationPlanner) params() *vexecPlannerParams { return p.d }
 func (p vreplicationPlanner) exec(
-	ctx context.Context, masterAlias *topodatapb.TabletAlias, query string,
+	ctx context.Context, primaryAlias *topodatapb.TabletAlias, query string,
 ) (*querypb.QueryResult, error) {
-	qr, err := p.vx.wr.VReplicationExec(ctx, masterAlias, query)
+	qr, err := p.vx.wr.VReplicationExec(ctx, primaryAlias, query)
 	if err != nil {
 		return nil, err
 	}
 	if qr.RowsAffected == 0 {
-		log.Infof("no matching streams found for workflow %s, tablet %s, query %s", p.vx.workflow, masterAlias, query)
+		log.Infof("no matching streams found for workflow %s, tablet %s, query %s", p.vx.workflow, primaryAlias, query)
 	}
 	return qr, nil
 }
@@ -94,9 +94,9 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
 	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID"})
-	for _, master := range p.vx.masters {
-		key := fmt.Sprintf("%s/%s", master.Shard, master.AliasString())
-		for _, stream := range rsr.ShardStatuses[key].MasterReplicationStatuses {
+	for _, primary := range p.vx.primaries {
+		key := fmt.Sprintf("%s/%s", primary.Shard, primary.AliasString())
+		for _, stream := range rsr.ShardStatuses[key].PrimaryReplicationStatuses {
 			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos})
 		}
 	}
@@ -148,8 +148,8 @@ func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 	}
 }
 func (p schemaMigrationsPlanner) params() *vexecPlannerParams { return p.d }
-func (p schemaMigrationsPlanner) exec(ctx context.Context, masterAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
-	qr, err := p.vx.wr.GenericVExec(ctx, masterAlias, query, p.vx.workflow, p.vx.keyspace)
+func (p schemaMigrationsPlanner) exec(ctx context.Context, primaryAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
+	qr, err := p.vx.wr.GenericVExec(ctx, primaryAlias, query, p.vx.workflow, p.vx.keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func extractTableName(stmt sqlparser.Statement) (string, error) {
 	case *sqlparser.Insert:
 		return sqlparser.String(stmt.Table), nil
 	case *sqlparser.Select:
-		return sqlparser.String(stmt.From), nil
+		return sqlparser.ToString(stmt.From), nil
 	}
 	return "", fmt.Errorf("query not supported by vexec: %+v", sqlparser.String(stmt))
 }
@@ -255,7 +255,7 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerParams.dbNameColumn)},
 			Operator: sqlparser.EqualOp,
-			Right:    sqlparser.NewStrLiteral(vx.masters[0].DbName()),
+			Right:    sqlparser.NewStrLiteral(vx.primaries[0].DbName()),
 		}
 		if newWhere == nil {
 			newWhere = &sqlparser.Where{

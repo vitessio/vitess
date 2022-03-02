@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -174,18 +173,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	qr = new(sqltypes.Result)
 
 	if session.InLockSession() && session.TriggerLockHeartBeat() {
-		go func() {
-			_, lockErr := stc.ExecuteLock(ctx, &srvtopo.ResolvedShard{
-				Target:  session.LockSession.Target,
-				Gateway: stc.gateway,
-			}, &querypb.BoundQuery{
-				Sql:           "select 1",
-				BindVariables: nil,
-			}, session)
-			if lockErr != nil {
-				log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
-			}
-		}()
+		go stc.runLockQuery(ctx, session)
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -246,18 +234,18 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					})
 				}
 			case begin:
-				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, reservedID, opts)
+				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.SavePoints(), queries[i].Sql, queries[i].BindVariables, reservedID, opts)
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
-						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
+						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
 					})
 				}
 			case reserve:
 				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, transactionID, opts)
 			case reserveBegin:
-				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
+				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
@@ -282,6 +270,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	}
 
 	return qr, allErrors.GetErrors()
+}
+
+func (stc *ScatterConn) runLockQuery(ctx context.Context, session *SafeSession) {
+	rs := &srvtopo.ResolvedShard{Target: session.LockSession.Target, Gateway: stc.gateway}
+	query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
+	_, lockErr := stc.ExecuteLock(ctx, rs, query, session)
+	if lockErr != nil {
+		log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
+	}
 }
 
 func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession, target *querypb.Target) reset {
@@ -331,30 +328,6 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 	return callback(qr)
 }
 
-// StreamExecute executes a streaming query on vttablet. The retry rules are the same.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines, through processOneStreamingResult.
-func (stc *ScatterConn) StreamExecute(
-	ctx context.Context,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
-	rss []*srvtopo.ResolvedShard,
-	options *querypb.ExecuteOptions,
-	callback func(reply *sqltypes.Result) error,
-) error {
-
-	// mu protects fieldSent, replyErr and callback
-	var mu sync.Mutex
-	fieldSent := false
-
-	allErrors := stc.multiGo("StreamExecute", rss, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.Gateway.StreamExecute(ctx, rs.Target, query, bindVars, 0, options, func(qr *sqltypes.Result) error {
-			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
-		})
-	})
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
 // StreamExecuteMulti is like StreamExecute,
 // but each shard gets its own bindVars. If len(shards) is not equal to
 // len(bindVars), the function panics.
@@ -365,18 +338,95 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	query string,
 	rss []*srvtopo.ResolvedShard,
 	bindVars []map[string]*querypb.BindVariable,
-	options *querypb.ExecuteOptions,
+	session *SafeSession,
+	autocommit bool,
 	callback func(reply *sqltypes.Result) error,
 ) []error {
-	// mu protects fieldSent, callback and replyErr
-	var mu sync.Mutex
-	fieldSent := false
+	if session.InLockSession() && session.TriggerLockHeartBeat() {
+		go stc.runLockQuery(ctx, session)
+	}
 
-	allErrors := stc.multiGo("StreamExecute", rss, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.Gateway.StreamExecute(ctx, rs.Target, query, bindVars[i], 0, options, func(qr *sqltypes.Result) error {
-			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
-		})
-	})
+	allErrors := stc.multiGoTransaction(
+		ctx,
+		"StreamExecute",
+		rss,
+		session,
+		autocommit,
+		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (*shardActionInfo, error) {
+			var (
+				err   error
+				opts  *querypb.ExecuteOptions
+				alias *topodatapb.TabletAlias
+				qs    queryservice.QueryService
+			)
+			transactionID := info.transactionID
+			reservedID := info.reservedID
+
+			if session != nil && session.Session != nil {
+				opts = session.Session.Options
+			}
+
+			if autocommit {
+				// As this is auto-commit, the transactionID is supposed to be zero.
+				if transactionID != int64(0) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "in autocommit mode, transactionID should be zero but was: %d", transactionID)
+				}
+			}
+
+			qs, err = getQueryService(rs, info)
+			if err != nil {
+				return nil, err
+			}
+
+			retryRequest := func(exec func()) {
+				retry := checkAndResetShardSession(info, err, session, rs.Target)
+				switch retry {
+				case newQS:
+					// Current tablet is not available, try querying new tablet using gateway.
+					qs = rs.Gateway
+					fallthrough
+				case shard:
+					// if we need to reset a reserved connection, here is our chance to try executing again,
+					// against a new connection
+					exec()
+				}
+			}
+
+			switch info.actionNeeded {
+			case nothing:
+				err = qs.StreamExecute(ctx, rs.Target, query, bindVars[i], transactionID, reservedID, opts, callback)
+				if err != nil {
+					retryRequest(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserve
+						reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, callback)
+					})
+				}
+			case begin:
+				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, callback)
+				if err != nil {
+					retryRequest(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserveBegin
+						transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+					})
+				}
+			case reserve:
+				reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
+			case reserveBegin:
+				transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
+			}
+			// We need to new shard info irrespective of the error.
+			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
+			if err != nil {
+				return newInfo, err
+			}
+
+			return newInfo, nil
+		},
+	)
 	return allErrors.GetErrors()
 }
 
@@ -436,7 +486,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 				return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 			})
 			// nil and EOF are equivalent. UNAVAILABLE can be returned by vttablet if it's demoted
-			// from master to replica. For any of these conditions, we have to retry.
+			// from primary to replica. For any of these conditions, we have to retry.
 			if err != nil && err != io.EOF && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
 				cancel()
 				return err
@@ -601,7 +651,7 @@ func (stc *ScatterConn) multiGoTransaction(
 	}
 
 	if session.MustRollback() {
-		stc.txConn.Rollback(ctx, session)
+		_ = stc.txConn.Rollback(ctx, session)
 	}
 	return allErrors
 }
@@ -699,8 +749,8 @@ func wasConnectionClosed(err error) bool {
 func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	return (code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))) ||
-		(target != nil && target.TabletType == topodatapb.TabletType_MASTER && buffer.CausedByFailover(err))
+	return (code == vtrpcpb.Code_FAILED_PRECONDITION && vterrors.RxWrongTablet.MatchString(msg)) ||
+		(code == vtrpcpb.Code_CLUSTER_EVENT && ((target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg)))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet

@@ -43,8 +43,8 @@ var _ flavor = (*mysqlFlavor56)(nil)
 var _ flavor = (*mysqlFlavor57)(nil)
 var _ flavor = (*mysqlFlavor80)(nil)
 
-// masterGTIDSet is part of the Flavor interface.
-func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+// primaryGTIDSet is part of the Flavor interface.
+func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
 	if err != nil {
@@ -80,6 +80,10 @@ func (mysqlFlavor) stopIOThreadCommand() string {
 	return "STOP SLAVE IO_THREAD"
 }
 
+func (mysqlFlavor) startSQLThreadCommand() string {
+	return "START SLAVE SQL_THREAD"
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
@@ -96,7 +100,7 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Posi
 func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 	resetCommands := []string{
 		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
 	if c.SemiSyncExtensionLoaded() {
@@ -114,7 +118,7 @@ func (mysqlFlavor) setReplicationPositionCommands(pos Position) []string {
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (mysqlFlavor) changeMasterArg() string {
+func (mysqlFlavor) changeReplicationSourceArg() string {
 	return "MASTER_AUTO_POSITION = 1"
 }
 
@@ -144,9 +148,9 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	if uuidString != "" {
 		sid, err := ParseSID(uuidString)
 		if err != nil {
-			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode MasterUUID")
+			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode SourceUUID")
 		}
-		status.MasterUUID = sid
+		status.SourceUUID = sid
 	}
 
 	var err error
@@ -166,32 +170,32 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	return status, nil
 }
 
-// masterStatus is part of the Flavor interface.
-func (mysqlFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+// primaryStatus is part of the Flavor interface.
+func (mysqlFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return MasterStatus{}, ErrNoMasterStatus
+		return PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 
-	return parseMysqlMasterStatus(resultMap)
+	return parseMysqlPrimaryStatus(resultMap)
 }
 
-func parseMysqlMasterStatus(resultMap map[string]string) (MasterStatus, error) {
-	status := parseMasterStatus(resultMap)
+func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
+	status := parsePrimaryStatus(resultMap)
 
 	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
-		return MasterStatus{}, vterrors.Wrapf(err, "MasterStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
+		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
 
 	return status, nil
@@ -232,7 +236,12 @@ func (mysqlFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	case ErrPacket:
 		return nil, ParseErrorPacket(result)
 	}
-	return NewMysql56BinlogEvent(result[1:]), nil
+	buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(result[1:])
+	if err != nil {
+		return nil, err
+	}
+	ev := NewMysql56BinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
+	return ev, nil
 }
 
 // enableBinlogPlaybackCommand is part of the Flavor interface.
@@ -250,26 +259,45 @@ const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_t
 		FROM information_schema.tables WHERE table_schema = database() group by table_name`
 
 // TablesWithSize57 is a query to select table along with size for mysql 5.7.
+//
 // It's a little weird, because the JOIN predicate only works if the table and databases do not contain weird characters.
-// As a fallback, we use the mysql 5.6 query, which is not always up to date, but works for all table/db names.
-const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
-	FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i 
-	WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)
-UNION ALL
-	SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
-	FROM information_schema.tables t
-	WHERE table_schema = database() AND NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name)) 
-	group by table_name, table_type, unix_timestamp(create_time), table_comment
+// If the join does not return any data, we fall back to the same fields as used in the mysql 5.6 query.
+//
+// We join with a subquery that materializes the data from `information_schema.innodb_sys_tablespaces`
+// early for performance reasons. This effectively causes only a single read of `information_schema.innodb_sys_tablespaces`
+// per query.
+const TablesWithSize57 = `SELECT t.table_name,
+	t.table_type,
+	UNIX_TIMESTAMP(t.create_time),
+	t.table_comment,
+	IFNULL(SUM(i.file_size), SUM(t.data_length + t.index_length)),
+	IFNULL(SUM(i.allocated_size), SUM(t.data_length + t.index_length))
+FROM information_schema.tables t
+LEFT OUTER JOIN (
+	SELECT space, file_size, allocated_size, name
+	FROM information_schema.innodb_sys_tablespaces
+	WHERE name LIKE CONCAT(database(), '/%')
+	GROUP BY space, file_size, allocated_size, name
+) i ON i.name = CONCAT(t.table_schema, '/', t.table_name) or i.name LIKE CONCAT(t.table_schema, '/', t.table_name, '#p#%')
+WHERE t.table_schema = database()
+GROUP BY t.table_name, t.table_type, t.create_time, t.table_comment
 `
 
 // TablesWithSize80 is a query to select table along with size for mysql 8.0
-const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, sum(i.file_size), sum(i.allocated_size) 
 		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
-		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+		WHERE t.table_schema = database() and 
+		(i.name = concat(t.table_schema,'/',t.table_name) or i.name like concat(t.table_schema,'/',t.table_name, '#p#%')) 
+		group by t.table_name, t.table_type, t.create_time, t.table_comment, i.file_size`
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor56) baseShowTablesWithSizes() string {
 	return TablesWithSize56
+}
+
+// supportsFastDropTable is part of the Flavor interface.
+func (mysqlFlavor56) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -277,7 +305,17 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }
 
+// supportsFastDropTable is part of the Flavor interface.
+func (mysqlFlavor57) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor80) baseShowTablesWithSizes() string {
 	return TablesWithSize80
+}
+
+// supportsFastDropTable is part of the Flavor interface.
+func (mysqlFlavor80) supportsFastDropTable(c *Conn) (bool, error) {
+	return c.ServerVersionAtLeast(8, 0, 23)
 }

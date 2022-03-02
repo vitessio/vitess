@@ -22,12 +22,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
 
@@ -55,9 +56,8 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		FullQuery:   p.FullQuery,
 		WhereClause: p.WhereClause,
 	}
-	if !p.NextCount.IsNull() {
-		b, _ := p.NextCount.MarshalJSON()
-		mplan.NextCount = string(b)
+	if p.NextCount != nil {
+		mplan.NextCount = evalengine.FormatExpr(p.NextCount)
 	}
 	return json.Marshal(&mplan)
 }
@@ -269,7 +269,7 @@ func TestMessageStreamingPlan(t *testing.T) {
 }
 
 func loadSchema(name string) map[string]*schema.Table {
-	b, err := ioutil.ReadFile(locateFile(name))
+	b, err := os.ReadFile(locateFile(name))
 	if err != nil {
 		panic(err)
 	}

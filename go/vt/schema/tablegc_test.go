@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsGCTableName(t *testing.T) {
@@ -151,4 +152,17 @@ func TestParseGCLifecycle(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateRenameStatementWithUUID(t *testing.T) {
+	uuid := "997342e3_e91d_11eb_aaae_0a43f95f28a3"
+	tableName := "mytbl"
+	countIterations := 5
+	toTableNames := map[string]bool{}
+	for i := 0; i < countIterations; i++ {
+		_, toTableName, err := GenerateRenameStatementWithUUID(tableName, PurgeTableGCState, OnlineDDLToGCUUID(uuid), time.Now().Add(time.Duration(i)*time.Second).UTC())
+		require.NoError(t, err)
+		toTableNames[toTableName] = true
+	}
+	assert.Equal(t, countIterations, len(toTableNames))
 }

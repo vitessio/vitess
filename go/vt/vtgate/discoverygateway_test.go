@@ -48,22 +48,9 @@ func TestDiscoveryGatewayExecute(t *testing.T) {
 	})
 }
 
-func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
-		return err
-	})
-	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
-		return err
-	})
-}
-
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		err := dg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
+		err := dg.StreamExecute(context.Background(), target, "query", nil, 0, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		return err
@@ -98,14 +85,6 @@ func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	})
 }
 
-func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
-		return err
-	})
-}
-
 func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	keyspace := "ks"
 	shard := "0"
@@ -122,12 +101,12 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
 
-	// master should use the one with newer timestamp regardless of cell
+	// primary should use the one with newer timestamp regardless of cell
 	hc.Reset()
 	dg.tsc.ResetForTesting()
-	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
-	ep1 = hc.AddTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 10, nil).Tablet()
-	tsl = dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
+	hc.AddTestTablet("remote", "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_PRIMARY, true, 5, nil)
+	ep1 = hc.AddTestTablet("remote", "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_PRIMARY, true, 10, nil).Tablet()
+	tsl = dg.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_PRIMARY)
 	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
@@ -145,7 +124,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	srvTopo.SrvKeyspace = &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodata.TabletType_MASTER,
+				ServedType: topodata.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name: shard,
@@ -176,11 +155,11 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet(cell, "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
-	hc.AddTestTablet(cell, "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
+	hc.AddTestTablet(cell, "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_PRIMARY, true, 5, nil)
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
 		defer cancel()
-		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_MASTER})
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY})
 		if err != nil {
 			t.Errorf("want %+v, got %+v", nil, err)
 		}
@@ -196,7 +175,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
 		defer cancel()
 		srvTopo.SrvKeyspaceNames = []string{keyspace, "ks2"}
-		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -206,7 +185,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
 		defer cancel()
-		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 		if err != nil {
 			t.Errorf("want %+v, got %+v", nil, err)
 		}
@@ -221,7 +200,7 @@ func TestShuffleTablets(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ts2 := discovery.LegacyTabletStats{
@@ -230,7 +209,7 @@ func TestShuffleTablets(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ts3 := discovery.LegacyTabletStats{
@@ -239,7 +218,7 @@ func TestShuffleTablets(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ts4 := discovery.LegacyTabletStats{
@@ -248,7 +227,7 @@ func TestShuffleTablets(t *testing.T) {
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Up:      true,
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	sameCellTablets := []discovery.LegacyTabletStats{ts1, ts2}

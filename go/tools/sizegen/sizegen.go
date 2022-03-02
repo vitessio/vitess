@@ -21,13 +21,15 @@ import (
 	"flag"
 	"fmt"
 	"go/types"
-	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/tools/common"
+	"vitess.io/vitess/go/tools/goimports"
 
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
@@ -98,14 +100,14 @@ func isPod(tt types.Type) bool {
 			}
 		}
 		return true
-
+	case *types.Named:
+		return isPod(tt.Underlying())
 	case *types.Basic:
 		switch tt.Kind() {
 		case types.String, types.UnsafePointer:
 			return false
 		}
 		return true
-
 	default:
 		return false
 	}
@@ -259,7 +261,7 @@ func (sizegen *sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct
 		b.Add(jen.If(jen.Id("cached").Op("==").Nil()).Block(jen.Return(jen.Lit(int64(0)))))
 		b.Add(jen.Id("size").Op(":=").Lit(int64(0)))
 		b.Add(jen.If(jen.Id("alloc")).Block(
-			jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(st)),
+			jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(sizegen.sizes.Sizeof(st))),
 		))
 		for _, s := range stmt {
 			b.Add(s)
@@ -294,7 +296,7 @@ func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) [
 	)
 
 	return []jen.Code{
-		jen.Id("size").Op("+=").Lit(sizeofHmap),
+		jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(sizeofHmap)),
 
 		jen.Id("hmap").Op(":=").Qual("reflect", "ValueOf").Call(fieldName),
 
@@ -308,12 +310,47 @@ func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) [
 			jen.Qual("unsafe", "Pointer").Call(
 				jen.Id("hmap").Dot("Pointer").Call().Op("+").Id("uintptr").Call(jen.Lit(10))))),
 
-		jen.Id("size").Op("+=").Id("int64").Call(jen.Id("numOldBuckets").Op("*").Lit(sizeOfBucket)),
+		jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Id("numOldBuckets").Op("*").Lit(sizeOfBucket)))),
 
 		jen.If(jen.Id("len").Call(fieldName).Op(">").Lit(0).Op("||").Id("numBuckets").Op(">").Lit(1)).Block(
-			jen.Id("size").Op("+=").Id("int64").Call(
-				jen.Id("numBuckets").Op("*").Lit(sizeOfBucket))),
+			jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Id("numBuckets").Op("*").Lit(sizeOfBucket))))),
 	}
+}
+
+func mallocsize(sizeStmt *jen.Statement) func(*jen.Statement) {
+	return func(parent *jen.Statement) {
+		parent.Qual("vitess.io/vitess/go/hack", "RuntimeAllocSize").Call(sizeStmt)
+	}
+}
+
+func (sizegen *sizegen) sizeStmtForArray(stmt []jen.Code, fieldName *jen.Statement, elemT types.Type) ([]jen.Code, codeFlag) {
+	var flag codeFlag
+
+	switch sizegen.sizes.Sizeof(elemT) {
+	case 0:
+		return nil, 0
+
+	case 1:
+		stmt = append(stmt, jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)))))
+
+	default:
+		var nested jen.Code
+		nested, flag = sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
+
+		stmt = append(stmt,
+			jen.Id("size").
+				Op("+=").
+				Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)).
+					Op("*").
+					Lit(sizegen.sizes.Sizeof(elemT))),
+				))
+
+		if nested != nil {
+			stmt = append(stmt, jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(nested))
+		}
+	}
+
+	return stmt, flag
 }
 
 func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Type, alloc bool) (jen.Code, codeFlag) {
@@ -323,31 +360,39 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 
 	switch node := field.(type) {
 	case *types.Slice:
-		elemT := node.Elem()
-		elemSize := sizegen.sizes.Sizeof(elemT)
+		var cond *jen.Statement
+		var stmt []jen.Code
+		var flag codeFlag
 
-		switch elemSize {
-		case 0:
-			return nil, 0
-
-		case 1:
-			return jen.Id("size").Op("+=").Int64().Call(jen.Cap(fieldName)), 0
-
-		default:
-			stmt, flag := sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
-			return jen.BlockFunc(func(b *jen.Group) {
-				b.Add(
-					jen.Id("size").
-						Op("+=").
-						Int64().Call(jen.Cap(fieldName)).
-						Op("*").
-						Lit(sizegen.sizes.Sizeof(elemT)))
-
-				if stmt != nil {
-					b.Add(jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(stmt))
-				}
-			}), flag
+		if alloc {
+			cond = jen.If(fieldName.Clone().Op("!=").Nil())
+			fieldName = jen.Op("*").Add(fieldName)
+			stmt = append(stmt, jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(8*3)))
 		}
+
+		stmt, flag = sizegen.sizeStmtForArray(stmt, fieldName, node.Elem())
+		if cond != nil {
+			return cond.Block(stmt...), flag
+		}
+		return jen.Block(stmt...), flag
+
+	case *types.Array:
+		if alloc {
+			cond := jen.If(fieldName.Clone().Op("!=").Nil())
+			fieldName = jen.Op("*").Add(fieldName)
+
+			stmt, flag := sizegen.sizeStmtForArray(nil, fieldName, node.Elem())
+			return cond.Block(stmt...), flag
+		}
+
+		elemT := node.Elem()
+		if sizegen.sizes.Sizeof(elemT) > 1 {
+			nested, flag := sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
+			if nested != nil {
+				return jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(nested), flag
+			}
+		}
+		return nil, 0
 
 	case *types.Map:
 		keySize, keyFlag := sizegen.sizeStmtForType(jen.Id("k"), node.Key(), false)
@@ -391,7 +436,7 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 					log.Printf("WARNING: size of external type %s cannot be fully calculated", node)
 				}
 				return jen.If(fieldName.Clone().Op("!=").Nil()).Block(
-					jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(node.Underlying())),
+					jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(node.Underlying())))),
 				), 0
 			}
 			return nil, 0
@@ -422,11 +467,16 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 	case *types.Basic:
 		if !alloc {
 			if node.Info()&types.IsString != 0 {
-				return jen.Id("size").Op("+=").Int64().Call(jen.Len(fieldName)), 0
+				return jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Len(fieldName)))), 0
 			}
 			return nil, 0
 		}
-		return jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(node)), 0
+		return jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(node)))), 0
+
+	case *types.Signature:
+		// assume that function pointers do not allocate (although they might, if they're closures)
+		return nil, 0
+
 	default:
 		log.Printf("unhandled type: %T", node)
 		return nil, 0
@@ -466,31 +516,37 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			if err := file.Save(fullPath); err != nil {
-				log.Fatalf("filed to save file to '%s': %v", fullPath, err)
+			content, err := goimports.FormatJenFile(file)
+			if err != nil {
+				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
 			}
-			log.Printf("saved '%s'", fullPath)
+			err = os.WriteFile(fullPath, content, 0664)
+			if err != nil {
+				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
+			}
 		}
 	}
 }
 
 // VerifyFilesOnDisk compares the generated results from the codegen against the files that
-// currently exist on disk and returns any mismatches
+// currently exist on disk and returns any mismatches. All the files generated by jennifer
+// are formatted using the goimports command. Any difference in the imports will also make
+// this test fail.
 func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	for fullPath, file := range result {
-		existing, err := ioutil.ReadFile(fullPath)
+		existing, err := os.ReadFile(fullPath)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("missing file on disk: %s (%w)", fullPath, err))
 			continue
 		}
 
-		var buf bytes.Buffer
-		if err := file.Render(&buf); err != nil {
-			errors = append(errors, fmt.Errorf("render error for '%s': %w", fullPath, err))
+		genFile, err := goimports.FormatJenFile(file)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
 		}
 
-		if !bytes.Equal(existing, buf.Bytes()) {
+		if !bytes.Equal(existing, genFile) {
 			errors = append(errors, fmt.Errorf("'%s' has changed", fullPath))
 			continue
 		}

@@ -17,19 +17,18 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -50,7 +49,7 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -112,7 +111,7 @@ type sourceTabletServer struct {
 	v3            bool
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -217,15 +216,15 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 		}
 	}
 
-	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	sourcePrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
-	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+	leftPrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		destinationTabletType, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
@@ -239,7 +238,7 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, false); err != nil {
+	if err := topotools.RebuildKeyspace(ctx, wi.wr.Logger(), wi.wr.TopoServer(), "ks", nil, false); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
@@ -293,7 +292,7 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 	}
 
 	// Start action loop after having registered all RPC services.
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
+	for _, ft := range []*testlib.FakeTablet{sourcePrimary, sourceRdonly1, sourceRdonly2, leftPrimary, leftRdonly1, leftRdonly2} {
 		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}

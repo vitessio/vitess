@@ -58,8 +58,8 @@ func (updTarget *UpdateTarget) GetTableName() string {
 	return ""
 }
 
-// Execute implements the Primitive interface
-func (updTarget *UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute implements the Primitive interface
+func (updTarget *UpdateTarget) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.Session().SetTarget(updTarget.Target)
 	if err != nil {
 		return nil, err
@@ -67,9 +67,9 @@ func (updTarget *UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*que
 	return &sqltypes.Result{}, nil
 }
 
-// StreamExecute implements the Primitive interface
-func (updTarget *UpdateTarget) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	result, err := updTarget.Execute(vcursor, bindVars, wantfields)
+// TryStreamExecute implements the Primitive interface
+func (updTarget *UpdateTarget) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := updTarget.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

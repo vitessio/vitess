@@ -13,13 +13,15 @@ import (
 )
 
 var (
-	addOptDryrun      bool
-	addOptName        string
-	addOptDescription string
-	addOptAction      string
-	addOptPlans       []string
-	addOptTables      []string
-	addOptQueryRE     string
+	addOptDryrun            bool
+	addOptName              string
+	addOptDescription       string
+	addOptAction            string
+	addOptPlans             []string
+	addOptTables            []string
+	addOptQueryRE           string
+	addOptLeadingCommentRE  string
+	addOptTrailingCommentRE string
 	// TODO: other stuff, bind vars etc
 )
 
@@ -36,8 +38,20 @@ func runAdd(cmd *cobra.Command, args []string) {
 		rule.AddTableCond(t)
 	}
 
-	if err := rule.SetQueryCond(addOptQueryRE); err != nil {
-		log.Fatalf("Query condition invalid '%v': %v", addOptQueryRE, err)
+	if addOptQueryRE != "" {
+		if err := rule.SetQueryCond(addOptQueryRE); err != nil {
+			log.Fatalf("Query condition invalid '%v': %v", addOptQueryRE, err)
+		}
+	}
+	if addOptLeadingCommentRE != "" {
+		if err := rule.SetLeadingCommentCond(addOptLeadingCommentRE); err != nil {
+			log.Fatalf("Leading comment condition invalid '%v': %v", addOptLeadingCommentRE, err)
+		}
+	}
+	if addOptTrailingCommentRE != "" {
+		if err := rule.SetTrailingCommentCond(addOptTrailingCommentRE); err != nil {
+			log.Fatalf("Trailing comment condition invalid '%v': %v", addOptTrailingCommentRE, err)
+		}
 	}
 
 	var rules *vtrules.Rules
@@ -141,6 +155,16 @@ func Add() *cobra.Command {
 		"query", "q",
 		"",
 		"A regexp that will be applied to a query in order to determine if it matches")
+	addCmd.Flags().StringVarP(
+		&addOptLeadingCommentRE,
+		"leading-comment", "l",
+		"",
+		"A regexp that will be applied to comments prefacing a SQL statement")
+	addCmd.Flags().StringVarP(
+		&addOptTrailingCommentRE,
+		"trailing-comment", "r",
+		"",
+		"A regexp that will be applied to comments after a SQL statement")
 
 	for _, f := range []string{"name", "action"} {
 		addCmd.MarkFlagRequired(f)

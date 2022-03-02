@@ -49,7 +49,7 @@ type binLogServer struct {
 	exit chan error
 }
 
-type mysqlMaster struct {
+type mysqlSource struct {
 	hostname string
 	port     int
 	username string
@@ -79,18 +79,18 @@ func newBinlogServer(hostname string, port int) (*binLogServer, error) {
 }
 
 // start starts the binlog server points to running mysql port
-func (bs *binLogServer) start(master mysqlMaster) error {
+func (bs *binLogServer) start(source mysqlSource) error {
 	bs.proc = exec.Command(
 		bs.executablePath,
 		fmt.Sprintf("-ripple_datadir=%s", bs.dataDirectory),
 		fmt.Sprintf("-ripple_server_password_hash=%s", bs.passwordHash),
-		fmt.Sprintf("-ripple_master_address=%s", master.hostname),
-		fmt.Sprintf("-ripple_master_port=%d", master.port),
-		fmt.Sprintf("-ripple_master_user=%s", master.username),
+		fmt.Sprintf("-ripple_master_address=%s", source.hostname),
+		fmt.Sprintf("-ripple_master_port=%d", source.port),
+		fmt.Sprintf("-ripple_master_user=%s", source.username),
 		fmt.Sprintf("-ripple_server_ports=%d", bs.port),
 	)
-	if master.password != "" {
-		bs.proc.Args = append(bs.proc.Args, fmt.Sprintf("-ripple_master_password=%s", master.password))
+	if source.password != "" {
+		bs.proc.Args = append(bs.proc.Args, fmt.Sprintf("-ripple_master_password=%s", source.password))
 	}
 
 	errFile, _ := os.Create(path.Join(bs.dataDirectory, "log.txt"))

@@ -37,5 +37,5 @@ func (r replicationLagRecord) isZero() bool {
 }
 
 func (r replicationLagRecord) lag() int64 {
-	return int64(r.Stats.SecondsBehindMaster)
+	return int64(r.Stats.ReplicationLagSeconds)
 }

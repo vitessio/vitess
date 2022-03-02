@@ -67,7 +67,7 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.BytesBindVariable(benchVarValue)
 	}
 
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.AllowAll = true
 	for i := 0; i < b.N; i++ {
 		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {
@@ -92,7 +92,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 		}
 	}
 
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.AllowAll = true
 	for i := 0; i < b.N; i++ {
 		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {

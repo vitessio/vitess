@@ -93,9 +93,9 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 	}
 
 	tShard1 := NewFakeTablet(t, wr, cell, 0,
-		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_PRIMARY, db, TabletKeyspaceShard(t, "ks", "-80"))
 	tShard2 := NewFakeTablet(t, wr, cell, 1,
-		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "80-"))
+		topodatapb.TabletType_PRIMARY, db, TabletKeyspaceShard(t, "ks", "80-"))
 	for _, ft := range []*FakeTablet{tShard1, tShard2} {
 		ft.StartActionLoop(t, wr)
 		defer ft.StopActionLoop(t)

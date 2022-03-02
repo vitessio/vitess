@@ -16,7 +16,6 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 
-import style from './Keyspaces.module.scss';
 import { useKeyspaces } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
@@ -30,6 +29,9 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import KeyspaceActions from './keyspaces/KeyspaceActions';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import { isReadOnlyMode } from '../../util/env';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
@@ -58,8 +60,8 @@ export const Keyspaces = () => {
             <tr key={idx}>
                 <DataCell>
                     <KeyspaceLink clusterID={row.clusterID} name={row.name}>
-                        <div className="font-weight-bold">{row.name}</div>
-                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        <div className="font-bold">{row.name}</div>
+                        <div className="text-sm text-secondary">{row.cluster}</div>
                     </KeyspaceLink>
                 </DataCell>
                 <DataCell>
@@ -69,12 +71,17 @@ export const Keyspaces = () => {
                         </div>
                     )}
                     {!!row.nonservingShards && (
-                        <div className="font-weight-bold">
+                        <div className="font-bold">
                             <Pip state="danger" /> {row.nonservingShards}{' '}
                             {row.nonservingShards === 1 ? 'shard' : 'shards'} not serving
                         </div>
                     )}
                 </DataCell>
+                <ReadOnlyGate>
+                    <DataCell>
+                        <KeyspaceActions keyspace={row.name as string} clusterID={row.clusterID as string} />
+                    </DataCell>
+                </ReadOnlyGate>
             </tr>
         ));
 
@@ -91,8 +98,12 @@ export const Keyspaces = () => {
                     placeholder="Filter keyspaces"
                     value={filter || ''}
                 />
-                <div className={style.container}>
-                    <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+                <div className="max-w-screen-md">
+                    <DataTable
+                        columns={isReadOnlyMode() ? ['Keyspace', 'Shards'] : ['Keyspace', 'Shards', 'Actions']}
+                        data={ksRows}
+                        renderRows={renderRows}
+                    />
                 </div>
             </ContentContainer>
         </div>

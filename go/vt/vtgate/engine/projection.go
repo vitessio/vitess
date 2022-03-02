@@ -8,6 +8,7 @@ import (
 
 var _ Primitive = (*Projection)(nil)
 
+// Projection can evaluate expressions and project the results
 type Projection struct {
 	Cols  []string
 	Exprs []evalengine.Expr
@@ -15,30 +16,31 @@ type Projection struct {
 	noTxNeeded
 }
 
+// RouteType implements the Primitive interface
 func (p *Projection) RouteType() string {
 	return p.Input.RouteType()
 }
 
+// GetKeyspaceName implements the Primitive interface
 func (p *Projection) GetKeyspaceName() string {
 	return p.Input.GetKeyspaceName()
 }
 
+// GetTableName implements the Primitive interface
 func (p *Projection) GetTableName() string {
 	return p.Input.GetTableName()
 }
 
-func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := p.Input.Execute(vcursor, bindVars, wantfields)
+// TryExecute implements the Primitive interface
+func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	result, err := vcursor.ExecutePrimitive(p.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 
-	env := evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	if wantfields {
-		err := p.addFields(result, bindVars)
+		err := p.addFields(env, result)
 		if err != nil {
 			return nil, err
 		}
@@ -47,7 +49,7 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 	for _, row := range result.Rows {
 		env.Row = row
 		for _, exp := range p.Exprs {
-			result, err := exp.Evaluate(env)
+			result, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
@@ -59,18 +61,16 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return result, nil
 }
 
-func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := p.Input.Execute(vcursor, bindVars, wantields)
+// TryStreamExecute implements the Primitive interface
+func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+	result, err := vcursor.ExecutePrimitive(p.Input, bindVars, wantields)
 	if err != nil {
 		return err
 	}
 
-	env := evalengine.ExpressionEnv{
-		BindVars: bindVars,
-	}
-
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	if wantields {
-		err = p.addFields(result, bindVars)
+		err = p.addFields(env, result)
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	for _, row := range result.Rows {
 		env.Row = row
 		for _, exp := range p.Exprs {
-			result, err := exp.Evaluate(env)
+			result, err := env.Evaluate(exp)
 			if err != nil {
 				return err
 			}
@@ -91,22 +91,23 @@ func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	return callback(result)
 }
 
+// GetFields implements the Primitive interface
 func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	qr, err := p.Input.GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	err = p.addFields(qr, bindVars)
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	err = p.addFields(env, qr)
 	if err != nil {
 		return nil, err
 	}
 	return qr, nil
 }
 
-func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) error {
-	env := evalengine.ExpressionEnv{BindVars: bindVars}
+func (p *Projection) addFields(env *evalengine.ExpressionEnv, qr *sqltypes.Result) error {
 	for i, col := range p.Cols {
-		q, err := p.Exprs[i].Type(env)
+		q, err := env.TypeOf(p.Exprs[i])
 		if err != nil {
 			return err
 		}
@@ -118,14 +119,16 @@ func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb
 	return nil
 }
 
+// Inputs implements the Primitive interface
 func (p *Projection) Inputs() []Primitive {
 	return []Primitive{p.Input}
 }
 
+// description implements the Primitive interface
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
 	for _, e := range p.Exprs {
-		exprs = append(exprs, e.String())
+		exprs = append(exprs, evalengine.FormatExpr(e))
 	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",

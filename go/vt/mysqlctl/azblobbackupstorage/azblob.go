@@ -23,7 +23,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
@@ -73,7 +72,7 @@ func azInternalCredentials() (string, string, error) {
 	var actKey string
 	if *accountKeyFile != "" {
 		log.Infof("Getting Azure Storage Account key from file: %s", *accountKeyFile)
-		dat, err := ioutil.ReadFile(*accountKeyFile)
+		dat, err := os.ReadFile(*accountKeyFile)
 		if err != nil {
 			return "", "", err
 		}

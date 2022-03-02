@@ -19,9 +19,9 @@ secure-file-priv = {{.SecureFilePriv}}
 read-only
 server-id = {{.ServerID}}
 
-# all db instances should skip the slave startup - that way we can do any
+# all db instances should skip starting replication threads - that way we can do any
 # additional configuration (like enabling semi-sync) before we connect to
-# the master.
+# the source.
 skip_slave_start
 socket = {{.SocketFile}}
 tmpdir = {{.TmpDir}}

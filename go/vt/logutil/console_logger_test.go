@@ -18,7 +18,7 @@ package logutil
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -61,9 +61,9 @@ func testConsoleLogger(t *testing.T, tee bool, entrypoint string) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("cmd.Start() error: %v", err)
 	}
-	out, err := ioutil.ReadAll(stderr)
+	out, err := io.ReadAll(stderr)
 	if err != nil {
-		t.Fatalf("ioutil.ReadAll(sterr) error: %v", err)
+		t.Fatalf("io.ReadAll(sterr) error: %v", err)
 	}
 	if err := cmd.Wait(); err != nil {
 		t.Fatalf("cmd.Wait() error: %v", err)

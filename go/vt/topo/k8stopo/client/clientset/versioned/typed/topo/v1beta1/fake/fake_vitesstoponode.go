@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -40,7 +42,7 @@ var vitesstoponodesResource = schema.GroupVersionResource{Group: "topo.vitess.io
 var vitesstoponodesKind = schema.GroupVersionKind{Group: "topo.vitess.io", Version: "v1beta1", Kind: "VitessTopoNode"}
 
 // Get takes name of the vitessTopoNode, and returns the corresponding vitessTopoNode object, and an error if there is any.
-func (c *FakeVitessTopoNodes) Get(name string, options v1.GetOptions) (result *v1beta1.VitessTopoNode, err error) {
+func (c *FakeVitessTopoNodes) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.VitessTopoNode, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(vitesstoponodesResource, c.ns, name), &v1beta1.VitessTopoNode{})
 
@@ -51,7 +53,7 @@ func (c *FakeVitessTopoNodes) Get(name string, options v1.GetOptions) (result *v
 }
 
 // List takes label and field selectors, and returns the list of VitessTopoNodes that match those selectors.
-func (c *FakeVitessTopoNodes) List(opts v1.ListOptions) (result *v1beta1.VitessTopoNodeList, err error) {
+func (c *FakeVitessTopoNodes) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.VitessTopoNodeList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(vitesstoponodesResource, vitesstoponodesKind, c.ns, opts), &v1beta1.VitessTopoNodeList{})
 
@@ -73,14 +75,14 @@ func (c *FakeVitessTopoNodes) List(opts v1.ListOptions) (result *v1beta1.VitessT
 }
 
 // Watch returns a watch.Interface that watches the requested vitessTopoNodes.
-func (c *FakeVitessTopoNodes) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeVitessTopoNodes) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(vitesstoponodesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a vitessTopoNode and creates it.  Returns the server's representation of the vitessTopoNode, and an error, if there is any.
-func (c *FakeVitessTopoNodes) Create(vitessTopoNode *v1beta1.VitessTopoNode) (result *v1beta1.VitessTopoNode, err error) {
+func (c *FakeVitessTopoNodes) Create(ctx context.Context, vitessTopoNode *v1beta1.VitessTopoNode, opts v1.CreateOptions) (result *v1beta1.VitessTopoNode, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(vitesstoponodesResource, c.ns, vitessTopoNode), &v1beta1.VitessTopoNode{})
 
@@ -91,7 +93,7 @@ func (c *FakeVitessTopoNodes) Create(vitessTopoNode *v1beta1.VitessTopoNode) (re
 }
 
 // Update takes the representation of a vitessTopoNode and updates it. Returns the server's representation of the vitessTopoNode, and an error, if there is any.
-func (c *FakeVitessTopoNodes) Update(vitessTopoNode *v1beta1.VitessTopoNode) (result *v1beta1.VitessTopoNode, err error) {
+func (c *FakeVitessTopoNodes) Update(ctx context.Context, vitessTopoNode *v1beta1.VitessTopoNode, opts v1.UpdateOptions) (result *v1beta1.VitessTopoNode, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(vitesstoponodesResource, c.ns, vitessTopoNode), &v1beta1.VitessTopoNode{})
 
@@ -102,7 +104,7 @@ func (c *FakeVitessTopoNodes) Update(vitessTopoNode *v1beta1.VitessTopoNode) (re
 }
 
 // Delete takes name of the vitessTopoNode and deletes it. Returns an error if one occurs.
-func (c *FakeVitessTopoNodes) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeVitessTopoNodes) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(vitesstoponodesResource, c.ns, name), &v1beta1.VitessTopoNode{})
 
@@ -110,15 +112,15 @@ func (c *FakeVitessTopoNodes) Delete(name string, options *v1.DeleteOptions) err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeVitessTopoNodes) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(vitesstoponodesResource, c.ns, listOptions)
+func (c *FakeVitessTopoNodes) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(vitesstoponodesResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1beta1.VitessTopoNodeList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched vitessTopoNode.
-func (c *FakeVitessTopoNodes) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.VitessTopoNode, err error) {
+func (c *FakeVitessTopoNodes) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.VitessTopoNode, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(vitesstoponodesResource, c.ns, name, pt, data, subresources...), &v1beta1.VitessTopoNode{})
 

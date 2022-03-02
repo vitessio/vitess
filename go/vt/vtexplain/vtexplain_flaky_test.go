@@ -19,13 +19,15 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -48,10 +50,10 @@ type testopts struct {
 }
 
 func initTest(mode string, opts *Options, topts *testopts, t *testing.T) {
-	schema, err := ioutil.ReadFile("testdata/test-schema.sql")
+	schema, err := os.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
-	vSchema, err := ioutil.ReadFile("testdata/test-vschema.json")
+	vSchema, err := os.ReadFile("testdata/test-vschema.json")
 	require.NoError(t, err)
 
 	shardmap := ""
@@ -86,28 +88,45 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 		initTest(mode, opts, topts, t)
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
-		sql, err := ioutil.ReadFile(sqlFile)
+		sql, err := os.ReadFile(sqlFile)
 		require.NoError(t, err, "vtexplain error")
 
 		textOutFile := fmt.Sprintf("testdata/%s-output/%s-output.txt", mode, testcase)
-		expected, _ := ioutil.ReadFile(textOutFile)
+		expected, _ := os.ReadFile(textOutFile)
 
 		explains, err := Run(string(sql))
 		require.NoError(t, err, "vtexplain error")
 		require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
-		explainText := ExplainsAsText(explains)
+		// We want to remove the additional `set collation_connection` queries that happen
+		// when the tablet connects to MySQL to set the default collation.
+		// Removing them lets us keep simpler expected output files.
+		for _, e := range explains {
+			for i, action := range e.TabletActions {
+				var mysqlQueries []*MysqlQuery
+				for _, query := range action.MysqlQueries {
+					if !strings.Contains(strings.ToLower(query.SQL), "set collation_connection") {
+						mysqlQueries = append(mysqlQueries, query)
+					}
+				}
+				e.TabletActions[i].MysqlQueries = mysqlQueries
+			}
+		}
+
+		explainText, err := ExplainsAsText(explains)
+		require.NoError(t, err, "vtexplain error")
+
 		if diff := cmp.Diff(strings.TrimSpace(string(expected)), strings.TrimSpace(explainText)); diff != "" {
 			// Print the Text that was actually returned and also dump to a
 			// temp file to be able to diff the results.
 			t.Errorf("Text output did not match (-want +got):\n%s", diff)
 
 			if testOutputTempDir == "" {
-				testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
+				testOutputTempDir, err = os.MkdirTemp("", "vtexplain_output")
 				require.NoError(t, err, "error getting tempdir")
 			}
 			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
-			ioutil.WriteFile(gotFile, []byte(explainText), 0644)
+			os.WriteFile(gotFile, []byte(explainText), 0644)
 
 			t.Logf("run the following command to update the expected output:")
 			t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(textOutFile))
@@ -137,6 +156,12 @@ func TestExplain(t *testing.T) {
 			NumShards:       4,
 			Normalize:       false,
 			Target:          "ks_sharded/40-80",
+		}},
+		{"gen4", &Options{
+			ReplicationMode: "ROW",
+			NumShards:       4,
+			Normalize:       true,
+			PlannerVersion:  querypb.ExecuteOptions_Gen4,
 		}},
 	}
 
@@ -188,6 +213,17 @@ func TestJSONOutput(t *testing.T) {
 	require.NoError(t, err, "vtexplain error")
 	require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
+	for _, e := range explains {
+		for i, action := range e.TabletActions {
+			var mysqlQueries []*MysqlQuery
+			for _, query := range action.MysqlQueries {
+				if !strings.Contains(strings.ToLower(query.SQL), "set collation_connection") {
+					mysqlQueries = append(mysqlQueries, query)
+				}
+			}
+			e.TabletActions[i].MysqlQueries = mysqlQueries
+		}
+	}
 	explainJSON := ExplainsAsJSON(explains)
 
 	var data interface{}

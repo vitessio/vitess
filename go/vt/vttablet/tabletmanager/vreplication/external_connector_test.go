@@ -152,7 +152,7 @@ func TestExternalConnectorPlay(t *testing.T) {
 		ExternalMysql: "exta",
 		Filter:        filter1,
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	cancel1 := startExternalVReplication(t, bls1, pos)
 	defer cancel1()
 

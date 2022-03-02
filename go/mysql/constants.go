@@ -16,7 +16,13 @@ limitations under the License.
 
 package mysql
 
-import "strings"
+import (
+	"strings"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/simplifiedchinese"
+)
 
 const (
 	// MaxPacketSize is the maximum payload length of a packet
@@ -28,20 +34,24 @@ const (
 	protocolVersion = 10
 )
 
+// AuthMethodDescription is the type for different supported and
+// implemented authentication methods.
+type AuthMethodDescription string
+
 // Supported auth forms.
 const (
 	// MysqlNativePassword uses a salt and transmits a hash on the wire.
-	MysqlNativePassword = "mysql_native_password"
+	MysqlNativePassword = AuthMethodDescription("mysql_native_password")
 
 	// MysqlClearPassword transmits the password in the clear.
-	MysqlClearPassword = "mysql_clear_password"
+	MysqlClearPassword = AuthMethodDescription("mysql_clear_password")
 
 	// CachingSha2Password uses a salt and transmits a SHA256 hash on the wire.
-	CachingSha2Password = "caching_sha2_password"
+	CachingSha2Password = AuthMethodDescription("caching_sha2_password")
 
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
-	MysqlDialog = "dialog"
+	MysqlDialog = AuthMethodDescription("dialog")
 )
 
 // Capability flags.
@@ -194,11 +204,17 @@ const (
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
 
+	// ComFieldList is COM_Field_List.
+	ComFieldList = 0x04
+
 	// ComPing is COM_PING.
 	ComPing = 0x0e
 
 	// ComBinlogDump is COM_BINLOG_DUMP.
 	ComBinlogDump = 0x12
+
+	// ComSemiSyncAck is SEMI_SYNC_ACK.
+	ComSemiSyncAck = 0xef
 
 	// ComPrepare is COM_PREPARE.
 	ComPrepare = 0x16
@@ -286,6 +302,7 @@ const (
 	// - the client cannot write an initial auth packet.
 	// - the client cannot read an initial auth packet.
 	// - the client cannot read a response from the server.
+	//     This happens when a running query is killed.
 	CRServerLost = 2013
 
 	// CRCommandsOutOfSync is CR_COMMANDS_OUT_OF_SYNC
@@ -319,6 +336,9 @@ const (
 // The below are in sorted order by value, grouped by vterror code they should be bucketed into.
 // See above reference for more information on each code.
 const (
+	// Vitess specific errors, (100-999)
+	ERNotReplica = 100
+
 	// unknown
 	ERUnknownError = 1105
 
@@ -402,6 +422,7 @@ const (
 	ErNoReferencedRow2              = 1452
 	ErSPNotVarArg                   = 1414
 	ERInnodbReadOnly                = 1874
+	ERMasterFatalReadingBinlog      = 1236
 
 	// already exists
 	ERTableExists    = 1050
@@ -536,6 +557,9 @@ const (
 	// SSWrongNumberOfColumns is related to columns error
 	SSWrongNumberOfColumns = "21000"
 
+	// SSWrongValueCountOnRow is related to columns count mismatch error
+	SSWrongValueCountOnRow = "21S01"
+
 	// SSDataTooLong is ER_DATA_TOO_LONG
 	SSDataTooLong = "22001"
 
@@ -558,8 +582,11 @@ const (
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
 
-	//SSClientError is the state on client errors
+	// SSClientError is the state on client errors
 	SSClientError = "42000"
+
+	// SSDupFieldName is ER_DUP_FIELD_NAME
+	SSDupFieldName = "42S21"
 
 	// SSBadFieldError is ER_BAD_FIELD_ERROR
 	SSBadFieldError = "42S22"
@@ -571,59 +598,30 @@ const (
 	SSQueryInterrupted = "70100"
 )
 
-// A few interesting character set values.
-// See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
-const (
-	// CharacterSetUtf8 is for UTF8. We use this by default.
-	CharacterSetUtf8 = 33
-
-	// CharacterSetBinary is for binary. Use by integer fields for instance.
-	CharacterSetBinary = 63
-)
-
-// CharacterSetMap maps the charset name (used in ConnParams) to the
-// integer value.  Interesting ones have their own constant above.
-var CharacterSetMap = map[string]uint8{
-	"big5":     1,
-	"dec8":     3,
-	"cp850":    4,
-	"hp8":      6,
-	"koi8r":    7,
-	"latin1":   8,
-	"latin2":   9,
-	"swe7":     10,
-	"ascii":    11,
-	"ujis":     12,
-	"sjis":     13,
-	"hebrew":   16,
-	"tis620":   18,
-	"euckr":    19,
-	"koi8u":    22,
-	"gb2312":   24,
-	"greek":    25,
-	"cp1250":   26,
-	"gbk":      28,
-	"latin5":   30,
-	"armscii8": 32,
-	"utf8":     CharacterSetUtf8,
-	"ucs2":     35,
-	"cp866":    36,
-	"keybcs2":  37,
-	"macce":    38,
-	"macroman": 39,
-	"cp852":    40,
-	"latin7":   41,
-	"utf8mb4":  45,
-	"cp1251":   51,
-	"utf16":    54,
-	"utf16le":  56,
-	"cp1256":   57,
-	"cp1257":   59,
-	"utf32":    60,
-	"binary":   CharacterSetBinary,
-	"geostd8":  92,
-	"cp932":    95,
-	"eucjpms":  97,
+// CharacterSetEncoding maps a charset name to a golang encoder.
+// golang does not support encoders for all MySQL charsets.
+// A charset not in this map is unsupported.
+// A trivial encoding (e.g. utf8) has a `nil` encoder
+var CharacterSetEncoding = map[string]encoding.Encoding{
+	"cp850":   charmap.CodePage850,
+	"koi8r":   charmap.KOI8R,
+	"latin1":  charmap.Windows1252,
+	"latin2":  charmap.ISO8859_2,
+	"ascii":   nil,
+	"hebrew":  charmap.ISO8859_8,
+	"greek":   charmap.ISO8859_7,
+	"cp1250":  charmap.Windows1250,
+	"gbk":     simplifiedchinese.GBK,
+	"latin5":  charmap.ISO8859_9,
+	"utf8":    nil,
+	"cp866":   charmap.CodePage866,
+	"cp852":   charmap.CodePage852,
+	"latin7":  charmap.ISO8859_13,
+	"utf8mb4": nil,
+	"cp1251":  charmap.Windows1251,
+	"cp1256":  charmap.Windows1256,
+	"cp1257":  charmap.Windows1257,
+	"binary":  nil,
 }
 
 // IsNum returns true if a MySQL type is a numeric value.
@@ -642,6 +640,16 @@ func IsConnErr(err error) bool {
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		return (num >= CRUnknownError && num <= CRNamedPipeStateError) || num == ERQueryInterrupted
+	}
+	return false
+}
+
+// IsConnLostDuringQuery returns true if the error is a CRServerLost error.
+// Happens most commonly when a query is killed MySQL server-side.
+func IsConnLostDuringQuery(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		num := sqlErr.Number()
+		return (num == CRServerLost)
 	}
 	return false
 }

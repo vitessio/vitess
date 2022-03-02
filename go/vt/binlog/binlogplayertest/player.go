@@ -112,7 +112,9 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position str
 		!proto.Equal(charset, testKeyRangeRequest.Charset) {
 		fake.t.Errorf("wrong StreamKeyRange parameter, got %+v want %+v", req, testKeyRangeRequest)
 	}
-	callback(testBinlogTransaction)
+	if err := callback(testBinlogTransaction); err != nil {
+		fake.t.Logf("StreamKeyRange callback failed: %v", err)
+	}
 	return nil
 }
 
@@ -178,7 +180,9 @@ func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position strin
 		!proto.Equal(charset, testTablesRequest.Charset) {
 		fake.t.Errorf("wrong StreamTables parameter, got %+v want %+v", req, testTablesRequest)
 	}
-	callback(testBinlogTransaction)
+	if err := callback(testBinlogTransaction); err != nil {
+		fake.t.Logf("StreamTables callback failed: %v", err)
+	}
 	return nil
 }
 

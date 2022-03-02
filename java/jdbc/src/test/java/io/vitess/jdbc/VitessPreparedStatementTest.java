@@ -150,7 +150,7 @@ public class VitessPreparedStatementTest {
       rs = preparedStatement.executeQuery();
       assertEquals(-1, preparedStatement.getUpdateCount());
 
-      //select on master
+      //select on primary
       rs = preparedStatement.executeQuery();
       assertEquals(-1, preparedStatement.getUpdateCount());
 
@@ -212,7 +212,7 @@ public class VitessPreparedStatementTest {
       rs = preparedStatement.executeQuery();
       assertEquals(-1, preparedStatement.getUpdateCount());
 
-      //select on master
+      //select on primary
       rs = preparedStatement.executeQuery();
       assertEquals(-1, preparedStatement.getUpdateCount());
 
@@ -250,7 +250,7 @@ public class VitessPreparedStatementTest {
     VitessPreparedStatement preparedStatement;
     try {
 
-      //executing dml on master
+      //executing dml on primary
       preparedStatement = new VitessPreparedStatement(mockConn, sqlUpdate,
           ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
       int updateCount = preparedStatement.executeUpdate();

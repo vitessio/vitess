@@ -61,22 +61,22 @@ func (ps *PulloutSubquery) GetTableName() string {
 	return ps.Underlying.GetTableName()
 }
 
-// Execute satisfies the Primitive interface.
-func (ps *PulloutSubquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute satisfies the Primitive interface.
+func (ps *PulloutSubquery) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return ps.Underlying.Execute(vcursor, combinedVars, wantfields)
+	return vcursor.ExecutePrimitive(ps.Underlying, combinedVars, wantfields)
 }
 
-// StreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+// TryStreamExecute performs a streaming exec.
+func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
-	return ps.Underlying.StreamExecute(vcursor, combinedVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(ps.Underlying, combinedVars, wantfields, callback)
 }
 
 // GetFields fetches the field info.
@@ -115,7 +115,7 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 	for k, v := range bindVars {
 		subqueryBindVars[k] = v
 	}
-	result, err := ps.Subquery.Execute(vcursor, subqueryBindVars, false)
+	result, err := vcursor.ExecutePrimitive(ps.Subquery, subqueryBindVars, false)
 	if err != nil {
 		return nil, err
 	}
@@ -171,9 +171,21 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 }
 
 func (ps *PulloutSubquery) description() PrimitiveDescription {
+	other := map[string]interface{}{}
+	var pulloutVars []string
+	if ps.HasValues != "" {
+		pulloutVars = append(pulloutVars, ps.HasValues)
+	}
+	if ps.SubqueryResult != "" {
+		pulloutVars = append(pulloutVars, ps.SubqueryResult)
+	}
+	if len(pulloutVars) > 0 {
+		other["PulloutVars"] = pulloutVars
+	}
 	return PrimitiveDescription{
 		OperatorType: "Subquery",
 		Variant:      ps.Opcode.String(),
+		Other:        other,
 	}
 }
 

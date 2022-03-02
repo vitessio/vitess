@@ -14,6 +14,7 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # Explain Vitess statement
 "explain format=vitess select * from user"
@@ -24,6 +25,7 @@
     "OperatorType": "Rows"
   }
 }
+Gen4 plan same as above
 
 # Analyze statement
 "analyze table t1"
@@ -41,6 +43,7 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # Describe statement
 "describe select * from t"
@@ -58,6 +61,7 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # Desc statement
 "desc select * from t"
@@ -75,3 +79,4 @@
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above

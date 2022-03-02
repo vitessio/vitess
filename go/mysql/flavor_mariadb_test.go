@@ -24,14 +24,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMariadbSetMasterCommands(t *testing.T) {
+func TestMariadbSetReplicationSourceCommand(t *testing.T) {
 	params := &ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
-	masterHost := "localhost"
-	masterPort := 123
-	masterConnectRetry := 1234
+	host := "localhost"
+	port := 123
+	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
   MASTER_PORT = 123,
@@ -41,13 +41,13 @@ func TestMariadbSetMasterCommands(t *testing.T) {
   MASTER_USE_GTID = current_pos`
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
 	if got != want {
-		t.Errorf("mariadbFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
+		t.Errorf("mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 	}
 }
 
-func TestMariadbSetMasterCommandsSSL(t *testing.T) {
+func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
 	params := &ConnParams{
 		Uname:     "username",
 		Pass:      "password",
@@ -57,9 +57,9 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 		SslKey:    "ssl-key",
 	}
 	params.EnableSSL()
-	masterHost := "localhost"
-	masterPort := 123
-	masterConnectRetry := 1234
+	host := "localhost"
+	port := 123
+	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
   MASTER_PORT = 123,
@@ -74,22 +74,22 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
   MASTER_USE_GTID = current_pos`
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
 	if got != want {
-		t.Errorf("mariadbFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
+		t.Errorf("mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 	}
 }
 
-func TestMariadbRetrieveMasterServerId(t *testing.T) {
+func TestMariadbRetrieveSourceServerId(t *testing.T) {
 	resultMap := map[string]string{
 		"Master_Server_Id": "1",
 		"Gtid_Slave_Pos":   "0-101-2320",
 	}
 
-	want := ReplicationStatus{MasterServerID: 1}
+	want := ReplicationStatus{SourceServerID: 1}
 	got, err := parseMariadbReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equal(t, got.MasterServerID, want.MasterServerID, fmt.Sprintf("got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID))
+	assert.Equal(t, got.SourceServerID, want.SourceServerID, fmt.Sprintf("got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID))
 }
 
 func TestMariadbRetrieveFileBasedPositions(t *testing.T) {

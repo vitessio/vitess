@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -56,7 +57,7 @@ func TestMergeSortNormal(t *testing.T) {
 			"8|h",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -114,7 +115,7 @@ func TestMergeSortWeightString(t *testing.T) {
 			"8|h",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: 0,
 		Col:             1,
 	}}
@@ -147,6 +148,68 @@ func TestMergeSortWeightString(t *testing.T) {
 	utils.MustMatch(t, wantResults, results)
 }
 
+func TestMergeSortCollation(t *testing.T) {
+	idColFields := sqltypes.MakeTestFields("normal", "varchar")
+	shardResults := []*shardResult{{
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"c",
+			"---",
+			"d",
+		),
+	}, {
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"cs",
+			"---",
+			"d",
+		),
+	}, {
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"cs",
+			"---",
+			"lu",
+		),
+	}, {
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"a",
+			"---",
+			"c",
+		),
+	}}
+
+	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
+	orderBy := []OrderByParams{{
+		Col:         0,
+		CollationID: collationID,
+	}}
+
+	var results []*sqltypes.Result
+	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Results are returned one row at a time.
+	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+		"a",
+		"---",
+		"c",
+		"---",
+		"c",
+		"---",
+		"cs",
+		"---",
+		"cs",
+		"---",
+		"d",
+		"---",
+		"d",
+		"---",
+		"lu",
+	)
+	utils.MustMatch(t, wantResults, results)
+}
+
 // TestMergeSortDescending tests the normal flow of a merge
 // sort where all shards return descending rows.
 func TestMergeSortDescending(t *testing.T) {
@@ -174,7 +237,7 @@ func TestMergeSortDescending(t *testing.T) {
 			"4|d",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 		Desc:            true,
@@ -225,7 +288,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 	}, {
 		results: sqltypes.MakeTestStreamingResults(idColFields),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -253,7 +316,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 // TestMergeSortResultFailures tests failures at various
 // stages of result return.
 func TestMergeSortResultFailures(t *testing.T) {
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -299,7 +362,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 			"2.1|b",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -325,7 +388,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 	require.EqualError(t, err, want)
 }
 
-func testMergeSort(shardResults []*shardResult, orderBy []OrderbyParams, callback func(qr *sqltypes.Result) error) error {
+func testMergeSort(shardResults []*shardResult, orderBy []OrderByParams, callback func(qr *sqltypes.Result) error) error {
 	prims := make([]StreamExecutor, 0, len(shardResults))
 	for _, sr := range shardResults {
 		prims = append(prims, sr)
@@ -334,7 +397,7 @@ func testMergeSort(shardResults []*shardResult, orderBy []OrderbyParams, callbac
 		Primitives: prims,
 		OrderBy:    orderBy,
 	}
-	return ms.StreamExecute(&noopVCursor{}, nil, true, callback)
+	return ms.TryStreamExecute(&noopVCursor{}, nil, true, callback)
 }
 
 type shardResult struct {

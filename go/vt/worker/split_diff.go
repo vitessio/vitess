@@ -17,14 +17,10 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"html/template"
 	"sort"
 	"sync"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -33,11 +29,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // SplitDiffWorker executes a diff between a destination shard and its
@@ -223,8 +222,8 @@ func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v has no source shard with UID %v", sdw.keyspace, sdw.shard, sdw.sourceUID)
 	}
 
-	if !sdw.shardInfo.HasMaster() {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v has no master", sdw.keyspace, sdw.shard)
+	if !sdw.shardInfo.HasPrimary() {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v has no primary", sdw.keyspace, sdw.shard)
 	}
 
 	return nil
@@ -279,20 +278,20 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 }
 
 // synchronizeReplication phase:
-// 1 - ask the master of the destination shard to pause filtered replication,
+// 1 - ask the primary of the destination shard to pause filtered replication,
 //   and return the source binlog positions
-//   (add a cleanup task to restart filtered replication on master)
+//   (add a cleanup task to restart filtered replication on primary)
 // 2 - stop the source tablet at a binlog position higher than the
-//   destination master. Get that new list of positions.
+//   destination primary. Get that new list of positions.
 //   (add a cleanup task to restart binlog replication on the source tablet, and
 //    change the existing ChangeTabletType cleanup action to 'spare' type)
-// 3 - ask the master of the destination shard to resume filtered replication
+// 3 - ask the primary of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
-// 4 - wait until the destination tablet is equal or passed that master
+// 4 - wait until the destination tablet is equal or passed that primary
 //   binlog position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeTabletType cleanup action to 'spare' type)
-// 5 - restart filtered replication on the destination master.
+// 5 - restart filtered replication on the destination primary.
 //   (remove the cleanup task that does the same)
 // At this point, the source and the destination tablet are stopped at the same
 // point.
@@ -302,23 +301,23 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	masterInfo, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.shardInfo.MasterAlias)
+	primaryInfo, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.shardInfo.PrimaryAlias)
 	if err != nil {
-		return vterrors.Wrapf(err, "synchronizeReplication: cannot get Tablet record for master %v", sdw.shardInfo.MasterAlias)
+		return vterrors.Wrapf(err, "synchronizeReplication: cannot get Tablet record for primary %v", sdw.shardInfo.PrimaryAlias)
 	}
 
-	// 1 - stop the master binlog replication, get its current position
-	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
+	// 1 - stop the primary binlog replication, get its current position
+	sdw.wr.Logger().Infof("Stopping primary binlog replication on %v", sdw.shardInfo.PrimaryAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	_, err = sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StopVReplication(sdw.sourceShard.Uid, "for split diff"))
+	_, err = sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, primaryInfo.Tablet, binlogplayer.StopVReplication(sdw.sourceShard.Uid, "for split diff"))
 	if err != nil {
-		return vterrors.Wrapf(err, "VReplicationExec(stop) for %v failed", sdw.shardInfo.MasterAlias)
+		return vterrors.Wrapf(err, "VReplicationExec(stop) for %v failed", sdw.shardInfo.PrimaryAlias)
 	}
-	wrangler.RecordVReplicationAction(sdw.cleaner, masterInfo.Tablet, binlogplayer.StartVReplication(sdw.sourceShard.Uid))
-	p3qr, err := sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.ReadVReplicationPos(sdw.sourceShard.Uid))
+	wrangler.RecordVReplicationAction(sdw.cleaner, primaryInfo.Tablet, binlogplayer.StartVReplication(sdw.sourceShard.Uid))
+	p3qr, err := sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, primaryInfo.Tablet, binlogplayer.ReadVReplicationPos(sdw.sourceShard.Uid))
 	if err != nil {
-		return vterrors.Wrapf(err, "ReadVReplicationPos for %v failed", sdw.shardInfo.MasterAlias)
+		return vterrors.Wrapf(err, "ReadVReplicationPos for %v failed", sdw.shardInfo.PrimaryAlias)
 	}
 	qr := sqltypes.Proto3ToResult(p3qr)
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
@@ -345,26 +344,26 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	// to StartReplication() + ChangeTabletType(spare)
 	wrangler.RecordStartReplicationAction(sdw.cleaner, sourceTablet.Tablet)
 
-	// 3 - ask the master of the destination shard to resume filtered
+	// 3 - ask the primary of the destination shard to resume filtered
 	//     replication up to the new list of positions
-	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, mysqlPos)
+	sdw.wr.Logger().Infof("Restarting primary %v until it catches up to %v", sdw.shardInfo.PrimaryAlias, mysqlPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	_, err = sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StartVReplicationUntil(sdw.sourceShard.Uid, mysqlPos))
+	_, err = sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, primaryInfo.Tablet, binlogplayer.StartVReplicationUntil(sdw.sourceShard.Uid, mysqlPos))
 	if err != nil {
-		return vterrors.Wrapf(err, "VReplication(start until) for %v until %v failed", sdw.shardInfo.MasterAlias, mysqlPos)
+		return vterrors.Wrapf(err, "VReplication(start until) for %v until %v failed", sdw.shardInfo.PrimaryAlias, mysqlPos)
 	}
-	if err := sdw.wr.TabletManagerClient().VReplicationWaitForPos(shortCtx, masterInfo.Tablet, int(sdw.sourceShard.Uid), mysqlPos); err != nil {
-		return vterrors.Wrapf(err, "VReplicationWaitForPos for %v until %v failed", sdw.shardInfo.MasterAlias, mysqlPos)
+	if err := sdw.wr.TabletManagerClient().VReplicationWaitForPos(shortCtx, primaryInfo.Tablet, int(sdw.sourceShard.Uid), mysqlPos); err != nil {
+		return vterrors.Wrapf(err, "VReplicationWaitForPos for %v until %v failed", sdw.shardInfo.PrimaryAlias, mysqlPos)
 	}
-	masterPos, err := sdw.wr.TabletManagerClient().MasterPosition(shortCtx, masterInfo.Tablet)
+	primaryPos, err := sdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, primaryInfo.Tablet)
 	if err != nil {
-		return vterrors.Wrapf(err, "MasterPosition for %v failed", sdw.shardInfo.MasterAlias)
+		return vterrors.Wrapf(err, "PrimaryPosition for %v failed", sdw.shardInfo.PrimaryAlias)
 	}
 
 	// 4 - wait until the destination tablet is equal or passed
-	//     that master binlog position, and stop its replication.
-	sdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", sdw.destinationAlias, masterPos)
+	//     that primary binlog position, and stop its replication.
+	sdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", sdw.destinationAlias, primaryPos)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
 	destinationTablet, err := sdw.wr.TopoServer().GetTablet(shortCtx, sdw.destinationAlias)
@@ -373,17 +372,17 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	}
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	if _, err = sdw.wr.TabletManagerClient().StopReplicationMinimum(shortCtx, destinationTablet.Tablet, masterPos, *remoteActionsTimeout); err != nil {
-		return vterrors.Wrapf(err, "StopReplicationMinimum for %v at %v failed", sdw.destinationAlias, masterPos)
+	if _, err = sdw.wr.TabletManagerClient().StopReplicationMinimum(shortCtx, destinationTablet.Tablet, primaryPos, *remoteActionsTimeout); err != nil {
+		return vterrors.Wrapf(err, "StopReplicationMinimum for %v at %v failed", sdw.destinationAlias, primaryPos)
 	}
 	wrangler.RecordStartReplicationAction(sdw.cleaner, destinationTablet.Tablet)
 
-	// 5 - restart filtered replication on destination master
-	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
+	// 5 - restart filtered replication on destination primary
+	sdw.wr.Logger().Infof("Restarting filtered replication on primary %v", sdw.shardInfo.PrimaryAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	defer cancel()
-	if _, err = sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StartVReplication(sdw.sourceShard.Uid)); err != nil {
-		return vterrors.Wrapf(err, "VReplicationExec(start) failed for %v", sdw.shardInfo.MasterAlias)
+	if _, err = sdw.wr.TabletManagerClient().VReplicationExec(shortCtx, primaryInfo.Tablet, binlogplayer.StartVReplication(sdw.sourceShard.Uid)); err != nil {
+		return vterrors.Wrapf(err, "VReplicationExec(start) failed for %v", sdw.shardInfo.PrimaryAlias)
 	}
 
 	return nil
@@ -404,8 +403,8 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+		sdw.destinationSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)
@@ -417,8 +416,8 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		sdw.sourceSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+		sdw.sourceSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)

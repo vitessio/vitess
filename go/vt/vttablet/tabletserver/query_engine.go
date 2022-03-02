@@ -150,7 +150,7 @@ type QueryEngine struct {
 	enableQueryPlanFieldCaching bool
 
 	// stats
-	queryCounts, queryTimes, queryRowCounts, queryErrorCounts *stats.CountersWithMultiLabels
+	queryCounts, queryTimes, queryRowCounts, queryErrorCounts, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -224,7 +224,9 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
 	qe.queryCounts = env.Exporter().NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
-	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
+	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "(DEPRECATED - use QueryRowsAffected and QueryRowsReturned instead) query row counts", []string{"Table", "Plan"})
+	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", []string{"Table", "Plan"})
+	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", []string{"Table", "Plan"})
 	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"})
 
 	env.Exporter().HandleFunc("/debug/hotrows", qe.txSerializer.ServeHTTP)
@@ -311,7 +313,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
 		if !skipQueryPlanCache && qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
@@ -424,13 +426,29 @@ func (qe *QueryEngine) QueryPlanCacheLen() int {
 }
 
 // AddStats adds the given stats for the planName.tableName
-func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
+func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64) {
 	// table names can contain "." characters, replace them!
-	keys := []string{tableName, planName}
+	keys := []string{tableName, planType.String()}
 	qe.queryCounts.Add(keys, queryCount)
 	qe.queryTimes.Add(keys, int64(duration))
-	qe.queryRowCounts.Add(keys, rowCount)
+	qe.queryRowCounts.Add(keys, rowsAffected)
 	qe.queryErrorCounts.Add(keys, errorCount)
+
+	// For certain plan types like select, we only want to add their metrics to rows returned
+	// But there are special cases like `SELECT ... INTO OUTFILE ''` which return positive rows affected
+	// So we check if it is positive and add that too.
+	switch planType {
+	case planbuilder.PlanSelect, planbuilder.PlanSelectStream, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
+		qe.queryRowsReturned.Add(keys, rowsReturned)
+		if rowsAffected > 0 {
+			qe.queryRowsAffected.Add(keys, rowsAffected)
+		}
+	default:
+		qe.queryRowsAffected.Add(keys, rowsAffected)
+		if rowsReturned > 0 {
+			qe.queryRowsReturned.Add(keys, rowsReturned)
+		}
+	}
 }
 
 type perQueryStats struct {

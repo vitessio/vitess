@@ -22,11 +22,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // StatementType encodes the type of a SQL statement
@@ -62,6 +57,7 @@ const (
 	StmtFlush
 	StmtCallProc
 	StmtRevert
+	StmtShowMigrationLogs
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -83,6 +79,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtDDL
 	case *RevertMigration:
 		return StmtRevert
+	case *ShowMigrationLogs:
+		return StmtShowMigrationLogs
 	case *Use:
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:
@@ -129,16 +127,26 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Union, *ParenSelect,
-		*Insert, *Update, *Delete, *Stream:
+	var directives CommentDirectives
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Insert:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Update:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Delete:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Union, *Stream:
 		return true
+	default:
+		return false
 	}
-	return false
+	return !directives.IsSet(DirectiveSkipQueryPlanCache)
 }
 
-//MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
-func MustRewriteAST(stmt Statement) bool {
+// MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
+func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
 	switch node := stmt.(type) {
 	case *Set:
 		return true
@@ -148,6 +156,8 @@ func MustRewriteAST(stmt Statement) bool {
 			return true
 		}
 		return false
+	case SelectStatement:
+		return hasSelectLimit
 	}
 	return false
 }
@@ -323,6 +333,37 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (Expr)(nil)
+	outer:
+		// we'll loop and remove any duplicates
+		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
+			if result == nil {
+				result = expr
+				continue outer
+			}
+
+			for j := 0; j < i; j++ {
+				if EqualsExpr(expr, exprs[j]) {
+					continue outer
+				}
+			}
+			result = &AndExpr{Left: result, Right: expr}
+		}
+		return result
+	}
+}
+
 // TableFromStatement returns the qualified table name for the query.
 // This works only for select statements.
 func TableFromStatement(sql string) (TableName, error) {
@@ -404,58 +445,6 @@ func IsSimpleTuple(node Expr) bool {
 	}
 	// It's a subquery
 	return false
-}
-
-// NewPlanValue builds a sqltypes.PlanValue from an Expr.
-func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
-	switch node := node.(type) {
-	case Argument:
-		return sqltypes.PlanValue{Key: string(node)}, nil
-	case *Literal:
-		switch node.Type {
-		case IntVal:
-			n, err := sqltypes.NewIntegral(string(node.Val))
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: n}, nil
-		case FloatVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Bytes())}, nil
-		case StrVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes())}, nil
-		case HexVal:
-			v, err := node.HexDecode()
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
-		}
-	case ListArg:
-		return sqltypes.PlanValue{ListKey: string(node)}, nil
-	case ValTuple:
-		pv := sqltypes.PlanValue{
-			Values: make([]sqltypes.PlanValue, 0, len(node)),
-		}
-		for _, val := range node {
-			innerpv, err := NewPlanValue(val)
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			if innerpv.ListKey != "" || innerpv.Values != nil {
-				return sqltypes.PlanValue{}, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: nested lists")
-			}
-			pv.Values = append(pv.Values, innerpv)
-		}
-		return pv, nil
-	case *NullVal:
-		return sqltypes.PlanValue{}, nil
-	case *UnaryExpr:
-		switch node.Operator {
-		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
-			return NewPlanValue(node.Expr)
-		}
-	}
-	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
 }
 
 //IsLockingFunc returns true for all functions that are used to work with mysql advisory locks

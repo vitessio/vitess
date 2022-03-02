@@ -105,9 +105,9 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 			stats, ok := out.(*LogStats)
 			if !ok {
 				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", QueryLogger.Name(), out, &LogStats{})
-				io.WriteString(w, `<tr class="error">`)
-				io.WriteString(w, err.Error())
-				io.WriteString(w, "</tr>")
+				_, _ = io.WriteString(w, `<tr class="error">`)
+				_, _ = io.WriteString(w, err.Error())
+				_, _ = io.WriteString(w, "</tr>")
 				log.Error(err)
 				continue
 			}

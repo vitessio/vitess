@@ -40,7 +40,7 @@ export interface TooltipProps {
  * See the Material documentation for helpful usage guidelines:
  * https://material.io/components/tooltips
  *
- * Note that custom components (like <Button> and <Icon> -- namely, any
+ * Note that custom components (like <Icon> -- namely, any
  * component that is not a native component like <div> and <span>)
  * must support ref forwarding for the tooltip to position itself correctly.
  * See https://reactjs.org/docs/forwarding-refs.html

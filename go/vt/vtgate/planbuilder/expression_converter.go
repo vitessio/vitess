@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -62,7 +65,8 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()))
+		// TODO@collations: proper collation for column name
+		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.TypedCollation{})
 	}
 	return nil
 }
@@ -80,9 +84,9 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 			return evalExpr, nil
 		}
 	}
-	evalExpr, err := sqlparser.Convert(astExpr)
+	evalExpr, err := evalengine.Translate(astExpr, nil)
 	if err != nil {
-		if err != sqlparser.ErrExprNotSupported {
+		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err
 		}
 		evalExpr = &evalengine.Column{Offset: len(ec.tabletExpressions)}
@@ -91,7 +95,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 	return evalExpr, nil
 }
 
-func (ec *expressionConverter) source(vschema ContextVSchema) (engine.Primitive, error) {
+func (ec *expressionConverter) source(vschema plancontext.VSchema) (engine.Primitive, error) {
 	if len(ec.tabletExpressions) == 0 {
 		return &engine.SingleRow{}, nil
 	}

@@ -17,7 +17,7 @@ limitations under the License.
 package txthrottler
 
 // Commands to generate the mocks for this test.
-//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler vitess.io/vitess/go/vt/discovery LegacyHealthCheck
+//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler -mock_names "LegacyHealthCheck=MockHealthCheck" vitess.io/vitess/go/vt/discovery LegacyHealthCheck
 //go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 

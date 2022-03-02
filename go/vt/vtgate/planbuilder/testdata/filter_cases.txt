@@ -5,7 +5,7 @@
   "Original": "select id from user",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -24,7 +24,7 @@ Gen4 plan same as above
   "Original": "select id from user where someColumn = null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -43,7 +43,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -52,7 +52,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where `user`.id = 5",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -66,7 +66,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 5+5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -76,7 +76,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id = 5+5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 5 + 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(10)"
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
@@ -85,7 +103,7 @@ Gen4 plan same as above
   "Original": "select id from music where id = 5 and user_id = 4",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -94,7 +112,7 @@ Gen4 plan same as above
     "Query": "select id from music where id = 5 and user_id = 4",
     "Table": "music",
     "Values": [
-      4
+      "INT64(4)"
     ],
     "Vindex": "user_index"
   }
@@ -108,7 +126,7 @@ Gen4 plan same as above
   "Original": "select id from user where costly = 'aa' and name = 'bb'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -117,7 +135,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
     "Table": "`user`",
     "Values": [
-      "bb"
+      "VARCHAR(\"bb\")"
     ],
     "Vindex": "name_user_map"
   }
@@ -131,7 +149,7 @@ Gen4 plan same as above
   "Original": "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -140,10 +158,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals",
     "Table": "`user`",
     "Values": [
-      [
-        "aa",
-        "bb"
-      ]
+      "(VARCHAR(\"aa\"), VARCHAR(\"bb\"))"
     ],
     "Vindex": "name_user_map"
   }
@@ -157,7 +172,7 @@ Gen4 plan same as above
   "Original": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -166,14 +181,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      [
-        "aa",
-        "cc"
-      ]
+      "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN clause, swapped columns
 "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -182,7 +195,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -191,14 +204,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      [
-        "bb",
-        "dd"
-      ]
+      "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN clause, choose cost within tuple
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -207,7 +218,7 @@ Gen4 plan same as above
   "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -216,14 +227,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      [
-        "bb",
-        "dd"
-      ]
+      "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN clause, choose cost within tuple, swapped
 "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -232,7 +241,7 @@ Gen4 plan same as above
   "Original": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -241,14 +250,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      [
-        "aa",
-        "cc"
-      ]
+      "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN clause, choose cost
 "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))"
@@ -257,7 +264,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -266,13 +273,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      [
-        "dd"
-      ]
+      "(VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN clause vs equality
 "select id from user where (col, name) in (('aa', 'bb')) and id = 5"
@@ -281,7 +287,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col, name) in (('aa', 'bb')) and id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -290,7 +296,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where (col, `name`) in (('aa', 'bb')) and id = 5",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -304,7 +310,7 @@ Gen4 plan same as above
   "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -313,14 +319,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
-      [
-        "bb",
-        "dd"
-      ]
+      "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN: tuple inside tuple
 "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))"
@@ -329,7 +333,7 @@ Gen4 plan same as above
   "Original": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -338,14 +342,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
     "Table": "`user`",
     "Values": [
-      [
-        "bb",
-        "ee"
-      ]
+      "(VARCHAR(\"bb\"), VARCHAR(\"ee\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN: tuple inside tuple, but no match in tuple
 "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))"
@@ -354,7 +356,7 @@ Gen4 plan same as above
   "Original": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectMultiEqual",
+    "Variant": "MultiEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -363,14 +365,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
     "Table": "`user`",
     "Values": [
-      [
-        "aa",
-        "dd"
-      ]
+      "(VARCHAR(\"aa\"), VARCHAR(\"dd\"))"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Composite IN: tuple inside tuple, mismiatched values
 "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))"
@@ -379,7 +379,7 @@ Gen4 plan same as above
   "Original": "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -398,7 +398,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col1, name) in (select * from music where music.user_id=user.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -408,6 +408,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # Composite IN: RHS has no simple values
 "select id from user where (col1, name) in (('aa', 1+1))"
@@ -416,7 +417,7 @@ Gen4 plan same as above
   "Original": "select id from user where (col1, name) in (('aa', 1+1))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -426,7 +427,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col1, name) in (('aa', 1+1))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "MultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
+    "Table": "`user`",
+    "Values": [
+      "(INT64(2))"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # IN clause: LHS is neither column nor composite tuple
 "select Id from user where 1 in ('aa', 'bb')"
@@ -435,7 +454,7 @@ Gen4 plan same as above
   "Original": "select Id from user where 1 in ('aa', 'bb')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -445,6 +464,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # Single table complex in clause
 "select id from user where name in (col, 'bb')"
@@ -453,7 +473,7 @@ Gen4 plan same as above
   "Original": "select id from user where name in (col, 'bb')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -472,7 +492,7 @@ Gen4 plan same as above
   "Original": "select id from user where name = :a",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -495,7 +515,7 @@ Gen4 plan same as above
   "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -504,7 +524,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where `name` = 18446744073709551615",
     "Table": "`user`",
     "Values": [
-      18446744073709551615
+      "UINT64(18446744073709551615)"
     ],
     "Vindex": "name_user_map"
   }
@@ -518,7 +538,7 @@ Gen4 plan same as above
   "Original": "select id from user where name in ::list",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -527,7 +547,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where `name` in ::__vals",
     "Table": "`user`",
     "Values": [
-      "::list"
+      ":list"
     ],
     "Vindex": "name_user_map"
   }
@@ -541,16 +561,35 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
+    "Query": "select user_extra.id from `user`, user_extra where `user`.id = 5 and `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra",
+    "Values": [
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -563,16 +602,35 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where user_extra.user_id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
+    "Query": "select user_extra.id from `user`, user_extra where user_extra.user_id = 5 and `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra",
+    "Values": [
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -585,20 +643,21 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Multi-table unique vindex constraint on left-joined right table
 "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5"
@@ -607,20 +666,21 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
-    "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where user_extra.user_id = 5",
-    "Table": "`user`",
+    "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
+    "Query": "select user_extra.id from `user`, user_extra where user_extra.user_id = 5 and `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Multi-route unique vindex constraint
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
@@ -631,11 +691,14 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -644,13 +707,13 @@ Gen4 plan same as above
         "Query": "select `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
-          5
+          "INT64(5)"
         ],
         "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -673,11 +736,14 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -686,13 +752,13 @@ Gen4 plan same as above
         "Query": "select `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
-          5
+          "INT64(5)"
         ],
         "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -701,11 +767,30 @@ Gen4 plan same as above
         "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = 5",
         "Table": "user_extra",
         "Values": [
-          5
+          "INT64(5)"
         ],
         "Vindex": "user_index"
       }
     ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
+    "Query": "select user_extra.id from `user`, user_extra where `user`.id = 5 and user_extra.user_id = 5 and `user`.col = user_extra.col",
+    "Table": "`user`, user_extra",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -718,11 +803,14 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -733,7 +821,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -749,6 +837,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Multi-route with non-route constraint, should use first route.
 "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
@@ -759,11 +848,14 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -774,13 +866,50 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
         "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where 1 = 1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where 1 = 1 and user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -794,7 +923,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = 5 and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -803,10 +932,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where `user`.col = 5 and `user`.id in ::__vals",
     "Table": "`user`",
     "Values": [
-      [
-        1,
-        2
-      ]
+      "(INT64(1), INT64(2))"
     ],
     "Vindex": "user_index"
   }
@@ -820,7 +946,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectIN",
+    "Variant": "IN",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -829,10 +955,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where `user`.col = case `user`.col when 'foo' then true else false end and `user`.id in ::__vals",
     "Table": "`user`",
     "Values": [
-      [
-        1,
-        2
-      ]
+      "(INT64(1), INT64(2))"
     ],
     "Vindex": "user_index"
   }
@@ -846,7 +969,7 @@ Gen4 plan same as above
   "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -855,11 +978,12 @@ Gen4 plan same as above
     "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
     "Table": "`user`",
     "Values": [
-      "aa"
+      "VARCHAR(\"aa\")"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
@@ -868,7 +992,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqual",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -877,11 +1001,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
     "Table": "`user`",
     "Values": [
-      "aa"
+      "VARCHAR(\"aa\")"
     ],
     "Vindex": "name_user_map"
   }
 }
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
@@ -890,7 +1015,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -899,11 +1024,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
@@ -912,7 +1038,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -921,7 +1047,7 @@ Gen4 plan same as above
     "Query": "select id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
@@ -935,7 +1061,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -956,11 +1082,14 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -971,7 +1100,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -989,23 +1118,26 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "unsharded_id": 0
+    },
     "TableName": "unsharded_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select unsharded.id, unsharded.id from unsharded where 1 != 1",
-        "Query": "select unsharded.id, unsharded.id from unsharded",
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+        "Query": "select unsharded.id from unsharded",
         "Table": "unsharded"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1029,7 +1161,7 @@ Gen4 plan same as above
   "Original": "select col from route1 where id = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1038,29 +1170,12 @@ Gen4 plan same as above
     "Query": "select col from `user` as route1 where id = 1",
     "Table": "`user`",
     "Values": [
-      1
+      "INT64(1)"
     ],
     "Vindex": "user_index"
   }
 }
 Gen4 plan same as above
-
-# subquery of information_schema with itself
-"select * from information_schema.a where id in (select * from information_schema.b)"
-{
-  "QueryType": "SELECT",
-  "Original": "select * from information_schema.a where id in (select * from information_schema.b)",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from information_schema.a where 1 != 1",
-    "Query": "select * from information_schema.a where id in (select * from information_schema.b)"
-  }
-}
 
 # subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)"
@@ -1071,11 +1186,14 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1086,7 +1204,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1095,10 +1213,133 @@ Gen4 plan same as above
         "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col)",
         "Table": "`user`",
         "Values": [
-          [
-            ":user_extra_col",
-            1
-          ]
+          "(:user_extra_col, INT64(1))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(:user_extra_col, INT64(1))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# correlated subquery merge-able into a route of a join tree
+"select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id)",
+        "Table": "`user`",
+        "Values": [
+          "(:user_extra_col, INT64(1))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(:user_extra_col, INT64(1))"
         ],
         "Vindex": "user_index"
       }
@@ -1119,7 +1360,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1130,7 +1371,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1139,7 +1380,45 @@ Gen4 plan same as above
         "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
         "Table": "`user`",
         "Values": [
-          5
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
         ],
         "Vindex": "user_index"
       }
@@ -1156,11 +1435,14 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1171,7 +1453,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1180,10 +1462,48 @@ Gen4 plan same as above
         "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
         "Table": "`user`",
         "Values": [
-          [
-            ":user_extra_col",
-            1
-          ]
+          "(:user_extra_col, INT64(1))"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(:user_extra_col, INT64(1))"
         ],
         "Vindex": "user_index"
       }
@@ -1198,7 +1518,7 @@ Gen4 plan same as above
   "Original": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1208,6 +1528,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -1216,7 +1537,7 @@ Gen4 plan same as above
   "Original": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1225,11 +1546,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where id = 5 and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
     "Table": "`user`",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # outer and inner subquery route by same str val
 "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')"
@@ -1238,7 +1560,7 @@ Gen4 plan same as above
   "Original": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1247,11 +1569,12 @@ Gen4 plan same as above
     "Query": "select id from `user` where id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
     "Table": "`user`",
     "Values": [
-      "aa"
+      "VARCHAR(\"aa\")"
     ],
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # outer and inner subquery route by same val arg
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
@@ -1260,7 +1583,7 @@ Gen4 plan same as above
   "Original": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1274,10 +1597,12 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # unresolved symbol in inner subquery.
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
 "symbol foo.id not found"
+Gen4 plan same as above
 
 # outer and inner subquery route by same outermost column value
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
@@ -1286,7 +1611,7 @@ Gen4 plan same as above
   "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1296,6 +1621,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # cross-shard subquery in IN clause.
 # Note the improved Underlying plan as SelectIN.
@@ -1306,10 +1632,14 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1320,7 +1650,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectIN",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1329,13 +1659,14 @@ Gen4 plan same as above
         "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
-          "::__sq1"
+          ":__sq1"
         ],
         "Vindex": "user_index"
       }
     ]
   }
 }
+Gen4 plan same as above
 
 # cross-shard subquery in NOT IN clause.
 "select id from user where id not in (select col from user)"
@@ -1345,10 +1676,14 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutNotIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1359,7 +1694,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1371,6 +1706,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # cross-shard subquery in EXISTS clause.
 "select id from user where exists (select col from user)"
@@ -1380,10 +1716,14 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1394,7 +1734,42 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where exists (select col from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1415,10 +1790,14 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1429,7 +1808,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1445,6 +1824,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # multi-level pullout
 "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))"
@@ -1454,14 +1834,22 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1472,7 +1860,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1485,7 +1873,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1501,6 +1889,67 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select id1 from user where id = (select id2 from user where id2 in (select id3 from user))",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values2",
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id3 from `user` where 1 != 1",
+            "Query": "select id3 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id2 from `user` where 1 != 1",
+            "Query": "select id2 from `user` where :__sq_has_values2 = 1 and id2 in ::__sq2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id1 from `user` where 1 != 1",
+        "Query": "select id1 from `user` where id = :__sq1",
+        "Table": "`user`",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # routing rules subquery merge
 "select col from user where id = (select id from route1 where route1.id = user.id)"
@@ -1509,7 +1958,7 @@ Gen4 plan same as above
   "Original": "select col from user where id = (select id from route1 where route1.id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1519,6 +1968,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules subquery pullout
 "select col from user where id = (select id from route2)"
@@ -1528,10 +1978,14 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -1542,7 +1996,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1558,6 +2012,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Case preservation test
 "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5"
@@ -1566,16 +2021,16 @@ Gen4 plan same as above
   "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select user_extra.Id from `user` join user_extra on `user`.iD = user_extra.User_Id where 1 != 1",
     "Query": "select user_extra.Id from `user` join user_extra on `user`.iD = user_extra.User_Id where `user`.Id = 5",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1585,7 +2040,7 @@ Gen4 plan same as above
   "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1594,7 +2049,7 @@ Gen4 plan same as above
     "Query": "select user_extra.Id from `user`, user_extra where `user`.Id = 5 and `user`.iD = user_extra.User_Id",
     "Table": "`user`, user_extra",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "user_index"
   }
@@ -1607,7 +2062,7 @@ Gen4 plan same as above
   "Original": "select id from user where database()",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1617,12 +2072,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-
-# outer and inner subquery route reference the same "uu.id" name
-# but they refer to different things. The first reference is to the outermost query,
-# and the second reference is to the innermost 'from' subquery.
-"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
-"unsupported: cross-shard correlated subquery"
+Gen4 plan same as above
 
 # Select with equals null
 "select id from music where id = null"
@@ -1631,7 +2081,7 @@ Gen4 plan same as above
   "Original": "select id from music where id = null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1650,7 +2100,7 @@ Gen4 plan same as above
   "Original": "select id from music where id is null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1659,11 +2109,12 @@ Gen4 plan same as above
     "Query": "select id from music where id is null",
     "Table": "music",
     "Values": [
-      null
+      "NULL"
     ],
     "Vindex": "music_user_map"
   }
 }
+Gen4 plan same as above
 
 # SELECT with IS NOT NULL
 "select id from music where id is not null"
@@ -1672,7 +2123,7 @@ Gen4 plan same as above
   "Original": "select id from music where id is not null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1691,7 +2142,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id = null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1710,7 +2161,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id IN (null)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1729,7 +2180,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id IN (null, 1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1738,7 +2189,7 @@ Gen4 plan same as above
     "Query": "select id from music where user_id = 4 and id in (null, 1, 2)",
     "Table": "music",
     "Values": [
-      4
+      "INT64(4)"
     ],
     "Vindex": "user_index"
   }
@@ -1752,7 +2203,7 @@ Gen4 plan same as above
   "Original": "select id from music where user_id = 4 and id NOT IN (null, 1, 2)",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectNone",
+    "Variant": "None",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -1762,113 +2213,26 @@ Gen4 plan same as above
     "Table": "music"
   }
 }
+Gen4 plan same as above
 
-# query trying to query two different keyspaces at the same time
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
+# Single table with unique vindex match and NOT IN (null, 1, 2) predicates inverted
+"select id from music where id NOT IN (null, 1, 2) and user_id = 4"
 {
   "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'",
+  "Original": "select id from music where id NOT IN (null, 1, 2) and user_id = 4",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "None",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]"
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id not in (null, 1, 2) and user_id = 4",
+    "Table": "music"
   }
 }
-
-# information_schema query using database() func
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"
-  }
-}
-
-# table_schema predicate the wrong way around
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
-  }
-}
-
-# table_schema OR predicate
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'"
-  }
-}
-
-# table_name predicate against a routed table
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_NAME = :__vttablename",
-    "SysTableTableName": "[VARBINARY(\"route1\")]",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
-  }
-}
-
-# information_schema query with additional predicates
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and other_column = 42"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and other_column = 42",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and other_column = 42",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
-  }
-}
+Gen4 plan same as above
 
 # pullout sq after pullout sq
 "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)"
@@ -1877,11 +2241,15 @@ Gen4 plan same as above
   "Original": "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)",
   "Instructions": {
     "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
+    "Variant": "PulloutNotIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
+        "Variant": "EqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1890,17 +2258,21 @@ Gen4 plan same as above
         "Query": "select user_extra.col from user_extra where user_extra.user_id = 42",
         "Table": "user_extra",
         "Values": [
-          42
+          "INT64(42)"
         ],
         "Vindex": "user_index"
       },
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -1909,22 +2281,91 @@ Gen4 plan same as above
             "Query": "select user_extra.col from user_extra where user_extra.user_id = 411",
             "Table": "user_extra",
             "Values": [
-              411
+              "INT64(411)"
             ],
             "Vindex": "user_index"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectIN",
+            "Variant": "IN",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and not (:__sq_has_values2 = 1 and id in ::__sq2)",
+            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and (:__sq_has_values2 = 0 or id not in ::__sq2)",
             "Table": "`user`",
             "Values": [
-              "::__sq1"
+              ":__sq1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where not id in (select user_extra.col from user_extra where user_extra.user_id = 42) and id in (select user_extra.col from user_extra where user_extra.user_id = 411)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 411",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(411)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutNotIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+            "Query": "select user_extra.col from user_extra where user_extra.user_id = 42",
+            "Table": "user_extra",
+            "Values": [
+              "INT64(42)"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where (:__sq_has_values1 = 0 or id not in ::__sq1) and (:__sq_has_values2 = 1 and id in ::__vals)",
+            "Table": "`user`",
+            "Values": [
+              ":__sq2"
             ],
             "Vindex": "user_index"
           }
@@ -1934,20 +2375,1555 @@ Gen4 plan same as above
   }
 }
 
-# able to isolate table_schema value even when hidden inside of ORs
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')"
+# solving LIKE query with a CFC prefix vindex
+"select c2 from cfc_vindex_col where c1 like 'A%'"
 {
   "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')",
+  "Original": "select c2 from cfc_vindex_col where c1 like 'A%'",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select c2 from cfc_vindex_col where 1 != 1",
+    "Query": "select c2 from cfc_vindex_col where c1 like 'A%'",
+    "Table": "cfc_vindex_col",
+    "Values": [
+      "VARCHAR(\"A%\")"
+    ],
+    "Vindex": "cfc"
+  }
+}
+Gen4 plan same as above
+
+"select * from samecolvin where col = :col"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from samecolvin where col = :col",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from samecolvin where 1 != 1",
+    "Query": "select col from samecolvin where col = :col",
+    "Table": "samecolvin",
+    "Values": [
+      ":col"
+    ],
+    "Vindex": "vindex1"
+  }
+}
+Gen4 plan same as above
+
+# non unique predicate on vindex
+"select id from user where user.id > 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id \u003e 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id \u003e 5",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# select from unsharded keyspace with uncorrelated subquery which should be merged to a single route
+"select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)"
+{
+  "QueryType": "SELECT",
+  "Original": "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
-    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
+    "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+    "Query": "select unsharded.id from unsharded where unsharded.`name` in (select `name` from unsharded_a)",
+    "Table": "unsharded"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select unsharded.id from unsharded where unsharded.name in (select name from unsharded_a)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+    "Query": "select unsharded.id from unsharded where unsharded.`name` in (select `name` from unsharded_a)",
+    "Table": "unsharded, unsharded_a"
+  }
+}
+
+# in subquery the id will be scoped to local table as there is no qualifier associated with it.
+"select id from user where id in (select col from unsharded where col = id)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (select col from unsharded where col = id)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select col from unsharded where 1 != 1",
+        "Query": "select col from unsharded where col = id",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          ":__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# correlated subquery with different keyspace tables involved
+"select id from user where id in (select col from unsharded where col = user.id)"
+"unsupported: cross-shard correlated subquery"
+Gen4 plan same as above
+
+# correlated subquery with same keyspace
+"select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# SelectDBA with uncorrelated subqueries
+"select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)"
+{
+  "QueryType": "SELECT",
+  "Original": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+    "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.column_name from information_schema.`columns` as c)",
+    "Table": "information_schema.`tables`"
+  }
+}
+Gen4 plan same as above
+
+# SelectReference with uncorrelated subqueries
+"select ref.col from ref where ref.col in (select ref.col from ref)"
+{
+  "QueryType": "SELECT",
+  "Original": "select ref.col from ref where ref.col in (select ref.col from ref)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select ref.col from ref where 1 != 1",
+    "Query": "select ref.col from ref where ref.col in (select ref.col from ref)",
+    "Table": "ref"
+  }
+}
+Gen4 plan same as above
+
+# SelectEqualUnique with uncorrelated subqueries
+"select u1.col from user as u1 where u1.id = 5 and u1.name in (select u2.name from user u2 where u2.id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where u1.id = 5 and u1.name in (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and u1.`name` in (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above
+
+# SelectEqualUnique with EXISTS uncorrelated subquery
+"select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where u1.id = 5 and exists (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above
+
+# SelectEqualUnique with NOT EXISTS uncorrelated subquery
+"select u1.col from user as u1 where u1.id = 5 and not exists (select u2.name from user u2 where u2.id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where u1.id = 5 and not exists (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above
+
+# SelectScatter with NOT EXISTS uncorrelated subquery
+"select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u2.`name` from `user` as u2 where 1 != 1",
+        "Query": "select u2.`name` from `user` as u2 where u2.id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+        "Query": "select u1.col from `user` as u1 where not :__sq_has_values1",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u2.`name` from `user` as u2 where 1 != 1",
+        "Query": "select u2.`name` from `user` as u2 where u2.id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+        "Query": "select u1.col from `user` as u1 where not :__sq_has_values1",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# The outer and first inner are SelectEqualUnique with same Vindex value, the second inner has different Vindex value
+"select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and :__sq_has_values1 = 1 and id in ::__sq1 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and (:__sq_has_values2 = 1 and id in ::__sq2)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# The outer and second inner are SelectEqualUnique with same Vindex value, the first inner has different Vindex value
+"select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutNotIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (:__sq_has_values1 = 0 or id not in ::__sq1)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 4) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutNotIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
+        "Table": "user_extra",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and (:__sq_has_values1 = 0 or id not in ::__sq1) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# two correlated subqueries that can be merge in a single route
+"select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
+    "Table": "`user`"
+  }
+}
+
+# transitive closures for the win
+"select id from user where user.id = user.col and user.col = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id = user.col and user.col = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = `user`.col and `user`.col = 5",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id = user.col and user.col = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = `user`.col and `user`.col = 5",
+    "Table": "`user`",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# join with transitive closures
+"select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.col = :user_id and user_extra.col = user_extra.user_id",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user, user_extra where user.id = user_extra.col and user_extra.col = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user`, user_extra where 1 != 1",
+    "Query": "select id from `user`, user_extra where user_extra.col = user_extra.user_id and `user`.id = user_extra.col",
+    "Table": "`user`, user_extra"
+  }
+}
+
+# not supported transitive closures with equality inside of an OR
+"select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.col = :user_id and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.`name`)",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user, user_extra where user.id = user_extra.col and (user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.name)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.`name`",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where `user`.id = :user_extra_col",
+        "Table": "`user`",
+        "Values": [
+          ":user_extra_col"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# routing rules subquery merge with alias
+"select col from user where id = (select id from route1 as a where a.id = user.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where id = (select id from route1 as a where a.id = user.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = (select id from `user` as a where a.id = `user`.id)",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# left join where clauses where we can optimize into an inner join
+"select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "user_col": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col, `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# this query lead to a nil pointer error
+"select user.id from user left join user_extra on user.col = user_extra.col where foo(user_extra.foobar)"
+"expr cannot be translated, not supported: foo(user_extra.foobar)"
+Gen4 plan same as above
+
+# filter after outer join
+"select user.id from user left join user_extra on user.col = user_extra.col where user_extra.id is null"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.id is null",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      1
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "user_extra.id is null",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "1,-2",
+            "JoinVars": {
+              "user_col": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+                "Query": "select `user`.col, `user`.id from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+                "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+#subquery on other table
+"select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where col2 = 'a'",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), 1",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where col2 = 'a'",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC, 1 ASC",
+            "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# should use colb_colc_map as first column of the vindex is present in predicate
+"select * from multicolvin where column_b = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_b = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_b = 1",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
+Gen4 plan same as above
+
+# should only use first column of the vindex colb_colc_map
+"select * from multicolvin where column_b = 1 and column_c = 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_b = 1 and column_c = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_b = 1 and column_c = 2",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
+Gen4 plan same as above
+
+# uses vindex colb_colc_map
+"select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
+Gen4 plan same as above
+
+# v3 takes cola_map, gen4 takes colb_colc_map, may be based on map key ordering
+"select * from multicolvin where column_a = 3 and column_b = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(3)"
+    ],
+    "Vindex": "cola_map"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
+    "Table": "multicolvin",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
+
+# multi column vindex produces Equal plan in gen4 and Scatter in v3
+"select * from multicol_tbl where cola = 1 and colb = 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 1 and colb = 2",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 1 and colb = 2",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with different order places the vindex keys in correct order
+"select * from multicol_tbl where colb = 2 and cola = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 2 and cola = 1",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 2 and cola = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 2 and cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)",
+      "INT64(2)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex produces IN plan in gen4 and Scatter in v3
+"select * from multicol_tbl where cola in (1,2) and colb in (3,4)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,2) and colb in (3,4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 2) and colb in (3, 4)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,2) and colb in (3,4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in ::__vals0 and colb in ::__vals1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(2))",
+      "(INT64(3), INT64(4))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with different order places the vindex keys in correct order in IN plan in gen4
+"select * from multicol_tbl where colb in (3,4) and cola in (1,2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (3,4) and cola in (1,2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in (3, 4) and cola in (1, 2)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (3,4) and cola in (1,2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in ::__vals1 and cola in ::__vals0",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(2))",
+      "(INT64(3), INT64(4))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with different order with one IN predicate and one equality
+"select * from multicol_tbl where colb = 1 and cola in (3,4)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 1 and cola in (3,4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 1 and cola in (3, 4)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 1 and cola in (3,4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 1 and cola in ::__vals0",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(3), INT64(4))",
+      "INT64(1)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with both IN predicate and equality predicate
+"select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6) and colb = 7",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola in (1,10) and cola = 4 and colb in (5,6) and colb = 7",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6) and colb = 7",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(4)",
+      "INT64(7)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with one column with equal followed by IN predicate, ordering matters for now
+"select * from multicol_tbl where colb = 4 and colb in (1,10) and cola in (5,6)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 4 and colb in (1,10) and cola in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 4 and colb in (1, 10) and cola in (5, 6)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb = 4 and colb in (1,10) and cola in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb = 4 and colb in ::__vals1 and cola in ::__vals0",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(5), INT64(6))",
+      "(INT64(1), INT64(10))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with one column with IN followed by equal predicate, ordering matters for now
+"select * from multicol_tbl where colb in (1,10) and colb = 4 and cola in (5,6)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (1,10) and colb = 4 and cola in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in (1, 10) and colb = 4 and cola in (5, 6)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (1,10) and colb = 4 and cola in (5,6)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in (1, 10) and colb = 4 and cola in ::__vals0",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(5), INT64(6))",
+      "INT64(4)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex with better plan selection
+"select * from multicol_tbl where colb in (1,2) and cola IN (3,4) and cola = 5 and colb = 6"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (1,2) and cola IN (3,4) and cola = 5 and colb = 6",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in (1, 2) and cola in (3, 4) and cola = 5 and colb = 6",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where colb in (1,2) and cola IN (3,4) and cola = 5 and colb = 6",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where colb in (1, 2) and cola in (3, 4) and cola = 5 and colb = 6",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(5)",
+      "INT64(6)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex as tuple
+"select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where (cola, colb) in ((1, 2), (3, 4))",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where (cola,colb) in ((1,2),(3,4))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "MultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where (cola, colb) in ((1, 2), (3, 4))",
+    "Table": "multicol_tbl",
+    "Values": [
+      "(INT64(1), INT64(3))",
+      "(INT64(2), INT64(4))"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex, partial vindex with SelectEqual
+"select * from multicol_tbl where cola = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 1",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 1",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# multi column vindex, partial vindex with SelectEqual over full vindex with SelectIN
+"select * from multicol_tbl where cola = 1 and colb in (2,3)"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 1 and colb in (2,3)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 1 and colb in (2, 3)",
+    "Table": "multicol_tbl"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 1 and colb in (2,3)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 1 and colb in (2, 3)",
+    "Table": "multicol_tbl",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "multicolIdx"
+  }
+}
+
+# left join with where clause - should be handled by gen4 but still isn't
+"select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where 1 != 1",
+    "Query": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
+    "Table": "unsharded_a, unsharded_b"
+  }
+}
+Gen4 plan same as above
+
+# filter on outer join should not be used for routing
+"select user.col from user_extra left outer join user on user_extra.user_id = user.id WHERE user.id IS NULL"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user_extra left outer join user on user_extra.user_id = user.id WHERE user.id IS NULL",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from user_extra left join `user` on user_extra.user_id = `user`.id where 1 != 1",
+    "Query": "select `user`.col from user_extra left join `user` on user_extra.user_id = `user`.id where `user`.id is null",
+    "Table": "`user`, user_extra"
+  }
+}
+Gen4 plan same as above

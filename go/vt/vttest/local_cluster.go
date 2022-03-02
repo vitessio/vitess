@@ -21,8 +21,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -30,7 +30,12 @@ import (
 	"strings"
 	"unicode"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/logutil"
+
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
@@ -80,6 +85,10 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
+	// PlannerVersion is the planner version to use for the vtgate.
+	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
+	PlannerVersion string
+
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 
@@ -104,6 +113,9 @@ type Config struct {
 	// do not suppport initialization through snapshot files.
 	SnapshotFile string
 
+	// Enable system settings to be changed per session at the database connection level
+	EnableSystemSettings bool
+
 	// TransactionMode is SINGLE, MULTI or TWOPC
 	TransactionMode string
 
@@ -126,6 +138,13 @@ type Config struct {
 
 	// Allow users to submit direct DDL statements
 	EnableDirectDDL bool
+
+	// Allow users to start a local cluster using a remote topo server
+	ExternalTopoImplementation string
+
+	ExternalTopoGlobalServerAddress string
+
+	ExternalTopoGlobalRoot string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -139,7 +158,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 	}
 
 	// Create a base temporary directory.
-	tempSchemaDir, err := ioutil.TempDir("", "vttest")
+	tempSchemaDir, err := os.MkdirTemp("", "vttest")
 	if err != nil {
 		return err
 	}
@@ -152,7 +171,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 			return err
 		}
 		fileName := path.Join(ksDir, "schema.sql")
-		err = ioutil.WriteFile(fileName, []byte(schema), 0666)
+		err = os.WriteFile(fileName, []byte(schema), 0666)
 		if err != nil {
 			return err
 		}
@@ -165,7 +184,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+		if err := os.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
 			return err
 		}
 	}
@@ -182,6 +201,33 @@ func (cfg *Config) DbName() string {
 		return ns[0].Name
 	}
 	return ""
+}
+
+type TopoData struct {
+	vtTestTopology *vttestpb.VTTestTopology
+	unmarshal      func(b []byte, m proto.Message) error
+}
+
+func (td *TopoData) String() string {
+	return prototext.Format(td.vtTestTopology)
+}
+
+func (td *TopoData) Set(value string) error {
+	return td.unmarshal([]byte(value), td.vtTestTopology)
+}
+
+func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      prototext.Unmarshal,
+	}
+}
+
+func JsonTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      protojson.Unmarshal,
+	}
 }
 
 // LocalCluster controls a local Vitess setup for testing, containing
@@ -201,6 +247,7 @@ type LocalCluster struct {
 	Env Environment
 
 	mysql MySQLManager
+	topo  TopoManager
 	vt    *VtProcess
 }
 
@@ -209,7 +256,9 @@ type LocalCluster struct {
 // This connection should be used for debug/introspection purposes; normal
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
-	return db.mysql.Params(db.DbName())
+	connParams := db.mysql.Params(db.DbName())
+	connParams.Charset = db.Config.Charset
+	return connParams
 }
 
 // MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used
@@ -237,6 +286,16 @@ func (db *LocalCluster) Setup() error {
 	}
 
 	log.Infof("LocalCluster environment: %+v", db.Env)
+
+	// Set up topo manager if we are using a remote topo server
+	if db.ExternalTopoImplementation != "" {
+		db.topo = db.Env.TopoManager(db.ExternalTopoImplementation, db.ExternalTopoGlobalServerAddress, db.ExternalTopoGlobalRoot, db.Topology)
+		log.Infof("Initializing Topo Manager: %+v", db.topo)
+		if err := db.topo.Setup(); err != nil {
+			log.Errorf("Failed to set up Topo Manager: %v", err)
+			return err
+		}
+	}
 
 	db.mysql, err = db.Env.MySQLManager(db.ExtraMyCnf, db.SnapshotFile)
 	if err != nil {
@@ -521,7 +580,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ReloadSchemaKeyspace", "-include_master=true", keyspace}
+	args := []string{"ReloadSchemaKeyspace", "-include_primary=true", keyspace}
 	fmt.Printf("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {

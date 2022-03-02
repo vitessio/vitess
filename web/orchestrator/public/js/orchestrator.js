@@ -264,13 +264,12 @@ function openNodeModal(node) {
   if (node.UnresolvedHostname) {
     addNodeModalDataAttribute("Unresolved hostname", node.UnresolvedHostname);
   }
-  $('#node_modal [data-btn-group=move-equivalent]').appendTo(hiddenZone);
-  if (node.MasterKey.Hostname) {
-    var td = addNodeModalDataAttribute("Master", node.masterTitle);
-    if (node.IsDetachedMaster) {
-      $('#node_modal button[data-btn=reattach-replica-master-host]').appendTo(td.find("div"));
+  if (node.SourceKey.Hostname) {
+    var td = addNodeModalDataAttribute("Primary", node.primaryTitle);
+    if (node.IsDetachedPrimary) {
+      $('#node_modal button[data-btn=reattach-replica-primary-host]').appendTo(td.find("div"));
     } else {
-      $('#node_modal button[data-btn=reattach-replica-master-host]').appendTo(hiddenZone);
+      $('#node_modal button[data-btn=reattach-replica-primary-host]').appendTo(hiddenZone);
     }
     $('#node_modal button[data-btn=reset-replica]').appendTo(td.find("div"))
 
@@ -288,39 +287,21 @@ function openNodeModal(node) {
         addNodeModalDataAttribute("Last IO error", node.LastIOError);
       }
     }
-    addNodeModalDataAttribute("Seconds behind master", node.SecondsBehindMaster.Valid ? node.SecondsBehindMaster.Int64 : "null");
+    addNodeModalDataAttribute("Seconds behind primary", node.SecondsBehindPrimary.Valid ? node.SecondsBehindPrimary.Int64 : "null");
     addNodeModalDataAttribute("Replication lag", node.ReplicationLagSeconds.Valid ? node.ReplicationLagSeconds.Int64 : "null");
     addNodeModalDataAttribute("SQL delay", node.SQLDelay);
 
-    var masterCoordinatesEl = addNodeModalDataAttribute("Master coordinates", node.ExecBinlogCoordinates.LogFile + ":" + node.ExecBinlogCoordinates.LogPos);
-    $('#node_modal [data-btn-group=move-equivalent] ul').empty();
-    $.get(appUrl("/api/master-equivalent/") + node.MasterKey.Hostname + "/" + node.MasterKey.Port + "/" + node.ExecBinlogCoordinates.LogFile + "/" + node.ExecBinlogCoordinates.LogPos, function(equivalenceResult) {
-      if (!equivalenceResult.Details) {
-        return false;
-      }
-      equivalenceResult.Details.forEach(function(equivalence) {
-        if (equivalence.Key.Hostname == node.Key.Hostname && equivalence.Key.Port == node.Key.Port) {
-          // This very instance; will not move below itself
-          return;
-        }
-        var title = canonizeInstanceTitle(equivalence.Key.Hostname + ':' + equivalence.Key.Port);
-        $('#node_modal [data-btn-group=move-equivalent] ul').append('<li><a href="#" data-btn="move-equivalent" data-hostname="' + equivalence.Key.Hostname + '" data-port="' + equivalence.Key.Port + '">' + title + '</a></li>');
-      });
-
-      if ($('#node_modal [data-btn-group=move-equivalent] ul li').length) {
-        $('#node_modal [data-btn-group=move-equivalent]').appendTo(masterCoordinatesEl.find("div"));
-      }
-    }, "json");
+    var primaryCoordinatesEl = addNodeModalDataAttribute("Primary coordinates", node.ExecBinlogCoordinates.LogFile + ":" + node.ExecBinlogCoordinates.LogPos);
     if (node.IsDetached) {
       $('#node_modal button[data-btn=detach-replica]').appendTo(hiddenZone)
-      $('#node_modal button[data-btn=reattach-replica]').appendTo(masterCoordinatesEl.find("div"))
+      $('#node_modal button[data-btn=reattach-replica]').appendTo(primaryCoordinatesEl.find("div"))
     } else {
-      $('#node_modal button[data-btn=detach-replica]').appendTo(masterCoordinatesEl.find("div"))
+      $('#node_modal button[data-btn=detach-replica]').appendTo(primaryCoordinatesEl.find("div"))
       $('#node_modal button[data-btn=reattach-replica]').appendTo(hiddenZone)
     }
   } else {
     $('#node_modal button[data-btn=reset-replica]').appendTo(hiddenZone);
-    $('#node_modal button[data-btn=reattach-replica-master-host]').appendTo(hiddenZone);
+    $('#node_modal button[data-btn=reattach-replica-primary-host]').appendTo(hiddenZone);
     $('#node_modal button[data-btn=skip-query]').appendTo(hiddenZone);
     $('#node_modal button[data-btn=detach-replica]').appendTo(hiddenZone)
     $('#node_modal button[data-btn=reattach-replica]').appendTo(hiddenZone)
@@ -419,8 +400,8 @@ function openNodeModal(node) {
   $('#node_modal button[data-btn=reattach-replica]').click(function() {
     apiCommand("/api/reattach-replica/" + node.Key.Hostname + "/" + node.Key.Port);
   });
-  $('#node_modal button[data-btn=reattach-replica-master-host]').click(function() {
-    apiCommand("/api/reattach-replica-master-host/" + node.Key.Hostname + "/" + node.Key.Port);
+  $('#node_modal button[data-btn=reattach-replica-primary-host]').click(function() {
+    apiCommand("/api/reattach-replica-primary-host/" + node.Key.Hostname + "/" + node.Key.Port);
   });
   $('#node_modal button[data-btn=reset-replica]').click(function() {
     var message = "<p>Are you sure you wish to reset <code><strong>" + node.Key.Hostname + ":" + node.Key.Port +
@@ -434,19 +415,19 @@ function openNodeModal(node) {
     });
     return false;
   });
-  $('#node_modal [data-btn=gtid-errant-reset-master]').click(function() {
-    var message = "<p>Are you sure you wish to reset master on <code><strong>" + node.Key.Hostname + ":" + node.Key.Port +
+  $('#node_modal [data-btn=gtid-errant-reset-primary]').click(function() {
+    var message = "<p>Are you sure you wish to reset primary on <code><strong>" + node.Key.Hostname + ":" + node.Key.Port +
       "</strong></code>?" +
       "<p>This will purge binary logs on server.";
     bootbox.confirm(message, function(confirm) {
       if (confirm) {
-        apiCommand("/api/gtid-errant-reset-master/" + node.Key.Hostname + "/" + node.Key.Port);
+        apiCommand("/api/gtid-errant-reset-primary/" + node.Key.Hostname + "/" + node.Key.Port);
       }
     });
     return false;
   });
   $('#node_modal [data-btn=gtid-errant-inject-empty]').click(function() {
-    var message = "<p>Are you sure you wish to inject empty transactions on the master of this cluster?";
+    var message = "<p>Are you sure you wish to inject empty transactions on the primary of this cluster?";
     bootbox.confirm(message, function(confirm) {
       if (confirm) {
         apiCommand("/api/gtid-errant-inject-empty/" + node.Key.Hostname + "/" + node.Key.Port);
@@ -492,12 +473,6 @@ function openNodeModal(node) {
     return false;
   });
 
-  $("body").on("click", "#node_modal a[data-btn=move-equivalent]", function(event) {
-    var targetHostname = $(event.target).attr("data-hostname");
-    var targetPort = $(event.target).attr("data-port");
-    apiCommand("/api/move-equivalent/" + node.Key.Hostname + "/" + node.Key.Port + "/" + targetHostname + "/" + targetPort);
-  });
-
   if (node.IsDowntimed) {
     $('#node_modal .end-downtime .panel-heading').html("Downtimed by <strong>" + node.DowntimeOwner + "</strong> until " + node.DowntimeEndTimestamp);
     $('#node_modal .end-downtime .panel-body').html(
@@ -520,7 +495,7 @@ function openNodeModal(node) {
   $('#node_modal button[data-btn=restart-replica]').hide();
   $('#node_modal button[data-btn=stop-replica]').hide();
 
-  if (node.MasterKey.Hostname) {
+  if (node.SourceKey.Hostname) {
     if (node.replicationRunning || node.replicationAttemptingToRun) {
       $('#node_modal button[data-btn=stop-replica]').show();
       $('#node_modal button[data-btn=restart-replica]').show();
@@ -612,17 +587,17 @@ function normalizeInstance(instance) {
   instance.id = getInstanceId(instance.Key.Hostname, instance.Key.Port);
   instance.title = instance.Key.Hostname + ':' + instance.Key.Port;
   instance.canonicalTitle = instance.title;
-  instance.masterTitle = instance.MasterKey.Hostname + ":" + instance.MasterKey.Port;
-  // If this host is a replication group member, we set its masterId to the group primary, unless the instance is itself
-  // the primary. In that case, we set it to its async/semi-sync master (if configured). Notice that for group members
-  // whose role is not defined (e.g. because they are in ERROR state) we still set their master ID to the group primary.
-  // Setting the masterId to the group primary is what allows us to visualize group secondary members as replicating
+  instance.primaryTitle = instance.SourceKey.Hostname + ":" + instance.SourceKey.Port;
+  // If this host is a replication group member, we set its primaryId to the group primary, unless the instance is itself
+  // the primary. In that case, we set it to its async/semi-sync primary (if configured). Notice that for group members
+  // whose role is not defined (e.g. because they are in ERROR state) we still set their primary ID to the group primary.
+  // Setting the primaryId to the group primary is what allows us to visualize group secondary members as replicating
   // from the group primary.
   if (instance.ReplicationGroupName != "" && (instance.ReplicationGroupMemberRole == "SECONDARY" || instance.ReplicationGroupMemberRole == ""))
-    masterKey = instance.ReplicationGroupPrimaryInstanceKey;
+    sourceKey = instance.ReplicationGroupPrimaryInstanceKey;
   else
-    masterKey = instance.MasterKey;
-  instance.masterId = getInstanceId(masterKey.Hostname, masterKey.Port);
+    sourceKey = instance.SourceKey;
+  instance.primaryId = getInstanceId(sourceKey.Hostname, sourceKey.Port);
 
   instance.replicationRunning = instance.ReplicationSQLThreadRuning && instance.ReplicationIOThreadRuning;
   instance.replicationAttemptingToRun = instance.ReplicationSQLThreadRuning || instance.ReplicationIOThreadRuning;
@@ -630,21 +605,21 @@ function normalizeInstance(instance) {
   instance.isSeenRecently = instance.SecondsSinceLastSeen.Valid && instance.SecondsSinceLastSeen.Int64 <= 3600;
   instance.supportsGTID = instance.SupportsOracleGTID || instance.UsingMariaDBGTID;
   instance.usingGTID = instance.UsingOracleGTID || instance.UsingMariaDBGTID;
-  instance.isMaxScale = (instance.Version.indexOf("maxscale") >= 0);
+  instance.isMaxScale = false;
 
   // used by cluster-tree
   instance.children = [];
   instance.parent = null;
-  instance.hasMaster = true;
-  instance.masterNode = null;
+  instance.hasPrimary = true;
+  instance.primaryNode = null;
   instance.inMaintenance = false;
   instance.maintenanceReason = "";
   instance.maintenanceEntry = null;
   instance.isFirstChildInDisplay = false
 
-  instance.isMaster = (instance.title == instance.ClusterName);
-  instance.isCoMaster = false;
-  instance.isCandidateMaster = false;
+  instance.isPrimary = (instance.title == instance.ClusterName);
+  instance.isCoPrimary = false;
+  instance.isCandidatePrimary = false;
   instance.isMostAdvancedOfSiblings = false;
   instance.isVirtual = false;
   instance.isAnchor = false;
@@ -710,10 +685,10 @@ function normalizeInstanceProblem(instance) {
     instance.problemDescription = "Replication is not running.\nEither stopped manually or is failing on I/O or SQL error.";
     instance.problemOrder = 4;
   } else if (instance.replicationLagProblem()) {
-    instance.problemDescription = "Replica is lagging.\nThis diagnostic is based on either Seconds_behind_master or configured ReplicationLagQuery";
+    instance.problemDescription = "Replica is lagging.\nThis diagnostic is based on either Seconds_behind_primary or configured ReplicationLagQuery";
     instance.problemOrder = 5;
   } else if (instance.errantGTIDProblem()) {
-    instance.problemDescription = "Replica has GTID entries not found on its master";
+    instance.problemDescription = "Replica has GTID entries not found on its primary";
     instance.problemOrder = 6;
   } else if (instance.replicationGroupMemberStateProblem()) {
     instance.problemDescription = "Replication group member in state " + instance.ReplicationGroupMemberState;
@@ -730,11 +705,11 @@ function createVirtualInstance() {
     id: "orchestrator-virtual-instance-" + (virtualInstanceCounter++),
     children: [],
     parent: null,
-    hasMaster: false,
+    hasPrimary: false,
     inMaintenance: false,
     maintenanceEntry: null,
-    isMaster: false,
-    isCoMaster: false,
+    isPrimary: false,
+    isCoPrimary: false,
     isVirtual: true,
     ReplicationLagSeconds: 0,
     SecondsSinceLastSeen: 0
@@ -778,23 +753,23 @@ function normalizeInstances(instances, maintenanceList) {
   // create the tree array
   instances.forEach(function(instance) {
     // add to parent
-    var parent = instancesMap[instance.masterId];
+    var parent = instancesMap[instance.primaryId];
     if (parent) {
       instance.parent = parent;
-      instance.masterNode = parent;
+      instance.primaryNode = parent;
       // create child array if it doesn't exist
       parent.children.push(instance);
       // (parent.contents || (parent.contents = [])).push(instance);
     } else {
       // parent is null or missing
-      instance.hasMaster = false;
+      instance.hasPrimary = false;
       instance.parent = null;
-      instance.masterNode = null;
+      instance.primaryNode = null;
     }
   });
 
   instances.forEach(function(instance) {
-    if (instance.masterNode != null) {
+    if (instance.primaryNode != null) {
       instance.isSQLThreadCaughtUpWithIOThread = (instance.ExecBinlogCoordinates.LogFile == instance.ReadBinlogCoordinates.LogFile &&
         instance.ExecBinlogCoordinates.LogPos == instance.ReadBinlogCoordinates.LogPos);
     } else {
@@ -803,30 +778,30 @@ function normalizeInstances(instances, maintenanceList) {
   });
 
   instances.forEach(function(instance) {
-    if (instance.isMaster && instance.parent != null && instance.parent.parent != null && instance.parent.parent.id == instance.id) {
-      // In case there's a master-master setup, introduce a virtual node
+    if (instance.isPrimary && instance.parent != null && instance.parent.parent != null && instance.parent.parent.id == instance.id) {
+      // In case there's a primary-primary setup, introduce a virtual node
       // that is parent of both.
       // This is for visualization purposes...
-      var virtualCoMastersRoot = createVirtualInstance();
-      coMaster = instance.parent;
+      var virtualCoPrimariesRoot = createVirtualInstance();
+      coPrimary = instance.parent;
 
-      function setAsCoMaster(instance, coMaster) {
-        instance.isCoMaster = true;
-        instance.hasMaster = true;
-        instance.masterId = coMaster.id;
-        instance.masterNode = coMaster;
+      function setAsCoPrimary(instance, coPrimary) {
+        instance.isCoPrimary = true;
+        instance.hasPrimary = true;
+        instance.primaryId = coPrimary.id;
+        instance.primaryNode = coPrimary;
 
-        var index = coMaster.children.indexOf(instance);
+        var index = coPrimary.children.indexOf(instance);
         if (index >= 0)
-          coMaster.children.splice(index, 1);
+          coPrimary.children.splice(index, 1);
 
-        instance.parent = virtualCoMastersRoot;
-        virtualCoMastersRoot.children.push(instance);
+        instance.parent = virtualCoPrimariesRoot;
+        virtualCoPrimariesRoot.children.push(instance);
       }
-      setAsCoMaster(instance, coMaster);
-      setAsCoMaster(coMaster, instance);
+      setAsCoPrimary(instance, coPrimary);
+      setAsCoPrimary(coPrimary, instance);
 
-      instancesMap[virtualCoMastersRoot.id] = virtualCoMastersRoot;
+      instancesMap[virtualCoPrimariesRoot.id] = virtualCoPrimariesRoot;
     }
   });
   return instancesMap;
@@ -903,16 +878,13 @@ function renderInstanceElement(popoverElement, instance, renderType) {
       popoverElement.attr("data-first-child-in-display", "true");
     }
     if (instance.supportsGTID) {
-      if (instance.hasMaster && !instance.usingGTID) {
+      if (instance.hasPrimary && !instance.usingGTID) {
         popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon text-muted glyphicon-globe" title="Support GTID but not using it in replication"></span> ');
       } else if (instance.GtidErrant) {
         popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon text-danger glyphicon-globe" title="Errant GTID found"></span> ');
       } else {
         popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-globe" title="Using GTID"></span> ');
       }
-    }
-    if (instance.UsingPseudoGTID) {
-      popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-globe" title="Using Pseudo GTID"></span> ');
     }
     if (!instance.ReadOnly) {
       popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-pencil" title="Writeable"></span> ');
@@ -926,8 +898,8 @@ function renderInstanceElement(popoverElement, instance, renderType) {
     if (instance.HasReplicationFilters) {
       popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-filter" title="Using replication filters"></span> ');
     }
-    if (instance.SemiSyncMasterStatus) {
-      popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-check" title="Semi sync enabled (master side)"></span> ');
+    if (instance.SemiSyncPrimaryStatus) {
+      popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-check" title="Semi sync enabled (primary side)"></span> ');
     }
     if (instance.SemiSyncReplicaStatus) {
       popoverElement.find("h3 div.pull-right").prepend('<span class="glyphicon glyphicon-saved" title="Semi sync enabled (replica side)"></span> ');
@@ -972,7 +944,7 @@ function renderInstanceElement(popoverElement, instance, renderType) {
       instance.renderHint = "stale";
       indicateLastSeenInStatus = true;
     } else if (instance.notReplicatingProblem()) {
-      // check replicas only; check master only if it's co-master where not
+      // check replicas only; check primary only if it's co-primary where not
       // replicating
       instance.renderHint = "danger";
     } else if (instance.replicationLagProblem()) {
@@ -1012,10 +984,10 @@ function renderInstanceElement(popoverElement, instance, renderType) {
     }
 
     var contentHtml = '' + '<div class="pull-right">' + statusMessage + ' </div>' + '<p class="instance-basic-info">' + identityHtml + '</p>';
-    if (instance.isCoMaster) {
-      contentHtml += '<p><strong>Co master</strong></p>';
-    } else if (instance.isMaster) {
-      contentHtml += '<p><strong>Master</strong></p>';
+    if (instance.isCoPrimary) {
+      contentHtml += '<p><strong>Co primary</strong></p>';
+    } else if (instance.isPrimary) {
+      contentHtml += '<p><strong>Primary</strong></p>';
     }
     if (renderType == "search") {
       if (instance.SuggestedClusterAlias) {

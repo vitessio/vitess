@@ -17,50 +17,29 @@ limitations under the License.
 
 package sqltypes
 
-func (cached *PlanValue) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(88)
-	}
-	// field Key string
-	size += int64(len(cached.Key))
-	// field Value vitess.io/vitess/go/sqltypes.Value
-	size += cached.Value.CachedSize(false)
-	// field ListKey string
-	size += int64(len(cached.ListKey))
-	// field Values []vitess.io/vitess/go/sqltypes.PlanValue
-	{
-		size += int64(cap(cached.Values)) * int64(88)
-		for _, elem := range cached.Values {
-			size += elem.CachedSize(false)
-		}
-	}
-	return size
-}
+import hack "vitess.io/vitess/go/hack"
+
 func (cached *Result) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(82)
+		size += int64(112)
 	}
 	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
 	{
-		size += int64(cap(cached.Fields)) * int64(8)
+		size += hack.RuntimeAllocSize(int64(cap(cached.Fields)) * int64(8))
 		for _, elem := range cached.Fields {
 			size += elem.CachedSize(true)
 		}
 	}
 	// field Rows [][]vitess.io/vitess/go/sqltypes.Value
 	{
-		size += int64(cap(cached.Rows)) * int64(24)
+		size += hack.RuntimeAllocSize(int64(cap(cached.Rows)) * int64(24))
 		for _, elem := range cached.Rows {
 			{
-				size += int64(cap(elem)) * int64(32)
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(32))
 				for _, elem := range elem {
 					size += elem.CachedSize(false)
 				}
@@ -68,7 +47,9 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 		}
 	}
 	// field SessionStateChanges string
-	size += int64(len(cached.SessionStateChanges))
+	size += hack.RuntimeAllocSize(int64(len(cached.SessionStateChanges)))
+	// field Info string
+	size += hack.RuntimeAllocSize(int64(len(cached.Info)))
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {
@@ -80,6 +61,8 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 		size += int64(32)
 	}
 	// field val []byte
-	size += int64(cap(cached.val))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.val)))
+	}
 	return size
 }

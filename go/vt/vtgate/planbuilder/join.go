@@ -17,10 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -34,6 +30,7 @@ var _ logicalPlan = (*join)(nil)
 // It's used to build a normal join or a left join
 // operation.
 type join struct {
+	v3Plan
 	order         int
 	resultColumns []*resultColumn
 	weightStrings map[*resultColumn]int
@@ -81,7 +78,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	opcode := engine.NormalJoin
+	opcode := engine.InnerJoin
 	if ajoin != nil {
 		switch {
 		case ajoin.Join == sqlparser.LeftJoinType:
@@ -100,7 +97,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 				return err
 			}
 		case ajoin.Condition.Using != nil:
-			return errors.New("unsupported: join with USING(column_list) clause for complex queries")
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
 		}
 	}
 	lpb.plan = &join{
@@ -153,15 +150,6 @@ func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
 	return jb.Left.Wireup(plan, jt)
 }
 
-// Wireup2 implements the logicalPlan interface
-func (jb *join) WireupGen4(semTable *semantics.SemTable) error {
-	err := jb.Right.WireupGen4(semTable)
-	if err != nil {
-		return err
-	}
-	return jb.Left.WireupGen4(semTable)
-}
-
 // SupplyVar implements the logicalPlan interface
 func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if !jb.isOnLeft(from) {
@@ -212,20 +200,20 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber i
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (jb *join) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	rc := jb.resultColumns[colNumber]
 	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
 		return weightcolNumber, nil
 	}
 	routeNumber := rc.column.Origin().Order()
 	if jb.isOnLeft(routeNumber) {
-		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
 		if err != nil {
 			return 0, err
 		}
 		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
 	} else {
-		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
 		if err != nil {
 			return 0, err
 		}
@@ -244,11 +232,6 @@ func (jb *join) Rewrite(inputs ...logicalPlan) error {
 	jb.Left = inputs[0]
 	jb.Right = inputs[1]
 	return nil
-}
-
-// Solves implements the logicalPlan interface
-func (jb *join) ContainsTables() semantics.TableSet {
-	return jb.Left.ContainsTables().Merge(jb.Right.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface

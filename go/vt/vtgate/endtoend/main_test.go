@@ -89,6 +89,12 @@ create table t1_row_count(
 	id1 bigint,
 	primary key(id)
 ) Engine=InnoDB;
+
+create table t1_sharded(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -125,6 +131,12 @@ create table t1_row_count(
 				}, {
 					Column: "id2",
 					Name:   "t1_id2_vdx",
+				}},
+			},
+			"t1_sharded": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
 				}},
 			},
 			"t1_id2_idx": {

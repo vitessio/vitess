@@ -17,24 +17,25 @@ limitations under the License.
 package buffer
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/stats"
 )
 
 func TestVariables(t *testing.T) {
 	flag.Set("buffer_size", "23")
-	defer resetFlagsForTesting()
+	defer func() {
+		flag.Set("buffer_size", "1")
+	}()
 
 	// Create new buffer which will the flags.
-	New()
+	NewConfigFromFlags()
 
-	if got, want := bufferSize.Get(), int64(23); got != want {
+	if got, want := bufferSizeStat.Get(), int64(23); got != want {
 		t.Fatalf("BufferSize variable not set during initilization: got = %v, want = %v", got, want)
 	}
 }
@@ -42,7 +43,7 @@ func TestVariables(t *testing.T) {
 func TestVariablesAreInitialized(t *testing.T) {
 	// Create a new buffer and make a call which will create the shardBuffer object.
 	// After that, the variables should be initialized for that shard.
-	b := New()
+	b := New(NewDefaultConfig())
 	_, err := b.WaitForFailoverEnd(context.Background(), "init_test", "0", nil /* err */)
 	if err != nil {
 		t.Fatalf("buffer should just passthrough and not return an error: %v", err)

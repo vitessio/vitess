@@ -17,10 +17,9 @@ limitations under the License.
 package vtgateconn
 
 import (
+	"context"
 	"flag"
 	"fmt"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -52,6 +51,19 @@ func (conn *VTGateConn) Session(targetString string, options *querypb.ExecuteOpt
 			Autocommit:   true,
 		},
 		impl: conn.impl,
+	}
+}
+
+// SessionPb returns the underlying proto session.
+func (sn *VTGateSession) SessionPb() *vtgatepb.Session {
+	return sn.session
+}
+
+// SessionFromPb returns a VTGateSession based on the provided proto session.
+func (conn *VTGateConn) SessionFromPb(sn *vtgatepb.Session) *VTGateSession {
+	return &VTGateSession{
+		session: sn,
+		impl:    conn.impl,
 	}
 }
 

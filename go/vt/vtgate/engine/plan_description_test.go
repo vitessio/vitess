@@ -19,9 +19,9 @@ package engine
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -34,7 +34,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 
 	expected := PrimitiveDescription{
 		OperatorType:      "Route",
-		Variant:           "SelectScatter",
+		Variant:           "Scatter",
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]interface{}{
@@ -52,23 +52,23 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 func createRoute() *Route {
 	hash, _ := vindexes.NewHash("vindex name", nil)
 	return &Route{
-		Opcode:            SelectScatter,
-		Keyspace:          &vindexes.Keyspace{Name: "ks"},
-		TargetDestination: key.DestinationAllShards{},
-		Query:             "select all the things",
-		TableName:         "tableName",
-		FieldQuery:        "more query",
-		Vindex:            hash.(*vindexes.Hash),
-		Values:            []sqltypes.PlanValue{},
-		OrderBy:           []OrderbyParams{},
+		RoutingParameters: &RoutingParameters{
+			Opcode:            Scatter,
+			Keyspace:          &vindexes.Keyspace{Name: "ks"},
+			TargetDestination: key.DestinationAllShards{},
+			Vindex:            hash.(*vindexes.Hash),
+		},
+		Query:      "select all the things",
+		TableName:  "tableName",
+		FieldQuery: "more query",
 	}
 }
 
 func TestPlanDescriptionWithInputs(t *testing.T) {
 	route := createRoute()
 	routeDescr := getDescriptionFor(route)
-	count := int64PlanValue(12)
-	offset := int64PlanValue(4)
+	count := evalengine.NewLiteralInt(12)
+	offset := evalengine.NewLiteralInt(4)
 	limit := &Limit{
 		Count:  count,
 		Offset: offset,
@@ -80,8 +80,8 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 	expected := PrimitiveDescription{
 		OperatorType: "Limit",
 		Other: map[string]interface{}{
-			"Count":  count.Value,
-			"Offset": offset.Value,
+			"Count":  evalengine.FormatExpr(count),
+			"Offset": evalengine.FormatExpr(offset),
 		},
 		Inputs: []PrimitiveDescription{routeDescr},
 	}
@@ -92,7 +92,7 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 func getDescriptionFor(route *Route) PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType:      "Route",
-		Variant:           routeName[route.Opcode],
+		Variant:           route.Opcode.String(),
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]interface{}{

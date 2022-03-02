@@ -65,8 +65,8 @@ func MarshalTabletAWK(t *topodatapb.Tablet) string {
 	mtst := "<null>"
 	// special case for old primary that hasn't been updated in the topo
 	// yet.
-	if t.MasterTermStartTime != nil && t.MasterTermStartTime.Seconds > 0 {
-		mtst = logutil.ProtoToTime(t.MasterTermStartTime).Format(time.RFC3339)
+	if t.PrimaryTermStartTime != nil && t.PrimaryTermStartTime.Seconds > 0 {
+		mtst = logutil.ProtoToTime(t.PrimaryTermStartTime).Format(time.RFC3339)
 	}
 
 	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(t.Alias), keyspace, shard, topoproto.TabletTypeLString(t.Type), ti.Addr(), ti.MysqlAddr(), MarshalMapAWK(t.Tags), mtst)

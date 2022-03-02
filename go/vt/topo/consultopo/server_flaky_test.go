@@ -19,7 +19,6 @@ package consultopo
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -46,7 +45,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	// Create a temporary config file, as ports cannot all be set
 	// via command line. The file name has to end with '.json' so
 	// we're not using TempFile.
-	configDir, err := ioutil.TempDir("", "consul")
+	configDir, err := os.MkdirTemp("", "consul")
 	if err != nil {
 		t.Fatalf("cannot create temp dir: %v", err)
 	}
@@ -69,6 +68,9 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 		},
 	}
 
+	// TODO(deepthi): this is the legacy ACL format. We run v1.4.0 by default in which this has been deprecated.
+	// We should start using the new format
+	// https://learn.hashicorp.com/tutorials/consul/access-control-replication-multiple-datacenters?in=consul/security-operations
 	if authToken != "" {
 		config["datacenter"] = "vitess"
 		config["acl_datacenter"] = "vitess"
@@ -170,6 +172,52 @@ func TestConsulTopo(t *testing.T) {
 	})
 }
 
+func TestConsulTopoWithChecks(t *testing.T) {
+	// One test is going to wait that full period, so make it shorter.
+	*watchPollDuration = 100 * time.Millisecond
+	*consulLockSessionChecks = "serfHealth"
+	*consulLockSessionTTL = "15s"
+
+	// Start a single consul in the background.
+	cmd, configFilename, serverAddr := startConsul(t, "")
+	defer func() {
+		// Alerts command did not run successful
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
+		}
+		// Alerts command did not run successful
+		if err := cmd.Wait(); err != nil {
+			log.Errorf("cmd wait has an error: %v", err)
+		}
+
+		os.Remove(configFilename)
+	}()
+
+	// Run the TopoServerTestSuite tests.
+	testIndex := 0
+	test.TopoServerTestSuite(t, func() *topo.Server {
+		// Each test will use its own sub-directories.
+		testRoot := fmt.Sprintf("test-%v", testIndex)
+		testIndex++
+
+		// Create the server on the new root.
+		ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
+		if err != nil {
+			t.Fatalf("OpenServer() failed: %v", err)
+		}
+
+		// Create the CellInfo.
+		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			ServerAddress: serverAddr,
+			Root:          path.Join(testRoot, test.LocalCellName),
+		}); err != nil {
+			t.Fatalf("CreateCellInfo() failed: %v", err)
+		}
+
+		return ts
+	})
+}
+
 func TestConsulTopoWithAuth(t *testing.T) {
 	// One test is going to wait that full period, so make it shorter.
 	*watchPollDuration = 100 * time.Millisecond
@@ -190,7 +238,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	tmpFile, err := ioutil.TempFile("", "consul_auth_client_static_file.json")
+	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
 
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
@@ -200,7 +248,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	*consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -239,7 +287,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 		os.Remove(configFilename)
 	}()
 
-	tmpFile, err := ioutil.TempFile("", "consul_auth_client_static_file.json")
+	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
 
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
@@ -249,7 +297,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	*consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 

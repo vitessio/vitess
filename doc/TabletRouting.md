@@ -20,10 +20,10 @@ shard to use.
 The SrvKeyspace object contains the following information about a Keyspace, for
 a given cell:
 
-* The served_from field: for a given tablet type (master, replica, read-only),
+* The served_from field: for a given tablet type (primary/master, replica, rdonly),
   another keyspace is used to serve the data. This is used for vertical
   resharding.
-* The partitions field: for a given tablet type (master, replica, read-only),
+* The partitions field: for a given tablet type (primary/master, replica, read-only),
   the list of shards to use. This can change when we perform horizontal
   resharding.
 
@@ -89,9 +89,10 @@ implementation inside vtgate, to route them to the right tablet.
 
 There are two implementations of the Gateway interface:
 
-* discoveryGateway: It combines a set of TopologyWatchers (described in the
+* discoveryGateway: deprecated
+* tabletGateway: Combines a set of TopologyWatchers (described in the
   discovery section, one per cell) as a source of tablets, a HealthCheck module
-  to watch their health, and a TabletStatsCache to collect all the health
+  to watch their health, and a tabletHealthCheck per tablet to collect all the health
   information. Based on this data, it can find the best tablet to use.
   
 # Extensions, work in progress
@@ -100,9 +101,9 @@ There are two implementations of the Gateway interface:
 
 At first, the discoveryGateway was routing queries the following way:
 
-* For master queries, just find the master tablet, whichever cell it's in, and
-  send the query to it. This was meant to handle cross-cell master fail-over.
-* For non-master queries, just route to the local cell vtgate is in.
+* For primary queries, just find the primary tablet, whichever cell it's in, and
+  send the query to it. This was meant to handle cross-cell primary fail-over.
+* For non-primary queries, just route to the local cell vtgate is in.
 
 This turned out to be a bit limiting, as if no local tablet was available in the
 cell, the queries would just fail. We added the concept of Region, and if
@@ -132,9 +133,9 @@ between vtgate and l2vtgate:
   (and whatever other pertinent information vtgate needs).
 * l2vtgateGateway can then provide the health information back up inside vtgate.
 * This would also lift the limitation previously noted about l2vtgate going
-  cross-cell. When a master is moved from one cell to another, the l2vtgate in
+  cross-cell. When a primary is moved from one cell to another, the l2vtgate in
   the old cell would advertize back that they lost the ability to serve the
-  master tablet type, and the l2vtgate in the new cell would start advertizing
+  primary tablet type, and the l2vtgate in the new cell would start advertizing
   it. Vtgates would then know where to look.
 
 This would also be a good time to merge the vtgate code that uses the VSchema

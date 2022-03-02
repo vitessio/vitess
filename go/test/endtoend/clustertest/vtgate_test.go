@@ -21,16 +21,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -42,9 +43,9 @@ func TestVtgateProcess(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "insert into customer(id, email) values(1,'email1')")
-	_ = exec(t, conn, "begin")
-	qr := exec(t, conn, "select id, email from customer")
+	utils.Exec(t, conn, "insert into customer(id, email) values(1,'email1')")
+	_ = utils.Exec(t, conn, "begin")
+	qr := utils.Exec(t, conn, "select id, email from customer")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
@@ -54,7 +55,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	resp, _ := http.Get(url)
 	if resp != nil && resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		require.Nil(t, err)
 		if resultMap["VtgateVSchemaCounts"] == nil {
@@ -81,8 +82,8 @@ func verifyVtgateVariables(t *testing.T, url string) {
 		if len(healthCheckConnection) <= 0 {
 			t.Error("Atleast one healthy tablet needs to be present")
 		}
-		if !isMasterTabletPresent(healthCheckConnection) {
-			t.Error("Atleast one master tablet needs to be present")
+		if !isPrimaryTabletPresent(healthCheckConnection) {
+			t.Error("Atleast one PRIMARY tablet needs to be present")
 		}
 	} else {
 		t.Error("Vtgate api url response not found")
@@ -101,18 +102,11 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isMasterTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
 	for key := range tablets {
-		if strings.Contains(key, "master") {
+		if strings.Contains(key, "primary") {
 			return true
 		}
 	}
 	return false
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
 }

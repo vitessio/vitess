@@ -25,10 +25,13 @@ import (
 
 func TestIsDirect(t *testing.T) {
 	assert.True(t, DDLStrategyDirect.IsDirect())
+	assert.False(t, DDLStrategyVitess.IsDirect())
 	assert.False(t, DDLStrategyOnline.IsDirect())
 	assert.False(t, DDLStrategyGhost.IsDirect())
 	assert.False(t, DDLStrategyPTOSC.IsDirect())
 	assert.True(t, DDLStrategy("").IsDirect())
+	assert.False(t, DDLStrategy("vitess").IsDirect())
+	assert.False(t, DDLStrategy("online").IsDirect())
 	assert.False(t, DDLStrategy("gh-ost").IsDirect())
 	assert.False(t, DDLStrategy("pt-osc").IsDirect())
 	assert.True(t, DDLStrategy("something").IsDirect())
@@ -36,17 +39,23 @@ func TestIsDirect(t *testing.T) {
 
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
-		strategyVariable string
-		strategy         DDLStrategy
-		options          string
-		isDeclarative    bool
-		isSingleton      bool
-		runtimeOptions   string
-		err              error
+		strategyVariable     string
+		strategy             DDLStrategy
+		options              string
+		isDeclarative        bool
+		isSingleton          bool
+		isPostponeCompletion bool
+		isAllowConcurrent    bool
+		runtimeOptions       string
+		err                  error
 	}{
 		{
 			strategyVariable: "direct",
 			strategy:         DDLStrategyDirect,
+		},
+		{
+			strategyVariable: "vitess",
+			strategy:         DDLStrategyVitess,
 		},
 		{
 			strategyVariable: "online",
@@ -66,8 +75,9 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
 			strategy:         DDLStrategyGhost,
-			options:          "--max-load=Threads_running=100 --allow-master",
-			runtimeOptions:   "--max-load=Threads_running=100 --allow-master",
+			// These are gh-ost options. Nothing we can do until that changes upstream
+			options:        "--max-load=Threads_running=100 --allow-master",
+			runtimeOptions: "--max-load=Threads_running=100 --allow-master",
 		},
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 -declarative",
@@ -90,6 +100,27 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			isSingleton:      true,
 		},
+		{
+			strategyVariable:     "online -postpone-completion",
+			strategy:             DDLStrategyOnline,
+			options:              "-postpone-completion",
+			runtimeOptions:       "",
+			isPostponeCompletion: true,
+		},
+		{
+			strategyVariable:  "online -allow-concurrent",
+			strategy:          DDLStrategyOnline,
+			options:           "-allow-concurrent",
+			runtimeOptions:    "",
+			isAllowConcurrent: true,
+		},
+		{
+			strategyVariable:  "vitess -allow-concurrent",
+			strategy:          DDLStrategyVitess,
+			options:           "-allow-concurrent",
+			runtimeOptions:    "",
+			isAllowConcurrent: true,
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)
@@ -98,6 +129,8 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.Equal(t, ts.options, setting.Options)
 		assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
 		assert.Equal(t, ts.isSingleton, setting.IsSingleton())
+		assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
+		assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
 
 		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 		assert.Equal(t, ts.runtimeOptions, runtimeOptions)

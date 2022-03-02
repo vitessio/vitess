@@ -17,7 +17,6 @@ limitations under the License.
 package topo
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"path"
@@ -412,8 +411,8 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 
 	for _, shard := range shards {
 		for _, tc := range shard.TabletControls {
-			if len(tc.BlacklistedTables) > 0 {
-				return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set for shard %v", shard)
+			if len(tc.DeniedTables) > 0 {
+				return fmt.Errorf("cannot safely alter DisableQueryService as DeniedTables is set for shard %v", shard)
 			}
 		}
 	}
@@ -510,7 +509,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 				for _, partition := range srvKeyspace.GetPartitions() {
 
 					// We are finishing the migration, cleaning up tablet controls from the srvKeyspace
-					if tabletType == topodatapb.TabletType_MASTER {
+					if tabletType == topodatapb.TabletType_PRIMARY {
 						partition.ShardTabletControls = nil
 					}
 
@@ -681,7 +680,7 @@ func OrderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) e
 				// this is the custom sharding case, all KeyRanges must be nil
 				continue
 			}
-			if !bytes.Equal(currShard.KeyRange.End, nextShard.KeyRange.Start) {
+			if !key.KeyRangeContiguous(currShard.KeyRange, nextShard.KeyRange) {
 				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(currShard.KeyRange.End), hex.EncodeToString(nextShard.KeyRange.Start))
 			}
 		}

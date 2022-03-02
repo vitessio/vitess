@@ -76,6 +76,9 @@ type Options struct {
 	// See https://github.com/grpc/grpc/blob/7324556353e831c57d30973db33df489c3ed3576/doc/health-checking.md
 	// for more details on healthchecking.
 	Services []string
+
+	StreamInterceptors []grpc.StreamServerInterceptor
+	UnaryInterceptors  []grpc.UnaryServerInterceptor
 }
 
 const healthServiceName = "grpc.health.v1.Health" // reserved health service name
@@ -99,9 +102,15 @@ type Server struct {
 // The underlying gRPC server always has the following interceptors:
 //	- prometheus
 //	- recovery: this handles recovering from panics.
+//
+// The full list of interceptors is as follows:
+// - (optional) interceptors defined on the Options struct
+// - prometheus
+// - (optional) opentracing, if opts.EnableTracing is set
+// - recovery
 func New(name string, opts Options) *Server {
-	streamInterceptors := []grpc.StreamServerInterceptor{grpc_prometheus.StreamServerInterceptor}
-	unaryInterceptors := []grpc.UnaryServerInterceptor{grpc_prometheus.UnaryServerInterceptor}
+	streamInterceptors := append(opts.StreamInterceptors, grpc_prometheus.StreamServerInterceptor)
+	unaryInterceptors := append(opts.UnaryInterceptors, grpc_prometheus.UnaryServerInterceptor)
 
 	if opts.EnableTracing {
 		tracer := opentracing.GlobalTracer()

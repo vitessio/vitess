@@ -17,38 +17,43 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 	upd := stmt.(*sqlparser.Update)
-	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
+	if upd.With != nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+	}
+	dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 	if err != nil {
 		return nil, err
 	}
-	eupd := &engine.Update{
-		DML: *dml,
-	}
+	eupd := &engine.Update{DML: dml}
 
 	if dml.Opcode == engine.Unsharded {
 		return eupd, nil
 	}
 
-	cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidCol)
+	cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidVindex.Columns)
 	if err != nil {
 		return nil, err
 	}
 	eupd.ChangedVindexValues = cvv
 	eupd.OwnedVindexQuery = ovq
 	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.KsidVindex = ksidVindex
+		eupd.KsidVindex = ksidVindex.Vindex
+		eupd.KsidLength = len(ksidVindex.Columns)
 	}
 	return eupd, nil
 }
@@ -56,11 +61,11 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCol string) (map[string]*engine.VindexValues, string, error) {
+func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.ColIdent) (map[string]*engine.VindexValues, string, error) {
 	changedVindexes := make(map[string]*engine.VindexValues)
-	buf, offset := initialQuery(ksidCol, table)
+	buf, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
-		vindexValueMap := make(map[string]sqltypes.PlanValue)
+		vindexValueMap := make(map[string]evalengine.Expr)
 		first := true
 		for _, vcol := range vindex.Columns {
 			// Searching in order of columns in colvindex.
@@ -113,14 +118,26 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		return nil, "", nil
 	}
 	// generate rest of the owned vindex query.
-	buf.Myprintf(" from %v%v%v%v for update", table.Name, update.Where, update.OrderBy, update.Limit)
+	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update on complex table expression")
+	}
+	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
+	buf.Myprintf(" from %v%v%v%v for update", tblExpr, update.Where, update.OrderBy, update.Limit)
 	return changedVindexes, buf.String(), nil
 }
 
-func initialQuery(ksidCol string, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
+func initialQuery(ksidCols []sqlparser.ColIdent, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select %s", ksidCol)
-	offset := 1
+	offset := 0
+	for _, col := range ksidCols {
+		if offset == 0 {
+			buf.Myprintf("select %v", col)
+		} else {
+			buf.Myprintf(", %v", col)
+		}
+		offset++
+	}
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
 			buf.Myprintf(", %v", column)
@@ -133,11 +150,11 @@ func initialQuery(ksidCol string, table *vindexes.Table) (*sqlparser.TrackedBuff
 // extractValueFromUpdate given an UpdateExpr attempts to extracts the Value
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
-func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (sqltypes.PlanValue, error) {
-	pv, err := sqlparser.NewPlanValue(upd.Expr)
+func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
+	pv, err := evalengine.Translate(upd.Expr, semantics.EmptySemTable())
 	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
-		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: %v", upd.Name.Name)
-		return sqltypes.PlanValue{}, err
+		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr))
+		return nil, err
 	}
 	return pv, nil
 }

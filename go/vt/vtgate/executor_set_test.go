@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -25,8 +26,6 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
@@ -164,7 +163,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "incorrect argument type to variable 'sql_select_limit': VARBINARY",
+		err: "incorrect argument type to variable 'sql_select_limit': VARCHAR",
 	}, {
 		in:  "set autocommit = 1+1",
 		err: "variable 'autocommit' can't be set to the value: 2 is not a boolean",
@@ -286,7 +285,7 @@ func TestExecutorSetOp(t *testing.T) {
 	}, {
 		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
 		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
-		result:  returnResult("sql_mode", "varchar", "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+		result:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
 	}, {
 		// even though the tablet is saying that the value has changed,
 		// useReservedConn is false, so we won't allow this change
@@ -349,7 +348,7 @@ func TestExecutorSetOp(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewAutocommitSession(masterSession)
+			session := NewAutocommitSession(primarySession)
 			session.TargetString = KsTestUnsharded
 			session.EnableSystemSettings = !tcase.disallowResConn
 			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
@@ -368,7 +367,7 @@ func TestExecutorSetOp(t *testing.T) {
 
 func TestExecutorSetMetadata(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
@@ -380,7 +379,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	}()
 
 	executor, _, _, _ = createLegacyExecutorEnv()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
@@ -438,7 +437,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.1, "baz"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{sqltypes.DecimalFloat(2.1), "baz"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
@@ -456,7 +455,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 func TestSetUDVFromTabletInput(t *testing.T) {
 	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
-	fields := sqltypes.MakeTestFields("some", "VARBINARY")
+	fields := sqltypes.MakeTestFields("some", "VARCHAR")
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(
 			fields,
@@ -464,15 +463,15 @@ func TestSetUDVFromTabletInput(t *testing.T) {
 		),
 	})
 
-	masterSession.TargetString = "TestExecutor"
+	primarySession.TargetString = "TestExecutor"
 	defer func() {
-		masterSession.TargetString = ""
+		primarySession.TargetString = ""
 	}()
 	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
 	require.NoError(t, err)
 
 	want := map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}
-	utils.MustMatch(t, want, masterSession.UserDefinedVariables, "")
+	utils.MustMatch(t, want, primarySession.UserDefinedVariables, "")
 }
 
 func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {

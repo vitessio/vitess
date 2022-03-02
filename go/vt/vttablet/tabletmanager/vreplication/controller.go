@@ -160,7 +160,7 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		timer := time.NewTimer(*retryDelay)
 		select {
@@ -199,7 +199,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		return vterrors.Wrap(err, "can't connect to database")
 	}
 	for _, query := range withDDLInitialQueries {
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch); err != nil {
+		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
 		}
 	}

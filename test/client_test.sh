@@ -30,7 +30,7 @@ for i in 100 101 102; do
  CELL=test KEYSPACE=test_keyspace TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-vtctlclient -server localhost:15999 InitShardMaster -force test_keyspace/0 test-100
+vtctlclient -server localhost:15999 InitShardPrimary -force test_keyspace/0 test-100
 
 vtctlclient -server localhost:15999 ApplySchema -sql-file create_test_table.sql test_keyspace
 vtctlclient -server localhost:15999 RebuildVSchemaGraph

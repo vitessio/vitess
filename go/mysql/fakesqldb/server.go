@@ -20,7 +20,6 @@ package fakesqldb
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -48,6 +47,8 @@ const appendEntry = -1
 // closed, the client queries will return CRServerGone(2006) when sending
 // the data, as opposed to CRServerLost(2013) when reading the response.
 type DB struct {
+	mysql.UnimplementedHandler
+
 	// Fields set at construction time.
 
 	// t is our testing.TB instance
@@ -153,9 +154,9 @@ type ExpectedExecuteFetch struct {
 // New creates a server, and starts listening.
 func New(t testing.TB) *DB {
 	// Pick a path for our socket.
-	socketDir, err := ioutil.TempDir("", "fakesqldb")
+	socketDir, err := os.MkdirTemp("", "fakesqldb")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir failed: %v", err)
+		t.Fatalf("os.MkdirTemp failed: %v", err)
 	}
 	socketFile := path.Join(socketDir, "fakesqldb.sock")
 
@@ -173,7 +174,7 @@ func New(t testing.TB) *DB {
 
 	db.Handler = db
 
-	authServer := &mysql.AuthServerNone{}
+	authServer := mysql.NewAuthServerNone()
 
 	// Start listening.
 	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false)
@@ -271,9 +272,7 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
-		Charset:    "utf8",
 	})
-
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
@@ -282,7 +281,6 @@ func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
-		Charset:    "utf8",
 	})
 }
 
@@ -360,10 +358,10 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return nil
 	}
 
-	// Using special handling for 'SET NAMES utf8'.  The driver
-	// may send this at connection time, and we don't want it to
+	// Using special handling for setting the charset and connection collation.
+	// The driver may send this at connection time, and we don't want it to
 	// interfere.
-	if key == "set names utf8" {
+	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
 		//log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
@@ -406,6 +404,13 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	// when creating a connection to the database, we send an initial query to set the connection's
+	// collation, we want to skip the query check if we get such initial query.
+	// this is done to ease the test readability.
+	if strings.HasPrefix(query, "SET collation_connection =") {
+		return &sqltypes.Result{}, nil
+	}
 
 	index := db.expectedExecuteFetchIndex
 	if db.infinite && index == len(db.expectedExecuteFetch) {
@@ -458,9 +463,9 @@ func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback
 	return nil
 }
 
-// ComResetConnection is part of the mysql.Handler interface.
-func (db *DB) ComResetConnection(c *mysql.Conn) {
-
+// ComBinlogDumpGTID is part of the mysql.Handler interface.
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+	return nil
 }
 
 //

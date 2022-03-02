@@ -26,7 +26,7 @@ topotools is used by wrangler, so it ends up in all tools using
 wrangler (vtctl, vtctld, ...). It is also included by vttablet, so it contains:
 - most of the logic to create a shard / keyspace (tablet's init code)
 - some of the logic to perform a TabletExternallyReparented (RPC call
-  to master vttablet to let it know it's the master).
+  to primary vttablet to let it know it's the primary).
 
 */
 package topotools
@@ -34,10 +34,9 @@ package topotools
 // This file contains utility functions for tablets
 
 import (
+	"context"
 	"errors"
 	"fmt"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -64,21 +63,21 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 // transitions need to be forced from time to time.
 //
 // If successful, the updated tablet record is returned.
-func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, masterTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
+func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, PrimaryTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
 	var result *topodatapb.Tablet
-	// Always clear out the master timestamp if not master.
-	if newType != topodatapb.TabletType_MASTER {
-		masterTermStartTime = nil
+	// Always clear out the primary timestamp if not primary.
+	if newType != topodatapb.TabletType_PRIMARY {
+		PrimaryTermStartTime = nil
 	}
 	_, err := ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		// Save the most recent tablet value so we can return it
 		// either if the update succeeds or if no update is needed.
 		result = tablet
-		if tablet.Type == newType && proto.Equal(tablet.MasterTermStartTime, masterTermStartTime) {
+		if tablet.Type == newType && proto.Equal(tablet.PrimaryTermStartTime, PrimaryTermStartTime) {
 			return topo.NewError(topo.NoUpdateNeeded, topoproto.TabletAliasString(tabletAlias))
 		}
 		tablet.Type = newType
-		tablet.MasterTermStartTime = masterTermStartTime
+		tablet.PrimaryTermStartTime = PrimaryTermStartTime
 		return nil
 	})
 	if err != nil {
@@ -103,11 +102,48 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 	return nil
 }
 
+// DoCellsHaveRdonlyTablets returns true if any of the cells has at least one
+// tablet with type RDONLY. If the slice of cells to search over is empty, it
+// checks all cells in the topo.
+func DoCellsHaveRdonlyTablets(ctx context.Context, ts *topo.Server, cells []string) (bool, error) {
+	areAnyRdonly := func(tablets []*topo.TabletInfo) bool {
+		for _, tablet := range tablets {
+			if tablet.Type == topodatapb.TabletType_RDONLY {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if len(cells) == 0 {
+		tablets, err := GetAllTabletsAcrossCells(ctx, ts)
+		if err != nil {
+			return false, err
+		}
+
+		return areAnyRdonly(tablets), nil
+	}
+
+	for _, cell := range cells {
+		tablets, err := ts.GetTabletsByCell(ctx, cell)
+		if err != nil {
+			return false, err
+		}
+
+		if areAnyRdonly(tablets) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // IsPrimaryTablet is a helper function to determine whether the current tablet
 // is a primary before we allow its tablet record to be deleted. The canonical
 // way to determine the only true primary in a shard is to list all the tablets
-// and find the one with the highest MasterTermStartTime among the ones that
-// claim to be master.
+// and find the one with the highest PrimaryTermStartTime among the ones that
+// claim to be primary.
 //
 // We err on the side of caution here, i.e. we should never return false for
 // a true primary tablet, but it is okay to return true for a tablet that isn't
@@ -115,8 +151,8 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 // the system is in transition (a reparenting event is in progress and parts of
 // the topo have not yet been updated).
 func IsPrimaryTablet(ctx context.Context, ts *topo.Server, ti *topo.TabletInfo) (bool, error) {
-	// Tablet record claims to be non-master, we believe it
-	if ti.Type != topodatapb.TabletType_MASTER {
+	// Tablet record claims to be non-primary, we believe it
+	if ti.Type != topodatapb.TabletType_PRIMARY {
 		return false, nil
 	}
 
@@ -127,16 +163,16 @@ func IsPrimaryTablet(ctx context.Context, ts *topo.Server, ti *topo.TabletInfo) 
 		return false, err
 	}
 
-	// Tablet record claims to be master, and shard record matches
-	if topoproto.TabletAliasEqual(si.MasterAlias, ti.Tablet.Alias) {
+	// Tablet record claims to be primary, and shard record matches
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, ti.Tablet.Alias) {
 		return true, nil
 	}
 
-	// Shard record has another tablet as master, so check MasterTermStartTime
-	// If tablet record's MasterTermStartTime is later than the one in the shard
-	// record, then the tablet is master
-	tabletMTST := ti.GetMasterTermStartTime()
-	shardMTST := si.GetMasterTermStartTime()
+	// Shard record has another tablet as primary, so check PrimaryTermStartTime
+	// If tablet record's PrimaryTermStartTime is later than the one in the shard
+	// record, then the tablet is primary
+	tabletMTST := ti.GetPrimaryTermStartTime()
+	shardMTST := si.GetPrimaryTermStartTime()
 
 	return tabletMTST.After(shardMTST), nil
 }

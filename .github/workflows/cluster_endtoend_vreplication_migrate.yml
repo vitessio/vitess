@@ -2,27 +2,35 @@
 
 name: Cluster (vreplication_migrate)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_migrate)')
+  cancel-in-progress: true
 
+env:
+  LAUNCHABLE_ORGANIZATION: "vitess"
+  LAUNCHABLE_WORKSPACE: "vitess-app"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+
+jobs:
   build:
     name: Run endtoend tests on Cluster (vreplication_migrate)
     runs-on: ubuntu-18.04
 
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
+        go-version: 1.17
+
+    - name: Set up python
+      uses: actions/setup-python@v2
 
     - name: Tune the OS
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
-
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
+        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
+        sudo sysctl -p /etc/sysctl.conf
 
     - name: Check out code
       uses: actions/checkout@v2
@@ -37,14 +45,41 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
+        # install JUnit report formatter
+        go get -u github.com/vitessio/go-junit-report@HEAD
+
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
+    - name: Setup launchable dependencies
+      run: |
+        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
+        pip3 install --user launchable~=1.0 > /dev/null
+
+        # verify that launchable setup is all correct.
+        launchable verify || true
+
+        # Tell Launchable about the build you are producing and testing
+        launchable record build --name "$GITHUB_RUN_ID" --source .
+
     - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard vreplication_migrate
+
+        set -x
+
+        # run the tests however you normally do, then produce a JUnit XML file
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+    - name: Print test output and Record test result in launchable
+      run: |
+        # send recorded tests to launchable
+        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+
+        # print test output
+        cat output.txt
+      if: always()

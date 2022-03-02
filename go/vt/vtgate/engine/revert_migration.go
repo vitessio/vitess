@@ -32,7 +32,7 @@ import (
 
 var _ Primitive = (*RevertMigration)(nil)
 
-//RevertMigration represents the instructions to perform an online schema change via vtctld
+// RevertMigration represents the instructions to perform an online schema change via vtctld
 type RevertMigration struct {
 	Keyspace          *vindexes.Keyspace
 	Stmt              *sqlparser.RevertMigration
@@ -69,8 +69,8 @@ func (v *RevertMigration) GetTableName() string {
 	return ""
 }
 
-// Execute implements the Primitive interface
-func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+// TryExecute implements the Primitive interface
+func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -88,7 +88,7 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 		return nil, err
 	}
 	ddlStrategySetting.Strategy = schema.DDLStrategyOnline // and we keep the options as they were
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "")
 	if err != nil {
 		return result, err
 	}
@@ -101,7 +101,7 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 			IsDML:             false,
 			SingleShardOnly:   false,
 		}
-		if _, err := s.Execute(vcursor, bindVars, wantfields); err != nil {
+		if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
 			return result, err
 		}
 	} else {
@@ -116,9 +116,9 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 	return result, err
 }
 
-//StreamExecute implements the Primitive interface
-func (v *RevertMigration) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := v.Execute(vcursor, bindVars, wantfields)
+// TryStreamExecute implements the Primitive interface
+func (v *RevertMigration) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

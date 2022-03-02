@@ -17,6 +17,7 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,11 +25,8 @@ import (
 	"io"
 	"strconv"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
 	"github.com/olekukonko/tablewriter"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -55,37 +53,43 @@ func init() {
 
 	// VtGate commands
 	addCommand(queriesGroupName, command{
-		"VtGateExecute",
-		commandVtGateExecute,
-		"-server <vtgate> [-bind_variables <JSON map>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
-		"Executes the given SQL query with the provided bound variables against the vtgate server."})
+		name:   "VtGateExecute",
+		method: commandVtGateExecute,
+		params: "-server <vtgate> [-bind_variables <JSON map>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
+		help:   "Executes the given SQL query with the provided bound variables against the vtgate server.",
+	})
 
 	// VtTablet commands
 	addCommand(queriesGroupName, command{
-		"VtTabletExecute",
-		commandVtTabletExecute,
-		"[-username <TableACL user>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
-		"Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction."})
+		name:   "VtTabletExecute",
+		method: commandVtTabletExecute,
+		params: "[-username <TableACL user>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
+		help:   "Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction.",
+	})
 	addCommand(queriesGroupName, command{
-		"VtTabletBegin",
-		commandVtTabletBegin,
-		"[-username <TableACL user>] <tablet alias>",
-		"Starts a transaction on the provided server."})
+		name:   "VtTabletBegin",
+		method: commandVtTabletBegin,
+		params: "[-username <TableACL user>] <tablet alias>",
+		help:   "Starts a transaction on the provided server.",
+	})
 	addCommand(queriesGroupName, command{
-		"VtTabletCommit",
-		commandVtTabletCommit,
-		"[-username <TableACL user>] <transaction_id>",
-		"Commits the given transaction on the provided server."})
+		name:   "VtTabletCommit",
+		method: commandVtTabletCommit,
+		params: "[-username <TableACL user>] <transaction_id>",
+		help:   "Commits the given transaction on the provided server.",
+	})
 	addCommand(queriesGroupName, command{
-		"VtTabletRollback",
-		commandVtTabletRollback,
-		"[-username <TableACL user>] <tablet alias> <transaction_id>",
-		"Rollbacks the given transaction on the provided server."})
+		name:   "VtTabletRollback",
+		method: commandVtTabletRollback,
+		params: "[-username <TableACL user>] <tablet alias> <transaction_id>",
+		help:   "Rollbacks the given transaction on the provided server.",
+	})
 	addCommand(queriesGroupName, command{
-		"VtTabletStreamHealth",
-		commandVtTabletStreamHealth,
-		"[-count <count, default 1>] <tablet alias>",
-		"Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers."})
+		name:   "VtTabletStreamHealth",
+		method: commandVtTabletStreamHealth,
+		params: "[-count <count, default 1>] <tablet alias>",
+		help:   "Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers.",
+	})
 }
 
 type bindvars map[string]interface{}

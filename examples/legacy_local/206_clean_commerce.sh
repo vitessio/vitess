@@ -18,6 +18,6 @@
 # keyspace
 
 vtctlclient -server localhost:15999 ApplySchema -sql-file drop_commerce_tables.sql commerce
-vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly
-vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica
-vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master
+vtctlclient -server localhost:15999 SetShardTabletControl -denied_tables=customer,corder -remove commerce/0 rdonly
+vtctlclient -server localhost:15999 SetShardTabletControl -denied_tables=customer,corder -remove commerce/0 replica
+vtctlclient -server localhost:15999 SetShardTabletControl -denied_tables=customer,corder -remove commerce/0 primary

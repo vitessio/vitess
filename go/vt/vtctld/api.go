@@ -21,7 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -72,36 +72,36 @@ type TabletStats struct {
 
 // TabletWithStatsAndURL wraps topo.Tablet, adding a URL property and optional realtime stats.
 type TabletWithStatsAndURL struct {
-	Alias               *topodatapb.TabletAlias `json:"alias,omitempty"`
-	Hostname            string                  `json:"hostname,omitempty"`
-	PortMap             map[string]int32        `json:"port_map,omitempty"`
-	Keyspace            string                  `json:"keyspace,omitempty"`
-	Shard               string                  `json:"shard,omitempty"`
-	KeyRange            *topodatapb.KeyRange    `json:"key_range,omitempty"`
-	Type                topodatapb.TabletType   `json:"type,omitempty"`
-	DbNameOverride      string                  `json:"db_name_override,omitempty"`
-	Tags                map[string]string       `json:"tags,omitempty"`
-	MysqlHostname       string                  `json:"mysql_hostname,omitempty"`
-	MysqlPort           int32                   `json:"mysql_port,omitempty"`
-	MasterTermStartTime *vttime.Time            `json:"master_term_start_time,omitempty"`
-	Stats               *TabletStats            `json:"stats,omitempty"`
-	URL                 string                  `json:"url,omitempty"`
+	Alias                *topodatapb.TabletAlias `json:"alias,omitempty"`
+	Hostname             string                  `json:"hostname,omitempty"`
+	PortMap              map[string]int32        `json:"port_map,omitempty"`
+	Keyspace             string                  `json:"keyspace,omitempty"`
+	Shard                string                  `json:"shard,omitempty"`
+	KeyRange             *topodatapb.KeyRange    `json:"key_range,omitempty"`
+	Type                 topodatapb.TabletType   `json:"type,omitempty"`
+	DbNameOverride       string                  `json:"db_name_override,omitempty"`
+	Tags                 map[string]string       `json:"tags,omitempty"`
+	MysqlHostname        string                  `json:"mysql_hostname,omitempty"`
+	MysqlPort            int32                   `json:"mysql_port,omitempty"`
+	PrimaryTermStartTime *vttime.Time            `json:"primary_term_start_time,omitempty"`
+	Stats                *TabletStats            `json:"stats,omitempty"`
+	URL                  string                  `json:"url,omitempty"`
 }
 
 func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) *TabletWithStatsAndURL {
 	tablet := &TabletWithStatsAndURL{
-		Alias:               t.Alias,
-		Hostname:            t.Hostname,
-		PortMap:             t.PortMap,
-		Keyspace:            t.Keyspace,
-		Shard:               t.Shard,
-		KeyRange:            t.KeyRange,
-		Type:                t.Type,
-		DbNameOverride:      t.DbNameOverride,
-		Tags:                t.Tags,
-		MysqlHostname:       t.MysqlHostname,
-		MysqlPort:           t.MysqlPort,
-		MasterTermStartTime: t.MasterTermStartTime,
+		Alias:                t.Alias,
+		Hostname:             t.Hostname,
+		PortMap:              t.PortMap,
+		Keyspace:             t.Keyspace,
+		Shard:                t.Shard,
+		KeyRange:             t.KeyRange,
+		Type:                 t.Type,
+		DbNameOverride:       t.DbNameOverride,
+		Tags:                 t.Tags,
+		MysqlHostname:        t.MysqlHostname,
+		MysqlPort:            t.MysqlPort,
+		PrimaryTermStartTime: t.PrimaryTermStartTime,
 	}
 
 	if *proxyTablets {
@@ -185,7 +185,7 @@ func getItemPath(url string) string {
 }
 
 func unmarshalRequest(r *http.Request, v interface{}) error {
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
 	}
@@ -430,7 +430,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			if cell == "" {
 				return nil, errors.New("cell param required")
 			}
-			return ts.GetTabletsByCell(ctx, cell)
+			return ts.GetTabletAliasesByCell(ctx, cell)
 		}
 
 		// Get tablet health.
@@ -633,15 +633,16 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		if err != nil {
 			return err
 		}
-		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
-		executor := schemamanager.NewTabletExecutor(requestContext, wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
 
+		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
+		executor := schemamanager.NewTabletExecutor(requestContext, wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
 		if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
 			return fmt.Errorf("error setting DDL strategy: %v", err)
 		}
 
-		return schemamanager.Run(ctx,
+		_, err = schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
+		return err
 	})
 
 	// Features

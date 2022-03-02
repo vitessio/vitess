@@ -54,7 +54,7 @@ public class VitessVTGateManagerTest {
     info.setProperty("username", "user");
     VitessConnection connection = new VitessConnection(
         "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17"
-            + ".233:15991/shipment/shipment?tabletType=master", info);
+            + ".233:15991/shipment/shipment?tabletType=primary", info);
     VitessVTGateManager.VTGateConnections vtGateConnections =
         new VitessVTGateManager.VTGateConnections(
         connection);
@@ -62,7 +62,7 @@ public class VitessVTGateManagerTest {
     info.setProperty("username", "user");
     VitessConnection connection1 = new VitessConnection(
         "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,11.33.17"
-            + ".233:15991/shipment/shipment?tabletType=master", info);
+            + ".233:15991/shipment/shipment?tabletType=primary", info);
     VitessVTGateManager.VTGateConnections vtGateConnections1 =
         new VitessVTGateManager.VTGateConnections(
         connection1);
@@ -85,7 +85,7 @@ public class VitessVTGateManagerTest {
     info.setProperty("username", "user");
     VitessConnection connection = new VitessConnection(
         "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17"
-            + ".233:15991/shipment/shipment?tabletType=master", info);
+            + ".233:15991/shipment/shipment?tabletType=primary", info);
     VitessVTGateManager.VTGateConnections vtGateConnections =
         new VitessVTGateManager.VTGateConnections(
         connection);

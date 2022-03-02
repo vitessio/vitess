@@ -17,7 +17,6 @@ limitations under the License.
 package filecustomrule
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -44,7 +43,7 @@ func TestFileCustomRule(t *testing.T) {
 	var qrs *rules.Rules
 	rulepath := path.Join(os.TempDir(), ".customrule.json")
 	// Set r1 and try to get it back
-	err := ioutil.WriteFile(rulepath, []byte(customRule1), os.FileMode(0644))
+	err := os.WriteFile(rulepath, []byte(customRule1), os.FileMode(0644))
 	if err != nil {
 		t.Fatalf("Cannot write r1 to rule file %s, err=%v", rulepath, err)
 	}

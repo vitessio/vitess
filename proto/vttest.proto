@@ -75,7 +75,7 @@ message Keyspace {
   // redirects all traffic to another keyspace. If set, shards is ignored.
   string served_from = 5;
 
-  // number of replica tablets to instantiate. This includes the master tablet.
+  // number of replica tablets to instantiate. This includes the primary tablet.
   int32 replica_count = 6;
 
   // number of rdonly tablets to instantiate.

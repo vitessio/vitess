@@ -19,9 +19,8 @@ package wrangler
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
-	"sort"
 	"sync"
 
 	"context"
@@ -31,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
@@ -39,7 +39,7 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -71,21 +71,15 @@ func ResetDebugVarsGetVersion() {
 
 // GetVersion returns the version string from a tablet
 func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.TabletAlias) (string, error) {
-	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return "", err
-	}
-
-	version, err := getVersionFromTablet(tablet.Addr())
-	if err != nil {
-		return "", err
-	}
-	log.Infof("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), version)
-	return version, err
+	resp, err := wr.VtctldServer().GetVersion(ctx, &vtctldatapb.GetVersionRequest{
+		TabletAlias: tabletAlias,
+	})
+	log.Infof("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), resp.Version)
+	return resp.Version, err
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, masterAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering version for %v", topoproto.TabletAliasString(alias))
 	replicaVersion, err := wr.GetVersion(ctx, alias)
@@ -94,8 +88,8 @@ func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, maste
 		return
 	}
 
-	if masterVersion != replicaVersion {
-		er.RecordError(fmt.Errorf("master %v version %v is different than replica %v version %v", topoproto.TabletAliasString(masterAlias), masterVersion, topoproto.TabletAliasString(alias), replicaVersion))
+	if primaryVersion != replicaVersion {
+		er.RecordError(fmt.Errorf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(primaryAlias), primaryVersion, topoproto.TabletAliasString(alias), replicaVersion))
 	}
 }
 
@@ -107,18 +101,18 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 		return err
 	}
 
-	// get version from the master, or error
-	if !si.HasMaster() {
-		return fmt.Errorf("no master in shard %v/%v", keyspace, shard)
+	// get version from the primary, or error
+	if !si.HasPrimary() {
+		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
-	log.Infof("Gathering version for master %v", topoproto.TabletAliasString(si.MasterAlias))
-	masterVersion, err := wr.GetVersion(ctx, si.MasterAlias)
+	log.Infof("Gathering version for primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
+	primaryVersion, err := wr.GetVersion(ctx, si.PrimaryAlias)
 	if err != nil {
 		return err
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
-	// replicating from the master
+	// replicating from the primary
 	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -128,12 +122,12 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
-		if topoproto.TabletAliasEqual(alias, si.MasterAlias) {
+		if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
 			continue
 		}
 
 		wg.Add(1)
-		go wr.diffVersion(ctx, masterVersion, si.MasterAlias, alias, &wg, &er)
+		go wr.diffVersion(ctx, primaryVersion, si.PrimaryAlias, alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -145,58 +139,12 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 // ValidateVersionKeyspace validates all versions are the same in all
 // tablets in a keyspace
 func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string) error {
-	// find all the shards
-	shards, err := wr.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return err
-	}
+	res, err := wr.VtctldServer().ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
+		Keyspace: keyspace,
+	})
 
-	// corner cases
-	if len(shards) == 0 {
-		return fmt.Errorf("no shards in keyspace %v", keyspace)
+	if len(res.Results) > 0 {
+		return fmt.Errorf("version diffs: %v", res.Results)
 	}
-	sort.Strings(shards)
-	if len(shards) == 1 {
-		return wr.ValidateVersionShard(ctx, keyspace, shards[0])
-	}
-
-	// find the reference version using the first shard's master
-	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
-	if err != nil {
-		return err
-	}
-	if !si.HasMaster() {
-		return fmt.Errorf("no master in shard %v/%v", keyspace, shards[0])
-	}
-	referenceAlias := si.MasterAlias
-	log.Infof("Gathering version for reference master %v", topoproto.TabletAliasString(referenceAlias))
-	referenceVersion, err := wr.GetVersion(ctx, referenceAlias)
-	if err != nil {
-		return err
-	}
-
-	// then diff with all tablets but master 0
-	er := concurrency.AllErrorRecorder{}
-	wg := sync.WaitGroup{}
-	for _, shard := range shards {
-		aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
-		if err != nil {
-			er.RecordError(err)
-			continue
-		}
-
-		for _, alias := range aliases {
-			if topoproto.TabletAliasEqual(alias, si.MasterAlias) {
-				continue
-			}
-
-			wg.Add(1)
-			go wr.diffVersion(ctx, referenceVersion, referenceAlias, alias, &wg, &er)
-		}
-	}
-	wg.Wait()
-	if er.HasErrors() {
-		return fmt.Errorf("version diffs: %v", er.Error().Error())
-	}
-	return nil
+	return err
 }

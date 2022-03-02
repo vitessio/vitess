@@ -38,19 +38,35 @@ type VtctlClientProcess struct {
 
 // VtctlClientParams encapsulated params to provide if non-default
 type VtctlClientParams struct {
-	DDLStrategy   string
-	SkipPreflight bool
+	DDLStrategy      string
+	MigrationContext string
+	SkipPreflight    bool
+	UUIDList         string
+	CallerId         string
 }
 
-// InitShardMaster executes vtctlclient command to make one of tablet as master
-func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
+// InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
+func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(
-		"InitShardMaster",
+		"InitShardPrimary",
 		"-force", "-wait_replicas_timeout", "31s",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
 	if err != nil {
-		log.Errorf("error in InitShardMaster output %s, err %s", output, err.Error())
+		log.Errorf("error in InitShardPrimary output %s, err %s", output, err.Error())
+	}
+	return err
+}
+
+// InitializeShard executes vtctlclient command to make specified tablet the primary for the shard.
+func (vtctlclient *VtctlClientProcess) InitializeShard(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
+	output, err := vtctlclient.ExecuteCommandWithOutput(
+		"PlannedReparentShard",
+		"-keyspace_shard", fmt.Sprintf("%s/%s", Keyspace, Shard),
+		"-wait_replicas_timeout", "31s",
+		"-new_primary", fmt.Sprintf("%s-%d", Cell, TabletUID))
+	if err != nil {
+		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
 	}
 	return err
 }
@@ -61,11 +77,21 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 		"ApplySchema",
 		"-sql", SQL,
 	}
+	if params.MigrationContext != "" {
+		args = append(args, "-migration_context", params.MigrationContext)
+	}
 	if params.DDLStrategy != "" {
 		args = append(args, "-ddl_strategy", params.DDLStrategy)
 	}
+	if params.UUIDList != "" {
+		args = append(args, "-uuid_list", params.UUIDList)
+	}
 	if params.SkipPreflight {
 		args = append(args, "-skip_preflight")
+	}
+
+	if params.CallerId != "" {
+		args = append(args, "-caller_id", params.CallerId)
 	}
 	args = append(args, Keyspace)
 	return vtctlclient.ExecuteCommandWithOutput(args...)
@@ -73,7 +99,7 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) error {
-	message, err := vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, VtctlClientParams{DDLStrategy: "direct"})
+	message, err := vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, VtctlClientParams{DDLStrategy: "direct -allow-zero-in-date", SkipPreflight: true})
 
 	return vterrors.Wrap(err, message)
 }
@@ -156,8 +182,6 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 	if output != "" {
 		if err != nil {
 			log.Errorf("Output:\n%v", output)
-		} else {
-			log.Infof("Output:\n%v", output)
 		}
 	}
 	return err

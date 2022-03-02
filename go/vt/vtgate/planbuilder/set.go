@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -33,7 +35,7 @@ import (
 )
 
 type (
-	planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error)
+	planFunc = func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error)
 
 	setting struct {
 		name         string
@@ -43,12 +45,13 @@ type (
 		// this allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
 		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 		identifierAsString bool
+		supportSetVar      bool
 	}
 )
 
 var sysVarPlanningFunc = map[string]planFunc{}
 
-func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
+func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
 	var err error
 
@@ -103,19 +106,19 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 }
 
 func buildSetOpReadOnly(s setting) planFunc {
-	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.IncorrectGlobalLocalVar, "variable '%s' is a read only variable", expr.Name)
 	}
 }
 
 func buildNotSupported(setting) planFunc {
-	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: system setting is not supported", expr.Name)
 	}
 }
 
 func buildSetOpIgnore(s setting) planFunc {
-	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		value, err := extractValue(expr, s.boolean)
 		if err != nil {
 			return nil, err
@@ -128,12 +131,12 @@ func buildSetOpIgnore(s setting) planFunc {
 }
 
 func buildSetOpCheckAndIgnore(s setting) planFunc {
-	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return planSysVarCheckIgnore(expr, schema, s.boolean)
 	}
 }
 
-func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema ContextVSchema, boolean bool) (engine.SetOp, error) {
+func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool) (engine.SetOp, error) {
 	keyspace, dest, err := resolveDestination(schema)
 	if err != nil {
 		return nil, err
@@ -152,7 +155,7 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema ContextVSchema, boole
 }
 
 func buildSetOpReservedConn(s setting) planFunc {
-	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
 			return planSysVarCheckIgnore(expr, vschema, s.boolean)
 		}
@@ -170,6 +173,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 			Keyspace:          ks,
 			TargetDestination: vschema.Destination(),
 			Expr:              value,
+			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
 }
@@ -177,7 +181,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 const defaultNotSupportedErrFmt = "DEFAULT not supported for @@%s"
 
 func buildSetOpVitessAware(s setting) planFunc {
-	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
+	return func(astExpr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
 		var err error
 		var runtimeExpr evalengine.Expr
 
@@ -201,7 +205,7 @@ func buildSetOpVitessAware(s setting) planFunc {
 	}
 }
 
-func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destination, error) {
+func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.Destination, error) {
 	keyspace, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, nil, err

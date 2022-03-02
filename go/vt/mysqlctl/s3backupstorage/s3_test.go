@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"testing"
@@ -82,7 +81,7 @@ func TestSSEAws(t *testing.T) {
 }
 
 func TestSSECustomerFileNotFound(t *testing.T) {
-	tempFile, err := ioutil.TempFile("", "filename")
+	tempFile, err := os.CreateTemp("", "filename")
 	require.NoErrorf(t, err, "TempFile() expected to succeed")
 	defer os.Remove(tempFile.Name())
 
@@ -99,7 +98,7 @@ func TestSSECustomerFileNotFound(t *testing.T) {
 }
 
 func TestSSECustomerFileBinaryKey(t *testing.T) {
-	tempFile, err := ioutil.TempFile("", "filename")
+	tempFile, err := os.CreateTemp("", "filename")
 	require.NoErrorf(t, err, "TempFile() expected to succeed")
 	defer os.Remove(tempFile.Name())
 
@@ -132,7 +131,7 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 }
 
 func TestSSECustomerFileBase64Key(t *testing.T) {
-	tempFile, err := ioutil.TempFile("", "filename")
+	tempFile, err := os.CreateTemp("", "filename")
 	require.NoErrorf(t, err, "TempFile() expected to succeed")
 	defer os.Remove(tempFile.Name())
 

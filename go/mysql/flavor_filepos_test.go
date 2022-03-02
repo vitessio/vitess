@@ -23,15 +23,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFilePosRetrieveMasterServerId(t *testing.T) {
+func TestFilePosRetrieveSourceServerId(t *testing.T) {
 	resultMap := map[string]string{
 		"Master_Server_Id": "1",
 	}
 
-	want := ReplicationStatus{MasterServerID: 1}
+	want := ReplicationStatus{SourceServerID: 1}
 	got, err := parseFilePosReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equalf(t, got.MasterServerID, want.MasterServerID, "got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
+	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestFilePosRetrieveExecutedPosition(t *testing.T) {
@@ -58,17 +58,17 @@ func TestFilePosRetrieveExecutedPosition(t *testing.T) {
 	assert.Equalf(t, got.RelayLogPosition.GTIDSet, got.FileRelayLogPosition.GTIDSet, "RelayLogPosition and FileRelayLogPosition don't match when they should for the FilePos flavor")
 }
 
-func TestFilePosShouldGetMasterPosition(t *testing.T) {
+func TestFilePosShouldGetPosition(t *testing.T) {
 	resultMap := map[string]string{
 		"Position": "1307",
 		"File":     "source-bin.000003",
 	}
 
-	want := MasterStatus{
+	want := PrimaryStatus{
 		Position:     Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
 		FilePosition: Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
 	}
-	got, err := parseFilePosMasterStatus(resultMap)
+	got, err := parseFilePosPrimaryStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet, want.Position.GTIDSet, "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
 	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)

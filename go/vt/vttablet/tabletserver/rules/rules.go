@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 
@@ -155,10 +156,10 @@ func (qrs *Rules) MarshalJSON() ([]byte, error) {
 // FilterByPlan creates a new Rules by prefiltering on the query and planId. This allows
 // us to create query plan specific Rules out of the original Rules. In the new rules,
 // query, plans and tableNames predicates are empty.
-func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *Rules) {
+func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableNames ...string) (newqrs *Rules) {
 	var newrules []*Rule
 	for _, qr := range qrs.rules {
-		if newrule := qr.FilterByPlan(query, planid, tableName); newrule != nil {
+		if newrule := qr.FilterByPlan(query, planid, tableNames); newrule != nil {
 			newrules = append(newrules, newrule)
 		}
 	}
@@ -166,9 +167,14 @@ func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableN
 }
 
 // GetAction runs the input against the rules engine and returns the action to be performed.
-func (qrs *Rules) GetAction(ip, user string, bindVars map[string]*querypb.BindVariable) (action Action, desc string) {
+func (qrs *Rules) GetAction(
+	ip,
+	user string,
+	bindVars map[string]*querypb.BindVariable,
+	marginComments sqlparser.MarginComments,
+) (action Action, desc string) {
 	for _, qr := range qrs.rules {
-		if act := qr.GetAction(ip, user, bindVars); act != QRContinue {
+		if act := qr.GetAction(ip, user, bindVars, marginComments); act != QRContinue {
 			return act, qr.Description
 		}
 	}
@@ -192,7 +198,7 @@ type Rule struct {
 	// All defined conditions must match for the rule to fire (AND).
 
 	// Regexp conditions. nil conditions are ignored (TRUE).
-	requestIP, user, query namedRegexp
+	requestIP, user, query, leadingComment, trailingComment namedRegexp
 
 	// Any matched plan will make this condition true (OR)
 	plans []planbuilder.PlanType
@@ -241,6 +247,8 @@ func (qr *Rule) Equal(other *Rule) bool {
 		qr.requestIP.Equal(other.requestIP) &&
 		qr.user.Equal(other.user) &&
 		qr.query.Equal(other.query) &&
+		qr.leadingComment.Equal(other.leadingComment) &&
+		qr.trailingComment.Equal(other.trailingComment) &&
 		reflect.DeepEqual(qr.plans, other.plans) &&
 		reflect.DeepEqual(qr.tableNames, other.tableNames) &&
 		reflect.DeepEqual(qr.bindVarConds, other.bindVarConds) &&
@@ -250,12 +258,14 @@ func (qr *Rule) Equal(other *Rule) bool {
 // Copy performs a deep copy of a Rule.
 func (qr *Rule) Copy() (newqr *Rule) {
 	newqr = &Rule{
-		Description: qr.Description,
-		Name:        qr.Name,
-		requestIP:   qr.requestIP,
-		user:        qr.user,
-		query:       qr.query,
-		act:         qr.act,
+		Description:     qr.Description,
+		Name:            qr.Name,
+		requestIP:       qr.requestIP,
+		user:            qr.user,
+		query:           qr.query,
+		leadingComment:  qr.leadingComment,
+		trailingComment: qr.trailingComment,
+		act:             qr.act,
 	}
 	if qr.plans != nil {
 		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
@@ -285,6 +295,12 @@ func (qr *Rule) MarshalJSON() ([]byte, error) {
 	}
 	if qr.query.Regexp != nil {
 		safeEncode(b, `,"Query":`, qr.query)
+	}
+	if qr.leadingComment.Regexp != nil {
+		safeEncode(b, `,"LeadingComment":`, qr.leadingComment)
+	}
+	if qr.trailingComment.Regexp != nil {
+		safeEncode(b, `,"TrailingComment":`, qr.trailingComment)
 	}
 	if qr.plans != nil {
 		safeEncode(b, `,"Plans":`, qr.plans)
@@ -336,6 +352,20 @@ func (qr *Rule) AddTableCond(tableName string) {
 func (qr *Rule) SetQueryCond(pattern string) (err error) {
 	qr.query.name = pattern
 	qr.query.Regexp, err = regexp.Compile(makeExact(pattern))
+	return
+}
+
+// SetLeadingCommentCond adds a regular expression condition for a leading query comment.
+func (qr *Rule) SetLeadingCommentCond(pattern string) (err error) {
+	qr.leadingComment.name = pattern
+	qr.leadingComment.Regexp, err = regexp.Compile(makeExact(pattern))
+	return
+}
+
+// SetTrailingCommentCond adds a regular expression condition for a trailing query comment.
+func (qr *Rule) SetTrailingCommentCond(pattern string) (err error) {
+	qr.trailingComment.name = pattern
+	qr.trailingComment.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
 }
 
@@ -406,25 +436,38 @@ Error:
 // The new Rule will contain all the original constraints other
 // than the plan and query. If the plan and query don't match the Rule,
 // then it returns nil.
-func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *Rule) {
+func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNames []string) (newqr *Rule) {
 	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
 	if !planMatch(qr.plans, planid) {
 		return nil
 	}
-	if !tableMatch(qr.tableNames, tableName) {
+	if !tableMatch(qr.tableNames, tableNames) {
 		return nil
 	}
 	newqr = qr.Copy()
 	newqr.query = namedRegexp{}
+	// Note we explicitly don't remove the leading/trailing comments as they
+	// must be evaluated at execution time.
 	newqr.plans = nil
 	newqr.tableNames = nil
 	return newqr
 }
 
 // GetAction returns the action for a single rule.
-func (qr *Rule) GetAction(ip, user string, bindVars map[string]*querypb.BindVariable) Action {
+func (qr *Rule) GetAction(
+	ip,
+	user string,
+	bindVars map[string]*querypb.BindVariable,
+	marginComments sqlparser.MarginComments,
+) Action {
+	if !reMatch(qr.leadingComment.Regexp, marginComments.Leading) {
+		return QRContinue
+	}
+	if !reMatch(qr.trailingComment.Regexp, marginComments.Trailing) {
+		return QRContinue
+	}
 	if !reMatch(qr.requestIP.Regexp, ip) {
 		return QRContinue
 	}
@@ -455,12 +498,16 @@ func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
 	return false
 }
 
-func tableMatch(tableNames []string, tableName string) bool {
+func tableMatch(tableNames []string, otherNames []string) bool {
 	if tableNames == nil {
 		return true
 	}
-	for _, t := range tableNames {
-		if t == tableName {
+	otherNamesMap := map[string]bool{}
+	for _, name := range otherNames {
+		otherNamesMap[name] = true
+	}
+	for _, name := range tableNames {
+		if otherNamesMap[name] {
 			return true
 		}
 	}
@@ -791,7 +838,7 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 		var lv []interface{}
 		var ok bool
 		switch k {
-		case "Name", "Description", "RequestIP", "User", "Query", "Action":
+		case "Name", "Description", "RequestIP", "User", "Query", "Action", "LeadingComment", "TrailingComment":
 			sv, ok = v.(string)
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want string for %s", k)
@@ -823,6 +870,16 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 			err = qr.SetQueryCond(sv)
 			if err != nil {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set Query condition: %v", sv)
+			}
+		case "LeadingComment":
+			err = qr.SetLeadingCommentCond(sv)
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set LeadingComment condition: %v", sv)
+			}
+		case "TrailingComment":
+			err = qr.SetTrailingCommentCond(sv)
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set TrailingComment condition: %v", sv)
 			}
 		case "Plans":
 			for _, p := range lv {

@@ -17,10 +17,15 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/hack"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -135,11 +140,15 @@ type ValType int
 const (
 	StrVal = ValType(iota)
 	IntVal
+	DecimalVal
 	FloatVal
 	HexNum
 	HexVal
 	BitVal
 )
+
+// queryOptimizerPrefix is the prefix of an optimizer hint comment.
+const queryOptimizerPrefix = "/*+"
 
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
@@ -276,6 +285,46 @@ func (ct *ColumnType) SQLType() querypb.Type {
 		return sqltypes.Geometry
 	}
 	return sqltypes.Null
+}
+
+// AddQueryHint adds the given string to list of comment.
+// If the list is empty, one will be created containing the query hint.
+// If the list already contains a query hint, the given string will be merged with the existing one.
+// This is done because only one query hint is allowed per query.
+func (node Comments) AddQueryHint(queryHint string) (Comments, error) {
+	if queryHint == "" {
+		return node, nil
+	}
+	queryHintCommentStr := fmt.Sprintf("%s %s */", queryOptimizerPrefix, queryHint)
+	if len(node) == 0 {
+		return Comments{queryHintCommentStr}, nil
+	}
+	var newComments Comments
+	var hasQueryHint bool
+	for _, comment := range node {
+		if strings.HasPrefix(comment, queryOptimizerPrefix) {
+			if hasQueryHint {
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
+			}
+			hasQueryHint = true
+			idx := strings.Index(comment, "*/")
+			if idx == -1 {
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
+			}
+			if strings.Contains(comment, queryHint) {
+				newComments = append(Comments{comment}, newComments...)
+				continue
+			}
+			newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(comment[:idx]), queryHint)
+			newComments = append(Comments{newComment}, newComments...)
+			continue
+		}
+		newComments = append(newComments, comment)
+	}
+	if !hasQueryHint {
+		newComments = append(Comments{queryHintCommentStr}, newComments...)
+	}
+	return newComments, nil
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case
@@ -434,6 +483,10 @@ func NewIntLiteral(in string) *Literal {
 	return &Literal{Type: IntVal, Val: in}
 }
 
+func NewDecimalLiteral(in string) *Literal {
+	return &Literal{Type: DecimalVal, Val: in}
+}
+
 // NewFloatLiteral builds a new FloatVal.
 func NewFloatLiteral(in string) *Literal {
 	return &Literal{Type: FloatVal, Val: in}
@@ -459,6 +512,16 @@ func NewArgument(in string) Argument {
 	return Argument(in)
 }
 
+// NewListArg builds a new ListArg.
+func NewListArg(in string) ListArg {
+	return ListArg(in)
+}
+
+// String returns ListArg as a string.
+func (node ListArg) String() string {
+	return string(node)
+}
+
 // Bytes return the []byte
 func (node *Literal) Bytes() []byte {
 	return []byte(node.Val)
@@ -467,6 +530,32 @@ func (node *Literal) Bytes() []byte {
 // HexDecode decodes the hexval into bytes.
 func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
+}
+
+// encodeHexValToMySQLQueryFormat encodes the hexval back into the query format
+// for passing on to MySQL as a bind var
+func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
+	nb := node.Bytes()
+	if node.Type != HexVal {
+		return nb, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Literal value is not a HexVal")
+	}
+
+	// Let's make this idempotent in case it's called more than once
+	match, err := regexp.Match("^x'.*'$", nb)
+	if err != nil {
+		return nb, err
+	}
+	if match {
+		return nb, nil
+	}
+
+	var bb bytes.Buffer
+	bb.WriteByte('x')
+	bb.WriteByte('\'')
+	bb.WriteString(string(nb))
+	bb.WriteByte('\'')
+	nb = bb.Bytes()
+	return nb, nil
 }
 
 // Equal returns true if the column names match.
@@ -529,7 +618,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 }
 
 //NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -556,6 +645,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, fro
 		StraightJoinHint: straightJoinHint,
 		SQLCalcFoundRows: sqlFoundRows,
 		SelectExprs:      exprs,
+		Into:             into,
 		From:             from,
 		Where:            where,
 		GroupBy:          groupBy,
@@ -635,7 +725,11 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 
 // NewTableIdent creates a new TableIdent.
 func NewTableIdent(str string) TableIdent {
-	return TableIdent{v: str}
+	// Use StringClone on the table name to ensure it is not pinned to the
+	// underlying query string that has been generated by the parser. This
+	// could lead to a significant increase in memory usage when the table
+	// name comes from a large query.
+	return TableIdent{v: hack.StringClone(str)}
 }
 
 // IsEmpty returns true if TabIdent is empty.
@@ -729,6 +823,11 @@ func (node *Select) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Select) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -739,9 +838,34 @@ func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// SetInto sets the into clause
+func (node *Select) SetInto(into *SelectInto) {
+	node.Into = into
+}
+
+// SetWith sets the with clause to a select statement
+func (node *Select) SetWith(with *With) {
+	node.With = with
+}
+
 // MakeDistinct makes the statement distinct
 func (node *Select) MakeDistinct() {
 	node.Distinct = true
+}
+
+// GetColumnCount return SelectExprs count.
+func (node *Select) GetColumnCount() int {
+	return len(node.SelectExprs)
+}
+
+// SetComments implements the SelectStatement interface
+func (node *Select) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// GetComments implements the SelectStatement interface
+func (node *Select) GetComments() Comments {
+	return node.Comments
 }
 
 // AddWhere adds the boolean expression to the
@@ -776,26 +900,6 @@ func (node *Select) AddHaving(expr Expr) {
 	}
 }
 
-// AddOrder adds an order by element
-func (node *ParenSelect) AddOrder(order *Order) {
-	node.Select.AddOrder(order)
-}
-
-// SetLimit sets the limit clause
-func (node *ParenSelect) SetLimit(limit *Limit) {
-	node.Select.SetLimit(limit)
-}
-
-// SetLock sets the lock clause
-func (node *ParenSelect) SetLock(lock Lock) {
-	node.Select.SetLock(lock)
-}
-
-// MakeDistinct implements the SelectStatement interface
-func (node *ParenSelect) MakeDistinct() {
-	node.Select.MakeDistinct()
-}
-
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
@@ -817,6 +921,11 @@ func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Union) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -827,23 +936,49 @@ func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
-// MakeDistinct implements the SelectStatement interface
-func (node *Union) MakeDistinct() {
-	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
+// SetInto sets the into clause
+func (node *Union) SetInto(into *SelectInto) {
+	node.Into = into
 }
 
-//Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit, lock Lock) *Union {
-	union, isUnion := lhs.(*Union)
-	if isUnion {
-		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Distinct: distinct, Statement: rhs})
-		union.OrderBy = by
-		union.Limit = limit
-		union.Lock = lock
-		return union
+// SetWith sets the with clause to a union statement
+func (node *Union) SetWith(with *With) {
+	node.With = with
+}
+
+// MakeDistinct implements the SelectStatement interface
+func (node *Union) MakeDistinct() {
+	node.Distinct = true
+}
+
+// GetColumnCount implements the SelectStatement interface
+func (node *Union) GetColumnCount() int {
+	return node.Left.GetColumnCount()
+}
+
+// SetComments implements the SelectStatement interface
+func (node *Union) SetComments(comments Comments) {
+	node.Left.SetComments(comments)
+}
+
+// GetComments implements the SelectStatement interface
+func (node *Union) GetComments() Comments {
+	return node.Left.GetComments()
+}
+
+func requiresParen(stmt SelectStatement) bool {
+	switch node := stmt.(type) {
+	case *Union:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
+	case *Select:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	}
 
-	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+	return false
+}
+
+func setLockInSelect(stmt SelectStatement, lock Lock) {
+	stmt.SetLock(lock)
 }
 
 // ToString returns the string associated with the DDLAction Enum
@@ -991,18 +1126,6 @@ func (op ComparisonExprOperator) ToString() string {
 }
 
 // ToString returns the operator as a string
-func (op RangeCondOperator) ToString() string {
-	switch op {
-	case BetweenOp:
-		return BetweenStr
-	case NotBetweenOp:
-		return NotBetweenStr
-	default:
-		return "Unknown RangeCondOperator"
-	}
-}
-
-// ToString returns the operator as a string
 func (op IsExprOperator) ToString() string {
 	switch op {
 	case IsNullOp:
@@ -1056,6 +1179,34 @@ func (op BinaryExprOperator) ToString() string {
 	}
 }
 
+// ToString returns the partition type as a string
+func (partitionType PartitionByType) ToString() string {
+	switch partitionType {
+	case HashType:
+		return HashTypeStr
+	case KeyType:
+		return KeyTypeStr
+	case ListType:
+		return ListTypeStr
+	case RangeType:
+		return RangeTypeStr
+	default:
+		return "Unknown PartitionByType"
+	}
+}
+
+// ToString returns the partition value range type as a string
+func (t PartitionValueRangeType) ToString() string {
+	switch t {
+	case LessThanType:
+		return LessThanTypeStr
+	case InType:
+		return InTypeStr
+	default:
+		return "Unknown PartitionValueRangeType"
+	}
+}
+
 // ToString returns the operator as a string
 func (op UnaryExprOperator) ToString() string {
 	switch op {
@@ -1067,16 +1218,8 @@ func (op UnaryExprOperator) ToString() string {
 		return TildaStr
 	case BangOp:
 		return BangStr
-	case BinaryOp:
-		return BinaryStr
-	case UBinaryOp:
-		return UBinaryStr
-	case Utf8mb4Op:
-		return Utf8mb4Str
-	case Utf8Op:
-		return Utf8Str
-	case Latin1Op:
-		return Latin1Str
+	case NStringOp:
+		return NStringStr
 	default:
 		return "Unknown UnaryExprOperator"
 	}
@@ -1112,18 +1255,6 @@ func (dir OrderDirection) ToString() string {
 	}
 }
 
-// ToString returns the operator as a string
-func (op ConvertTypeOperator) ToString() string {
-	switch op {
-	case NoOperator:
-		return NoOperatorStr
-	case CharacterSetOp:
-		return CharacterSetStr
-	default:
-		return "Unknown ConvertTypeOperator"
-	}
-}
-
 // ToString returns the type as a string
 func (ty IndexHintsType) ToString() string {
 	switch ty {
@@ -1155,6 +1286,54 @@ func (ty ExplainType) ToString() string {
 		return AnalyzeStr
 	default:
 		return "Unknown ExplainType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty IntervalTypes) ToString() string {
+	switch ty {
+	case IntervalYear:
+		return YearStr
+	case IntervalQuarter:
+		return QuarterStr
+	case IntervalMonth:
+		return MonthStr
+	case IntervalWeek:
+		return WeekStr
+	case IntervalDay:
+		return DayStr
+	case IntervalHour:
+		return HourStr
+	case IntervalMinute:
+		return MinuteStr
+	case IntervalSecond:
+		return SecondStr
+	case IntervalMicrosecond:
+		return MicrosecondStr
+	case IntervalYearMonth:
+		return YearMonthStr
+	case IntervalDayHour:
+		return DayHourStr
+	case IntervalDayMinute:
+		return DayMinuteStr
+	case IntervalDaySecond:
+		return DaySecondStr
+	case IntervalHourMinute:
+		return HourMinuteStr
+	case IntervalHourSecond:
+		return HourSecondStr
+	case IntervalMinuteSecond:
+		return MinuteSecondStr
+	case IntervalDayMicrosecond:
+		return DayMicrosecondStr
+	case IntervalHourMicrosecond:
+		return HourMicrosecondStr
+	case IntervalMinuteMicrosecond:
+		return MinuteMicrosecondStr
+	case IntervalSecondMicrosecond:
+		return SecondMicrosecondStr
+	default:
+		return "Unknown IntervalType"
 	}
 }
 
@@ -1307,6 +1486,17 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
+// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
+func isExprAliasForCurrentTimeStamp(expr Expr) bool {
+	switch node := expr.(type) {
+	case *FuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	case *CurTimeFuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	}
+	return false
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
@@ -1319,23 +1509,194 @@ const (
 	DoubleAt
 )
 
-// handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
-func handleUnaryMinus(expr Expr) Expr {
-	if num, ok := expr.(*Literal); ok && num.Type == IntVal {
-		// Handle double negative
-		if num.Val[0] == '-' {
-			num.Val = num.Val[1:]
-			return num
-		}
-		return NewIntLiteral("-" + num.Val)
-	}
-	if unaryExpr, ok := expr.(*UnaryExpr); ok && unaryExpr.Operator == UMinusOp {
-		return unaryExpr.Expr
-	}
-	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
-}
-
 // encodeSQLString encodes the string as a SQL string.
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
+}
+
+// ToString prints the list of table expressions as a string
+// To be used as an alternate for String for []TableExpr
+func ToString(exprs []TableExpr) string {
+	buf := NewTrackedBuffer(nil)
+	prefix := ""
+	for _, expr := range exprs {
+		buf.astPrintf(nil, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	return buf.String()
+}
+
+func formatIdentifier(id string) string {
+	buf := NewTrackedBuffer(nil)
+	formatID(buf, id, NoAt)
+	return buf.String()
+}
+
+func formatAddress(address string) string {
+	if len(address) > 0 && address[0] == '\'' {
+		return address
+	}
+	buf := NewTrackedBuffer(nil)
+	formatID(buf, address, NoAt)
+	return buf.String()
+}
+
+// ContainsAggregation returns true if the expression contains aggregation
+func ContainsAggregation(e SQLNode) bool {
+	hasAggregates := false
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		if IsAggregation(node) {
+			hasAggregates = true
+			return false, nil
+		}
+		return true, nil
+	}, e)
+	return hasAggregates
+}
+
+// IsAggregation returns true if the node is an aggregation expression
+func IsAggregation(node SQLNode) bool {
+	switch node := node.(type) {
+	case *FuncExpr:
+		return node.IsAggregate()
+	case *GroupConcatExpr:
+		return true
+	}
+	return false
+}
+
+// GetFirstSelect gets the first select statement
+func GetFirstSelect(selStmt SelectStatement) *Select {
+	if selStmt == nil {
+		return nil
+	}
+	switch node := selStmt.(type) {
+	case *Select:
+		return node
+	case *Union:
+		return GetFirstSelect(node.Left)
+	}
+	panic("[BUG]: unknown type for SelectStatement")
+}
+
+// GetAllSelects gets all the select statement s
+func GetAllSelects(selStmt SelectStatement) []*Select {
+	switch node := selStmt.(type) {
+	case *Select:
+		return []*Select{node}
+	case *Union:
+		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
+	}
+	panic("[BUG]: unknown type for SelectStatement")
+}
+
+// SetArgName sets argument name.
+func (es *ExtractedSubquery) SetArgName(n string) {
+	es.argName = n
+	es.updateAlternative()
+}
+
+// SetHasValuesArg sets has_values argument.
+func (es *ExtractedSubquery) SetHasValuesArg(n string) {
+	es.hasValuesArg = n
+	es.updateAlternative()
+}
+
+// GetArgName returns argument name.
+func (es *ExtractedSubquery) GetArgName() string {
+	return es.argName
+}
+
+// GetHasValuesArg returns has values argument.
+func (es *ExtractedSubquery) GetHasValuesArg() string {
+	return es.hasValuesArg
+
+}
+
+func (es *ExtractedSubquery) updateAlternative() {
+	switch original := es.Original.(type) {
+	case *ExistsExpr:
+		es.alternative = NewArgument(es.argName)
+	case *Subquery:
+		es.alternative = NewArgument(es.argName)
+	case *ComparisonExpr:
+		// other_side = :__sq
+		cmp := &ComparisonExpr{
+			Left:     es.OtherSide,
+			Right:    NewArgument(es.argName),
+			Operator: original.Operator,
+		}
+		var expr Expr = cmp
+		switch original.Operator {
+		case InOp:
+			// :__sq_has_values = 1 and other_side in ::__sq
+			cmp.Right = NewListArg(es.argName)
+			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("1"), Operator: EqualOp}
+			expr = AndExpressions(hasValue, cmp)
+		case NotInOp:
+			// :__sq_has_values = 0 or other_side not in ::__sq
+			cmp.Right = NewListArg(es.argName)
+			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
+			expr = &OrExpr{hasValue, cmp}
+		}
+		es.alternative = expr
+	}
+}
+
+func isExprLiteral(expr Expr) bool {
+	switch expr := expr.(type) {
+	case *Literal:
+		return true
+	case BoolVal:
+		return true
+	case *UnaryExpr:
+		return isExprLiteral(expr.Expr)
+	default:
+		return false
+	}
+}
+
+func defaultRequiresParens(ct *ColumnType) bool {
+	// in 5.7 null value should be without parenthesis, in 8.0 it is allowed either way.
+	// so it is safe to not keep parenthesis around null.
+	if _, isNullVal := ct.Options.Default.(*NullVal); isNullVal {
+		return false
+	}
+
+	switch strings.ToUpper(ct.Type) {
+	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB",
+		"LONGBLOB", "JSON", "GEOMETRY", "POINT",
+		"LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING",
+		"MULTIPOLYGON", "GEOMETRYCOLLECTION":
+		return true
+	}
+
+	if isExprLiteral(ct.Options.Default) || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+		return false
+	}
+
+	return true
+}
+
+// RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
+func RemoveKeyspaceFromColName(expr Expr) Expr {
+	return RemoveKeyspace(expr).(Expr) // This hard cast is safe because we do not change the type the input
+}
+
+// RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
+func RemoveKeyspace(in SQLNode) SQLNode {
+	return Rewrite(in, nil, func(cursor *Cursor) bool {
+		switch col := cursor.Node().(type) {
+		case *ColName:
+			if !col.Qualifier.Qualifier.IsEmpty() {
+				col.Qualifier.Qualifier = NewTableIdent("")
+			}
+		}
+		return true
+	})
+}
+
+func convertStringToInt(integer string) int {
+	val, _ := strconv.Atoi(integer)
+	return val
 }

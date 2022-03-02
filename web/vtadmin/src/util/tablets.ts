@@ -44,3 +44,6 @@ export const formatDisplayType = (t: pb.Tablet) => {
 export const SERVING_STATES = Object.keys(pb.Tablet.ServingState);
 
 export const formatState = (t: pb.Tablet) => t.state && SERVING_STATES[t.state];
+
+export const isPrimary = (t: pb.Tablet | undefined) =>
+    Boolean(t?.tablet?.type) && t?.tablet?.type === topodata.TabletType.PRIMARY;

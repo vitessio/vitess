@@ -21,11 +21,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
@@ -102,7 +102,7 @@ type streamerPlan struct {
 //   "select * from t where in_keyrange(col1, 'hash', '-80')",
 //   "select col1, col2 from t where...",
 //   "select col1, keyspace_id() from t where...".
-//   Only "in_keyrange" expressions are supported in the where clause.
+//   Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
@@ -200,6 +200,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// all existing rows are sent without the new row.
 	// If a single row exceeds the packet size, it will be in its own packet.
 	bufferAndTransmit := func(vevent *binlogdatapb.VEvent) error {
+		vevent.Keyspace = vs.vse.keyspace
+		vevent.Shard = vs.vse.shard
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
 			binlogdatapb.VEventType_JOURNAL:
@@ -271,16 +273,31 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		for {
 			// check throttler.
 			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+				select {
+				// make sure to leave if context is cancelled
+				case <-ctx.Done():
+					return
+				default:
+					// do nothing special
+				}
 				continue
 			}
-
-			ev, ok := <-events
-			if ok {
-				throttledEvents <- ev
-			} else {
-				close(throttledEvents)
+			select {
+			case ev, ok := <-events:
+				if ok {
+					select {
+					case throttledEvents <- ev:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					close(throttledEvents)
+					return
+				}
+			case <-ctx.Done():
 				return
 			}
+
 		}
 	}()
 	for {
@@ -362,7 +379,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	// tells us the size of the event header.
 	if vs.format.IsZero() {
 		// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
-		// is a fake ROTATE_EVENT, which the master sends to tell us the name
+		// is a fake ROTATE_EVENT, which the primary sends to tell us the name
 		// of the current log file.
 		if ev.IsRotate() {
 			return nil, nil
@@ -388,7 +405,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_BEGIN,
 			})
 		}
-		vs.pos = mysql.AppendGTID(vs.pos, gtid) //TODO: #sugu why Append?
+		vs.pos = mysql.AppendGTID(vs.pos, gtid)
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
@@ -463,7 +480,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			vs.se.ReloadAt(context.Background(), vs.pos)
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
+				vs.se.ReloadAt(context.Background(), vs.pos)
+			}
 		case sqlparser.StmtSavepoint:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
@@ -664,6 +683,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		FieldEvent: &binlogdatapb.FieldEvent{
 			TableName: plan.Table.Name,
 			Fields:    plan.fields(),
+			Keyspace:  vs.vse.keyspace,
+			Shard:     vs.vse.shard,
 		},
 	}, nil
 }
@@ -711,11 +732,13 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 		return nil, err
 	}
 	for _, field := range fields {
-		typ := strings.ToLower(field.Type.String())
-		if typ == "enum" || typ == "set" {
-			if extColInfo, ok := extColInfos[field.Name]; ok {
-				field.ColumnType = extColInfo.columnType
-			}
+		// we want the MySQL column type info so that we can properly handle
+		// ambiguous binlog events and other cases where the internal types
+		// don't match the MySQL column type. One example being that in binlog
+		// events CHAR columns with a binary collation are indistinguishable
+		// from BINARY columns.
+		if extColInfo, ok := extColInfos[field.Name]; ok {
+			field.ColumnType = extColInfo.columnType
 		}
 	}
 	return fields, nil
@@ -782,7 +805,11 @@ nextrow:
 				continue
 			}
 			journal := &binlogdatapb.Journal{}
-			if err := prototext.Unmarshal(afterValues[i].ToBytes(), journal); err != nil {
+			avBytes, err := afterValues[i].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			if err := prototext.Unmarshal(avBytes, journal); err != nil {
 				return nil, err
 			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -823,6 +850,8 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName:  plan.Table.Name,
 				RowChanges: rowChanges,
+				Keyspace:   vs.vse.keyspace,
+				Shard:      vs.vse.shard,
 			},
 		})
 	}
@@ -856,6 +885,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		return false, nil, nil
 	}
 	values := make([]sqltypes.Value, dataColumns.Count())
+	charsets := make([]collations.ID, len(values))
 	valueIndex := 0
 	pos := 0
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
@@ -866,17 +896,20 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			valueIndex++
 			continue
 		}
-		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
+		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum])
 		if err != nil {
+			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
+				err, plan.Table.Name, colNum, plan.Table.Fields, values)
 			return false, nil, err
 		}
 		pos += l
 
+		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
 		values[colNum] = value
 		valueIndex++
 	}
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
-	ok, err := plan.filter(values, filtered)
+	ok, err := plan.filter(values, filtered, charsets)
 	return ok, filtered, err
 }
 

@@ -27,8 +27,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"gotest.tools/assert"
-
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/require"
@@ -70,7 +68,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	require.EqualError(t, err, "not in a transaction")
 
 	// wrap everything up and assert
-	assert.Equal(t, "begin;"+sql+";commit", db.QueryLog())
+	requireLogs(t, db.QueryLog(), "begin", sql, "commit")
 	conn3.Release(tx.TxCommit)
 }
 
@@ -89,7 +87,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	err = txPool.Rollback(ctx, conn)
 	require.NoError(t, err, "not in a transaction")
 
-	assert.Equal(t, "begin;rollback", db.QueryLog())
+	requireLogs(t, db.QueryLog(), "begin", "rollback")
 }
 
 func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
@@ -106,7 +104,7 @@ func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
 	err = txPool.Rollback(ctx, conn)
 	require.NoError(t, err)
 
-	assert.Equal(t, "begin", db.QueryLog())
+	requireLogs(t, db.QueryLog(), "begin")
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
@@ -132,7 +130,8 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	require.Error(t, err)
 
 	conn1.Release(tx.TxCommit)
-	assert.Equal(t, "begin;begin;rollback;commit", db.QueryLog())
+
+	requireLogs(t, db.QueryLog(), "begin", "begin", "rollback", "commit")
 }
 
 func TestTxPoolTransactionIsolation(t *testing.T) {
@@ -143,7 +142,7 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 	require.NoError(t, err)
 	c2.Release(tx.TxClose)
 
-	assert.Equal(t, "set transaction isolation level read committed;begin", db.QueryLog())
+	requireLogs(t, db.QueryLog(), "begin")
 }
 
 func TestTxPoolAutocommit(t *testing.T) {
@@ -165,8 +164,8 @@ func TestTxPoolAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	conn1.Release(tx.TxCommit)
 
-	// finally, we should only see the query, no begin/commit
-	assert.Equal(t, query, db.QueryLog())
+	// finally, we should only see the query + the initial collation set, no begin/commit
+	requireLogs(t, db.QueryLog(), "select 3")
 }
 
 // TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
@@ -267,7 +266,7 @@ func TestTxPoolCancelledContextError(t *testing.T) {
 	// then
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "transaction pool aborting request due to already expired context")
-	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	require.Empty(t, db.QueryLog())
 }
 
@@ -292,7 +291,8 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "transaction pool connection limit exceeded")
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
-	require.Equal(t, "begin", db.QueryLog())
+
+	requireLogs(t, db.QueryLog(), "begin")
 	require.True(t, conn.TxProperties().LogToFile)
 }
 
@@ -355,7 +355,8 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
-	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	conn1, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	require.NoError(t, err, "unable to start transaction: %v", err)
 	conn1.Unlock()
 	id = conn1.ReservedID()
 	time.Sleep(20 * time.Millisecond)

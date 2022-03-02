@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates master traffic for the customer keyspace to the
-# new master tablet
+# this script migrates primary traffic for the customer keyspace to the
+# new primary tablet
 
 source ./env.sh
 
-vtctlclient SwitchWrites customer.commerce2customer
+vtctlclient MoveTables -tablet_types=primary SwitchTraffic customer.commerce2customer

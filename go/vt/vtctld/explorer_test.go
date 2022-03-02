@@ -141,7 +141,7 @@ func TestHandlePathShard(t *testing.T) {
 	input := path.Join("/global", "keyspaces", "test_keyspace", "shards", "-80", "Shard")
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topodatapb.Keyspace{}
-	want := "is_master_serving:true"
+	want := "is_primary_serving:true"
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer(cells...)

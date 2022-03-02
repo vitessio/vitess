@@ -132,10 +132,10 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	revert := changeVar(t, "Consolidator", tabletenv.NotOnMaster)
+	revert := changeVar(t, "Consolidator", tabletenv.NotOnPrimary)
 	defer revert()
 
-	// master should not do query consolidation
+	// primary should not do query consolidation
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -156,7 +156,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	err := client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
 	defer func() {
-		err = client.SetServingType(topodatapb.TabletType_MASTER)
+		err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 		require.NoError(t, err)
 	}()
 

@@ -33,18 +33,18 @@ func init() {
 func TestGetAnalysisInstanceType(t *testing.T) {
 	{
 		analysis := &ReplicationAnalysis{}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "intermediate-master")
+		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "intermediate-primary")
 	}
 	{
-		analysis := &ReplicationAnalysis{IsMaster: true}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "master")
+		analysis := &ReplicationAnalysis{IsPrimary: true}
+		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "primary")
 	}
 	{
-		analysis := &ReplicationAnalysis{IsCoMaster: true}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "co-master")
+		analysis := &ReplicationAnalysis{IsCoPrimary: true}
+		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "co-primary")
 	}
 	{
-		analysis := &ReplicationAnalysis{IsMaster: true, IsCoMaster: true}
-		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "co-master")
+		analysis := &ReplicationAnalysis{IsPrimary: true, IsCoPrimary: true}
+		test.S(t).ExpectEquals(string(analysis.GetAnalysisInstanceType()), "co-primary")
 	}
 }

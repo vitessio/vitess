@@ -30,10 +30,6 @@ service Query {
   // transaction context, if Query.transaction_id is set).
   rpc Execute(query.ExecuteRequest) returns (query.ExecuteResponse) {};
 
-  // ExecuteBatch executes a list of queries, and returns the result
-  // for each query.
-  rpc ExecuteBatch(query.ExecuteBatchRequest) returns (query.ExecuteBatchResponse) {};
-
   // StreamExecute executes a streaming query. Use this method if the
   // query returns a large number of rows. The first QueryResult will
   // contain the Fields, subsequent QueryResult messages will contain
@@ -76,8 +72,8 @@ service Query {
   // BeginExecute executes a begin and the specified SQL query.
   rpc BeginExecute(query.BeginExecuteRequest) returns (query.BeginExecuteResponse) {};
 
-  // BeginExecuteBatch executes a begin and a list of queries.
-  rpc BeginExecuteBatch(query.BeginExecuteBatchRequest) returns (query.BeginExecuteBatchResponse) {};
+  // BeginStreamExecute executes a begin and the specified SQL query.
+  rpc BeginStreamExecute(query.BeginStreamExecuteRequest) returns (stream query.BeginStreamExecuteResponse) {};
 
   // MessageStream streams messages from a message table.
   rpc MessageStream(query.MessageStreamRequest) returns (stream query.MessageStreamResponse) {};
@@ -85,8 +81,19 @@ service Query {
   // MessageAck acks messages for a table.
   rpc MessageAck(query.MessageAckRequest) returns (query.MessageAckResponse) {};
 
+  // ReserveExecute executes a query on a reserved connection
   rpc ReserveExecute(query.ReserveExecuteRequest) returns (query.ReserveExecuteResponse) {};
+
+  // ReserveBeginExecute starts a transaction and executes a query in the transaction on a reserved connection
   rpc ReserveBeginExecute(query.ReserveBeginExecuteRequest) returns (query.ReserveBeginExecuteResponse) {};
+
+  // ReserveStreamExecute executes a streaming query on a reserved connection
+  rpc ReserveStreamExecute(query.ReserveStreamExecuteRequest) returns (stream query.ReserveStreamExecuteResponse) {};
+
+  // ReserveBeginStreamExecute starts a transaction and executes a streaming query in the transaction on a reserved connection
+  rpc ReserveBeginStreamExecute(query.ReserveBeginStreamExecuteRequest) returns (stream query.ReserveBeginStreamExecuteResponse) {};
+
+  // Release releases the connection
   rpc Release(query.ReleaseRequest) returns (query.ReleaseResponse) {};
 
   // StreamHealth runs a streaming RPC to the tablet, that returns the

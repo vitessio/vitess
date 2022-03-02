@@ -19,7 +19,6 @@ package etcd2topo
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -39,7 +38,7 @@ import (
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
 func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	// Create a temporary directory.
-	dataDir, err := ioutil.TempDir("", "etcd")
+	dataDir, err := os.MkdirTemp("", "etcd")
 	if err != nil {
 		t.Fatalf("cannot create tempdir: %v", err)
 	}
@@ -93,7 +92,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 // startEtcdWithTLS starts an etcd subprocess with TLS setup, and waits for it to be ready.
 func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func()) {
 	// Create a temporary directory.
-	dataDir, err := ioutil.TempDir("", "etcd")
+	dataDir, err := os.MkdirTemp("", "etcd")
 	if err != nil {
 		t.Fatalf("cannot create tempdir: %v", err)
 	}

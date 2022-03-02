@@ -1,0 +1,15 @@
+--source suite/collations/include/unicode.inc
+insert into unicode values (0x100001,convert(_utf16 0x0064017E using utf8mb4),'Croatian dž','Ll');
+insert into unicode values (0x100002,convert(_utf16 0x0044017E using utf8mb4),'Croatian Dž','Ll');
+insert into unicode values (0x100003,convert(_utf16 0x0044017D using utf8mb4),'Croatian DŽ','Ll');
+insert into unicode values (0x100004,'LJ','Croatian LJ','Lu');
+insert into unicode values (0x100005,'Lj','Croatian Lj','Lt');
+insert into unicode values (0x100006,'lj','Croatian lj','Ll');
+insert into unicode values (0x100007,'NJ','Croatian NJ','Lu');
+insert into unicode values (0x100008,'Nj','Croatian Nj','Lt');
+insert into unicode values (0x100009,'nj','Croatian nj','Ll');
+--test:uca0900 utf8mb4_hr_0900_ai_ci
+select hex(convert(uc using utf32)), hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_hr_0900_ai_ci)), name from unicode where category in ('Lu','Ll','Lt','Lm') order by uc  collate utf8mb4_hr_0900_ai_ci, cp;
+--test:uca0900 utf8mb4_hr_0900_as_cs
+select hex(convert(uc using utf32)), hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_hr_0900_as_cs)), name from unicode where category in ('Lu','Ll','Lt','Lm') order by uc  collate utf8mb4_hr_0900_as_cs, cp;
+drop table if exists unicode;

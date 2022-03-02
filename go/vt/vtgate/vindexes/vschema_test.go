@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"google.golang.org/protobuf/proto"
 
 	"github.com/stretchr/testify/assert"
@@ -35,7 +37,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
@@ -176,6 +177,26 @@ func NewSTLO(name string, _ map[string]string) (Vindex, error) {
 var _ SingleColumn = (*stLO)(nil)
 var _ Lookup = (*stLO)(nil)
 
+// mcFU is a multi-column Functional, Unique Vindex.
+type mcFU struct {
+	name   string
+	Params map[string]string
+}
+
+func (v *mcFU) String() string                                                      { return v.name }
+func (*mcFU) Cost() int                                                             { return 1 }
+func (*mcFU) IsUnique() bool                                                        { return true }
+func (*mcFU) NeedsVCursor() bool                                                    { return false }
+func (*mcFU) Verify(VCursor, [][]sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*mcFU) Map(cursor VCursor, ids [][]sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (*mcFU) PartialVindex() bool                                                   { return false }
+
+func NewMCFU(name string, params map[string]string) (Vindex, error) {
+	return &mcFU{name: name, Params: params}, nil
+}
+
+var _ MultiColumn = (*mcFU)(nil)
+
 func init() {
 	Register("cheap", NewCheapVindex)
 	Register("stfu", NewSTFU)
@@ -183,13 +204,15 @@ func init() {
 	Register("stln", NewSTLN)
 	Register("stlu", NewSTLU)
 	Register("stlo", NewSTLO)
+	Register("region_experimental_test", NewRegionExperimental)
+	Register("mcfu", NewMCFU)
 }
 
 func TestUnshardedVSchemaValid(t *testing.T) {
 	err := ValidateKeyspace(&vschemapb.Keyspace{
 		Sharded:  false,
-		Vindexes: make(map[string]*vschema.Vindex),
-		Tables:   make(map[string]*vschema.Table),
+		Vindexes: make(map[string]*vschemapb.Vindex),
+		Tables:   make(map[string]*vschemapb.Table),
 	})
 	if err != nil {
 		t.Errorf("TestUnshardedVSchemaValid:\n%v", err)
@@ -206,7 +229,7 @@ func TestUnshardedVSchema(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["unsharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -261,7 +284,7 @@ func TestVSchemaColumns(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["unsharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -326,8 +349,7 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 			},
 		},
 	}
-	got, err := BuildVSchema(&good)
-	require.NoError(t, err)
+	got := BuildVSchema(&good)
 	ks := &Keyspace{
 		Name: "unsharded",
 	}
@@ -389,7 +411,7 @@ func TestVSchemaColumnsFail(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	want := "duplicate column name 'c1' for table: t1"
 	err := got.Keyspaces["unsharded"].Error
 	if err == nil || err.Error() != want {
@@ -410,7 +432,7 @@ func TestVSchemaPinned(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -486,7 +508,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -505,17 +527,21 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stfu",
-				Name:    "stfu1",
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
-				Type:    "stln",
-				Name:    "stln1",
-				Owned:   true,
-				Vindex:  vindex2,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:     "stln",
+				Name:     "stln1",
+				Owned:    true,
+				Vindex:   vindex2,
+				isUnique: vindex2.IsUnique(),
+				cost:     vindex2.Cost(),
 			},
 		},
 	}
@@ -553,11 +579,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		gotjson, _ := json.Marshal(got)
-		wantjson, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
-	}
+	utils.MustMatch(t, want, got)
 }
 
 func TestShardedVSchemaOwnerInfo(t *testing.T) {
@@ -614,7 +636,7 @@ func TestShardedVSchemaOwnerInfo(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	results := []struct {
@@ -714,7 +736,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&input)
+	got := BuildVSchema(&input)
 	ks1 := &Keyspace{
 		Name:    "ks1",
 		Sharded: true,
@@ -729,10 +751,12 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks1,
 		ColumnVindexes: []*ColumnVindex{{
-			Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-			Type:    "stfu",
-			Name:    "stfu1",
-			Vindex:  vindex1,
+			Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+			Type:     "stfu",
+			Name:     "stfu1",
+			Vindex:   vindex1,
+			isUnique: vindex1.IsUnique(),
+			cost:     vindex1.Cost(),
 		}},
 	}
 	t1.Ordered = []*ColumnVindex{
@@ -767,7 +791,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("duplicate rule for entry dup"),
 			},
 			"badname": {
-				Error: errors.New("invalid table name: t1.t2.t3"),
+				Error: errors.New("invalid table name: t1.t2.t3, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"unqualified": {
 				Error: errors.New("table t1 must be qualified"),
@@ -987,8 +1011,7 @@ func TestFindBestColVindex(t *testing.T) {
 			},
 		},
 	}
-	vschema, err := BuildVSchema(testSrvVSchema)
-	require.NoError(t, err)
+	vs := BuildVSchema(testSrvVSchema)
 
 	testcases := []struct {
 		tablename  string
@@ -1011,7 +1034,7 @@ func TestFindBestColVindex(t *testing.T) {
 		err:       "table t2 has no vindex",
 	}}
 	for _, tcase := range testcases {
-		table, err := vschema.FindTable("", tcase.tablename)
+		table, err := vs.FindTable("", tcase.tablename)
 		require.NoError(t, err)
 		cv, err := FindBestColVindex(table)
 		if err != nil {
@@ -1040,17 +1063,21 @@ func TestFindVindexForSharding(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stfu",
-				Name:    "stfu1",
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
-				Type:    "stln",
-				Name:    "stln1",
-				Owned:   true,
-				Vindex:  vindex2,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:     "stln",
+				Name:     "stln1",
+				Owned:    true,
+				Vindex:   vindex2,
+				isUnique: vindex2.IsUnique(),
+				cost:     vindex2.Cost(),
 			},
 		},
 	}
@@ -1073,17 +1100,21 @@ func TestFindVindexForShardingError(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stlu",
-				Name:    "stlu1",
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stlu",
+				Name:     "stlu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
-				Type:    "stln",
-				Name:    "stln1",
-				Owned:   true,
-				Vindex:  vindex2,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:     "stln",
+				Name:     "stln1",
+				Owned:    true,
+				Vindex:   vindex2,
+				isUnique: vindex2.IsUnique(),
+				cost:     vindex2.Cost(),
 			},
 		},
 	}
@@ -1114,17 +1145,21 @@ func TestFindVindexForSharding2(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stlu",
-				Name:    "stlu1",
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stlu",
+				Name:     "stlu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
-				Type:    "stfu",
-				Name:    "stfu1",
-				Owned:   true,
-				Vindex:  vindex2,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Owned:    true,
+				Vindex:   vindex2,
+				isUnique: vindex2.IsUnique(),
+				cost:     vindex2.Cost(),
 			},
 		},
 	}
@@ -1162,7 +1197,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -1180,10 +1215,12 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1"), sqlparser.NewColIdent("c2")},
-				Type:    "stfu",
-				Name:    "stfu1",
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1"), sqlparser.NewColIdent("c2")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 		},
 	}
@@ -1255,7 +1292,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	ks := &Keyspace{
@@ -1269,18 +1306,22 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stlu",
-				Name:    "stlu1",
-				Owned:   false,
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stlu",
+				Name:     "stlu1",
+				Owned:    false,
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
-				Type:    "stfu",
-				Name:    "stfu1",
-				Owned:   false,
-				Vindex:  vindex2,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Owned:    false,
+				Vindex:   vindex2,
+				isUnique: vindex2.IsUnique(),
+				cost:     vindex2.Cost(),
 			},
 		},
 	}
@@ -1347,7 +1388,7 @@ func TestBuildVSchemaVindexNotFoundFail(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := `vindexType "noexist" not found`
 	if err == nil || err.Error() != want {
@@ -1371,7 +1412,7 @@ func TestBuildVSchemaNoColumnVindexFail(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "missing primary col vindex for table: t1"
 	if err == nil || err.Error() != want {
@@ -1404,7 +1445,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	ksb := &Keyspace{
 		Name: "ksb",
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	t1a := &Table{
 		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ksa,
@@ -1473,7 +1514,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	ksa := &Keyspace{
 		Name: "ksa",
 	}
@@ -1574,7 +1615,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["ksa"].Error
 	err1 := got.Keyspaces["ksb"].Error
 	require.NoError(t, err)
@@ -1595,11 +1636,13 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Keyspace: ksa,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stlu",
-				Name:    "stlu1",
-				Owned:   false,
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stlu",
+				Name:     "stlu1",
+				Owned:    false,
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 		},
 	}
@@ -1611,11 +1654,13 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Keyspace: ksb,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stlu",
-				Name:    "stlu1",
-				Owned:   false,
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stlu",
+				Name:     "stlu1",
+				Owned:    false,
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 		},
 	}
@@ -1694,7 +1739,7 @@ func TestBuildVSchemaNoindexFail(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "vindex notexist not found for table t1"
 	if err == nil || err.Error() != want {
@@ -1726,7 +1771,7 @@ func TestBuildVSchemaColumnAndColumnsFail(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := `can't use column and columns at the same time in vindex (stfu) and table (t1)`
 	if err == nil || err.Error() != want {
@@ -1756,7 +1801,7 @@ func TestBuildVSchemaNoColumnsFail(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := `must specify at least one column for vindex (stfu) and table (t1)`
 	if err == nil || err.Error() != want {
@@ -1787,7 +1832,7 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "primary vindex stln is not Unique for table t1"
 	if err == nil || err.Error() != want {
@@ -1819,7 +1864,7 @@ func TestBuildVSchemaPrimaryCannotBeOwned(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "primary vindex stlu cannot be owned for table t1"
 	if err == nil || err.Error() != want {
@@ -1876,7 +1921,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&good)
+	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	err1 := got.Keyspaces["unsharded"].Error
@@ -1906,10 +1951,12 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stfu",
-				Name:    "stfu1",
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 		},
 		AutoIncrement: &AutoIncrement{
@@ -1925,10 +1972,12 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
-				Type:    "stfu",
-				Name:    "stfu1",
-				Vindex:  vindex1,
+				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Type:     "stfu",
+				Name:     "stfu1",
+				Vindex:   vindex1,
+				isUnique: vindex1.IsUnique(),
+				cost:     vindex1.Cost(),
 			},
 		},
 		AutoIncrement: &AutoIncrement{
@@ -2035,7 +2084,7 @@ func TestBadSequence(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "cannot resolve sequence invalid_seq: table invalid_seq not found"
 	if err == nil || err.Error() != want {
@@ -2083,7 +2132,7 @@ func TestBadSequenceName(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "invalid table name: a.b.seq"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -2107,7 +2156,7 @@ func TestBadShardedSequence(t *testing.T) {
 			},
 		},
 	}
-	got, _ := BuildVSchema(&bad)
+	got := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "sequence table has to be in an unsharded keyspace or must be pinned: t1"
 	if err == nil || err.Error() != want {
@@ -2155,7 +2204,7 @@ func TestFindTable(t *testing.T) {
 			},
 		},
 	}
-	vschema, _ := BuildVSchema(&input)
+	vschema := BuildVSchema(&input)
 	_, err := vschema.FindTable("", "t1")
 	require.EqualError(t, err, "ambiguous table reference: t1")
 
@@ -2253,23 +2302,23 @@ func TestFindTableOrVindex(t *testing.T) {
 			},
 		},
 	}
-	vschema, _ := BuildVSchema(&input)
+	vschema := BuildVSchema(&input)
 	ta := vschema.Keyspaces["ksa"].Tables["ta"]
 	t1 := vschema.Keyspaces["ksb"].Tables["t1"]
 
-	_, _, err := vschema.FindTableOrVindex("", "t1", topodatapb.TabletType_MASTER)
+	_, _, err := vschema.FindTableOrVindex("", "t1", topodatapb.TabletType_PRIMARY)
 	wantErr := "ambiguous table reference: t1"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "none", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "none", topodatapb.TabletType_PRIMARY)
 	wantErr = "table none not found"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	got, _, err := vschema.FindTableOrVindex("", "ta", topodatapb.TabletType_MASTER)
+	got, _, err := vschema.FindTableOrVindex("", "ta", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2277,7 +2326,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(\"t1a\"): %+v, want %+v", got, ta)
 	}
 
-	_, vindex, err := vschema.FindTableOrVindex("", "stfu1", topodatapb.TabletType_MASTER)
+	_, vindex, err := vschema.FindTableOrVindex("", "stfu1", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2288,7 +2337,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta", topodatapb.TabletType_MASTER)
+	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2299,13 +2348,13 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "dup", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "dup", topodatapb.TabletType_PRIMARY)
 	wantErr = "ambiguous vindex reference: dup"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_MASTER)
+	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2321,7 +2370,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_MASTER)
+	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2337,7 +2386,7 @@ func TestFindTableOrVindex(t *testing.T) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	_, _, err = vschema.FindTableOrVindex("", "notarget", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "notarget", topodatapb.TabletType_PRIMARY)
 	wantErr = "table notarget has been disabled"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
@@ -2596,7 +2645,7 @@ func TestFindSingleKeyspace(t *testing.T) {
 			},
 		},
 	}
-	vschema, _ := BuildVSchema(&input)
+	vschema := BuildVSchema(&input)
 	none := &Table{
 		Name: sqlparser.NewTableIdent("none"),
 		Keyspace: &Keyspace{
@@ -2637,10 +2686,77 @@ func TestFindSingleKeyspace(t *testing.T) {
 			},
 		},
 	}
-	vschema, _ = BuildVSchema(&input)
+	vschema = BuildVSchema(&input)
 	_, err := vschema.FindTable("", "none")
 	wantErr := "table none not found"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("FindTable(\"\"): %v, want %s", err, wantErr)
 	}
+}
+
+func TestMultiColVindexPartialAllowed(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ksa": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"regional_vdx": {
+						Type: "region_experimental_test",
+						Params: map[string]string{
+							"region_bytes": "1",
+						},
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"user_region": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Columns: []string{"cola", "colb"},
+								Name:    "regional_vdx",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	table, err := vschema.FindTable("ksa", "user_region")
+	require.NoError(t, err)
+	require.Len(t, table.ColumnVindexes, 2)
+	require.True(t, table.ColumnVindexes[0].IsUnique())
+	require.False(t, table.ColumnVindexes[1].IsUnique())
+	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
+	require.EqualValues(t, 2, table.ColumnVindexes[1].Cost())
+}
+
+func TestMultiColVindexPartialNotAllowed(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ksa": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"multicol_vdx": {
+						Type: "mcfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"multiColTbl": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Columns: []string{"cola", "colb", "colc"},
+								Name:    "multicol_vdx",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	table, err := vschema.FindTable("ksa", "multiColTbl")
+	require.NoError(t, err)
+	require.Len(t, table.ColumnVindexes, 1)
+	require.True(t, table.ColumnVindexes[0].IsUnique())
+	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
 }

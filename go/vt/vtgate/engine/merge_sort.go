@@ -18,11 +18,10 @@ package engine
 
 import (
 	"container/heap"
+	"context"
 	"io"
 
 	"vitess.io/vitess/go/mysql"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -50,7 +49,7 @@ var _ Primitive = (*MergeSort)(nil)
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
 	Primitives              []StreamExecutor
-	OrderBy                 []OrderbyParams
+	OrderBy                 []OrderByParams
 	ScatterErrorsAsWarnings bool
 	noInputs
 	noTxNeeded
@@ -65,8 +64,8 @@ func (ms *MergeSort) GetKeyspaceName() string { return "" }
 // GetTableName satisfies Primitive.
 func (ms *MergeSort) GetTableName() string { return "" }
 
-// Execute is not supported.
-func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute is not supported.
+func (ms *MergeSort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Execute is not reachable")
 }
 
@@ -75,8 +74,8 @@ func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }
 
-// StreamExecute performs a streaming exec.
-func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+// TryStreamExecute performs a streaming exec.
+func (ms *MergeSort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 	gotFields := wantfields

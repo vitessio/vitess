@@ -35,7 +35,7 @@ CELL=zone1 ./scripts/vtctld-up.sh
 CELL=zone1 TABLET_UID=100 ./scripts/mysqlctl-up.sh
 SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID=100 ./scripts/vttablet-up.sh
 
-vtctlclient InitShardMaster -force main/0 zone1-100
+vtctlclient InitShardPrimary -force main/0 zone1-100
 
 # create the schema
 vtctlclient ApplySchema -sql-file create_main_schema.sql main

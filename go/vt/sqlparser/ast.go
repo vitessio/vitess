@@ -37,15 +37,28 @@ type (
 		SQLNode
 	}
 
+	// SupportOptimizerHint represents a statement that accepts optimizer hints.
+	SupportOptimizerHint interface {
+		iSupportOptimizerHint()
+		SetComments(comments Comments)
+		GetComments() Comments
+	}
+
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
+		InsertRows
 		iSelectStatement()
-		iInsertRows()
 		AddOrder(*Order)
+		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
+		SetInto(into *SelectInto)
+		SetWith(with *With)
 		MakeDistinct()
+		GetColumnCount() int
+		SetComments(comments Comments)
+		GetComments() Comments
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -58,6 +71,7 @@ type (
 		GetOptLike() *OptLike
 		GetIfExists() bool
 		GetIfNotExists() bool
+		GetIsReplace() bool
 		GetTableSpec() *TableSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
@@ -104,7 +118,7 @@ type (
 	// AddColumns represents a ADD COLUMN alter option
 	AddColumns struct {
 		Columns []*ColumnDefinition
-		First   *ColName
+		First   bool
 		After   *ColName
 	}
 
@@ -118,18 +132,30 @@ type (
 		DefaultVal  Expr
 	}
 
+	// With contains the lists of common table expression and specifies if it is recursive or not
+	With struct {
+		ctes      []*CommonTableExpr
+		Recursive bool
+	}
+
+	// CommonTableExpr is the structure for supporting common table expressions
+	CommonTableExpr struct {
+		TableID  TableIdent
+		Columns  Columns
+		Subquery *Subquery
+	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
 		OldColumn        *ColName
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
 	// ModifyColumn is used to change the column definition in alter table command
 	ModifyColumn struct {
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
@@ -201,16 +227,18 @@ type (
 		Distinct         bool
 		StraightJoinHint bool
 		SQLCalcFoundRows bool
-		Comments         Comments
-		SelectExprs      SelectExprs
-		From             TableExprs
-		Where            *Where
-		GroupBy          GroupBy
-		Having           *Where
-		OrderBy          OrderBy
-		Limit            *Limit
-		Lock             Lock
-		Into             *SelectInto
+		// The From field must be the first AST element of this struct so the rewriter sees it first
+		From        []TableExpr
+		Comments    Comments
+		SelectExprs SelectExprs
+		Where       *Where
+		With        *With
+		GroupBy     GroupBy
+		Having      *Where
+		OrderBy     OrderBy
+		Limit       *Limit
+		Lock        Lock
+		Into        *SelectInto
 	}
 
 	// SelectInto is a struct that represent the INTO part of a select query
@@ -230,18 +258,16 @@ type (
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
 
-	// UnionSelect represents union type and select statement after first select statement.
-	UnionSelect struct {
-		Distinct  bool
-		Statement SelectStatement
-	}
 	// Union represents a UNION statement.
 	Union struct {
-		FirstStatement SelectStatement
-		UnionSelects   []*UnionSelect
-		OrderBy        OrderBy
-		Limit          *Limit
-		Lock           Lock
+		Left     SelectStatement
+		Right    SelectStatement
+		Distinct bool
+		OrderBy  OrderBy
+		With     *With
+		Limit    *Limit
+		Lock     Lock
+		Into     *SelectInto
 	}
 
 	// VStream represents a VSTREAM statement.
@@ -288,6 +314,7 @@ type (
 	// Update represents an UPDATE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
+		With       *With
 		Comments   Comments
 		Ignore     Ignore
 		TableExprs TableExprs
@@ -300,6 +327,7 @@ type (
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
+		With       *With
 		Ignore     Ignore
 		Comments   Comments
 		Targets    TableNames
@@ -413,6 +441,12 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
+	ShowMigrationLogs struct {
+		UUID     string
+		Comments Comments
+	}
+
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
@@ -430,11 +464,12 @@ type (
 
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
-		Table         TableName
-		AlterOptions  []AlterOption
-		PartitionSpec *PartitionSpec
-		Comments      Comments
-		FullyParsed   bool
+		Table           TableName
+		AlterOptions    []AlterOption
+		PartitionSpec   *PartitionSpec
+		PartitionOption *PartitionOption
+		Comments        Comments
+		FullyParsed     bool
 	}
 
 	// DropTable represents a DROP TABLE statement.
@@ -450,6 +485,7 @@ type (
 	DropView struct {
 		FromTables TableNames
 		IfExists   bool
+		Comments   Comments
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
@@ -467,23 +503,31 @@ type (
 	CreateView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
+		Comments    Comments
 	}
 
 	// AlterView represents a ALTER VIEW query
 	AlterView struct {
 		ViewName    TableName
 		Algorithm   string
-		Definer     string
+		Definer     *Definer
 		Security    string
 		Columns     Columns
 		Select      SelectStatement
 		CheckOption string
+		Comments    Comments
+	}
+
+	// Definer stores the user for AlterView and CreateView definers
+	Definer struct {
+		Name    string
+		Address string
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -491,11 +535,6 @@ type (
 
 	// Load represents a LOAD statement
 	Load struct {
-	}
-
-	// ParenSelect is a parenthesized SELECT statement.
-	ParenSelect struct {
-		Select SelectStatement
 	}
 
 	// Show represents a show statement.
@@ -572,6 +611,8 @@ type (
 		Table TableName
 		Wild  string
 	}
+	// IntervalTypes is an enum to get types of intervals
+	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -608,7 +649,6 @@ func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
-func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
@@ -621,6 +661,7 @@ func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}
+func (*ShowMigrationLogs) iStatement() {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
@@ -660,6 +701,14 @@ func (TableOptions) iAlterOption()             {}
 
 func (*ExplainStmt) iExplain() {}
 func (*ExplainTab) iExplain()  {}
+
+func (*Delete) iSupportOptimizerHint()  {}
+func (*Insert) iSupportOptimizerHint()  {}
+func (*Stream) iSupportOptimizerHint()  {}
+func (*Update) iSupportOptimizerHint()  {}
+func (*VStream) iSupportOptimizerHint() {}
+func (*Select) iSupportOptimizerHint()  {}
+func (*Union) iSupportOptimizerHint()   {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -969,6 +1018,46 @@ func (node *DropView) GetIfNotExists() bool {
 	return false
 }
 
+// GetIsReplace implements the DDLStatement interface
+func (node *RenameTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *TruncateTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateView) GetIsReplace() bool {
+	return node.IsReplace
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *AlterView) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropTable) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDLStatement interface
+func (node *DropView) GetIsReplace() bool {
+	return false
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -1120,7 +1209,7 @@ func (node *CreateTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *CreateView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
@@ -1130,16 +1219,41 @@ func (node *DropTable) SetComments(comments Comments) {
 
 // SetComments implements DDLStatement.
 func (node *DropView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments implements DDLStatement.
 func (node *AlterView) SetComments(comments Comments) {
-	// irrelevant
+	node.Comments = comments
 }
 
 // SetComments for RevertMigration, does not implement DDLStatement
 func (node *RevertMigration) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Delete
+func (node *Delete) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Insert
+func (node *Insert) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Stream
+func (node *Stream) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for Update
+func (node *Update) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments for VStream
+func (node *VStream) SetComments(comments Comments) {
 	node.Comments = comments
 }
 
@@ -1167,8 +1281,7 @@ func (node *CreateTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *CreateView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
@@ -1178,14 +1291,37 @@ func (node *DropTable) GetComments() Comments {
 
 // GetComments implements DDLStatement.
 func (node *DropView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
 }
 
 // GetComments implements DDLStatement.
 func (node *AlterView) GetComments() Comments {
-	// irrelevant
-	return nil
+	return node.Comments
+}
+
+// GetComments implements SupportOptimizerHint.
+func (node *Delete) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Insert.
+func (node *Insert) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Stream.
+func (node *Stream) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements Update.
+func (node *Update) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements VStream.
+func (node *VStream) GetComments() Comments {
+	return node.Comments
 }
 
 // GetToTables implements the DDLStatement interface
@@ -1376,11 +1512,6 @@ func (node *AlterDatabase) GetDatabaseName() string {
 	return node.DBName.String()
 }
 
-// ParenSelect can actually not be a top level statement,
-// but we have to allow it because it's a requirement
-// of SelectStatement.
-func (*ParenSelect) iStatement() {}
-
 type (
 
 	// ShowInternal will represent all the show statement types.
@@ -1429,10 +1560,9 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*Union) iInsertRows()       {}
-func (Values) iInsertRows()       {}
-func (*ParenSelect) iInsertRows() {}
+func (*Select) iInsertRows() {}
+func (*Union) iInsertRows()  {}
+func (Values) iInsertRows()  {}
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
@@ -1455,9 +1585,42 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name     ColIdent
-	Limit    Expr
+	Name       ColIdent
+	ValueRange *PartitionValueRange
+}
+
+// PartitionValueRangeType is an enum for PartitionValueRange.Type
+type PartitionValueRangeType int8
+
+type PartitionValueRange struct {
+	Type     PartitionValueRangeType
+	Range    ValTuple
 	Maxvalue bool
+}
+
+// PartitionByType is an enum storing how we are partitioning a table
+type PartitionByType int8
+
+// PartitionOption describes partitioning control (for create table statements)
+type PartitionOption struct {
+	Type         PartitionByType
+	IsLinear     bool
+	KeyAlgorithm int
+	ColList      Columns
+	Expr         Expr
+	Partitions   int
+	SubPartition *SubPartition
+	Definitions  []*PartitionDefinition
+}
+
+// SubPartition describes subpartitions control
+type SubPartition struct {
+	Type          PartitionByType
+	IsLinear      bool
+	KeyAlgorithm  int
+	ColList       Columns
+	Expr          Expr
+	SubPartitions int
 }
 
 // TableOptions specifies a list of table options
@@ -1465,10 +1628,11 @@ type TableOptions []*TableOption
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns     []*ColumnDefinition
-	Indexes     []*IndexDefinition
-	Constraints []*ConstraintDefinition
-	Options     TableOptions
+	Columns         []*ColumnDefinition
+	Indexes         []*IndexDefinition
+	Constraints     []*ConstraintDefinition
+	Options         TableOptions
+	PartitionOption *PartitionOption
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement
@@ -1495,7 +1659,6 @@ type ColumnType struct {
 
 	// Text field options
 	Charset string
-	Collate string
 
 	// Enum values
 	EnumValues []string
@@ -1520,6 +1683,7 @@ type ColumnTypeOptions struct {
 	As            Expr
 	Comment       *Literal
 	Storage       ColumnStorage
+	Collate       string
 	// Reference stores a foreign key constraint for the given column
 	Reference *ReferenceDefinition
 
@@ -1663,6 +1827,7 @@ type (
 		Partitions Partitions
 		As         TableIdent
 		Hints      *IndexHints
+		Columns    Columns
 	}
 
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.
@@ -1670,7 +1835,7 @@ type (
 		LeftExpr  TableExpr
 		Join      JoinType
 		RightExpr TableExpr
-		Condition JoinCondition
+		Condition *JoinCondition
 	}
 
 	// JoinType represents the type of Join for JoinTableExpr
@@ -1752,6 +1917,11 @@ type (
 		SQLNode
 	}
 
+	Callable interface {
+		iCallable()
+		Expr
+	}
+
 	// AndExpr represents an AND expression.
 	AndExpr struct {
 		Left, Right Expr
@@ -1782,11 +1952,11 @@ type (
 	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
 	ComparisonExprOperator int8
 
-	// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
-	RangeCond struct {
-		Operator RangeCondOperator
-		Left     Expr
-		From, To Expr
+	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
+	BetweenExpr struct {
+		IsBetween bool
+		Left      Expr
+		From, To  Expr
 	}
 
 	// RangeCondOperator is an enum for RangeCond.Operator
@@ -1794,8 +1964,8 @@ type (
 
 	// IsExpr represents an IS ... or an IS NOT ... expression.
 	IsExpr struct {
-		Operator IsExprOperator
-		Expr     Expr
+		Left  Expr
+		Right IsExprOperator
 	}
 
 	// IsExprOperator is an enum for IsExpr.Operator
@@ -1863,6 +2033,12 @@ type (
 	// UnaryExprOperator is an enum for UnaryExpr.Operator
 	UnaryExprOperator int8
 
+	// IntroducerExpr represents a unary value expression.
+	IntroducerExpr struct {
+		CharacterSet string
+		Expr         Expr
+	}
+
 	// IntervalExpr represents a date-time INTERVAL expression.
 	IntervalExpr struct {
 		Expr Expr
@@ -1877,10 +2053,22 @@ type (
 		Unit  string
 	}
 
+	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
+	ExtractFuncExpr struct {
+		IntervalTypes IntervalTypes
+		Expr          Expr
+	}
+
 	// CollateExpr represents dynamic collate operator.
 	CollateExpr struct {
-		Expr    Expr
-		Charset string
+		Expr      Expr
+		Collation string
+	}
+
+	// WeightStringFuncExpr represents the function and arguments for WEIGHT_STRING('string' AS [CHAR|BINARY](n))
+	WeightStringFuncExpr struct {
+		Expr Expr
+		As   *ConvertType
 	}
 
 	// FuncExpr represents a function call.
@@ -1905,16 +2093,15 @@ type (
 		Name *ColName
 	}
 
-	// SubstrExpr represents a call to SubstrExpr(column, value_expression) or SubstrExpr(column, value_expression,value_expression)
-	// also supported syntax SubstrExpr(column from value_expression for value_expression).
-	// Additionally to column names, SubstrExpr is also supported for string values, e.g.:
-	// SubstrExpr('static string value', value_expression, value_expression)
-	// In this case StrVal will be set instead of Name.
+	// SubstrExpr represents a calls to
+	// - SubstrExpr(expression, expression, expression)
+	// - SubstrExpr(expression, expression)
+	// - SubstrExpr(expression FROM expression)
+	// - SubstrExpr(expression FROM expression FOR expression)
 	SubstrExpr struct {
-		Name   *ColName
-		StrVal *Literal
-		From   Expr
-		To     Expr
+		Name Expr
+		From Expr
+		To   Expr
 	}
 
 	// ConvertExpr represents a call to CONVERT(expr, type)
@@ -1962,42 +2149,74 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name ColIdent
-		Fsp  Expr // fractional seconds precision, integer from 0 to 6
+		Fsp  *Literal // fractional seconds precision, integer from 0 to 6
+	}
+
+	// ExtractedSubquery is a subquery that has been extracted from the original AST
+	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
+	// CAUTION: you should only change argName and hasValuesArg through the setter methods
+	ExtractedSubquery struct {
+		Original     Expr // original expression that was replaced by this ExtractedSubquery
+		OpCode       int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		Subquery     *Subquery
+		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
+
+		hasValuesArg string
+		argName      string
+		alternative  Expr // this is what will be used to Format this struct
 	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*AndExpr) iExpr()           {}
-func (*OrExpr) iExpr()            {}
-func (*XorExpr) iExpr()           {}
-func (*NotExpr) iExpr()           {}
-func (*ComparisonExpr) iExpr()    {}
-func (*RangeCond) iExpr()         {}
-func (*IsExpr) iExpr()            {}
-func (*ExistsExpr) iExpr()        {}
-func (*Literal) iExpr()           {}
-func (Argument) iExpr()           {}
-func (*NullVal) iExpr()           {}
-func (BoolVal) iExpr()            {}
-func (*ColName) iExpr()           {}
-func (ValTuple) iExpr()           {}
-func (*Subquery) iExpr()          {}
-func (ListArg) iExpr()            {}
-func (*BinaryExpr) iExpr()        {}
-func (*UnaryExpr) iExpr()         {}
-func (*IntervalExpr) iExpr()      {}
-func (*CollateExpr) iExpr()       {}
-func (*FuncExpr) iExpr()          {}
-func (*TimestampFuncExpr) iExpr() {}
-func (*CurTimeFuncExpr) iExpr()   {}
-func (*CaseExpr) iExpr()          {}
-func (*ValuesFuncExpr) iExpr()    {}
-func (*ConvertExpr) iExpr()       {}
-func (*SubstrExpr) iExpr()        {}
-func (*ConvertUsingExpr) iExpr()  {}
-func (*MatchExpr) iExpr()         {}
-func (*GroupConcatExpr) iExpr()   {}
-func (*Default) iExpr()           {}
+func (*AndExpr) iExpr()              {}
+func (*OrExpr) iExpr()               {}
+func (*XorExpr) iExpr()              {}
+func (*NotExpr) iExpr()              {}
+func (*ComparisonExpr) iExpr()       {}
+func (*BetweenExpr) iExpr()          {}
+func (*IsExpr) iExpr()               {}
+func (*ExistsExpr) iExpr()           {}
+func (*Literal) iExpr()              {}
+func (Argument) iExpr()              {}
+func (*NullVal) iExpr()              {}
+func (BoolVal) iExpr()               {}
+func (*ColName) iExpr()              {}
+func (ValTuple) iExpr()              {}
+func (*Subquery) iExpr()             {}
+func (ListArg) iExpr()               {}
+func (*BinaryExpr) iExpr()           {}
+func (*UnaryExpr) iExpr()            {}
+func (*IntroducerExpr) iExpr()       {}
+func (*IntervalExpr) iExpr()         {}
+func (*CollateExpr) iExpr()          {}
+func (*FuncExpr) iExpr()             {}
+func (*TimestampFuncExpr) iExpr()    {}
+func (*ExtractFuncExpr) iExpr()      {}
+func (*WeightStringFuncExpr) iExpr() {}
+func (*CurTimeFuncExpr) iExpr()      {}
+func (*CaseExpr) iExpr()             {}
+func (*ValuesFuncExpr) iExpr()       {}
+func (*ConvertExpr) iExpr()          {}
+func (*SubstrExpr) iExpr()           {}
+func (*ConvertUsingExpr) iExpr()     {}
+func (*MatchExpr) iExpr()            {}
+func (*GroupConcatExpr) iExpr()      {}
+func (*Default) iExpr()              {}
+func (*ExtractedSubquery) iExpr()    {}
+
+// iCallable marks all expressions that represent function calls
+func (*FuncExpr) iCallable()             {}
+func (*TimestampFuncExpr) iCallable()    {}
+func (*ExtractFuncExpr) iCallable()      {}
+func (*WeightStringFuncExpr) iCallable() {}
+func (*CurTimeFuncExpr) iCallable()      {}
+func (*ValuesFuncExpr) iCallable()       {}
+func (*ConvertExpr) iCallable()          {}
+func (*SubstrExpr) iCallable()           {}
+func (*ConvertUsingExpr) iCallable()     {}
+func (*MatchExpr) iCallable()            {}
+func (*GroupConcatExpr) iCallable()      {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
@@ -2009,15 +2228,11 @@ func (ListArg) iColTuple()   {}
 
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
-	Type     string
-	Length   *Literal
-	Scale    *Literal
-	Operator ConvertTypeOperator
-	Charset  string
+	Type    string
+	Length  *Literal
+	Scale   *Literal
+	Charset string
 }
-
-// ConvertTypeOperator is an enum for ConvertType.Operator
-type ConvertTypeOperator int8
 
 // GroupBy represents a GROUP BY clause.
 type GroupBy []Expr

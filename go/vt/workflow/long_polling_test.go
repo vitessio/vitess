@@ -18,10 +18,12 @@ package workflow
 
 import (
 	"bytes"
-	"io/ioutil"
+	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -35,7 +37,7 @@ func TestLongPolling(t *testing.T) {
 
 	// Register the manager to a web handler, start a web server.
 	m.HandleHTTPLongPolling("/workflow")
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -50,7 +52,7 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("/create failed: %v", err)
 	}
-	tree, err := ioutil.ReadAll(resp.Body)
+	tree, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatalf("/create reading failed: %v", err)
@@ -78,7 +80,7 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("/poll/1 failed: %v", err)
 	}
-	tree, err = ioutil.ReadAll(resp.Body)
+	tree, err = io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatalf("/poll/1 reading failed: %v", err)
@@ -119,7 +121,7 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("/poll/1 failed: %v", err)
 	}
-	tree, err = ioutil.ReadAll(resp.Body)
+	tree, err = io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatalf("/poll/1 reading failed: %v", err)
@@ -131,4 +133,88 @@ func TestLongPolling(t *testing.T) {
 	// Stop the manager.
 	cancel()
 	wg.Wait()
+}
+
+func TestSanitizeRequestHeader(t *testing.T) {
+	testCases := []struct {
+		name                string
+		sanitizeHTTPHeaders bool
+		reqMethod           string
+		reqURL              string
+		reqHeader           map[string]string
+		wantHeader          http.Header
+	}{
+		{
+			name:                "withCookie-and-sanitize",
+			sanitizeHTTPHeaders: true,
+			reqMethod:           "GET",
+			reqURL:              "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
+			reqHeader: map[string]string{
+				"Accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
+				"Cookie":     "_ga=GA1.2.1234567899.1234567890; machine-cookie=username:123456789:1234f999ff99aa1af3ae9999d2a5d3968ac014a0947ae1418b10642ab2cbb7d3; session=7e5dc76807be39dd0886b9425883dabe3fd2432f7415e2a08fba7ca43ac4d0dc;",
+				"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36",
+			},
+			wantHeader: map[string][]string{
+				"Accept":     {"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp"},
+				"Cookie":     {HTTPHeaderRedactedMessage},
+				"User-Agent": {"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36"},
+			},
+		},
+		{
+			name:                "withCookie-not-sanitize",
+			sanitizeHTTPHeaders: false,
+			reqMethod:           "GET",
+			reqURL:              "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
+			reqHeader: map[string]string{
+				"Accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
+				"Cookie":     "_ga=GA1.2.1234567899.1234567890; machine-cookie=username:123456789:1234f999ff99aa1af3ae9999d2a5d3968ac014a0947ae1418b10642ab2cbb7d3; session=7e5dc76807be39dd0886b9425883dabe3fd2432f7415e2a08fba7ca43ac4d0dc;",
+				"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36",
+			},
+			wantHeader: map[string][]string{
+				"Accept":     {"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp"},
+				"Cookie":     {"_ga=GA1.2.1234567899.1234567890; machine-cookie=username:123456789:1234f999ff99aa1af3ae9999d2a5d3968ac014a0947ae1418b10642ab2cbb7d3; session=7e5dc76807be39dd0886b9425883dabe3fd2432f7415e2a08fba7ca43ac4d0dc;"},
+				"User-Agent": {"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36"},
+			},
+		},
+		{
+			name:                "noCookie-sanitize",
+			sanitizeHTTPHeaders: true,
+			reqMethod:           "GET",
+			reqURL:              "https://vtctld-dev-xyz.company.com/api/workflow/poll/11",
+			reqHeader: map[string]string{
+				"Accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
+				"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36",
+			},
+			wantHeader: map[string][]string{
+				"Accept":     {"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp"},
+				"User-Agent": {"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			req, err := http.NewRequestWithContext(ctx, tc.reqMethod, tc.reqURL, nil)
+			if err != nil {
+				t.Fatalf("can't parse test http req: %v", err)
+			}
+
+			for k, v := range tc.reqHeader {
+				req.Header.Set(k, v)
+			}
+			clone := req.Clone(ctx)
+
+			if got := sanitizeRequestHeader(req, tc.sanitizeHTTPHeaders); !reflect.DeepEqual(got.Header, tc.wantHeader) {
+				t.Errorf("sanitizeRequestHeader() failed\nwant: %#v\ngot: %#v", tc.wantHeader, got.Header)
+			}
+
+			if !reflect.DeepEqual(clone, req) {
+				t.Errorf("sanitizeRequestHeader() corrupted original http request\nwant: %#v\ngot: %#v", clone, req)
+			}
+		})
+	}
 }

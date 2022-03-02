@@ -14,43 +14,43 @@
  * limitations under the License.
  */
 .table {
-  margin: 8px 0;
+    margin: 8px 0;
 }
 
 .table tr {
-  border: none;
+    border: none;
 }
 
 .table td {
-  border: none;
-  line-height: 1.6;
-  margin: 0;
+    border: none;
+    line-height: 1.6;
+    margin: 0;
 }
 
 .lineNumber {
-  box-sizing: border-box;
-  color: var(--textColorSecondary);
-  font-family: var(--fontFamilyMonospace);
-  font-size: var(--fontSizeDefault);
-  line-height: 2.4rem;
-  min-width: 5rem;
-  padding: 0 1.2rem;
-  text-align: right;
-  user-select: none;
-  vertical-align: top;
-  white-space: nowrap;
-  width: 1%;
+    box-sizing: border-box;
+    color: var(--textColorSecondary);
+    font-family: var(--fontFamilyMonospace);
+    font-size: theme('fontSize.base');
+    line-height: 2.4rem;
+    min-width: 5rem;
+    padding: 0 1.2rem;
+    text-align: right;
+    user-select: none;
+    vertical-align: top;
+    white-space: nowrap;
+    width: 1%;
 }
 
 .lineNumber::before {
-  content: attr(data-line-number);
+    content: attr(data-line-number);
 }
 
 .code {
-  font-family: var(--fontFamilyMonospace);
-  font-size: var(--fontSizeDefault);
-  line-height: 2.4rem;
-  padding: 0 1.2rem;
-  tab-size: 8;
-  white-space: pre;
+    font-family: var(--fontFamilyMonospace);
+    font-size: theme('fontSize.base');
+    line-height: 2.4rem;
+    padding: 0 1.2rem;
+    tab-size: 8;
+    white-space: pre;
 }

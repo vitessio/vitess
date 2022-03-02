@@ -20,6 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -72,7 +75,7 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		return node, nil
 	case *vindexFunc:
 		return filterVindexFunc(node, filter)
-	case *subquery:
+	case *simpleProjection:
 		return nil, errors.New("unsupported: filtering on results of cross-shard subquery")
 	case *orderedAggregate:
 		return nil, errors.New("unsupported: filtering on results of aggregates")
@@ -83,35 +86,36 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 
 func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, error) {
 	if node.eVindexFunc.Opcode != engine.VindexNone {
-		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)")
+		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)")
 	}
 
 	// Check LHS.
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
-		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)")
+		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)")
 	}
-	if comparison.Operator != sqlparser.EqualOp {
-		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (not equality)")
+	if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
+		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)")
 	}
 	colname, ok := comparison.Left.(*sqlparser.ColName)
 	if !ok {
-		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)")
+		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)")
 	}
 	if !colname.Name.EqualString("id") {
-		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)")
+		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)")
 	}
 
 	// Check RHS.
 	// We have to check before calling NewPlanValue because NewPlanValue allows lists also.
-	if !sqlparser.IsValue(comparison.Right) {
-		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)")
+	if !sqlparser.IsValue(comparison.Right) && !sqlparser.IsSimpleTuple(comparison.Right) {
+		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)")
 	}
 	var err error
-	node.eVindexFunc.Value, err = sqlparser.NewPlanValue(comparison.Right)
+	node.eVindexFunc.Value, err = evalengine.Translate(comparison.Right, semantics.EmptySemTable())
 	if err != nil {
-		return nil, fmt.Errorf("unsupported: where clause for vindex function must be of the form id = <val>: %v", err)
+		return nil, fmt.Errorf("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...): %v", err)
 	}
+
 	node.eVindexFunc.Opcode = engine.VindexMap
 	return node, nil
 }

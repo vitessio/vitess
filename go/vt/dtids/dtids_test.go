@@ -32,7 +32,7 @@ func TestDTID(t *testing.T) {
 		Target: &querypb.Target{
 			Keyspace:   "aa",
 			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		TransactionId: 1,
 	}

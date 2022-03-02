@@ -20,11 +20,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -46,7 +43,7 @@ var (
 	clusterInstance         *cluster.LocalProcessCluster
 	vtParams                mysql.ConnParams
 	evaluatedMysqlParams    *mysql.ConnParams
-	ddlStrategy             = "online -skip-topo -vreplication-test-suite"
+	ddlStrategy             = "vitess -vreplication-test-suite"
 	waitForMigrationTimeout = 20 * time.Second
 
 	hostname              = "localhost"
@@ -61,7 +58,7 @@ var (
 
 const (
 	testDataPath   = "testdata"
-	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
+	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
 )
 
 func TestMain(m *testing.M) {
@@ -138,7 +135,7 @@ func TestSchemaChange(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	files, err := ioutil.ReadDir(testDataPath)
+	files, err := os.ReadDir(testDataPath)
 	require.NoError(t, err)
 	for _, f := range files {
 		if !f.IsDir() {
@@ -158,7 +155,7 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 		return "", false
 	}
 	require.NoError(t, err)
-	b, err := ioutil.ReadFile(filePath)
+	b, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	return strings.TrimSpace(string(b)), true
 }
@@ -198,7 +195,7 @@ func testSingle(t *testing.T, testName string) {
 		f := "create.sql"
 		_, exists := readTestFile(t, testName, f)
 		require.True(t, exists)
-		mysqlClientExecFile(t, testName, f)
+		onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
 		// ensure test table has been created:
 		getCreateTableStatement(t, tableName)
 	}
@@ -206,7 +203,7 @@ func testSingle(t *testing.T, testName string) {
 		// destroy
 		f := "destroy.sql"
 		if _, exists := readTestFile(t, testName, f); exists {
-			mysqlClientExecFile(t, testName, f)
+			onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
 		}
 	}()
 
@@ -214,6 +211,11 @@ func testSingle(t *testing.T, testName string) {
 	if content, exists := readTestFile(t, testName, "expect_query_failure"); exists {
 		// VTGate failure is expected!
 		expectQueryFailure = content
+	}
+
+	singleDDLStrategy := ddlStrategy
+	if extra, exists := readTestFile(t, testName, "ddl_strategy"); exists {
+		singleDDLStrategy = fmt.Sprintf("%s %s", singleDDLStrategy, extra)
 	}
 
 	var migrationMessage string
@@ -225,7 +227,7 @@ func testSingle(t *testing.T, testName string) {
 	}
 	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
 	// Run the DDL!
-	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, expectQueryFailure)
+	uuid := testOnlineDDLStatement(t, alterStatement, singleDDLStrategy, expectQueryFailure)
 
 	if expectQueryFailure != "" {
 		// Nothing further to do. Migration isn't actually running
@@ -279,19 +281,15 @@ func testSingle(t *testing.T, testName string) {
 		selectBefore := fmt.Sprintf("select %s from %s %s", beforeColumns, beforeTableName, orderBy)
 		selectAfter := fmt.Sprintf("select %s from %s %s", afterColumns, afterTableName, orderBy)
 
-		// selectBeforeRS := mysqlExec(t, selectBefore, "")
-		// selectAfterRS := mysqlExec(t, selectAfter, "")
-		// require.Equal(t, selectBeforeRS.Rows, selectAfterRS.Rows, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
-
-		selectBeforeFile := createTempScript(t, selectBefore)
+		selectBeforeFile := onlineddl.CreateTempScript(t, selectBefore)
 		defer os.Remove(selectBeforeFile)
-		beforeOutput := mysqlClientExecFile(t, "", selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectBeforeFile)
 
-		selectAfterFile := createTempScript(t, selectAfter)
+		selectAfterFile := onlineddl.CreateTempScript(t, selectAfter)
 		defer os.Remove(selectAfterFile)
-		afterOutput := mysqlClientExecFile(t, "", selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectAfterFile)
 
-		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) amd (%s)", selectBefore, selectAfter)
+		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBefore, selectAfter)
 	}
 }
 
@@ -368,31 +366,6 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	return qr
 }
 
-// mysqlClientExecFile runs a file through the mysql client
-func mysqlClientExecFile(t *testing.T, testName string, fileName string) (output string) {
-	t.Helper()
-
-	bashPath, err := exec.LookPath("bash")
-	require.NoError(t, err)
-	mysqlPath, err := exec.LookPath("mysql")
-	require.NoError(t, err)
-
-	filePath := fileName
-	if !filepath.IsAbs(fileName) {
-		filePath, _ = filepath.Abs(path.Join(testDataPath, testName, fileName))
-	}
-	params := mysqlParams()
-	bashCommand := fmt.Sprintf(`%s -u%s --socket=%s --database=%s -s -s < %s 2> /tmp/error.log`, mysqlPath, params.Uname, params.UnixSocket, params.DbName, filePath)
-	cmd, err := exec.Command(
-		bashPath,
-		"-c",
-		bashCommand,
-	).Output()
-
-	require.NoError(t, err)
-	return string(cmd)
-}
-
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tableName string) (statement string) {
 	queryResult, err := getTablet().VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s", tableName), keyspaceName, true)
@@ -402,16 +375,4 @@ func getCreateTableStatement(t *testing.T, tableName string) (statement string) 
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
-}
-
-func createTempScript(t *testing.T, content string) (fileName string) {
-	f, err := ioutil.TempFile("", "vrepl-suite-")
-	require.NoError(t, err)
-
-	_, err = f.WriteString(content)
-	require.NoError(t, err)
-	err = f.Close()
-	require.NoError(t, err)
-
-	return f.Name()
 }

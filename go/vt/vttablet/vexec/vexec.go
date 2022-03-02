@@ -195,7 +195,7 @@ func (e *TabletVExec) analyzeStatement() error {
 		e.TableName = sqlparser.String(stmt.Table)
 		e.InsertCols = e.analyzeInsertColumns(stmt)
 	case *sqlparser.Select:
-		e.TableName = sqlparser.String(stmt.From)
+		e.TableName = sqlparser.ToString(stmt.From)
 		e.WhereCols = e.analyzeWhereEqualsColumns(stmt.Where)
 	default:
 		return fmt.Errorf("query not supported by vexec: %+v", sqlparser.String(stmt))

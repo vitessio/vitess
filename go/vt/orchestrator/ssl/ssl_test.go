@@ -5,8 +5,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	nethttp "net/http"
+	"os"
 	"reflect"
 	"strings"
 	"syscall"
@@ -184,11 +184,11 @@ func TestIsEncryptedPEM(t *testing.T) {
 }
 
 func writeFakeFile(content string) string {
-	f, err := ioutil.TempFile("", "ssl_test")
+	f, err := os.CreateTemp("", "ssl_test")
 	if err != nil {
 		return ""
 	}
-	ioutil.WriteFile(f.Name(), []byte(content), 0644)
+	os.WriteFile(f.Name(), []byte(content), 0644)
 	return f.Name()
 }
 

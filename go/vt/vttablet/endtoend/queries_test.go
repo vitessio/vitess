@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -1785,10 +1786,21 @@ func TestQueries(t *testing.T) {
 	client := framework.NewClient()
 
 	for _, tcase := range TestQueryCases {
-		if err := tcase.Test("", client); err != nil {
-			t.Error(err)
-		}
+		t.Run(name(tcase), func(t *testing.T) {
+			err := tcase.Test("", client)
+			require.NoError(t, err)
+		})
 	}
+}
+
+func name(tc framework.Testable) string {
+	switch tc := tc.(type) {
+	case *framework.TestCase:
+		return tc.Name
+	case *framework.MultiCase:
+		return tc.Name
+	}
+	return fmt.Sprintf("%T", tc)
 }
 
 func BenchmarkTabletQueries(b *testing.B) {

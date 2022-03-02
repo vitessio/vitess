@@ -93,7 +93,11 @@ type Mycnf struct {
 	BinLogPath string
 
 	// MasterInfoFile is the master.info file location.
-	// (unused by vt software for now)
+	// Unused when vitess manages mysql config because we set
+	// master_info_repository = TABLE and
+	// relay_log_info_repository = TABLE
+	// However it is possible to use custom cnf files with vitess
+	// and to generate them using command-line flags, so we allow a way to set this property
 	MasterInfoFile string
 
 	// PidFile is the mysql.pid file location

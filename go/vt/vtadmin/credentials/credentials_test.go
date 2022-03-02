@@ -17,7 +17,6 @@ limitations under the License.
 package credentials
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -65,7 +64,7 @@ func Test_loadCredentials(t *testing.T) {
 			path := ""
 
 			if len(tt.contents) > 0 {
-				f, err := ioutil.TempFile("", "vtsql-credentials-test-*")
+				f, err := os.CreateTemp("", "vtsql-credentials-test-*")
 				require.NoError(t, err)
 				_, err = f.Write(tt.contents)
 				require.NoError(t, err)

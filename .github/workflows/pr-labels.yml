@@ -2,8 +2,6 @@ name: pr-labels
 on:
   pull_request:
     types: [opened, labeled, unlabeled, synchronize]
-  push:
-  label:
 jobs:
   analyze:
     if: github.repository == 'vitessio/vitess'
@@ -24,6 +22,9 @@ jobs:
       env:
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
+        if [ -z "$PR_NUMBER" ] ; then
+          exit 0
+        fi
         LABELS_JSON="/tmp/labels.json"
 
         # Get labels for this pull request
@@ -40,6 +41,10 @@ jobs:
         fi
         if ! cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'Type:' ; then
           echo "Expecting PR to have label 'Type: ...'"
+          exit 1
+        fi
+        if ! cat ${LABELS_JSON} | jq -r '.[].name ' | grep 'release notes' | wc -l | grep -q 1 ; then
+          echo "Expecting PR to have only one of the following labels: 'release notes', 'release notes none', 'release notes (needs details)'."
           exit 1
         fi
         exit 0

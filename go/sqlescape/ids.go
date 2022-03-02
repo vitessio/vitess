@@ -35,3 +35,21 @@ func WriteEscapeID(buf *bytes.Buffer, in string) {
 	}
 	buf.WriteByte('`')
 }
+
+// EscapeIDs runs sqlescape.EscapeID() for all entries in the slice.
+func EscapeIDs(identifiers []string) []string {
+	result := make([]string, len(identifiers))
+	for i := range identifiers {
+		result[i] = EscapeID(identifiers[i])
+	}
+	return result
+}
+
+// UnescapeID reverses any backticking in the input string.
+func UnescapeID(in string) string {
+	l := len(in)
+	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
+		return in[1 : l-1]
+	}
+	return in
+}

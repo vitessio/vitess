@@ -68,6 +68,7 @@ var (
 	warnMemoryRows       = flag.Int("warn_memory_rows", 30000, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
 	defaultDDLStrategy   = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	dbDDLPlugin          = flag.String("dbddl_plugin", "fail", "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
+	noScatter            = flag.Bool("no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
 
 	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
@@ -80,6 +81,7 @@ var (
 
 	// Put set-passthrough under a flag.
 	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	setVarEnabled    = flag.Bool("enable_set_var", true, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
 	plannerVersion   = flag.String("planner_version", "v3", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the new gen4 planner and falls back to the V3 planner if the gen4 fails. All Gen4 versions should be considered experimental!")
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
@@ -92,7 +94,8 @@ var (
 	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
-	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
+	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
+	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -200,10 +203,10 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
-	var si SchemaInfo = nil
+	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if *enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe())
+		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser)
 		addKeyspaceToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -214,7 +217,18 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		LFU:            *queryPlanCacheLFU,
 	}
 
-	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, si)
+	executor := NewExecutor(
+		ctx,
+		serv,
+		cell,
+		resolver,
+		*normalizeQueries,
+		*warnShardedOnly,
+		*streamBufferSize,
+		cacheCfg,
+		si,
+		*noScatter,
+	)
 
 	// connect the schema tracker with the vschema manager
 	if *enableSchemaChangeSignal {
@@ -273,6 +287,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		}
 	})
 	rpcVTGate.registerDebugHealthHandler()
+	rpcVTGate.registerDebugEnvHandler()
 	err := initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
@@ -298,27 +313,33 @@ func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st
 }
 
 func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
-	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, key.DestinationAllShards{})
+	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, key.DestinationAllShards{})
 	if err != nil {
 		log.Warningf("Unable to resolve destination: %v", err)
 		return
 	}
+
 	timeout := time.After(5 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			log.Warningf("Unable to get initial schema reload")
+			log.Warningf("Unable to get initial schema reload for keyspace: %s", keyspace)
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
-				err := st.LoadKeyspace(gw, shard.Target)
+				err := st.AddNewKeyspace(gw, shard.Target)
 				if err == nil {
 					return
 				}
-				log.Warningf("Unable to add keyspace to tracker: %v", err)
 			}
 		}
 	}
+}
+
+func (vtg *VTGate) registerDebugEnvHandler() {
+	http.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+		debugEnvHandler(vtg, w, r)
+	})
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {
@@ -424,10 +445,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			NewSafeSession(session),
 			sql,
 			bindVariables,
-			&querypb.Target{
-				Keyspace:   destKeyspace,
-				TabletType: destTabletType,
-			},
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
@@ -611,7 +628,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, nil),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, nil, *noScatter),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,

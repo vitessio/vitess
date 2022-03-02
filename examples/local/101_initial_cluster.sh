@@ -37,8 +37,8 @@ for i in 100 101 102; do
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-# set one of the replicas to master
-vtctldclient InitShardPrimary --force commerce/0 zone1-100
+# set one of the replicas to primary
+vtctldclient PlannedReparentShard commerce/0 --new-primary zone1-100
 
 # create the schema
 vtctlclient ApplySchema -sql-file create_commerce_schema.sql commerce

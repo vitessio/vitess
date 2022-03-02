@@ -34,12 +34,12 @@ import (
 
 // These constants represent values for various config parameters.
 const (
-	Enable      = "enable"
-	Disable     = "disable"
-	Dryrun      = "dryRun"
-	NotOnMaster = "notOnMaster"
-	Polling     = "polling"
-	Heartbeat   = "heartbeat"
+	Enable       = "enable"
+	Disable      = "disable"
+	Dryrun       = "dryRun"
+	NotOnPrimary = "notOnPrimary"
+	Polling      = "polling"
+	Heartbeat    = "heartbeat"
 )
 
 var (
@@ -108,19 +108,21 @@ func init() {
 	flag.BoolVar(&currentConfig.QueryCacheLFU, "queryserver-config-query-cache-lfu", defaultConfig.QueryCacheLFU, "query server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
 	SecondsVar(&currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	SecondsVar(&currentConfig.SignalSchemaChangeReloadIntervalSeconds, "queryserver-config-schema-change-signal-interval", defaultConfig.SignalSchemaChangeReloadIntervalSeconds, "query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate.")
-	flag.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected.")
+	flag.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work")
 	SecondsVar(&currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	SecondsVar(&currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
 	SecondsVar(&currentConfig.OlapReadPool.TimeoutSeconds, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.TimeoutSeconds, "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
 	SecondsVar(&currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	SecondsVar(&currentConfig.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	flag.IntVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
+	flag.IntVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection")
 	flag.IntVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
 	// tableacl related configurations.
 	flag.BoolVar(&currentConfig.StrictTableACL, "queryserver-config-strict-table-acl", defaultConfig.StrictTableACL, "only allow queries that pass table acl checks")
 	flag.BoolVar(&currentConfig.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", defaultConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
 	flag.StringVar(&currentConfig.TableACLExemptACL, "queryserver-config-acl-exempt-acl", defaultConfig.TableACLExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
-	flag.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
+	flag.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in client error messages")
+	flag.BoolVar(&currentConfig.AnnotateQueries, "queryserver-config-annotate-queries", defaultConfig.AnnotateQueries, "prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type")
 	flag.StringVar(&deprecatedPoolNamePrefix, "pool-name-prefix", "", "Deprecated")
 	flag.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
 	flag.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
@@ -161,6 +163,8 @@ func init() {
 	flag.DurationVar(&transitionGracePeriod, "serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
 
 	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
+	flag.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
+	flag.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -182,7 +186,7 @@ func Init() {
 
 	switch {
 	case enableConsolidatorReplicas:
-		currentConfig.Consolidator = NotOnMaster
+		currentConfig.Consolidator = NotOnPrimary
 	case enableConsolidator:
 		currentConfig.Consolidator = Enable
 	default:
@@ -243,7 +247,8 @@ type TabletConfig struct {
 
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
-	// Consolidator can be enable, disable, or notOnMaster. Default is enable.
+	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
+	// notOnMaster is the deprecated value that is the same as notOnPrimary.
 	Consolidator                            string  `json:"consolidator,omitempty"`
 	PassthroughDML                          bool    `json:"passthroughDML,omitempty"`
 	StreamBufferSize                        int     `json:"streamBufferSize,omitempty"`
@@ -257,12 +262,14 @@ type TabletConfig struct {
 	WatchReplication                        bool    `json:"watchReplication,omitempty"`
 	TrackSchemaVersions                     bool    `json:"trackSchemaVersions,omitempty"`
 	TerseErrors                             bool    `json:"terseErrors,omitempty"`
+	AnnotateQueries                         bool    `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int     `json:"messagePostponeParallelism,omitempty"`
 	CacheResultFields                       bool    `json:"cacheResultFields,omitempty"`
 	SignalWhenSchemaChange                  bool    `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
 
+	SanitizeLogMessages     bool    `json:"-"`
 	StrictTableACL          bool    `json:"-"`
 	EnableTableACLDryRun    bool    `json:"-"`
 	TableACLExemptACL       string  `json:"-"`
@@ -279,6 +286,7 @@ type TabletConfig struct {
 	TransactionLimitConfig `json:"-"`
 
 	EnforceStrictTransTables bool `json:"-"`
+	EnableOnlineDDL          bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -294,7 +302,7 @@ type ConnPoolConfig struct {
 type OltpConfig struct {
 	QueryTimeoutSeconds Seconds `json:"queryTimeoutSeconds,omitempty"`
 	TxTimeoutSeconds    Seconds `json:"txTimeoutSeconds,omitempty"`
-	MaxRows             int     `json:"maxRpws,omitempty"`
+	MaxRows             int     `json:"maxRows,omitempty"`
 	WarnRows            int     `json:"warnRows,omitempty"`
 }
 
@@ -478,6 +486,7 @@ var defaultConfig = TabletConfig{
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 
 	EnforceStrictTransTables: true,
+	EnableOnlineDDL:          true,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

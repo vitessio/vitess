@@ -17,7 +17,7 @@ limitations under the License.
 package schema
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -33,7 +33,7 @@ func TestSchamazHandler1(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 	tables := initialSchema()
 	schemazHandler(tables, resp, req)
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	test01 := []string{
 		`<td>test_table_01</td>`,

@@ -18,7 +18,7 @@ package mysql
 
 import (
 	"context"
-	"io/ioutil"
+	"crypto/tls"
 	"net"
 	"os"
 	"path"
@@ -34,12 +34,10 @@ const clientCertUsername = "Client Cert"
 func TestValidCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
-	}
+	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -48,7 +46,7 @@ func TestValidCert(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestSSLConnection")
+	root, err := os.MkdirTemp("", "TestSSLConnection")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
@@ -56,13 +54,16 @@ func TestValidCert(t *testing.T) {
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", clientCertUsername)
+	tlstest.CreateCRL(root, tlstest.CA)
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		path.Join(root, "ca-crl.pem"),
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestValidCert(t *testing.T) {
 		Uname: clientCertUsername,
 		Pass:  "",
 		// SSL flags.
-		Flags:      CapabilityClientSSL,
+		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		SslCert:    path.Join(root, "client-cert.pem"),
 		SslKey:     path.Join(root, "client-key.pem"),
@@ -118,12 +119,10 @@ func TestValidCert(t *testing.T) {
 func TestNoCert(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
-	}
+	authServer := newAuthServerClientCert()
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -132,20 +131,23 @@ func TestNoCert(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestSSLConnection")
+	root, err := os.MkdirTemp("", "TestSSLConnection")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateCRL(root, tlstest.CA)
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		path.Join(root, "ca-crl.pem"),
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -160,7 +162,7 @@ func TestNoCert(t *testing.T) {
 		Port:       port,
 		Uname:      "user1",
 		Pass:       "",
-		Flags:      CapabilityClientSSL,
+		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		ServerName: "server.example.com",
 	}

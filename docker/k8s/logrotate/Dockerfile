@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM debian:buster-slim
+ARG DEBIAN_VER=stable-slim
+
+FROM debian:${DEBIAN_VER}
 
 ADD logrotate.conf /vt/logrotate.conf
 

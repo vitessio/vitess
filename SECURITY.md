@@ -33,11 +33,11 @@ score >= 4; see below). If the fix relies on another upstream project's disclosu
 will adjust the process as well. We will work with the upstream project to fit their timeline and
 best protect our users.
 
-#### Policy for master-only vulnerabilities
+#### Policy for main-only vulnerabilities
 
-If a security vulnerability affects master, but not a currently supported branch, then the following process will apply:
+If a security vulnerability affects main, but not a currently supported branch, then the following process will apply:
 
-* The fix will land in master.
+* The fix will land in main.
 * A courtesy notice will be posted in #developers on Vitess Slack.
 
 #### Policy for unsupported releases

@@ -29,6 +29,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
@@ -52,6 +53,27 @@ var _ SessionActions = (*noopVCursor)(nil)
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 	ctx context.Context
+}
+
+// ConnCollation implements VCursor
+func (t *noopVCursor) ConnCollation() collations.ID {
+	return collations.CollationUtf8mb4ID
+}
+
+func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(t, bindVars, wantfields)
+}
+
+func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
+}
+
+func (t *noopVCursor) HasSystemVariables() bool {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetSystemVariables(func(k string, v string)) {
+	panic("implement me")
 }
 
 func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
@@ -91,6 +113,10 @@ func (t *noopVCursor) SetSessionEnableSystemSettings(allow bool) error {
 }
 
 func (t *noopVCursor) GetSessionEnableSystemSettings() bool {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetEnableSetVar() bool {
 	panic("implement me")
 }
 
@@ -234,7 +260,7 @@ func (t *noopVCursor) ExecuteStandalone(query string, bindvars map[string]*query
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
+func (t *noopVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	panic("unimplemented")
 }
 
@@ -243,6 +269,10 @@ func (t *noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query stri
 }
 
 func (t *noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	return nil, nil, nil
+}
+
+func (t *noopVCursor) ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
 	panic("unimplemented")
 }
 
@@ -282,17 +312,39 @@ type loggingVCursor struct {
 
 	resolvedTargetTabletType topodatapb.TabletType
 
-	tableRoutes tableRoutes
-	dbDDLPlugin string
-	ksAvailable bool
+	tableRoutes     tableRoutes
+	dbDDLPlugin     string
+	ksAvailable     bool
+	inReservedConn  bool
+	systemVariables map[string]string
+	disableSetVar   bool
+
+	// map different shards to keyspaces in the test.
+	ksShardMap map[string][]string
 }
 
 type tableRoutes struct {
 	tbl *vindexes.Table
 }
 
+func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(f, bindVars, wantfields)
+}
+
+func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
+}
+
 func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {
 	return f.ksAvailable
+}
+
+func (f *loggingVCursor) HasSystemVariables() bool {
+	return len(f.systemVariables) > 0
+}
+
+func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
@@ -317,10 +369,12 @@ func (f *loggingVCursor) SetSysVar(name string, expr string) {
 }
 
 func (f *loggingVCursor) NeedsReservedConn() {
+	f.log = append(f.log, "Needs Reserved Conn")
+	f.inReservedConn = true
 }
 
 func (f *loggingVCursor) InReservedConn() bool {
-	panic("implement me")
+	return f.inReservedConn
 }
 
 func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
@@ -405,7 +459,7 @@ func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*qu
 	return f.nextResult()
 }
 
-func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
+func (f *loggingVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	f.mu.Lock()
 	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
 	r, err := f.nextResult()
@@ -425,6 +479,79 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 	var rss []*srvtopo.ResolvedShard
 	var values [][]*querypb.Value
+	visited := make(map[string]int)
+	for i, destination := range destinations {
+		var shards []string
+
+		switch d := destination.(type) {
+		case key.DestinationAllShards:
+			if f.ksShardMap != nil {
+				if ksShards, exists := f.ksShardMap[keyspace]; exists {
+					shards = ksShards
+					break
+				}
+			}
+			shards = f.shards
+		case key.DestinationKeyRange:
+			shards = f.shardForKsid
+		case key.DestinationKeyspaceID:
+			if f.shardForKsid == nil || f.curShardForKsid >= len(f.shardForKsid) {
+				shards = []string{"-20"}
+			} else {
+				shards = []string{f.shardForKsid[f.curShardForKsid]}
+				f.curShardForKsid++
+			}
+		case key.DestinationKeyspaceIDs:
+			for _, ksid := range d {
+				if string(ksid) < "\x20" {
+					shards = append(shards, "-20")
+				} else {
+					shards = append(shards, "20-")
+				}
+			}
+		case key.DestinationAnyShard:
+			// Take the first shard.
+			shards = f.shards[:1]
+		case key.DestinationNone:
+			// Nothing to do here.
+		case key.DestinationShard:
+			shards = []string{destination.String()}
+		default:
+			return nil, nil, fmt.Errorf("unsupported destination: %v", destination)
+		}
+
+		for _, shard := range shards {
+			vi, ok := visited[shard]
+			if !ok {
+				vi = len(rss)
+				visited[shard] = vi
+				rss = append(rss, &srvtopo.ResolvedShard{
+					Target: &querypb.Target{
+						Keyspace:   keyspace,
+						Shard:      shard,
+						TabletType: f.resolvedTargetTabletType,
+					},
+				})
+				if ids != nil {
+					values = append(values, nil)
+				}
+			}
+			if ids != nil {
+				values[vi] = append(values[vi], ids[i])
+			}
+		}
+	}
+	return rss, values, nil
+}
+
+func (f *loggingVCursor) ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
+	f.log = append(f.log, fmt.Sprintf("ResolveDestinationsMultiCol %v %v %v", keyspace, ids, key.DestinationsString(destinations)))
+	if f.shardErr != nil {
+		return nil, nil, f.shardErr
+	}
+
+	var rss []*srvtopo.ResolvedShard
+	var values [][][]sqltypes.Value
 	visited := make(map[string]int)
 	for i, destination := range destinations {
 		var shards []string
@@ -557,6 +684,11 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 		return &sqltypes.Result{}, f.resultErr
 	}
 	return r, nil
+}
+
+func (f *loggingVCursor) GetEnableSetVar() bool {
+	f.log = append(f.log, fmt.Sprintf("SET_VAR enabled: %v", !f.disableSetVar))
+	return !f.disableSetVar
 }
 
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {

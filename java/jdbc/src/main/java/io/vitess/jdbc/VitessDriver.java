@@ -78,7 +78,7 @@ public class VitessDriver implements Driver {
    * the driver. Parameters can be set in either the URL or Properties.
    *
    * @param url - Connection Url A vitess-compatible URL, per {@link VitessJDBCUrl} i.e.
-   *     jdbc:vitess://locahost:9000/vt_keyspace?TABLET_TYPE=master
+   *     jdbc:vitess://locahost:9000/vt_keyspace?TABLET_TYPE=primary
    * @param info - Property for the connection May contain additional properties to configure
    *     this driver with
    * @return DriverPropertyInfo Array Object

@@ -19,13 +19,17 @@ package mysqlctl
 import (
 	"bufio"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"io"
 	"os"
 	"path"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/klauspost/pgzip"
@@ -36,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -55,6 +60,8 @@ var (
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
 	BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
+
+	builtinBackupProgress = flag.Duration("builtinbackup_progress", 5*time.Second, "how often to send progress updates when backing up large files")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -142,10 +149,10 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 	// Save initial state so we can restore.
 	replicaStartRequired := false
-	sourceIsMaster := false
+	sourceIsPrimary := false
 	readOnly := true //nolint
 	var replicationPosition mysql.Position
-	semiSyncMaster, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
+	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
 	params.Logger.Infof("getting current replication status")
@@ -154,8 +161,8 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	case nil:
 		replicaStartRequired = replicaStatus.ReplicationRunning() && !*DisableActiveReparents
 	case mysql.ErrNotReplica:
-		// keep going if we're the master, might be a degenerate case
-		sourceIsMaster = true
+		// keep going if we're the primary, might be a degenerate case
+		sourceIsPrimary = true
 	default:
 		return false, vterrors.Wrap(err, "can't get replica status")
 	}
@@ -167,16 +174,16 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// get the replication position
-	if sourceIsMaster {
+	if sourceIsPrimary {
 		if !readOnly {
-			params.Logger.Infof("turning master read-only before backup")
+			params.Logger.Infof("turning primary read-only before backup")
 			if err = params.Mysqld.SetReadOnly(true); err != nil {
 				return false, vterrors.Wrap(err, "can't set read-only status")
 			}
 		}
-		replicationPosition, err = params.Mysqld.MasterPosition()
+		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
-			return false, vterrors.Wrap(err, "can't get master position")
+			return false, vterrors.Wrap(err, "can't get position on primary")
 		}
 	} else {
 		if err = params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
@@ -216,12 +223,12 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// Restore original mysqld state that we saved above.
-	if semiSyncMaster || semiSyncReplica {
+	if semiSyncSource || semiSyncReplica {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
-		params.Logger.Infof("restoring semi-sync settings from before backup: master=%v, replica=%v",
-			semiSyncMaster, semiSyncReplica)
-		err := params.Mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncReplica)
+		params.Logger.Infof("restoring semi-sync settings from before backup: primary=%v, replica=%v",
+			semiSyncSource, semiSyncReplica)
+		err := params.Mysqld.SetSemiSyncEnabled(semiSyncSource, semiSyncReplica)
 		if err != nil {
 			return usable, err
 		}
@@ -237,11 +244,11 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return usable, vterrors.Wrap(err, "replica is not restarting")
 		}
 
-		// Wait for a reliable value for SecondsBehindMaster from ReplicationStatus()
+		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
 
 		// We know that we stopped at replicationPosition.
-		// If MasterPosition is the same, that means no writes
-		// have happened to master, so we are up-to-date.
+		// If PrimaryPosition is the same, that means no writes
+		// have happened to primary, so we are up-to-date.
 		// Otherwise, we wait for replica's Position to change from
 		// the saved replicationPosition before proceeding
 		tmc := tmclient.NewTabletManagerClient()
@@ -249,12 +256,12 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer remoteCancel()
 
-		masterPos, err := getMasterPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
-		// If we are unable to get master position, return error.
+		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
+		// If we are unable to get the primary's position, return error.
 		if err != nil {
 			return usable, err
 		}
-		if !replicationPosition.Equal(masterPos) {
+		if !replicationPosition.Equal(pos) {
 			for {
 				if err := ctx.Err(); err != nil {
 					return usable, err
@@ -359,6 +366,88 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	return nil
 }
 
+type backupPipe struct {
+	filename string
+	maxSize  int64
+
+	r io.Reader
+	w *bufio.Writer
+
+	crc32  hash.Hash32
+	nn     int64
+	done   chan struct{}
+	closed int32
+}
+
+func newBackupWriter(filename string, maxSize int64, w io.Writer) *backupPipe {
+	return &backupPipe{
+		crc32:    crc32.NewIEEE(),
+		w:        bufio.NewWriterSize(w, writerBufferSize),
+		filename: filename,
+		maxSize:  maxSize,
+		done:     make(chan struct{}),
+	}
+}
+
+func newBackupReader(filename string, r io.Reader) *backupPipe {
+	return &backupPipe{
+		crc32:    crc32.NewIEEE(),
+		r:        r,
+		filename: filename,
+		done:     make(chan struct{}),
+	}
+}
+
+func (bp *backupPipe) Read(p []byte) (int, error) {
+	nn, err := bp.r.Read(p)
+	_, _ = bp.crc32.Write(p[:nn])
+	atomic.AddInt64(&bp.nn, int64(nn))
+	return nn, err
+}
+
+func (bp *backupPipe) Write(p []byte) (int, error) {
+	nn, err := bp.w.Write(p)
+	_, _ = bp.crc32.Write(p[:nn])
+	atomic.AddInt64(&bp.nn, int64(nn))
+	return nn, err
+}
+
+func (bp *backupPipe) Close() error {
+	if atomic.CompareAndSwapInt32(&bp.closed, 0, 1) {
+		close(bp.done)
+		if bp.w != nil {
+			if err := bp.w.Flush(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (bp *backupPipe) HashString() string {
+	return hex.EncodeToString(bp.crc32.Sum(nil))
+}
+
+func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
+	tick := time.NewTicker(period)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-bp.done:
+			return
+		case <-tick.C:
+			written := float64(atomic.LoadInt64(&bp.nn))
+			if bp.maxSize == 0 {
+				logger.Infof("Backup %q: %.02fkb", bp.filename, written/1024.0)
+			} else {
+				maxSize := float64(bp.maxSize)
+				logger.Infof("Backup %q: %.02f%% (%.02f/%.02fkb)", bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+			}
+		}
+	}
+}
+
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
@@ -389,11 +478,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			}
 		}
 	}(name, fe.Name)
-	dst := bufio.NewWriterSize(wc, writerBufferSize)
 
-	// Create the hasher and the tee on top.
-	hasher := newHasher()
-	writer := io.MultiWriter(dst, hasher)
+	bw := newBackupWriter(fe.Name, fi.Size(), wc)
+	go bw.ReportProgress(*builtinBackupProgress, params.Logger)
+
+	var writer io.Writer = bw
 
 	// Create the external write pipe, if any.
 	var pipe io.WriteCloser
@@ -446,13 +535,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		}
 	}
 
-	// Flush the buffer to finish writing on destination.
-	if err = dst.Flush(); err != nil {
+	// Close the backupPipe to finish writing on destination.
+	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
 
 	// Save the hash.
-	fe.Hash = hasher.HashString()
+	fe.Hash = bw.HashString()
 	return nil
 }
 
@@ -545,15 +634,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		}
 	}()
 
-	// Create a buffering output.
-	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
+	bp := newBackupReader(name, source)
+	go bp.ReportProgress(*builtinBackupProgress, params.Logger)
 
-	// Create hash to write the compressed data to.
-	hasher := newHasher()
-
-	// Create a Tee: we split the input into the hasher
-	// and into the gunziper.
-	reader := io.TeeReader(source, hasher)
+	dst := bufio.NewWriterSize(dstFile, writerBufferSize)
+	var reader io.Reader = bp
 
 	// Create the external read pipe, if any.
 	var wait hook.WaitFunc
@@ -602,7 +687,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}
 
 	// Check the hash.
-	hash := hasher.HashString()
+	hash := bp.HashString()
 	if hash != fe.Hash {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
@@ -610,6 +695,10 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Flush the buffer.
 	if err := dst.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
+	}
+
+	if err := bp.Close(); err != nil {
+		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
 	return nil
@@ -621,25 +710,25 @@ func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
 	return true
 }
 
-func getMasterPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
+func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
-	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
-	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master replication position: %v", err)
+		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
 	pos, err := mysql.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
+		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }

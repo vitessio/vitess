@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -99,7 +100,7 @@ func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.De
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_PRE)
+	results, err := lu.lkp.Lookup(vcursor, ids, vcursor.LookupRowLockShardSession())
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +111,11 @@ func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.De
 		}
 		ksids := make([][]byte, 0, len(result.Rows))
 		for _, row := range result.Rows {
-			ksids = append(ksids, row[0].ToBytes())
+			rowBytes, err := row[0].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			ksids = append(ksids, rowBytes)
 		}
 		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
@@ -173,7 +178,11 @@ func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]
 		case 0:
 			out = append(out, key.DestinationNone{})
 		case 1:
-			out = append(out, key.DestinationKeyspaceID(result.Rows[0][0].ToBytes()))
+			rowBytes, err := result.Rows[0][0].ToBytes()
+			if err != nil {
+				return out, err
+			}
+			out = append(out, key.DestinationKeyspaceID(rowBytes))
 		default:
 			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
 		}
@@ -284,7 +293,10 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 			return err
 		}
 	case 1:
-		existingksid := qr.Rows[0][0].ToBytes()
+		existingksid, err := qr.Rows[0][0].ToBytes()
+		if err != nil {
+			return err
+		}
 		// Lock the target row using normal transaction priority.
 		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {
@@ -314,7 +326,8 @@ func (lu *clCommon) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ks
 func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
-		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i])
+		// TODO(king-11) make collation aware
+		result, err := evalengine.NullsafeCompare(oldValues[i], newValues[i], collations.Unknown)
 		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
 		if err != nil || result != 0 {
 			equal = false
@@ -383,4 +396,9 @@ func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
 		}
 		buf.WriteString(column + " = :" + lu.lkp.FromColumns[colIdx])
 	}
+}
+
+// IsBackfilling implements the LookupBackfill interface
+func (lu *ConsistentLookupUnique) IsBackfilling() bool {
+	return lu.writeOnly
 }

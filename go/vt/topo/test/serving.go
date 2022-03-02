@@ -42,7 +42,7 @@ func checkSrvKeyspace(t *testing.T, ts *topo.Server) {
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name: "-80",

@@ -17,8 +17,11 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // This file has functions to analyze postprocessing
@@ -54,7 +57,11 @@ func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if err := pb.st.ResolveSymbols(orderBy); err != nil {
 		return err
 	}
-	plan, err := planOrdering(pb, pb.plan, orderBy)
+	var v3OrderBylist v3OrderBy
+	for _, order := range orderBy {
+		v3OrderBylist = append(v3OrderBylist, &v3Order{Order: order})
+	}
+	plan, err := planOrdering(pb, pb.plan, v3OrderBylist)
 	if err != nil {
 		return err
 	}
@@ -95,15 +102,11 @@ var _ planVisitor = setUpperLimit
 // that it does not need to return more than the specified number of rows.
 // A primitive that cannot perform this can ignore the request.
 func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
-	arg := sqlparser.NewArgument("__upper_limit")
 	switch node := plan.(type) {
-	case *join:
+	case *join, *joinGen4, *hashJoin:
 		return false, node, nil
 	case *memorySort:
-		pv, err := sqlparser.NewPlanValue(arg)
-		if err != nil {
-			return false, nil, err
-		}
+		pv := evalengine.NewBindVar("__upper_limit", collations.TypedCollation{})
 		node.eMemorySort.UpperLimit = pv
 		// we don't want to go down to the rest of the tree
 		return false, node, nil
@@ -121,7 +124,12 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 		// The route pushes the limit regardless of the plan.
 		// If it's a scatter query, the rows returned will be
 		// more than the upper limit, but enough for the limit
-		node.Select.SetLimit(&sqlparser.Limit{Rowcount: arg})
+		node.Select.SetLimit(&sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")})
+	case *routeGen4:
+		// The route pushes the limit regardless of the plan.
+		// If it's a scatter query, the rows returned will be
+		// more than the upper limit, but enough for the limit
+		node.Select.SetLimit(&sqlparser.Limit{Rowcount: sqlparser.NewArgument("__upper_limit")})
 	case *concatenate:
 		return false, node, nil
 	}
@@ -130,14 +138,15 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 
 func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
 	plan := newLimit(input)
-	pv, err := sqlparser.NewPlanValue(limit.Rowcount)
+	emptySemTable := semantics.EmptySemTable()
+	pv, err := evalengine.Translate(limit.Rowcount, emptySemTable)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
 	plan.elimit.Count = pv
 
 	if limit.Offset != nil {
-		pv, err = sqlparser.NewPlanValue(limit.Offset)
+		pv, err = evalengine.Translate(limit.Offset, emptySemTable)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}

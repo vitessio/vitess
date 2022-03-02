@@ -1,6 +1,6 @@
 # Guiding Principles
 
-The Vitess project operates under the guiding principles described below. The PMC is responsible for upholding these principles and keeping this document updated with any changes.
+The Vitess project operates under the guiding principles described below. The [Steering Committee](https://github.com/vitessio/vitess/blob/main/STEERING.md) is responsible for upholding these principles and keeping this document updated with any changes.
 
 # Mission Statement
 
@@ -24,4 +24,4 @@ Vitess is driven by high technical standards, and these must be maintained. It i
 * Diversity
 * Inclusiveness
 * Openness
-* Adherence to the [Code of Conduct](https://github.com/vitessio/vitess/blob/master/CODE_OF_CONDUCT.md)
+* Adherence to the [Code of Conduct](https://github.com/vitessio/vitess/blob/main/CODE_OF_CONDUCT.md)

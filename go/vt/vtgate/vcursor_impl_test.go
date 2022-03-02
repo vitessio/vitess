@@ -57,7 +57,7 @@ func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace stri
 	ks := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{Name: "-80", KeyRange: &topodatapb.KeyRange{Start: zeroHexBytes, End: eightyHexBytes}},
 					{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: eightyHexBytes, End: zeroHexBytes}},
@@ -68,10 +68,15 @@ func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace stri
 	return ks, nil
 }
 
+func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	ks, err := f.GetSrvKeyspace(ctx, cell, keyspace)
+	callback(ks, err)
+}
+
 // WatchSrvVSchema starts watching the SrvVSchema object for
 // the provided cell.  It will call the callback when
 // a new value or an error occurs.
-func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 
 }
 
@@ -122,21 +127,21 @@ func TestDestinationKeyspace(t *testing.T) {
 		qualifier:          "",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       nil,
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:            vschemaWith1KS,
 		targetString:       "ks1",
 		qualifier:          "",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       nil,
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:            vschemaWith1KS,
 		targetString:       "ks1:-80",
 		qualifier:          "",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       key.DestinationShard("-80"),
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:            vschemaWith1KS,
 		targetString:       "ks1@replica",
@@ -157,7 +162,7 @@ func TestDestinationKeyspace(t *testing.T) {
 		qualifier:          "ks1",
 		expectedKeyspace:   ks1.Name,
 		expectedDest:       nil,
-		expectedTabletType: topodatapb.TabletType_MASTER,
+		expectedTabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2",
@@ -262,7 +267,7 @@ func TestPlanPrefixKey(t *testing.T) {
 	tests := []testCase{{
 		vschema:               vschemaWith1KS,
 		targetString:          "",
-		expectedPlanPrefixKey: "ks1@master",
+		expectedPlanPrefixKey: "ks1@primary",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1@replica",
@@ -270,11 +275,11 @@ func TestPlanPrefixKey(t *testing.T) {
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "ks1@masterDestinationShard(-80)",
+		expectedPlanPrefixKey: "ks1@primaryDestinationShard(-80)",
 	}, {
 		vschema:               vschemaWith1KS,
 		targetString:          "ks1[deadbeef]",
-		expectedPlanPrefixKey: "ks1@masterKsIDsResolved(80-)",
+		expectedPlanPrefixKey: "ks1@primaryKsIDsResolved(80-)",
 	}}
 
 	for i, tc := range tests {

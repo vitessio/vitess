@@ -146,6 +146,10 @@ message Session {
 
   // enable_system_settings defines if we can use reserved connections.
   bool enable_system_settings = 23;
+
+  // enable_set_var enables the use of SET_VAR query hint to reduce the number of reserved connection
+  // this feature is part of this RFC (https://github.com/vitessio/vitess/issues/9706)'s second proposal
+  bool enable_set_var = 24;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout
@@ -271,7 +275,12 @@ message ResolveTransactionResponse {
 }
 
 message VStreamFlags {
+  // align streams
   bool minimize_skew = 1;
+  // how often heartbeats must be sent when idle (seconds)
+  uint32 heartbeat_interval = 2;
+  // stop streams on a reshard (journal event)
+  bool stop_on_reshard = 3;
 }
 
 // VStreamRequest is the payload for VStream.

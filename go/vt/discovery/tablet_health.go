@@ -32,16 +32,13 @@ import (
 // TabletHealth represents simple tablet health data that is returned to users of healthcheck.
 // No synchronization is required because we always return a copy.
 type TabletHealth struct {
-	Conn                queryservice.QueryService
-	Tablet              *topodata.Tablet
-	Target              *query.Target
-	Stats               *query.RealtimeStats
-	MasterTermStartTime int64
-	LastError           error
-	Serving             bool
-
-	// TablesUpdated contains a list of all tables that we need to fetch new schema info for
-	TablesUpdated []string
+	Conn                 queryservice.QueryService
+	Tablet               *topodata.Tablet
+	Target               *query.Target
+	Stats                *query.RealtimeStats
+	PrimaryTermStartTime int64
+	LastError            error
+	Serving              bool
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we
@@ -50,7 +47,7 @@ func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {
 	return proto.Equal(th.Tablet, other.Tablet) &&
 		proto.Equal(th.Target, other.Target) &&
 		th.Serving == other.Serving &&
-		th.MasterTermStartTime == other.MasterTermStartTime &&
+		th.PrimaryTermStartTime == other.PrimaryTermStartTime &&
 		proto.Equal(th.Stats, other.Stats) &&
 		((th.LastError == nil && other.LastError == nil) ||
 			(th.LastError != nil && other.LastError != nil && th.LastError.Error() == other.LastError.Error()))
@@ -92,6 +89,6 @@ func (th *TabletHealth) GetHostNameLevel(level int) string {
 // https://{{.GetHostNameLevel 0}}.bastion.corp -> https://host.bastion.corp
 func (th *TabletHealth) getTabletDebugURL() string {
 	var buffer bytes.Buffer
-	tabletURLTemplate.Execute(&buffer, th)
+	_ = tabletURLTemplate.Execute(&buffer, th)
 	return buffer.String()
 }

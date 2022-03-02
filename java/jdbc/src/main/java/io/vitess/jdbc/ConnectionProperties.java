@@ -132,11 +132,11 @@ public class ConnectionProperties {
       "Targeted shard in a given keyspace", Constants.DEFAULT_SHARD, null);
   private EnumConnectionProperty<Topodata.TabletType> tabletType = new EnumConnectionProperty<>(
       Constants.Property.TABLET_TYPE,
-      "Tablet Type to which Vitess will connect(master, replica, rdonly)",
+      "Tablet Type to which Vitess will connect(primary, replica, rdonly)",
       Constants.DEFAULT_TABLET_TYPE);
   private EnumConnectionProperty<Topodata.TabletType> oldTabletType = new EnumConnectionProperty<>(
       Constants.Property.OLD_TABLET_TYPE,
-      "Deprecated Tablet Type to which Vitess will connect(master, replica, rdonly)",
+      "Deprecated Tablet Type to which Vitess will connect(primary, replica, rdonly)",
       Constants.DEFAULT_TABLET_TYPE);
   private EnumConnectionProperty<Constants.QueryExecuteType> executeType =
       new EnumConnectionProperty<>(

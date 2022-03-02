@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 @font-face {
-  font-display: swap;
-  font-family: 'NotoSans';
-  src: local('NotoSans-Regular'), url('../fonts/NotoSans-Regular.ttf') format('truetype');
+    font-display: swap;
+    font-family: NotoSans;
+    src: local('NotoSans-Regular'), url('../fonts/NotoSans-Regular.ttf') format('truetype');
 }
 
 @font-face {
-  font-display: swap;
-  font-family: 'NotoSans';
-  src: local('NotoSans-SemiBold'), url('../fonts/NotoSans-SemiBold.ttf') format('truetype');
-  font-weight: 500;
+    font-display: swap;
+    font-family: NotoSans;
+    src: local('NotoSans-SemiBold'), url('../fonts/NotoSans-SemiBold.ttf') format('truetype');
+    font-weight: 500;
 }
 
 @font-face {
-  font-display: swap;
-  font-family: 'NotoSans';
-  src: local('NotoSans-Bold'), url('../fonts/NotoSans-Bold.ttf') format('truetype');
-  font-weight: 700;
+    font-display: swap;
+    font-family: NotoSans;
+    src: local('NotoSans-Bold'), url('../fonts/NotoSans-Bold.ttf') format('truetype');
+    font-weight: 700;
 }
 
 @font-face {
-  font-display: swap;
-  font-family: 'NotoMono';
-  src: local('NotoMono-Regular'), url('../fonts/NotoMono-Regular.ttf') format('truetype');
+    font-display: swap;
+    font-family: NotoMono;
+    src: local('NotoMono-Regular'), url('../fonts/NotoMono-Regular.ttf') format('truetype');
 }

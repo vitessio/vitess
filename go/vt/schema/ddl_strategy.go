@@ -28,11 +28,14 @@ var (
 )
 
 const (
-	declarativeFlag       = "declarative"
-	skipTopoFlag          = "skip-topo"
-	singletonFlag         = "singleton"
-	singletonContextFlag  = "singleton-context"
-	vreplicationTestSuite = "vreplication-test-suite"
+	declarativeFlag        = "declarative"
+	skipTopoFlag           = "skip-topo"
+	singletonFlag          = "singleton"
+	singletonContextFlag   = "singleton-context"
+	allowZeroInDateFlag    = "allow-zero-in-date"
+	postponeCompletionFlag = "postpone-completion"
+	allowConcurrentFlag    = "allow-concurrent"
+	vreplicationTestSuite  = "vreplication-test-suite"
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -41,6 +44,8 @@ type DDLStrategy string
 const (
 	// DDLStrategyDirect means not an online-ddl migration. Just a normal MySQL ALTER TABLE
 	DDLStrategyDirect DDLStrategy = "direct"
+	// DDLStrategyVitess requests vreplication to run the migration; new name for DDLStrategyOnline
+	DDLStrategyVitess DDLStrategy = "vitess"
 	// DDLStrategyOnline requests vreplication to run the migration
 	DDLStrategyOnline DDLStrategy = "online"
 	// DDLStrategyGhost requests gh-ost to run the migration
@@ -53,7 +58,7 @@ const (
 // A strategy is direct if it's not explciitly one of the online DDL strategies
 func (s DDLStrategy) IsDirect() bool {
 	switch s {
-	case DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC:
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC:
 		return false
 	}
 	return true
@@ -85,7 +90,7 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 	switch strategy := DDLStrategy(strategyName); strategy {
 	case "": // backward compatiblity and to handle unspecified values
 		setting.Strategy = DDLStrategyDirect
-	case DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyDirect:
+	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyDirect:
 		setting.Strategy = strategy
 	default:
 		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
@@ -130,6 +135,21 @@ func (setting *DDLStrategySetting) IsSingletonContext() bool {
 	return setting.hasFlag(singletonContextFlag)
 }
 
+// IsAllowZeroInDateFlag checks if strategy options include -allow-zero-in-date
+func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
+	return setting.hasFlag(allowZeroInDateFlag)
+}
+
+// IsPostponeCompletion checks if strategy options include -postpone-completion
+func (setting *DDLStrategySetting) IsPostponeCompletion() bool {
+	return setting.hasFlag(postponeCompletionFlag)
+}
+
+// IsAllowConcurrent checks if strategy options include -allow-concurrent
+func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
+	return setting.hasFlag(allowConcurrentFlag)
+}
+
 // IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
@@ -145,6 +165,9 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, skipTopoFlag):
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
+		case isFlag(opt, allowZeroInDateFlag):
+		case isFlag(opt, postponeCompletionFlag):
+		case isFlag(opt, allowConcurrentFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		default:
 			validOpts = append(validOpts, opt)
@@ -155,13 +178,10 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 
 // IsSkipTopo suggests that DDL should apply to tables bypassing global topo request
 func (setting *DDLStrategySetting) IsSkipTopo() bool {
-	switch {
-	case setting.IsSingleton(), setting.IsSingletonContext():
-		return true
-	case setting.hasFlag(skipTopoFlag):
-		return true
-	}
-	return false
+	// Vitess 11 introduced the flag -skip-topo. starting Vitess 12 the flag is _always_ considered 'true'.
+	// Ideally the flag should be gone, but for backwards compatibility we allow users to still specify it
+	// (and we stil ignore the value, it's always set to true)
+	return true
 }
 
 // ToString returns a simple string representation of this instance

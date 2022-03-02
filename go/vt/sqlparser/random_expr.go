@@ -292,18 +292,18 @@ func (g *generator) between() Expr {
 	g.enter()
 	defer g.exit()
 
-	var op RangeCondOperator
+	var IsBetween bool
 	if g.randomBool() {
-		op = BetweenOp
+		IsBetween = true
 	} else {
-		op = NotBetweenOp
+		IsBetween = false
 	}
 
-	return &RangeCond{
-		Operator: op,
-		Left:     g.intExpr(),
-		From:     g.intExpr(),
-		To:       g.intExpr(),
+	return &BetweenExpr{
+		IsBetween: IsBetween,
+		Left:      g.intExpr(),
+		From:      g.intExpr(),
+		To:        g.intExpr(),
 	}
 }
 
@@ -314,7 +314,7 @@ func (g *generator) isExpr() Expr {
 	ops := []IsExprOperator{IsNullOp, IsNotNullOp, IsTrueOp, IsNotTrueOp, IsFalseOp, IsNotFalseOp}
 
 	return &IsExpr{
-		Operator: ops[g.r.Intn(len(ops))],
-		Expr:     g.booleanExpr(),
+		Right: ops[g.r.Intn(len(ops))],
+		Left:  g.booleanExpr(),
 	}
 }

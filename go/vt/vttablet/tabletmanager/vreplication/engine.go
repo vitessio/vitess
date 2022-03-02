@@ -67,22 +67,24 @@ var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
 
 const (
-	throttlerAppName = "vreplication"
+	throttlerAppName      = "vreplication"
+	changeMasterToPrimary = `update _vt.vreplication set tablet_types = replace(lower(convert(tablet_types using utf8mb4)), 'master', 'primary') where instr(convert(tablet_types using utf8mb4), 'master');`
 )
 
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
-	allddls = append(allddls, createVReplicationLog)
+	allddls = append(allddls, createVReplicationLogTable)
 	withDDL = withddl.New(allddls)
 
+	withDDLInitialQueries = append(withDDLInitialQueries, changeMasterToPrimary)
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
 }
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
 // it can be overridden by passing a different list to the MoveTables or Reshard commands
-var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "comma separated list of tablet types used as a source")
+var tabletTypesStr = flag.String("vreplication_tablet_type", "PRIMARY,REPLICA", "comma separated list of tablet types used as a source")
 
 // waitRetryTime can be changed to a smaller value for tests.
 // A VReplication stream can be created by sending an insert statement
@@ -92,6 +94,9 @@ var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "
 // For example, setting the state to 'Stopped' will cause that stream to
 // stop replicating.
 var waitRetryTime = 1 * time.Second
+
+// How frequently vcopier will update _vt.vreplication rows_copied
+var rowsCopiedUpdateInterval = 30 * time.Second
 
 // Engine is the engine for handling vreplication.
 type Engine struct {
@@ -356,13 +361,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := withDDL.Exec(vre.ctx, "use _vt", dbClient.ExecuteFetch); err != nil {
+	if _, err := withDDL.Exec(vre.ctx, "use _vt", dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return nil, err
 	}
 
 	switch plan.opcode {
 	case insertQuery:
-		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
@@ -410,7 +415,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
@@ -458,7 +463,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
 		}
@@ -476,7 +481,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		return qr, nil
 	case selectQuery, reshardingJournalQuery:
 		// select and resharding journal queries are passed through.
-		return withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
+		return withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	}
 	panic("unreachable")
 }
@@ -635,7 +640,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])
-		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
+		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -645,7 +650,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	}
 	for _, ks := range participants {
 		id := je.participants[ks]
-		_, err := withDDL.Exec(vre.ctx, binlogplayer.DeleteVReplication(uint32(id)), dbClient.ExecuteFetch)
+		_, err := withDDL.Exec(vre.ctx, binlogplayer.DeleteVReplication(uint32(id)), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -736,8 +741,11 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 
 		select {
 		case <-ctx.Done():
-			log.Errorf("Error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
-			return fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
+			err = fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v: %s",
+				pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start),
+				"possibly no tablets are available to stream in the source keyspace for your cell and tablet_types setting")
+			log.Error(err.Error())
+			return err
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
 		case <-tkr.C:

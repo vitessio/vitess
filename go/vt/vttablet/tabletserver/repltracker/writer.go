@@ -29,10 +29,11 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -54,7 +55,7 @@ var withDDL = withddl.New([]string{
 	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
 })
 
-// heartbeatWriter runs on master tablets and writes heartbeats to the _vt.heartbeat
+// heartbeatWriter runs on primary tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type heartbeatWriter struct {
 	env tabletenv.Env
@@ -66,10 +67,11 @@ type heartbeatWriter struct {
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
 
-	mu     sync.Mutex
-	isOpen bool
-	pool   *connpool.Pool
-	ticks  *timer.Timer
+	mu           sync.Mutex
+	isOpen       bool
+	appPool      *dbconnpool.ConnectionPool
+	allPrivsPool *dbconnpool.ConnectionPool
+	ticks        *timer.Timer
 }
 
 // newHeartbeatWriter creates a new heartbeatWriter.
@@ -89,10 +91,10 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		interval:    heartbeatInterval,
 		ticks:       timer.NewTimer(heartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool: connpool.NewPool(env, "HeartbeatWritePool", tabletenv.ConnPoolConfig{
-			Size:               1,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
-		}),
+		// We make this pool size 2; to prevent pool exhausted
+		// stats from incrementing continually, and causing concern
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
 	}
 }
 
@@ -114,7 +116,14 @@ func (w *heartbeatWriter) Open() {
 	}
 	log.Info("Hearbeat Writer: opening")
 
-	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
+	// We cannot create the database and tables in this Open function
+	// since, this is run when a tablet changes to Primary type. The other replicas
+	// might not have started replication. So if we run the create commands, it will
+	// block this thread, and we could end up in a deadlock.
+	// Instead, we try creating the database and table in each tick which runs in a go routine
+	// keeping us safe from hanging the main thread.
+	w.appPool.Open(w.env.Config().DB.AppWithDB())
+	w.allPrivsPool.Open(w.env.Config().DB.AllPrivsWithDB())
 	w.enableWrites(true)
 	w.isOpen = true
 }
@@ -131,7 +140,8 @@ func (w *heartbeatWriter) Close() {
 	}
 
 	w.enableWrites(false)
-	w.pool.Close()
+	w.appPool.Close()
+	w.allPrivsPool.Close()
 	w.isOpen = false
 	log.Info("Hearbeat Writer: closed")
 }
@@ -166,16 +176,22 @@ func (w *heartbeatWriter) write() error {
 	defer w.env.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
+	allPrivsConn, err := w.allPrivsPool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer allPrivsConn.Recycle()
+
 	upsert, err := w.bindHeartbeatVars(sqlUpsertHeartbeat)
 	if err != nil {
 		return err
 	}
-	conn, err := w.pool.Get(ctx)
+	appConn, err := w.appPool.Get(ctx)
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
-	_, err = withDDL.Exec(ctx, upsert, conn.Exec)
+	defer appConn.Recycle()
+	_, err = withDDL.Exec(ctx, upsert, appConn.ExecuteFetch, allPrivsConn.ExecuteFetch)
 	if err != nil {
 		return err
 	}

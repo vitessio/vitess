@@ -89,6 +89,13 @@ type MultiColumn interface {
 	Vindex
 	Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
 	Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
+	// PartialVindex returns true if subset of columns can be passed in to the vindex Map and Verify function.
+	PartialVindex() bool
+}
+
+// Hashing defined the interface for the vindexes that export the Hash function to be used by multi-column vindex.
+type Hashing interface {
+	Hash(id sqltypes.Value) ([]byte, error)
 }
 
 // A Reversible vindex is one that can perform a
@@ -126,6 +133,11 @@ type Lookup interface {
 
 	// Update replaces the mapping of old values with new values for a keyspace id.
 	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
+}
+
+// LookupBackfill interfaces all lookup vindexes that can backfill rows, such as LookupUnique.
+type LookupBackfill interface {
+	IsBackfilling() bool
 }
 
 // WantOwnerInfo defines the interface that a vindex must

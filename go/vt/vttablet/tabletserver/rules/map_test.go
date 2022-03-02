@@ -25,13 +25,13 @@ import (
 )
 
 var (
-	blacklistRules *Rules
-	otherRules     *Rules
+	denyRules  *Rules
+	otherRules *Rules
 )
 
 const (
-	// mimic query rules from blacklist
-	blacklistQueryRules string = "BLACKLIST_QUERY_RULES"
+	// mimic query rules from denylist
+	denyListQueryRules string = "DENYLIST_QUERY_RULES"
 	// mimic query rules from custom source
 	customQueryRules string = "CUSTOM_QUERY_RULES"
 )
@@ -39,14 +39,14 @@ const (
 func setupRules() {
 	var qr *Rule
 
-	// mock blacklisted tables
-	blacklistRules = New()
-	blacklistedTables := []string{"bannedtable1", "bannedtable2", "bannedtable3"}
-	qr = NewQueryRule("enforce blacklisted tables", "blacklisted_table", QRFailRetry)
-	for _, t := range blacklistedTables {
+	// mock denied tables
+	denyRules = New()
+	deniedTables := []string{"bannedtable1", "bannedtable2", "bannedtable3"}
+	qr = NewQueryRule("enforce denied tables", "denied_table", QRFailRetry)
+	for _, t := range deniedTables {
 		qr.AddTableCond(t)
 	}
-	blacklistRules.Add(qr)
+	denyRules.Add(qr)
 
 	// mock custom rules
 	otherRules = New()
@@ -59,41 +59,41 @@ func setupRules() {
 func TestMapRegisterARegisteredSource(t *testing.T) {
 	setupRules()
 	qri := NewMap()
-	qri.RegisterSource(blacklistQueryRules)
+	qri.RegisterSource(denyListQueryRules)
 	defer func() {
 		err := recover()
 		if err == nil {
 			t.Fatalf("should get an error for registering a registered query rule source ")
 		}
 	}()
-	qri.RegisterSource(blacklistQueryRules)
+	qri.RegisterSource(denyListQueryRules)
 }
 
 func TestMapSetRulesWithNil(t *testing.T) {
 	setupRules()
 	qri := NewMap()
 
-	qri.RegisterSource(blacklistQueryRules)
-	err := qri.SetRules(blacklistQueryRules, blacklistRules)
+	qri.RegisterSource(denyListQueryRules)
+	err := qri.SetRules(denyListQueryRules, denyRules)
 	if err != nil {
-		t.Errorf("Failed to set blacklistQueryRules Rules : %s", err)
+		t.Errorf("Failed to set denyListQueryRules Rules : %s", err)
 	}
-	qrs, err := qri.Get(blacklistQueryRules)
+	qrs, err := qri.Get(denyListQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
+		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
 	}
-	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+	if !reflect.DeepEqual(qrs, denyRules) {
+		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyListQueryRules)
 	}
 
-	qri.SetRules(blacklistQueryRules, nil)
+	qri.SetRules(denyListQueryRules, nil)
 
-	qrs, err = qri.Get(blacklistQueryRules)
+	qrs, err = qri.Get(denyListQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
+		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, New()) {
-		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyListQueryRules)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 	setupRules()
 	qri := NewMap()
 
-	qri.RegisterSource(blacklistQueryRules)
+	qri.RegisterSource(denyListQueryRules)
 	qri.RegisterSource(customQueryRules)
 
 	// Test if we can get a Rules without a predefined rule set name
@@ -123,13 +123,13 @@ func TestMapGetSetQueryRules(t *testing.T) {
 	}
 
 	// Test if we can successfully set Rules previously mocked into Map
-	err = qri.SetRules(blacklistQueryRules, blacklistRules)
+	err = qri.SetRules(denyListQueryRules, denyRules)
 	if err != nil {
-		t.Errorf("Failed to set blacklist Rules : %s", err)
+		t.Errorf("Failed to set denylist Rules : %s", err)
 	}
-	err = qri.SetRules(blacklistQueryRules, blacklistRules)
+	err = qri.SetRules(denyListQueryRules, denyRules)
 	if err != nil {
-		t.Errorf("Failed to set blacklist Rules: %s", err)
+		t.Errorf("Failed to set denylist Rules: %s", err)
 	}
 	err = qri.SetRules(customQueryRules, otherRules)
 	if err != nil {
@@ -137,20 +137,20 @@ func TestMapGetSetQueryRules(t *testing.T) {
 	}
 
 	// Test if we can successfully retrieve rules that've been set
-	qrs, err = qri.Get(blacklistQueryRules)
+	qrs, err = qri.Get(denyListQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
+		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
 	}
-	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
+	if !reflect.DeepEqual(qrs, denyRules) {
+		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyRules)
 	}
 
-	qrs, err = qri.Get(blacklistQueryRules)
+	qrs, err = qri.Get(denyListQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
+		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
 	}
-	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
+	if !reflect.DeepEqual(qrs, denyRules) {
+		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyRules)
 	}
 
 	qrs, err = qri.Get(customQueryRules)
@@ -167,19 +167,19 @@ func TestMapFilterByPlan(t *testing.T) {
 	setupRules()
 	qri := NewMap()
 
-	qri.RegisterSource(blacklistQueryRules)
+	qri.RegisterSource(denyListQueryRules)
 	qri.RegisterSource(customQueryRules)
 
-	qri.SetRules(blacklistQueryRules, blacklistRules)
+	qri.SetRules(denyListQueryRules, denyRules)
 	qri.SetRules(customQueryRules, otherRules)
 
-	// Test filter by blacklist rule
+	// Test filter by denylist rule
 	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
 	if l := len(qrs.rules); l != 1 {
 		t.Errorf("Select from bannedtable matches %d rules, but we expect %d", l, 1)
 	}
-	if !strings.HasPrefix(qrs.rules[0].Name, "blacklisted_table") {
-		t.Errorf("Select from bannedtable query matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "blacklisted_table")
+	if !strings.HasPrefix(qrs.rules[0].Name, "denied_table") {
+		t.Errorf("Select from bannedtable query matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "denied_table")
 	}
 
 	// Test filter by custom rule
@@ -191,7 +191,7 @@ func TestMapFilterByPlan(t *testing.T) {
 		t.Errorf("Select from t_customer matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "customrule_ban_bindvar")
 	}
 
-	// Test match two rules: both blacklist rule and custom rule will be matched
+	// Test match two rules: both denylist rule and custom rule will be matched
 	otherRules = New()
 	qr := NewQueryRule("sample custom rule", "customrule_ban_bindvar", QRFail)
 	qr.AddBindVarCond("bindvar1", true, false, QRNoOp, nil)
@@ -206,24 +206,24 @@ func TestMapFilterByPlan(t *testing.T) {
 func TestMapJSON(t *testing.T) {
 	setupRules()
 	qri := NewMap()
-	qri.RegisterSource(blacklistQueryRules)
-	_ = qri.SetRules(blacklistQueryRules, blacklistRules)
+	qri.RegisterSource(denyListQueryRules)
+	_ = qri.SetRules(denyListQueryRules, denyRules)
 	qri.RegisterSource(customQueryRules)
 	_ = qri.SetRules(customQueryRules, otherRules)
 	got := marshalled(qri)
 	want := compacted(`{
-		"BLACKLIST_QUERY_RULES":[{
-			"Description":"enforce blacklisted tables",
-			"Name":"blacklisted_table",
-			"TableNames":["bannedtable1","bannedtable2","bannedtable3"],
-			"Action":"FAIL_RETRY"
-		}],
 		"CUSTOM_QUERY_RULES":[{
 			"Description":"sample custom rule",
 			"Name":"customrule_ban_bindvar",
 			"TableNames":["t_customer"],
 			"BindVarConds":[{"Name":"bindvar1","OnAbsent":true,"Operator":""}],
 			"Action":"FAIL"
+		}],
+		"DENYLIST_QUERY_RULES":[{
+			"Description":"enforce denied tables",
+			"Name":"denied_table",
+			"TableNames":["bannedtable1","bannedtable2","bannedtable3"],
+			"Action":"FAIL_RETRY"
 		}]
 	}`)
 	if got != want {

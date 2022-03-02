@@ -415,7 +415,7 @@ outer:
 
 // shutdownTransactions rolls back all open transactions
 // including the prepared ones.
-// This is used for transitioning from a master to a non-master
+// This is used for transitioning from a primary to a non-primary
 // serving type.
 func (te *TxEngine) shutdownTransactions() {
 	te.rollbackPrepared()
@@ -491,7 +491,7 @@ func (te *TxEngine) stopWatchdog() {
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
-func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, postBeginQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -505,7 +505,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		return 0, err
 	}
 	defer conn.UnlockUpdateTime()
-	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, nil)
+	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, postBeginQueries)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)

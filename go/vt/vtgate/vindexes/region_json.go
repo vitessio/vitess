@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -60,7 +60,7 @@ type RegionJSON struct {
 func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
 	rmPath := m["region_map"]
 	rmap := make(map[string]uint64)
-	data, err := ioutil.ReadFile(rmPath)
+	data, err := os.ReadFile(rmPath)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +99,11 @@ func (rv *RegionJSON) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (rv *RegionJSON) IsUnique() bool {
 	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (rv *RegionJSON) NeedsVCursor() bool {
+	return false
 }
 
 // Map satisfies MultiColumn.
@@ -149,7 +154,6 @@ func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	return result, nil
 }
 
-// NeedsVCursor satisfies the Vindex interface.
-func (rv *RegionJSON) NeedsVCursor() bool {
+func (rv *RegionJSON) PartialVindex() bool {
 	return false
 }

@@ -379,3 +379,60 @@ func TestSelectDBA(t *testing.T) {
 	}
 	require.Equal(t, 2, rowCount)
 }
+
+func TestSelectLock(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	// Get Lock
+	prepare, err := dbo.Prepare("select get_lock(?, ?)")
+	require.NoError(t, err)
+
+	rows, err := prepare.Query("a", 100000)
+	require.NoError(t, err)
+
+	var resultBytes sql.RawBytes
+	require.True(t, rows.Next(), "no rows found")
+	err = rows.Scan(&resultBytes)
+	require.NoError(t, err)
+	assert.Equal(t, "1", string(resultBytes))
+
+	// for connection to be reused.
+	err = rows.Close()
+	require.NoError(t, err)
+
+	// Release Lock
+	prepare, err = dbo.Prepare("select release_lock(?)")
+	require.NoError(t, err)
+
+	rows, err = prepare.Query("a")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	require.True(t, rows.Next(), "no rows found")
+	err = rows.Scan(&resultBytes)
+	require.NoError(t, err)
+	assert.Equal(t, "1", string(resultBytes))
+}
+
+func TestShowColumns(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	prepare, err := dbo.Prepare("show columns from vt_prepare_stmt_test where Field = 'id'")
+	require.NoError(t, err)
+
+	rows, err := prepare.Query()
+	require.NoError(t, err)
+	defer rows.Close()
+
+	require.True(t, rows.Next(), "no rows found")
+	cols, err := rows.Columns()
+	if err != nil {
+		return
+	}
+	require.Len(t, cols, 6)
+	require.False(t, rows.Next())
+}

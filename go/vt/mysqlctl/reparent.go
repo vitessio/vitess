@@ -18,8 +18,6 @@ package mysqlctl
 
 /*
 This file contains the reparenting methods for mysqlctl.
-
-TODO(alainjobart) Once refactoring is done, remove unused code paths.
 */
 
 import (
@@ -51,10 +49,22 @@ func CreateReparentJournal() []string {
 ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 }
 
+// AlterReparentJournal returns the commands to execute to change
+// column master_alias -> primary_alias or the other way
+// In 13.0.0 we introduce renaming of primary_alias -> master_alias.
+// This is to support in-place downgrade from a later version.
+// In 14.0.0 we will replace this with renaming of master_alias -> primary_alias.
+// This is to support in-place upgrades from 13.0.x to 14.0.x
+func AlterReparentJournal() []string {
+	return []string{
+		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN primary_alias master_alias VARBINARY(32) NOT NULL",
+	}
+}
+
 // PopulateReparentJournal returns the SQL command to use to populate
 // the _vt.reparent_journal table, as well as the time_created_ns
 // value used.
-func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string, pos mysql.Position) string {
+func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos mysql.Position) string {
 	posStr := mysql.EncodePosition(pos)
 	if len(posStr) > mysql.MaximumPositionSize {
 		posStr = posStr[:mysql.MaximumPositionSize]
@@ -62,7 +72,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string
 	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
 		"(time_created_ns, action_name, master_alias, replication_position) "+
 		"VALUES (%v, '%v', '%v', '%v')",
-		timeCreatedNS, actionName, masterAlias, posStr)
+		timeCreatedNS, actionName, primaryAlias, posStr)
 }
 
 // queryReparentJournal returns the SQL query to use to query the database
@@ -92,7 +102,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	}
 }
 
-// Promote will promote this server to be the new master.
+// Promote will promote this server to be the new primary.
 func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, error) {
 	ctx := context.TODO()
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
@@ -104,10 +114,10 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 	// Since we handle replication, just stop it.
 	cmds := []string{
 		conn.StopReplicationCommand(),
-		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
-		// When using semi-sync and GTID, a replica first connects to the new master with a given GTID set,
+		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
+		// When using semi-sync and GTID, a replica first connects to the new primary with a given GTID set,
 		// it can take a long time to scan the current binlog file to find the corresponding position.
-		// This can cause commits that occur soon after the master is promoted to take a long time waiting
+		// This can cause commits that occur soon after the primary is promoted to take a long time waiting
 		// for a semi-sync ACK, since replication is not fully set up.
 		// More details in: https://github.com/vitessio/vitess/issues/4161
 		"FLUSH BINARY LOGS",
@@ -116,5 +126,5 @@ func (mysqld *Mysqld) Promote(hookExtraEnv map[string]string) (mysql.Position, e
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
 		return mysql.Position{}, err
 	}
-	return conn.MasterPosition()
+	return conn.PrimaryPosition()
 }

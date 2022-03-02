@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -41,8 +42,10 @@ import (
 )
 
 var (
-	ts              *topo.Server
-	clustersToWatch = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	ts                *topo.Server
+	clustersToWatch   = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	shutdownWaitTime  = flag.Duration("shutdown_wait_time", 30*time.Second, "maximum time to wait for vtorc to release all the locks that it is holding before shutting down on SIGTERM")
+	shardsLockCounter int32
 )
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
@@ -58,19 +61,19 @@ func OpenTabletDiscovery() <-chan time.Time {
 	}
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
 		_ = inst.InjectSeed(instanceKey)
-	})
+	}, false /* forceRefresh */)
 	// TODO(sougou): parameterize poll interval.
 	return time.Tick(15 * time.Second) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // RefreshTablets reloads the tablets from topo.
-func RefreshTablets() {
+func RefreshTablets(forceRefresh bool) {
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
-		DiscoverInstance(*instanceKey)
-	})
+		DiscoverInstance(*instanceKey, forceRefresh)
+	}, forceRefresh)
 }
 
-func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
+func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	if !IsLeaderOrActive() {
 		return
 	}
@@ -90,7 +93,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 			wg.Add(1)
 			go func(cell string) {
 				defer wg.Done()
-				refreshTabletsInCell(refreshCtx, cell, loader)
+				refreshTabletsInCell(refreshCtx, cell, loader, forceRefresh)
 			}(cell)
 		}
 		wg.Wait()
@@ -133,14 +136,14 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 			wg.Add(1)
 			go func(ks *topo.KeyspaceShard) {
 				defer wg.Done()
-				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader)
+				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader, forceRefresh)
 			}(ks)
 		}
 		wg.Wait()
 	}
 }
 
-func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey)) {
+func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	tablets, err := topotools.GetTabletMapForCell(ctx, ts, cell)
 	if err != nil {
 		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
@@ -148,10 +151,10 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 	}
 	query := "select hostname, port, info from vitess_tablet where cell = ?"
 	args := sqlutils.Args(cell)
-	refreshTablets(tablets, query, args, loader)
+	refreshTablets(tablets, query, args, loader, forceRefresh)
 }
 
-func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey)) {
+func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
@@ -159,10 +162,10 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	}
 	query := "select hostname, port, info from vitess_tablet where keyspace = ? and shard = ?"
 	args := sqlutils.Args(keyspace, shard)
-	refreshTablets(tablets, query, args, loader)
+	refreshTablets(tablets, query, args, loader, forceRefresh)
 }
 
-func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []interface{}, loader func(instanceKey *inst.InstanceKey)) {
+func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []interface{}, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
@@ -172,7 +175,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 		if tablet.MysqlHostname == "" {
 			continue
 		}
-		if tablet.Type != topodatapb.TabletType_MASTER && !topo.IsReplicaType(tablet.Type) {
+		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			continue
 		}
 		instanceKey := inst.InstanceKey{
@@ -185,7 +188,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 			log.Errore(err)
 			continue
 		}
-		if proto.Equal(tablet, old) {
+		if !forceRefresh && proto.Equal(tablet, old) {
 			continue
 		}
 		if err := inst.SaveTablet(tablet); err != nil {
@@ -236,19 +239,32 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 }
 
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
+func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Context, func(*error), error) {
 	if instanceKey.Hostname == "" {
-		return nil, errors.New("Can't lock shard: instance is unspecified")
+		return nil, nil, errors.New("Can't lock shard: instance is unspecified")
+	}
+	val := atomic.LoadInt32(&hasReceivedSIGTERM)
+	if val > 0 {
+		return nil, nil, errors.New("Can't lock shard: SIGTERM received")
 	}
 
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
-	defer cancel()
-	_, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
-	return unlock, err
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
+	atomic.AddInt32(&shardsLockCounter, 1)
+	ctx, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	if err != nil {
+		cancel()
+		atomic.AddInt32(&shardsLockCounter, -1)
+		return nil, nil, err
+	}
+	return ctx, func(e *error) {
+		defer atomic.AddInt32(&shardsLockCounter, -1)
+		unlock(e)
+		cancel()
+	}, nil
 }
 
 // TabletRefresh refreshes the tablet info.
@@ -269,19 +285,19 @@ func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	return ti.Tablet, nil
 }
 
-// TabletDemoteMaster requests the master tablet to stop accepting transactions.
-func TabletDemoteMaster(instanceKey inst.InstanceKey) error {
-	return tabletDemoteMaster(instanceKey, true)
+// TabletDemotePrimary requests the primary tablet to stop accepting transactions.
+func TabletDemotePrimary(instanceKey inst.InstanceKey) error {
+	return tabletDemotePrimary(instanceKey, true)
 }
 
-// TabletUndoDemoteMaster requests the master tablet to undo the demote.
-func TabletUndoDemoteMaster(instanceKey inst.InstanceKey) error {
-	return tabletDemoteMaster(instanceKey, false)
+// TabletUndoDemotePrimary requests the primary tablet to undo the demote.
+func TabletUndoDemotePrimary(instanceKey inst.InstanceKey) error {
+	return tabletDemotePrimary(instanceKey, false)
 }
 
-func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
+func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	if instanceKey.Hostname == "" {
-		return errors.New("Can't demote/undo master: instance is unspecified")
+		return errors.New("can't demote/undo primary: instance is unspecified")
 	}
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
@@ -293,14 +309,14 @@ func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	if forward {
-		_, err = tmc.DemoteMaster(ctx, tablet)
+		_, err = tmc.DemotePrimary(ctx, tablet)
 	} else {
-		err = tmc.UndoDemoteMaster(ctx, tablet)
+		err = tmc.UndoDemotePrimary(ctx, tablet, inst.SemiSyncAckers(instanceKey) > 0)
 	}
 	return err
 }
 
-func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, err error) {
+func ShardPrimary(instanceKey *inst.InstanceKey) (primaryKey *inst.InstanceKey, err error) {
 	tablet, err := inst.ReadTablet(*instanceKey)
 	if err != nil {
 		return nil, err
@@ -311,17 +327,17 @@ func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, er
 	if err != nil {
 		return nil, err
 	}
-	if !si.HasMaster() {
-		return nil, fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	if !si.HasPrimary() {
+		return nil, fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer tCancel()
-	master, err := ts.GetTablet(tCtx, si.MasterAlias)
+	primary, err := ts.GetTablet(tCtx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
 	return &inst.InstanceKey{
-		Hostname: master.MysqlHostname,
-		Port:     int(master.MysqlPort),
+		Hostname: primary.MysqlHostname,
+		Port:     int(primary.MysqlPort),
 	}, nil
 }

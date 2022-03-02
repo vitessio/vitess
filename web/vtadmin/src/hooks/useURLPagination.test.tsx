@@ -1,3 +1,4 @@
+/* eslint-disable jest/no-conditional-expect */
 /**
  * Copyright 2021 The Vitess Authors.
  *

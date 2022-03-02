@@ -50,7 +50,7 @@ func TestVerticalSplitTask(t *testing.T) {
 	vtworker.RegisterResult([]string{"VerticalSplitDiff", "--min_healthy_rdonly_tablets=1", "destination_keyspace/0"}, "", nil)
 	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "rdonly"}, "", nil)
 	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "replica"}, "", nil)
-	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "master"},
+	vtctld.RegisterResult([]string{"MigrateServedFrom", "destination_keyspace/0", "primary"},
 		"ALL_DONE",
 		nil)
 

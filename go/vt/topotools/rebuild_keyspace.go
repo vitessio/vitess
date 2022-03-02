@@ -17,10 +17,9 @@ limitations under the License.
 package topotools
 
 import (
+	"context"
 	"fmt"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -101,7 +100,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		}
 	}
 
-	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - get the Shard structures for each shard / cell
@@ -110,10 +109,8 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		for _, si := range shards {
-			// We rebuild keyspace iff:
-			// 1) shard master is in a serving state.
-			// 2) shard has served type for master (this is for backwards compatibility).
-			if !(si.IsMasterServing || si.GetServedType(topodatapb.TabletType_MASTER) != nil) {
+			// We rebuild keyspace iff shard primary is in a serving state.
+			if !si.GetIsPrimaryServing() {
 				continue
 			}
 			// for each type this shard is supposed to serve,

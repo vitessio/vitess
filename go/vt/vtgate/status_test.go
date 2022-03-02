@@ -81,7 +81,7 @@ func TestTabletStatusAggregator(t *testing.T) {
 	qi = &queryInfo{
 		aggr:       aggr,
 		addr:       "b",
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		elapsed:    9 * time.Millisecond,
 		hasError:   false,
 	}
@@ -89,7 +89,7 @@ func TestTabletStatusAggregator(t *testing.T) {
 	qi = &queryInfo{
 		aggr:       aggr,
 		addr:       "",
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		elapsed:    6 * time.Millisecond,
 		hasError:   true,
 	}
@@ -98,7 +98,7 @@ func TestTabletStatusAggregator(t *testing.T) {
 		Keyspace:   "k",
 		Shard:      "s",
 		Name:       "n",
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 		Addr:       "b",
 		QueryCount: 2,
 		QueryError: 1,

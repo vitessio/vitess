@@ -107,7 +107,7 @@ If a scatter query is attempting to collect and process too many rows in memory 
 
 
 ### Set Statement Support
-Set statement support is added in Vitess. There are [some system variables](https://github.com/vitessio/vitess/blob/master/go/vt/sysvars/sysvars.go#L147,L190) which are disabled by default and can be enabled using flag `-enable_system_settings` on VTGate.These system variables are set on the backing MySQL instance, and will force the connection to be dedicated instead of part of the connection pool.
+Set statement support is added in Vitess. There are [some system variables](https://github.com/vitessio/vitess/blob/main/go/vt/sysvars/sysvars.go#L147,L190) which are disabled by default and can be enabled using flag `-enable_system_settings` on VTGate.These system variables are set on the backing MySQL instance, and will force the connection to be dedicated instead of part of the connection pool.
 
 * Disabled passthrough system variables by default. #6859
 * Allow switching workload between OLAP and OLTP #4086 #6691

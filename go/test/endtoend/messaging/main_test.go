@@ -22,10 +22,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -33,10 +29,10 @@ import (
 
 var (
 	clusterInstance      *cluster.LocalProcessCluster
-	shard0Master         *cluster.Vttablet
+	shard0Primary        *cluster.Vttablet
 	shard0Replica        *cluster.Vttablet
-	shard1Master         *cluster.Vttablet
-	lookupMaster         *cluster.Vttablet
+	shard1Primary        *cluster.Vttablet
+	lookupPrimary        *cluster.Vttablet
 	hostname             = "localhost"
 	cell                 = "zone1"
 	userKeyspace         = "user"
@@ -129,9 +125,9 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard0Master = clusterInstance.Keyspaces[1].Shards[0].MasterTablet()
-		shard1Master = clusterInstance.Keyspaces[1].Shards[1].MasterTablet()
-		lookupMaster = clusterInstance.Keyspaces[0].Shards[0].MasterTablet()
+		shard0Primary = clusterInstance.Keyspaces[1].Shards[0].PrimaryTablet()
+		shard1Primary = clusterInstance.Keyspaces[1].Shards[1].PrimaryTablet()
+		lookupPrimary = clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 		shard0Replica = clusterInstance.Keyspaces[1].Shards[0].Vttablets[1]
 
 		return m.Run(), nil
@@ -143,11 +139,4 @@ func TestMain(m *testing.M) {
 		os.Exit(exitcode)
 	}
 
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	return qr
 }

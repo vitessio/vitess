@@ -34,8 +34,8 @@ var _ Primitive = (*MemorySort)(nil)
 
 // MemorySort is a primitive that performs in-memory sorting.
 type MemorySort struct {
-	UpperLimit sqltypes.PlanValue
-	OrderBy    []OrderbyParams
+	UpperLimit evalengine.Expr
+	OrderBy    []OrderByParams
 	Input      Primitive
 
 	// TruncateColumnCount specifies the number of columns to return
@@ -64,14 +64,14 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
 }
 
-// Execute satisfies the Primitive interface.
-func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	count, err := ms.fetchCount(bindVars)
+// TryExecute satisfies the Primitive interface.
+func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := ms.Input.Execute(vcursor, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ms.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +90,9 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return result.Truncate(ms.TruncateColumnCount), nil
 }
 
-// StreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	count, err := ms.fetchCount(bindVars)
+// TryStreamExecute satisfies the Primitive interface.
+func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		comparers: extractSlices(ms.OrderBy),
 		reverse:   true,
 	}
-	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -157,15 +157,16 @@ func (ms *MemorySort) NeedsTransaction() bool {
 	return ms.Input.NeedsTransaction()
 }
 
-func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
-	resolved, err := ms.UpperLimit.ResolveValue(bindVars)
+func (ms *MemorySort) fetchCount(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (int, error) {
+	if ms.UpperLimit == nil {
+		return math.MaxInt64, nil
+	}
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	resolved, err := env.Evaluate(ms.UpperLimit)
 	if err != nil {
 		return 0, err
 	}
-	if resolved.IsNull() {
-		return math.MaxInt64, nil
-	}
-	num, err := evalengine.ToUint64(resolved)
+	num, err := resolved.Value().ToUint64()
 	if err != nil {
 		return 0, err
 	}
@@ -178,10 +179,9 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
-	value := ms.UpperLimit.Value
 	other := map[string]interface{}{"OrderBy": orderByIndexes}
-	if !value.IsNull() {
-		other["UpperLimit"] = value.String()
+	if ms.TruncateColumnCount > 0 {
+		other["ResultColumns"] = ms.TruncateColumnCount
 	}
 	return PrimitiveDescription{
 		OperatorType: "Sort",
@@ -191,11 +191,11 @@ func (ms *MemorySort) description() PrimitiveDescription {
 }
 
 func orderByParamsToString(i interface{}) string {
-	return i.(OrderbyParams).String()
+	return i.(OrderByParams).String()
 }
 
-//GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
-//string representation of each element, and then uses strings.Join() join all the strings into a single one
+// GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
+// string representation of each element, and then uses strings.Join() join all the strings into a single one
 func GenericJoin(input interface{}, f func(interface{}) string) string {
 	sl := reflect.ValueOf(input)
 	var keys []string

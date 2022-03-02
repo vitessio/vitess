@@ -118,7 +118,7 @@ func (client *FakeTabletManagerClient) SetReadWrite(ctx context.Context, tablet 
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
+func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error {
 	return nil
 }
 
@@ -129,11 +129,6 @@ func (client *FakeTabletManagerClient) RefreshState(ctx context.Context, tablet 
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return nil
-}
-
-// IgnoreHealthError is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) IgnoreHealthError(ctx context.Context, tablet *topodatapb.Tablet, pattern string) error {
 	return nil
 }
 
@@ -192,12 +187,17 @@ func (client *FakeTabletManagerClient) StopReplicationMinimum(ctx context.Contex
 }
 
 // MasterStatus is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
-	return &replicationdatapb.MasterStatus{}, nil
+func (client *FakeTabletManagerClient) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return &replicationdatapb.PrimaryStatus{}, nil
+}
+
+// PrimaryStatus is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return &replicationdatapb.PrimaryStatus{}, nil
 }
 
 // StartReplication is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *FakeTabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	return nil
 }
 
@@ -212,7 +212,7 @@ func (client *FakeTabletManagerClient) GetReplicas(ctx context.Context, tablet *
 }
 
 // InitReplica is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
+func (client *FakeTabletManagerClient) InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error {
 	return nil
 }
 
@@ -228,6 +228,11 @@ func (client *FakeTabletManagerClient) ReplicaWasRestarted(ctx context.Context, 
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	return "", nil
+}
+
+// PrimaryPosition is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return "", nil
 }
 
@@ -271,7 +276,12 @@ func (client *FakeTabletManagerClient) ResetReplication(ctx context.Context, tab
 }
 
 // InitMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	return "", nil
+}
+
+// InitPrimary is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	return "", nil
 }
 
@@ -281,17 +291,32 @@ func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Conte
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	return nil, nil
 }
 
 // UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (client *FakeTabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	return nil
+}
+
+// DemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return nil, nil
+}
+
+// UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	return nil
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+	return nil
+}
+
+// SetReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
 	return nil
 }
 
@@ -301,7 +326,7 @@ func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.C
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	return "", nil
 }
 
@@ -321,7 +346,7 @@ func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topod
 }
 
 // RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error) {
+func (client *FakeTabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error) {
 	return &eofEventStream{}, nil
 }
 

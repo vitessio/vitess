@@ -38,6 +38,7 @@ import (
 
 var (
 	clusterInstance       *cluster.LocalProcessCluster
+	shards                []cluster.Shard
 	vtParams              mysql.ConnParams
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -50,6 +51,13 @@ var (
 			msg varchar(64),
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB;`
+	insertStatements = []string{
+		`insert into %s (id, msg) values (3, 'three')`,
+		`insert into %s (id, msg) values (5, 'five')`,
+		`insert into %s (id, msg) values (7, 'seven')`,
+		`insert into %s (id, msg) values (11, 'eleven')`,
+		`insert into %s (id, msg) values (13, 'thirteen')`,
+	}
 	// To verify non online-DDL behavior
 	alterTableNormalStatement = `
 		ALTER TABLE %s
@@ -167,6 +175,48 @@ func TestMain(m *testing.M) {
 			"-ddl_strategy", "gh-ost",
 		}
 
+		primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+		replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
+
+		tableACLConfigJSON := path.Join("/tmp", "table_acl_config.json")
+		f, _ := os.Create(tableACLConfigJSON)
+		vtStaticACLJSON := `{
+	"table_groups":
+	[
+	    {
+	        "name": "vitess user groups",
+	        "table_names_or_prefixes":
+	        [
+	            "%"
+	        ],
+	        "readers":
+	        [
+	            "vitess-reader",
+	            "vitess-writer",
+	            "vitess-admin"
+	        ],
+	        "writers":
+	        [
+	            "vitess-writer",
+	            "vitess-writer-only",
+	            "vitess-admin"
+	        ],
+	        "admins":
+	        [
+	            "vitess-admin"
+	        ]
+	    }
+	]
+}`
+		f.WriteString(vtStaticACLJSON)
+		f.Close()
+
+		// start the tablets
+		for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
+			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-table-acl-config", tableACLConfigJSON, "-queryserver-config-strict-table-acl")
+			tablet.VttabletProcess.Setup()
+		}
+
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
@@ -208,33 +258,66 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspaces[0].Shards
 	assert.Equal(t, 2, len(shards))
 	testWithInitialSchema(t)
 	t.Run("create non_online", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online")
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online", "")
 	})
 	t.Run("successful online alter, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "gh-ost", "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "gh-ost", "vtgate", "ghost_col", "")
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+
+		var totalRowsCopied uint64
+		// count sum of rows copied in all shards, that should be the total number of rows inserted to the table
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			rowsCopied := row.AsUint64("rows_copied", 0)
+			totalRowsCopied += rowsCopied
+		}
+		require.Equal(t, uint64(len(insertStatements)), totalRowsCopied)
+
+		// See that we're able to read logs after successful migration:
+		expectedMessage := "starting gh-ost"
+		logs := onlineddl.ReadMigrationLogs(t, &vtParams, uuid)
+		assert.Equal(t, len(shards), len(logs))
+		for i := range logs {
+			require.Contains(t, logs[i], expectedMessage)
+		}
+
+	})
+	t.Run("successful online alter, vtctl", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
-	t.Run("successful online alter, vtctl", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
+	t.Run("successful online alter, postponed, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -postpone-completion", "vtgate", "ghost_col", "")
+		// Should be still running!
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+		// Issue a complete and wait for successful completion
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
+		// This part may take a while, because we depend on vreplicatoin polling
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("throttled migration", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
 		time.Sleep(2 * time.Second)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 	})
 	t.Run("failed migration", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
@@ -253,26 +336,26 @@ func TestSchemaChange(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col", "")
 			}()
 		}
 		wg.Wait()
 		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
 	})
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtctl", "")
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtctl", "", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online CREATE, vtctl", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "gh-ost", "vtctl", "online_ddl_create_col")
+		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "gh-ost", "vtctl", "online_ddl_create_col", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online DROP TABLE IF EXISTS, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "gh-ost", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "gh-ost", "vtgate", "", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
@@ -280,7 +363,7 @@ func TestSchemaChange(t *testing.T) {
 		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 1)
 	})
 	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "gh-ost", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "gh-ost", "vtgate", "", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
@@ -288,39 +371,53 @@ func TestSchemaChange(t *testing.T) {
 		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 0)
 	})
 	t.Run("Online DROP TABLE for nonexistent table, expect error, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtgate", "", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 	})
 	t.Run("Online CREATE no PK table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost --skip-topo", "vtgate", "online_ddl_create_col")
+		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost", "vtgate", "online_ddl_create_col", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Fail ALTER for no PK table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost --skip-topo", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtgate", "", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 
+		expectedMessage := "No PRIMARY nor UNIQUE key found"
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
 			// the following message is generated by gh-ost. We test that it is captured in our 'message' column:
-			expectedMessage := "No PRIMARY nor UNIQUE key found"
 			require.Contains(t, message, expectedMessage)
+		}
+
+		// See that we're able to read logs after failed migration:
+		logs := onlineddl.ReadMigrationLogs(t, &vtParams, uuid)
+		assert.Equal(t, len(shards), len(logs))
+		for i := range logs {
+			require.Contains(t, logs[i], expectedMessage)
 		}
 	})
 }
 
 func testWithInitialSchema(t *testing.T) {
-	// Create 4 tables
+	// Create 4 tables and populate them
 	var sqlQuery = "" //nolint
 	for i := 0; i < totalTableCount; i++ {
-		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
+		tableName := fmt.Sprintf("vt_onlineddl_test_%02d", i)
+		sqlQuery = fmt.Sprintf(createTable, tableName)
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
+
+		for _, insert := range insertStatements {
+			insertQuery := fmt.Sprintf(insert, tableName)
+			r := onlineddl.VtgateExecQuery(t, &vtParams, insertQuery, "")
+			require.NotNil(t, r)
+		}
 	}
 
 	// Check if 4 tables are created
@@ -328,7 +425,7 @@ func testWithInitialSchema(t *testing.T) {
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string, callerId string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
@@ -338,7 +435,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, CallerId: callerId})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -347,8 +444,10 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
+
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
 	if expectHint != "" {

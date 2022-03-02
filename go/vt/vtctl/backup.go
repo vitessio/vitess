@@ -17,52 +17,61 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-
-	"context"
+	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func init() {
 	addCommand("Shards", command{
-		"ListBackups",
-		commandListBackups,
-		"<keyspace/shard>",
-		"Lists all the backups for a shard."})
+		name:   "ListBackups",
+		method: commandListBackups,
+		params: "<keyspace/shard>",
+		help:   "Lists all the backups for a shard.",
+	})
 	addCommand("Shards", command{
-		"BackupShard",
-		commandBackupShard,
-		"[-allow_master=false] <keyspace/shard>",
-		"Chooses a tablet and creates a backup for a shard."})
+		name:   "BackupShard",
+		method: commandBackupShard,
+		params: "[-allow_primary=false] <keyspace/shard>",
+		help:   "Chooses a tablet and creates a backup for a shard.",
+	})
 	addCommand("Shards", command{
-		"RemoveBackup",
-		commandRemoveBackup,
-		"<keyspace/shard> <backup name>",
-		"Removes a backup for the BackupStorage."})
+		name:   "RemoveBackup",
+		method: commandRemoveBackup,
+		params: "<keyspace/shard> <backup name>",
+		help:   "Removes a backup for the BackupStorage.",
+	})
 
 	addCommand("Tablets", command{
-		"Backup",
-		commandBackup,
-		"[-concurrency=4] [-allow_master=false] <tablet alias>",
-		"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."})
+		name:   "Backup",
+		method: commandBackup,
+		params: "[-concurrency=4] [-allow_primary=false] <tablet alias>",
+		help:   "Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes.",
+	})
 	addCommand("Tablets", command{
-		"RestoreFromBackup",
-		commandRestoreFromBackup,
-		"<tablet alias>",
-		"Stops mysqld and restores the data from the latest backup."})
+		name:   "RestoreFromBackup",
+		method: commandRestoreFromBackup,
+		params: "[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
+		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time.",
+	})
 }
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
-	allowMaster := subFlags.Bool("allow_master", false, "Allows backups to be taken on master. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup ")
+	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -80,12 +89,12 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return err
 	}
 
-	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowMaster)
+	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowPrimary)
 }
 
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
-	allowMaster := subFlags.Bool("allow_master", false, "Whether to use master tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup ")
+	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -100,7 +109,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
-	if tablets == nil {
+	if err != nil {
 		return err
 	}
 
@@ -117,26 +126,26 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		// choose the first tablet as the baseline
 		if tabletForBackup == nil {
 			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].SecondsBehindMaster
+			secondsBehind = stats[i].ReplicationLagSeconds
 			continue
 		}
 
 		// choose a new tablet if it is more up to date
-		if stats[i].SecondsBehindMaster < secondsBehind {
+		if stats[i].ReplicationLagSeconds < secondsBehind {
 			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].SecondsBehindMaster
+			secondsBehind = stats[i].ReplicationLagSeconds
 		}
 	}
 
-	// if no other tablet is available and allowMaster is set to true
-	if tabletForBackup == nil && *allowMaster {
-	ChooseMaster:
+	// if no other tablet is available and allowPrimary is set to true
+	if tabletForBackup == nil && *allowPrimary {
+	ChooseTablet:
 		for i := range tablets {
 			switch tablets[i].Type {
-			case topodatapb.TabletType_MASTER:
+			case topodatapb.TabletType_PRIMARY:
 				tabletForBackup = tablets[i].Tablet
 				secondsBehind = 0 //nolint
-				break ChooseMaster
+				break ChooseTablet
 			default:
 				continue
 			}
@@ -147,12 +156,12 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return errors.New("no tablet available for backup")
 	}
 
-	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowMaster)
+	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowPrimary)
 }
 
 // execBackup is shared by Backup and BackupShard
-func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) error {
-	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency, allowMaster)
+func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) error {
+	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency, allowPrimary)
 	if err != nil {
 		return err
 	}
@@ -162,7 +171,18 @@ func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.T
 		case nil:
 			logutil.LogEvent(wr.Logger(), e)
 		case io.EOF:
-			return nil
+			// Do not do anything for primary tablets and when active reparenting is disabled
+			if *mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
+				return nil
+			}
+			// Otherwise we find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we executed the backup which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err := wr.TopoServer().GetTablet(ctx, tablet.Alias)
+			if err != nil {
+				return err
+			}
+			return wr.SetReplicationSource(ctx, tabletInfo.Tablet)
 		default:
 			return err
 		}
@@ -222,11 +242,24 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the RestoreFromBackup command requires the <tablet alias> argument")
+	}
+
+	// Zero date will cause us to use the latest, which is the default
+	backupTime := time.Time{}
+
+	// Or if a backup timestamp was specified then we use the last backup taken at or before that time
+	if *backupTimestampStr != "" {
+		var err error
+		backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *backupTimestampStr)
+		if err != nil {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("unable to parse the backup timestamp value provided of '%s'", *backupTimestampStr))
+		}
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -237,7 +270,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet)
+	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet, backupTime)
 	if err != nil {
 		return err
 	}
@@ -247,7 +280,18 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 		case nil:
 			logutil.LogEvent(wr.Logger(), e)
 		case io.EOF:
-			return nil
+			// Do not do anything when active reparenting is disabled
+			if *mysqlctl.DisableActiveReparents {
+				return nil
+			}
+			// Otherwise we find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we restored which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err = wr.TopoServer().GetTablet(ctx, tabletAlias)
+			if err != nil {
+				return err
+			}
+			return wr.SetReplicationSource(ctx, tabletInfo.Tablet)
 		default:
 			return err
 		}

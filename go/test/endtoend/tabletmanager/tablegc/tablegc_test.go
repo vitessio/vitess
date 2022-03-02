@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package master
+package tablegc
 
 import (
 	"flag"
@@ -32,18 +32,21 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
-	masterTablet    cluster.Vttablet
-	replicaTablet   cluster.Vttablet
+	primaryTablet   cluster.Vttablet
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	cell            = "zone1"
-	sqlSchema       = `
-	create table if not exists t1(
-		id bigint not null auto_increment,
-		value varchar(32),
-		primary key(id)
-	) Engine=InnoDB;
-`
+	sqlCreateTable  = `
+		create table if not exists t1(
+			id bigint not null auto_increment,
+			value varchar(32),
+			primary key(id)
+		) Engine=InnoDB;
+	`
+	sqlCreateView = `
+		create or replace view v1 as select * from t1;
+	`
+	sqlSchema = sqlCreateTable + sqlCreateView
 
 	vSchema = `
 	{
@@ -88,6 +91,7 @@ func TestMain(m *testing.M) {
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
 			"-gc_check_interval", "5s",
+			"-gc_purge_check_interval", "5s",
 			"-table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 		// We do not need semiSync for this test case.
@@ -107,10 +111,8 @@ func TestMain(m *testing.M) {
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
-			if tablet.Type == "master" {
-				masterTablet = *tablet
-			} else if tablet.Type != "rdonly" {
-				replicaTablet = *tablet
+			if tablet.Type == "primary" {
+				primaryTablet = *tablet
 			}
 		}
 
@@ -123,21 +125,21 @@ func checkTableRows(t *testing.T, tableName string, expect int64) {
 	require.NotEmpty(t, tableName)
 	query := `select count(*) as c from %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	rs, err := masterTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	rs, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	require.NoError(t, err)
 	count := rs.Named().Row().AsInt64("c", 0)
 	assert.Equal(t, expect, count)
 }
 
 func populateTable(t *testing.T) {
-	_, err := masterTablet.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
+	_, err := primaryTablet.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
 	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
 	require.NoError(t, err)
-	_, err = masterTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
 	require.NoError(t, err)
 	for i := 0; i < 10; i++ {
-		_, err = masterTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
+		_, err = primaryTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
 		require.NoError(t, err)
 	}
 	checkTableRows(t, "t1", 1024)
@@ -147,7 +149,7 @@ func populateTable(t *testing.T) {
 func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 	query := `show table status like '%a'`
 	parsed := sqlparser.BuildParsedQuery(query, tableExpr)
-	rs, err := masterTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	rs, err := primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	if err != nil {
 		return false, "", err
 	}
@@ -162,7 +164,7 @@ func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 func dropTable(tableName string) (err error) {
 	query := `drop table if exists %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
-	_, err = masterTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
 	return err
 }
 
@@ -185,7 +187,7 @@ func TestHold(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.HoldTableGCState, time.Now().UTC().Add(10*time.Second))
 	assert.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
 	{
@@ -231,7 +233,7 @@ func TestEvac(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.EvacTableGCState, time.Now().UTC().Add(10*time.Second))
 	assert.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
 	{
@@ -276,7 +278,7 @@ func TestDrop(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.DropTableGCState, time.Now().UTC().Add(10*time.Second))
 	assert.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.NoError(t, err)
 
 	{
@@ -299,7 +301,7 @@ func TestPurge(t *testing.T) {
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(10*time.Second))
 	require.NoError(t, err)
 
-	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
 
 	{
@@ -323,7 +325,7 @@ func TestPurge(t *testing.T) {
 		checkTableRows(t, tableName, 1024)
 	}
 
-	time.Sleep(2 * time.Minute) // purgeReentranceInterval
+	time.Sleep(15 * time.Second) // purgeReentranceInterval
 	{
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		exists, _, err := tableExists(tableName)
@@ -338,5 +340,78 @@ func TestPurge(t *testing.T) {
 		checkTableRows(t, evacTableName, 0)
 		err = dropTable(evacTableName)
 		require.NoError(t, err)
+	}
+}
+
+func TestPurgeView(t *testing.T) {
+	populateTable(t)
+	query, tableName, err := schema.GenerateRenameStatement("v1", schema.PurgeTableGCState, time.Now().UTC().Add(10*time.Second))
+	require.NoError(t, err)
+
+	_, err = primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
+
+	{
+		// table untouched
+		exists, _, err := tableExists("t1")
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
+	{
+		exists, _, err := tableExists("v1")
+		require.NoError(t, err)
+		require.False(t, exists)
+	}
+	{
+		exists, _, err := tableExists(tableName)
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
+
+	time.Sleep(5 * time.Second)
+	{
+		// View was created with +10s timestamp, so it should still exist
+		exists, _, err := tableExists(tableName)
+		require.NoError(t, err)
+		require.True(t, exists)
+
+		// We're really reading the view here:
+		checkTableRows(t, tableName, 1024)
+	}
+
+	time.Sleep(15 * time.Second) // purgeReentranceInterval
+	{
+		// We're now both beyond view's timestamp as well as a tableGC interval
+		exists, _, err := tableExists(tableName)
+		require.NoError(t, err)
+		require.False(t, exists)
+	}
+	{
+		// table still untouched
+		exists, _, err := tableExists("t1")
+		require.NoError(t, err)
+		require.True(t, exists)
+	}
+	{
+		// View should be renamed as _vt_EVAC_ or _vt_DROP: views only spend a fraction of a second in "EVAC"
+		// because evacuation is irrelevant to views. They are immediately renamed to DROP.
+		// Because there might be a race condition, we allow both cases
+		evacTableExists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
+		require.NoError(t, err)
+
+		dropTableExists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
+		require.NoError(t, err)
+
+		require.True(t, evacTableExists || dropTableExists)
+		switch {
+		case evacTableExists:
+			checkTableRows(t, evacTableName, 1024) // the renamed view still points to t1's data
+			err = dropTable(evacTableName)
+			require.NoError(t, err)
+		case dropTableExists:
+			checkTableRows(t, dropTableName, 1024) // the renamed view still points to t1's data
+			err = dropTable(dropTableName)
+			require.NoError(t, err)
+		}
 	}
 }

@@ -17,19 +17,18 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -51,7 +50,7 @@ type msdDestinationTabletServer struct {
 	shardIndex    int
 }
 
-func (sq *msdDestinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *msdDestinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -113,7 +112,7 @@ type msdSourceTabletServer struct {
 	v3            bool
 }
 
-func (sq *msdSourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (sq *msdSourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -212,22 +211,22 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		}
 	}
 
-	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	sourcePrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
-	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+	leftPrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
-	rightMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 20,
-		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
+	rightPrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 20,
+		topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 21,
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 22,
@@ -245,7 +244,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, false); err != nil {
+	if err := topotools.RebuildKeyspace(ctx, wi.wr.Logger(), wi.wr.TopoServer(), "ks", nil, false); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
@@ -312,7 +311,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 	}
 
 	// Start action loop after having registered all RPC services.
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2, rightMaster, rightRdonly1, rightRdonly2} {
+	for _, ft := range []*testlib.FakeTablet{sourcePrimary, sourceRdonly1, sourceRdonly2, leftPrimary, leftRdonly1, leftRdonly2, rightPrimary, rightRdonly1, rightRdonly2} {
 		ft.StartActionLoop(t, wi.wr)
 		defer ft.StopActionLoop(t)
 	}

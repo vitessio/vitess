@@ -135,11 +135,12 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 		*vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
+		return true
 	})
 
 	vschema := <-vschemaUpdates
@@ -165,8 +166,9 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
+		return true
 	})
 
 	vschema := <-vschemaUpdates
@@ -206,8 +208,9 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
+		return true
 	})
 
 	vschema := <-vschemaUpdates
@@ -274,8 +277,9 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
+		return true
 	})
 
 	vschema := <-vschemaUpdates
@@ -293,12 +297,12 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	stmt := "alter vschema add table test_table"
 	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
+	_ = waitForVschemaTables(t, ks, append([]string{"test_table"}, vschemaTables...), executor)
 
 	stmt = "alter vschema add table test_table2"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
+	_ = waitForVschemaTables(t, ks, append([]string{"test_table", "test_table2"}, vschemaTables...), executor)
 
 	// Should fail adding a table on a sharded keyspace
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
@@ -390,8 +394,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
+		return true
 	})
 
 	vschema := <-vschemaUpdates

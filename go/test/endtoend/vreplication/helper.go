@@ -3,17 +3,21 @@ package vreplication
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buger/jsonparser"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/schema"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -52,7 +56,9 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
-	execQuery(t, conn, "use `"+database+"`;")
+	if database != "" {
+		execQuery(t, conn, "use `"+database+"`;")
+	}
 	execQuery(t, conn, "begin")
 	qr := execQuery(t, conn, query)
 	execQuery(t, conn, "commit")
@@ -66,6 +72,38 @@ func checkHealth(t *testing.T, url string) bool {
 		return false
 	}
 	return true
+}
+
+func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
+	done := false
+	ticker := time.NewTicker(10 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			if done {
+				return
+			}
+			qr := execVtgateQuery(t, conn, database, query)
+			require.NotNil(t, qr)
+			if want == fmt.Sprintf("%v", qr.Rows) {
+				done = true
+			}
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "query %s.%s did not execute in time", database, query)
+		}
+	}
+}
+
+// verifyNoInternalTables can e.g. be used to confirm that no internal tables were
+// copied from a source to a target during a MoveTables or Reshard operation.
+func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {
+	qr := execVtgateQuery(t, conn, keyspaceShard, "show tables")
+	require.NotNil(t, qr)
+	require.NotNil(t, qr.Rows)
+	for _, row := range qr.Rows {
+		tableName := row[0].ToString()
+		assert.False(t, schema.IsInternalOperationTableName(tableName), "found internal table %s in shard %s", tableName, keyspaceShard)
+	}
 }
 
 func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
@@ -108,7 +146,7 @@ func getQueryCount(url string, query string) int {
 		fmt.Printf("http Get returns status %d\n", resp.StatusCode)
 		return 0
 	}
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	body := string(respByte)
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
@@ -167,10 +205,13 @@ func getQueryCount(url string, query string) int {
 func validateDryRunResults(t *testing.T, output string, want []string) {
 	t.Helper()
 	require.NotEmpty(t, output)
-
 	gotDryRun := strings.Split(output, "\n")
 	require.True(t, len(gotDryRun) > 3)
-	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
+	startRow := 3
+	if strings.Contains(gotDryRun[0], "deprecated") {
+		startRow = 4
+	}
+	gotDryRun = gotDryRun[startRow : len(gotDryRun)-1]
 	if len(want) != len(gotDryRun) {
 		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
 	}
@@ -189,11 +230,11 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 		}
 		if !match {
 			fail = true
-			t.Logf("want %s, got %s\n", w, gotDryRun[i])
+			t.Fatalf("want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
 	if fail {
-		t.Fatal("Dry run results don't match")
+		t.Fatalf("Dry run results don't match, want %s, got %s", want, gotDryRun)
 	}
 }
 
@@ -214,7 +255,7 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	return found, nil
 }
 
-func checkIfBlacklistExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
+func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, table string) (bool, error) {
 	var output string
 	var err error
 	found := false
@@ -226,7 +267,7 @@ func checkIfBlacklistExists(t *testing.T, vc *VitessCluster, ksShard string, tab
 		if string(value) == table {
 			found = true
 		}
-	}, "tablet_controls", "[0]", "blacklisted_tables")
+	}, "tablet_controls", "[0]", "denied_tables")
 	return found, nil
 }
 
@@ -261,4 +302,10 @@ func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	}
 	fmt.Printf("Routing Rules::%s:\n%s\n", msg, output)
 	return nil
+}
+
+func osExec(t *testing.T, command string, args []string) (string, error) {
+	cmd := exec.Command(command, args...)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
 }

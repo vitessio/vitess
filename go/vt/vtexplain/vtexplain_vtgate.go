@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -57,7 +58,7 @@ var (
 func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
 	explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
-	healthCheck = discovery.NewFakeHealthCheck()
+	healthCheck = discovery.NewFakeHealthCheck(nil)
 
 	resolver := newFakeResolver(opts, explainTopo, vtexplainCell)
 
@@ -68,9 +69,16 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 
 	vtgateSession.TargetString = opts.Target
 
+	if opts.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
+		if vtgateSession.Options == nil {
+			vtgateSession.Options = &querypb.ExecuteOptions{}
+		}
+		vtgateSession.Options.PlannerVersion = opts.PlannerVersion
+	}
+
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig, schemaTracker)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig, schemaTracker, false /*no-scatter*/)
 
 	return nil
 }
@@ -123,7 +131,7 @@ func buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numSh
 			hostname := fmt.Sprintf("%s/%s", ks, shard.Name)
 			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
 
-			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_MASTER, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
+			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_PRIMARY, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
 				return newTablet(opts, t)
 			})
 			explainTopo.TabletConns[hostname] = tablet.(*explainTablet)

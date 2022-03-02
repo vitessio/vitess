@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -41,7 +43,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 	tests := []struct {
 		name             string
 		statusMap        map[string]*replicationdatapb.StopReplicationStatus
-		primaryStatusMap map[string]*replicationdatapb.MasterStatus
+		primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
 		// Note: for these tests, it's simpler to compare keys than actual
 		// mysql.Postion structs, which are just thin wrappers around the
 		// mysql.GTIDSet interface. If a tablet alias makes it into the map, we
@@ -61,18 +63,18 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 			},
-			primaryStatusMap: map[string]*replicationdatapb.MasterStatus{
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
 				"p1": {
 					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 				},
@@ -85,13 +87,13 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"r2": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
 					},
 				},
@@ -104,7 +106,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
@@ -122,13 +124,13 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:100",
 					},
 				},
 				"r2": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "FilePos/mysql-bin.0001:10",
 					},
 				},
@@ -141,18 +143,18 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 				"errant": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
 					},
 				},
 			},
-			primaryStatusMap: map[string]*replicationdatapb.MasterStatus{
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
 				"p1": {
 					Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 				},
@@ -161,16 +163,16 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "bad master position fails the call",
+			name: "bad primary position fails the call",
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"r1": {
 					After: &replicationdatapb.Status{
-						MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 					},
 				},
 			},
-			primaryStatusMap: map[string]*replicationdatapb.MasterStatus{
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
 				"p1": {
 					Position: "InvalidFlavor/1234",
 				},
@@ -209,11 +211,11 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	tmclient.TabletManagerClient
 
-	demoteMasterResults map[string]*struct {
-		MasterStatus *replicationdatapb.MasterStatus
-		Err          error
+	demotePrimaryResults map[string]*struct {
+		PrimaryStatus *replicationdatapb.PrimaryStatus
+		Err           error
 	}
-	demoteMasterDelays map[string]time.Duration
+	demotePrimaryDelays map[string]time.Duration
 
 	stopReplicationAndGetStatusResults map[string]*struct {
 		StopStatus *replicationdatapb.StopReplicationStatus
@@ -222,14 +224,14 @@ type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	stopReplicationAndGetStatusDelays map[string]time.Duration
 }
 
-func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	if tablet.Alias == nil {
 		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
 
-	if delay, ok := fake.demoteMasterDelays[key]; ok {
+	if delay, ok := fake.demotePrimaryDelays[key]; ok {
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
@@ -237,8 +239,8 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemoteMaster(ctx cont
 		}
 	}
 
-	if result, ok := fake.demoteMasterResults[key]; ok {
-		return result.MasterStatus, result.Err
+	if result, ok := fake.demotePrimaryResults[key]; ok {
+		return result.PrimaryStatus, result.Err
 	}
 
 	return nil, assert.AnError
@@ -272,14 +274,15 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 	ctx := context.Background()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
-		name                    string
-		tmc                     *stopReplicationAndBuildStatusMapsTestTMClient
-		tabletMap               map[string]*topo.TabletInfo
-		waitReplicasTimeout     time.Duration
-		ignoredTablets          sets.String
-		expectedStatusMap       map[string]*replicationdatapb.StopReplicationStatus
-		expectedMasterStatusMap map[string]*replicationdatapb.MasterStatus
-		shouldErr               bool
+		name                     string
+		tmc                      *stopReplicationAndBuildStatusMapsTestTMClient
+		tabletMap                map[string]*topo.TabletInfo
+		waitReplicasTimeout      time.Duration
+		ignoredTablets           sets.String
+		tabletToWaitFor          *topodatapb.TabletAlias
+		expectedStatusMap        map[string]*replicationdatapb.StopReplicationStatus
+		expectedPrimaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+		shouldErr                bool
 	}{
 		{
 			name: "success",
@@ -331,8 +334,8 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
-			expectedMasterStatusMap: map[string]*replicationdatapb.MasterStatus{},
-			shouldErr:               false,
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			shouldErr:                false,
 		},
 		{
 			name: "ignore tablets",
@@ -380,19 +383,19 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
-			expectedMasterStatusMap: map[string]*replicationdatapb.MasterStatus{},
-			shouldErr:               false,
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			shouldErr:                false,
 		},
 		{
-			name: "have MASTER tablet and can demote",
+			name: "have PRIMARY tablet and can demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
-				demoteMasterResults: map[string]*struct {
-					MasterStatus *replicationdatapb.MasterStatus
-					Err          error
+				demotePrimaryResults: map[string]*struct {
+					PrimaryStatus *replicationdatapb.PrimaryStatus
+					Err           error
 				}{
 					"zone1-0000000100": {
-						MasterStatus: &replicationdatapb.MasterStatus{
-							Position: "master-position-100",
+						PrimaryStatus: &replicationdatapb.PrimaryStatus{
+							Position: "primary-position-100",
 						},
 					},
 				},
@@ -401,7 +404,9 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					Err        error
 				}{
 					"zone1-0000000100": {
-						Err: mysql.ErrNotReplica,
+						// In the tabletManager implementation of StopReplicationAndGetStatus
+						// we wrap the error and then send it via GRPC. This should still work as expected.
+						Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed")),
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
@@ -436,19 +441,19 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
-			expectedMasterStatusMap: map[string]*replicationdatapb.MasterStatus{
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{
 				"zone1-0000000100": {
-					Position: "master-position-100",
+					Position: "primary-position-100",
 				},
 			},
 			shouldErr: false,
 		},
 		{
-			name: "one tablet is MASTER and cannot demote",
+			name: "one tablet is PRIMARY and cannot demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
-				demoteMasterResults: map[string]*struct {
-					MasterStatus *replicationdatapb.MasterStatus
-					Err          error
+				demotePrimaryResults: map[string]*struct {
+					PrimaryStatus *replicationdatapb.PrimaryStatus
+					Err           error
 				}{
 					"zone1-0000000100": {
 						Err: assert.AnError,
@@ -494,15 +499,15 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
-			expectedMasterStatusMap: map[string]*replicationdatapb.MasterStatus{}, // zone1-0000000100 fails to demote, so does not appear
-			shouldErr:               false,
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{}, // zone1-0000000100 fails to demote, so does not appear
+			shouldErr:                false,
 		},
 		{
-			name: "multiple tablets are MASTER and cannot demote",
+			name: "multiple tablets are PRIMARY and cannot demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
-				demoteMasterResults: map[string]*struct {
-					MasterStatus *replicationdatapb.MasterStatus
-					Err          error
+				demotePrimaryResults: map[string]*struct {
+					PrimaryStatus *replicationdatapb.PrimaryStatus
+					Err           error
 				}{
 					"zone1-0000000100": {
 						Err: assert.AnError,
@@ -541,10 +546,10 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets:          sets.NewString(),
-			expectedStatusMap:       nil,
-			expectedMasterStatusMap: nil,
-			shouldErr:               true, // we get multiple errors, so we fail
+			ignoredTablets:           sets.NewString(),
+			expectedStatusMap:        nil,
+			expectedPrimaryStatusMap: nil,
+			shouldErr:                true, // we get multiple errors, so we fail
 		},
 		{
 			name: "waitReplicasTimeout exceeded",
@@ -596,8 +601,8 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
-			expectedMasterStatusMap: map[string]*replicationdatapb.MasterStatus{},
-			shouldErr:               false,
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			shouldErr:                false,
 		},
 		{
 			name: "one tablet fails to StopReplication",
@@ -607,7 +612,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					Err        error
 				}{
 					"zone1-0000000100": {
-						Err: assert.AnError, // not being mysql.ErrNotReplica will not cause us to call DemoteMaster
+						Err: assert.AnError, // not being mysql.ErrNotReplica will not cause us to call DemotePrimary
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
@@ -642,8 +647,8 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					After:  &replicationdatapb.Status{Position: "101-after"},
 				},
 			},
-			expectedMasterStatusMap: map[string]*replicationdatapb.MasterStatus{},
-			shouldErr:               false,
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			shouldErr:                false,
 		},
 		{
 			name: "multiple tablets fail StopReplication",
@@ -678,10 +683,89 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets:          sets.NewString(),
-			expectedStatusMap:       nil,
-			expectedMasterStatusMap: nil,
-			shouldErr:               true,
+			ignoredTablets:           sets.NewString(),
+			expectedStatusMap:        nil,
+			expectedPrimaryStatusMap: nil,
+			shouldErr:                true,
+		},
+		{
+			name: "slow tablet is the new primary requested",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusDelays: map[string]time.Duration{
+					"zone1-0000000102": 1 * time.Second, // zone1-0000000102 is slow to respond but has to be included since it is the requested primary
+				},
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "100-before"},
+							After:  &replicationdatapb.Status{Position: "100-after"},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "101-before"},
+							After:  &replicationdatapb.Status{Position: "101-after"},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "102-before"},
+							After:  &replicationdatapb.Status{Position: "102-after"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			tabletToWaitFor: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			ignoredTablets: sets.NewString(),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					Before: &replicationdatapb.Status{Position: "100-before"},
+					After:  &replicationdatapb.Status{Position: "100-after"},
+				},
+				"zone1-0000000101": {
+					Before: &replicationdatapb.Status{Position: "101-before"},
+					After:  &replicationdatapb.Status{Position: "101-after"},
+				},
+				"zone1-0000000102": {
+					Before: &replicationdatapb.Status{Position: "102-before"},
+					After:  &replicationdatapb.Status{Position: "102-after"},
+				},
+			},
+			waitReplicasTimeout:      time.Minute,
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			shouldErr:                false,
 		},
 	}
 
@@ -691,15 +775,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			statusMap, masterStatusMap, err := StopReplicationAndBuildStatusMaps(
-				ctx,
-				tt.tmc,
-				&events.Reparent{},
-				tt.tabletMap,
-				tt.waitReplicasTimeout,
-				tt.ignoredTablets,
-				logger,
-			)
+			statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -707,7 +783,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedStatusMap, statusMap, "StopReplicationStatus mismatch")
-			assert.Equal(t, tt.expectedMasterStatusMap, masterStatusMap, "MasterStatusMap mismatch")
+			assert.Equal(t, tt.expectedPrimaryStatusMap, primaryStatusMap, "PrimaryStatusMap mismatch")
 		})
 	}
 }

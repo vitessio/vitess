@@ -1,0 +1,86 @@
+{
+  "keyspaces": {
+    "main": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash"
+        }
+      },
+      "tables": {
+        "customer1": {
+          "column_vindexes": [
+            {
+              "column": "c_w_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "district1": {
+          "column_vindexes": [
+            {
+              "column": "d_w_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "history1": {
+          "column_vindexes": [
+            {
+              "column": "h_w_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "item1": {
+          "column_vindexes": [
+            {
+              "column": "i_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "new_orders1": {
+          "column_vindexes": [
+            {
+              "column": "no_w_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "order_line1": {
+          "column_vindexes": [
+            {
+              "column": "ol_w_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "orders1": {
+          "column_vindexes": [
+            {
+              "column": "o_w_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "stock1": {
+          "column_vindexes": [
+            {
+              "column": "s_w_id",
+              "name": "hash"
+            }
+          ]
+        },
+        "warehouse1": {
+          "column_vindexes": [
+            {
+              "column": "w_id",
+              "name": "hash"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

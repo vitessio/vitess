@@ -1,3 +1,4 @@
+//go:build gofuzz
 // +build gofuzz
 
 /*
@@ -20,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -54,9 +54,9 @@ func Fuzz(data []byte) int {
 	service := CreateFakeServer(t)
 
 	// listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Println("Cannot listen: %v", err)
+		fmt.Println("Cannot listen")
 		return -1
 	}
 	defer listener.Close()
@@ -76,7 +76,7 @@ func Fuzz(data []byte) int {
          "Password": "valid"
         }`
 
-	f, err := ioutil.TempFile("", "static_auth_creds.json")
+	f, err := os.CreateTemp("", "static_auth_creds.json")
 	if err != nil {
 		return -1
 	}
@@ -93,7 +93,7 @@ func Fuzz(data []byte) int {
 	flag.Set("grpc_auth_static_client_creds", f.Name())
 	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
-		fmt.Println("dial failed: %v", err)
+		fmt.Println("dial failed")
 		return -1
 	}
 	defer client.Close()
@@ -101,7 +101,7 @@ func Fuzz(data []byte) int {
 	RegisterTestDialProtocol(client)
 	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
-		fmt.Println("Got err: %v from vtgateconn.DialProtocol", err)
+		fmt.Println("Got err from vtgateconn.DialProtocol")
 		return -1
 	}
 	session := conn.Session("connection_ks@rdonly", testExecuteOptions)

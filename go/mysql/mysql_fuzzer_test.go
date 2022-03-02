@@ -1,3 +1,6 @@
+//go:build gofuzz
+// +build gofuzz
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -17,7 +20,7 @@ limitations under the License.
 package mysql
 
 import (
-	"io/ioutil"
+	"os"
 	"path"
 	"runtime/debug"
 	"testing"
@@ -27,7 +30,7 @@ import (
 
 func TestFuzzHandleNextCommandFromFile(t *testing.T) {
 	directoryName := "fuzzdata"
-	files, err := ioutil.ReadDir(directoryName)
+	files, err := os.ReadDir(directoryName)
 	require.NoError(t, err)
 	for _, file := range files {
 		t.Run(file.Name(), func(t *testing.T) {
@@ -38,7 +41,7 @@ func TestFuzzHandleNextCommandFromFile(t *testing.T) {
 					t.Fatal(string(debug.Stack()))
 				}
 			}()
-			testcase, err := ioutil.ReadFile(path.Join(directoryName, file.Name()))
+			testcase, err := os.ReadFile(path.Join(directoryName, file.Name()))
 			require.NoError(t, err)
 			FuzzHandleNextCommand(testcase)
 		})

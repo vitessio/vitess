@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2018 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,13 +37,13 @@ func TestFindTablet(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
-	// Create an old master, two good replicas
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	// Create an old primary, two good replicas
+	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -54,24 +54,24 @@ func TestFindTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
 	}
-	master, err := topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
-	if err != nil || !topoproto.TabletAliasEqual(master, oldMaster.Tablet.Alias) {
-		t.Fatalf("FindTabletByHostAndPort(master) failed: %v %v", err, master)
+	primary, err := topotools.FindTabletByHostAndPort(tabletMap, oldPrimary.Tablet.Hostname, "vt", oldPrimary.Tablet.PortMap["vt"])
+	if err != nil || !topoproto.TabletAliasEqual(primary, oldPrimary.Tablet.Alias) {
+		t.Fatalf("FindTabletByHostAndPort(primary) failed: %v %v", err, primary)
 	}
 	replica1, err := topotools.FindTabletByHostAndPort(tabletMap, goodReplica1.Tablet.Hostname, "vt", goodReplica1.Tablet.PortMap["vt"])
 	if err != nil || !topoproto.TabletAliasEqual(replica1, goodReplica1.Tablet.Alias) {
-		t.Fatalf("FindTabletByHostAndPort(replica1) failed: %v %v", err, master)
+		t.Fatalf("FindTabletByHostAndPort(replica1) failed: %v %v", err, primary)
 	}
 	replica2, err := topotools.FindTabletByHostAndPort(tabletMap, goodReplica2.Tablet.Hostname, "vt", goodReplica2.Tablet.PortMap["vt"])
 	if !topo.IsErrType(err, topo.NoNode) {
 		t.Fatalf("FindTabletByHostAndPort(replica2) worked: %v %v", err, replica2)
 	}
 
-	// Make sure the master is not exported in other cells
+	// Make sure the primary is not exported in other cells
 	tabletMap, _ = ts.GetTabletMapForShardByCell(ctx, "test_keyspace", "0", []string{"cell2"})
-	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
+	primary, err = topotools.FindTabletByHostAndPort(tabletMap, oldPrimary.Tablet.Hostname, "vt", oldPrimary.Tablet.PortMap["vt"])
 	if !topo.IsErrType(err, topo.NoNode) {
-		t.Fatalf("FindTabletByHostAndPort(master) worked in cell2: %v %v", err, master)
+		t.Fatalf("FindTabletByHostAndPort(primary) worked in cell2: %v %v", err, primary)
 	}
 
 	// Get tablet map for all cells.  If there were to be failures talking to local cells, this will return the tablet map
@@ -80,9 +80,9 @@ func TestFindTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTabletMapForShard should nil but got: %v", err)
 	}
-	master, err = topotools.FindTabletByHostAndPort(tabletMap, oldMaster.Tablet.Hostname, "vt", oldMaster.Tablet.PortMap["vt"])
-	if err != nil || !topoproto.TabletAliasEqual(master, oldMaster.Tablet.Alias) {
-		t.Fatalf("FindTabletByHostAndPort(master) failed: %v %v", err, master)
+	primary, err = topotools.FindTabletByHostAndPort(tabletMap, oldPrimary.Tablet.Hostname, "vt", oldPrimary.Tablet.PortMap["vt"])
+	if err != nil || !topoproto.TabletAliasEqual(primary, oldPrimary.Tablet.Alias) {
+		t.Fatalf("FindTabletByHostAndPort(primary) failed: %v %v", err, primary)
 	}
 
 }

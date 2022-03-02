@@ -3,8 +3,8 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 
 	vtfcr "vitess.io/vitess/go/vt/vttablet/customrule/filecustomrule"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -32,7 +32,7 @@ func MustWriteJSON(obj interface{}, path string) {
 		log.Fatalf("Unable to marshal object: %v", err)
 	}
 
-	err = ioutil.WriteFile(path, enc, 0400)
+	err = os.WriteFile(path, enc, 0400)
 	if err != nil {
 		log.Fatalf("Unable to save new JSON: %v", err)
 	}

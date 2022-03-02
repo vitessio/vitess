@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# this script migrates traffic for the primary tablet
 
-vtctlclient -server localhost:15999 MigrateServedTypes customer/0 master
+vtctlclient -server localhost:15999 MigrateServedTypes customer/0 primary
 # data has been copied over to shards, and databases for the new shards are now available
 

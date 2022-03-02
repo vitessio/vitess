@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates master traffic for the customer keyspace to the
-# new master tablet
+# this script migrates primary traffic for the customer keyspace to the
+# new primary tablet
 
-vtctlclient -server localhost:15999 MigrateServedFrom customer/0 master
+vtctlclient -server localhost:15999 MigrateServedFrom customer/0 primary

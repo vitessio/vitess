@@ -63,7 +63,7 @@ func init() {
 func BenchmarkWithNormalizer(b *testing.B) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	saved := rpcVTGate.executor.normalize
 	rpcVTGate.executor.normalize = true
 	defer func() { rpcVTGate.executor.normalize = saved }()
@@ -72,7 +72,7 @@ func BenchmarkWithNormalizer(b *testing.B) {
 		_, _, err := rpcVTGate.Execute(
 			context.Background(),
 			&vtgatepb.Session{
-				TargetString: "@master",
+				TargetString: "@primary",
 				Options:      executeOptions,
 			},
 			benchQuery,
@@ -87,7 +87,7 @@ func BenchmarkWithNormalizer(b *testing.B) {
 func BenchmarkWithoutNormalizer(b *testing.B) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	saved := rpcVTGate.executor.normalize
 	rpcVTGate.executor.normalize = false
 	defer func() { rpcVTGate.executor.normalize = saved }()
@@ -96,7 +96,7 @@ func BenchmarkWithoutNormalizer(b *testing.B) {
 		_, _, err := rpcVTGate.Execute(
 			context.Background(),
 			&vtgatepb.Session{
-				TargetString: "@master",
+				TargetString: "@primary",
 				Options:      executeOptions,
 			},
 			benchQuery,

@@ -15,14 +15,14 @@ limitations under the License.
 */
 
 /*
-Test the vtgate master buffer.
+Test the vtgate buffering.
 
-During a master failover, vtgate should automatically buffer (stall) requests
+During a failover, vtgate should automatically buffer (stall) requests
 for a configured time and retry them after the failover is over.
 
 The test reproduces such a scenario as follows:
 - run two threads, the first thread continuously executes a critical read and the second executes a write (UPDATE)
-- vtctl PlannedReparentShard runs a master failover
+- vtctl PlannedReparentShard runs a failover
 - both threads should not see any error during the failover
 */
 
@@ -32,7 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -43,13 +43,14 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -71,9 +72,9 @@ var (
 const (
 	criticalReadRowID          = 1
 	updateRowID                = 2
-	demoteMasterQuery          = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
-	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
-	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
+	demoteQuery                = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
+	disableSemiSyncSourceQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
+	enableSemiSyncSourceQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
 	promoteQuery               = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 )
 
@@ -208,7 +209,8 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		"-buffer_max_failover_duration", "10m",
 		"-buffer_min_time_between_failovers", "20m",
 		// Use legacy gateway. tabletgateway test is at go/test/endtoend/tabletgateway/buffer/buffer_test.go
-		"-gateway_implementation", "discoverygateway"}
+		"-gateway_implementation", "discoverygateway",
+	}
 
 	// Start vtgate
 	if err := clusterInstance.StartVtgate(); err != nil {
@@ -220,13 +222,6 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 	rand.Seed(time.Now().UnixNano())
 	return clusterInstance, 0
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
 }
 
 func TestBufferInternalReparenting(t *testing.T) {
@@ -249,10 +244,10 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
-	exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
+	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", criticalReadRowID, "'critical read'"))
+	utils.Exec(t, conn, fmt.Sprintf("INSERT INTO buffer (id, msg) VALUES (%d, %s)", updateRowID, "'update'"))
 
-	//Start both threads.
+	// Start both threads.
 	readThreadInstance := &threadParams{writable: false, quit: false, rpcs: 0, errors: 0, notifyAfterNSuccessfulRpcs: 0, rpcsSoFar: 0, executeFunction: readExecute, waitForNotification: make(chan bool)}
 	wg.Add(1)
 	go readThreadInstance.threadRun()
@@ -272,12 +267,12 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
 
 	if isExternalParent {
-		externalReparenting(ctx, t, clusterInstance)
+		externalReparenting(t, clusterInstance)
 	} else {
 		//reparent call
 		if err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-			"-new_master", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
+			"-new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias); err != nil {
 			log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand(\"PlannedRepare... caused an error : %v", err)
 		}
 	}
@@ -299,20 +294,20 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	require.Nil(t, err)
 	label := fmt.Sprintf("%s.%s", keyspaceUnshardedName, "0")
 	inFlightMax := 0
-	masterPromotedCount := 0
+	promotedCount := 0
 	durationMs := 0
 	bufferingStops := 0
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
 			panic(err)
 		}
 		inFlightMax = getVarFromVtgate(t, label, "BufferLastRequestsInFlightMax", resultMap)
-		masterPromotedCount = getVarFromVtgate(t, label, "HealthcheckMasterPromoted", resultMap)
+		promotedCount = getVarFromVtgate(t, label, "HealthcheckPrimaryPromoted", resultMap)
 		durationMs = getVarFromVtgate(t, label, "BufferFailoverDurationSumMs", resultMap)
-		bufferingStops = getVarFromVtgate(t, "NewMasterSeen", "BufferStops", resultMap)
+		bufferingStops = getVarFromVtgate(t, "NewPrimarySeen", "BufferStops", resultMap)
 	}
 	if inFlightMax == 0 {
 		// Missed buffering is okay when we observed the failover during the
@@ -323,13 +318,13 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	}
 
 	// There was a failover and the HealthCheck module must have seen it.
-	if masterPromotedCount > 0 {
-		assert.Greater(t, masterPromotedCount, 0)
+	if promotedCount > 0 {
+		assert.Greater(t, promotedCount, 0)
 	}
 
 	if durationMs > 0 {
 		// Number of buffering stops must be equal to the number of seen failovers.
-		assert.Equal(t, masterPromotedCount, bufferingStops)
+		assert.Equal(t, promotedCount, bufferingStops)
 	}
 	wg.Wait()
 	clusterInstance.Teardown()
@@ -352,26 +347,26 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 	return paramVal
 }
 
-func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
+func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) {
 	start := time.Now()
 
-	// Demote master Query
-	master := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	// Demote Query
+	primary := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
-	oldMaster := master
-	newMaster := replica
-	master.VttabletProcess.QueryTablet(demoteMasterQuery, keyspaceUnshardedName, true)
-	if master.VttabletProcess.EnableSemiSync {
+	oldPrimary := primary
+	newPrimary := replica
+	primary.VttabletProcess.QueryTablet(demoteQuery, keyspaceUnshardedName, true)
+	if primary.VttabletProcess.EnableSemiSync {
 
 		//log error
-		if _, err := master.VttabletProcess.QueryTablet(disableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
-			log.Errorf("master.VttabletProcess.QueryTablet(disableSemi... caused an error : %v", err)
+		if _, err := primary.VttabletProcess.QueryTablet(disableSemiSyncSourceQuery, keyspaceUnshardedName, true); err != nil {
+			log.Errorf("primary.VttabletProcess.QueryTablet(disableSemi... caused an error : %v", err)
 		}
 
 	}
 
-	// Wait for replica to catch up to master.
-	cluster.WaitForReplicationPos(t, master, replica, "localhost", 60.0)
+	// Wait for replica to catch up to primary.
+	cluster.WaitForReplicationPos(t, primary, replica, "localhost", 60.0)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
@@ -381,33 +376,33 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 		time.Sleep(time.Duration(w) * time.Second)
 	}
 
-	//Promote replica to new master and log error
+	//Promote replica to new primary and log error
 	if _, err := replica.VttabletProcess.QueryTablet(promoteQuery, keyspaceUnshardedName, true); err != nil {
 		log.Errorf("replica.VttabletProcess.QueryTablet(promoteQuery... caused an error : %v", err)
 	}
 
 	if replica.VttabletProcess.EnableSemiSync {
 		//Log error
-		if _, err := replica.VttabletProcess.QueryTablet(enableSemiSyncMasterQuery, keyspaceUnshardedName, true); err != nil {
+		if _, err := replica.VttabletProcess.QueryTablet(enableSemiSyncSourceQuery, keyspaceUnshardedName, true); err != nil {
 			log.Errorf("replica.VttabletProcess.QueryTablet caused an error : %v", err)
 		}
 	}
 
-	// Configure old master to replicate from new master.
+	// Configure old primary to replicate from new primary.
 
-	_, gtID := cluster.GetMasterPosition(t, *newMaster, hostname)
+	_, gtID := cluster.GetPrimaryPosition(t, *newPrimary, hostname)
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
-	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newMaster.MySQLPort)
+	changeSourceCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newPrimary.MySQLPort)
 
 	//Log error
-	if _, err := oldMaster.VttabletProcess.QueryTablet(changeMasterCommands, keyspaceUnshardedName, true); err != nil {
-		log.Errorf("oldMaster.VttabletProcess.QueryTablet caused an error : %v", err)
+	if _, err := oldPrimary.VttabletProcess.QueryTablet(changeSourceCommands, keyspaceUnshardedName, true); err != nil {
+		log.Errorf("oldPrimary.VttabletProcess.QueryTablet caused an error : %v", err)
 	}
 
-	//Notify the new vttablet master about the reparent and Log error
-	if err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newMaster.Alias); err != nil {
+	//Notify the new vttablet primary about the reparent and Log error
+	if err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias); err != nil {
 		log.Errorf("clusterInstance.VtctlclientProcess.ExecuteCommand caused an error : %v", err)
 	}
 }

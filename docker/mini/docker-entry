@@ -97,12 +97,12 @@ BASE_TABLET_UID=100
 for i in $(orchestrator-client -c all-instances) ; do
   read -r mysql_host mysql_port <<<$(echo $i | tr ':' ' ') 
 
-  is_master=""
+  is_primary=""
   if [ "$i" == "$(orchestrator-client -c which-cluster-master -i "$i")" ] ; then
-    is_master="true"
+    is_primary="true"
   fi
 
-	KEYSPACE=$MYSQL_SCHEMA TABLET_UID=$BASE_TABLET_UID ./vttablet-mini-up.sh "$mysql_host" "$mysql_port" "$is_master"
+	KEYSPACE=$MYSQL_SCHEMA TABLET_UID=$BASE_TABLET_UID ./vttablet-mini-up.sh "$mysql_host" "$mysql_port" "$is_primary"
   BASE_TABLET_UID=$((BASE_TABLET_UID + 1))
 done
 
@@ -118,12 +118,12 @@ echo_header "vtgate is listening for MySQL connection on port 15306"
 
 echo_header "On this container, try running any of the following commands:"
 echo "  mysql ${MYSQL_SCHEMA} -e 'show tables'"
-echo "  mysql ${MYSQL_SCHEMA}@master -e 'select @@hostname, @@port'"
+echo "  mysql ${MYSQL_SCHEMA}@primary -e 'select @@hostname, @@port'"
 echo "  mysql ${MYSQL_SCHEMA}@replica -e 'select @@hostname, @@port'"
 
 echo_header "Outside this container, try running any of the following commands:"
 echo "  mysql -h $(hostname) --port=15306 ${MYSQL_SCHEMA} -e 'show tables'"
-echo "  mysql -h $(hostname) --port=15306 ${MYSQL_SCHEMA}@master -e 'select @@hostname, @@port'"
+echo "  mysql -h $(hostname) --port=15306 ${MYSQL_SCHEMA}@primary -e 'select @@hostname, @@port'"
 echo "  mysql -h $(hostname) --port=15306 ${MYSQL_SCHEMA}@replica -e 'select @@hostname, @@port'"
 
 echo_header "Ready"

@@ -26,6 +26,8 @@ import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
 import "logutil.proto";
+import "vttime.proto";
+import "vtrpc.proto";
 
 //
 // Data structures
@@ -160,6 +162,7 @@ message SetReadWriteResponse {
 
 message ChangeTypeRequest {
   topodata.TabletType tablet_type = 1;
+  bool semiSync = 2;
 }
 
 message ChangeTypeResponse {
@@ -175,13 +178,6 @@ message RunHealthCheckRequest {
 }
 
 message RunHealthCheckResponse {
-}
-
-message IgnoreHealthErrorRequest {
-  string pattern = 1;
-}
-
-message IgnoreHealthErrorResponse {
 }
 
 message ReloadSchemaRequest {
@@ -210,6 +206,7 @@ message ApplySchemaRequest {
   bool allow_replication = 3;
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
+  string sql_mode = 6;
 }
 
 message ApplySchemaResponse {
@@ -233,6 +230,9 @@ message ExecuteQueryRequest {
   bytes query = 1;
   string db_name = 2;
   uint64 max_rows = 3;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 4;
 }
 
 message ExecuteQueryResponse {
@@ -278,17 +278,17 @@ message ReplicationStatusResponse {
   replicationdata.Status status = 1;
 }
 
-message MasterStatusRequest {
+message PrimaryStatusRequest {
 }
 
-message MasterStatusResponse {
-  replicationdata.MasterStatus status = 1;
+message PrimaryStatusResponse {
+  replicationdata.PrimaryStatus status = 1;
 }
 
-message MasterPositionRequest {
+message PrimaryPositionRequest {
 }
 
-message MasterPositionResponse {
+message PrimaryPositionResponse {
   string position = 1;
 }
 
@@ -315,6 +315,7 @@ message StopReplicationMinimumResponse {
 }
 
 message StartReplicationRequest {
+  bool semiSync = 1;
 }
 
 message StartReplicationResponse {
@@ -357,17 +358,18 @@ message VReplicationWaitForPosRequest {
 message VReplicationWaitForPosResponse {
 }
 
-message InitMasterRequest {
+message InitPrimaryRequest {
+  bool semiSync = 1;
 }
 
-message InitMasterResponse {
+message InitPrimaryResponse {
   string position = 1;
 }
 
 message PopulateReparentJournalRequest {
   int64 time_created_ns = 1;
   string action_name = 2;
-  topodata.TabletAlias master_alias = 3;
+  topodata.TabletAlias primary_alias = 3;
   string replication_position = 4;
 }
 
@@ -378,26 +380,28 @@ message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
   int64 time_created_ns = 3;
+  bool semiSync = 4;
 }
 
 message InitReplicaResponse {
 }
 
-message DemoteMasterRequest {
+message DemotePrimaryRequest {
 }
 
-message DemoteMasterResponse {
-  // Position is deprecated, and is a string representation of a demoted masters executed position.
+message DemotePrimaryResponse {
+  // Position is deprecated, and is a string representation of a demoted primaries executed position.
   string deprecated_position = 1 [deprecated=true];
 
-  // MasterStatus represents the response from calling `SHOW MASTER STATUS` on a master that has been demoted.
-  replicationdata.MasterStatus master_status = 2;
+  // PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a primary that has been demoted.
+  replicationdata.PrimaryStatus primary_status = 2;
 }
 
-message UndoDemoteMasterRequest {
+message UndoDemotePrimaryRequest {
+  bool semiSync = 1;
 }
 
-message UndoDemoteMasterResponse {
+message UndoDemotePrimaryResponse {
 }
 
 message ReplicaWasPromotedRequest {
@@ -406,14 +410,15 @@ message ReplicaWasPromotedRequest {
 message ReplicaWasPromotedResponse {
 }
 
-message SetMasterRequest {
+message SetReplicationSourceRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
   bool force_start_replication = 3;
   string wait_position = 4;
+  bool semiSync = 5;
 }
 
-message SetMasterResponse {
+message SetReplicationSourceResponse {
 }
 
 message ReplicaWasRestartedRequest {
@@ -439,6 +444,7 @@ message StopReplicationAndGetStatusResponse {
 }
 
 message PromoteReplicaRequest {
+  bool semiSync = 1;
 }
 
 message PromoteReplicaResponse {
@@ -449,7 +455,7 @@ message PromoteReplicaResponse {
 
 message BackupRequest {
   int64 concurrency = 1;
-  bool allowMaster = 2;
+  bool allow_primary = 2;
 }
 
 message BackupResponse {
@@ -457,6 +463,7 @@ message BackupResponse {
 }
 
 message RestoreFromBackupRequest {
+  vttime.Time backup_time = 1;
 }
 
 message RestoreFromBackupResponse {
