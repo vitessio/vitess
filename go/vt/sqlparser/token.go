@@ -137,6 +137,7 @@ var keywords = map[string]int{
 	"cast":                     CAST,
 	"catalog_name":             CATALOG_NAME,
 	"change":                   CHANGE,
+	"channel":					CHANNEL,
 	"char":                     CHAR,
 	"character":                CHARACTER,
 	"charset":                  CHARSET,

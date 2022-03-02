@@ -2313,6 +2313,9 @@ var (
 			input: "FLUSH USER_RESOURCES",
 			output: "flush user_resources",
 		}, {
+			input: "FLUSH RELAY LOGS FOR CHANNEL 'connections'",
+			output: "flush relay logs for channel connections",
+		}, {
 			input: "FLUSH LOCAL HOSTS",
 			output: "flush local hosts",
 		}, {

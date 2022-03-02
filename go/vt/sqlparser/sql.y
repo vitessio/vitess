@@ -244,7 +244,7 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
 %token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
-%token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG
+%token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
@@ -432,6 +432,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <indexOptions> index_option_list index_option_list_opt
 %type <flushOption> flush_option
 %type <flushOptions> flush_option_list flush_option_list_opt
+%type <str> relay_logs_attribute
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -2629,6 +2630,10 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
+| RELAY LOGS relay_logs_attribute
+  {
+    $$ = &FlushOption{Name: string($1) + " " +  string($2), Channel: $3}
+  }
 | SLOW LOGS
   {
     $$ = &FlushOption{Name: string($1) + " " +  string($2)}
@@ -2641,6 +2646,11 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
+
+relay_logs_attribute:
+  { $$ = "" }
+| FOR CHANNEL STRING
+  { $$ = string($3) }
 
 flush_type:
   NO_WRITE_TO_BINLOG
@@ -5985,6 +5995,7 @@ non_reserved_keyword:
 | CASCADE
 | CATALOG_NAME
 | CHANGE
+| CHANNEL
 | CHAR
 | CHARACTER
 | CHARSET

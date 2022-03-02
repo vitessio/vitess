@@ -2822,6 +2822,7 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 // FlushOption is used for trailing options for flush statement
 type FlushOption struct {
 	Name string
+	Channel string
 }
 
 // Flush represents a Flush statement.
@@ -2837,6 +2838,9 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 	var opts []string
 	for _, opt := range node.Options {
 		opts = append(opts, strings.ToLower(opt.Name))
+		if opt.Name == "RELAY LOGS" && opt.Channel != ""{
+			opts = append(opts, "for channel " + opt.Channel)
+		}
 	}
 
 	if node.Type == "" {
