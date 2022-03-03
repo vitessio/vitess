@@ -415,7 +415,6 @@ func (tsv *TabletServer) IsHealthy() error {
 
 // ReloadSchema reloads the schema.
 func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
-	fmt.Printf("======= ZZZ --- ReloadSchema\n")
 	return tsv.se.Reload(ctx)
 }
 
