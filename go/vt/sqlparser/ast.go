@@ -611,6 +611,14 @@ type (
 		Table TableName
 		Wild  string
 	}
+
+	// PrepareStmt represents a Prepare Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
+	PrepareStmt struct {
+		Name      ColIdent
+		Statement string
+	}
+
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
 
@@ -669,6 +677,7 @@ func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
 func (*ExplainStmt) iStatement()       {}
 func (*ExplainTab) iStatement()        {}
+func (*PrepareStmt) iStatement()       {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}

@@ -632,6 +632,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsPartitions(a, b)
+	case *PrepareStmt:
+		b, ok := inB.(*PrepareStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPrepareStmt(a, b)
 	case ReferenceAction:
 		b, ok := inB.(ReferenceAction)
 		if !ok {
@@ -2207,6 +2213,18 @@ func EqualsPartitions(a, b Partitions) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfPrepareStmt does deep equals between the two objects.
+func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Statement == b.Statement &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.
@@ -3851,6 +3869,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
+	case *PrepareStmt:
+		b, ok := inB.(*PrepareStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPrepareStmt(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {

@@ -883,6 +883,11 @@ func (node *ExplainTab) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *PrepareStmt) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "prepare %v from %s", node.Name, node.Statement)
+}
+
+// Format formats the node.
 func (node *CallProc) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "call %v(%v)", node.Name, node.Params)
 }

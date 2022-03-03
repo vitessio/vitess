@@ -224,6 +224,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPartitionValueRange(in, f)
 	case Partitions:
 		return VisitPartitions(in, f)
+	case *PrepareStmt:
+		return VisitRefOfPrepareStmt(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
@@ -1707,6 +1709,18 @@ func VisitPartitions(in Partitions, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -2912,6 +2926,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
+	case *PrepareStmt:
+		return VisitRefOfPrepareStmt(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameTable:
