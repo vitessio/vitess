@@ -1719,6 +1719,9 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
+	if err := VisitColIdent(in.StatementIdentifier, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {

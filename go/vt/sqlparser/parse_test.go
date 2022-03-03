@@ -2267,6 +2267,9 @@ var (
 		input:  "PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
 		output: "prepare stmt1 from SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse",
 	}, {
+		input:  "PREPARE stmt2 FROM @s",
+		output: "prepare stmt2 from @s",
+	}, {
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}}
