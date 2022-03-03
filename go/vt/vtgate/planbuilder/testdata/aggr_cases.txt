@@ -3119,25 +3119,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select 1 from user having count(id) = 10 and name = 'a'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "Equal",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select 1 from `user` where 1 != 1",
-    "Query": "select 1 from `user` where `name` = 'a' having count(id) = 10",
-    "Table": "`user`",
-    "Values": [
-      "VARCHAR(\"a\")"
-    ],
-    "Vindex": "name_user_map"
-  }
-}
+Gen4 error: cannot push projections in ordered aggregates
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
@@ -3209,7 +3191,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+Gen4 error: cannot push projections in ordered aggregates
 
 # Aggregate on join
 "select user.a, count(*) from user join user_extra group by user.a"
