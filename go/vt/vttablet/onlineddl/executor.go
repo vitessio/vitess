@@ -703,6 +703,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
 			return err
 		}
+	} else {
+		// As a temporary race condition mitigation step, while working on a full solution, we take a short sleep. This will let queries that are past
+		// the ACL/Rules check and are just about to query the table, to get their work done, without harming the logic.
+		time.Sleep(250 * time.Millisecond)
 	}
 	postWritesPos, err := e.primaryPosition(ctx)
 	if err != nil {
