@@ -520,6 +520,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	if distinctGroupBy != nil {
 		grouping = append(grouping, *distinctGroupBy)
 		order = append(order, distinctGroupBy.AsOrderBy())
+		oa.preProcess = true
 	}
 
 	groupings, aggrParamOffsets, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
@@ -772,57 +773,6 @@ func isCountStar(f *sqlparser.FuncExpr) bool {
 	return isStar
 }
 
-// createPushExprAndAlias creates the expression that should be pushed down to the leaves,
-// and changes the opcode, so it is a distinct one if needed
-func (hp *horizonPlanning) createPushExprAndAlias(
-	ctx *plancontext.PlanningContext,
-	expr abstract.SelectExpr,
-	handleDistinct bool,
-	innerAliased *sqlparser.AliasedExpr,
-	opcode engine.AggregateOpcode,
-	oa *orderedAggregate,
-) (*sqlparser.AliasedExpr, *engine.AggregateParams) {
-	aliasExpr, isAlias := expr.Col.(*sqlparser.AliasedExpr)
-	if !isAlias {
-		return nil, nil
-	}
-	var alias string
-	if aliasExpr.As.IsEmpty() {
-		alias = sqlparser.String(aliasExpr.Expr)
-	} else {
-		alias = aliasExpr.As.String()
-	}
-	if handleDistinct {
-		aliasExpr = innerAliased
-
-		switch opcode {
-		case engine.AggregateCount:
-			opcode = engine.AggregateCountDistinct
-		case engine.AggregateSum:
-			opcode = engine.AggregateSumDistinct
-		}
-
-		oa.preProcess = true
-		by := abstract.GroupBy{
-			Inner:             innerAliased.Expr,
-			WeightStrExpr:     innerAliased.Expr,
-			DistinctAggrIndex: len(oa.aggregates) + 1,
-		}
-		hp.qp.AddGroupBy(by)
-	}
-	collID := collations.Unknown
-	if innerAliased != nil {
-		collID = ctx.SemTable.CollationForExpr(innerAliased.Expr)
-	}
-
-	param := &engine.AggregateParams{
-		Opcode:      opcode,
-		Alias:       alias,
-		CollationID: collID,
-	}
-	return aliasExpr, param
-}
-
 func hasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
 	for _, groupByExpr := range groupByExprs {
 		if exprHasUniqueVindex(vschema, semTable, groupByExpr.WeightStrExpr) {
@@ -830,29 +780,6 @@ func hasUniqueVindex(vschema plancontext.VSchema, semTable *semantics.SemTable, 
 		}
 	}
 	return false
-}
-
-func (hp *horizonPlanning) planGroupByUsingOrderBy(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
-	var orderExprs []abstract.OrderBy
-	for _, groupExpr := range hp.qp.GetGrouping() {
-		addExpr := true
-		for _, orderExpr := range hp.qp.OrderExprs {
-			if sqlparser.EqualsExpr(groupExpr.Inner, orderExpr.Inner.Expr) {
-				addExpr = false
-				break
-			}
-		}
-		if addExpr {
-			orderExprs = append(orderExprs, abstract.OrderBy{
-				Inner:         &sqlparser.Order{Expr: groupExpr.Inner},
-				WeightStrExpr: groupExpr.WeightStrExpr},
-			)
-		}
-	}
-	if len(orderExprs) > 0 {
-		return hp.planOrderBy(ctx, orderExprs, plan)
-	}
-	return plan, nil
 }
 
 func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderExprs []abstract.OrderBy, plan logicalPlan) (logicalPlan, error) {
