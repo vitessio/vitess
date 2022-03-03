@@ -673,7 +673,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	toggleBuffering := func(bufferQueries bool) error {
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
-			// release
+			// called after new table is in place.
+			// unbuffer existing queries:
+			bufferingContextCancel()
+			// force re-read of tables
 			if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
 				return err
 			}
@@ -683,7 +686,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
-			bufferingContextCancel()
 			toggleBuffering(false)
 		})
 	}
@@ -712,16 +714,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	} else {
 		// real production
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-			onlineDDL.Table, stowawayTableName,
-		)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, stowawayTableName)
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
 		}
-	} else {
-		// As a temporary race condition mitigation step, while working on a full solution, we take a short sleep. This will let queries that are past
-		// the ACL/Rules check and are just about to query the table, to get their work done, without harming the logic.
-		time.Sleep(250 * time.Millisecond)
 	}
 
 	// We have just created a gaping hole, the original table does not exist.
@@ -772,9 +768,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
 			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-				vreplTable, testSuiteAfterTableName,
-			)
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
 			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
