@@ -151,10 +151,19 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning, nil
 }
 
-// StopReplicationAndBuildStatusMaps stops replication on all replicas, then
+// replicationSnapshot stores the status maps and the tablets that were reachable
+// when trying to stopReplicationAndBuildStatusMaps.
+type replicationSnapshot struct {
+	statusMap        map[string]*replicationdatapb.StopReplicationStatus
+	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+	reachableTablets []*topodatapb.Tablet
+}
+
+// stopReplicationAndBuildStatusMaps stops replication on all replicas, then
 // collects and returns a mapping of TabletAlias (as string) to their current
 // replication positions.
-func StopReplicationAndBuildStatusMaps(
+// Apart from the status maps, it also returns the tablets reached as a list
+func stopReplicationAndBuildStatusMaps(
 	ctx context.Context,
 	tmc tmclient.TabletManagerClient,
 	ev *events.Reparent,
@@ -163,16 +172,18 @@ func StopReplicationAndBuildStatusMaps(
 	ignoredTablets sets.String,
 	tabletToWaitFor *topodatapb.TabletAlias,
 	logger logutil.Logger,
-) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus, error) {
+) (*replicationSnapshot, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
 
 	var (
-		statusMap        = map[string]*replicationdatapb.StopReplicationStatus{}
-		primaryStatusMap = map[string]*replicationdatapb.PrimaryStatus{}
-		m                sync.Mutex
-		errChan          = make(chan concurrency.Error)
-		tabletsReachable []*topodatapb.Tablet
-		allTablets       []*topodatapb.Tablet
+		m          sync.Mutex
+		errChan    = make(chan concurrency.Error)
+		allTablets []*topodatapb.Tablet
+		res        = &replicationSnapshot{
+			statusMap:        map[string]*replicationdatapb.StopReplicationStatus{},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			reachableTablets: []*topodatapb.Tablet{},
+		}
 	)
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
@@ -205,8 +216,8 @@ func StopReplicationAndBuildStatusMaps(
 				}
 
 				m.Lock()
-				primaryStatusMap[alias] = primaryStatus
-				tabletsReachable = append(tabletsReachable, tabletInfo.Tablet)
+				res.primaryStatusMap[alias] = primaryStatus
+				res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
@@ -214,8 +225,8 @@ func StopReplicationAndBuildStatusMaps(
 			}
 		} else {
 			m.Lock()
-			statusMap[alias] = stopReplicationStatus
-			tabletsReachable = append(tabletsReachable, tabletInfo.Tablet)
+			res.statusMap[alias] = stopReplicationStatus
+			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
 			m.Unlock()
 		}
 	}
@@ -245,15 +256,15 @@ func StopReplicationAndBuildStatusMaps(
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)
 	if len(errRecorder.Errors) <= 1 {
-		return statusMap, primaryStatusMap, nil
+		return res, nil
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
-	revokeSuccessful := haveRevoked(tabletsReachable, allTablets)
+	revokeSuccessful := haveRevoked(res.reachableTablets, allTablets)
 	if !revokeSuccessful {
-		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
+		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}
 
-	return statusMap, primaryStatusMap, nil
+	return res, nil
 }
 
 // WaitForRelayLogsToApply blocks execution waiting for the given tablet's relay
