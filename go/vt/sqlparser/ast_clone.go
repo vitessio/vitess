@@ -109,6 +109,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCreateView(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
+	case *DeallocateStmt:
+		return CloneRefOfDeallocateStmt(in)
 	case *Default:
 		return CloneRefOfDefault(in)
 	case *Definer:
@@ -776,6 +778,16 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	out.Fsp = CloneRefOfLiteral(n.Fsp)
+	return &out
+}
+
+// CloneRefOfDeallocateStmt creates a deep clone of the input.
+func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
 	return &out
 }
 
@@ -2400,6 +2412,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
 		return CloneRefOfCreateView(in)
+	case *DeallocateStmt:
+		return CloneRefOfDeallocateStmt(in)
 	case *Delete:
 		return CloneRefOfDelete(in)
 	case *DropDatabase:

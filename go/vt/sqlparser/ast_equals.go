@@ -284,6 +284,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfCurTimeFuncExpr(a, b)
+	case *DeallocateStmt:
+		b, ok := inB.(*DeallocateStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDeallocateStmt(a, b)
 	case *Default:
 		b, ok := inB.(*Default)
 		if !ok {
@@ -1503,6 +1509,18 @@ func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
 		EqualsRefOfLiteral(a.Fsp, b.Fsp)
+}
+
+// EqualsRefOfDeallocateStmt does deep equals between the two objects.
+func EqualsRefOfDeallocateStmt(a, b *DeallocateStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfDefault does deep equals between the two objects.
@@ -3816,6 +3834,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfCreateView(a, b)
+	case *DeallocateStmt:
+		b, ok := inB.(*DeallocateStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDeallocateStmt(a, b)
 	case *Delete:
 		b, ok := inB.(*Delete)
 		if !ok {

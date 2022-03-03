@@ -236,7 +236,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
+%token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY DEALLOCATE
 %token <str> REVERT
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
@@ -319,7 +319,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
 %type <statement> prepare_statement
-%type <statement> execute_statement
+%type <statement> execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <with> with_clause_opt with_clause
@@ -516,6 +516,7 @@ command:
 | revert_statement
 | prepare_statement
 | execute_statement
+| deallocate_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -3820,6 +3821,17 @@ execute_statement_list_opt:
     $$ = $1
   }
 
+deallocate_statement:
+  DEALLOCATE PREPARE sql_id
+  {
+    $$ = &DeallocateStmt{Type:DeallocateType, Name:$3}
+  }
+// Addition of below is failing tests
+//| DROP PREPARE sql_id
+//  {
+//    $$ = &DeallocateStmt{Type: DropType, Name: $3}
+//  }
+
 select_expression_list_opt:
   {
     $$ = nil
@@ -5726,6 +5738,7 @@ reserved_keyword:
 | SUBSTRING
 | DATABASE
 | DATABASES
+| DEALLOCATE
 | DEFAULT
 | DELETE
 | DENSE_RANK

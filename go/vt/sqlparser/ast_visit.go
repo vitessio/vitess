@@ -108,6 +108,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCreateView(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *DeallocateStmt:
+		return VisitRefOfDeallocateStmt(in, f)
 	case *Default:
 		return VisitRefOfDefault(in, f)
 	case *Definer:
@@ -933,6 +935,18 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfLiteral(in.Fsp, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -2922,6 +2936,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:
 		return VisitRefOfCreateView(in, f)
+	case *DeallocateStmt:
+		return VisitRefOfDeallocateStmt(in, f)
 	case *Delete:
 		return VisitRefOfDelete(in, f)
 	case *DropDatabase:

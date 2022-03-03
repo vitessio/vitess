@@ -108,6 +108,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
+	case *DeallocateStmt:
+		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
 	case *Default:
 		return a.rewriteRefOfDefault(parent, node, replacer)
 	case *Definer:
@@ -1628,6 +1630,33 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}
 	if !a.rewriteRefOfLiteral(node, node.Fsp, func(newNode, parent SQLNode) {
 		parent.(*CurTimeFuncExpr).Fsp = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *DeallocateStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DeallocateStmt).Name = newNode.(ColIdent)
 	}) {
 		return false
 	}
@@ -5659,6 +5688,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
 		return a.rewriteRefOfCreateView(parent, node, replacer)
+	case *DeallocateStmt:
+		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
 	case *Delete:
 		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DropDatabase:

@@ -2279,6 +2279,9 @@ var (
 		input:  "EXECUTE stmt1 USING @a, @b",
 		output: "execute stmt1 using @a, @b",
 	}, {
+		input:  "DEALLOCATE PREPARE stmt1",
+		output: "deallocate prepare stmt1",
+	}, {
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}}

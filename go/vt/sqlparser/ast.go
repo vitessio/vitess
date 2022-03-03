@@ -627,6 +627,16 @@ type (
 		Arguments Columns
 	}
 
+	// DeallocateStmt represents a Deallocate Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
+	DeallocateStmt struct {
+		Type DeallocateStmtType
+		Name ColIdent
+	}
+
+	// DeallocateStmtType is an enum to get types of deallocate
+	DeallocateStmtType int8
+
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
 
@@ -687,6 +697,7 @@ func (*ExplainStmt) iStatement()       {}
 func (*ExplainTab) iStatement()        {}
 func (*PrepareStmt) iStatement()       {}
 func (*ExecuteStmt) iStatement()       {}
+func (*DeallocateStmt) iStatement()    {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
