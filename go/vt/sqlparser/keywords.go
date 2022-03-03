@@ -416,6 +416,7 @@ var keywords = []keyword{
 	{"point", POINT},
 	{"polygon", POLYGON},
 	{"precision", UNUSED},
+	{"prepare", PREPARE},
 	{"primary", PRIMARY},
 	{"privileges", PRIVILEGES},
 	{"processlist", PROCESSLIST},

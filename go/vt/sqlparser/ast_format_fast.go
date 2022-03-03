@@ -1189,6 +1189,14 @@ func (node *ExplainTab) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("prepare ")
+	node.Name.formatFast(buf)
+	buf.WriteString(" from ")
+	buf.WriteString(node.Statement)
+}
+
+// formatFast formats the node.
 func (node *CallProc) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("call ")
 	node.Name.formatFast(buf)

@@ -224,6 +224,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionValueRange(parent, node, replacer)
 	case Partitions:
 		return a.rewritePartitions(parent, node, replacer)
+	case *PrepareStmt:
+		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
 	case *ReferenceDefinition:
@@ -3383,6 +3385,33 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 	}
 	return true
 }
+func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *ReferenceDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5615,6 +5644,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
 	case *OtherRead:
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
+	case *PrepareStmt:
+		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameTable:

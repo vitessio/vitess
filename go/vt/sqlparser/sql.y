@@ -240,7 +240,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> REVERT
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
+%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
@@ -318,6 +318,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
+%type <statement> prepare_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <with> with_clause_opt with_clause
@@ -512,6 +513,7 @@ command:
 | unlock_statement
 | call_statement
 | revert_statement
+| prepare_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -3787,6 +3789,12 @@ distinct_opt:
     $$ = true
   }
 
+prepare_statement:
+  PREPARE sql_id FROM STRING
+  {
+    $$ = &PrepareStmt{Name:$2, Statement:$4}
+  }
+
 select_expression_list_opt:
   {
     $$ = nil
@@ -5764,6 +5772,7 @@ reserved_keyword:
 | OVER
 | PARTITION
 | PERCENT_RANK
+| PREPARE
 | PRIMARY
 | RANGE
 | RANK

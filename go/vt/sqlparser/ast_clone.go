@@ -225,6 +225,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
+	case *PrepareStmt:
+		return CloneRefOfPrepareStmt(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -1379,6 +1381,16 @@ func ClonePartitions(n Partitions) Partitions {
 	return res
 }
 
+// CloneRefOfPrepareStmt creates a deep clone of the input.
+func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	return &out
+}
+
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
 func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition {
 	if n == nil {
@@ -2398,6 +2410,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfOtherAdmin(in)
 	case *OtherRead:
 		return CloneRefOfOtherRead(in)
+	case *PrepareStmt:
+		return CloneRefOfPrepareStmt(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameTable:

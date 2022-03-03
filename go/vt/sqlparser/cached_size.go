@@ -1692,6 +1692,20 @@ func (cached *PartitionValueRange) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field Statement string
+	size += hack.RuntimeAllocSize(int64(len(cached.Statement)))
+	return size
+}
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
