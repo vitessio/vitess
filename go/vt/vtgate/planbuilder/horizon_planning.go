@@ -517,9 +517,40 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		order = append(order, distinctGroupBy.AsOrderBy())
 	}
 
-	aggPlan, groupings, aggrParams, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
+	groupings, aggrParamOffsets, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
 	if err != nil {
 		return nil, err
+	}
+
+	needsProj := false
+	for _, paramOffset := range aggrParamOffsets {
+		if len(paramOffset) > 1 {
+			needsProj = true
+			break
+		}
+	}
+	var aggPlan = plan
+	var proj *projection
+	if needsProj {
+		length := getLengthOfProjection(groupings, aggrs)
+		proj = &projection{
+			source:      plan,
+			columns:     make([]sqlparser.Expr, length),
+			columnNames: make([]string, length),
+		}
+		aggPlan = proj
+	}
+
+	aggrParams, err := generateAggregateParams(aggrs, aggrParamOffsets, proj)
+	if err != nil {
+		return nil, err
+	}
+
+	if proj != nil {
+		groupings, err = passGroupingColumns(proj, groupings, grouping)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Next we add the aggregation expressions and grouping offsets to the OA
@@ -536,6 +567,75 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	return hp.planHaving(ctx, oa)
+}
+
+func passGroupingColumns(proj *projection, groupings []offsets, grouping []abstract.GroupBy) (projGrpOffsets []offsets, err error) {
+	for idx, grp := range groupings {
+		origGrp := grouping[idx]
+		var offs offsets
+		offs.col, err = proj.addColumn(origGrp.InnerIndex, sqlparser.Offset(grp.col), "")
+		if err != nil {
+			return nil, err
+		}
+		if grp.wsCol != -1 {
+			offs.wsCol, err = proj.addColumn(nil, sqlparser.Offset(grp.wsCol), "")
+			if err != nil {
+				return nil, err
+			}
+		}
+		projGrpOffsets = append(projGrpOffsets, offs)
+	}
+	return projGrpOffsets, nil
+}
+
+func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets, proj *projection) ([]*engine.AggregateParams, error) {
+	aggrParams := make([]*engine.AggregateParams, len(aggrs))
+	for idx, paramOffset := range aggrParamOffsets {
+		aggr := aggrs[idx]
+		incomingOffset := paramOffset[0].col
+		var offset int
+		if proj != nil {
+			var aggrExpr sqlparser.Expr
+			if len(paramOffset) == 1 {
+				aggrExpr = sqlparser.Offset(incomingOffset)
+			} else {
+				for _, ofs := range paramOffset {
+					curr := sqlparser.Offset(ofs.col)
+					if aggrExpr == nil {
+						aggrExpr = curr
+					} else {
+						aggrExpr = &sqlparser.BinaryExpr{
+							Operator: sqlparser.MultOp,
+							Left:     aggrExpr,
+							Right:    curr,
+						}
+					}
+				}
+			}
+
+			pos, err := proj.addColumn(aggr.Index, aggrExpr, aggr.Alias)
+			if err != nil {
+				return nil, err
+			}
+			offset = pos
+		} else {
+			offset = incomingOffset
+		}
+
+		opcode := engine.AggregateSum
+		if aggr.OpCode == engine.AggregateMin ||
+			aggr.OpCode == engine.AggregateMax {
+			opcode = aggr.OpCode
+		}
+
+		aggrParams[idx] = &engine.AggregateParams{
+			Opcode: opcode,
+			Col:    offset,
+			Alias:  aggr.Alias,
+			Expr:   aggr.Func,
+		}
+	}
+	return aggrParams, nil
 }
 
 func addColumnsToOA(
@@ -1396,4 +1496,16 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupB
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}
+}
+
+func getLengthOfProjection(groupingOffsets []offsets, aggregations []abstract.Aggr) int {
+	length := 0
+	for _, groupBy := range groupingOffsets {
+		if groupBy.wsCol != -1 {
+			length++
+		}
+		length++
+	}
+	length += len(aggregations)
+	return length
 }

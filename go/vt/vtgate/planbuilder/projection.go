@@ -77,7 +77,7 @@ func (p *projection) ContainsTables() semantics.TableSet {
 
 // OutputColumns implements the logicalPlan interface
 func (p *projection) OutputColumns() []sqlparser.SelectExpr {
-	columns := p.source.OutputColumns()
+	columns := make([]sqlparser.SelectExpr, 0, len(p.columns))
 	for i, expr := range p.columns {
 		columns = append(columns, &sqlparser.AliasedExpr{
 			Expr: expr,
