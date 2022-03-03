@@ -69,10 +69,10 @@ type Configuration struct {
 	HTTPAdvertise                               string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
 	AgentsServerPort                            string // port orchestrator agents talk back to
 	Durability                                  string // The type of durability to enforce. Default is "none". Other values are dictated by registered plugins
-	MySQLTopologyUser                           string
-	MySQLTopologyPassword                       string
-	MySQLReplicaUser                            string // If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
-	MySQLReplicaPassword                        string
+	MySQLTopologyUser                           string // The user VTOrc will use to connect to MySQL instances
+	MySQLTopologyPassword                       string // The password VTOrc will use to connect to MySQL instances
+	MySQLReplicaUser                            string // User to set on replica MySQL instances while configuring replication settings on them. If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
+	MySQLReplicaPassword                        string // Password to set on replica MySQL instances while configuring replication settings on them.
 	MySQLTopologyCredentialsConfigFile          string // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
 	MySQLTopologySSLPrivateKeyFile              string // Private key file used to authenticate with a Topology mysql instance with TLS
 	MySQLTopologySSLCertFile                    string // Certificate PEM file used to authenticate with a Topology mysql instance with TLS

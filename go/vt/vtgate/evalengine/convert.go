@@ -53,7 +53,7 @@ func (c *ConvertExpr) unsupported() {
 
 func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.init(env, c.Inner)
-	if result.null() {
+	if result.isNull() {
 		result.resolve()
 		return
 	}
@@ -77,7 +77,10 @@ func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 		if c.HasScale {
 			d = c.Scale
 		}
-		result.makeDecimal(m, d)
+		if m == 0 && d == 0 {
+			m = 10
+		}
+		result.makeDecimal(int32(m), int32(d))
 	case "DOUBLE", "REAL":
 		result.makeFloat()
 	case "FLOAT":
@@ -134,7 +137,7 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 
 func (c *ConvertUsingExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	result.init(env, c.Inner)
-	if result.null() {
+	if result.isNull() {
 		result.resolve()
 	} else {
 		result.makeTextualAndConvert(c.Collation)

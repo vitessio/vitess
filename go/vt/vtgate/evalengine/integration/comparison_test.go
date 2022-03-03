@@ -468,6 +468,59 @@ func TestBitwiseOperatorsUnary(t *testing.T) {
 	}
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+const Pi = "314159265358979323846264338327950288419716939937510582097494459"
+
+func TestDecimalClamping(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for pos := 0; pos < len(Pi); pos++ {
+		for m := 0; m < min(len(Pi), 67); m += 2 {
+			for d := 0; d <= min(m, 33); d += 2 {
+				query := fmt.Sprintf("SELECT CAST(%s.%s AS DECIMAL(%d, %d))", Pi[:pos], Pi[pos:], m, d)
+				compareRemoteQuery(t, conn, query)
+			}
+		}
+	}
+}
+
+func TestLargeIntegers(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var largepi = Pi + Pi
+
+	for pos := 1; pos < len(largepi); pos++ {
+		query := fmt.Sprintf("SELECT %s", largepi[:pos])
+		compareRemoteQuery(t, conn, query)
+
+		query = fmt.Sprintf("SELECT -%s", largepi[:pos])
+		compareRemoteQuery(t, conn, query)
+	}
+}
+
+func TestLargeDecimals(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var largepi = Pi + Pi
+
+	for pos := 0; pos < len(largepi); pos++ {
+		query := fmt.Sprintf("SELECT %s.%s", largepi[:pos], largepi[pos:])
+		compareRemoteQuery(t, conn, query)
+
+		query = fmt.Sprintf("SELECT -%s.%s", largepi[:pos], largepi[pos:])
+		compareRemoteQuery(t, conn, query)
+	}
+}
+
 func TestConversionOperators(t *testing.T) {
 	var left = []string{
 		"0", "1", "255",

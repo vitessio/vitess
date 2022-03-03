@@ -327,6 +327,9 @@ message DeleteKeyspaceRequest {
   // before deleting the keyspace. It is an error to call DeleteKeyspace on a
   // non-empty keyspace without also specifying Recursive.
   bool recursive = 2;
+  // Force allows a keyspace to be deleted even if the keyspace lock cannot be
+  // obtained. This should only be used to force-clean a keyspace.
+  bool force = 3;
 }
 
 message DeleteKeyspaceResponse {
@@ -343,6 +346,9 @@ message DeleteShardsRequest {
   // EvenIfServing allows a shard to be deleted even if it is serving, which is
   // normally an error. Use with caution.
   bool even_if_serving = 4;
+  // Force allows a shard to be deleted even if the shard lock cannot be
+  // obtained. This should only be used to force-clean a shard.
+  bool force = 5;
 }
 
 message DeleteShardsResponse {
@@ -597,6 +603,14 @@ message GetTabletsResponse {
 
 message GetVSchemaRequest {
   string keyspace = 1;
+}
+
+message GetVersionRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetVersionResponse {
+  string version = 1;
 }
 
 message GetVSchemaResponse {
@@ -958,6 +972,19 @@ message ValidateKeyspaceResponse {
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
 
+message ValidateSchemaKeyspaceRequest {
+  string keyspace = 1;
+  repeated string exclude_tables = 2;
+  bool include_views = 3;
+  bool skip_no_primary = 4;
+  bool include_vschema = 5;
+}
+
+message ValidateSchemaKeyspaceResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
 message ValidateShardRequest {
   string keyspace = 1;
   string shard = 2;
@@ -966,4 +993,25 @@ message ValidateShardRequest {
 
 message ValidateShardResponse {
   repeated string results = 1;
+}
+
+message ValidateVersionKeyspaceRequest {
+  string keyspace = 1;
+}
+
+message ValidateVersionKeyspaceResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message ValidateVSchemaRequest {
+  string keyspace = 1;
+  repeated string shards = 2;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
+}
+
+message ValidateVSchemaResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
 }

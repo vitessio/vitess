@@ -47,8 +47,8 @@ type (
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
+		InsertRows
 		iSelectStatement()
-		iInsertRows()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
@@ -1826,7 +1826,7 @@ type (
 		Expr       SimpleTableExpr
 		Partitions Partitions
 		As         TableIdent
-		Hints      *IndexHints
+		Hints      IndexHints
 		Columns    Columns
 	}
 
@@ -1891,14 +1891,22 @@ type JoinCondition struct {
 	Using Columns
 }
 
-// IndexHints represents a list of index hints.
-type IndexHints struct {
-	Type    IndexHintsType
+// IndexHint represents an index hint.
+// More information available on https://dev.mysql.com/doc/refman/8.0/en/index-hints.html
+type IndexHint struct {
+	Type    IndexHintType
+	ForType IndexHintForType
 	Indexes []ColIdent
 }
 
-// IndexHintsType is an enum for IndexHints.Type
-type IndexHintsType int8
+// IndexHints represents a list of index hints.
+type IndexHints []*IndexHint
+
+// IndexHintType is an enum for IndexHint.Type
+type IndexHintType int8
+
+// IndexHintForType is an enum for FOR specified in an IndexHint
+type IndexHintForType int8
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {

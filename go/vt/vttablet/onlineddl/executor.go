@@ -118,6 +118,8 @@ const (
 	etaSecondsUnknown                        = -1
 	etaSecondsNow                            = 0
 	rowsCopiedUnknown                        = 0
+	emptyHint                                = ""
+	readyToCompleteHint                      = "ready_to_complete"
 	databasePoolSize                         = 3
 	vreplicationCutOverThreshold             = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
@@ -553,7 +555,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		return false, err
 	}
 
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
 
 	if err != nil {
@@ -572,7 +574,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	if err != nil {
 		return false, err
 	}
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 
 	return acceptableErrorCodeFound, nil
 }
@@ -804,7 +806,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// Tables are now swapped! Migration is successful
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied, emptyHint)
 	return nil
 
 	// deferred function will re-enable writes now
@@ -947,7 +949,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	defer conn.Close()
 
 	e.ownedRunningMigrations.Store(onlineDDL.UUID, onlineDDL)
-	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown); err != nil {
+	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint); err != nil {
 		return err
 	}
 
@@ -1094,24 +1096,28 @@ exit $exit_code
 		log.Errorf("Error creating wrapper script: %+v", err)
 		return err
 	}
-	onHookContent := func(status schema.OnlineDDLStatus) string {
+	onHookContent := func(status schema.OnlineDDLStatus, hint string) string {
 		return fmt.Sprintf(`#!/bin/bash
-	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"'&rowscopied='"$GH_OST_COPIED_ROWS"
-			`, *servenv.Port, onlineDDL.UUID, string(status))
+	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&hint=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"'&rowscopied='"$GH_OST_COPIED_ROWS"
+			`, *servenv.Port, onlineDDL.UUID, string(status), hint)
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-status", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-status", onHookContent(schema.OnlineDDLStatusRunning, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-success", onHookContent(schema.OnlineDDLStatusComplete)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-success", onHookContent(schema.OnlineDDLStatusComplete, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-failure", onHookContent(schema.OnlineDDLStatusFailed)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-failure", onHookContent(schema.OnlineDDLStatusFailed, emptyHint)); err != nil {
+		log.Errorf("Error creating script: %+v", err)
+		return err
+	}
+	if _, err := createTempScript(tempDir, "gh-ost-on-begin-postponed", onHookContent(schema.OnlineDDLStatusRunning, readyToCompleteHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
@@ -1315,16 +1321,16 @@ export MYSQL_PWD
 
 	sub before_create_new_table {
 	  my($self, % args) = @_;
-	  get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusRunning}}&dryrun={{DRYRUN}}");
+	  get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusRunning}}&hint=&dryrun={{DRYRUN}}");
 	}
 
 	sub before_exit {
 		my($self, % args) = @_;
 		my $exit_status = $args{exit_status};
 	  if ($exit_status == 0) {
-	    get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusComplete}}&dryrun={{DRYRUN}}");
+	    get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusComplete}}&hint=&dryrun={{DRYRUN}}");
 	  } else {
-	    get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusFailed}}&dryrun={{DRYRUN}}");
+	    get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusFailed}}&hint=&dryrun={{DRYRUN}}");
 	  }
 	}
 
@@ -1654,9 +1660,40 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	// The query sqlScheduleSingleMigration has some business logic; in the future, we can
-	// consider moving the logic outside the query and into this function's code.
-	_, err := e.execQuery(ctx, sqlScheduleSingleMigration)
+	var onlyScheduleOneMigration sync.Once
+
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
+	if err != nil {
+		return err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		postponeCompletion := row.AsBool("postpone_completion", false)
+		readyToComplete := row.AsBool("ready_to_complete", false)
+		ddlAction := row["ddl_action"].ToString()
+
+		if !readyToComplete {
+			// Whether postponsed or not, CREATE and DROP operations are inherently "ready to complete"
+			// because their operation is instantaneous.
+			switch ddlAction {
+			case sqlparser.CreateStr, sqlparser.DropStr:
+				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
+					return err
+				}
+			}
+		}
+		if ddlAction == sqlparser.AlterStr || !postponeCompletion {
+			// Any non-postponed migration can be scheduled
+			// postponed ALTER can be scheduled
+			// We only schedule a single migration in the execution of this function
+			onlyScheduleOneMigration.Do(func() {
+				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return err
 }
 
@@ -1858,7 +1895,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			}
 			if len(artifactTables) == 0 {
 				// This indicates no table was actually created. this must have been a CREATE TABLE IF NOT EXISTS where the table already existed.
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 			}
 
 			for _, artifactTable := range artifactTables {
@@ -1884,7 +1921,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			}
 			if len(artifactTables) == 0 {
 				// Could happen on `DROP TABLE IF EXISTS` where the table did not exist...
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 			}
 			for _, artifactTable := range artifactTables {
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
@@ -2323,7 +2360,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	}
 	defer conn.Close()
 
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
 
 	if _, err := conn.ExecuteFetch(artifactViewCreateSQL, 0, false); err != nil {
 		return err
@@ -2350,7 +2387,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 		return err
 	}
 
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 
 	return nil
 }
@@ -2448,7 +2485,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		}
 		if completedUUID != "" {
 			// Yep. We mark this migration as implicitly complete, and we're done with it!
-			_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+			_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("duplicate DDL as %s for migration context %s", completedUUID, onlineDDL.MigrationContext))
 			return nil
 		}
@@ -2482,7 +2519,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				// table does exist, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
 			} else {
 				// table does not exist. We mark this DROP as implicitly sucessful
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
 				return nil
 			}
@@ -2515,7 +2552,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				}
 				if alterClause == "" {
 					// No diff! We mark this CREATE as implicitly sucessful
-					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown)
+					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 					_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
 					return nil
 				}
@@ -2872,6 +2909,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 							isReady = false
 						}
 					}
+					// Indicate to outside observers whether the migration is generally ready to complete.
+					// In the case of a postponed migration, we will not complete it, but the user will
+					// understand whether "now is a good time" or "not there yet"
+					_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
 					if postponeCompletion {
 						// override. Even if migration is ready, we do not complet it.
 						isReady = false
@@ -3431,6 +3472,18 @@ func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isVie
 	return err
 }
 
+func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid string, isReady bool) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationReadyToComplete,
+		sqltypes.BoolBindVariable(isReady),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
 // retryMigrationWhere retries a migration based on a given WHERE clause
 func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
@@ -3665,7 +3718,7 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
 func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
-	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64) (err error) {
+	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string) (err error) {
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
 		return nil
@@ -3707,6 +3760,11 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 	if err := e.updateRowsCopied(ctx, uuid, rowsCopied); err != nil {
 		return err
 	}
+	if hint == readyToCompleteHint {
+		if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
+			return err
+		}
+	}
 	if !dryRun {
 		switch status {
 		case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
@@ -3719,7 +3777,7 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
 func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
-	uuidParam, statusParam, dryrunParam, progressParam, etaParam, rowsCopiedParam string) (err error) {
+	uuidParam, statusParam, dryrunParam, progressParam, etaParam, rowsCopiedParam, hint string) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
 	dryRun := (dryrunParam == "true")
 	var progressPct float64
@@ -3735,7 +3793,7 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 		rowsCopied = rows
 	}
 
-	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds, rowsCopied)
+	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds, rowsCopied, hint)
 }
 
 // VExec is called by a VExec invocation

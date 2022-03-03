@@ -1099,6 +1099,25 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# multiple index hints, make sure they are not stripped.
+"select user.col from user use index(a) use index for group by (b)"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user use index(a) use index for group by (b)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col from `user` use index (a) use index for group by (b) where 1 != 1",
+    "Query": "select `user`.col from `user` use index (a) use index for group by (b)",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
 # mergeable sharded join on unique vindex
 "select user.col from user join user_extra on user.id = user_extra.user_id"
 {
@@ -3327,87 +3346,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# join with USING construct
-"select user.id from user join user_extra using(id)"
-{
-  "QueryType": "SELECT",
-  "Original": "select user.id from user join user_extra using(id)",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "user_id": 0
-    },
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.id from `user` where 1 != 1",
-        "Query": "select `user`.id from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where user_extra.id = :user_id",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select user.id from user join user_extra using(id)",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "user_extra_id": 0
-    },
-    "TableName": "user_extra_`user`",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra",
-        "Table": "user_extra"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.id from `user` where 1 != 1",
-        "Query": "select `user`.id from `user` where `user`.id = :user_extra_id",
-        "Table": "`user`",
-        "Values": [
-          ":user_extra_id"
-        ],
-        "Vindex": "user_index"
-      }
-    ]
-  }
-}
-
 # join with bindvariables
 "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2"
 {
@@ -3762,7 +3700,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0)",
         "Inputs": [
           {
@@ -3792,7 +3730,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -4391,6 +4329,25 @@ Gen4 plan same as above
         "Table": "unsharded_tab"
       }
     ]
+  }
+}
+Gen4 plan same as above
+
+# Unsharded join with using
+"select * from unsharded_a join unsharded_b using (propertyId);"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from unsharded_a join unsharded_b using (propertyId);",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from unsharded_a join unsharded_b using (propertyId) where 1 != 1",
+    "Query": "select * from unsharded_a join unsharded_b using (propertyId)",
+    "Table": "unsharded_a, unsharded_b"
   }
 }
 Gen4 plan same as above

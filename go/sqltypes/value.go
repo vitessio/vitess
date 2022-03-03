@@ -48,21 +48,25 @@ var (
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
 )
 
-// BinWriter interface is used for encoding values.
-// Types like bytes.Buffer conform to this interface.
-// We expect the writer objects to be in-memory buffers.
-// So, we don't expect the write operations to fail.
-type BinWriter interface {
-	Write([]byte) (int, error)
-}
+type (
+	// BinWriter interface is used for encoding values.
+	// Types like bytes.Buffer conform to this interface.
+	// We expect the writer objects to be in-memory buffers.
+	// So, we don't expect the write operations to fail.
+	BinWriter interface {
+		Write([]byte) (int, error)
+	}
 
-// Value can store any SQL value. If the value represents
-// an integral type, the bytes are always stored as a canonical
-// representation that matches how MySQL returns such values.
-type Value struct {
-	typ querypb.Type
-	val []byte
-}
+	// Value can store any SQL value. If the value represents
+	// an integral type, the bytes are always stored as a canonical
+	// representation that matches how MySQL returns such values.
+	Value struct {
+		typ querypb.Type
+		val []byte
+	}
+
+	Row = []Value
+)
 
 // NewValue builds a Value using typ and val. If the value and typ
 // don't match, it returns an error.
@@ -266,7 +270,7 @@ func (v Value) ToInt64() (int64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseInt(v.ToString(), 10, 64)
+	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
 // ToFloat64 returns the value as MySQL would return it as a float64.
@@ -275,7 +279,7 @@ func (v Value) ToFloat64() (float64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseFloat(v.ToString(), 64)
+	return strconv.ParseFloat(v.RawStr(), 64)
 }
 
 // ToUint64 returns the value as MySQL would return it as a uint64.
@@ -284,7 +288,7 @@ func (v Value) ToUint64() (uint64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return strconv.ParseUint(v.ToString(), 10, 64)
+	return strconv.ParseUint(v.RawStr(), 10, 64)
 }
 
 // ToBool returns the value as a bool value

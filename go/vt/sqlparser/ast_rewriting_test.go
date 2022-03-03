@@ -182,9 +182,6 @@ func TestRewrites(in *testing.T) {
 		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
 		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
 	}, {
-		in:       "SELECT a.col, b.col FROM A JOIN B USING (id)",
-		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id = B.id",
-	}, {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual)",
 		expected: "SELECT * FROM tbl WHERE id IN (1)",
 	}, {
@@ -212,9 +209,6 @@ func TestRewrites(in *testing.T) {
 	}, {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
-	}, {
-		in:       "SELECT a.col, b.col FROM A JOIN B USING (id1,id2,id3)",
-		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id1 = B.id1 AND A.id2 = B.id2 AND A.id3 = B.id3",
 	}, {
 		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
 		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",

@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -51,11 +53,11 @@ func TestTabletReshuffle(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Sanity Check
-	exec(t, conn, "delete from t1")
-	exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
-	//Create new tablet
+	// Create new tablet
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// mycnf_server_id prevents vttablet from reading the mycnf
@@ -108,7 +110,7 @@ func TestHealthCheck(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Create database in mysql
-	exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
+	utils.Exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
 
 	// start vttablet process, should be in SERVING state as we already have a primary
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
@@ -124,7 +126,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// Make sure the primary is still primary
 	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
-	exec(t, conn, "stop slave")
+	utils.Exec(t, conn, "stop slave")
 
 	// stop replication, make sure we don't go unhealthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rTablet.Alias)

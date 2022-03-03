@@ -40,6 +40,8 @@ if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ./scripts/zk-down.sh
 elif [ "${TOPO}" = "k8s" ]; then
 	CELL=zone1 ./scripts/k3s-down.sh
+elif [ "${TOPO}" = "consul" ]; then
+	CELL=zone1 ./scripts/consul-down.sh
 else
 	CELL=zone1 ./scripts/etcd-down.sh
 fi
