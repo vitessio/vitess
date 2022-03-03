@@ -8,11 +8,6 @@ on:
     # Every day at 5am UTC (9pm PST / 10pm PDT)
     - cron: '0 5 * * *'
 
-env:
-  REGISTRY: us.gcr.io/planetscale-operator/vitess
-  REGISTRY_V2: us-docker.pkg.dev/planetscale-registry/prod
-  REGISTRY_DEV: us-docker.pkg.dev/planetscale-registry/dev
-
 jobs:
   build-tag-push-lite:
     name: vitess/lite
@@ -38,32 +33,12 @@ jobs:
         with:
           ref: ${{ matrix.ref }}
 
-      - name: Determine Build Info
-        id: build-info
-        run: |
-          echo "::set-output name=date::$(date +%F)"
-          echo "::set-output name=sha::$(git rev-parse --short HEAD)"
-          if [[ "${{ matrix.ref }}" == "latest" ]]; then
-            echo "::set-output name=suffix::-vthead"
-            echo "::set-output name=images::${{ env.REGISTRY_DEV }}/vitess/lite,${{ env.REGISTRY }}/lite"
-          else
-            echo "::set-output name=suffix::"
-            echo "::set-output name=images::${{ env.REGISTRY }}/lite,${{ env.REGISTRY_V2 }}/vitess/lite"
-          fi
-
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v1
         with:
           # Vitess build context causes tar header problem with containerd
           driver: docker
-
-      - name: Login to GCR
-        uses: docker/login-action@v1
-        with:
-          registry: us.gcr.io
-          username: _json_key
-          password: ${{ secrets.PLANETSCALE_GITHUB_PROD_SA_KEY }}
 
       - name: Login to Artifact Registry
         uses: docker/login-action@v1
@@ -77,11 +52,12 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ${{ steps.build-info.outputs.images }}
+            ${{ format('us-docker.pkg.dev/planetscale-registry/{0}/vitess/lite', matrix.ref == 'main' && 'prod' || 'dev') }}
           flavor: |
             latest=${{ matrix.default == 'true' }}
+            prefix=${{ matrix.image }}-,onlatest=true
           tags: |
-            ${{ matrix.image }}-${{ steps.build-info.outputs.date }}.${{ steps.build-info.outputs.sha }}${{ steps.build-info.outputs.suffix }}
+            type=raw,value={{date 'YYYY-MM-DD'}}.{{sha}}
 
       - name: Build and push
         id: build

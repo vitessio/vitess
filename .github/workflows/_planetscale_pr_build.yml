@@ -7,10 +7,6 @@ on:
       - synchronize
       - reopened
 
-env:
-  REGISTRY: us-docker.pkg.dev/planetscale-registry/dev
-  FLAVOR: mysql80
-
 # Serialize workflow runs
 # Also, if previous build hasn't finished, cancel it
 concurrency:
@@ -49,18 +45,19 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ${{ env.REGISTRY }}/vitess/lite
+            ${{ format('us-docker.pkg.dev/planetscale-registry/{0}/vitess/lite', matrix.ref == 'main' && 'prod' || 'dev') }}
           flavor: |
             latest=false
+            prefix=mysql80-
           tags: |
-            type=ref,event=pr,prefix=${{ env.FLAVOR }}-pr-
+            type=ref,event=pr,prefix=mysql80-pr-
 
       - name: Build and push
         id: build
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: docker/lite/Dockerfile.${{ env.FLAVOR }}
+          file: docker/lite/Dockerfile.mysql80
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           push: true
@@ -87,6 +84,6 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Test kmsbackup
-        run: | 
+        run: |
           echo '${{ secrets.VITESS_PRIVATE_AWS_CREDENTIALS }}' >> "$RUNNER_TEMP/aws.credentials"
           go test vitess.io/vitess/go/vt/mysqlctl/kmsbackup -v -race --aws-credentials-file "$RUNNER_TEMP/aws.credentials" --aws-credentials-profile vitess-private-ci
