@@ -3794,6 +3794,10 @@ prepare_statement:
   {
     $$ = &PrepareStmt{Name:$2, Statement:$4}
   }
+| PREPARE sql_id FROM sql_id
+  {
+    $$ = &PrepareStmt{Name:$2, StatementIdentifier: $4}
+  }
 
 select_expression_list_opt:
   {

@@ -2224,7 +2224,8 @@ func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 		return false
 	}
 	return a.Statement == b.Statement &&
-		EqualsColIdent(a.Name, b.Name)
+		EqualsColIdent(a.Name, b.Name) &&
+		EqualsColIdent(a.StatementIdentifier, b.StatementIdentifier)
 }
 
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.

@@ -3402,6 +3402,11 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}) {
 		return false
 	}
+	if !a.rewriteColIdent(node, node.StatementIdentifier, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).StatementIdentifier = newNode.(ColIdent)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

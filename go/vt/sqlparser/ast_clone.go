@@ -1388,6 +1388,7 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
+	out.StatementIdentifier = CloneColIdent(n.StatementIdentifier)
 	return &out
 }
 

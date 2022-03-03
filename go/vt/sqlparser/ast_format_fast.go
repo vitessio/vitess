@@ -1193,7 +1193,11 @@ func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("prepare ")
 	node.Name.formatFast(buf)
 	buf.WriteString(" from ")
-	buf.WriteString(node.Statement)
+	if node.Statement != "" {
+		buf.WriteString(node.Statement)
+	} else {
+		node.StatementIdentifier.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.
