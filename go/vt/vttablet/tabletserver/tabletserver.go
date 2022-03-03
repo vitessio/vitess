@@ -232,15 +232,14 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // There are two layers to buffering/unbuffering:
 // 1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
 //    for all new queries (see Execute() function and call to GetPlan())
-// 2. affecting already existing rules. a Rule has a isCancelled function which it invokes; we supply that
-//    function here so that when onlineDDLExecutor stops buffering, that rule function returns "false"
-func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingContext context.Context, tableName string, bufferQueries bool) {
+// 2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
+func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, bufferQueries bool) {
 	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
 
 	if bufferQueries {
 		tsv.RegisterQueryRuleSource(queryRuleSource)
 		bufferRules := rules.New()
-		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingContext, tableName, "buffered for cut-over"))
+		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingCtx, tableName, "buffered for cut-over"))
 		tsv.SetQueryRules(queryRuleSource, bufferRules)
 	} else {
 		tsv.UnRegisterQueryRuleSource(queryRuleSource) // new rules will not have buffering. Existing rules will be affected by bufferingContext.Done()
