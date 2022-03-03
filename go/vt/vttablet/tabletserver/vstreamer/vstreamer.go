@@ -463,7 +463,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			fmt.Printf("======= ZZZ sqlparser.StmtDDL: %v\n", q.SQL)
 			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
@@ -702,10 +701,8 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 			Type: t,
 		})
 	}
-	fmt.Printf("======= ZZZ vs.se.GetTableForPos00: %v, pos=%v\n", tm.Name, mysql.EncodePosition(vs.pos))
 	st, err := vs.se.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
 	if err != nil {
-		fmt.Printf("======= ZZZ vs.se.GetTableForPos01: err=%v\n", err)
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			log.Infof("No schema found for table %s", tm.Name)
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
