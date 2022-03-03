@@ -632,10 +632,8 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 // This can then be used by go's template package to substitute other keyrange values.
 func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
-	if !ok {
-		if !schema.IsInternalOperationTableName(rule.Match) {
-			return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
-		}
+	if !ok && !schema.IsInternalOperationTableName(rule.Match) {
+		return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
 
 	if vtable != nil && vtable.Type == vindexes.TypeReference {
@@ -757,10 +755,8 @@ func (sm *StreamMigrator) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, 
 
 func (sm *StreamMigrator) identifyRuleType(rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
-	if !ok {
-		if !schema.IsInternalOperationTableName(rule.Match) {
-			return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
-		}
+	if !ok && !schema.IsInternalOperationTableName(rule.Match) {
+		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
 
 	if vtable != nil && vtable.Type == vindexes.TypeReference {
