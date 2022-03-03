@@ -275,24 +275,18 @@ func (se *Engine) Reload(ctx context.Context) error {
 func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	fmt.Printf("======= ZZZ ReloadAt 0 %v\n", pos)
 	if !se.isOpen {
 		log.Warning("Schema reload called for an engine that is not yet open")
 		return nil
 	}
-	fmt.Printf("======= ZZZ ReloadAt 1 %v\n", pos)
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		fmt.Printf("======= ZZZ ReloadAt 2 %v\n", pos)
 		log.V(2).Infof("ReloadAt: found cached schema at %s", mysql.EncodePosition(pos))
 		return nil
 	}
-	fmt.Printf("======= ZZZ ReloadAt 3 %v\n", pos)
 	if err := se.reload(ctx); err != nil {
-		fmt.Printf("======= ZZZ ReloadAt 4 %v, err=%v\n", pos, err)
 		return err
 	}
 	se.reloadAtPos = pos
-	fmt.Printf("======= ZZZ ReloadAt 5 %v\n", pos)
 	return nil
 }
 
@@ -336,7 +330,6 @@ func (se *Engine) reload(ctx context.Context) error {
 	var created, altered []string
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
-		fmt.Printf("======= ZZZ SHOW TABLES: %v\n", tableName)
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
 		fileSize, _ := evalengine.ToUint64(row[4])
@@ -387,7 +380,6 @@ func (se *Engine) reload(ctx context.Context) error {
 	var dropped []string
 	for tableName := range se.tables {
 		if !curTables[tableName] {
-			fmt.Printf("======= ZZZ se.tables dropped: %v\n", tableName)
 			dropped = append(dropped, tableName)
 			delete(se.tables, tableName)
 			// We can't actually delete the label from the stats, but we can set it to 0.
@@ -404,7 +396,6 @@ func (se *Engine) reload(ctx context.Context) error {
 
 	// Update se.tables
 	for k, t := range changedTables {
-		fmt.Printf("======= ZZZ se.tables changed: %v\n", k)
 		se.tables[k] = t
 	}
 	se.lastChange = curTime
@@ -480,37 +471,25 @@ func (se *Engine) RegisterVersionEvent() error {
 
 // GetTableForPos returns a best-effort schema for a specific gtid
 func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
-	fmt.Printf("======= ZZZ GetTableForPos: t=%v, gtid=%v\n", tableName, gtid)
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
-	fmt.Printf("======= ZZZ GetTableForPos: mt=%v, err=%v\n", mt, err)
 	if err != nil {
-		log.Infof("GetTableForPos returned error: %s", err.Error())
 		return nil, err
 	}
 	if mt != nil {
-		fmt.Printf("======= ZZZ GetTableForPos: returning mt=%v\n", mt)
 		return mt, nil
 	}
-	fmt.Printf("======= ZZZ GetTableForPos: reading new mt=%v\n", mt)
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tableNameStr := tableName.String()
 	st, ok := se.tables[tableNameStr]
-	for tname := range se.tables {
-		fmt.Printf("======= ZZZ GetTableForPos: tname=%v\n", tname)
-	}
-	fmt.Printf("======= ZZZ GetTableForPos: reading new st=%v, ok=%v\n", st, ok)
 	if !ok {
 		if schema.IsInternalOperationTableName(tableNameStr) {
 			log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
-			fmt.Printf("======= ZZZ GetTableForPos: tableNameStr\n")
 		} else {
 			log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
-			fmt.Printf("======= ZZZ NOTFOUND!: tableNameStr\n")
 			return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 		}
 	}
-	fmt.Printf("======= ZZZ GetTableForPos: returning new mt=%v\n", newMinimalTable(st))
 	return newMinimalTable(st), nil
 }
 
