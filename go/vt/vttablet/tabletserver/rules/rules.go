@@ -244,7 +244,7 @@ func NewQueryRule(description, name string, act Action) (qr *Rule) {
 	return &Rule{Description: description, Name: name, act: act}
 }
 
-// NewQueryRule creates a new Rule.
+// NewBufferedTableQueryRule creates a new buffer Rule.
 func NewBufferedTableQueryRule(tableName string, description string, isCancelledFunc func() bool) (qr *Rule) {
 	// We ignore act because there's only one action right now
 	return &Rule{isCancelledFunc: isCancelledFunc, Description: description, Name: bufferedTableRuleName, tableNames: []string{tableName}, act: QRBuffer}
