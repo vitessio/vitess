@@ -517,7 +517,6 @@ const (
 	sqlSwapTables      = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
 	sqlRenameTable     = "RENAME TABLE `%a` TO `%a`"
 	sqlRenameTwoTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`"
-	// sqlRenameThreeTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
 )
 
 const (

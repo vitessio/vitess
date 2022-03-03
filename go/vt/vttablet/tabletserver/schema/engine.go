@@ -473,6 +473,7 @@ func (se *Engine) RegisterVersionEvent() error {
 func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
+		log.Infof("GetTableForPos returned error: %s", err.Error())
 		return nil, err
 	}
 	if mt != nil {
