@@ -557,6 +557,9 @@ const (
 	// SSWrongNumberOfColumns is related to columns error
 	SSWrongNumberOfColumns = "21000"
 
+	// SSWrongValueCountOnRow is related to columns count mismatch error
+	SSWrongValueCountOnRow = "21S01"
+
 	// SSDataTooLong is ER_DATA_TOO_LONG
 	SSDataTooLong = "22001"
 

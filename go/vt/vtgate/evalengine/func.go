@@ -72,7 +72,7 @@ type builtinCoalesce struct{}
 
 func (builtinCoalesce) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	for _, arg := range args {
-		if !arg.null() {
+		if !arg.isNull() {
 			*result = arg
 			result.resolve()
 			return
@@ -107,7 +107,7 @@ func getMultiComparisonFunc(args []EvalResult) multiComparisonFunc {
 
 	for i := range args {
 		arg := &args[i]
-		if arg.null() {
+		if arg.isNull() {
 			return func(args []EvalResult, result *EvalResult, cmp int) {
 				result.setNull()
 			}
@@ -185,20 +185,19 @@ func compareAllFloat(args []EvalResult, result *EvalResult, cmp int) {
 
 func compareAllDecimal(args []EvalResult, result *EvalResult, cmp int) {
 	candidateD := args[0].coerceToDecimal()
-	maxFrac := candidateD.frac
+	maxFrac := args[0].length_
 
 	for _, arg := range args[1:] {
 		thisD := arg.coerceToDecimal()
-		if (cmp < 0) == (thisD.num.Cmp(&candidateD.num) < 0) {
+		if (cmp < 0) == (thisD.Cmp(candidateD) < 0) {
 			candidateD = thisD
 		}
-		if thisD.frac > maxFrac {
-			maxFrac = thisD.frac
+		if arg.length_ > maxFrac {
+			maxFrac = arg.length_
 		}
 	}
 
-	candidateD.frac = maxFrac
-	result.setDecimal(candidateD)
+	result.setDecimal(candidateD, maxFrac)
 }
 
 func compareAllText(args []EvalResult, result *EvalResult, cmp int) {
@@ -350,7 +349,7 @@ func builtinIsNullRewrite(args []Expr, lookup TranslationLookup) (Expr, error) {
 	return &IsExpr{
 		UnaryExpr: UnaryExpr{args[0]},
 		Op:        sqlparser.IsNullOp,
-		Check:     func(er *EvalResult) bool { return er.null() },
+		Check:     func(er *EvalResult) bool { return er.isNull() },
 	}, nil
 }
 
@@ -360,12 +359,12 @@ func (builtinBitCount) call(_ *ExpressionEnv, args []EvalResult, result *EvalRes
 	var count int
 	inarg := &args[0]
 
-	if inarg.null() {
+	if inarg.isNull() {
 		result.setNull()
 		return
 	}
 
-	if inarg.bitwiseBinaryString() {
+	if inarg.isBitwiseBinaryString() {
 		binary := inarg.bytes()
 		for _, b := range binary {
 			count += bits.OnesCount8(b)

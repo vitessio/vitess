@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
@@ -52,8 +54,8 @@ func TestTabletCommands(t *testing.T) {
 	defer replicaConn.Close()
 
 	// Sanity Check
-	exec(t, conn, "delete from t1")
-	exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// test exclude_field_names to vttablet works as expected
@@ -91,14 +93,14 @@ func TestTabletCommands(t *testing.T) {
 	// Check basic actions.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadOnly", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
-	qr := exec(t, conn, "show variables like 'read_only'")
+	qr := utils.Exec(t, conn, "show variables like 'read_only'")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := "[[VARCHAR(\"read_only\") VARCHAR(\"ON\")]]"
 	assert.Equal(t, want, got)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
-	qr = exec(t, conn, "show variables like 'read_only'")
+	qr = utils.Exec(t, conn, "show variables like 'read_only'")
 	got = fmt.Sprintf("%v", qr.Rows)
 	want = "[[VARCHAR(\"read_only\") VARCHAR(\"OFF\")]]"
 	assert.Equal(t, want, got)

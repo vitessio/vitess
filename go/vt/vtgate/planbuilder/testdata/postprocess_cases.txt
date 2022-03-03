@@ -1802,7 +1802,7 @@ Gen4 plan same as above
   "Original": "select count(id), num from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0)",
     "Inputs": [
       {
@@ -1834,7 +1834,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0)",
         "ResultColumns": 3,
         "Inputs": [
@@ -2236,7 +2236,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {

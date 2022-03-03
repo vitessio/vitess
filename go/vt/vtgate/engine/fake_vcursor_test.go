@@ -318,6 +318,9 @@ type loggingVCursor struct {
 	inReservedConn  bool
 	systemVariables map[string]string
 	disableSetVar   bool
+
+	// map different shards to keyspaces in the test.
+	ksShardMap map[string][]string
 }
 
 type tableRoutes struct {
@@ -482,6 +485,12 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 		switch d := destination.(type) {
 		case key.DestinationAllShards:
+			if f.ksShardMap != nil {
+				if ksShards, exists := f.ksShardMap[keyspace]; exists {
+					shards = ksShards
+					break
+				}
+			}
 			shards = f.shards
 		case key.DestinationKeyRange:
 			shards = f.shardForKsid

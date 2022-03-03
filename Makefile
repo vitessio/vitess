@@ -49,9 +49,8 @@ export CGO_CFLAGS := -O1
 
 # regenerate rice-box.go when any of the .cnf files change
 embed_config:
-	cd go/vt/mysqlctl
-	go run github.com/GeertJohan/go.rice/rice embed-go
-	go build .
+	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go
+	cd go/vt/mysqlctl && go build .
 
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
@@ -132,6 +131,9 @@ vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
+demo:
+	go install ./examples/demo/demo.go
+
 codegen: asthelpergen sizegen parser astfmtgen
 
 visitor: asthelpergen
@@ -171,7 +173,7 @@ cleanall: clean
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
 
-unit_test: build dependency_check
+unit_test: build dependency_check demo
 	echo $$(date): Running unit tests
 	tools/unit_test_runner.sh
 

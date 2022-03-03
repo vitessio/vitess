@@ -171,6 +171,8 @@ func StopReplicationAndBuildStatusMaps(
 		primaryStatusMap = map[string]*replicationdatapb.PrimaryStatus{}
 		m                sync.Mutex
 		errChan          = make(chan concurrency.Error)
+		tabletsReachable []*topodatapb.Tablet
+		allTablets       []*topodatapb.Tablet
 	)
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
@@ -204,6 +206,7 @@ func StopReplicationAndBuildStatusMaps(
 
 				m.Lock()
 				primaryStatusMap[alias] = primaryStatus
+				tabletsReachable = append(tabletsReachable, tabletInfo.Tablet)
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)
@@ -212,6 +215,7 @@ func StopReplicationAndBuildStatusMaps(
 		} else {
 			m.Lock()
 			statusMap[alias] = stopReplicationStatus
+			tabletsReachable = append(tabletsReachable, tabletInfo.Tablet)
 			m.Unlock()
 		}
 	}
@@ -222,6 +226,7 @@ func StopReplicationAndBuildStatusMaps(
 		tabletAliasToWaitFor = topoproto.TabletAliasString(tabletToWaitFor)
 	}
 	for alias, tabletInfo := range tabletMap {
+		allTablets = append(allTablets, tabletInfo.Tablet)
 		if !ignoredTablets.Has(alias) {
 			mustWaitFor := tabletAliasToWaitFor == alias
 			if mustWaitFor {
@@ -239,8 +244,13 @@ func StopReplicationAndBuildStatusMaps(
 	}
 
 	errRecorder := errgroup.Wait(groupCancel, errChan)
-	if len(errRecorder.Errors) > 1 {
-		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "encountered more than one error when trying to stop replication and get positions: %v", errRecorder.Error())
+	if len(errRecorder.Errors) <= 1 {
+		return statusMap, primaryStatusMap, nil
+	}
+	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
+	revokeSuccessful := haveRevoked(tabletsReachable, allTablets)
+	if !revokeSuccessful {
+		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}
 
 	return statusMap, primaryStatusMap, nil

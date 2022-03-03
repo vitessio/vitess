@@ -104,6 +104,12 @@ service VTAdmin {
     rpc StartReplication(StartReplicationRequest) returns (StartReplicationResponse) {};
     // StopReplication will run th underlying database command to stop replication on a tablet
     rpc StopReplication(StopReplicationRequest) returns (StopReplicationResponse) {};
+    // ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+    rpc ValidateKeyspace(ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+    // ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+    rpc ValidateSchemaKeyspace(ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
+	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+    rpc ValidateVersionKeyspace(ValidateVersionKeyspaceRequest) returns (vtctldata.ValidateVersionKeyspaceResponse) {};
     // VTExplain provides information on how Vitess plans to execute a particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
@@ -514,6 +520,22 @@ message StopReplicationRequest {
 
 message StopReplicationResponse {
     string status = 1;
+}
+
+message ValidateKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    bool ping_tablets = 3;
+}
+
+message ValidateSchemaKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+}
+
+message ValidateVersionKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
 }
 
 message VTExplainRequest {

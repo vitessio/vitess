@@ -153,8 +153,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGroupConcatExpr(in)
 	case *IndexDefinition:
 		return CloneRefOfIndexDefinition(in)
-	case *IndexHints:
-		return CloneRefOfIndexHints(in)
+	case *IndexHint:
+		return CloneRefOfIndexHint(in)
+	case IndexHints:
+		return CloneIndexHints(in)
 	case *IndexInfo:
 		return CloneRefOfIndexInfo(in)
 	case *Insert:
@@ -394,7 +396,7 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	out.Expr = CloneSimpleTableExpr(n.Expr)
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.As = CloneTableIdent(n.As)
-	out.Hints = CloneRefOfIndexHints(n.Hints)
+	out.Hints = CloneIndexHints(n.Hints)
 	out.Columns = CloneColumns(n.Columns)
 	return &out
 }
@@ -1016,14 +1018,26 @@ func CloneRefOfIndexDefinition(n *IndexDefinition) *IndexDefinition {
 	return &out
 }
 
-// CloneRefOfIndexHints creates a deep clone of the input.
-func CloneRefOfIndexHints(n *IndexHints) *IndexHints {
+// CloneRefOfIndexHint creates a deep clone of the input.
+func CloneRefOfIndexHint(n *IndexHint) *IndexHint {
 	if n == nil {
 		return nil
 	}
 	out := *n
 	out.Indexes = CloneSliceOfColIdent(n.Indexes)
 	return &out
+}
+
+// CloneIndexHints creates a deep clone of the input.
+func CloneIndexHints(n IndexHints) IndexHints {
+	if n == nil {
+		return nil
+	}
+	res := make(IndexHints, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfIndexHint(x))
+	}
+	return res
 }
 
 // CloneRefOfIndexInfo creates a deep clone of the input.

@@ -88,7 +88,7 @@ func (cached *AliasedTableExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.SimpleTableExpr
 	if cc, ok := cached.Expr.(cachedObject); ok {
@@ -103,8 +103,13 @@ func (cached *AliasedTableExpr) CachedSize(alloc bool) int64 {
 	}
 	// field As vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.As.CachedSize(false)
-	// field Hints *vitess.io/vitess/go/vt/sqlparser.IndexHints
-	size += cached.Hints.CachedSize(true)
+	// field Hints vitess.io/vitess/go/vt/sqlparser.IndexHints
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Hints)) * int64(8))
+		for _, elem := range cached.Hints {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field Columns vitess.io/vitess/go/vt/sqlparser.Columns
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(40))
@@ -1188,7 +1193,7 @@ func (cached *IndexDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *IndexHints) CachedSize(alloc bool) int64 {
+func (cached *IndexHint) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}

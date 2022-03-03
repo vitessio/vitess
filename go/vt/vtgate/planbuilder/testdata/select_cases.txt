@@ -82,7 +82,7 @@ Gen4 plan same as above
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0)",
     "Inputs": [
       {
@@ -105,7 +105,7 @@ Gen4 plan same as above
   "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -177,7 +177,7 @@ Gen4 plan same as above
   "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0)",
     "Inputs": [
       {
@@ -200,7 +200,7 @@ Gen4 plan same as above
   "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -226,7 +226,7 @@ Gen4 plan same as above
   "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0)",
     "Inputs": [
       {
@@ -249,7 +249,7 @@ Gen4 plan same as above
   "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -1766,7 +1766,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0)",
         "Inputs": [
           {
@@ -1810,7 +1810,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS count(*)",
         "Inputs": [
           {
@@ -1902,7 +1902,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0)",
         "Inputs": [
           {
@@ -1948,7 +1948,7 @@ Gen4 plan same as above
       },
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS count(*)",
         "Inputs": [
           {

@@ -28,6 +28,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 type (
@@ -35,8 +36,11 @@ type (
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
 		BindVars         map[string]*querypb.BindVariable
-		Row              []sqltypes.Value
 		DefaultCollation collations.ID
+
+		// Row and Fields should line up
+		Row    []sqltypes.Value
+		Fields []*querypb.Field
 	}
 
 	// Expr is the interface that all evaluating expressions must implement
@@ -343,11 +347,11 @@ func NewLiteralFloatFromBytes(val []byte) (*Literal, error) {
 
 func NewLiteralDecimalFromBytes(val []byte) (*Literal, error) {
 	lit := &Literal{}
-	dec, err := newDecimalString(string(val))
+	dec, err := decimal.NewFromMySQL(val)
 	if err != nil {
 		return nil, err
 	}
-	lit.Val.setDecimal(dec)
+	lit.Val.setDecimal(dec, -dec.Exponent())
 	return lit, nil
 }
 
@@ -476,12 +480,16 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 	case sqltypes.Tuple:
 		tuple := make([]EvalResult, len(bvar.Values))
 		for i, value := range bvar.Values {
-			tuple[i].setBindVar1(value.Type, value.Value, collations.TypedCollation{})
+			if err := tuple[i].setValue(sqltypes.MakeTrusted(value.Type, value.Value), collations.TypedCollation{}); err != nil {
+				throwEvalError(err)
+			}
 		}
 		result.setTuple(tuple)
 
 	default:
-		result.setBindVar1(typ, bvar.Value, bv.coll)
+		if err := result.setValue(sqltypes.MakeTrusted(typ, bvar.Value), bv.coll); err != nil {
+			throwEvalError(err)
+		}
 	}
 }
 
@@ -499,11 +507,9 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 
 // eval implements the Expr interface
 func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
-	value := env.Row[c.Offset]
-	if err := result.setValue(value); err != nil {
+	if err := result.setValue(env.Row[c.Offset], c.coll); err != nil {
 		throwEvalError(err)
 	}
-	result.replaceCollation(c.coll)
 }
 
 // typeof implements the Expr interface
@@ -517,12 +523,18 @@ func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
-	value := env.Row[c.Offset]
-	tt := value.Type()
-	switch tt {
-	case sqltypes.Null:
-		return tt, flagNullable | flagNull
-	default:
-		return tt, 0
+	// we'll try to do the best possible with the information we have
+	if c.Offset < len(env.Row) {
+		value := env.Row[c.Offset]
+		if value.IsNull() {
+			return sqltypes.Null, flagNull | flagNullable
+		}
+		return value.Type(), flag(0)
 	}
+
+	if c.Offset < len(env.Fields) {
+		return env.Fields[c.Offset].Type, flagNullable
+	}
+
+	panic("Column missing both data and field")
 }

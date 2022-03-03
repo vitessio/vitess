@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -1031,4 +1032,17 @@ func getCoveragePath(fileName string) string {
 		covDir = os.TempDir()
 	}
 	return path.Join(covDir, fileName)
+}
+
+// PrintMysqlctlLogFiles prints all the log files associated with the mysqlctl binary
+func (cluster *LocalProcessCluster) PrintMysqlctlLogFiles() {
+	logDir := cluster.TmpDirectory
+	files, _ := ioutil.ReadDir(logDir)
+	for _, fileInfo := range files {
+		if !fileInfo.IsDir() && strings.Contains(fileInfo.Name(), "mysqlctl") {
+			log.Errorf("Printing the log file - " + fileInfo.Name())
+			logOut, _ := ioutil.ReadFile(path.Join(logDir, fileInfo.Name()))
+			log.Errorf(string(logOut))
+		}
+	}
 }

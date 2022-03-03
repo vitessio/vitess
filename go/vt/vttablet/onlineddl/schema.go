@@ -72,6 +72,7 @@ const (
 	alterSchemaMigrationsTableRevertedUUID             = "ALTER TABLE _vt.schema_migrations add column reverted_uuid varchar(64) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
 	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -96,19 +97,15 @@ const (
 		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
-	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
-		SET
-			migration_status='ready',
-			ready_timestamp=NOW()
+	sqlSelectQueuedMigrations = `SELECT
+			migration_uuid,
+			ddl_action,
+			postpone_completion,
+			ready_to_complete
+		FROM _vt.schema_migrations
 		WHERE
 			migration_status='queued'
-			AND (
-				postpone_completion=0 OR ddl_action='alter'
-			)
-		ORDER BY
-			requested_timestamp ASC
-		LIMIT 1
-	`  // if the migration is CREATE or DROP, and postpone_completion=1, we just don't schedule it
+	`
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a
 		WHERE
@@ -138,7 +135,12 @@ const (
 			SET is_view=%a
 		WHERE
 			migration_uuid=%a
-`
+	`
+	sqlUpdateMigrationReadyToComplete = `UPDATE _vt.schema_migrations
+			SET ready_to_complete=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
 			started_timestamp =IFNULL(started_timestamp,  NOW()),
 			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
@@ -367,6 +369,7 @@ const (
 			migration_context,
 			retain_artifacts_seconds,
 			is_view,
+			ready_to_complete,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -572,4 +575,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableRevertedUUID,
 	alterSchemaMigrationsTableRevertedUUIDIndex,
 	alterSchemaMigrationsTableIsView,
+	alterSchemaMigrationsTableReadyToComplete,
 }

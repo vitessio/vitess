@@ -217,7 +217,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
 
-	// check weather the intermediate source candidate selected is ideal or if it can be improved later
+	// check whether the intermediate source candidate selected is ideal or if it can be improved later
 	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
