@@ -113,6 +113,11 @@ const (
 	IgnoreStr = "ignore "
 	ForceStr  = "force "
 
+	// Index hints For types.
+	JoinForStr    = "join"
+	GroupByForStr = "group by"
+	OrderByForStr = "order by"
+
 	// Where.Type
 	WhereStr  = "where"
 	HavingStr = "having"
@@ -458,11 +463,19 @@ const (
 	DescOrder
 )
 
-// Constant for Enum Type - IndexHintsType
+// Constant for Enum Type - IndexHintType
 const (
-	UseOp IndexHintsType = iota
+	UseOp IndexHintType = iota
 	IgnoreOp
 	ForceOp
+)
+
+// Constant for Enum Type - IndexHintForType
+const (
+	NoForType IndexHintForType = iota
+	JoinForType
+	GroupByForType
+	OrderByForType
 )
 
 // Constant for Enum Type - PartitionSpecAction

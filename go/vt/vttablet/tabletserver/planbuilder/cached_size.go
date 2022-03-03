@@ -41,10 +41,17 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(128)
 	}
 	// field Table *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
 	size += cached.Table.CachedSize(true)
+	// field AllTables []*vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.AllTables)) * int64(8))
+		for _, elem := range cached.AllTables {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field Permissions []vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder.Permission
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Permissions)) * int64(24))

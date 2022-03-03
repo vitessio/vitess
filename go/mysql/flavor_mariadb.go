@@ -240,3 +240,8 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	ev := NewMariadbBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 	return ev, nil
 }
+
+// supportsFastDropTable is part of the Flavor interface.
+func (mariadbFlavor) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
+}

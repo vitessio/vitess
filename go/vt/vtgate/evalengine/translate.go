@@ -25,6 +25,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 type (
@@ -139,17 +140,17 @@ func translateIsExpr(left sqlparser.Expr, op sqlparser.IsExprOperator, lookup Tr
 
 	switch op {
 	case sqlparser.IsNullOp:
-		check = func(er *EvalResult) bool { return er.null() }
+		check = func(er *EvalResult) bool { return er.isNull() }
 	case sqlparser.IsNotNullOp:
-		check = func(er *EvalResult) bool { return !er.null() }
+		check = func(er *EvalResult) bool { return !er.isNull() }
 	case sqlparser.IsTrueOp:
-		check = func(er *EvalResult) bool { return er.truthy() == boolTrue }
+		check = func(er *EvalResult) bool { return er.isTruthy() == boolTrue }
 	case sqlparser.IsNotTrueOp:
-		check = func(er *EvalResult) bool { return er.truthy() != boolTrue }
+		check = func(er *EvalResult) bool { return er.isTruthy() != boolTrue }
 	case sqlparser.IsFalseOp:
-		check = func(er *EvalResult) bool { return er.truthy() == boolFalse }
+		check = func(er *EvalResult) bool { return er.isTruthy() == boolFalse }
 	case sqlparser.IsNotFalseOp:
-		check = func(er *EvalResult) bool { return er.truthy() != boolFalse }
+		check = func(er *EvalResult) bool { return er.isTruthy() != boolFalse }
 	}
 
 	return &IsExpr{
@@ -446,6 +447,16 @@ func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup)
 				"For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%s').",
 				"", // TODO: column name
 			)
+		}
+		if convert.Length > decimal.MyMaxPrecision {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too-big precision %d specified for '%s'. Maximum is %d.",
+				convert.Length, sqlparser.String(expr.Expr), decimal.MyMaxPrecision)
+		}
+		if convert.Scale > decimal.MyMaxScale {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too big scale %d specified for column '%s'. Maximum is %d.",
+				convert.Scale, sqlparser.String(expr.Expr), decimal.MyMaxScale)
 		}
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID

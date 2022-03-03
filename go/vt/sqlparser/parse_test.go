@@ -399,6 +399,18 @@ var (
 	}, {
 		input: "select /* parenthessis in table list 1 */ 1 from (t1), t2",
 	}, {
+		input:  "SELECT * FROM t1 USE INDEX (i1) IGNORE INDEX FOR ORDER BY (i2) ORDER BY a",
+		output: "select * from t1 use index (i1) ignore index for order by (i2) order by a asc",
+	}, {
+		input:  "SELECT * FROM t1 USE INDEX FOR JOIN (i1) FORCE INDEX FOR JOIN (i2)",
+		output: "select * from t1 use index for join (i1) force index for join (i2)",
+	}, {
+		input:  "SELECT * FROM t1 USE INDEX FOR JOIN (i1) FORCE INDEX FOR JOIN (i2) IGNORE KEY FOR GROUP BY (i1, i2)",
+		output: "select * from t1 use index for join (i1) force index for join (i2) ignore index for group by (i1, i2)",
+	}, {
+		input:  "SELECT * FROM t1 USE KEY (), t2 FORCE KEY (i2), t3 IGNORE INDEX FOR GROUP BY (i1, i2)",
+		output: "select * from t1 use index (), t2 force index (i2), t3 ignore index for group by (i1, i2)",
+	}, {
 		input: "select /* parenthessis in table list 2 */ 1 from t1, (t2)",
 	}, {
 		input: "select /* use */ 1 from t1 use index (a) where b = 1",

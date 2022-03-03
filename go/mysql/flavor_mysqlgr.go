@@ -228,6 +228,11 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
+// supportsFastDropTable is part of the Flavor interface.
+func (mysqlGRFlavor) supportsFastDropTable(c *Conn) (bool, error) {
+	return false, nil
+}
+
 func init() {
 	flavors[GRFlavorID] = newMysqlGRFlavor
 }

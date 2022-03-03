@@ -416,12 +416,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfIndexDefinition(a, b)
-	case *IndexHints:
-		b, ok := inB.(*IndexHints)
+	case *IndexHint:
+		b, ok := inB.(*IndexHint)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfIndexHints(a, b)
+		return EqualsRefOfIndexHint(a, b)
+	case IndexHints:
+		b, ok := inB.(IndexHints)
+		if !ok {
+			return false
+		}
+		return EqualsIndexHints(a, b)
 	case *IndexInfo:
 		b, ok := inB.(*IndexInfo)
 		if !ok {
@@ -1032,7 +1038,7 @@ func EqualsRefOfAliasedTableExpr(a, b *AliasedTableExpr) bool {
 	return EqualsSimpleTableExpr(a.Expr, b.Expr) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
 		EqualsTableIdent(a.As, b.As) &&
-		EqualsRefOfIndexHints(a.Hints, b.Hints) &&
+		EqualsIndexHints(a.Hints, b.Hints) &&
 		EqualsColumns(a.Columns, b.Columns)
 }
 
@@ -1775,8 +1781,8 @@ func EqualsRefOfIndexDefinition(a, b *IndexDefinition) bool {
 		EqualsSliceOfRefOfIndexOption(a.Options, b.Options)
 }
 
-// EqualsRefOfIndexHints does deep equals between the two objects.
-func EqualsRefOfIndexHints(a, b *IndexHints) bool {
+// EqualsRefOfIndexHint does deep equals between the two objects.
+func EqualsRefOfIndexHint(a, b *IndexHint) bool {
 	if a == b {
 		return true
 	}
@@ -1784,7 +1790,21 @@ func EqualsRefOfIndexHints(a, b *IndexHints) bool {
 		return false
 	}
 	return a.Type == b.Type &&
+		a.ForType == b.ForType &&
 		EqualsSliceOfColIdent(a.Indexes, b.Indexes)
+}
+
+// EqualsIndexHints does deep equals between the two objects.
+func EqualsIndexHints(a, b IndexHints) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfIndexHint(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // EqualsRefOfIndexInfo does deep equals between the two objects.
