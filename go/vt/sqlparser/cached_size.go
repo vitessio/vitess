@@ -973,6 +973,25 @@ func (cached *DropView) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	// field Arguments vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Arguments)) * int64(40))
+		for _, elem := range cached.Arguments {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *ExistsExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

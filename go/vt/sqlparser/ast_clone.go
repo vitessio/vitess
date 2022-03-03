@@ -127,6 +127,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ExecuteStmt:
+		return CloneRefOfExecuteStmt(in)
 	case *ExistsExpr:
 		return CloneRefOfExistsExpr(in)
 	case *ExplainStmt:
@@ -872,6 +874,17 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
 	out.Comments = CloneComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfExecuteStmt creates a deep clone of the input.
+func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.Arguments = CloneColumns(n.Arguments)
 	return &out
 }
 
@@ -2395,6 +2408,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ExecuteStmt:
+		return CloneRefOfExecuteStmt(in)
 	case *ExplainStmt:
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:

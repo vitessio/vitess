@@ -620,6 +620,13 @@ type (
 		StatementIdentifier ColIdent
 	}
 
+	// ExecuteStmt represents an Execute Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
+	ExecuteStmt struct {
+		Name      ColIdent
+		Arguments Columns
+	}
+
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
 
@@ -679,6 +686,7 @@ func (*CallProc) iStatement()          {}
 func (*ExplainStmt) iStatement()       {}
 func (*ExplainTab) iStatement()        {}
 func (*PrepareStmt) iStatement()       {}
+func (*ExecuteStmt) iStatement()       {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}

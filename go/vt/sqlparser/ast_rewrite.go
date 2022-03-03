@@ -126,6 +126,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
 		return a.rewriteRefOfDropView(parent, node, replacer)
+	case *ExecuteStmt:
+		return a.rewriteRefOfExecuteStmt(parent, node, replacer)
 	case *ExistsExpr:
 		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *ExplainStmt:
@@ -1913,6 +1915,38 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropView).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.Arguments, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Arguments = newNode.(Columns)
 	}) {
 		return false
 	}
@@ -5633,6 +5667,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
 		return a.rewriteRefOfDropView(parent, node, replacer)
+	case *ExecuteStmt:
+		return a.rewriteRefOfExecuteStmt(parent, node, replacer)
 	case *ExplainStmt:
 		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
