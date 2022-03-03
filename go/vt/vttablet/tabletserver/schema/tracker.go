@@ -286,17 +286,22 @@ func encodeString(in string) string {
 
 // MustReloadSchemaOnDDL returns true if the ddl is for the db which is part of the workflow and is not an online ddl artifact
 func MustReloadSchemaOnDDL(sql string, dbname string) bool {
+	fmt.Printf("======= ZZZ MustReloadSchemaOnDDL: %v for %v\n", sql, dbname)
+
 	ast, err := sqlparser.Parse(sql)
 	if err != nil {
+		fmt.Printf("======= ZZZ MustReloadSchemaOnDDL: err= %v\n", err)
 		return false
 	}
 	switch stmt := ast.(type) {
 	case sqlparser.DBDDLStatement:
+		fmt.Printf("======= ZZZ MustReloadSchemaOnDDL: DBDDLStatement\n")
 		return false
 	case sqlparser.DDLStatement:
 		tables := []sqlparser.TableName{stmt.GetTable()}
 		tables = append(tables, stmt.GetToTables()...)
 		for _, table := range tables {
+			fmt.Printf("======= ZZZ MustReloadSchemaOnDDL: table= %v\n", table)
 			if table.IsEmpty() {
 				continue
 			}
@@ -305,10 +310,13 @@ func MustReloadSchemaOnDDL(sql string, dbname string) bool {
 			}
 			tableName := table.Name.String()
 			if schema.IsOnlineDDLTableName(tableName) {
+				fmt.Printf("======= ZZZ MustReloadSchemaOnDDL: IsOnlineDDLTableName\n")
 				continue
 			}
+			fmt.Printf("======= ZZZ MustReloadSchemaOnDDL: YESSSSS\n")
 			return true
 		}
 	}
+	fmt.Printf("======= ZZZ MustReloadSchemaOnDDL: NOOOOOOOO\n")
 	return false
 }
