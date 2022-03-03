@@ -21,6 +21,17 @@ jobs:
 
       - name: Get dependencies
         run: |
+          # Install Minikube
+          wget https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          sudo cp minikube-linux-amd64 /usr/local/bin/minikube
+          sudo chmod 755 /usr/local/bin/minikube
+
+          # Install kubectl
+          curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+          kubectl version -o json
+
           go mod download
 
       - name: Build
@@ -28,16 +39,16 @@ jobs:
           make build
 
       - name: Start minikube
-        uses: medyagh/setup-minikube@master
-        with:
-          # Creating minikube using all core of the hosted runners.
-          # Equinix's c3.small.x86 has 8 cores.
-          cpus: 8
-          memory: 4000m
-          kubernetes-version: v1.22.7
+        run: |
+          minikube start --kubernetes-version=v1.22.7 --cpus=6 --memory=8000 --disk-size=15g
 
       - name: operator example
         timeout-minutes: 20
         run: |
           source build.env
           eatmydata -- go run test.go -print-log -follow -docker=false -skip-build operator_example
+
+      - name: Clean up minikube
+        if: always()
+        run: |
+          minikube delete --all --purge
