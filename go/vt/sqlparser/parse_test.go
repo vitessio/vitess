@@ -2304,6 +2304,27 @@ var (
 			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
 			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
 		}, {
+			input: "FLUSH PRIVILEGES",
+			output: "flush privileges",
+		}, {
+			input: "FLUSH BINARY LOGS",
+			output: "flush binary logs",
+		}, {
+			input: "FLUSH USER_RESOURCES",
+			output: "flush user_resources",
+		}, {
+			input: "FLUSH RELAY LOGS",
+			output: "flush relay logs",
+		}, {
+			input: "FLUSH LOCAL RELAY LOGS FOR CHANNEL 'connections'",
+			output: "flush local relay logs for channel connections",
+		}, {
+			input: "FLUSH LOCAL OPTIMIZER_COSTS",
+			output: "flush local optimizer_costs",
+		}, {
+			input: "FLUSH NO_WRITE_TO_BINLOG HOSTS",
+			output: "flush no_write_to_binlog hosts",
+		}, {
 			input:  "SHOW GRANTS",
 			output: "show grants",
 		}, {
