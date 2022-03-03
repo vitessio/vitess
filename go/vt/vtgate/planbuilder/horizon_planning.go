@@ -459,7 +459,12 @@ func (hp *horizonPlanning) planAggregations(ctx *plancontext.PlanningContext, pl
 			return nil, err
 		}
 
-		return resultPlan, nil
+		newPlan, err := hp.planHaving(ctx, resultPlan)
+		if err != nil {
+			return nil, err
+		}
+
+		return newPlan, nil
 	}
 
 	if hp.qp.ProjectionError != nil {

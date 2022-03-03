@@ -1,8 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-"select a.val1, count(*) from user a join user_extra t on a.val2 = t.id group by a.val1"
-{
-
-}
-{
-
-}
