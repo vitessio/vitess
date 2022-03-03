@@ -43,6 +43,8 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "vitess.io/vitess/go/vt/proto/vttest";
 
+import "vschema.proto";
+
 package vttest;
 
 // Shard describes a single shard in a keyspace.
@@ -89,4 +91,7 @@ message VTTestTopology {
 
   // list of cells the keyspaces reside in. Vtgate is started in only the first cell.
   repeated string cells = 2;
+
+  // routing rules for the topology.
+  vschema.RoutingRules routing_rules = 3;
 }

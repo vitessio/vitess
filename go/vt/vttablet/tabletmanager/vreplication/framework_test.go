@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
@@ -489,6 +491,7 @@ func shouldIgnoreQuery(query string) bool {
 func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...string) {
 	extraQueries := withDDL.DDLs()
 	extraQueries = append(extraQueries, withDDLInitialQueries...)
+	extraQueries = append(extraQueries, withddl.QueryToTriggerWithDDL)
 	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
