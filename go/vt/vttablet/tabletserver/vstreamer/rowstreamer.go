@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -121,7 +122,15 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("======= ZZZ rowStreamer.buildPlan\n")
+
 	st, err := rs.se.GetTableForPos(fromTable, "")
+	if err != nil {
+		fmt.Printf("======= ZZZ rowStreamer.buildPlan - extra reload!\n")
+		rs.se.ReloadAt(context.Background(), mysql.Position{})
+		fmt.Printf("======= ZZZ rowStreamer.buildPlan - now reading again!\n")
+		st, err = rs.se.GetTableForPos(fromTable, "")
+	}
 	if err != nil {
 		return err
 	}
