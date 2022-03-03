@@ -240,6 +240,7 @@ var keywords = []keyword{
 	{"event", EVENT},
 	{"exchange", EXCHANGE},
 	{"exclusive", EXCLUSIVE},
+	{"execute", EXECUTE},
 	{"exists", EXISTS},
 	{"exit", UNUSED},
 	{"explain", EXPLAIN},

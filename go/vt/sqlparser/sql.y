@@ -240,7 +240,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> REVERT
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE
+%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
@@ -319,6 +319,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
 %type <statement> prepare_statement
+%type <statement> execute_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <with> with_clause_opt with_clause
@@ -395,7 +396,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
-%type <columns> ins_column_list column_list column_list_opt index_list
+%type <columns> ins_column_list column_list column_list_opt index_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -514,6 +515,7 @@ command:
 | call_statement
 | revert_statement
 | prepare_statement
+| execute_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -3799,6 +3801,25 @@ prepare_statement:
     $$ = &PrepareStmt{Name:$2, StatementIdentifier: $4}
   }
 
+execute_statement:
+  EXECUTE sql_id
+  {
+    $$ = &ExecuteStmt{Name:$2}
+  }
+| EXECUTE sql_id USING execute_statement_list_opt
+  {
+    $$ = &ExecuteStmt{Name:$2, Arguments: $4}
+  }
+
+execute_statement_list_opt:
+  {
+    $$ = nil
+  }
+| column_list
+  {
+    $$ = $1
+  }
+
 select_expression_list_opt:
   {
     $$ = nil
@@ -4169,7 +4190,7 @@ index_hint_list_opt:
   }
 
 index_hint_list:
-index_hint 
+index_hint
   {
     $$ = IndexHints{$1}
   }
@@ -5716,6 +5737,7 @@ reserved_keyword:
 | DROP
 | ELSE
 | ESCAPE
+| EXECUTE
 | EXISTS
 | EXPLAIN
 | EXTRACT

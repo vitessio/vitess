@@ -126,6 +126,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
 		return VisitRefOfDropView(in, f)
+	case *ExecuteStmt:
+		return VisitRefOfExecuteStmt(in, f)
 	case *ExistsExpr:
 		return VisitRefOfExistsExpr(in, f)
 	case *ExplainStmt:
@@ -1063,6 +1065,21 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 		return err
 	}
 	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Arguments, f); err != nil {
 		return err
 	}
 	return nil
@@ -2913,6 +2930,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
 		return VisitRefOfDropView(in, f)
+	case *ExecuteStmt:
+		return VisitRefOfExecuteStmt(in, f)
 	case *ExplainStmt:
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:

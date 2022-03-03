@@ -338,6 +338,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfDropView(a, b)
+	case *ExecuteStmt:
+		b, ok := inB.(*ExecuteStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExecuteStmt(a, b)
 	case *ExistsExpr:
 		b, ok := inB.(*ExistsExpr)
 		if !ok {
@@ -1613,6 +1619,18 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 	return a.IfExists == b.IfExists &&
 		EqualsTableNames(a.FromTables, b.FromTables) &&
 		EqualsComments(a.Comments, b.Comments)
+}
+
+// EqualsRefOfExecuteStmt does deep equals between the two objects.
+func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsColumns(a.Arguments, b.Arguments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.
@@ -3822,6 +3840,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfDropView(a, b)
+	case *ExecuteStmt:
+		b, ok := inB.(*ExecuteStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExecuteStmt(a, b)
 	case *ExplainStmt:
 		b, ok := inB.(*ExplainStmt)
 		if !ok {
