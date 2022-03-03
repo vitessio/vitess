@@ -144,7 +144,7 @@ type Executor struct {
 	pool                  *connpool.Pool
 	tabletTypeFunc        func() topodatapb.TabletType
 	ts                    *topo.Server
-	toggleBufferTableFunc func(tableName string, bufferQueries bool)
+	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool)
 	tabletAlias           *topodatapb.TabletAlias
 
 	keyspace string
@@ -204,7 +204,7 @@ func newGCTableRetainTime() time.Time {
 // NewExecutor creates a new gh-ost executor.
 func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server,
 	tabletTypeFunc func() topodatapb.TabletType,
-	toggleBufferTableFunc func(tableName string, bufferQueries bool),
+	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
 	return &Executor{
 		env:         env,
@@ -667,9 +667,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
+	bufferingCtx, bufferingContextCancel := context.WithCancel(ctx)
+	defer bufferingContextCancel()
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
-		e.toggleBufferTableFunc(onlineDDL.Table, bufferQueries)
+		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
 			// release
 			if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
@@ -681,6 +683,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
+			bufferingContextCancel()
 			toggleBuffering(false)
 		})
 	}
@@ -715,6 +718,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
 		}
+	} else {
+		// As a temporary race condition mitigation step, while working on a full solution, we take a short sleep. This will let queries that are past
+		// the ACL/Rules check and are just about to query the table, to get their work done, without harming the logic.
+		time.Sleep(250 * time.Millisecond)
 	}
 
 	// We have just created a gaping hole, the original table does not exist.
