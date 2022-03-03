@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -759,9 +758,7 @@ func (sm *StreamMigrator) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, 
 func (sm *StreamMigrator) identifyRuleType(rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	if !ok {
-		if schema.IsInternalOperationTableName(rule.Match) {
-			log.Infof("found internal table %s, ignoring in rule identification", rule.Match)
-		} else {
+		if !schema.IsInternalOperationTableName(rule.Match) {
 			return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
 		}
 	}
