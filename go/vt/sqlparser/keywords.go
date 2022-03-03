@@ -197,6 +197,7 @@ var keywords = []keyword{
 	{"day_second", DAY_SECOND},
 	{"date", DATE},
 	{"datetime", DATETIME},
+	{"deallocate", DEALLOCATE},
 	{"dec", UNUSED},
 	{"decimal", DECIMAL_TYPE},
 	{"declare", UNUSED},

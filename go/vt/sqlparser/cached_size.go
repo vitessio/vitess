@@ -789,6 +789,18 @@ func (cached *CurTimeFuncExpr) CachedSize(alloc bool) int64 {
 	size += cached.Fsp.CachedSize(true)
 	return size
 }
+func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
+	return size
+}
 func (cached *Default) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

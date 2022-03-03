@@ -1213,7 +1213,13 @@ func (node *ExecuteStmt) formatFast(buf *TrackedBuffer) {
 		n.formatFast(buf)
 		prefix = ", "
 	}
+}
 
+// formatFast formats the node.
+func (node *DeallocateStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteString(" prepare ")
+	node.Name.formatFast(buf)
 }
 
 // formatFast formats the node.

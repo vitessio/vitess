@@ -903,7 +903,11 @@ func (node *ExecuteStmt) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
+}
 
+// Format formats the node.
+func (node *DeallocateStmt) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s prepare %v", node.Type.ToString(), node.Name)
 }
 
 // Format formats the node.
