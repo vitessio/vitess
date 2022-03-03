@@ -24,6 +24,8 @@ import (
 	"path"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vschema"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -143,6 +145,23 @@ func CreateTablet(
 		tm:  tm,
 	}
 	return nil
+}
+
+// InitRoutingRules saves the routing rules into ts and reloads the vschema.
+func InitRoutingRules(
+	ctx context.Context,
+	ts *topo.Server,
+	rr *vschema.RoutingRules,
+) error {
+	if rr == nil {
+		return nil
+	}
+
+	if err := ts.SaveRoutingRules(ctx, rr); err != nil {
+		return err
+	}
+
+	return ts.RebuildSrvVSchema(ctx, nil)
 }
 
 // InitTabletMap creates the action tms and associated data structures
