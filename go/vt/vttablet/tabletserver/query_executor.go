@@ -391,29 +391,29 @@ func (qre *QueryExecutor) checkPermissions() error {
 		username = ci.Username()
 	}
 
-	ctx, cancel := context.WithTimeout(qre.ctx, maxQueryBufferDuration)
+	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, maxQueryBufferDuration)
 	defer cancel()
-	for goodToProceed := false; !goodToProceed; {
-		action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
-		switch action {
-		case rules.QRFail:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
-		case rules.QRFailRetry:
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
-		case rules.QRBuffer:
+
+	action, ruleCancelCtx, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+	switch action {
+	case rules.QRFail:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
+	case rules.QRFailRetry:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
+	case rules.QRBuffer:
+		if ruleCancelCtx != nil {
 			// We buffer up to some timeout. The timeout is determined by ctx.Done().
-			// If we're not at timeout yet, then we sleep for a short amount of time before
-			// resuming the loop.
+			// If we're not at timeout yet, we fail the query
 			select {
-			case <-time.After(time.Second):
-				// keep iteration
-			case <-ctx.Done():
+			case <-ruleCancelCtx.Done():
+				// good! We have buffered the query, and buffering is completed
+			case <-bufferingTimeoutCtx.Done():
+				// Sorry, timeout while waiting for buffering to complete
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout in rule: %s", desc)
 			}
-		default:
-			// no rules against this query. leave the loop
-			goodToProceed = true
 		}
+	default:
+		// no rules against this query. Good to proceed
 	}
 	// Skip ACL check for queries against the dummy dual table
 	if qre.plan.TableName().String() == "dual" {
