@@ -639,7 +639,7 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 		}
 	}
 
-	if vtable.Type == vindexes.TypeReference {
+	if vtable != nil && vtable.Type == vindexes.TypeReference {
 		return StreamTypeReference, nil
 	}
 
@@ -766,7 +766,7 @@ func (sm *StreamMigrator) identifyRuleType(rule *binlogdatapb.Rule) (StreamType,
 		}
 	}
 
-	if vtable.Type == vindexes.TypeReference {
+	if vtable != nil && vtable.Type == vindexes.TypeReference {
 		return StreamTypeReference, nil
 	}
 
