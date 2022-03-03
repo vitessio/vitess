@@ -23,7 +23,10 @@ import (
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
+
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
@@ -49,6 +52,57 @@ func (client *localVtctldClient) ApplySchema(ctx context.Context, in *vtctldatap
 // ApplyVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatapb.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	return client.s.ApplyVSchema(ctx, in)
+}
+
+type backupStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.BackupResponse
+}
+
+func (stream *backupStreamAdapter) Recv() (*vtctldatapb.BackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *backupStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// Backup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
+	stream := &backupStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.BackupResponse, 1),
+	}
+	go func() {
+		err := client.s.Backup(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
