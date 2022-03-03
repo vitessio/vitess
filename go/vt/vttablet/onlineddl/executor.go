@@ -717,7 +717,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	}
 
-	// We have just greated a gaping hole, the original table does not exist.
+	// We have just created a gaping hole, the original table does not exist.
 	// we expect to fill that hole by swapping in the vrepl table. But if anything goes wrong we prepare
 	// to rename the table back:
 	defer func() {
