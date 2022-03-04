@@ -3498,3 +3498,56 @@ Gen4 error: cannot push projections in ordered aggregates
     ]
   }
 }
+
+# we have to track the order of distinct aggregation expressions
+"select val2, count(distinct val1), count(*) from user group by val2"
+{
+  "QueryType": "SELECT",
+  "Original": "select val2, count(distinct val1), count(*) from user group by val2",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1) AS count(distinct val1), count(2)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` where 1 != 1 group by val2, val1, weight_string(val2), weight_string(val1)",
+        "OrderBy": "(0|3) ASC, (1|4) ASC",
+        "Query": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` group by val2, val1, weight_string(val2), weight_string(val1) order by val2 asc, val1 asc",
+        "ResultColumns": 3,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select val2, count(distinct val1), count(*) from user group by val2",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|4) AS count(distinct val1), sum(2) AS count(*)",
+    "GroupBy": "(0|3)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` where 1 != 1 group by val2, weight_string(val2), val1, weight_string(val1)",
+        "OrderBy": "(0|3) ASC, (1|4) ASC",
+        "Query": "select val2, val1, count(*), weight_string(val2), weight_string(val1) from `user` group by val2, weight_string(val2), val1, weight_string(val1) order by val2 asc, val1 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}

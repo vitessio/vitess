@@ -67,12 +67,16 @@ func pushAggrOnRoute(
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
 	}
 
-	// creating a copy of the original grouping list, so we can reorder it later
-	originalGrouping := make([]abstract.GroupBy, len(grouping))
-	vtgateAggregation := make([][]offsets, 0, len(aggregations))
+	var originalGrouping []abstract.GroupBy
+	var vtgateAggregation [][]offsets
+
 	// aggIdx keeps track of the index of the aggregations we have processed so far. Starts with 0, goes all the way to len(aggregations)
 	aggrIdx := 0
 	if !ignoreOutputOrder {
+		// creating a copy of the original grouping list, so we can reorder them
+		// we do the actual copying inside the if statement below
+		originalGrouping = make([]abstract.GroupBy, len(grouping))
+		vtgateAggregation = make([][]offsets, 0, len(aggregations))
 		copy(originalGrouping, grouping)
 
 		// If we care for the output order, we first sort the aggregations and the groupBys independently
