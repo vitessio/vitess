@@ -718,6 +718,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 		distinct = &abstract.GroupBy{
 			Inner:         inner,
 			WeightStrExpr: innerWS,
+			InnerIndex:    expr.Index,
 		}
 	}
 	return
