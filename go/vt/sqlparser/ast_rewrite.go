@@ -174,6 +174,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *KeyState:
 		return a.rewriteRefOfKeyState(parent, node, replacer)
+	case *LTrimFuncExpr:
+		return a.rewriteRefOfLTrimFuncExpr(parent, node, replacer)
 	case *Limit:
 		return a.rewriteRefOfLimit(parent, node, replacer)
 	case ListArg:
@@ -2657,6 +2659,33 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfLTrimFuncExpr(parent SQLNode, node *LTrimFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
+		parent.(*LTrimFuncExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -5293,6 +5322,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *LTrimFuncExpr:
+		return a.rewriteRefOfLTrimFuncExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *SubstrExpr:
@@ -5455,6 +5486,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
+	case *LTrimFuncExpr:
+		return a.rewriteRefOfLTrimFuncExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:

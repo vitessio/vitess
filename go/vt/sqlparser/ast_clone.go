@@ -175,6 +175,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJoinTableExpr(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
+	case *LTrimFuncExpr:
+		return CloneRefOfLTrimFuncExpr(in)
 	case *Limit:
 		return CloneRefOfLimit(in)
 	case ListArg:
@@ -1128,6 +1130,16 @@ func CloneRefOfKeyState(n *KeyState) *KeyState {
 	return &out
 }
 
+// CloneRefOfLTrimFuncExpr creates a deep clone of the input.
+func CloneRefOfLTrimFuncExpr(n *LTrimFuncExpr) *LTrimFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.StringArg = CloneExpr(n.StringArg)
+	return &out
+}
+
 // CloneRefOfLimit creates a deep clone of the input.
 func CloneRefOfLimit(n *Limit) *Limit {
 	if n == nil {
@@ -2050,6 +2062,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *LTrimFuncExpr:
+		return CloneRefOfLTrimFuncExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *SubstrExpr:
@@ -2226,6 +2240,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *LTrimFuncExpr:
+		return CloneRefOfLTrimFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:

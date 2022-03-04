@@ -174,6 +174,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJoinTableExpr(in, f)
 	case *KeyState:
 		return VisitRefOfKeyState(in, f)
+	case *LTrimFuncExpr:
+		return VisitRefOfLTrimFuncExpr(in, f)
 	case *Limit:
 		return VisitRefOfLimit(in, f)
 	case ListArg:
@@ -1397,6 +1399,18 @@ func VisitRefOfKeyState(in *KeyState, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLTrimFuncExpr(in *LTrimFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.StringArg, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLimit(in *Limit, f Visit) error {
 	if in == nil {
 		return nil
@@ -2590,6 +2604,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *LTrimFuncExpr:
+		return VisitRefOfLTrimFuncExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *SubstrExpr:
@@ -2752,6 +2768,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
 		return VisitRefOfIsExpr(in, f)
+	case *LTrimFuncExpr:
+		return VisitRefOfLTrimFuncExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:

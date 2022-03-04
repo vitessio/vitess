@@ -1917,6 +1917,12 @@ type Where struct {
 // WhereType is an enum for Where.Type
 type WhereType int8
 
+// LTrimFuncExpr represents a LTRIM function
+// More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_ltrim
+type LTrimFuncExpr struct {
+	StringArg Expr
+}
+
 // *********** Expressions
 type (
 	// Expr represents an expression.
@@ -2212,6 +2218,7 @@ func (*MatchExpr) iExpr()            {}
 func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
+func (*LTrimFuncExpr) iExpr()        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2221,6 +2228,7 @@ func (*WeightStringFuncExpr) iCallable() {}
 func (*CurTimeFuncExpr) iCallable()      {}
 func (*ValuesFuncExpr) iCallable()       {}
 func (*ConvertExpr) iCallable()          {}
+func (*LTrimFuncExpr) iCallable()        {}
 func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}
 func (*MatchExpr) iCallable()            {}

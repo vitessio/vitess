@@ -482,6 +482,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfKeyState(a, b)
+	case *LTrimFuncExpr:
+		b, ok := inB.(*LTrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLTrimFuncExpr(a, b)
 	case *Limit:
 		b, ok := inB.(*Limit)
 		if !ok {
@@ -1915,6 +1921,17 @@ func EqualsRefOfKeyState(a, b *KeyState) bool {
 	return a.Enable == b.Enable
 }
 
+// EqualsRefOfLTrimFuncExpr does deep equals between the two objects.
+func EqualsRefOfLTrimFuncExpr(a, b *LTrimFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.StringArg, b.StringArg)
+}
+
 // EqualsRefOfLimit does deep equals between the two objects.
 func EqualsRefOfLimit(a, b *Limit) bool {
 	if a == b {
@@ -3080,6 +3097,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *LTrimFuncExpr:
+		b, ok := inB.(*LTrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLTrimFuncExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -3461,6 +3484,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIsExpr(a, b)
+	case *LTrimFuncExpr:
+		b, ok := inB.(*LTrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLTrimFuncExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {

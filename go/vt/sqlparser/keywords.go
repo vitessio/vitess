@@ -350,6 +350,7 @@ var keywords = []keyword{
 	{"longtext", LONGTEXT},
 	{"loop", UNUSED},
 	{"low_priority", LOW_PRIORITY},
+	{"ltrim", LTRIM},
 	{"manifest", MANIFEST},
 	{"master_bind", UNUSED},
 	{"match", MATCH},

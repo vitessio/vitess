@@ -284,6 +284,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GROUP_CONCAT SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
+%token <str> LTRIM
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -4430,6 +4431,10 @@ function_call_keyword
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
+| LTRIM openb expression closeb
+  {
+    $$ = &LTrimFuncExpr{StringArg: $3}
+  }
 | BINARY simple_expr %prec UNARY
   {
     // From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary
@@ -5940,6 +5945,7 @@ non_reserved_keyword:
 | LOGS
 | LONGBLOB
 | LONGTEXT
+| LTRIM
 | MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
