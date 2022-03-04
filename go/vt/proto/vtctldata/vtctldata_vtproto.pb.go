@@ -1199,10 +1199,10 @@ func (m *ApplySchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x3a
 	}
-	if len(m.RequestContext) > 0 {
-		i -= len(m.RequestContext)
-		copy(dAtA[i:], m.RequestContext)
-		i = encodeVarint(dAtA, i, uint64(len(m.RequestContext)))
+	if len(m.MigrationContext) > 0 {
+		i -= len(m.MigrationContext)
+		copy(dAtA[i:], m.MigrationContext)
+		i = encodeVarint(dAtA, i, uint64(len(m.MigrationContext)))
 		i--
 		dAtA[i] = 0x32
 	}
@@ -8329,7 +8329,7 @@ func (m *ApplySchemaRequest) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
-	l = len(m.RequestContext)
+	l = len(m.MigrationContext)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -14117,7 +14117,7 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 6:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RequestContext", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field MigrationContext", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -14145,7 +14145,7 @@ func (m *ApplySchemaRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.RequestContext = string(dAtA[iNdEx:postIndex])
+			m.MigrationContext = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 7:
 			if wireType != 2 {

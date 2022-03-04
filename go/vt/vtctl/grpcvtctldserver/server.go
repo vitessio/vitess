@@ -189,9 +189,9 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		return resp, vterrors.Wrapf(err, "unable to create execution UUID")
 	}
 
-	requestContext := req.RequestContext
-	if requestContext == "" {
-		requestContext = fmt.Sprintf("vtctl:%s", executionUUID)
+	migrationContext := req.MigrationContext
+	if migrationContext == "" {
+		migrationContext = fmt.Sprintf("vtctl:%s", executionUUID)
 	}
 
 	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
@@ -210,7 +210,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		logstream = append(logstream, e)
 	})
 
-	executor := schemamanager.NewTabletExecutor(requestContext, s.ts, s.tmc, logger, waitReplicasTimeout)
+	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
 	if req.AllowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
