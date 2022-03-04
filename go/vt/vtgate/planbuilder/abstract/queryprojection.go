@@ -66,8 +66,10 @@ type (
 		// This is to add the distinct function expression in grouping column for pushing down but not be to used as grouping key at VTGate level.
 		// Starts with 1 so that default (0) means unassigned.
 		DistinctAggrIndex int
+
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
-		InnerIndex *int
+		InnerIndex  *int
+		aliasedExpr *sqlparser.AliasedExpr
 	}
 )
 
@@ -78,6 +80,26 @@ func (b GroupBy) AsOrderBy() OrderBy {
 			Direction: sqlparser.AscOrder,
 		},
 		WeightStrExpr: b.WeightStrExpr,
+	}
+}
+
+func (b GroupBy) AsAliasedExpr() *sqlparser.AliasedExpr {
+	if b.aliasedExpr != nil {
+		return b.aliasedExpr
+	}
+	col, isColName := b.Inner.(*sqlparser.ColName)
+	if isColName && b.WeightStrExpr != b.Inner {
+		return &sqlparser.AliasedExpr{
+			Expr: b.WeightStrExpr,
+			As:   col.Name,
+		}
+	}
+	if !isColName && b.WeightStrExpr != b.Inner {
+		panic("this should not happen - different inner and weighStringExpr and not a column alias")
+	}
+
+	return &sqlparser.AliasedExpr{
+		Expr: b.WeightStrExpr,
 	}
 }
 
@@ -115,7 +137,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		return nil, err
 	}
 	for _, group := range sel.GroupBy {
-		selectExprIdx := qp.FindSelectExprIndexForExpr(group)
+		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(group)
 		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group, semTable)
 		if err != nil {
 			return nil, err
@@ -125,7 +147,14 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 			return nil, err
 		}
 
-		qp.groupByExprs = append(qp.groupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr, InnerIndex: selectExprIdx})
+		groupBy := GroupBy{
+			Inner:         expr,
+			WeightStrExpr: weightStrExpr,
+			InnerIndex:    selectExprIdx,
+			aliasedExpr:   aliasExpr,
+		}
+
+		qp.groupByExprs = append(qp.groupByExprs, groupBy)
 	}
 
 	err = qp.addOrderBy(sel.OrderBy, semTable)
@@ -457,7 +486,7 @@ func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
 
 // FindSelectExprIndexForExpr returns the index of the given expression in the select expressions, if it is part of it
 // returns -1 otherwise.
-func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) *int {
+func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) (*int, *sqlparser.AliasedExpr) {
 	colExpr, isCol := expr.(*sqlparser.ColName)
 
 	for idx, selectExpr := range qp.SelectExprs {
@@ -468,14 +497,14 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) *int 
 		if isCol {
 			isAliasExpr := !aliasedExpr.As.IsEmpty()
 			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
-				return &idx
+				return &idx, aliasedExpr
 			}
 		}
 		if sqlparser.EqualsExpr(aliasedExpr.Expr, expr) {
-			return &idx
+			return &idx, aliasedExpr
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // AlignGroupByAndOrderBy aligns the group by and order by columns, so they are in the same order
