@@ -226,6 +226,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionValueRange(parent, node, replacer)
 	case Partitions:
 		return a.rewritePartitions(parent, node, replacer)
+	case *RTrimFuncExpr:
+		return a.rewriteRefOfRTrimFuncExpr(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
 	case *ReferenceDefinition:
@@ -3412,6 +3414,33 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 	}
 	return true
 }
+func (a *application) rewriteRefOfRTrimFuncExpr(parent SQLNode, node *RTrimFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
+		parent.(*RTrimFuncExpr).StringArg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *ReferenceDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5326,6 +5355,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfLTrimFuncExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *RTrimFuncExpr:
+		return a.rewriteRefOfRTrimFuncExpr(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
@@ -5500,6 +5531,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNullVal(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
+	case *RTrimFuncExpr:
+		return a.rewriteRefOfRTrimFuncExpr(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:

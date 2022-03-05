@@ -457,6 +457,7 @@ var keywords = []keyword{
 	{"row_format", ROW_FORMAT},
 	{"row_number", UNUSED},
 	{"rows", UNUSED},
+	{"rtrim", RTRIM},
 	{"s3", S3},
 	{"savepoint", SAVEPOINT},
 	{"schema", SCHEMA},

@@ -227,6 +227,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
+	case *RTrimFuncExpr:
+		return CloneRefOfRTrimFuncExpr(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -1391,6 +1393,16 @@ func ClonePartitions(n Partitions) Partitions {
 	return res
 }
 
+// CloneRefOfRTrimFuncExpr creates a deep clone of the input.
+func CloneRefOfRTrimFuncExpr(n *RTrimFuncExpr) *RTrimFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.StringArg = CloneExpr(n.StringArg)
+	return &out
+}
+
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
 func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition {
 	if n == nil {
@@ -2066,6 +2078,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfLTrimFuncExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
+	case *RTrimFuncExpr:
+		return CloneRefOfRTrimFuncExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
@@ -2254,6 +2268,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNullVal(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
+	case *RTrimFuncExpr:
+		return CloneRefOfRTrimFuncExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:

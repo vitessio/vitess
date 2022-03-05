@@ -638,6 +638,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsPartitions(a, b)
+	case *RTrimFuncExpr:
+		b, ok := inB.(*RTrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRTrimFuncExpr(a, b)
 	case ReferenceAction:
 		b, ok := inB.(ReferenceAction)
 		if !ok {
@@ -2226,6 +2232,17 @@ func EqualsPartitions(a, b Partitions) bool {
 	return true
 }
 
+// EqualsRefOfRTrimFuncExpr does deep equals between the two objects.
+func EqualsRefOfRTrimFuncExpr(a, b *RTrimFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.StringArg, b.StringArg)
+}
+
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.
 func EqualsRefOfReferenceDefinition(a, b *ReferenceDefinition) bool {
 	if a == b {
@@ -3109,6 +3126,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *RTrimFuncExpr:
+		b, ok := inB.(*RTrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRTrimFuncExpr(a, b)
 	case *SubstrExpr:
 		b, ok := inB.(*SubstrExpr)
 		if !ok {
@@ -3526,6 +3549,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *RTrimFuncExpr:
+		b, ok := inB.(*RTrimFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRTrimFuncExpr(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {

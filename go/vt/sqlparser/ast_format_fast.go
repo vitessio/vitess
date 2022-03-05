@@ -1620,6 +1620,13 @@ func (node *LTrimFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *RTrimFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("rtrim(")
+	buf.printExpr(node, node.StringArg, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
 func (node *WeightStringFuncExpr) formatFast(buf *TrackedBuffer) {
 	if node.As != nil {
 		buf.WriteString("weight_string(")
