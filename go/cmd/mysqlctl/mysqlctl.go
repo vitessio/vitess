@@ -250,7 +250,7 @@ func main() {
 
 	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
 
-	action := flag.Arg(0)
+	action := _flag.Arg(0)
 	for _, cmd := range commands {
 		if cmd.name == action {
 			subFlags := flag.NewFlagSet(action, flag.ExitOnError)
@@ -260,7 +260,7 @@ func main() {
 				subFlags.PrintDefaults()
 			}
 
-			if err := cmd.method(subFlags, flag.Args()[1:]); err != nil {
+			if err := cmd.method(subFlags, _flag.Args()[1:]); err != nil {
 				log.Error(err)
 				exit.Return(1)
 			}

@@ -53,6 +53,40 @@ func Parse() {
 	warnOnMixedPositionalAndFlagArguments(goflag.Args(), log.Warningf)
 }
 
+// Args returns the positional arguments with the first double-dash ("--")
+// removed. If no double-dash was specified on the command-line, this is
+// equivalent to flag.Args() from the standard library flag package.
+func Args() (args []string) {
+	doubleDashIdx := -1
+	for i, arg := range goflag.Args() {
+		if arg == "--" {
+			doubleDashIdx = i
+			break
+		}
+
+		args = append(args, arg)
+	}
+
+	if doubleDashIdx != -1 {
+		args = append(args, goflag.Args()[doubleDashIdx+1:]...)
+	}
+
+	return args
+}
+
+// Arg returns the ith command-line argument after flags have been processed,
+// ignoring the first double-dash ("--") argument separator. If fewer than `i`
+// arguments were specified, the empty string is returned. If no double-dash was
+// specified, this is equivalent to flag.Arg(i) from the standard library flag
+// package.
+func Arg(i int) string {
+	if args := Args(); len(args) > i {
+		return args[i]
+	}
+
+	return ""
+}
+
 const (
 	singleDashLongFlagsWarning  = "Use of single-dash long flags is deprecated and will be removed in the next version of Vitess. Please use --%s instead"
 	mixedFlagsAndPosargsWarning = "Detected a dashed argument after a positional argument. " +

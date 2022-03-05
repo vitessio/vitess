@@ -239,7 +239,7 @@ func ParseFlags(cmd string) {
 		os.Exit(0)
 	}
 
-	args := flag.Args()
+	args := _flag.Args()
 	if len(args) > 0 {
 		flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
@@ -255,7 +255,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 		os.Exit(0)
 	}
 
-	args := flag.Args()
+	args := _flag.Args()
 	if len(args) == 0 {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}

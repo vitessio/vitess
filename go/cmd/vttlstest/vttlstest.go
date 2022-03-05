@@ -119,7 +119,7 @@ func main() {
 		fmt.Fprint(os.Stderr, doc)
 	}
 	_flag.Parse()
-	args := flag.Args()
+	args := _flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
 		exit.Return(1)

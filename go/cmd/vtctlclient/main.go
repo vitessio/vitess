@@ -77,9 +77,9 @@ func main() {
 
 	logger := logutil.NewConsoleLogger()
 
-	// We can't do much without a -server flag
+	// We can't do much without a --server flag
 	if *server == "" {
-		log.Error(errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
+		log.Error(errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
 		os.Exit(1)
 	}
 
@@ -89,7 +89,7 @@ func main() {
 	checkDeprecations(flag.Args())
 
 	err := vtctlclient.RunCommandAndWait(
-		ctx, *server, flag.Args(),
+		ctx, *server, _flag.Args(),
 		func(e *logutilpb.Event) {
 			logutil.LogEvent(logger, e)
 		})
@@ -99,7 +99,7 @@ func main() {
 		}
 
 		errStr := strings.Replace(err.Error(), "remote error: ", "", -1)
-		fmt.Printf("%s Error: %s\n", flag.Arg(0), errStr)
+		fmt.Printf("%s Error: %s\n", _flag.Arg(0), errStr)
 		log.Error(err)
 		os.Exit(1)
 	}

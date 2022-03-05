@@ -72,7 +72,7 @@ func main() {
 	defer exit.Recover()
 
 	_flag.Parse()
-	args := flag.Args()
+	args := _flag.Args()
 
 	servenv.Init()
 	defer servenv.Close()

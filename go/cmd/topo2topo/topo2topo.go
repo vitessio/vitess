@@ -54,7 +54,7 @@ func main() {
 	defer logutil.Flush()
 
 	_flag.Parse()
-	args := flag.Args()
+	args := _flag.Args()
 	if len(args) != 0 {
 		flag.Usage()
 		log.Exitf("topo2topo doesn't take any parameter.")

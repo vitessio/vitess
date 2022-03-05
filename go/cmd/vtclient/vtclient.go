@@ -149,7 +149,7 @@ func main() {
 
 func run() (*results, error) {
 	_flag.Parse()
-	args := flag.Args()
+	args := _flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()

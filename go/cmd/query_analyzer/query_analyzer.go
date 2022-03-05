@@ -19,7 +19,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -61,7 +60,7 @@ func (a stats) Less(i, j int) bool { return a[i].Count > a[j].Count }
 func main() {
 	defer exit.Recover()
 	_flag.Parse()
-	for _, filename := range flag.Args() {
+	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)
 		if err := processFile(filename); err != nil {
 			log.Errorf("processFile error: %v", err)

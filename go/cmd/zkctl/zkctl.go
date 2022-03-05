@@ -62,7 +62,7 @@ func main() {
 	defer logutil.Flush()
 
 	_flag.Parse()
-	args := flag.Args()
+	args := _flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()
@@ -72,7 +72,7 @@ func main() {
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
-	action := flag.Arg(0)
+	action := _flag.Arg(0)
 	var err error
 	switch action {
 	case "init":

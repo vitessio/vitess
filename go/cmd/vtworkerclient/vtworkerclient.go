@@ -53,7 +53,7 @@ func main() {
 	logger := logutil.NewConsoleLogger()
 
 	err := vtworkerclient.RunCommandAndWait(
-		ctx, *server, flag.Args(),
+		ctx, *server, _flag.Args(),
 		func(e *logutilpb.Event) {
 			logutil.LogEvent(logger, e)
 		})
