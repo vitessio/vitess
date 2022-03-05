@@ -79,7 +79,7 @@ func init() {
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
-	allddls = append(allddls, createOnlineDDLMigration)
+	allddls = append(allddls, createOnlineDDLMigrationTable)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, changeMasterToPrimary)

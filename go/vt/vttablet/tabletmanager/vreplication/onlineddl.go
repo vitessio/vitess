@@ -13,14 +13,17 @@ import (
 )
 
 const (
-	onlineDDLMigrationTableName = "_vt.vreplication_onlineddl_migration"
-	createOnlineDDLMigration    = `create table if not exists _vt.vreplication_onlineddl_migration(
+	onlineDDLMigrationTableName   = "_vt.vreplication_onlineddl_migration"
+	createOnlineDDLMigrationTable = `create table if not exists _vt.vreplication_onlineddl_migration(
 		id BIGINT(20) AUTO_INCREMENT,
 		uuid VARBINARY(256) NOT NULL,
 		state VARBINARY(100) NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		PRIMARY KEY (id))`
+	addOnlineDDLMigrationQuery           = "insert ignore into %s (uuid, state) values ('%s', '%s')"
+	getOnlineDDLMigrationQuery           = "select id, state from %s where uuid = '%s'"
+	markOnlineDDLMigrationCompletedQuery = "update %s set state = '%s' where uuid = '%s'"
 )
 
 var onlineDDLMu sync.Mutex
@@ -66,8 +69,7 @@ func (odm *OnlineDDLMigration) completed() bool {
 }
 
 func (odm *OnlineDDLMigration) get() error {
-	query := "select id, state from %s where uuid = '%s'"
-	query = fmt.Sprintf(query, onlineDDLMigrationTableName, odm.uuid)
+	query := fmt.Sprintf(getOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid)
 	qr, err := odm.dbClient.Execute(query)
 	if err != nil {
 		return err
@@ -92,8 +94,7 @@ func (odm *OnlineDDLMigration) register(ddl string) error {
 		return nil
 	}
 	log.Infof("uuid %s, registering ddl %s", odm.uuid, ddl)
-	query := "insert ignore into %s (uuid, state) values ('%s', '%s')"
-	query = fmt.Sprintf(query, onlineDDLMigrationTableName, odm.uuid, OnlineDDLMigrationStateInProgress)
+	query := fmt.Sprintf(addOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid, OnlineDDLMigrationStateInProgress)
 	qr, err := odm.dbClient.Execute(query)
 	if err != nil {
 		log.Infof("%s", err)
@@ -133,8 +134,8 @@ func (odm *OnlineDDLMigration) complete(ddl string) error {
 		log.Infof("%s", err)
 		return err
 	}
-	query := "update %s set state = '%s' where uuid = '%s'"
-	query = fmt.Sprintf(query, onlineDDLMigrationTableName, OnlineDDLMigrationStateComplete, odm.uuid)
+	query := fmt.Sprintf(markOnlineDDLMigrationCompletedQuery, onlineDDLMigrationTableName,
+		OnlineDDLMigrationStateComplete, odm.uuid)
 	log.Infof("execing update %s", query)
 	if _, err := odm.dbClient.Execute(query); err != nil {
 		log.Infof("%s", err)

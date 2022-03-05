@@ -48,6 +48,18 @@ func (vs *vstreamer) getMaterializedTableOnlineDDLEvent(table *onlineDDLMigratio
 	return materializedTableEvent, nil
 }
 
+// materializedTable is of the form _04f532ce_9265_11ec_893f_04ed332e05c2_20220220165152_vrepl
+func getUuidFromMaterializedTableName(materializedTableName string) string {
+	const (
+		uuidStartIndex = 1
+		uuidLength     = 35
+	)
+	if len(materializedTableName) < uuidStartIndex+uuidLength+1 {
+		return ""
+	}
+	return materializedTableName[uuidStartIndex : uuidStartIndex+uuidLength+1]
+}
+
 // sendVEventsForOnlineDDLMigrations sends MATERIALIZED_TABLE events to the target.
 // When vstreamer first starts it calls this function with an empty string so that events are sent for all active migrations.
 // When a materialized table is encountered for the first time this function is called just for that table.
@@ -126,12 +138,13 @@ func (vs *vstreamer) getRenameOnlineDDLEvent(query mysql.Query, dbname string) (
 		// rename query looks like
 		// "RENAME TABLE `customer` TO `_swap_07f1423b926511ecbbb504ed332e05c2`, `_04f532ce_9265_11ec_893f_04ed332e05c2_20220220165152_vrepl` TO `customer`, `_swap_07f1423b926511ecbbb504ed332e05c2` TO `_04f532ce_9265_11ec_893f_04ed332e05c2_20220220165152_vrepl`
 		if strings.Contains(strings.ToUpper(query.SQL), "RENAME TABLE") && len(stmt.GetToTables()) == 3 {
-			table := stmt.GetToTables()[2].Name.String()
-			if vtschema.IsOnlineDDLMaterializedTableName(table) {
+			materializedTable := stmt.GetToTables()[2].Name.String()
+			uuid := getUuidFromMaterializedTableName(materializedTable)
+			if vtschema.IsOnlineDDLMaterializedTableName(materializedTable) {
 				ev := &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_ONLINEDDLEVENT,
 					OnlineDdlEvent: &binlogdatapb.OnlineDDLEvent{
-						Uuid:      table[1:37],
+						Uuid:      uuid,
 						EventType: binlogdatapb.OnlineDDLEventType_RENAME_TABLE,
 						Ddl:       query.SQL,
 					},
