@@ -17,26 +17,26 @@ const (
 	createOnlineDDLMigrationTable = `create table if not exists _vt.vreplication_onlineddl_migration(
 		id BIGINT(20) AUTO_INCREMENT,
 		uuid VARBINARY(256) NOT NULL,
+		vrepl_id BIGINT(20) NOT NULL,
 		state VARBINARY(100) NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		PRIMARY KEY (id))`
-	addOnlineDDLMigrationQuery           = "insert ignore into %s (uuid, state) values ('%s', '%s')"
-	getOnlineDDLMigrationQuery           = "select id, state from %s where uuid = '%s'"
-	markOnlineDDLMigrationCompletedQuery = "update %s set state = '%s' where uuid = '%s'"
+	addOnlineDDLMigrationQuery           = "insert ignore into %s (uuid, state, vrepl_id) values ('%s', '%s', %d)"
+	getOnlineDDLMigrationQuery           = "select id, state from %s where uuid = '%s' and vrepl_id = %d"
+	markOnlineDDLMigrationCompletedQuery = "update %s set state = '%s' where uuid = '%s' and vrepl_id = %d"
 )
 
 var onlineDDLMu sync.Mutex
 
 type OnlineDDLMigration struct {
-	uuid  string
-	state string
-	id    int64
+	uuid     string
+	state    string
+	id       int64
+	vrepl_id int64
 
 	ctx context.Context
 	vp  *vplayer
-
-	dbClient *vdbClient
 }
 
 type OnlineDDLMigrationState string
@@ -47,12 +47,12 @@ const (
 	OnlineDDLMigrationStateComplete                           = "complete"
 )
 
-func newOnlineDDLMigration(ctx context.Context, vp *vplayer, uuid string, dbClient *vdbClient) (*OnlineDDLMigration, error) {
+func newOnlineDDLMigration(ctx context.Context, vp *vplayer, uuid string) (*OnlineDDLMigration, error) {
 	odm := &OnlineDDLMigration{
 		uuid:     uuid,
-		dbClient: dbClient,
 		ctx:      ctx,
 		vp:       vp,
+		vrepl_id: int64(vp.vr.id),
 	}
 	if err := odm.get(); err != nil {
 		return nil, err
@@ -69,8 +69,8 @@ func (odm *OnlineDDLMigration) completed() bool {
 }
 
 func (odm *OnlineDDLMigration) get() error {
-	query := fmt.Sprintf(getOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid)
-	qr, err := odm.dbClient.Execute(query)
+	query := fmt.Sprintf(getOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid, odm.vp.vr.id)
+	qr, err := odm.vp.vr.dbClient.Execute(query)
 	if err != nil {
 		return err
 	}
@@ -94,8 +94,8 @@ func (odm *OnlineDDLMigration) register(ddl string) error {
 		return nil
 	}
 	log.Infof("uuid %s, registering ddl %s", odm.uuid, ddl)
-	query := fmt.Sprintf(addOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid, OnlineDDLMigrationStateInProgress)
-	qr, err := odm.dbClient.Execute(query)
+	query := fmt.Sprintf(addOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid, OnlineDDLMigrationStateInProgress, odm.vp.vr.id)
+	qr, err := odm.vp.vr.dbClient.Execute(query)
 	if err != nil {
 		log.Infof("%s", err)
 		return err
@@ -106,7 +106,7 @@ func (odm *OnlineDDLMigration) register(ddl string) error {
 	}
 	odm.id = int64(qr.InsertID)
 	log.Infof("uuid %s, id %d, exec %s", odm.uuid, odm.id, ddl)
-	if _, err := odm.dbClient.ExecuteWithRetry(odm.ctx, ddl); err != nil {
+	if _, err := odm.vp.vr.dbClient.ExecuteWithRetry(odm.ctx, ddl); err != nil {
 		log.Infof("%s", err)
 		return err
 	}
@@ -130,14 +130,14 @@ func (odm *OnlineDDLMigration) complete(ddl string) error {
 	}
 	log.Infof("uuid %s, execing %s", odm.uuid, ddl)
 
-	if _, err := odm.dbClient.ExecuteWithRetry(odm.ctx, ddl); err != nil {
+	if _, err := odm.vp.vr.dbClient.ExecuteWithRetry(odm.ctx, ddl); err != nil {
 		log.Infof("%s", err)
 		return err
 	}
 	query := fmt.Sprintf(markOnlineDDLMigrationCompletedQuery, onlineDDLMigrationTableName,
-		OnlineDDLMigrationStateComplete, odm.uuid)
+		OnlineDDLMigrationStateComplete, odm.uuid, odm.vp.vr.id)
 	log.Infof("execing update %s", query)
-	if _, err := odm.dbClient.Execute(query); err != nil {
+	if _, err := odm.vp.vr.dbClient.Execute(query); err != nil {
 		log.Infof("%s", err)
 		return err
 	}
@@ -194,7 +194,7 @@ func (vp *vplayer) handleOnlineDDLEvent(ctx context.Context, event *binlogdatapb
 	odEvent := event.OnlineDdlEvent
 	odEventType := event.OnlineDdlEvent.EventType
 
-	odm, err := newOnlineDDLMigration(ctx, vp, odEvent.Uuid, vp.vr.dbClient)
+	odm, err := newOnlineDDLMigration(ctx, vp, odEvent.Uuid)
 	if err != nil {
 		log.Errorf("%s", err)
 		return err
