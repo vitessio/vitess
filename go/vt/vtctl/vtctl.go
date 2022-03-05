@@ -2173,7 +2173,7 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 func useV1(args []string) bool {
 	for _, arg := range args {
-		if arg == "-v1" {
+		if arg == "-v1" || arg == "--v1" {
 			return true
 		}
 	}
