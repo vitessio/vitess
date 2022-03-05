@@ -131,6 +131,7 @@ func (vs *vstreamer) getRenameOnlineDDLEvent(query mysql.Query, dbname string) (
 				ev := &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_ONLINEDDLEVENT,
 					OnlineDdlEvent: &binlogdatapb.OnlineDDLEvent{
+						Uuid:      table[1:37],
 						EventType: binlogdatapb.OnlineDDLEventType_RENAME_TABLE,
 						Ddl:       query.SQL,
 					},

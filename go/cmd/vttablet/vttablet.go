@@ -102,7 +102,7 @@ func main() {
 		DBConfigs:           config.DB.Clone(),
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
-		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler(), tablet.Shard),
+		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler(), tablet.Shard, tabletAlias),
 		MetadataManager:     &mysqlctl.MetadataManager{},
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {

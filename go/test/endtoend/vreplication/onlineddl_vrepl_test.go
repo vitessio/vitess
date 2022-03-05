@@ -66,7 +66,7 @@ const (
 	// 	Case 1. Online DDL ALTER is started after Reshard and completed before cutover: table should have the new schema after cutover
 	case1Ddl    = "ALTER TABLE customer ADD COLUMN description varchar(20) NOT NULL;"
 	case1Update = "update customer set description = concat('cust-', cid)"
-	enableCase1 = false
+	enableCase1 = true
 
 	//  Case 2: Online DDL ALTER is started before Reshard starts and completed after it starts:
 	case2Ddl    = "ALTER TABLE `Lead` ADD COLUMN description varchar(64) NOT NULL;"
@@ -76,7 +76,7 @@ const (
 	//  Case 3: Online DDL ALTER is started before Reshard starts and completed after it ends:
 	case3Ddl    = "ALTER TABLE `Lead-1` ADD COLUMN description varchar(64) NOT NULL;"
 	case3Update = "update `Lead-1` set description = concat('Lead1-', md5(`Lead`))"
-	enableCase3 = true
+	enableCase3 = false
 )
 
 // TestOnlineDDLsDuringReshard validates that tables participating in online ddls do the right thing during reshard
@@ -166,12 +166,21 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, shardedKeyspaceName, case3Update)
 	}
 	if enableCase1 {
+		//customerRS := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select * from customer")
+		//require.NotNil(t, customerRS)
+		//log.Infof("customerRS: %+v", customerRS.Rows)
 		customerRS := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from customer")
 		require.NotNil(t, customerRS)
-		require.Equal(t, customerRS.Named().Row().AsInt64("cnt", -1), 3)
+		require.Equal(t, int64(4), customerRS.Named().Row().AsInt64("cnt", -1))
+
 		customerRS = execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from customer where description = ''")
+		if customerRS == nil {
+			log.Infof("description not yet available")
+			time.Sleep(8 * time.Minute)
+			customerRS = execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from customer where description = ''")
+		}
 		require.NotNil(t, customerRS)
-		require.Equal(t, customerRS.Named().Row().AsInt64("cnt", -1), 0)
+		require.Equal(t, int64(0), customerRS.Named().Row().AsInt64("cnt", -1))
 	}
 	if enableCase2 {
 		customerLead := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead`")

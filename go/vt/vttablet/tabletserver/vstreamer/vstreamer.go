@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -78,6 +79,8 @@ type vstreamer struct {
 
 	phase string
 	vse   *Engine
+
+	onlineDDLOnce sync.Once
 }
 
 // streamerPlan extends the original plan to also include
@@ -173,9 +176,11 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	defer conn.Close()
 
 	// send MATERIALIZED_TABLE events, one per active migration
-	if err := vs.sendVEventsForOnlineDDLMigrations(""); err != nil {
-		return err
-	}
+	vs.onlineDDLOnce.Do(func() {
+		if err := vs.sendVEventsForOnlineDDLMigrations(""); err != nil {
+			log.Errorf("error sending events for online ddl migrations %s", err)
+		}
+	})
 
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
@@ -474,7 +479,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 			if renameEvent != nil {
 				vevents = append(vevents, renameEvent)
-			} else if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
+			}
+			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),

@@ -524,28 +524,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_ONLINEDDLEVENT:
-		log.Infof(">>>>> Got VEventType_ONLINEDDLEVENT for %+v", event)
-		ddl := event.OnlineDdlEvent.Ddl
-		// The target can see the same event multiple times. Example: there are multiple streams with the same source.
-		// The first ddl will succeed and others error out, hence we ignore.
-		if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, ddl); err != nil {
-			log.Infof("Ignoring error: %v for DDL: %s", err, ddl)
-		}
-		// Applying the ddl would change the schema and the field events that we get will reflect the new schema.
-		// So reload the extended column information from the information_schema and rebuild the replicator plan.
-		// Otherwise, the field events will not match the current plan, resulting in errors.
-		colInfo, err := vp.vr.buildColInfoMap(ctx)
-		if err != nil {
+		if err := vp.handleOnlineDDLEvent(ctx, event); err != nil {
 			return err
 		}
-		vp.vr.colInfoMap = colInfo
-
-		plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
-		if err != nil {
-			vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
-			return err
-		}
-		vp.replicatorPlan = plan
 	case binlogdatapb.VEventType_DDL:
 
 		if vp.vr.dbClient.InTransaction {

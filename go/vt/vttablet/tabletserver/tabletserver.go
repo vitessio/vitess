@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -1389,6 +1390,8 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 
 	if logMethod != nil {
 		logMethod(message)
+		log.Infof("Stack: %s", debug.Stack())
+		log.Infof("Customer Schema: %+v", tsv.se.GetTable(sqlparser.NewTableIdent("customer")).Fields)
 	}
 
 	if logStats != nil {

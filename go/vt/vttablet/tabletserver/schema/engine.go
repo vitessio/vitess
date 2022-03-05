@@ -426,6 +426,12 @@ func (se *Engine) reload(ctx context.Context) error {
 	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, dropped)
+		table, ok := se.tables["customer"]
+		if ok {
+			log.Infof("Customer table: %+v", table.Fields)
+		} else {
+			log.Infof("Customer table not found")
+		}
 	}
 	se.broadcast(created, altered, dropped)
 	return nil

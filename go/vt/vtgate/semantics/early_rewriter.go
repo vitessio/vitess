@@ -105,7 +105,7 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 
 	}
 	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown columnX '%d' in '%s'", num, r.clause)
 	}
 
 	for i := 0; i < num; i++ {

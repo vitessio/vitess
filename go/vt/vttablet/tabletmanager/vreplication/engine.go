@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -77,6 +79,7 @@ func init() {
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
+	allddls = append(allddls, createOnlineDDLMigration)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, changeMasterToPrimary)
@@ -129,6 +132,7 @@ type Engine struct {
 
 	throttlerClient *throttle.Client
 	shard           string
+	tabletAlias     *topodatapb.TabletAlias
 }
 
 type journalEvent struct {
@@ -139,7 +143,8 @@ type journalEvent struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler, shard string) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon,
+	lagThrottler *throttle.Throttler, shard string, tabletAlias *topodatapb.TabletAlias) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
@@ -149,6 +154,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		ec:              newExternalConnector(config.ExternalConnections),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
 		shard:           shard,
+		tabletAlias:     tabletAlias,
 	}
 
 	return vre
