@@ -27,6 +27,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"os"
 	"time"
 
@@ -55,13 +56,16 @@ func init() {
 
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	flag.Usage = func() {
-		logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
-		logger.Printf("\nThe global optional parameters are:\n")
-		flag.PrintDefaults()
-		logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
-		worker.PrintAllCommands(logger)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Preface: func(w io.Writer) {
+			logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+			logger.Printf("\nThe global optional parameters are:\n")
+		},
+		Epilogue: func(w io.Writer) {
+			logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+			worker.PrintAllCommands(logger)
+		},
+	})
 }
 
 var (

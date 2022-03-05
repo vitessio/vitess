@@ -87,6 +87,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"sort"
@@ -124,6 +125,9 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -4151,25 +4155,27 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 			if strings.ToLower(cmd.name) == actionLowerCase {
 				subFlags := flag.NewFlagSet(action, flag.ContinueOnError)
 				subFlags.SetOutput(logutil.NewLoggerWriter(wr.Logger()))
-				subFlags.Usage = func() {
-					if cmd.deprecated {
-						msg := &strings.Builder{}
-						msg.WriteString("WARNING: ")
-						msg.WriteString(action)
-						msg.WriteString(" is deprecated and will be removed in a future release.")
-						if cmd.deprecatedBy != "" {
-							msg.WriteString(" Use ")
-							msg.WriteString(cmd.deprecatedBy)
-							msg.WriteString(" instead.")
+				_flag.SetUsage(subFlags, _flag.UsageOptions{
+					Preface: func(w io.Writer) {
+						if cmd.deprecated {
+							msg := &strings.Builder{}
+							msg.WriteString("WARNING: ")
+							msg.WriteString(action)
+							msg.WriteString(" is deprecated and will be removed in a future release.")
+							if cmd.deprecatedBy != "" {
+								msg.WriteString(" Use ")
+								msg.WriteString(cmd.deprecatedBy)
+								msg.WriteString(" instead.")
+							}
+
+							wr.Logger().Printf("%s\n", msg.String())
 						}
 
-						wr.Logger().Printf("%s\n", msg.String())
-					}
+						wr.Logger().Printf("Usage: %s %s\n\n", action, cmd.params)
+						wr.Logger().Printf("%s\n\n", cmd.help)
+					},
+				})
 
-					wr.Logger().Printf("Usage: %s %s\n\n", action, cmd.params)
-					wr.Logger().Printf("%s\n\n", cmd.help)
-					subFlags.PrintDefaults()
-				}
 				return cmd.method(ctx, wr, subFlags, args[1:])
 			}
 		}

@@ -19,7 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
+	"io"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
@@ -113,11 +113,9 @@ func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, doc)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Preface: func(w io.Writer) { fmt.Fprint(w, doc) },
+	})
 	_flag.Parse()
 	args := _flag.Args()
 	if len(args) == 0 {

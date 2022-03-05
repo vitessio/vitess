@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"vitess.io/vitess/go/exit"
@@ -49,11 +50,9 @@ var (
 )
 
 func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, usage)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Epilogue: func(w io.Writer) { fmt.Fprint(w, usage) },
+	})
 	stdin = bufio.NewReader(os.Stdin)
 }
 
