@@ -3295,7 +3295,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		Sql:                     parts,
 		SkipPreflight:           *skipPreflight,
 		UuidList:                textutil.SplitDelimitedList(*uuidList),
-		RequestContext:          *migrationContext,
+		MigrationContext:        *migrationContext,
 		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
 		CallerId:                cID,
 	})
