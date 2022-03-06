@@ -66,12 +66,12 @@ const (
 	// 	Case 1. Online DDL ALTER is started after Reshard and completed before cutover: table should have the new schema after cutover
 	case1Ddl    = "ALTER TABLE customer ADD COLUMN description varchar(20) NOT NULL;"
 	case1Update = "update customer set description = concat('cust-', cid)"
-	enableCase1 = true
+	enableCase1 = false
 
 	//  Case 2: Online DDL ALTER is started before Reshard starts and completed after it starts:
 	case2Ddl    = "ALTER TABLE `Lead` ADD COLUMN description varchar(64) NOT NULL;"
 	case2Update = "update `Lead` set description = concat('Lead-id-', md5(`Lead-id`))"
-	enableCase2 = false
+	enableCase2 = true
 
 	//  Case 3: Online DDL ALTER is started before Reshard starts and completed after it ends:
 	case3Ddl    = "ALTER TABLE `Lead-1` ADD COLUMN description varchar(64) NOT NULL;"
@@ -185,19 +185,19 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 	if enableCase2 {
 		customerLead := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead`")
 		require.NotNil(t, customerLead)
-		require.Equal(t, customerLead.Named().Row().AsInt64("cnt", -1), 6)
+		require.Equal(t, int64(6), customerLead.Named().Row().AsInt64("cnt", -1))
 		customerLead = execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead` where description = ''")
 		require.NotNil(t, customerLead)
-		require.Equal(t, customerLead.Named().Row().AsInt64("cnt", -1), 0)
+		require.Equal(t, int64(0), customerLead.Named().Row().AsInt64("cnt", -1))
 	}
 
 	if enableCase3 {
 		customerLead1 := execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead-1`")
 		require.NotNil(t, customerLead1)
-		require.Equal(t, customerLead1.Named().Row().AsInt64("cnt", -1), 6)
+		require.Equal(t, int64(6), customerLead1.Named().Row().AsInt64("cnt", -1))
 		customerLead1 = execVtgateQuery(t, vtgateConn, shardedKeyspaceName, "select count(*) cnt from `Lead-1` where description = ''")
 		require.NotNil(t, customerLead1)
-		require.Equal(t, customerLead1.Named().Row().AsInt64("cnt", -1), 0)
+		require.Equal(t, int64(0), customerLead1.Named().Row().AsInt64("cnt", -1))
 	}
 }
 
