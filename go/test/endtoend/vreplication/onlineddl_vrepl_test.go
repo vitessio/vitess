@@ -66,7 +66,7 @@ const (
 	// 	Case 1. Online DDL ALTER is started after Reshard and completed before cutover: table should have the new schema after cutover
 	case1Ddl    = "ALTER TABLE customer ADD COLUMN description varchar(20) NOT NULL;"
 	case1Update = "update customer set description = concat('cust-', cid)"
-	enableCase1 = false
+	enableCase1 = true
 
 	//  Case 2: Online DDL ALTER is started before Reshard starts and completed after it starts:
 	case2Ddl    = "ALTER TABLE `Lead` ADD COLUMN description varchar(64) NOT NULL;"

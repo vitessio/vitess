@@ -272,6 +272,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	// care.
 	if tpb.lastpk != nil {
 		for _, f := range tpb.lastpk.Fields {
+			log.Infof("adding col from last pk field %s", f.Name)
 			tpb.addCol(sqlparser.NewColIdent(f.Name))
 		}
 	}
@@ -324,6 +325,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 }
 
 func (tpb *tablePlanBuilder) generate() *TablePlan {
+	log.Infof("In generate() with pkCols %+v, lastpk Fields %+v\n%s", tpb.pkCols, tpb.lastpk, debug.Stack())
 	refmap := make(map[string]bool)
 	for _, cexpr := range tpb.pkCols {
 		for k := range cexpr.references {
@@ -428,8 +430,9 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		}
 		cexpr.expr = expr
 		cexpr.operation = opExpr
+		log.Infof("adding to selectExprs %s, references %s", as, as.Lowered())
 		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: selExpr, As: as})
-		cexpr.references[as.Lowered()] = true
+		cexpr.references[as.String()] = true
 		return cexpr, nil
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
@@ -461,7 +464,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.operation = opSum
 			cexpr.expr = innerCol
 			tpb.addCol(innerCol.Name)
-			cexpr.references[innerCol.Name.Lowered()] = true
+			cexpr.references[innerCol.Name.String()] = true
 			return cexpr, nil
 		case "keyspace_id":
 			if len(expr.Exprs) != 0 {
@@ -479,8 +482,9 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			if !node.Qualifier.IsEmpty() {
 				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}
+			log.Infof("analyzeExpr addCol %s, references %s", node.Name.String(), node.Name.String())
 			tpb.addCol(node.Name)
-			cexpr.references[node.Name.Lowered()] = true
+			cexpr.references[node.Name.String()] = true
 		case *sqlparser.Subquery:
 			return false, fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
 		case *sqlparser.FuncExpr:

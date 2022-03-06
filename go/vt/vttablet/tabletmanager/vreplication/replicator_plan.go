@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/bytes2"
@@ -299,6 +301,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 // - enum values converted to text via Online DDL
 // - ...any other future possible values
 func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
+	log.Infof("bindFieldVal: field is %s", field.Name)
 	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
 		// Non-null string value, for which we have a charset conversion instruction
 		valString := val.ToString()
@@ -318,7 +321,7 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 		return sqltypes.StringBindVariable(valString), nil
 	}
 	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
-		// The fact that this fielkd has a EnumValuesMap entry, means we must
+		// The fact that this field has a EnumValuesMap entry, means we must
 		// use the enum's text value as opposed to the enum's numerical value.
 		// Once known use case is with Online DDL, when a column is converted from
 		// ENUM to a VARCHAR/TEXT.
@@ -398,6 +401,10 @@ func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.Bin
 
 func (tp *TablePlan) pkChanged(bindvars map[string]*querypb.BindVariable) bool {
 	for _, pkref := range tp.PKReferences {
+		log.Infof("pkChanged: pkref %s, bindvars %+v", pkref, bindvars)
+		if bindvars["b_"+pkref] == nil || bindvars["a_"+pkref] == nil {
+			log.Infof("pkref bind var nill %s, %+v, %+v", pkref, bindvars["b_"+pkref], bindvars["a_"+pkref])
+		}
 		v1, _ := sqltypes.BindVariableToValue(bindvars["b_"+pkref])
 		v2, _ := sqltypes.BindVariableToValue(bindvars["a_"+pkref])
 		if !valsEqual(v1, v2) {

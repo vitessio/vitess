@@ -191,6 +191,7 @@ func (vp *vplayer) reloadSchema(ctx context.Context) error {
 }
 
 func (vp *vplayer) updatePlan(ctx context.Context) error {
+	return nil
 	// Applying the ddl would change the schema and the field events that we get will reflect the new schema.
 	// So reload the extended column information from the information_schema and rebuild the replicator plan.
 	// Otherwise, the field events will not match the current plan, resulting in errors.
