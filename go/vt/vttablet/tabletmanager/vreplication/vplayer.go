@@ -399,7 +399,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					if err != io.EOF {
 						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-						log.Errorf("Error applying event: %s", err.Error())
+						log.Errorf("Error applying event: %s, event is %+v", err.Error(), event)
 					}
 					return err
 				}

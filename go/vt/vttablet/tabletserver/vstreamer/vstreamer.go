@@ -150,7 +150,7 @@ func (vs *vstreamer) Stream() error {
 	ctx := context.Background()
 	defer ctx.Done()
 	vs.vse.vstreamersCreated.Add(1)
-	log.Infof("Starting Stream() with startPos %s", vs.startPos)
+	log.Infof("Starting Stream() with startPos %s for filter.Rules %+v", vs.startPos, vs.filter.Rules)
 	pos, err := mysql.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)

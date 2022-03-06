@@ -19,8 +19,11 @@ package vreplication
 import (
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
@@ -124,6 +127,7 @@ const (
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
 func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
+	log.Infof("buildReplicatorPlan: %s", debug.Stack())
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
@@ -134,7 +138,9 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 	for tableName := range colInfoMap {
 		lastpk, ok := copyState[tableName]
 		if ok && lastpk == nil {
-			// Don't replicate uncopied tables.
+			// Don't replicate uncopied tables. Source will never send events for these since we don't
+			// add it to the vstream filter which is generated below.
+			log.Infof("lastpk nil in copy state, not adding to replicator plan %s", tableName)
 			continue
 		}
 		rule, err := MatchTable(tableName, filter)
@@ -159,10 +165,14 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, colInfoMap map[string][]*C
 		if dup, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
 			return nil, fmt.Errorf("more than one target for source table %s: %s and %s", tablePlan.SendRule.Match, dup.TargetName, tableName)
 		}
+		// Only tables already copied are sent in the catchup/fastforward/replicate phases. Hence, source will never
+		// send events for uncopied tables.
 		plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
+		log.Infof("adding rule to VStreamFilter.Rules for %s: %+v", tableName, tablePlan.SendRule.Match)
 		plan.TargetTables[tableName] = tablePlan
 		plan.TablePlans[tablePlan.SendRule.Match] = tablePlan
 	}
+	log.Infof("VStreamFilter.Rules %+v", plan.VStreamFilter.Rules)
 	return plan, nil
 }
 

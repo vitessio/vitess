@@ -340,6 +340,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			})
 		}
 		colInfoMap[td.Name] = colInfo
+		log.Infof("adding colInfo for %s", td.Name)
 	}
 	return colInfoMap, nil
 }

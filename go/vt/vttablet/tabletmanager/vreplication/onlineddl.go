@@ -3,6 +3,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -19,21 +20,24 @@ const (
 		uuid VARBINARY(256) NOT NULL,
 		vrepl_id BIGINT(20) NOT NULL,
 		state VARBINARY(100) NOT NULL,
+		materialized_table VARBINARY(256) NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		PRIMARY KEY (id))`
-	addOnlineDDLMigrationQuery           = "insert ignore into %s (uuid, state, vrepl_id) values ('%s', '%s', %d)"
-	getOnlineDDLMigrationQuery           = "select id, state from %s where uuid = '%s' and vrepl_id = %d"
+	addOnlineDDLMigrationQuery           = "insert ignore into %s (uuid, state, vrepl_id, materialized_table) values ('%s', '%s', %d, '%s')"
+	getOnlineDDLMigrationQuery           = "select id, state, materialized_table from %s where uuid = '%s' and vrepl_id = %d"
 	markOnlineDDLMigrationCompletedQuery = "update %s set state = '%s' where uuid = '%s' and vrepl_id = %d"
 )
 
 var onlineDDLMu sync.Mutex
+var ReloadCopyState error = fmt.Errorf("new copy state")
 
 type OnlineDDLMigration struct {
-	uuid     string
-	state    string
-	id       int64
-	vrepl_id int64
+	uuid              string
+	state             string
+	id                int64
+	vreplId           int64
+	materializedTable string
 
 	ctx context.Context
 	vp  *vplayer
@@ -47,12 +51,13 @@ const (
 	OnlineDDLMigrationStateComplete                           = "complete"
 )
 
-func newOnlineDDLMigration(ctx context.Context, vp *vplayer, uuid string) (*OnlineDDLMigration, error) {
+func newOnlineDDLMigration(ctx context.Context, vp *vplayer, uuid, materializedTable string) (*OnlineDDLMigration, error) {
 	odm := &OnlineDDLMigration{
-		uuid:     uuid,
-		ctx:      ctx,
-		vp:       vp,
-		vrepl_id: int64(vp.vr.id),
+		uuid:              uuid,
+		ctx:               ctx,
+		vp:                vp,
+		vreplId:           int64(vp.vr.id),
+		materializedTable: materializedTable,
 	}
 	if err := odm.get(); err != nil {
 		return nil, err
@@ -82,40 +87,60 @@ func (odm *OnlineDDLMigration) get() error {
 		row := qr.Named().Row()
 		odm.state = row["state"].ToString()
 		odm.id, _ = row["id"].ToInt64()
-		log.Infof("odm.get: uuid %s, id %d, state %s", odm.uuid, odm.id, odm.state)
+		odm.materializedTable = row["materialized_table"].ToString()
+		log.Infof("odm.get: uuid %s, id %d, state %s, materialized_table %s", odm.uuid,
+			odm.id, odm.state, odm.materializedTable)
 		return nil
 	default:
 		return fmt.Errorf("too many rows %d found for uuid %s", len(qr.Rows), odm.uuid)
 	}
 }
 
-func (odm *OnlineDDLMigration) register(ddl string) error {
+func (odm *OnlineDDLMigration) register(ddl string) (bool, error) {
 	if odm.exists() {
-		return nil
+		return false, nil
 	}
 	log.Infof("uuid %s, registering ddl %s", odm.uuid, ddl)
-	query := fmt.Sprintf(addOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid, OnlineDDLMigrationStateInProgress, odm.vp.vr.id)
+	query := fmt.Sprintf(addOnlineDDLMigrationQuery, onlineDDLMigrationTableName, odm.uuid,
+		OnlineDDLMigrationStateInProgress, odm.vp.vr.id, odm.materializedTable)
 	qr, err := odm.vp.vr.dbClient.Execute(query)
 	if err != nil {
 		log.Infof("%s", err)
-		return err
+		return false, err
 	}
-	if qr.InsertID == 0 {
+	// if this is a new migration, create the materialized table and add to copy state
+	if qr.InsertID != 0 {
 		log.Infof("did not insert %s into %s", odm.uuid, onlineDDLMigrationTableName)
-		return nil
+		odm.id = int64(qr.InsertID)
+		log.Infof("uuid %s, id %d, exec %s", odm.uuid, odm.id, ddl)
+		if _, err := odm.vp.vr.dbClient.ExecuteWithRetry(odm.ctx, ddl); err != nil {
+			log.Infof("%s", err)
+			return false, err
+		}
+		log.Infof("uuid %s, id %d, execed %s, updating plan", odm.uuid, odm.id, ddl)
+		if err := odm.addToCopyState(odm.materializedTable); err != nil {
+			return false, err
+		}
 	}
-	odm.id = int64(qr.InsertID)
-	log.Infof("uuid %s, id %d, exec %s", odm.uuid, odm.id, ddl)
-	if _, err := odm.vp.vr.dbClient.ExecuteWithRetry(odm.ctx, ddl); err != nil {
-		log.Infof("%s", err)
-		return err
-	}
-	log.Infof("uuid %s, id %d, execed %s, updating plan", odm.uuid, odm.id, ddl)
+	// both for new and existing migrations we need to update the plan
 	if err := odm.vp.updatePlan(odm.ctx); err != nil {
 		log.Infof("%s", err)
-		return err
+		return false, err
 	}
 	log.Infof("uuid %s, updated plan", odm.uuid)
+
+	return true, nil
+}
+
+func (odm *OnlineDDLMigration) addToCopyState(table string) error {
+	var buf strings.Builder
+	buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+	fmt.Fprintf(&buf, " (%d, %s)", odm.vp.vr.id, encodeString(table))
+	if _, err := odm.vp.vr.dbClient.ExecuteWithRetry(odm.ctx, buf.String()); err != nil {
+		log.Infof("%s", err)
+		return err
+	}
+	log.Infof("added %s to copy_state for %d", table, odm.vp.vr.id)
 	return nil
 }
 
@@ -194,7 +219,7 @@ func (vp *vplayer) handleOnlineDDLEvent(ctx context.Context, event *binlogdatapb
 	odEvent := event.OnlineDdlEvent
 	odEventType := event.OnlineDdlEvent.EventType
 
-	odm, err := newOnlineDDLMigration(ctx, vp, odEvent.Uuid)
+	odm, err := newOnlineDDLMigration(ctx, vp, odEvent.Uuid, odEvent.MaterializedTableName)
 	if err != nil {
 		log.Errorf("%s", err)
 		return err
@@ -202,9 +227,15 @@ func (vp *vplayer) handleOnlineDDLEvent(ctx context.Context, event *binlogdatapb
 
 	switch odEventType {
 	case binlogdatapb.OnlineDDLEventType_MATERIALIZED_TABLE:
-		if err := odm.register(odEvent.Ddl); err != nil {
+		var registered bool
+		var err error
+		if registered, err = odm.register(odEvent.Ddl); err != nil {
 			log.Errorf("%s", err)
 			return err
+		}
+		if registered {
+			log.Infof("Registered table %s, returning ReloadCopyState", odEvent.MaterializedTableName)
+			return ReloadCopyState
 		}
 	case binlogdatapb.OnlineDDLEventType_RENAME_TABLE:
 		if err := odm.complete(odEvent.Ddl); err != nil {

@@ -22,8 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -342,6 +340,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 }
 
 func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
+	log.Infof("buildPlan for %s, filter %+v", ti.Name, filter.Rules)
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -356,11 +355,11 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*
 			return buildREPlan(ti, vschema, rule.Filter)
 		case rule.Match == ti.Name:
 			return buildTablePlan(ti, vschema, rule.Filter)
-		case schema.IsOnlineDDLMaterializedTableName(ti.Name):
-			// materialized tables are not part of the filter, so we need to create a new table plan for it.
-			// only rows in the keyrange of the target should be sent.
-			return buildTablePlan(ti, vschema, fmt.Sprintf("select * from %s where in_keyrange('%s')",
-				sqlescape.EscapeID(ti.Name), filter.TargetShard))
+			//case schema.IsOnlineDDLMaterializedTableName(ti.Name):
+			//	// materialized tables are not part of the filter, so we need to create a new table plan for it.
+			//	// only rows in the keyrange of the target should be sent.
+			//	return buildTablePlan(ti, vschema, fmt.Sprintf("select * from %s where in_keyrange('%s')",
+			//		sqlescape.EscapeID(ti.Name), filter.TargetShard))
 		}
 	}
 	log.Infof("buildPlan returns nil")
