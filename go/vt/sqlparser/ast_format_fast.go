@@ -1629,8 +1629,20 @@ func (node *RTrimFuncExpr) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("trim(")
+	if node.Type.ToString() != "" {
+		buf.WriteString(node.Type.ToString())
+		buf.WriteByte(' ')
+	}
+	if node.TrimArg != nil {
+		buf.printExpr(node, node.TrimArg, true)
+		buf.WriteByte(' ')
+	}
+
+	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
+		buf.WriteString("from ")
+	}
 	buf.printExpr(node, node.StringArg, true)
-	buf.WriteByte(')')
+	buf.WriteString(")")
 }
 
 // formatFast formats the node.

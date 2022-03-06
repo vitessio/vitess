@@ -2706,7 +2706,9 @@ func EqualsRefOfTrimFuncExpr(a, b *TrimFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsExpr(a.StringArg, b.StringArg)
+	return a.Type == b.Type &&
+		EqualsExpr(a.TrimArg, b.TrimArg) &&
+		EqualsExpr(a.StringArg, b.StringArg)
 }
 
 // EqualsRefOfTruncateTable does deep equals between the two objects.

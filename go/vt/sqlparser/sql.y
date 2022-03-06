@@ -119,6 +119,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
+  trimType        TrimType
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -194,6 +195,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
+%token <str> BOTH LEADING TRAILING
 
 %left EMPTY_FROM_CLAUSE
 %right INTO
@@ -342,6 +344,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
+%type <trimType> trim_type_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -4443,6 +4446,10 @@ function_call_keyword
   {
     $$ = &TrimFuncExpr{StringArg: $3}
   }
+| TRIM openb expression FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
+  }
 | BINARY simple_expr %prec UNARY
   {
     // From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary
@@ -4472,6 +4479,22 @@ function_call_keyword
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
   }
 
+trim_type_opt:
+  {
+    $$ = NoTrimType
+  }
+| BOTH
+  {
+    $$ = BothTrimType
+  }
+| LEADING
+  {
+    $$ = LeadingTrimType
+  }
+| TRAILING
+  {
+    $$ = TrailingTrimType
+  }
 
 default_opt:
   /* empty */
@@ -5686,6 +5709,7 @@ reserved_keyword:
 | ASC
 | BETWEEN
 | BINARY
+| BOTH
 | BY
 | CASE
 | CALL
@@ -5748,6 +5772,7 @@ reserved_keyword:
 | LAST_VALUE
 | LATERAL
 | LEAD
+| LEADING
 | LEFT
 | LIKE
 | LIMIT
@@ -5804,6 +5829,7 @@ reserved_keyword:
 | TIMESTAMPADD
 | TIMESTAMPDIFF
 | TO
+| TRAILING
 | TRIM
 | TRUE
 | UNION

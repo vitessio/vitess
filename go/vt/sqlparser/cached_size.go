@@ -2370,7 +2370,11 @@ func (cached *TrimFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(48)
+	}
+	// field TrimArg vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.TrimArg.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field StringArg vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.StringArg.(cachedObject); ok {

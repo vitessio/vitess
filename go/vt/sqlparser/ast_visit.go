@@ -2258,6 +2258,9 @@ func VisitRefOfTrimFuncExpr(in *TrimFuncExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitExpr(in.TrimArg, f); err != nil {
+		return err
+	}
 	if err := VisitExpr(in.StringArg, f); err != nil {
 		return err
 	}

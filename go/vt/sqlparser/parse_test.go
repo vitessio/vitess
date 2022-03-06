@@ -2275,6 +2275,9 @@ var (
 	}, {
 		input:  "SELECT TRIM('  abc  ')",
 		output: "select trim('  abc  ') from dual",
+	}, {
+		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
+		output: "select trim('aa' from 'aabccaaa') from dual",
 	}}
 )
 

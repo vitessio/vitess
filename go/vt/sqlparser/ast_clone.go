@@ -1794,6 +1794,7 @@ func CloneRefOfTrimFuncExpr(n *TrimFuncExpr) *TrimFuncExpr {
 		return nil
 	}
 	out := *n
+	out.TrimArg = CloneExpr(n.TrimArg)
 	out.StringArg = CloneExpr(n.StringArg)
 	return &out
 }

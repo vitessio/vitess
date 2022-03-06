@@ -294,6 +294,11 @@ const (
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
 
+	// TrimType strings
+	BothTrimStr     = "both"
+	LeadingTrimStr  = "leading"
+	TrailingTrimStr = "trailing"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -376,6 +381,14 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+)
+
+// Constants for Enum Type - TrimType
+const (
+	NoTrimType TrimType = iota
+	BothTrimType
+	LeadingTrimType
+	TrailingTrimType
 )
 
 // Constants for Enum Type - WhereType

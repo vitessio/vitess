@@ -1226,7 +1226,19 @@ func (node *RTrimFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "trim(%v)", node.StringArg)
+	buf.WriteString("trim(")
+	if node.Type.ToString() != "" {
+		buf.astPrintf(node, "%s ", node.Type.ToString())
+	}
+	if node.TrimArg != nil {
+		buf.astPrintf(node, "%v ", node.TrimArg)
+	}
+
+	if (node.Type.ToString() != "") || (node.TrimArg != nil) {
+		buf.WriteString("from ")
+	}
+	buf.astPrintf(node, "%v", node.StringArg)
+	buf.WriteString(")")
 }
 
 // Format formats the node.

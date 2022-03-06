@@ -1932,8 +1932,13 @@ type RTrimFuncExpr struct {
 // TrimFuncExpr represents a LTRIM function
 // More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_trim
 type TrimFuncExpr struct {
+	Type      TrimType
+	TrimArg   Expr
 	StringArg Expr
 }
+
+// TrimType is an enum to get types of Trim
+type TrimType int8
 
 // *********** Expressions
 type (

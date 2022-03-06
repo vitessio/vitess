@@ -4626,6 +4626,11 @@ func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExp
 			return true
 		}
 	}
+	if !a.rewriteExpr(node, node.TrimArg, func(newNode, parent SQLNode) {
+		parent.(*TrimFuncExpr).TrimArg = newNode.(Expr)
+	}) {
+		return false
+	}
 	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
 		parent.(*TrimFuncExpr).StringArg = newNode.(Expr)
 	}) {
