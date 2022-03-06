@@ -527,6 +527,7 @@ var keywords = []keyword{
 	{"triggers", TRIGGERS},
 	{"true", TRUE},
 	{"truncate", TRUNCATE},
+	{"trim", TRIM},
 	{"uncommitted", UNCOMMITTED},
 	{"undefined", UNDEFINED},
 	{"undo", UNUSED},

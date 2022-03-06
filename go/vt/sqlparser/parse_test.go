@@ -2272,6 +2272,9 @@ var (
 	}, {
 		input:  "SELECT RTRIM('abc')",
 		output: "select rtrim('abc') from dual",
+	}, {
+		input:  "SELECT TRIM('  abc  ')",
+		output: "select trim('  abc  ') from dual",
 	}}
 )
 

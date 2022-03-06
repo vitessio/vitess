@@ -303,6 +303,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfTablespaceOperation(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *TruncateTable:
 		return CloneRefOfTruncateTable(in)
 	case *UnaryExpr:
@@ -1786,6 +1788,16 @@ func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
 	return &out
 }
 
+// CloneRefOfTrimFuncExpr creates a deep clone of the input.
+func CloneRefOfTrimFuncExpr(n *TrimFuncExpr) *TrimFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.StringArg = CloneExpr(n.StringArg)
+	return &out
+}
+
 // CloneRefOfTruncateTable creates a deep clone of the input.
 func CloneRefOfTruncateTable(n *TruncateTable) *TruncateTable {
 	if n == nil {
@@ -2084,6 +2096,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *ValuesFuncExpr:
 		return CloneRefOfValuesFuncExpr(in)
 	case *WeightStringFuncExpr:
@@ -2276,6 +2290,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
+	case *TrimFuncExpr:
+		return CloneRefOfTrimFuncExpr(in)
 	case *UnaryExpr:
 		return CloneRefOfUnaryExpr(in)
 	case ValTuple:

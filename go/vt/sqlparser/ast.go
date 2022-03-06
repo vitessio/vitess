@@ -1929,6 +1929,12 @@ type RTrimFuncExpr struct {
 	StringArg Expr
 }
 
+// TrimFuncExpr represents a LTRIM function
+// More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_trim
+type TrimFuncExpr struct {
+	StringArg Expr
+}
+
 // *********** Expressions
 type (
 	// Expr represents an expression.
@@ -2226,6 +2232,7 @@ func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
 func (*LTrimFuncExpr) iExpr()        {}
 func (*RTrimFuncExpr) iExpr()        {}
+func (*TrimFuncExpr) iExpr()         {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2237,6 +2244,7 @@ func (*ValuesFuncExpr) iCallable()       {}
 func (*ConvertExpr) iCallable()          {}
 func (*LTrimFuncExpr) iCallable()        {}
 func (*RTrimFuncExpr) iCallable()        {}
+func (*TrimFuncExpr) iCallable()         {}
 func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}
 func (*MatchExpr) iCallable()            {}

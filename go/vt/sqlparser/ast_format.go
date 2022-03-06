@@ -1225,6 +1225,11 @@ func (node *RTrimFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "trim(%v)", node.StringArg)
+}
+
+// Format formats the node.
 func (node *WeightStringFuncExpr) Format(buf *TrackedBuffer) {
 	if node.As != nil {
 		buf.astPrintf(node, "weight_string(%v as %v)", node.Expr, node.As)

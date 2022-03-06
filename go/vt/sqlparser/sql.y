@@ -284,7 +284,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GROUP_CONCAT SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
-%token <str> LTRIM RTRIM
+%token <str> LTRIM RTRIM TRIM
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -4439,6 +4439,10 @@ function_call_keyword
   {
     $$ = &RTrimFuncExpr{StringArg: $3}
   }
+| TRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{StringArg: $3}
+  }
 | BINARY simple_expr %prec UNARY
   {
     // From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary
@@ -5800,6 +5804,7 @@ reserved_keyword:
 | TIMESTAMPADD
 | TIMESTAMPDIFF
 | TO
+| TRIM
 | TRUE
 | UNION
 | UNIQUE
