@@ -60,7 +60,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	needsOrdering := len(hp.qp.OrderExprs) > 0
-	canShortcut := isRoute && !(hp.sel.Having != nil) && !needsOrdering
+	canShortcut := isRoute && hp.sel.Having == nil && !needsOrdering
 
 	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
 	// so it probably has aggregations
