@@ -100,8 +100,7 @@ func pushAggrOnRoute(
 				// and don't want to insert weight_strings in the beginning. We don't keep track of the offsets of where these
 				// are pushed since the later coll will reuse them and get the offset for us.
 				groupbyIdx++
-				expr := groupBy.AsAliasedExpr()
-				_, _, err := pushProjection(ctx, expr, plan, true, true, false)
+				_, _, err := pushProjection(ctx, groupBy.AsAliasedExpr(), plan, true, true, false)
 				if err != nil {
 					return nil, nil, err
 				}
