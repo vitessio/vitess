@@ -528,6 +528,14 @@ func TestSchemaChange(t *testing.T) {
 	}
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", providedUUID, providedMigrationContext, "vtctl", "", "", false)
+		t.Run("test ready to complete", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				readyToComplete := row.AsInt64("ready_to_complete", 0)
+				assert.Equal(t, int64(1), readyToComplete)
+			}
+		})
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)

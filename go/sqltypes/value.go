@@ -48,21 +48,25 @@ var (
 	ErrIncompatibleTypeCast = errors.New("Cannot convert value to desired type")
 )
 
-// BinWriter interface is used for encoding values.
-// Types like bytes.Buffer conform to this interface.
-// We expect the writer objects to be in-memory buffers.
-// So, we don't expect the write operations to fail.
-type BinWriter interface {
-	Write([]byte) (int, error)
-}
+type (
+	// BinWriter interface is used for encoding values.
+	// Types like bytes.Buffer conform to this interface.
+	// We expect the writer objects to be in-memory buffers.
+	// So, we don't expect the write operations to fail.
+	BinWriter interface {
+		Write([]byte) (int, error)
+	}
 
-// Value can store any SQL value. If the value represents
-// an integral type, the bytes are always stored as a canonical
-// representation that matches how MySQL returns such values.
-type Value struct {
-	typ querypb.Type
-	val []byte
-}
+	// Value can store any SQL value. If the value represents
+	// an integral type, the bytes are always stored as a canonical
+	// representation that matches how MySQL returns such values.
+	Value struct {
+		typ querypb.Type
+		val []byte
+	}
+
+	Row = []Value
+)
 
 // NewValue builds a Value using typ and val. If the value and typ
 // don't match, it returns an error.

@@ -47,8 +47,8 @@ type (
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
 		Statement
+		InsertRows
 		iSelectStatement()
-		iInsertRows()
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
@@ -611,6 +611,35 @@ type (
 		Table TableName
 		Wild  string
 	}
+
+	// PrepareStmt represents a Prepare Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
+	PrepareStmt struct {
+		Name                ColIdent
+		Statement           string
+		Comments            Comments
+		StatementIdentifier ColIdent
+	}
+
+	// ExecuteStmt represents an Execute Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
+	ExecuteStmt struct {
+		Name      ColIdent
+		Comments  Comments
+		Arguments Columns
+	}
+
+	// DeallocateStmt represents a Deallocate Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
+	DeallocateStmt struct {
+		Type     DeallocateStmtType
+		Comments Comments
+		Name     ColIdent
+	}
+
+	// DeallocateStmtType is an enum to get types of deallocate
+	DeallocateStmtType int8
+
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
 
@@ -669,6 +698,9 @@ func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
 func (*ExplainStmt) iStatement()       {}
 func (*ExplainTab) iStatement()        {}
+func (*PrepareStmt) iStatement()       {}
+func (*ExecuteStmt) iStatement()       {}
+func (*DeallocateStmt) iStatement()    {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -1826,7 +1858,7 @@ type (
 		Expr       SimpleTableExpr
 		Partitions Partitions
 		As         TableIdent
-		Hints      *IndexHints
+		Hints      IndexHints
 		Columns    Columns
 	}
 
@@ -1891,14 +1923,22 @@ type JoinCondition struct {
 	Using Columns
 }
 
-// IndexHints represents a list of index hints.
-type IndexHints struct {
-	Type    IndexHintsType
+// IndexHint represents an index hint.
+// More information available on https://dev.mysql.com/doc/refman/8.0/en/index-hints.html
+type IndexHint struct {
+	Type    IndexHintType
+	ForType IndexHintForType
 	Indexes []ColIdent
 }
 
-// IndexHintsType is an enum for IndexHints.Type
-type IndexHintsType int8
+// IndexHints represents a list of index hints.
+type IndexHints []*IndexHint
+
+// IndexHintType is an enum for IndexHint.Type
+type IndexHintType int8
+
+// IndexHintForType is an enum for FOR specified in an IndexHint
+type IndexHintForType int8
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {

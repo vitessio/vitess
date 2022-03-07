@@ -889,11 +889,6 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 		case 2:
 			err = generateDelete(t, conn)
 		}
-		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce denied tables") {
-				err = nil
-			}
-		}
 		assert.Nil(t, err)
 		time.Sleep(10 * time.Millisecond)
 	}

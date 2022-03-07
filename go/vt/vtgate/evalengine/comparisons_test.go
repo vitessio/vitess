@@ -59,9 +59,14 @@ func (tc testCase) run(t *testing.T) {
 	if tc.bv == nil {
 		tc.bv = map[string]*querypb.BindVariable{}
 	}
+	fields := make([]*querypb.Field, len(tc.row))
+	for i, value := range tc.row {
+		fields[i] = &querypb.Field{Type: value.Type()}
+	}
 	env := &ExpressionEnv{
 		BindVars: tc.bv,
 		Row:      tc.row,
+		Fields:   fields,
 	}
 	cmp, err := translateComparisonExpr2(tc.op, tc.v1, tc.v2)
 	if err != nil {

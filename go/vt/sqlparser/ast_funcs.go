@@ -1256,7 +1256,7 @@ func (dir OrderDirection) ToString() string {
 }
 
 // ToString returns the type as a string
-func (ty IndexHintsType) ToString() string {
+func (ty IndexHintType) ToString() string {
 	switch ty {
 	case UseOp:
 		return UseStr
@@ -1265,7 +1265,35 @@ func (ty IndexHintsType) ToString() string {
 	case ForceOp:
 		return ForceStr
 	default:
-		return "Unknown IndexHintsType"
+		return "Unknown IndexHintType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty DeallocateStmtType) ToString() string {
+	switch ty {
+	case DeallocateType:
+		return DeallocateStr
+	case DropType:
+		return DropStr
+	default:
+		return "Unknown Deallocate Statement Type"
+	}
+}
+
+// ToString returns the type as a string
+func (ty IndexHintForType) ToString() string {
+	switch ty {
+	case NoForType:
+		return ""
+	case JoinForType:
+		return JoinForStr
+	case GroupByForType:
+		return GroupByForStr
+	case OrderByForType:
+		return OrderByForStr
+	default:
+		return "Unknown IndexHintForType"
 	}
 }
 

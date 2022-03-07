@@ -238,24 +238,9 @@ Gen4 plan same as above
 "unsupported: multi-shard or vindex write statement"
 Gen4 plan same as above
 
-# unsharded insert with cross-shard join"
-"insert into unsharded select u.col from user u join user u1"
-"unsupported: sharded subquery in insert values"
-Gen4 plan same as above
-
-# unsharded insert with mismatched keyspaces"
-"insert into unsharded select col from user where id=1"
-"unsupported: sharded subquery in insert values"
-Gen4 plan same as above
-
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
 "unsupported: auto-inc and select in insert"
-Gen4 plan same as above
-
-# unsharded insert, with sharded subquery in insert value
-"insert into unsharded values((select 1 from user), 1)"
-"unsupported: sharded subquery in insert values"
 Gen4 plan same as above
 
 # unsharded insert, no col list with auto-inc
@@ -276,11 +261,6 @@ Gen4 plan same as above
 # sharded upsert can't change vindex using values function
 "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(id)"
 "unsupported: DML cannot change vindex column"
-Gen4 plan same as above
-
-# sharded insert from select
-"insert into user(id) select 1 from dual"
-"unsupported: insert into select"
 Gen4 plan same as above
 
 # sharded replace no vindex
@@ -381,11 +361,6 @@ Gen4 plan same as above
 "is_free_lock('xyz') allowed only with dual"
 Gen4 plan same as above
 
-# insert using select get_lock from table
-"insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
-"unsupported: insert into select"
-Gen4 plan same as above
-
 # union with SQL_CALC_FOUND_ROWS 
 "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
 "SQL_CALC_FOUND_ROWS not supported with union"
@@ -468,7 +443,7 @@ Gen4 plan same as above
   "Original": "select id, count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(1)",
     "Inputs": [
       {
@@ -643,7 +618,12 @@ Gen4 error: unsupported: aggregation on unions
 "unsupported: filtering on results of cross-shard subquery"
 Gen4 error: can't push predicates on concatenate
 
+# insert having subquery in row values
+"insert into user(id, name) values ((select 1 from user where id = 1), 'A')"
+"expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
+Gen4 plan same as above
+
 # join with USING construct
 "select user.id from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
-Gen4 error: unsupported: join with USING(column_list) clause for complex queries
+Gen4 plan same as above

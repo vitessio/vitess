@@ -268,7 +268,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(224)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -315,6 +315,19 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	// field Suffix string
 	size += hack.RuntimeAllocSize(int64(len(cached.Suffix)))
+	// field VindexValueOffset [][]int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.VindexValueOffset)) * int64(24))
+		for _, elem := range cached.VindexValueOffset {
+			{
+				size += hack.RuntimeAllocSize(int64(cap(elem)) * int64(8))
+			}
+		}
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 
@@ -783,6 +796,40 @@ func (cached *SQLCalcFoundRows) CachedSize(alloc bool) int64 {
 	}
 	// field CountPrimitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.CountPrimitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+
+//go:nocheckptr
+func (cached *ScalarAggregate) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Aggregates []*vitess.io/vitess/go/vt/vtgate/engine.AggregateParams
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Aggregates)) * int64(8))
+		for _, elem := range cached.Aggregates {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field Collations map[int]vitess.io/vitess/go/mysql/collations.ID
+	if cached.Collations != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.Collations)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 96))
+		if len(cached.Collations) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 96))
+		}
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

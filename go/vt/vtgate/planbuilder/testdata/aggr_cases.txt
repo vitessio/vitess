@@ -280,7 +280,7 @@ Gen4 plan same as above
   "Original": "select count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0)",
     "Inputs": [
       {
@@ -302,7 +302,7 @@ Gen4 plan same as above
   "Original": "select count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -327,7 +327,7 @@ Gen4 plan same as above
   "Original": "select sum(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0)",
     "Inputs": [
       {
@@ -349,7 +349,7 @@ Gen4 plan same as above
   "Original": "select sum(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0) AS sum(col)",
     "Inputs": [
       {
@@ -374,7 +374,7 @@ Gen4 plan same as above
   "Original": "select min(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "min(0)",
     "Inputs": [
       {
@@ -396,7 +396,7 @@ Gen4 plan same as above
   "Original": "select min(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "min(0) AS min(col)",
     "Inputs": [
       {
@@ -421,7 +421,7 @@ Gen4 plan same as above
   "Original": "select max(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "max(0)",
     "Inputs": [
       {
@@ -443,7 +443,7 @@ Gen4 plan same as above
   "Original": "select max(col) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "max(0) AS max(col)",
     "Inputs": [
       {
@@ -870,7 +870,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0)",
         "Inputs": [
           {
@@ -900,7 +900,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -927,7 +927,7 @@ Gen4 plan same as above
   "Original": "select id, count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(1)",
     "Inputs": [
       {
@@ -1130,7 +1130,7 @@ Gen4 plan same as above
   "Original": "select count(distinct col2) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count_distinct(0) AS count(distinct col2)",
     "Inputs": [
       {
@@ -1154,7 +1154,7 @@ Gen4 plan same as above
   "Original": "select count(distinct col2) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count_distinct(0|1) AS count(distinct col2)",
     "ResultColumns": 1,
     "Inputs": [
@@ -1625,7 +1625,7 @@ Gen4 plan same as above
   "Original": "select count(*) from user order by null",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0)",
     "Inputs": [
       {
@@ -1647,7 +1647,7 @@ Gen4 plan same as above
   "Original": "select count(*) from user order by null",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -2133,7 +2133,7 @@ Gen4 plan same as above
   "Original": "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -2214,7 +2214,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0)",
         "Inputs": [
           {
@@ -2238,7 +2238,7 @@ Gen4 plan same as above
   "Original": "select distinct count(*) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -2311,7 +2311,7 @@ Gen4 plan same as above
   "Original": "select count(distinct a), count(distinct b) from user",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count_distinct(0|2) AS count(distinct a), count_distinct(1|3) AS count(distinct b)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2472,7 +2472,7 @@ Gen4 plan same as above
   "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) \u003e 10)",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0)",
     "Inputs": [
       {
@@ -2494,7 +2494,7 @@ Gen4 plan same as above
   "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) \u003e 10)",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
@@ -2743,7 +2743,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -2775,7 +2775,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -2807,7 +2807,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -2839,7 +2839,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -2871,7 +2871,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -2903,7 +2903,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -2935,7 +2935,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {
@@ -2967,7 +2967,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Aggregate",
-        "Variant": "Ordered",
+        "Variant": "Scalar",
         "Aggregates": "count(0) AS a",
         "Inputs": [
           {

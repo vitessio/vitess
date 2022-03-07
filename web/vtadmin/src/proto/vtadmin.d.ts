@@ -30471,6 +30471,216 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a BackupRequest. */
+    interface IBackupRequest {
+
+        /** BackupRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupRequest allow_primary */
+        allow_primary?: (boolean|null);
+
+        /** BackupRequest concurrency */
+        concurrency?: (number|Long|null);
+    }
+
+    /** Represents a BackupRequest. */
+    class BackupRequest implements IBackupRequest {
+
+        /**
+         * Constructs a new BackupRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IBackupRequest);
+
+        /** BackupRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupRequest allow_primary. */
+        public allow_primary: boolean;
+
+        /** BackupRequest concurrency. */
+        public concurrency: (number|Long);
+
+        /**
+         * Creates a new BackupRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BackupRequest instance
+         */
+        public static create(properties?: vtctldata.IBackupRequest): vtctldata.BackupRequest;
+
+        /**
+         * Encodes the specified BackupRequest message. Does not implicitly {@link vtctldata.BackupRequest.verify|verify} messages.
+         * @param message BackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BackupRequest message, length delimited. Does not implicitly {@link vtctldata.BackupRequest.verify|verify} messages.
+         * @param message BackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BackupRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.BackupRequest;
+
+        /**
+         * Decodes a BackupRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.BackupRequest;
+
+        /**
+         * Verifies a BackupRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BackupRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BackupRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.BackupRequest;
+
+        /**
+         * Creates a plain object from a BackupRequest message. Also converts values to other types if specified.
+         * @param message BackupRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.BackupRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BackupRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a BackupResponse. */
+    interface IBackupResponse {
+
+        /** BackupResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupResponse keyspace */
+        keyspace?: (string|null);
+
+        /** BackupResponse shard */
+        shard?: (string|null);
+
+        /** BackupResponse event */
+        event?: (logutil.IEvent|null);
+    }
+
+    /** Represents a BackupResponse. */
+    class BackupResponse implements IBackupResponse {
+
+        /**
+         * Constructs a new BackupResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IBackupResponse);
+
+        /** BackupResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupResponse keyspace. */
+        public keyspace: string;
+
+        /** BackupResponse shard. */
+        public shard: string;
+
+        /** BackupResponse event. */
+        public event?: (logutil.IEvent|null);
+
+        /**
+         * Creates a new BackupResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BackupResponse instance
+         */
+        public static create(properties?: vtctldata.IBackupResponse): vtctldata.BackupResponse;
+
+        /**
+         * Encodes the specified BackupResponse message. Does not implicitly {@link vtctldata.BackupResponse.verify|verify} messages.
+         * @param message BackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BackupResponse message, length delimited. Does not implicitly {@link vtctldata.BackupResponse.verify|verify} messages.
+         * @param message BackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BackupResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.BackupResponse;
+
+        /**
+         * Decodes a BackupResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.BackupResponse;
+
+        /**
+         * Verifies a BackupResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BackupResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BackupResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.BackupResponse;
+
+        /**
+         * Creates a plain object from a BackupResponse message. Also converts values to other types if specified.
+         * @param message BackupResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.BackupResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BackupResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a ChangeTabletTypeRequest. */
     interface IChangeTabletTypeRequest {
 
