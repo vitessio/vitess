@@ -23,12 +23,24 @@ import (
 	"strings"
 )
 
+// UsageOptions controls the custom behavior when overriding the Usage for a
+// FlagSet.
 type UsageOptions struct {
-	Preface    func(w io.Writer)
-	Epilogue   func(w io.Writer)
+	// Preface determines the beginning of the help text, before flag usages
+	// and defaults. If this function is nil, the Usage will print "Usage of <os.Args[0]:\n".
+	Preface func(w io.Writer)
+	// Epilogue optionally prints text after the flag usages and defaults. If
+	// this function is nil, the flag usage/defaults will be the end of the
+	// Usage text.
+	Epilogue func(w io.Writer)
+	// FlagFilter allows certain flags to be omitted from the flag usage and
+	// defaults. If non-nil, flags for which this function returns false are
+	// omitted.
 	FlagFilter func(f *goflag.Flag) bool
 }
 
+// SetUsage sets the Usage function for the given FlagSet according to the
+// options. For VEP-4, all flags are printed in their double-dash form.
 func SetUsage(fs *goflag.FlagSet, opts UsageOptions) {
 	flagFilter := opts.FlagFilter
 	if flagFilter == nil {
