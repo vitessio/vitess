@@ -100,7 +100,7 @@ func pushAggrOnRoute(
 				// and don't want to insert weight_strings in the beginning. We don't keep track of the offsets of where these
 				// are pushed since the later coll will reuse them and get the offset for us.
 				groupbyIdx++
-				_, _, err := pushProjection(ctx, groupBy.AsAliasedExpr(), plan, true, true, false)
+				_, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), true)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -110,7 +110,7 @@ func pushAggrOnRoute(
 		for groupbyIdx < len(grouping) {
 			groupBy := grouping[groupbyIdx]
 			groupbyIdx++
-			_, _, err := pushProjection(ctx, groupBy.AsAliasedExpr(), plan, true, true, false)
+			_, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), true)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -326,6 +326,12 @@ func (hp *horizonPlanning) pushAggrOnSemiJoin(
 	return outputGroupings, aggrParams, nil
 }
 
+// this method takes a slice of aggregations that can have missing spots in the form of `nil`,
+// and pushes the non-empty values down.
+// during aggregation planning, it's important to know which of
+// the incoming aggregations correspond to what is sent to the LHS and RHS.
+// Some aggregations only need to be sent to one of the sides of the join, and in that case,
+// the other side will have a nil in this offset of the aggregations
 func (hp *horizonPlanning) filteredPushAggregation(
 	ctx *plancontext.PlanningContext,
 	plan logicalPlan,
