@@ -158,20 +158,19 @@ func TestAggrOnJoin(t *testing.T) {
 		3 rows in set (0.00 sec)
 	*/
 	utils.AssertMatches(t, conn, `
-select /*vt+ PLANNER=gen4 */ count(*) 
+select /*vt+ PLANNER=gen4 */ max(a1.val2), max(a2.val2), count(*) 
 from aggr_test a1 
 	join aggr_test a2 on a1.val2 = a2.id
-	join t3 t on a2.val2 = t.id7`, "[[INT64(8)]]")
-	/*mysql> select count(*)
-	-> from aggr_test a1
-	-> join aggr_test a2 on a1.val2 = a2.id
-	-> join t3 t on a2.val2 = t.id7;
-	+----------+
-	| count(*) |
-	+----------+
-	|        8 |
-	+----------+
-		1 row in set (0.00 sec)*/
+	join t3 t on a2.val2 = t.id7`, "[[INT64(3) INT64(1) INT64(8)]]")
+	/*
+		mysql> select max(a1.val2), max(a2.val2), count(*) from aggr_test a1 join aggr_test a2 on a1.val2 = a2.id join t3 t on a2.val2 = t.id7;
+		+--------------+--------------+----------+
+		| max(a1.val2) | max(a2.val2) | count(*) |
+		+--------------+--------------+----------+
+		|            3 |            1 |        8 |
+		+--------------+--------------+----------+
+		1 row in set (0.00 sec)
+	*/
 }
 
 func TestNotEqualFilterOnScatter(t *testing.T) {
