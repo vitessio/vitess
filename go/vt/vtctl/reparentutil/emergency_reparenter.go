@@ -229,7 +229,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
-	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, validCandidateTablets, tabletMap, opts)
+	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -601,8 +601,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 }
 
-// intermediateSourceIsIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
-func (erp *EmergencyReparenter) intermediateSourceIsIdeal(
+// isIntermediateSourceIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
+func (erp *EmergencyReparenter) isIntermediateSourceIdeal(
 	intermediateSource *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
