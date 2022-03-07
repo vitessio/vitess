@@ -18,60 +18,77 @@ package flag
 import (
 	goflag "flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
 
-func usage() {
-	fmt.Fprintf(goflag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+type UsageOptions struct {
+	Preface  func(w io.Writer)
+	Epilogue func(w io.Writer)
+}
 
-	var buf strings.Builder
-	goflag.CommandLine.VisitAll(func(f *goflag.Flag) {
-		defer buf.Reset()
-		defer func() { fmt.Fprintf(goflag.CommandLine.Output(), "%s\n", buf.String()) }()
-
-		// See https://cs.opensource.google/go/go/+/refs/tags/go1.17.7:src/flag/flag.go;l=512;drc=refs%2Ftags%2Fgo1.17.7
-		// for why two leading spaces.
-		buf.WriteString("  ")
-
-		// We use `UnquoteUsage` to preserve the "name override"
-		// behavior of the standard flag package, documented here:
-		//
-		//	> The listed type, here int, can be changed by placing a
-		//	> back-quoted name in the flag's usage string; the first
-		//	> such item in the message is taken to be a parameter name
-		//	> to show in the message and the back quotes are stripped
-		//	> from the message when displayed. For instance, given
-		//	>
-		//	>	flag.String("I", "", "search `directory` for include files")
-		//	>
-		//	> the output will be
-		//	>
-		// 	> 	-I directory
-		//	>		search directory for include files.
-		name, usage := goflag.UnquoteUsage(f)
-
-		// From the standard library documentation:
-		//	> For bool flags, the type is omitted and if the flag name is
-		//	> one byte the usage message appears on the same line.
-		if bf, ok := f.Value.(maybeBoolFlag); ok && bf.IsBoolFlag() && len(name) == 1 {
-			fmt.Fprintf(&buf, "-%s\t%s", f.Name, usage)
-			return
+func SetUsage(fs *goflag.FlagSet, opts UsageOptions) {
+	fs.Usage = func() {
+		switch opts.Preface {
+		case nil:
+			fmt.Fprintf(fs.Output(), "Usage of %s:\n", os.Args[0])
+		default:
+			opts.Preface(fs.Output())
 		}
 
-		// First line: name, and, type or backticked name.
-		buf.WriteString("--")
-		buf.WriteString(f.Name)
-		if name != "" {
-			fmt.Fprintf(&buf, " %s", name)
-		}
-		buf.WriteString("\n\t")
+		var buf strings.Builder
+		fs.VisitAll(func(f *goflag.Flag) {
+			defer buf.Reset()
+			defer func() { fmt.Fprintf(fs.Output(), "%s\n", buf.String()) }()
 
-		// Second line: usage and optional default, if not the zero value
-		// for the type.
-		buf.WriteString(usage)
-		if !isZeroValue(f, f.DefValue) {
-			fmt.Fprintf(&buf, " (default %s)", f.DefValue)
+			// See https://cs.opensource.google/go/go/+/refs/tags/go1.17.7:src/flag/flag.go;l=512;drc=refs%2Ftags%2Fgo1.17.7
+			// for why two leading spaces.
+			buf.WriteString("  ")
+
+			// We use `UnquoteUsage` to preserve the "name override"
+			// behavior of the standard flag package, documented here:
+			//
+			//	> The listed type, here int, can be changed by placing a
+			//	> back-quoted name in the flag's usage string; the first
+			//	> such item in the message is taken to be a parameter name
+			//	> to show in the message and the back quotes are stripped
+			//	> from the message when displayed. For instance, given
+			//	>
+			//	>	flag.String("I", "", "search `directory` for include files")
+			//	>
+			//	> the output will be
+			//	>
+			// 	> 	-I directory
+			//	>		search directory for include files.
+			name, usage := goflag.UnquoteUsage(f)
+
+			// From the standard library documentation:
+			//	> For bool flags, the type is omitted and if the flag name is
+			//	> one byte the usage message appears on the same line.
+			if bf, ok := f.Value.(maybeBoolFlag); ok && bf.IsBoolFlag() && len(name) == 1 {
+				fmt.Fprintf(&buf, "-%s\t%s", f.Name, usage)
+				return
+			}
+
+			// First line: name, and, type or backticked name.
+			buf.WriteString("--")
+			buf.WriteString(f.Name)
+			if name != "" {
+				fmt.Fprintf(&buf, " %s", name)
+			}
+			buf.WriteString("\n\t")
+
+			// Second line: usage and optional default, if not the zero value
+			// for the type.
+			buf.WriteString(usage)
+			if !isZeroValue(f, f.DefValue) {
+				fmt.Fprintf(&buf, " (default %s)", f.DefValue)
+			}
+		})
+
+		if opts.Epilogue != nil {
+			opts.Epilogue(fs.Output())
 		}
-	})
+	}
 }

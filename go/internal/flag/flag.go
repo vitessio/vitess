@@ -43,7 +43,7 @@ import (
 func Parse() {
 	// First, override the Usage func to make flags show in their double-dash
 	// forms to the user.
-	goflag.CommandLine.Usage = usage
+	SetUsage(goflag.CommandLine, UsageOptions{})
 
 	// Then, parse as normal.
 	goflag.Parse()
