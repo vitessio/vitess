@@ -840,7 +840,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 
 		for _, order := range orderExprs {
 			if sqlparser.ContainsAggregation(order.WeightStrExpr) {
-				ms, err := createMemorySortPlanOnAggregation(plan, orderExprs)
+				ms, err := createMemorySortPlanOnAggregation(ctx, plan, orderExprs)
 				if err != nil {
 					return nil, err
 				}
@@ -1039,7 +1039,7 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *plancontext.PlanningContext, 
 	return sortPlan, nil
 }
 
-func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abstract.OrderBy) (logicalPlan, error) {
+func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *orderedAggregate, orderExprs []abstract.OrderBy) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -1051,15 +1051,12 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 	}
 
 	for _, order := range orderExprs {
-		offset, woffset, idx, found := findExprInOrderedAggr(plan, order)
+		offset, woffset, found := findExprInOrderedAggr(plan, order)
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected to find the order by expression (%s) in orderedAggregate", sqlparser.String(order.Inner))
 		}
 
-		collationID := collations.Unknown
-		if woffset != -1 {
-			collationID = plan.groupByKeys[idx].CollationID
-		}
+		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
@@ -1071,20 +1068,20 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 	return ms, nil
 }
 
-func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, index int, found bool) {
-	for idx, key := range plan.groupByKeys {
+func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, found bool) {
+	for _, key := range plan.groupByKeys {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) ||
 			sqlparser.EqualsExpr(order.Inner.Expr, key.Expr) {
-			return key.KeyCol, key.WeightStringCol, idx, true
+			return key.KeyCol, key.WeightStringCol, true
 		}
 	}
-	for idx, aggregate := range plan.aggregates {
+	for _, aggregate := range plan.aggregates {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Expr) ||
 			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Expr) {
-			return aggregate.Col, -1, idx, true
+			return aggregate.Col, -1, true
 		}
 	}
-	return 0, 0, 0, false
+	return 0, 0, false
 }
 
 func (hp *horizonPlanning) createMemorySortPlan(ctx *plancontext.PlanningContext, plan logicalPlan, orderExprs []abstract.OrderBy, useWeightStr bool) (logicalPlan, error) {
