@@ -4450,6 +4450,10 @@ function_call_keyword
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
+| TRIM openb trim_type_opt FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{Type:$3, StringArg: $5}
+  }
 | BINARY simple_expr %prec UNARY
   {
     // From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary

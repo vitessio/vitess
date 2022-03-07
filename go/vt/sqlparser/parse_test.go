@@ -2278,6 +2278,18 @@ var (
 	}, {
 		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
 		output: "select trim('aa' from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
+		output: "select trim('aa' from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING FROM 'aabccaaa')",
+		output: "select trim(leading from 'aabccaaa') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING FROM 'abca')",
+		output: "select trim(trailing from 'abca') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH FROM 'aabccaaa')",
+		output: "select trim(both from 'aabccaaa') from dual",
 	}}
 )
 
