@@ -2203,7 +2203,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Sharded": true
         },
         "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
-        "OrderBy": "(0|2) ASC, (1|2) ASC",
+        "OrderBy": "(0|2) ASC, (0|2) ASC",
         "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
         "Table": "`user`"
       }
