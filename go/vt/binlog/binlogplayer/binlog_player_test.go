@@ -332,7 +332,7 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 		},
 	}
 
-	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db")
+	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", binlogdatapb.VReplicationWorkflowType_MATERIALIZE)
 	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
@@ -349,7 +349,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 		Tables:   []string{"a", "b"},
 	}
 
-	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db")
+	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", binlogdatapb.VReplicationWorkflowType_MATERIALIZE)
 	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}

@@ -634,7 +634,7 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	}, nil
 }
 
-const insertVreplicationQuery = "insert into _vt.vreplication " +
+const insertVReplicationQuery = "insert into _vt.vreplication " +
 	"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type) " +
 	"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v)"
 
@@ -643,7 +643,7 @@ const insertVreplicationQuery = "insert into _vt.vreplication " +
 func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag,
 	timeUpdated int64, dbName string, workflowType binlogdatapb.VReplicationWorkflowType) string {
 
-	return fmt.Sprintf(insertVreplicationQuery,
+	return fmt.Sprintf(insertVReplicationQuery,
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
 		timeUpdated, BlpRunning, encodeString(dbName), int64(workflowType))
 }
@@ -652,7 +652,7 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource, position, state string, dbName string,
 	workflowType binlogdatapb.VReplicationWorkflowType) string {
 
-	return fmt.Sprintf(insertVreplicationQuery,
+	return fmt.Sprintf(insertVReplicationQuery,
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
 		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName), int64(workflowType))
 }

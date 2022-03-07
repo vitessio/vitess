@@ -648,7 +648,6 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		sgtid := je.shardGTIDs[shard]
 		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
 
-		// todo: copy over workflow type in ig.AddRow
 		i, _ := strconv.ParseInt(params["workflow_type"], 10, 64)
 		workflowType := binlogdatapb.VReplicationWorkflowType(i)
 		if workflowType == binlogdatapb.VReplicationWorkflowType_ONLINEDDL &&
