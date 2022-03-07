@@ -3806,6 +3806,15 @@ var (
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {
+		input:  "execute stmt using 1;",
+		output: "syntax error at position 21 near '1'",
+	}, {
+		input:  "PREPARE stmt FROM a;",
+		output: "syntax error at position 20 near 'a'",
+	}, {
+		input:  "PREPARE stmt FROM @@a;",
+		output: "syntax error at position 22 near 'a'",
+	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",
 	}, {

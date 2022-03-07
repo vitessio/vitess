@@ -396,7 +396,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
-%type <columns> ins_column_list column_list column_list_opt index_list execute_statement_list_opt
+%type <columns> ins_column_list column_list at_id_list column_list_opt index_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -3797,28 +3797,24 @@ prepare_statement:
   {
     $$ = &PrepareStmt{Name:$2, Statement:$4}
   }
-| PREPARE sql_id FROM sql_id
+| PREPARE sql_id FROM AT_ID
   {
-    $$ = &PrepareStmt{Name:$2, StatementIdentifier: $4}
+    $$ = &PrepareStmt{Name:$2, StatementIdentifier: NewColIdentWithAt(string($4), SingleAt)}
   }
 
 execute_statement:
-  EXECUTE sql_id
+  EXECUTE sql_id execute_statement_list_opt
   {
-    $$ = &ExecuteStmt{Name:$2}
-  }
-| EXECUTE sql_id USING execute_statement_list_opt
-  {
-    $$ = &ExecuteStmt{Name:$2, Arguments: $4}
+    $$ = &ExecuteStmt{Name:$2, Arguments: $3}
   }
 
 execute_statement_list_opt:
   {
     $$ = nil
   }
-| column_list
+| USING at_id_list
   {
-    $$ = $1
+    $$ = $2
   }
 
 deallocate_statement:
@@ -4016,6 +4012,16 @@ column_list:
 | column_list ',' sql_id
   {
     $$ = append($$, $3)
+  }
+
+at_id_list:
+  AT_ID
+  {
+    $$ = Columns{NewColIdentWithAt(string($1), SingleAt)}
+  }
+| column_list ',' AT_ID
+  {
+    $$ = append($$, NewColIdentWithAt(string($3), SingleAt))
   }
 
 index_list:
