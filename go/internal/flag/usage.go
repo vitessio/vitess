@@ -24,11 +24,17 @@ import (
 )
 
 type UsageOptions struct {
-	Preface  func(w io.Writer)
-	Epilogue func(w io.Writer)
+	Preface    func(w io.Writer)
+	Epilogue   func(w io.Writer)
+	FlagFilter func(f *goflag.Flag) bool
 }
 
 func SetUsage(fs *goflag.FlagSet, opts UsageOptions) {
+	flagFilter := opts.FlagFilter
+	if flagFilter == nil {
+		flagFilter = func(f *goflag.Flag) bool { return true }
+	}
+
 	fs.Usage = func() {
 		switch opts.Preface {
 		case nil:
@@ -39,6 +45,10 @@ func SetUsage(fs *goflag.FlagSet, opts UsageOptions) {
 
 		var buf strings.Builder
 		fs.VisitAll(func(f *goflag.Flag) {
+			if !flagFilter(f) {
+				return
+			}
+
 			defer buf.Reset()
 			defer func() { fmt.Fprintf(fs.Output(), "%s\n", buf.String()) }()
 
