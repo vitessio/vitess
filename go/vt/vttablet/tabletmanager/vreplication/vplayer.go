@@ -146,7 +146,6 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		filter := vp.replicatorPlan.VStreamFilter
 		filter.WorkflowType = vp.vr.workflowType
 		filter.WorkflowName = vp.vr.workflowName
-		filter.TargetShard = vp.vr.shard
 
 		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, filter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)

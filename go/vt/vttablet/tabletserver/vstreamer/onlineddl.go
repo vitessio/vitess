@@ -49,7 +49,7 @@ func (vs *vstreamer) getMaterializedTableOnlineDDLEvent(table *onlineDDLMigratio
 }
 
 // materializedTable is of the form _04f532ce_9265_11ec_893f_04ed332e05c2_20220220165152_vrepl
-func getUuidFromMaterializedTableName(materializedTableName string) string {
+func getUUIDFromMaterializedTableName(materializedTableName string) string {
 	const (
 		uuidStartIndex = 1
 		uuidLength     = 35
@@ -139,7 +139,7 @@ func (vs *vstreamer) getRenameOnlineDDLEvent(query mysql.Query, dbname string) (
 		// "RENAME TABLE `customer` TO `_swap_07f1423b926511ecbbb504ed332e05c2`, `_04f532ce_9265_11ec_893f_04ed332e05c2_20220220165152_vrepl` TO `customer`, `_swap_07f1423b926511ecbbb504ed332e05c2` TO `_04f532ce_9265_11ec_893f_04ed332e05c2_20220220165152_vrepl`
 		if strings.Contains(strings.ToUpper(query.SQL), "RENAME TABLE") && len(stmt.GetToTables()) == 3 {
 			materializedTable := stmt.GetToTables()[2].Name.String()
-			uuid := getUuidFromMaterializedTableName(materializedTable)
+			uuid := getUUIDFromMaterializedTableName(materializedTable)
 			if vtschema.IsOnlineDDLMaterializedTableName(materializedTable) {
 				ev := &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_ONLINEDDLEVENT,

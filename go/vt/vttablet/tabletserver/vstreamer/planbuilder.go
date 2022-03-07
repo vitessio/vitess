@@ -355,11 +355,6 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*
 			return buildREPlan(ti, vschema, rule.Filter)
 		case rule.Match == ti.Name:
 			return buildTablePlan(ti, vschema, rule.Filter)
-			//case schema.IsOnlineDDLMaterializedTableName(ti.Name):
-			//	// materialized tables are not part of the filter, so we need to create a new table plan for it.
-			//	// only rows in the keyrange of the target should be sent.
-			//	return buildTablePlan(ti, vschema, fmt.Sprintf("select * from %s where in_keyrange('%s')",
-			//		sqlescape.EscapeID(ti.Name), filter.TargetShard))
 		}
 	}
 	log.Infof("buildPlan returns nil")

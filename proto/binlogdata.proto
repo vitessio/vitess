@@ -193,7 +193,6 @@ message Filter {
 
   int64 workflow_type = 3;
   string workflow_name = 4;
-  string target_shard = 5;
 }
 
 // OnDDLAction lists the possible actions for DDLs.

@@ -571,13 +571,6 @@ func (m *Filter) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TargetShard) > 0 {
-		i -= len(m.TargetShard)
-		copy(dAtA[i:], m.TargetShard)
-		i = encodeVarint(dAtA, i, uint64(len(m.TargetShard)))
-		i--
-		dAtA[i] = 0x2a
-	}
 	if len(m.WorkflowName) > 0 {
 		i -= len(m.WorkflowName)
 		copy(dAtA[i:], m.WorkflowName)
@@ -2312,10 +2305,6 @@ func (m *Filter) SizeVT() (n int) {
 		n += 1 + sov(uint64(m.WorkflowType))
 	}
 	l = len(m.WorkflowName)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
-	l = len(m.TargetShard)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -4503,38 +4492,6 @@ func (m *Filter) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.WorkflowName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TargetShard", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.TargetShard = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

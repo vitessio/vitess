@@ -2032,7 +2032,6 @@ func TestOnlineDDLMaterializedTable(t *testing.T) {
 		}},
 		WorkflowType: int64(binlogdatapb.VReplicationWorkflowType_RESHARD),
 		WorkflowName: "wf1",
-		TargetShard:  "-80",
 	}
 
 	testcases := []testcase{{

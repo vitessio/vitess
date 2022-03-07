@@ -104,7 +104,6 @@ type vreplicator struct {
 
 	workflowType int64
 	workflowName string
-	shard        string
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -141,7 +140,6 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
-		shard:           shard,
 	}
 }
 

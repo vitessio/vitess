@@ -111,7 +111,7 @@ type streamerPlan struct {
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
-	log.Infof("newVStreamer phase %s with pos %s, who %s", phase, startPos, filter.WorkflowName+":"+filter.TargetShard)
+	log.Infof("newVStreamer phase %s with pos %s, who %s", phase, startPos, filter.WorkflowName)
 	return &vstreamer{
 		ctx:      ctx,
 		cancel:   cancel,
