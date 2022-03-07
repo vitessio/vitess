@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -225,22 +227,33 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	return restrictedValidCandidates, nil
 }
 
-func findCandidateAnyCell(
+func findCandidate(
 	newPrimary *topodatapb.Tablet,
 	possibleCandidates []*topodatapb.Tablet,
 ) *topodatapb.Tablet {
 	// check whether the one we have selected as the source belongs to the candidate list provided
 	for _, candidate := range possibleCandidates {
-		if !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
-			continue
+		if topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias) {
+			return candidate
 		}
-		return candidate
 	}
 	// return the first candidate from this list, if it isn't empty
 	if len(possibleCandidates) > 0 {
 		return possibleCandidates[0]
 	}
 	return nil
+}
+
+// getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets
+func getTabletsWithPromotionRules(tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) []*topodatapb.Tablet {
+	var res []*topodatapb.Tablet
+	for _, candidate := range tablets {
+		promotionRule := PromotionRule(candidate)
+		if promotionRule == rule {
+			res = append(res, candidate)
+		}
+	}
+	return res
 }
 
 // waitForCatchUp is used to wait for the given tablet until it has caught up to the source
