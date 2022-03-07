@@ -528,7 +528,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 
 	// If we have a distinct aggregating expression,
 	// we handle it by pushing it down to the underlying input as a grouping column
-	distinctGroupBy, offset, aggrs, err := hp.handleDistinctAggr(ctx, aggregationExprs)
+	distinctGroupBy, distinctOffsets, aggrs, err := hp.handleDistinctAggr(ctx, aggregationExprs)
 	if err != nil {
 		return nil, err
 	}
@@ -576,7 +576,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	// Next we add the aggregation expressions and grouping offsets to the OA
-	addColumnsToOA(ctx, oa, distinctGroupBy, aggrParams, offset, groupings, aggregationExprs)
+	addColumnsToOA(ctx, oa, distinctGroupBy, aggrParams, distinctOffsets, groupings, aggregationExprs)
 
 	aggPlan, err = hp.planOrderBy(ctx, order, aggPlan)
 	if err != nil {
@@ -665,14 +665,14 @@ func addColumnsToOA(
 	oa *orderedAggregate,
 	distinctGroupBy *abstract.GroupBy,
 	aggrParams []*engine.AggregateParams,
-	offset int,
+	distinctOffsets []int,
 	groupings []offsets,
 	aggregationExprs []abstract.Aggr,
 ) {
 	if distinctGroupBy == nil {
 		oa.aggregates = aggrParams
 	} else {
-		addDistinctAggr := func() {
+		addDistinctAggr := func(offset int) {
 			// the last grouping we pushed is the one we added for the distinct aggregation
 			o := groupings[len(groupings)-1]
 			a := aggregationExprs[offset]
@@ -688,9 +688,12 @@ func addColumnsToOA(
 				CollationID: collID,
 			})
 		}
-		for i := 0; i <= offset || i <= len(aggrParams); i++ {
-			if i == offset {
-				addDistinctAggr()
+		lastOffset := distinctOffsets[len(distinctOffsets)-1]
+		distinctIdx := 0
+		for i := 0; i <= lastOffset || i <= len(aggrParams); i++ {
+			for distinctIdx < len(distinctOffsets) && i == distinctOffsets[distinctIdx] {
+				addDistinctAggr(i)
+				distinctIdx++
 			}
 			if i < len(aggrParams) {
 				oa.aggregates = append(oa.aggregates, aggrParams[i])
@@ -707,15 +710,11 @@ func addColumnsToOA(
 }
 
 func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, exprs []abstract.Aggr) (
-	distinct *abstract.GroupBy, offset int, aggrs []abstract.Aggr, err error) {
+	distinct *abstract.GroupBy, offsets []int, aggrs []abstract.Aggr, err error) {
 	for i, expr := range exprs {
 		if !expr.Distinct {
 			aggrs = append(aggrs, expr)
 			continue
-		}
-		if distinct != nil {
-			err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
-			return
 		}
 		aliasedExpr, ok := expr.Func.Exprs[0].(*sqlparser.AliasedExpr)
 		if !ok {
@@ -724,18 +723,25 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 		}
 		inner, innerWS, err := hp.qp.GetSimplifiedExpr(aliasedExpr.Expr, ctx.SemTable)
 		if err != nil {
-			return nil, 0, nil, err
+			return nil, nil, nil, err
 		}
 		if exprHasVindex(ctx.VSchema, ctx.SemTable, innerWS, false) {
 			aggrs = append(aggrs, expr)
 			continue
 		}
-		offset = i
-		distinct = &abstract.GroupBy{
-			Inner:         inner,
-			WeightStrExpr: innerWS,
-			InnerIndex:    expr.Index,
+		if distinct == nil {
+			distinct = &abstract.GroupBy{
+				Inner:         inner,
+				WeightStrExpr: innerWS,
+				InnerIndex:    expr.Index,
+			}
+		} else {
+			if !sqlparser.EqualsExpr(distinct.WeightStrExpr, innerWS) {
+				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
+				return nil, nil, nil, err
+			}
 		}
+		offsets = append(offsets, i)
 	}
 	return
 }
