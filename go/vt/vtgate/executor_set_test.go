@@ -163,7 +163,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "incorrect argument type to variable 'sql_select_limit': VARBINARY",
+		err: "incorrect argument type to variable 'sql_select_limit': VARCHAR",
 	}, {
 		in:  "set autocommit = 1+1",
 		err: "variable 'autocommit' can't be set to the value: 2 is not a boolean",
@@ -455,7 +455,7 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 func TestSetUDVFromTabletInput(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 
-	fields := sqltypes.MakeTestFields("some", "VARBINARY")
+	fields := sqltypes.MakeTestFields("some", "VARCHAR")
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(
 			fields,

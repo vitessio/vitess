@@ -18,6 +18,7 @@ package vtadmin
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/patrickmn/go-cache"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/trace"
@@ -61,15 +63,17 @@ import (
 type API struct {
 	vtadminpb.UnimplementedVTAdminServer
 
-	clusters   []*cluster.Cluster
-	clusterMap map[string]*cluster.Cluster
-	serv       *grpcserver.Server
-	router     *mux.Router
+	clusters     []*cluster.Cluster
+	clusterCache *cache.Cache
+	clusterMap   map[string]*cluster.Cluster
+	serv         *grpcserver.Server
+	router       *mux.Router
 
 	authz *rbac.Authorizer
 
 	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
 	vtexplainLock sync.Mutex
+	options       Options
 }
 
 // Options wraps the configuration options for different components of the
@@ -78,6 +82,10 @@ type Options struct {
 	GRPCOpts grpcserver.Options
 	HTTPOpts vtadminhttp.Options
 	RBAC     *rbac.Config
+}
+
+type DynamicClusterJSON struct {
+	ClusterName string `json:"name,omitempty"`
 }
 
 // NewAPI returns a new API, configured to service the given set of clusters,
@@ -139,53 +147,16 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	})
 
 	router := serv.Router().PathPrefix("/api").Subrouter()
-
 	api := &API{
 		clusters:   clusters,
 		clusterMap: clusterMap,
 		router:     router,
 		serv:       serv,
 		authz:      authz,
+		options:    opts,
 	}
-
-	vtadminpb.RegisterVTAdminServer(serv.GRPCServer(), api)
-
-	httpAPI := vtadminhttp.NewAPI(api, opts.HTTPOpts)
-
-	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
-	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
-	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
-	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
-	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
-	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
-	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
-	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
-	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
-	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
-	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
-	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
-	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
-	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
-	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
-	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
-	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet").Methods("GET")
-	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.DeleteTablet)).Name("API.DeleteTablet").Methods("DELETE", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
-	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
-	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
-	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
-	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
-	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
-	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
-	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
-
-	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
-	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
-	experimentalRouter.HandleFunc("/whoami", httpAPI.Adapt(experimental.WhoAmI))
+	router.PathPrefix("/").Handler(api).Methods("DELETE", "OPTIONS", "GET", "POST", "PUT")
+	vtadminpb.RegisterVTAdminServer(api.serv.GRPCServer(), api)
 
 	if !opts.HTTPOpts.DisableDebug {
 		// Due to the way net/http/pprof insists on registering its handlers, we
@@ -229,6 +200,11 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 		middlewares = append(middlewares, vthandlers.NewAuthenticationHandler(authn))
 	}
 
+	if opts.HTTPOpts.EnableDynamicClusters {
+		api.clusterCache = cache.New(24*time.Hour, 24*time.Hour)
+		api.clusterCache.OnEvicted(api.EjectDynamicCluster)
+	}
+
 	router.Use(middlewares...)
 
 	return api
@@ -238,6 +214,125 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 // grpcserver.Options) until shutdown or irrecoverable error occurs.
 func (api *API) ListenAndServe() error {
 	return api.serv.ListenAndServe()
+}
+
+// ServeHTTP serves all routes matching path "/api" (see above)
+// It first processes cookies, and acts accordingly
+// Primarily, it sets up a dynamic API if HttpOpts.EnableDynamicClusters is set to true
+func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !api.options.HTTPOpts.EnableDynamicClusters {
+		api.Handler().ServeHTTP(w, r)
+		return
+	}
+	dynamicAPI := &API{
+		clusters:   api.clusters,
+		clusterMap: api.clusterMap,
+		router:     api.router,
+		serv:       api.serv,
+		authz:      api.authz,
+		options:    api.options,
+	}
+
+	clusterCookie, err := r.Cookie("cluster")
+
+	if err == nil {
+		decoded, err := base64.StdEncoding.DecodeString(clusterCookie.Value)
+		if err == nil {
+			var clusterJSON DynamicClusterJSON
+			err = json.Unmarshal(decoded, &clusterJSON)
+			if err == nil {
+				clusterID := clusterJSON.ClusterName
+				c, err := cluster.Config{
+					ID:            clusterID,
+					Name:          clusterID,
+					DiscoveryImpl: "dynamic",
+					DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+						"dynamic": map[string]string{
+							"discovery": string(decoded),
+						},
+					},
+				}.Cluster()
+				if err == nil {
+					api.clusterMap[clusterID] = c
+					api.clusters = append(api.clusters, c)
+					err = api.clusterCache.Add(clusterID, c, 24*time.Hour)
+					if err != nil {
+						log.Infof("could not add dynamic cluster %s to cluster cache: %+v", clusterID, err)
+					}
+				}
+				selectedCluster := api.clusterMap[clusterID]
+				dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
+				dynamicAPI.clusterMap = map[string]*cluster.Cluster{clusterID: selectedCluster}
+			}
+		}
+	}
+
+	defer dynamicAPI.Close()
+	dynamicAPI.Handler().ServeHTTP(w, r)
+}
+
+func (api *API) Close() error {
+	return nil
+}
+
+// Handler handles all routes under "/api" (see above)
+func (api *API) Handler() http.Handler {
+	router := mux.NewRouter().PathPrefix("/api").Subrouter()
+
+	router.Use(handlers.CORS(
+		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+
+	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
+
+	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
+	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
+	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
+	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate", httpAPI.Adapt(vtadminhttp.ValidateKeyspace)).Name("API.ValidateKeyspace").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/schema", httpAPI.Adapt(vtadminhttp.ValidateSchemaKeyspace)).Name("API.ValidateSchemaKeyspace").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}/validate/version", httpAPI.Adapt(vtadminhttp.ValidateVersionKeyspace)).Name("API.ValidateVersionKeyspace").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
+	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
+	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
+	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
+	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
+	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
+	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
+	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
+	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
+	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
+	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet").Methods("GET")
+	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.DeleteTablet)).Name("API.DeleteTablet").Methods("DELETE", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
+	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
+	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/set_read_only", httpAPI.Adapt(vtadminhttp.SetReadOnly)).Name("API.SetReadOnly").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/set_read_write", httpAPI.Adapt(vtadminhttp.SetReadWrite)).Name("API.SetReadWrite").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
+	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
+	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
+	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
+	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
+
+	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
+	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
+	experimentalRouter.HandleFunc("/whoami", httpAPI.Adapt(experimental.WhoAmI))
+
+	return router
+}
+
+func (api *API) EjectDynamicCluster(key string, value interface{}) {
+	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
+	_, ok := api.clusterMap[key]
+	if ok {
+		delete(api.clusterMap, key)
+	}
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -1029,6 +1124,72 @@ func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest
 	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
 }
 
+// SetReadOnly sets the tablet to read only mode
+func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyRequest) (*vtadminpb.SetReadOnlyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.SetReadOnly")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tablet.Tablet.Alias,
+		Writable:    false,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error setting tablet to read-only: %w", err)
+	}
+
+	return &vtadminpb.SetReadOnlyResponse{}, nil
+}
+
+// SetReadWrite sets the tablet to read-write mode
+func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteRequest) (*vtadminpb.SetReadWriteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.SetReadWrite")
+	defer span.Finish()
+
+	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := api.clusterMap[tablet.Cluster.Id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, tablet.Cluster.Id)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tablet.Tablet.Alias,
+		Writable:    true,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error setting tablet to read-write: %w", err)
+	}
+
+	return &vtadminpb.SetReadWriteResponse{}, nil
+}
+
 // StartReplication starts replication on the specified tablet.
 func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplicationRequest) (*vtadminpb.StartReplicationResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.StartReplication")
@@ -1416,6 +1577,90 @@ func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateReq
 	}
 
 	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil
+}
+
+// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	res, err := c.Vtctld.ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
+		Keyspace:    req.Keyspace,
+		PingTablets: req.PingTablets,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateSchemaKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace: req.Keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
+		return nil, nil
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
+		Keyspace: req.Keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.

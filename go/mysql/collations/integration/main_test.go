@@ -46,6 +46,11 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 		conn.Close()
 		t.Skipf("collation integration tests are only supported in MySQL 8.0+")
 	}
+	if strings.HasPrefix(conn.ServerVersion, "8.0.27") {
+		conn.Close()
+		t.Fatalf("MySQL 8.0.27 is UNSUPPORTED for integration testing because of a behavior regression; " +
+			"please update to 8.0.28, or rollback to a previous 8.0 version. See: MySQL bug #33117410.")
+	}
 	return conn
 }
 
@@ -71,6 +76,7 @@ func TestMain(m *testing.M) {
 				},
 			},
 			OnlyMySQL: true,
+			Charset:   "utf8mb4",
 		}
 		cluster := vttest.LocalCluster{
 			Config: cfg,

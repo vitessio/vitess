@@ -130,8 +130,6 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 		if len(primaries) == 0 {
 			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no PRIMARY is available; will retry until there is PRIMARY again", e.keyspace, e.shard)
 			statsRetryCount.Add(1)
-			// TODO(deepthi): for backwards compatibility. remove after v12.0
-			statsRetryCounters.Add(retryCategoryNoMasterAvailable, 1)
 			statsRetryCounters.Add(retryCategoryNoPrimaryAvailable, 1)
 			goto retry
 		}

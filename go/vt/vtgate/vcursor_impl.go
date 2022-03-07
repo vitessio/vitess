@@ -140,7 +140,6 @@ func newVCursorImpl(
 	}
 
 	// we only support collations for the new TabletGateway implementation
-	collationEnv := collations.Local()
 	var connCollation collations.ID
 	if executor != nil {
 		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
@@ -148,11 +147,7 @@ func newVCursorImpl(
 		}
 	}
 	if connCollation == collations.Unknown {
-		coll, err := collationEnv.ResolveCollation("", "")
-		if err != nil {
-			panic("should never happen: don't know how to resolve default collation")
-		}
-		connCollation = coll.ID()
+		connCollation = collations.Default()
 	}
 
 	return &vcursorImpl{
@@ -171,6 +166,16 @@ func newVCursorImpl(
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
 	}, nil
+}
+
+// HasSystemVariables returns whether the session has set system variables or not
+func (vc *vcursorImpl) HasSystemVariables() bool {
+	return vc.safeSession.HasSystemVariables()
+}
+
+// GetSystemVariables takes a visitor function that will save each system variables of the session
+func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
+	vc.safeSession.GetSystemVariables(f)
 }
 
 // ConnCollation returns the collation of this session
@@ -311,14 +316,22 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 		return nil, errNoDbAvailable
 	}
 
-	// Looks for any sharded keyspace if present, otherwise take any keyspace.
+	var keyspaces = make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
 	for _, ks := range vc.vschema.Keyspaces {
-		keyspace = ks.Keyspace
-		if keyspace.Sharded {
-			return keyspace, nil
+		keyspaces = append(keyspaces, ks.Keyspace)
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+
+	// Look for any sharded keyspace if present, otherwise take the first keyspace,
+	// sorted alphabetically
+	for _, ks := range keyspaces {
+		if ks.Sharded {
+			return ks, nil
 		}
 	}
-	return keyspace, nil
+	return keyspaces[0], nil
 }
 
 func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
@@ -363,19 +376,9 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	switch strings.ToLower(*plannerVersion) {
-	case "v3":
-		return planbuilder.V3
-	case "gen4":
-		return planbuilder.Gen4
-	case "gen4greedy", "greedy":
-		return planbuilder.Gen4GreedyOnly
-	case "left2right":
-		return planbuilder.Gen4Left2Right
-	case "gen4fallback":
-		return planbuilder.Gen4WithFallback
-	case "gen4comparev3":
-		return planbuilder.Gen4CompareV3
+	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
+	if done {
+		return version
 	}
 
 	log.Warning("unknown planner version configured. using the default")
@@ -748,6 +751,11 @@ func (vc *vcursorImpl) SetSessionEnableSystemSettings(allow bool) error {
 // GetSessionEnableSystemSettings implements the SessionActions interface
 func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
 	return vc.safeSession.GetSessionEnableSystemSettings()
+}
+
+// GetEnableSetVar implements the SessionActions interface
+func (vc *vcursorImpl) GetEnableSetVar() bool {
+	return vc.safeSession.GetEnableSetVar()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface

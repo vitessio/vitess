@@ -20,6 +20,8 @@ import (
 	"errors"
 	"sort"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -65,7 +67,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -92,22 +94,76 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema plancontext.VSchema, v3planner selectPlanner) (selectPlanner, error) {
-	switch vschema.Planner() {
+func getConfiguredPlanner(vschema plancontext.VSchema, v3planner func(string) selectPlanner, stmt sqlparser.SelectStatement, query string) (selectPlanner, error) {
+	planner, ok := getPlannerFromQuery(stmt)
+	if !ok {
+		// if the query doesn't specify the planner, we check what the configuration is
+		planner = vschema.Planner()
+	}
+	switch planner {
 	case Gen4CompareV3:
-		return gen4CompareV3Planner, nil
+		return gen4CompareV3Planner(query), nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
-		return gen4Planner, nil
+		return gen4Planner(query, planner), nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
-			primary:  gen4Planner,
-			fallback: v3planner,
+			primary:  gen4Planner(query, querypb.ExecuteOptions_Gen4),
+			fallback: v3planner(query),
 		}
 		return fp.plan, nil
 	default:
 		// default is v3 plan
-		return v3planner, nil
+		return v3planner(query), nil
 	}
+}
+
+// getPlannerFromQuery chooses the planner to use based on the query
+// The default planner can be overridden using /*vt+ PLANNER=gen4 */
+// We will also fall back on the gen4 planner if we encounter outer join,
+// since there are known problems with the v3 planner and outer joins
+func getPlannerFromQuery(stmt sqlparser.SelectStatement) (version plancontext.PlannerVersion, found bool) {
+	version, found = getPlannerFromQueryHint(stmt)
+	if found {
+		return
+	}
+
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		join, ok := node.(*sqlparser.JoinTableExpr)
+		if ok {
+			if join.Join == sqlparser.LeftJoinType || join.Join == sqlparser.RightJoinType {
+				version = querypb.ExecuteOptions_Gen4
+				found = true
+				return false, nil
+			}
+		}
+		return true, nil
+	}, stmt)
+
+	return
+}
+
+func getPlannerFromQueryHint(stmt sqlparser.SelectStatement) (plancontext.PlannerVersion, bool) {
+	var d sqlparser.CommentDirectives
+
+	firstSelect := sqlparser.GetFirstSelect(stmt)
+	if firstSelect != nil {
+		d = sqlparser.ExtractCommentDirectives(firstSelect.Comments)
+	}
+	if d == nil {
+		return plancontext.PlannerVersion(0), false
+	}
+
+	val, ok := d[sqlparser.DirectiveQueryPlanner]
+	if !ok {
+		return plancontext.PlannerVersion(0), false
+	}
+
+	str, ok := val.(string)
+	if !ok {
+		log.Errorf("planner specified with unknown type %v", val)
+		return plancontext.PlannerVersion(0), false
+	}
+	return plancontext.PlannerNameToVersion(str)
 }
 
 func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error)) (engine.Primitive, error) {
@@ -117,16 +173,16 @@ func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVa
 	return f(stmt, reservedVars, vschema)
 }
 
-type selectPlanner func(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error)
+type selectPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error)
 
 func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan, stmt, query)
 		if err != nil {
 			return nil, err
 		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner(query))
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Insert:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
 	case *sqlparser.Update:
@@ -134,11 +190,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case *sqlparser.Delete:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
 	case *sqlparser.Union:
-		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
 		if err != nil {
 			return nil, err
 		}
-		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner(query))
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterMigration:

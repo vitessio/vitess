@@ -73,6 +73,8 @@ type (
 
 		// NotSingleRouteErr stores any errors that have to be generated if the query cannot be planned as a single route.
 		NotSingleRouteErr error
+		// NotUnshardedErr stores any errors that have to be generated if the query is not unsharded.
+		NotUnshardedErr error
 
 		// Recursive contains the dependencies from the expression to the actual tables
 		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
@@ -95,7 +97,7 @@ type (
 
 		// DefaultCollation is the default collation for this query, which is usually
 		// inherited from the connection's default collation.
-		DefaultCollation collations.ID
+		Collation collations.ID
 
 		Warning string
 	}
@@ -214,13 +216,17 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	return nil
 }
 
-// CollationFor returns the collation name of expressions in the query
-func (st *SemTable) CollationFor(e sqlparser.Expr) collations.ID {
+// CollationForExpr returns the collation name of expressions in the query
+func (st *SemTable) CollationForExpr(e sqlparser.Expr) collations.ID {
 	typ, found := st.ExprTypes[e]
 	if found {
 		return typ.Collation
 	}
-	return st.DefaultCollation
+	return collations.Unknown
+}
+
+func (st *SemTable) DefaultCollation() collations.ID {
+	return st.Collation
 }
 
 // dependencies return the table dependencies of the expression. This method finds table dependencies recursively
@@ -320,14 +326,43 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 	}
 }
 
-var _ evalengine.ConverterLookup = (*SemTable)(nil)
+var _ evalengine.TranslationLookup = (*SemTable)(nil)
 
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
+// ColumnLookup implements the TranslationLookup interface
 func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
 
-func (st *SemTable) CollationIDLookup(expr sqlparser.Expr) collations.ID {
-	return st.CollationFor(expr)
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
+func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
+	var ks *vindexes.Keyspace
+	for _, table := range st.Tables {
+		vindexTable := table.GetVindexTable()
+		if vindexTable == nil || vindexTable.Type != "" {
+			// this is not a simple table access - can't shortcut
+			return nil
+		}
+		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		if !ok {
+			return nil
+		}
+		if name.Name.String() != vindexTable.Name.String() {
+			// this points to a table alias. safer to not shortcut
+			return nil
+		}
+		this := vindexTable.Keyspace
+		if this == nil || this.Sharded {
+			return nil
+		}
+		if ks == nil {
+			ks = this
+		} else {
+			if ks != this {
+				return nil
+			}
+		}
+	}
+	return ks
 }

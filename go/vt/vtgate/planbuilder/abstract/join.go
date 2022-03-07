@@ -36,15 +36,17 @@ var _ LogicalOperator = (*Join)(nil)
 func (*Join) iLogical() {}
 
 // PushPredicate implements the Operator interface
-func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	deps := semTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(j.LHS.TableID()):
-		return j.LHS.PushPredicate(expr, semTable)
-	case deps.IsSolvedBy(j.RHS.TableID()):
-		if !j.LeftJoin {
-			return j.RHS.PushPredicate(expr, semTable)
+		lhs, err := j.LHS.PushPredicate(expr, semTable)
+		if err != nil {
+			return nil, err
 		}
+		j.LHS = lhs
+		return j, nil
+	case deps.IsSolvedBy(j.RHS.TableID()):
 		// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
 		// where tbl is on the rhs of the left outer join
 		if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
@@ -59,15 +61,26 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 
 			// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
 			j.LeftJoin = false
-			return j.RHS.PushPredicate(expr, semTable)
 		}
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
+		if !j.LeftJoin {
+			rhs, err := j.RHS.PushPredicate(expr, semTable)
+			if err != nil {
+				return nil, err
+			}
+			j.RHS = rhs
+			return j, err
+		}
+		op := &Filter{
+			Source:     j,
+			Predicates: []sqlparser.Expr{expr},
+		}
+		return op, nil
 	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
 		j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
-		return nil
+		return j, nil
 	}
 
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
 // TableID implements the Operator interface

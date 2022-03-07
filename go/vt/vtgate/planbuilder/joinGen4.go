@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -75,4 +76,9 @@ func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 // ContainsTables implements the logicalPlan interface
 func (j *joinGen4) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
+}
+
+// OutputColumns implements the logicalPlan interface
+func (j *joinGen4) OutputColumns() []sqlparser.SelectExpr {
+	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }

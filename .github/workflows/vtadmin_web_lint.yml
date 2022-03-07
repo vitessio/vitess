@@ -28,7 +28,7 @@ jobs:
           node-version: '16.13.0'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # Using "if: always()" means each step will run, even if a previous
       # step fails. This is nice because, for example, we want stylelint and 
@@ -49,3 +49,8 @@ jobs:
       - name: Run prettier
         if: always()
         run: npm run lint:prettier
+
+    # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
+    concurrency: 
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true

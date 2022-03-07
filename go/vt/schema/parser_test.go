@@ -93,6 +93,55 @@ func TestReplaceTableNameInCreateTableStatement(t *testing.T) {
 	}
 }
 
+func TestReplaceViewNameInCreateViewStatement(t *testing.T) {
+	replacementViewName := `my_view`
+	tt := []struct {
+		stmt    string
+		expect  string
+		isError bool
+	}{
+		{
+			stmt:    "CREATE VIEW vw AS SELECT * FROM tbl",
+			isError: true,
+		},
+		{
+			stmt:   "CREATE VIEW `vw` AS SELECT * FROM tbl",
+			expect: "CREATE VIEW `my_view` AS SELECT * FROM tbl",
+		},
+		{
+			stmt:   "CREATE     VIEW    `vw`   AS      SELECT    *  FROM     tbl",
+			expect: "CREATE     VIEW    `my_view`   AS      SELECT    *  FROM     tbl",
+		},
+		{
+			stmt:   "create view `vw` as select * from tbl",
+			expect: "create view `my_view` as select * from tbl",
+		},
+		{
+			stmt:   "create or replace view `vw` as select * from tbl",
+			expect: "create or replace view `my_view` as select * from tbl",
+		},
+		{
+			stmt:   "create ALGORITHM =TEMPTABLE view `vw` as select * from tbl",
+			expect: "create ALGORITHM =TEMPTABLE view `my_view` as select * from tbl",
+		},
+		{
+			stmt:    "CREATE VIEW `schema`.`vw` AS SELECT * FROM tbl",
+			isError: true,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.stmt, func(*testing.T) {
+			result, err := ReplaceViewNameInCreateViewStatement(ts.stmt, replacementViewName)
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, ts.expect, result)
+			}
+		})
+	}
+}
+
 func TestLegacyParseRevertUUID(t *testing.T) {
 
 	{

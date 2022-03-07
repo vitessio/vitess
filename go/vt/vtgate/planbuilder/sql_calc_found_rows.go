@@ -110,3 +110,8 @@ func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 func (s *sqlCalcFoundRows) Inputs() []logicalPlan {
 	return []logicalPlan{s.LimitQuery, s.CountQuery}
 }
+
+// OutputColumns implements the logicalPlan interface
+func (s *sqlCalcFoundRows) OutputColumns() []sqlparser.SelectExpr {
+	return s.LimitQuery.OutputColumns()
+}

@@ -18,7 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 func (expr *Literal) constant() bool {
@@ -50,46 +50,47 @@ func (expr *UnaryExpr) constant() bool {
 	return expr.Inner.constant()
 }
 
-func (expr *Literal) simplify() error {
+func (expr *Literal) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *BindVariable) simplify() error {
+func (expr *BindVariable) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *Column) simplify() error {
+func (expr *Column) simplify(_ *ExpressionEnv) error {
 	return nil
 }
 
-func (expr *BinaryExpr) simplify() error {
+func (expr *BinaryExpr) simplify(env *ExpressionEnv) error {
 	var err error
-	expr.Left, err = simplifyExpr(expr.Left)
+	expr.Left, err = simplifyExpr(env, expr.Left)
 	if err != nil {
 		return err
 	}
-	expr.Right, err = simplifyExpr(expr.Right)
+	expr.Right, err = simplifyExpr(env, expr.Right)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (expr *LikeExpr) simplify() error {
-	if err := expr.BinaryCoercedExpr.simplify(); err != nil {
+func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
+	if err := expr.BinaryExpr.simplify(env); err != nil {
 		return err
 	}
 
 	lit2, _ := expr.Right.(*Literal)
-	if lit2 != nil && lit2.Val.textual() && expr.MergedCollation.Valid() {
-		coll := collations.Local().LookupByID(expr.MergedCollation.Collation)
+	if lit2 != nil && lit2.Val.isTextual() {
+		expr.MatchCollation = lit2.Val.collation().Collation
+		coll := collations.Local().LookupByID(expr.MatchCollation)
 		expr.Match = coll.Wildcard(lit2.Val.bytes(), 0, 0, 0)
 	}
 	return nil
 }
 
-func (inexpr *InExpr) simplify() error {
-	if err := inexpr.BinaryExpr.simplify(); err != nil {
+func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
+	if err := inexpr.BinaryExpr.simplify(env); err != nil {
 		return err
 	}
 
@@ -100,7 +101,7 @@ func (inexpr *InExpr) simplify() error {
 
 	var (
 		collation collations.ID
-		typ       querypb.Type
+		typ       sqltypes.Type
 		optimize  = true
 	)
 
@@ -144,34 +145,10 @@ func (inexpr *InExpr) simplify() error {
 	return nil
 }
 
-func (expr *BinaryCoercedExpr) simplify() error {
-	var err error
-
-	if err = expr.BinaryExpr.simplify(); err != nil {
-		return err
-	}
-
-	lit1, _ := expr.Left.(*Literal)
-	lit2, _ := expr.Right.(*Literal)
-
-	if lit1 != nil && expr.CoerceLeft != nil {
-		b, _ := expr.CoerceLeft(nil, lit1.Val.bytes())
-		lit1.Val.replaceBytes(b, expr.MergedCollation)
-		expr.CoerceLeft = nil
-	}
-	if lit2 != nil && expr.CoerceRight != nil {
-		b, _ := expr.CoerceRight(nil, lit2.Val.bytes())
-		lit2.Val.replaceBytes(b, expr.MergedCollation)
-		expr.CoerceRight = nil
-	}
-
-	return nil
-}
-
-func (expr TupleExpr) simplify() error {
+func (expr TupleExpr) simplify(env *ExpressionEnv) error {
 	var err error
 	for i, subexpr := range expr {
-		expr[i], err = simplifyExpr(subexpr)
+		expr[i], err = simplifyExpr(env, subexpr)
 		if err != nil {
 			return err
 		}
@@ -179,21 +156,39 @@ func (expr TupleExpr) simplify() error {
 	return nil
 }
 
-func (expr *UnaryExpr) simplify() error {
+func (expr *UnaryExpr) simplify(env *ExpressionEnv) error {
 	var err error
-	expr.Inner, err = simplifyExpr(expr.Inner)
+	expr.Inner, err = simplifyExpr(env, expr.Inner)
 	return err
 }
 
-func simplifyExpr(e Expr) (Expr, error) {
+func (c *CallExpr) constant() bool {
+	return c.Arguments.constant()
+}
+
+func (c *CallExpr) simplify(env *ExpressionEnv) error {
+	return c.Arguments.simplify(env)
+}
+
+func (c *WeightStringCallExpr) constant() bool {
+	return c.String.constant()
+}
+
+func (c *WeightStringCallExpr) simplify(env *ExpressionEnv) error {
+	var err error
+	c.String, err = simplifyExpr(env, c.String)
+	return err
+}
+
+func simplifyExpr(env *ExpressionEnv, e Expr) (Expr, error) {
 	if e.constant() {
-		res, err := noenv.Evaluate(e)
+		res, err := env.Evaluate(e)
 		if err != nil {
 			return nil, err
 		}
 		return &Literal{Val: res}, nil
 	}
-	if err := e.simplify(); err != nil {
+	if err := e.simplify(env); err != nil {
 		return nil, err
 	}
 	return e, nil

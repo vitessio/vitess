@@ -17,6 +17,7 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -24,8 +25,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -247,26 +246,6 @@ func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Tar
 	t.currentTime = batchTime.Wait()
 	t.mu.Unlock()
 	return t.tsv.ReadTransaction(ctx, target, dtid)
-}
-
-// ExecuteBatch is part of the QueryService interface.
-func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	t.mu.Lock()
-	t.currentTime = batchTime.Wait()
-
-	// Since the query is simulated being "sent" over the wire we need to
-	// copy the bindVars into the executor to avoid a data race.
-	for _, query := range queries {
-		query.BindVariables = sqltypes.CopyBindVariables(query.BindVariables)
-		t.tabletQueries = append(t.tabletQueries, &TabletQuery{
-			Time:     t.currentTime,
-			SQL:      query.Sql,
-			BindVars: query.BindVariables,
-		})
-	}
-	t.mu.Unlock()
-
-	return t.tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 }
 
 // BeginExecute is part of the QueryService interface.
@@ -704,7 +683,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Tabl
 			colNames = append(colNames, col)
 			colTypes = append(colTypes, colType)
 		}
-	case *sqlparser.FuncExpr:
+	case sqlparser.Callable:
 		// As a shortcut, functions are integral types
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT32)
@@ -723,6 +702,8 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Tabl
 			colTypes = append(colTypes, querypb.Type_VARCHAR)
 		case sqlparser.FloatVal:
 			colTypes = append(colTypes, querypb.Type_FLOAT64)
+		case sqlparser.DecimalVal:
+			colTypes = append(colTypes, querypb.Type_DECIMAL)
 		default:
 			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
 		}

@@ -5,7 +5,7 @@
   "Original": "SELECT c FROM sbtest34 WHERE id=15",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -28,7 +28,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -47,12 +47,12 @@ Gen4 plan same as above
   "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0)",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -69,12 +69,12 @@ Gen4 plan same as above
   "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0) AS SUM(k)",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -94,7 +94,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -111,7 +111,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -137,7 +137,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -157,12 +157,12 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "(0|1)",
+    "GroupBy": "(0|1) COLLATE latin1_swedish_ci",
     "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -263,7 +263,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
-    "TableName": "sbtest16"
+    "TableName": "sbtest16",
+    "VindexValues": {
+      "hash": "INT64(42)"
+    }
   }
 }
 Gen4 plan same as above

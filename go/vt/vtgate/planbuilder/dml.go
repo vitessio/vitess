@@ -34,7 +34,7 @@ type (
 	costDML struct {
 		vindexCost int
 		isUnique   bool
-		opCode     engine.DMLOpcode
+		opCode     engine.Opcode
 	}
 
 	// vindexPlusPredicatesDML is a struct used to store all the predicates that the vindex can be used to query
@@ -51,7 +51,7 @@ type (
 		values []evalengine.Expr
 		// columns that we have seen so far. Used only for multi-column vindexes so that we can track how many columns part of the vindex we have seen
 		colsSeen    map[string]interface{}
-		opcode      engine.DMLOpcode
+		opcode      engine.Opcode
 		foundVindex vindexes.Vindex
 		cost        costDML
 	}
@@ -60,7 +60,7 @@ type (
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
 func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
-	engine.DMLOpcode,
+	engine.Opcode,
 	*vindexes.ColumnVindex,
 	vindexes.Vindex,
 	[]evalengine.Expr,
@@ -79,9 +79,6 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
 	filters := sqlparser.SplitAndExpression(nil, where.Expr)
 	// go over the vindexes in the order of increasing cost
 	for _, colVindex := range table.Ordered {
-		if !colVindex.IsUnique() {
-			continue
-		}
 		if lu, isLu := colVindex.Vindex.(vindexes.LookupBackfill); isLu && lu.IsBackfilling() {
 			// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
 			// and we will be able to do a delete equal. Otherwise, we continue to look for next best vindex.
@@ -118,7 +115,7 @@ func getBestVindexOption(exprs []sqlparser.Expr, index *vindexes.ColumnVindex) *
 			continue
 		}
 
-		var opcode engine.DMLOpcode
+		var opcode engine.Opcode
 		switch comparison.Operator {
 		case sqlparser.EqualOp:
 			if !sqlparser.IsValue(valExpr) {
@@ -129,11 +126,11 @@ func getBestVindexOption(exprs []sqlparser.Expr, index *vindexes.ColumnVindex) *
 			if !sqlparser.IsSimpleTuple(valExpr) {
 				continue
 			}
-			opcode = engine.In
+			opcode = engine.IN
 		default:
 			continue
 		}
-		expr, err := evalengine.Convert(comparison.Right, semantics.EmptySemTable())
+		expr, err := evalengine.Translate(comparison.Right, semantics.EmptySemTable())
 		if err != nil {
 			continue
 		}
@@ -168,7 +165,7 @@ func lessCostDML(c1, c2 costDML) bool {
 }
 
 // addVindexOptions adds new vindexOptionDML if it matches any column of the vindexes.ColumnVindex
-func addVindexOptions(column *sqlparser.ColName, value evalengine.Expr, opcode engine.DMLOpcode, v *vindexPlusPredicatesDML) {
+func addVindexOptions(column *sqlparser.ColName, value evalengine.Expr, opcode engine.Opcode, v *vindexPlusPredicatesDML) {
 	switch v.colVindex.Vindex.(type) {
 	case vindexes.SingleColumn:
 		col := v.colVindex.Columns[0]
@@ -239,7 +236,7 @@ func copyOptionDML(orig *vindexOptionDML) *vindexOptionDML {
 }
 
 // updateWithNewColumn is used to update vindexOptionDML with a new column that matches one of its unseen columns
-func (option *vindexOptionDML) updateWithNewColumn(colLoweredName string, indexOfCol int, value evalengine.Expr, colVindex *vindexes.ColumnVindex, opcode engine.DMLOpcode) {
+func (option *vindexOptionDML) updateWithNewColumn(colLoweredName string, indexOfCol int, value evalengine.Expr, colVindex *vindexes.ColumnVindex, opcode engine.Opcode) {
 	option.colsSeen[colLoweredName] = true
 	option.values[indexOfCol] = value
 	option.ready = len(option.colsSeen) == len(colVindex.Columns)
@@ -264,7 +261,7 @@ func createOptionDML(
 }
 
 // costForDML returns a cost struct to make route choices easier to compare
-func costForDML(foundVindex *vindexes.ColumnVindex, opcode engine.DMLOpcode) costDML {
+func costForDML(foundVindex *vindexes.ColumnVindex, opcode engine.Opcode) costDML {
 	switch opcode {
 	// For these opcodes, we should not have a vindex, so we just return the opcode as the cost
 	case engine.Unsharded, engine.Scatter:
@@ -281,7 +278,7 @@ func costForDML(foundVindex *vindexes.ColumnVindex, opcode engine.DMLOpcode) cos
 }
 
 func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, *vindexes.ColumnVindex, error) {
-	edml := &engine.DML{}
+	edml := engine.NewDML()
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	rb, err := pb.processDMLTable(tableExprs, reservedVars, nil)
 	if err != nil {

@@ -39,17 +39,12 @@ import (
 )
 
 type testHandler struct {
+	mysql.UnimplementedHandler
 	lastConn *mysql.Conn
 }
 
 func (th *testHandler) NewConnection(c *mysql.Conn) {
 	th.lastConn = c
-}
-
-func (th *testHandler) ConnectionReady(c *mysql.Conn) {
-}
-
-func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
@@ -65,10 +60,11 @@ func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb
 	return nil, nil
 }
 
-func (th *testHandler) ComResetConnection(c *mysql.Conn) {
+func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
 }
 
-func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
 	return nil
 }
 

@@ -2114,7 +2114,7 @@ func TestExecutorExplain(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t,
-		`[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from `+"`user`"+`")]]`,
+		`[[VARCHAR("Route") VARCHAR("Scatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from `+"`user`"+`")]]`,
 		fmt.Sprintf("%v", result.Rows))
 
 	result, err = executorExec(executor, "explain format = vitess select 42", bindVars)
@@ -2290,7 +2290,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
+	session := NewSafeSession(&vtgatepb.Session{EnableSetVar: true, Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
 	})
@@ -2312,6 +2312,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	_, err = exec(executor, session, "commit")
 	require.NoError(t, err)
 	emptyBV := map[string]*querypb.BindVariable{}
+
 	sbc1WantQueries := []*querypb.BoundQuery{{
 		Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
 	}, {
@@ -2337,6 +2338,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	}, {
 		Sql: "select id from `user` where id = 3", BindVariables: emptyBV,
 	}}
+
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
 	testQueryLog(t, logChan, "TestExecute", "SET", "set session sql_mode = ''", 1)

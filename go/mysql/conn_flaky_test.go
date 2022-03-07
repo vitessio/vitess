@@ -805,6 +805,7 @@ func createSendLongDataPacket(stmtID uint32, paramID uint16, data []byte) []byte
 }
 
 type testRun struct {
+	UnimplementedHandler
 	t              *testing.T
 	err            error
 	expParamCounts int
@@ -816,15 +817,7 @@ func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sq
 	panic("implement me")
 }
 
-func (t testRun) NewConnection(c *Conn) {
-	panic("implement me")
-}
-
-func (t testRun) ConnectionReady(c *Conn) {
-	panic("implement me")
-}
-
-func (t testRun) ConnectionClosed(c *Conn) {
+func (t testRun) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
 	panic("implement me")
 }
 
@@ -853,10 +846,6 @@ func (t testRun) ComPrepare(c *Conn, query string, bv map[string]*querypb.BindVa
 
 func (t testRun) WarningCount(c *Conn) uint16 {
 	return 0
-}
-
-func (t testRun) ComResetConnection(c *Conn) {
-	panic("implement me")
 }
 
 var _ Handler = (*testRun)(nil)

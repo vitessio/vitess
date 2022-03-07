@@ -31,7 +31,7 @@ type (
 	Route struct {
 		Source abstract.PhysicalOperator
 
-		RouteOpCode engine.RouteOpcode
+		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
 
 		// here we store the possible vindexes we can use so that when we add predicates to the plan,
@@ -67,7 +67,7 @@ type (
 		ColsSeen    map[string]interface{}
 		ValueExprs  []sqlparser.Expr
 		Predicates  []sqlparser.Expr
-		OpCode      engine.RouteOpcode
+		OpCode      engine.Opcode
 		FoundVindex vindexes.Vindex
 		Cost        Cost
 	}
@@ -76,7 +76,7 @@ type (
 	Cost struct {
 		VindexCost int
 		IsUnique   bool
-		OpCode     engine.RouteOpcode
+		OpCode     engine.Opcode
 	}
 )
 
@@ -94,22 +94,22 @@ func (r *Route) TableID() semantics.TableSet {
 func (r *Route) Cost() int {
 	switch r.RouteOpCode {
 	case // these op codes will never be compared with each other - they are assigned by a rule and not a comparison
-		engine.SelectDBA,
-		engine.SelectNext,
-		engine.SelectNone,
-		engine.SelectReference,
-		engine.SelectUnsharded:
+		engine.DBA,
+		engine.Next,
+		engine.None,
+		engine.Reference,
+		engine.Unsharded:
 		return 0
 	// TODO revisit these costs when more of the gen4 planner is done
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		return 1
-	case engine.SelectEqual:
+	case engine.Equal:
 		return 5
-	case engine.SelectIN:
+	case engine.IN:
 		return 10
-	case engine.SelectMultiEqual:
+	case engine.MultiEqual:
 		return 10
-	case engine.SelectScatter:
+	case engine.Scatter:
 		return 20
 	}
 	return 1
@@ -211,7 +211,7 @@ func (r *Route) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.
 }
 
 func (r *Route) setSelectNoneOpcode() {
-	r.RouteOpCode = engine.SelectNone
+	r.RouteOpCode = engine.None
 	// clear any chosen vindex as this query does not need to be sent down.
 	r.Selected = nil
 }
@@ -259,7 +259,7 @@ func (r *Route) makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, _ := evalengine.Convert(expr, ctx.SemTable)
+		pv, _ := evalengine.Translate(expr, ctx.SemTable)
 		if pv != nil {
 			return pv
 		}
@@ -285,7 +285,7 @@ func (r *Route) haveMatchingVindex(
 	valueExpr sqlparser.Expr,
 	column *sqlparser.ColName,
 	value evalengine.Expr,
-	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
+	opcode func(*vindexes.ColumnVindex) engine.Opcode,
 	vfunc func(*vindexes.ColumnVindex) vindexes.Vindex,
 ) bool {
 	newVindexFound := false
@@ -406,7 +406,7 @@ func (option *VindexOption) updateWithNewColumn(
 	value evalengine.Expr,
 	node sqlparser.Expr,
 	colVindex *vindexes.ColumnVindex,
-	opcode func(*vindexes.ColumnVindex) engine.RouteOpcode,
+	opcode func(*vindexes.ColumnVindex) engine.Opcode,
 ) bool {
 	option.ColsSeen[colLoweredName] = true
 	option.ValueExprs = append(option.ValueExprs, valueExpr)
@@ -434,7 +434,7 @@ func (r *Route) PickBestAvailableVindex() {
 
 // canImprove returns true if additional predicates could help improving this plan
 func (r *Route) canImprove() bool {
-	return r.RouteOpCode != engine.SelectNone
+	return r.RouteOpCode != engine.None
 }
 
 // UnsolvedPredicates implements the Operator interface
@@ -454,7 +454,7 @@ func (r *Route) Compact(semTable *semantics.SemTable) (abstract.Operator, error)
 
 func (r *Route) IsSingleShard() bool {
 	switch r.RouteOpCode {
-	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
+	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
 		return true
 	}
 	return false
@@ -494,7 +494,7 @@ func (r *Route) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparser.Compar
 		if value == nil {
 			return false
 		}
-		opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectIN }
+		opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.IN }
 		return r.haveMatchingVindex(ctx, cmp, vdValue, left, value, opcode, justTheVindex)
 	case sqlparser.ValTuple:
 		right, rightIsValTuple := cmp.Right.(sqlparser.ValTuple)
@@ -532,7 +532,7 @@ func (r *Route) planLikeOp(ctx *plancontext.PlanningContext, node *sqlparser.Com
 	if val == nil {
 		return false
 	}
-	selectEqual := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectEqual }
+	selectEqual := func(*vindexes.ColumnVindex) engine.Opcode { return engine.Equal }
 	vdx := func(vindex *vindexes.ColumnVindex) vindexes.Vindex {
 		if prefixable, ok := vindex.Vindex.(vindexes.Prefixable); ok {
 			return prefixable.PrefixVindex()
@@ -584,7 +584,7 @@ func (r *Route) planCompositeInOpRecursive(
 				return false
 			}
 
-			opcode := func(*vindexes.ColumnVindex) engine.RouteOpcode { return engine.SelectMultiEqual }
+			opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.MultiEqual }
 			newVindex := r.haveMatchingVindex(ctx, cmp, rightVals, expr, newPlanValues, opcode, justTheVindex)
 			foundVindex = newVindex || foundVindex
 		}
@@ -594,10 +594,10 @@ func (r *Route) planCompositeInOpRecursive(
 
 func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	switch r.RouteOpCode {
-	case engine.SelectDBA, engine.SelectNext, engine.SelectReference, engine.SelectUnsharded:
+	case engine.DBA, engine.Next, engine.Reference, engine.Unsharded:
 		// these we keep as is
 	default:
-		r.RouteOpCode = engine.SelectScatter
+		r.RouteOpCode = engine.Scatter
 	}
 
 	r.Selected = nil
@@ -626,12 +626,12 @@ func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
 	return expr
 }
 
-func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
+func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.Opcode {
 	if vindex.IsUnique() {
-		return engine.SelectEqualUnique
+		return engine.EqualUnique
 	}
 
-	return engine.SelectEqual
+	return engine.Equal
 }
 
 func justTheVindex(vindex *vindexes.ColumnVindex) vindexes.Vindex {
@@ -639,10 +639,10 @@ func justTheVindex(vindex *vindexes.ColumnVindex) vindexes.Vindex {
 }
 
 // costFor returns a cost struct to make route choices easier to compare
-func costFor(foundVindex *vindexes.ColumnVindex, opcode engine.RouteOpcode) Cost {
+func costFor(foundVindex *vindexes.ColumnVindex, opcode engine.Opcode) Cost {
 	switch opcode {
 	// For these opcodes, we should not have a vindex, so we just return the opcode as the cost
-	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone, engine.SelectScatter:
+	case engine.Unsharded, engine.Next, engine.DBA, engine.Reference, engine.None, engine.Scatter:
 		return Cost{
 			OpCode: opcode,
 		}

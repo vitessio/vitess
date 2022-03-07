@@ -74,7 +74,7 @@ var (
 
 const (
 	getSQLModeQuery = `SELECT @@session.sql_mode AS sql_mode`
-	// Use this whenever performing a schema change as part of a vreplication
+	// SQLMode should be used whenever performing a schema change as part of a vreplication
 	// workflow to ensure that you set a permissive SQL mode as defined by
 	// VReplication. We follow MySQL's model for recreating database objects
 	// on a target -- using SQL statements generated from a source -- which

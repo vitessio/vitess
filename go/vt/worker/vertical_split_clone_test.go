@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/wrangler/testlib"
@@ -54,6 +55,10 @@ func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insert
 	}
 
 	return f
+}
+
+func init() {
+	_ = reparentutil.SetDurabilityPolicy("none")
 }
 
 // TestVerticalSplitClone will run VerticalSplitClone in the combined

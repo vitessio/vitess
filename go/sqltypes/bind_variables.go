@@ -87,6 +87,11 @@ func Int32BindVariable(v int32) *querypb.BindVariable {
 	return ValueBindVariable(NewInt32(v))
 }
 
+// Uint32BindVariable converts a uint32 to a bind var.
+func Uint32BindVariable(v uint32) *querypb.BindVariable {
+	return ValueBindVariable(NewUint32(v))
+}
+
 // BoolBindVariable converts an bool to a int64 bind var.
 func BoolBindVariable(v bool) *querypb.BindVariable {
 	if v {
@@ -117,7 +122,7 @@ func DecimalBindVariable(v DecimalFloat) *querypb.BindVariable {
 
 // StringBindVariable converts a string to a bind var.
 func StringBindVariable(v string) *querypb.BindVariable {
-	return ValueBindVariable(NewVarBinary(v))
+	return ValueBindVariable(NewVarChar(v))
 }
 
 // BytesBindVariable converts a []byte to a bind var.
@@ -134,7 +139,7 @@ func ValueBindVariable(v Value) *querypb.BindVariable {
 func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 	switch v := v.(type) {
 	case string:
-		return BytesBindVariable([]byte(v)), nil
+		return StringBindVariable(v), nil
 	case []byte:
 		return BytesBindVariable(v), nil
 	case bool:
@@ -184,7 +189,7 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		}
 		values := make([]querypb.Value, len(v))
 		for i, lv := range v {
-			values[i].Type = querypb.Type_VARBINARY
+			values[i].Type = querypb.Type_VARCHAR
 			values[i].Value = []byte(lv)
 			bv.Values[i] = &values[i]
 		}

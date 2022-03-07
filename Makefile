@@ -49,9 +49,8 @@ export CGO_CFLAGS := -O1
 
 # regenerate rice-box.go when any of the .cnf files change
 embed_config:
-	cd go/vt/mysqlctl
-	go run github.com/GeertJohan/go.rice/rice embed-go
-	go build .
+	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go
+	cd go/vt/mysqlctl && go build .
 
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
@@ -88,7 +87,7 @@ endif
 	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# unset GOOS and embed local resources in the vttablet executable
-	(cd go/cmd/vttablet && unset GOOS && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+	(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
 	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
@@ -132,6 +131,9 @@ vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
+demo:
+	go install ./examples/demo/demo.go
+
 codegen: asthelpergen sizegen parser astfmtgen
 
 visitor: asthelpergen
@@ -171,7 +173,7 @@ cleanall: clean
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
 
-unit_test: build dependency_check
+unit_test: build dependency_check demo
 	echo $$(date): Running unit tests
 	tools/unit_test_runner.sh
 
@@ -234,7 +236,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
-		-I${PWD}/dist/vt-protoc-3.6.1/include:proto $(PROTO_SRCS)
+		-I${PWD}/dist/vt-protoc-3.19.4/include:proto $(PROTO_SRCS)
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
 
@@ -264,9 +266,9 @@ docker_bootstrap_pull:
 
 
 define build_docker_image
-	# Fix permissions before copying files, to avoid AUFS bug.
 	${info Building ${2}}
-	chmod -R o=g *;
+	# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
+	chmod -R o=rx *;
 	docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
 endef
 
@@ -329,49 +331,7 @@ release: docker_base
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
 do_release:
-ifndef RELEASE_VERSION
-		echo "Set the env var RELEASE_VERSION with the release version"
-		exit 1
-endif
-ifndef DEV_VERSION
-		echo "Set the env var DEV_VERSION with the version the dev branch should have after release"
-		exit 1
-endif
-ifeq ($(strip $(GIT_STATUS)),)
-	echo so much clean
-else
-	echo cannot do release with dirty git state
-	exit 1
-	echo so much win
-endif
-# Pre checks passed. Let's change the current version
-	cd java && mvn versions:set -DnewVersion=$(RELEASE_VERSION)
-	echo package servenv > go/vt/servenv/version.go
-	echo  >> go/vt/servenv/version.go
-	echo const versionName = \"$(RELEASE_VERSION)\" >> go/vt/servenv/version.go
-	echo -n Pausing so relase notes can be added. Press enter to continue
-	read line
-	git add --all
-	git commit -n -s -m "Release commit for $(RELEASE_VERSION)"
-	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
-ifdef GODOC_RELEASE_VERSION
-	git tag -a v$(GODOC_RELEASE_VERSION) -m "Tagging $(RELEASE_VERSION) also as $(GODOC_RELEASE_VERSION) for godoc/go modules"
-endif
-	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
-	echo package servenv > go/vt/servenv/version.go
-	echo  >> go/vt/servenv/version.go
-	echo const versionName = \"$(DEV_VERSION)\" >> go/vt/servenv/version.go
-	git add --all
-	git commit -n -s -m "Back to dev mode"
-	echo "Release preparations successful"
-ifdef GODOC_RELEASE_VERSION
-	echo "Two git tags were created, you can push them with:"
-	echo "   git push upstream v$(RELEASE_VERSION) && git push upstream v$(GODOC_RELEASE_VERSION)"
-else
-	echo "One git tag was created, you can push it with:"
-	echo "   git push upstream v$(RELEASE_VERSION)"
-endif
-	echo "The git branch has also been updated. You need to push it and get it merged"
+	./tools/do_release.sh
 
 tools:
 	echo $$(date): Installing dependencies

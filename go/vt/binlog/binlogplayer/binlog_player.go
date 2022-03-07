@@ -564,12 +564,19 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
+
+	// records the time of the last heartbeat. Heartbeats are only received if the source has no recent events
+	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
 }
 
-// WithDDLInitialQueries contains the queries to be expected by the mock db client during tests
+// WithDDLInitialQueries contains the queries that:
+// - are to be expected by the mock db client during tests, or
+// - trigger some of the above _vt.vreplication schema changes to take effect
+//   when the binlogplayer starts up
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
+	"SELECT time_heartbeat FROM _vt.vreplication LIMIT 0",
 }
 
 // VRSettings contains the settings of a vreplication table.
@@ -638,8 +645,7 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName))
 }
 
-// GenerateUpdatePos returns a statement to update a value in the
-// _vt.vreplication table.
+// GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.
 func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
 	strGTID := encodeString(mysql.EncodePosition(pos))
 	if compress {
@@ -659,12 +665,12 @@ func GenerateUpdateRowsCopied(uid uint32, rowsCopied int64) string {
 	return fmt.Sprintf("update _vt.vreplication set rows_copied=%v where id=%v", rowsCopied, uid)
 }
 
-// GenerateUpdateTime returns a statement to update time_updated in the _vt.vreplication table.
-func GenerateUpdateTime(uid uint32, timeUpdated int64) (string, error) {
+// GenerateUpdateHeartbeat returns a statement to record the latest heartbeat in the _vt.vreplication table.
+func GenerateUpdateHeartbeat(uid uint32, timeUpdated int64) (string, error) {
 	if timeUpdated == 0 {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
-	return fmt.Sprintf("update _vt.vreplication set time_updated=%v where id=%v", timeUpdated, uid), nil
+	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_heartbeat=%v where id=%v", timeUpdated, timeUpdated, uid), nil
 }
 
 // StartVReplication returns a statement to start the replication.

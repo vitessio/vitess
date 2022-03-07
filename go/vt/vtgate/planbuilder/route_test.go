@@ -43,17 +43,18 @@ For easy reference, opcodes are:
 */
 
 func TestJoinCanMerge(t *testing.T) {
-	testcases := [engine.NumRouteOpcodes][engine.NumRouteOpcodes]bool{
-		{true, false, false, false, false, false, false, false, true, false},
-		{false, true, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, true, true, false},
-		{true, true, true, true, true, true, true, true, true, true},
-		{false, false, false, false, false, false, false, false, true, false},
+	testcases := [engine.NumOpcodes][engine.NumOpcodes]bool{
+		{true, false, false, false, false, false, false, false, true, false, false},
+		{false, true, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, true, true, false, false},
+		{true, true, true, true, true, true, true, true, true, true, true},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
 	}
 
 	ks := &vindexes.Keyspace{}
@@ -71,8 +72,8 @@ func TestJoinCanMerge(t *testing.T) {
 				rRoute := &route{
 					condition: &sqlparser.ColName{},
 				}
-				lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
-				rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
+				lRoute.eroute = engine.NewSimpleRoute(engine.Opcode(left), ks)
+				rRoute.eroute = engine.NewSimpleRoute(engine.Opcode(right), ks)
 				assert.Equal(t, val, lRoute.JoinCanMerge(pb, rRoute, nil, nil), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 			})
 		}
@@ -80,17 +81,18 @@ func TestJoinCanMerge(t *testing.T) {
 }
 
 func TestSubqueryCanMerge(t *testing.T) {
-	testcases := [engine.NumRouteOpcodes][engine.NumRouteOpcodes]bool{
-		{true, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, true, true, false},
-		{true, true, true, true, true, true, true, true, true, true},
-		{false, false, false, false, false, false, false, false, true, false},
+	testcases := [engine.NumOpcodes][engine.NumOpcodes]bool{
+		{true, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, true, true, false, false},
+		{true, true, true, true, true, true, true, true, true, true, true},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
 	}
 
 	ks := &vindexes.Keyspace{}
@@ -100,34 +102,35 @@ func TestSubqueryCanMerge(t *testing.T) {
 	}
 	rRoute := &route{}
 	for left, vals := range testcases {
-		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
+		lRoute.eroute = engine.NewSimpleRoute(engine.Opcode(left), ks)
 		for right, val := range vals {
-			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
+			rRoute.eroute = engine.NewSimpleRoute(engine.Opcode(right), ks)
 			assert.Equal(t, val, lRoute.SubqueryCanMerge(pb, rRoute), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}
 }
 
 func TestUnionCanMerge(t *testing.T) {
-	testcases := [engine.NumRouteOpcodes][engine.NumRouteOpcodes]bool{
-		{true, false, false, false, false, false, false, false, false, false},
-		{false, false, false, false, false, false, false, false, false, false},
-		{false, false, false, false, false, false, false, false, false, false},
-		{false, false, false, false, false, false, false, false, false, false},
-		{false, false, false, false, false, false, false, false, false, false},
-		{false, false, false, false, false, true, false, false, false, false},
-		{false, false, false, false, false, false, false, false, false, false},
-		{false, false, false, false, false, false, false, true, false, false},
-		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, false, false},
+	testcases := [engine.NumOpcodes][engine.NumOpcodes]bool{
+		{true, false, false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, false, true, false, false, false, false, false},
+		{false, false, false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, false, false, false, true, false, false, false},
+		{false, false, false, false, false, false, false, false, true, false, false},
+		{false, false, false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, false, false, false, false, false, false, false},
 	}
 	ks := &vindexes.Keyspace{}
 	lRoute := &route{}
 	rRoute := &route{}
 	for left, vals := range testcases {
-		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
+		lRoute.eroute = engine.NewSimpleRoute(engine.Opcode(left), ks)
 		for right, val := range vals {
-			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
+			rRoute.eroute = engine.NewSimpleRoute(engine.Opcode(right), ks)
 			assert.Equal(t, val, lRoute.unionCanMerge(rRoute, false), fmt.Sprintf("can't create a single route from these two inputs %v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}

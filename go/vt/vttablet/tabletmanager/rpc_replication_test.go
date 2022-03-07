@@ -34,7 +34,7 @@ func TestPromoteReplicaHealthTicksStopped(t *testing.T) {
 	tm := newTestTM(t, ts, 100, keyspace, shard)
 	defer tm.Stop()
 
-	_, err := tm.PromoteReplica(ctx)
+	_, err := tm.PromoteReplica(ctx, false)
 	require.NoError(t, err)
 	require.False(t, tm.replManager.ticks.Running())
 }

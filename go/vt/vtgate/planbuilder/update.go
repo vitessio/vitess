@@ -39,9 +39,7 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	if err != nil {
 		return nil, err
 	}
-	eupd := &engine.Update{
-		DML: *dml,
-	}
+	eupd := &engine.Update{DML: dml}
 
 	if dml.Opcode == engine.Unsharded {
 		return eupd, nil
@@ -153,7 +151,7 @@ func initialQuery(ksidCols []sqlparser.ColIdent, table *vindexes.Table) (*sqlpar
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
 func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
-	pv, err := evalengine.Convert(upd.Expr, semantics.EmptySemTable())
+	pv, err := evalengine.Translate(upd.Expr, semantics.EmptySemTable())
 	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
 		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr))
 		return nil, err

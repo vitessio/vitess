@@ -48,7 +48,7 @@ type RPCTM interface {
 
 	SetReadOnly(ctx context.Context, rdonly bool) error
 
-	ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error
+	ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error
 
 	Sleep(ctx context.Context, duration time.Duration)
 
@@ -57,8 +57,6 @@ type RPCTM interface {
 	RefreshState(ctx context.Context) error
 
 	RunHealthCheck(ctx context.Context)
-
-	IgnoreHealthError(ctx context.Context, pattern string) error
 
 	ReloadSchema(ctx context.Context, waitPosition string) error
 
@@ -90,7 +88,7 @@ type RPCTM interface {
 
 	StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
 
-	StartReplication(ctx context.Context) error
+	StartReplication(ctx context.Context, semiSync bool) error
 
 	StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
 
@@ -114,36 +112,36 @@ type RPCTM interface {
 	ResetReplication(ctx context.Context) error
 
 	// Deprecated, use InitPrimary instead
-	InitMaster(ctx context.Context) (string, error)
+	InitMaster(ctx context.Context, semiSync bool) (string, error)
 
-	InitPrimary(ctx context.Context) (string, error)
+	InitPrimary(ctx context.Context, semiSync bool) (string, error)
 
 	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
-	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
+	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error
 
 	// Deprecated, use DemotePrimary instead
 	DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	// Deprecated, use UndoDemotePrimary instead
-	UndoDemoteMaster(ctx context.Context) error
+	UndoDemoteMaster(ctx context.Context, semiSync bool) error
 
 	DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
-	UndoDemotePrimary(ctx context.Context) error
+	UndoDemotePrimary(ctx context.Context, semiSync bool) error
 
 	ReplicaWasPromoted(ctx context.Context) error
 
 	// Deprecated, use SetReplicationSource instead
-	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
+	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 
-	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
+	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 
 	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)
 
 	ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
-	PromoteReplica(ctx context.Context) (string, error)
+	PromoteReplica(ctx context.Context, semiSync bool) (string, error)
 
 	// Backup / restore related methods
 
