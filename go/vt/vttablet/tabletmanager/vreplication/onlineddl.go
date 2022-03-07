@@ -30,13 +30,18 @@ const (
 )
 
 var onlineDDLMu sync.Mutex
-var ReloadCopyState error = fmt.Errorf("new copy state")
+
+// ErrReloadCopyState is sent when a new table is inserted into copy state to switch the current player from Replicating to Copying
+// is not an error, but linter expects an Err prefix since we return this as an error.
+// todo: better way would be to explicitly signal the request to restart, but since that involves changing a lot of function signatures
+// and impacts a lot of code we take this shortcut now?
+var ErrReloadCopyState = fmt.Errorf("new copy state")
 
 type OnlineDDLMigration struct {
 	uuid              string
 	state             string
 	id                int64
-	vreplId           int64
+	vreplID           int64
 	materializedTable string
 
 	ctx context.Context
@@ -47,8 +52,8 @@ type OnlineDDLMigrationState string
 
 const (
 	OnlineDDLMigrationStateUnknown    OnlineDDLMigrationState = ""
-	OnlineDDLMigrationStateInProgress                         = "inprogress"
-	OnlineDDLMigrationStateComplete                           = "complete"
+	OnlineDDLMigrationStateInProgress OnlineDDLMigrationState = "inprogress"
+	OnlineDDLMigrationStateComplete   OnlineDDLMigrationState = "complete"
 )
 
 func newOnlineDDLMigration(ctx context.Context, vp *vplayer, uuid, materializedTable string) (*OnlineDDLMigration, error) {
@@ -56,7 +61,7 @@ func newOnlineDDLMigration(ctx context.Context, vp *vplayer, uuid, materializedT
 		uuid:              uuid,
 		ctx:               ctx,
 		vp:                vp,
-		vreplId:           int64(vp.vr.id),
+		vreplID:           int64(vp.vr.id),
 		materializedTable: materializedTable,
 	}
 	if err := odm.get(); err != nil {
@@ -70,7 +75,7 @@ func (odm *OnlineDDLMigration) exists() bool {
 }
 
 func (odm *OnlineDDLMigration) completed() bool {
-	return odm.state == OnlineDDLMigrationStateComplete
+	return odm.state == string(OnlineDDLMigrationStateComplete)
 }
 
 func (odm *OnlineDDLMigration) get() error {
@@ -191,7 +196,6 @@ func (vp *vplayer) reloadSchema(ctx context.Context) error {
 }
 
 func (vp *vplayer) updatePlan(ctx context.Context) error {
-	return nil
 	// Applying the ddl would change the schema and the field events that we get will reflect the new schema.
 	// So reload the extended column information from the information_schema and rebuild the replicator plan.
 	// Otherwise, the field events will not match the current plan, resulting in errors.
@@ -235,8 +239,8 @@ func (vp *vplayer) handleOnlineDDLEvent(ctx context.Context, event *binlogdatapb
 			return err
 		}
 		if registered {
-			log.Infof("Registered table %s, returning ReloadCopyState", odEvent.MaterializedTableName)
-			return ReloadCopyState
+			log.Infof("Registered table %s, returning ErrReloadCopyState", odEvent.MaterializedTableName)
+			return ErrReloadCopyState
 		}
 	case binlogdatapb.OnlineDDLEventType_RENAME_TABLE:
 		if err := odm.complete(odEvent.Ddl); err != nil {

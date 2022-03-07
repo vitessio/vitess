@@ -160,8 +160,8 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-		if err == ReloadCopyState {
-			log.Infof("got ReloadCopyState, restarting Blp")
+		if err == ErrReloadCopyState {
+			log.Infof("got ErrReloadCopyState, restarting Blp")
 			continue
 		}
 		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
