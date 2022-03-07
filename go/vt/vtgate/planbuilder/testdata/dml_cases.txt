@@ -2459,7 +2459,7 @@ Gen4 plan same as above
       "Name": "zlookup_unique",
       "Sharded": true
     },
-    "TargetTabletType": "PRIMARY",
+    "TargetTabletType": "MASTER",
     "KsidVindex": "xxhash",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
@@ -2481,7 +2481,7 @@ Gen4 plan same as above
       "Name": "zlookup_unique",
       "Sharded": true
     },
-    "TargetTabletType": "PRIMARY",
+    "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
       "lookup_t1:3"
     ],
@@ -2506,7 +2506,7 @@ Gen4 plan same as above
       "Name": "zlookup_unique",
       "Sharded": true
     },
-    "TargetTabletType": "PRIMARY",
+    "TargetTabletType": "MASTER",
     "KsidVindex": "xxhash",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
@@ -2532,7 +2532,7 @@ Gen4 plan same as above
       "Name": "zlookup_unique",
       "Sharded": true
     },
-    "TargetTabletType": "PRIMARY",
+    "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
       "lookup_t1:3"
     ],
@@ -2561,7 +2561,7 @@ Gen4 plan same as above
       "Name": "zlookup_unique",
       "Sharded": true
     },
-    "TargetTabletType": "PRIMARY",
+    "TargetTabletType": "MASTER",
     "KsidVindex": "xxhash",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 in (20, 21) for update",
@@ -2590,7 +2590,7 @@ Gen4 plan same as above
       "Name": "zlookup_unique",
       "Sharded": true
     },
-    "TargetTabletType": "PRIMARY",
+    "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
       "lookup_t1:3"
     ],
