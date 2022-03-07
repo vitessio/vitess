@@ -883,6 +883,34 @@ func (node *ExplainTab) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *PrepareStmt) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "prepare %v%v from ", node.Comments, node.Name)
+	if node.Statement != "" {
+		buf.astPrintf(node, "%s", node.Statement)
+	} else {
+		buf.astPrintf(node, "%v", node.StatementIdentifier)
+	}
+}
+
+// Format formats the node.
+func (node *ExecuteStmt) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "execute %v%v", node.Comments, node.Name)
+	if len(node.Arguments) > 0 {
+		buf.WriteString(" using ")
+	}
+	var prefix string
+	for _, n := range node.Arguments {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node.
+func (node *DeallocateStmt) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s %vprepare %v", node.Type.ToString(), node.Comments, node.Name)
+}
+
+// Format formats the node.
 func (node *CallProc) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "call %v(%v)", node.Name, node.Params)
 }
