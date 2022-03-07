@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -219,13 +218,13 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 	qr := sqltypes.Proto3ToResult(p3qr)
 	tabletStreams := make([]*VReplicationStream, 0, len(qr.Rows))
 
-	for _, row := range qr.Rows { // todo: change to Named()
-		id, err := evalengine.ToInt64(row[0])
+	for _, row := range qr.Named().Rows { // todo: change to Named()
+		id, err := row["id"].ToInt64()
 		if err != nil {
 			return nil, err
 		}
 
-		workflowName := row[1].ToString()
+		workflowName := row["workflow"].ToString()
 		switch workflowName {
 		case "":
 			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
@@ -233,13 +232,13 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
 		}
 
-		workflowType, err := row[4].ToInt64()
+		workflowType, err := row["workflow_type"].ToInt64()
 		if err != nil {
 			return nil, err
 		}
 		log.Infof("WorkflowType %d, casted %d", workflowType, binlogdatapb.VReplicationWorkflowType(workflowType))
 		var bls binlogdatapb.BinlogSource
-		rowBytes, err := row[2].ToBytes()
+		rowBytes, err := row["source"].ToBytes()
 		if err != nil {
 			return nil, err
 		}
@@ -259,7 +258,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			continue
 		}
 
-		pos, err := mysql.DecodePosition(row[3].ToString())
+		pos, err := mysql.DecodePosition(row["pos"].ToString())
 		if err != nil {
 			return nil, err
 		}

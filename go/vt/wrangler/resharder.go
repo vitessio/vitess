@@ -205,14 +205,14 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 				ref[k] = true
 			}
 		}
-		for _, row := range qr.Rows {
+		for _, row := range qr.Named().Rows {
 
-			workflow := row[0].ToString()
+			workflow := row["workflow"].ToString()
 			if workflow == "" {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())
 			}
 			var bls binlogdatapb.BinlogSource
-			rowBytes, err := row[1].ToBytes()
+			rowBytes, err := row["source"].ToBytes()
 			if err != nil {
 				return err
 			}
@@ -227,14 +227,14 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 				continue
 			}
 			key := fmt.Sprintf("%s:%s:%s", workflow, bls.Keyspace, bls.Shard)
-			i, _ := row[4].ToInt64()
-			workflowType := binlogdatapb.VReplicationWorkflowType(i)
+			typ, _ := row["workflow_type"].ToInt64()
+			workflowType := binlogdatapb.VReplicationWorkflowType(typ)
 			if mustCreate {
 				rs.refStreams[key] = &refStream{
 					workflow:     workflow,
 					bls:          &bls,
-					cell:         row[2].ToString(),
-					tabletTypes:  row[3].ToString(),
+					cell:         row["cell"].ToString(),
+					tabletTypes:  row["tablet_types"].ToString(),
 					workflowType: workflowType,
 				}
 			} else {

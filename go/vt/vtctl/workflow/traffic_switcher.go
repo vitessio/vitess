@@ -241,14 +241,14 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		}
 
 		qr := sqltypes.Proto3ToResult(p3qr)
-		for _, row := range qr.Rows {
-			id, err := evalengine.ToInt64(row[0])
+		for _, row := range qr.Named().Rows {
+			id, err := evalengine.ToInt64(row["id"])
 			if err != nil {
 				return nil, err
 			}
 
 			var bls binlogdatapb.BinlogSource
-			rowBytes, err := row[1].ToBytes()
+			rowBytes, err := row["source"].ToBytes()
 			if err != nil {
 				return nil, err
 			}
@@ -256,14 +256,14 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 				return nil, err
 			}
 
-			if row[2].ToString() == Frozen {
+			if row["message"].ToString() == Frozen {
 				frozen = true
 			}
 
 			target.Sources[uint32(id)] = &bls
-			optCells = row[3].ToString()
-			optTabletTypes = row[4].ToString()
-			i, err := evalengine.ToInt64(row[5])
+			optCells = row["cell"].ToString()
+			optTabletTypes = row["tablet_types"].ToString()
+			i, err := evalengine.ToInt64(row["workflow_type"])
 			if err != nil {
 				return nil, err
 			}
