@@ -153,7 +153,12 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(ctx *plancontext.PlanningCont
 }
 
 // pushProjection pushes a projection to the plan.
-func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, plan logicalPlan, inner, reuseCol, hasAggregation bool) (offset int, added bool, err error) {
+func pushProjection(
+	ctx *plancontext.PlanningContext,
+	expr *sqlparser.AliasedExpr,
+	plan logicalPlan,
+	inner, reuseCol, hasAggregation bool,
+) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *routeGen4:
 		_, isColName := expr.Expr.(*sqlparser.ColName)
@@ -167,28 +172,7 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 				}
 			}
 		}
-		if reuseCol {
-			if i := checkIfAlreadyExists(expr, node.Select, ctx.SemTable); i != -1 {
-				return i, false, nil
-			}
-		}
-		expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
-		sel, isSel := node.Select.(*sqlparser.Select)
-		if !isSel {
-			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "unsupported: pushing projection '%s' on %T", sqlparser.String(expr), node.Select)
-		}
-
-		// if we are trying to push a projection that belongs to a DerivedTable
-		// we rewrite that expression, so it matches the column name used inside
-		// that derived table.
-		err = rewriteProjectionOfDerivedTable(expr, ctx.SemTable)
-		if err != nil {
-			return 0, false, err
-		}
-
-		offset := len(sel.SelectExprs)
-		sel.SelectExprs = append(sel.SelectExprs, expr)
-		return offset, true, nil
+		return addExpressionToRoute(ctx, node, expr, reuseCol)
 	case *hashJoin:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
@@ -384,6 +368,31 @@ func pushProjection(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExp
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
+}
+
+func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr *sqlparser.AliasedExpr, reuseCol bool) (int, bool, error) {
+	if reuseCol {
+		if i := checkIfAlreadyExists(expr, rb.Select, ctx.SemTable); i != -1 {
+			return i, false, nil
+		}
+	}
+	expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+	sel, isSel := rb.Select.(*sqlparser.Select)
+	if !isSel {
+		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "unsupported: pushing projection '%s' on %T", sqlparser.String(expr), rb.Select)
+	}
+
+	// if we are trying to push a projection that belongs to a DerivedTable
+	// we rewrite that expression, so it matches the column name used inside
+	// that derived table.
+	err := rewriteProjectionOfDerivedTable(expr, ctx.SemTable)
+	if err != nil {
+		return 0, false, err
+	}
+
+	offset := len(sel.SelectExprs)
+	sel.SelectExprs = append(sel.SelectExprs, expr)
+	return offset, true, nil
 }
 
 func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
