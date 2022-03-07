@@ -45,7 +45,7 @@ func (cached *Rule) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(240)
+		size += int64(256)
 	}
 	// field Description string
 	size += hack.RuntimeAllocSize(int64(len(cached.Description)))
