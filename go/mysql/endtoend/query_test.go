@@ -220,7 +220,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	// Read the rows.
 	count := 0
 	for {
-		row, err := conn.FetchNext()
+		row, err := conn.FetchNext(nil)
 		if err != nil {
 			t.Fatalf("FetchNext failed: %v", err)
 		}

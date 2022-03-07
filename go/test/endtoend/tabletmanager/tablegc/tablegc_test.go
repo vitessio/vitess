@@ -88,6 +88,7 @@ func TestMain(m *testing.M) {
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
 			"-gc_check_interval", "5s",
+			"-gc_purge_check_interval", "5s",
 			"-table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 		// We do not need semiSync for this test case.
@@ -124,21 +125,21 @@ func checkTableRows(t *testing.T, tableName string, expect int64) {
 	query := `select count(*) as c from %a`
 	parsed := sqlparser.BuildParsedQuery(query, tableName)
 	rs, err := masterTablet.VttabletProcess.QueryTablet(parsed.Query, keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	count := rs.Named().Row().AsInt64("c", 0)
 	assert.Equal(t, expect, count)
 }
 
 func populateTable(t *testing.T) {
 	_, err := masterTablet.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = masterTablet.VttabletProcess.QueryTablet("delete from t1", keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = masterTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) values (null, md5(rand()))", keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	for i := 0; i < 10; i++ {
 		_, err = masterTablet.VttabletProcess.QueryTablet("insert into t1 (id, value) select null, md5(rand()) from t1", keyspaceName, true)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	checkTableRows(t, "t1", 1024)
 }
@@ -297,46 +298,46 @@ func TestDrop(t *testing.T) {
 func TestPurge(t *testing.T) {
 	populateTable(t)
 	query, tableName, err := schema.GenerateRenameStatement("t1", schema.PurgeTableGCState, time.Now().UTC().Add(10*time.Second))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = masterTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	{
 		exists, _, err := tableExists("t1")
-		assert.NoError(t, err)
-		assert.False(t, exists)
+		require.NoError(t, err)
+		require.False(t, exists)
 	}
 	{
 		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.True(t, exists)
+		require.NoError(t, err)
+		require.True(t, exists)
 	}
 
 	time.Sleep(5 * time.Second)
 	{
 		// Table was created with +10s timestamp, so it should still exist
 		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.True(t, exists)
+		require.NoError(t, err)
+		require.True(t, exists)
 
 		checkTableRows(t, tableName, 1024)
 	}
 
-	time.Sleep(1 * time.Minute) // purgeReentraceInterval
+	time.Sleep(15 * time.Second) // purgeReentranceInterval
 	{
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		exists, _, err := tableExists(tableName)
-		assert.NoError(t, err)
-		assert.False(t, exists)
+		require.NoError(t, err)
+		require.False(t, exists)
 	}
 	{
 		// Table should be renamed as _vt_EVAC_...
 		exists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
-		assert.NoError(t, err)
-		assert.True(t, exists)
+		require.NoError(t, err)
+		require.True(t, exists)
 		checkTableRows(t, evacTableName, 0)
 		err = dropTable(evacTableName)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 }

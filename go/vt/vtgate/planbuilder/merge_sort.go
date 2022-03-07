@@ -68,13 +68,8 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 		rc := ms.resultColumns[orderby.Col]
 		// Add a weight_string column if we know that the column is a textual column or if its type is unknown
 		if sqltypes.IsText(rc.column.typ) || rc.column.typ == sqltypes.Null {
-			// If a weight string was previously requested, reuse it.
-			if colNumber, ok := ms.weightStrings[rc]; ok {
-				rb.eroute.OrderBy[i].WeightStringCol = colNumber
-				continue
-			}
 			var err error
-			rb.eroute.OrderBy[i].WeightStringCol, err = rb.SupplyWeightString(orderby.Col)
+			rb.eroute.OrderBy[i].WeightStringCol, err = rb.SupplyWeightString(orderby.Col, orderby.FromGroupBy)
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {
@@ -89,6 +84,6 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *mergeSort) WireupV4(semTable *semantics.SemTable) error {
-	return ms.input.WireupV4(semTable)
+func (ms *mergeSort) WireupGen4(semTable *semantics.SemTable) error {
+	return ms.input.WireupGen4(semTable)
 }

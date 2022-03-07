@@ -1,0 +1,111 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Note that the $colors definition needs to go before the highcharts.scss import.
+// This is the easiest way to override the Highcharts colour palette when using styled mode;
+// see https://www.highcharts.com/docs/chart-design-and-style/custom-themes-in-styled-mode
+//
+// The limitation here is that we can't really toggle Highcharts palettes between
+// dark/light/other themes, which is not a huge deal, but worth mentioning in case
+// it matters later on.
+//
+// // Gradient generated with the very useful https://colordesigner.io/gradient-generator
+$colors: #8187ff #b17ff5 #d676e5 #f26fd1 #ff6bbb #ff6ca3 #ff738c #ff7e75 #ff8c60 #ff9b4e #ffab40;
+
+/*
+* We use Highcharts' "styled mode" to style chart components
+* (SVGs under the hood) with CSS. This lets us rely on our
+* standard CSS variables for consistent theming.
+*
+* See https://www.highcharts.com/docs/chart-design-and-style/style-by-css
+*/
+@import 'highcharts/css/highcharts.scss';
+
+.highcharts-axis-labels {
+  fill: var(--textColorSecondary);
+}
+
+.highcharts-axis-title {
+  fill: var(--textColorSecondary);
+}
+
+.highcharts-background {
+  fill: none;
+}
+
+.highcharts-grid-line {
+  stroke: var(--backgroundPrimaryHighlight);
+}
+
+.highcharts-legend-item text {
+  fill: var(--textColorPrimary);
+}
+
+.highcharts-line-series .highcharts-graph {
+  stroke-width: 1px;
+  transition: stroke-width 200ms; /* slow out */
+}
+
+.highcharts-loading-inner {
+  color: var(--textColorSecondary);
+  font-family: var(--fontFamilyPrimary);
+  font-size: var(--fontSizeLarge);
+  font-weight: 500;
+}
+
+.highcharts-series-hover .highcharts-graph {
+  transition: stroke-width 50ms ease-in-out; /* quick in */
+}
+
+.highcharts-line-series.highcharts-series-hover .highcharts-graph {
+  stroke-width: 2px;
+}
+
+// Matches the root svg element of the chart. Use this to set styles
+// that should be inherited by all elements, like font-family or other text styles.
+.highcharts-root {
+  font-family: var(--fontFamilyMonospace);
+}
+
+// Using Highcharts' built in `title` property is not recommended.
+// In most cases, using a regular heading element like <h2>
+// adjacent to the chart is more flexible and consistent,
+// since we can't apply layout-type rules like line-height or margin.
+.highcharts-title {
+  font-family: var(--fontFamilyPrimary);
+  font-weight: 700;
+}
+
+.highcharts-tooltip {
+  stroke: none;
+
+  text {
+    fill: #fff;
+  }
+}
+
+.highcharts-tooltip-box {
+  fill: rgba(0, 0, 0, 0.85);
+  fill-opacity: 0.95;
+}
+
+.highcharts-yaxis-grid .highcharts-grid-line {
+  stroke-width: 1px;
+}
+
+.highcharts-xaxis-grid .highcharts-grid-line {
+  stroke-width: 1px;
+}

@@ -4,7 +4,7 @@ ARG image="vitess/bootstrap:${bootstrap_version}-common"
 FROM "${image}"
 
 # Install Percona 8.0
-RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done \
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done \
     && echo 'deb http://repo.percona.com/ps-80/apt buster main' > /etc/apt/sources.list.d/percona.list && \
     { \
         echo debconf debconf/frontend select Noninteractive; \

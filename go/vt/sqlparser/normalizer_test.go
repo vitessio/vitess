@@ -17,8 +17,12 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
 	"fmt"
+	"math/rand"
 	"reflect"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -232,8 +236,7 @@ func TestNormalize(t *testing.T) {
 		}
 		known := GetBindvars(stmt)
 		bv := make(map[string]*querypb.BindVariable)
-		require.NoError(t,
-			Normalize(stmt, known, bv, prefix))
+		require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
 		outstmt := String(stmt)
 		if outstmt != tc.outstmt {
 			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
@@ -275,8 +278,7 @@ func BenchmarkNormalize(b *testing.B) {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
-		require.NoError(b,
-			Normalize(ast, reservedVars, map[string]*querypb.BindVariable{}, ""))
+		require.NoError(b, Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}))
 	}
 }
 
@@ -304,7 +306,7 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for i, query := range parsed {
-					_ = Normalize(query, reservedVars[i], map[string]*querypb.BindVariable{}, "")
+					_ = Normalize(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{})
 				}
 			}
 		})
@@ -337,7 +339,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt) {
-				result, err := PrepareAST(stmt, reservedVars, bindVars, "vtg", true, keyspace)
+				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -349,6 +351,278 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 			_ = query
 			_ = statement
 			_ = bindVarNeeds
+		}
+	}
+}
+
+func randtmpl(template string) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const numberBytes = "0123456789"
+
+	result := []byte(template)
+	for i, c := range result {
+		switch c {
+		case '#':
+			result[i] = numberBytes[rand.Intn(len(numberBytes))]
+		case '@':
+			result[i] = letterBytes[rand.Intn(len(letterBytes))]
+		}
+	}
+	return string(result)
+}
+
+func randString(n int) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
+func BenchmarkNormalizeTPCCBinds(b *testing.B) {
+	query := `INSERT IGNORE INTO customer0
+(c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data)
+values
+(:c_id, :c_d_id, :c_w_id, :c_first, :c_middle, :c_last, :c_street_1, :c_street_2, :c_city, :c_state, :c_zip, :c_phone, :c_since, :c_credit, :c_credit_lim, :c_discount, :c_balance, :c_ytd_payment, :c_payment_cnt, :c_delivery_cnt, :c_data)`
+	benchmarkNormalization(b, []string{query})
+}
+
+func BenchmarkNormalizeTPCCInsert(b *testing.B) {
+	generateInsert := func(rows int) string {
+		var query bytes.Buffer
+		query.WriteString("INSERT IGNORE INTO customer0 (c_id, c_d_id, c_w_id, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_since, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_data) values ")
+		for i := 0; i < rows; i++ {
+			fmt.Fprintf(&query, "(%d, %d, %d, '%s','OE','%s','%s', '%s', '%s', '%s', '%s','%s',NOW(),'%s',50000,%f,-10,10,1,0,'%s' )",
+				rand.Int(), rand.Int(), rand.Int(),
+				"first-"+randString(rand.Intn(10)),
+				randtmpl("last-@@@@"),
+				randtmpl("street1-@@@@@@@@@@@@"),
+				randtmpl("street2-@@@@@@@@@@@@"),
+				randtmpl("city-@@@@@@@@@@@@"),
+				randtmpl("@@"), randtmpl("zip-#####"),
+				randtmpl("################"),
+				"GC", rand.Float64(), randString(300+rand.Intn(200)),
+			)
+			if i < rows-1 {
+				query.WriteString(", ")
+			}
+		}
+		return query.String()
+	}
+
+	var queries []string
+
+	for i := 0; i < 1024; i++ {
+		queries = append(queries, generateInsert(4))
+	}
+
+	benchmarkNormalization(b, queries)
+}
+
+func BenchmarkNormalizeTPCC(b *testing.B) {
+	templates := []string{
+		`SELECT c_discount, c_last, c_credit, w_tax
+FROM customer%d AS c
+JOIN warehouse%d AS w ON c_w_id=w_id
+WHERE w_id = %d
+AND c_d_id = %d
+AND c_id = %d`,
+		`SELECT d_next_o_id, d_tax 
+FROM district%d 
+WHERE d_w_id = %d 
+AND d_id = %d FOR UPDATE`,
+		`UPDATE district%d
+SET d_next_o_id = %d
+WHERE d_id = %d AND d_w_id= %d`,
+		`INSERT INTO orders%d
+(o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local)
+VALUES (%d,%d,%d,%d,NOW(),%d,%d)`,
+		`INSERT INTO new_orders%d (no_o_id, no_d_id, no_w_id)
+VALUES (%d,%d,%d)`,
+		`SELECT i_price, i_name, i_data 
+FROM item%d
+WHERE i_id = %d`,
+		`SELECT s_quantity, s_data, s_dist_%s s_dist 
+FROM stock%d  
+WHERE s_i_id = %d AND s_w_id= %d FOR UPDATE`,
+		`UPDATE stock%d
+SET s_quantity = %d
+WHERE s_i_id = %d 
+AND s_w_id= %d`,
+		`INSERT INTO order_line%d
+(ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info)
+VALUES (%d,%d,%d,%d,%d,%d,%d,%d,'%s')`,
+		`UPDATE warehouse%d
+SET w_ytd = w_ytd + %d 
+WHERE w_id = %d`,
+		`SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name
+FROM warehouse%d
+WHERE w_id = %d`,
+		`UPDATE district%d 
+SET d_ytd = d_ytd + %d 
+WHERE d_w_id = %d 
+AND d_id= %d`,
+		`SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name 
+FROM district%d
+WHERE d_w_id = %d 
+AND d_id = %d`,
+		`SELECT count(c_id) namecnt
+FROM customer%d
+WHERE c_w_id = %d 
+AND c_d_id= %d
+AND c_last='%s'`,
+		`SELECT c_first, c_middle, c_last, c_street_1,
+c_street_2, c_city, c_state, c_zip, c_phone,
+c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since
+FROM customer%d
+WHERE c_w_id = %d 
+AND c_d_id= %d
+AND c_id=%d FOR UPDATE`,
+		`SELECT c_data
+FROM customer%d
+WHERE c_w_id = %d 
+AND c_d_id=%d
+AND c_id= %d`,
+		`UPDATE customer%d
+SET c_balance=%f, c_ytd_payment=%f, c_data='%s'
+WHERE c_w_id = %d 
+AND c_d_id=%d
+AND c_id=%d`,
+		`UPDATE customer%d
+SET c_balance=%f, c_ytd_payment=%f
+WHERE c_w_id = %d 
+AND c_d_id=%d
+AND c_id=%d`,
+		`INSERT INTO history%d
+(h_c_d_id, h_c_w_id, h_c_id, h_d_id,  h_w_id, h_date, h_amount, h_data)
+VALUES (%d,%d,%d,%d,%d,NOW(),%d,'%s')`,
+		`SELECT count(c_id) namecnt
+FROM customer%d
+WHERE c_w_id = %d 
+AND c_d_id= %d
+AND c_last='%s'`,
+		`SELECT c_balance, c_first, c_middle, c_id
+FROM customer%d
+WHERE c_w_id = %d 
+AND c_d_id= %d
+AND c_last='%s' ORDER BY c_first`,
+		`SELECT c_balance, c_first, c_middle, c_last
+FROM customer%d
+WHERE c_w_id = %d 
+AND c_d_id=%d
+AND c_id=%d`,
+		`SELECT o_id, o_carrier_id, o_entry_d
+FROM orders%d 
+WHERE o_w_id = %d 
+AND o_d_id = %d 
+AND o_c_id = %d 
+ORDER BY o_id DESC`,
+		`SELECT ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d
+FROM order_line%d WHERE ol_w_id = %d AND ol_d_id = %d  AND ol_o_id = %d`,
+		`SELECT no_o_id
+FROM new_orders%d 
+WHERE no_d_id = %d 
+AND no_w_id = %d 
+ORDER BY no_o_id ASC LIMIT 1 FOR UPDATE`,
+		`DELETE FROM new_orders%d
+WHERE no_o_id = %d 
+AND no_d_id = %d  
+AND no_w_id = %d`,
+		`SELECT o_c_id
+FROM orders%d 
+WHERE o_id = %d 
+AND o_d_id = %d 
+AND o_w_id = %d`,
+		`UPDATE orders%d 
+SET o_carrier_id = %d
+WHERE o_id = %d 
+AND o_d_id = %d 
+AND o_w_id = %d`,
+		`UPDATE order_line%d 
+SET ol_delivery_d = NOW()
+WHERE ol_o_id = %d 
+AND ol_d_id = %d 
+AND ol_w_id = %d`,
+		`SELECT SUM(ol_amount) sm
+FROM order_line%d 
+WHERE ol_o_id = %d 
+AND ol_d_id = %d 
+AND ol_w_id = %d`,
+		`UPDATE customer%d 
+SET c_balance = c_balance + %f,
+c_delivery_cnt = c_delivery_cnt + 1
+WHERE c_id = %d 
+AND c_d_id = %d 
+AND c_w_id = %d`,
+		`SELECT d_next_o_id 
+FROM district%d
+WHERE d_id = %d AND d_w_id= %d`,
+		`SELECT COUNT(DISTINCT(s.s_i_id))
+FROM stock%d AS s
+JOIN order_line%d AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id			
+WHERE ol.ol_w_id = %d 
+AND ol.ol_d_id = %d
+AND ol.ol_o_id < %d 
+AND ol.ol_o_id >= %d
+AND s.s_w_id= %d
+AND s.s_quantity < %d `,
+		`SELECT DISTINCT ol_i_id FROM order_line%d
+WHERE ol_w_id = %d AND ol_d_id = %d
+AND ol_o_id < %d AND ol_o_id >= %d`,
+		`SELECT count(*) FROM stock%d
+WHERE s_w_id = %d AND s_i_id = %d
+AND s_quantity < %d`,
+		`SELECT min(no_o_id) mo
+FROM new_orders%d 
+WHERE no_w_id = %d AND no_d_id = %d`,
+		`SELECT o_id FROM orders%d o, (SELECT o_c_id,o_w_id,o_d_id,count(distinct o_id) FROM orders%d WHERE o_w_id=%d AND o_d_id=%d AND o_id > 2100 AND o_id < %d GROUP BY o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t WHERE t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1 `,
+		`DELETE FROM order_line%d where ol_w_id=%d AND ol_d_id=%d AND ol_o_id=%d`,
+		`DELETE FROM orders%d where o_w_id=%d AND o_d_id=%d and o_id=%d`,
+		`DELETE FROM history%d where h_w_id=%d AND h_d_id=%d LIMIT 10`,
+	}
+
+	re := regexp.MustCompile(`%\w`)
+	repl := func(m string) string {
+		switch m {
+		case "%s":
+			return "RANDOM_STRING"
+		case "%d":
+			return strconv.Itoa(rand.Int())
+		case "%f":
+			return strconv.FormatFloat(rand.Float64(), 'f', 8, 64)
+		default:
+			panic(m)
+		}
+	}
+
+	var queries []string
+
+	for _, tmpl := range templates {
+		for i := 0; i < 128; i++ {
+			queries = append(queries, re.ReplaceAllStringFunc(tmpl, repl))
+		}
+	}
+
+	benchmarkNormalization(b, queries)
+}
+
+func benchmarkNormalization(b *testing.B, sqls []string) {
+	b.Helper()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, sql := range sqls {
+			stmt, reserved, err := Parse2(sql)
+			if err != nil {
+				b.Fatalf("%v: %q", err, sql)
+			}
+
+			reservedVars := NewReservedVars("vtg", reserved)
+			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0")
+			if err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }

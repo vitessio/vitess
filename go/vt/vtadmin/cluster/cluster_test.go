@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -33,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
+	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
@@ -158,7 +161,7 @@ func TestFindTablet(t *testing.T) {
 				assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
 			} else {
 				assert.NoError(t, err)
-				testutil.AssertTabletsEqual(t, tt.expected, tablet)
+				utils.MustMatch(t, tt.expected, tablet)
 			}
 		})
 	}
@@ -384,7 +387,7 @@ func TestGetSchema(t *testing.T) {
 	}{
 		{
 			name: "success",
-			vtctld: &testutil.VtctldClient{
+			vtctld: &fakevtctldclient.VtctldClient{
 				GetSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSchemaResponse
 					Error    error
@@ -430,7 +433,7 @@ func TestGetSchema(t *testing.T) {
 		},
 		{
 			name: "error getting schema",
-			vtctld: &testutil.VtctldClient{
+			vtctld: &fakevtctldclient.VtctldClient{
 				GetSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSchemaResponse
 					Error    error
@@ -456,7 +459,7 @@ func TestGetSchema(t *testing.T) {
 		},
 		{
 			name: "underlying schema is nil",
-			vtctld: &testutil.VtctldClient{
+			vtctld: &fakevtctldclient.VtctldClient{
 				GetSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSchemaResponse
 					Error    error
@@ -533,7 +536,7 @@ func TestGetSchema(t *testing.T) {
 	t.Run("does not modify passed-in request", func(t *testing.T) {
 		t.Parallel()
 
-		vtctld := &testutil.VtctldClient{
+		vtctld := &fakevtctldclient.VtctldClient{
 			GetSchemaResults: map[string]struct {
 				Response *vtctldatapb.GetSchemaResponse
 				Error    error
@@ -620,7 +623,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -632,12 +635,20 @@ func TestGetSchema(t *testing.T) {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  100,
+												},
 											},
 										},
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  200,
+												},
 											},
 										},
 										"-": {
@@ -727,6 +738,174 @@ func TestGetSchema(t *testing.T) {
 				shouldErr: false,
 			},
 			{
+				name: "include nonserving shards",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  300,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &fakevtctldclient.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-80": {
+											Name: "-80",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"80-": {
+											Name: "80-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"-": {
+											Name: "-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: false,
+											},
+										},
+									},
+								},
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 200,
+												RowCount:   420,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000300": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 1000,
+												RowCount:   200,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes:          true,
+						IncludeNonServingShards: true,
+					},
+				},
+				expected: &vtadminpb.Schema{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Keyspace: "testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "foo",
+							Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+							DataLength: 0,
+							RowCount:   0,
+						},
+					},
+					TableSizes: map[string]*vtadminpb.Schema_TableSize{
+						"foo": {
+							DataLength: 100 + 200 + 1000,
+							RowCount:   5 + 420 + 200,
+							ByShard: map[string]*vtadminpb.Schema_ShardTableSize{
+								"-80": {
+									DataLength: 100,
+									RowCount:   5,
+								},
+								"80-": {
+									DataLength: 200,
+									RowCount:   420,
+								},
+								"-": {
+									DataLength: 1000,
+									RowCount:   200,
+								},
+							},
+						},
+					},
+				},
+				shouldErr: false,
+			},
+			{
 				name: "no serving tablets found for shard",
 				cfg: testutil.TestClusterConfig{
 					Cluster: &vtadminpb.Cluster{
@@ -757,7 +936,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -769,12 +948,20 @@ func TestGetSchema(t *testing.T) {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  100,
+												},
 											},
 										},
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  200,
+												},
 											},
 										},
 										"-": {
@@ -864,7 +1051,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -876,12 +1063,20 @@ func TestGetSchema(t *testing.T) {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  100,
+												},
 											},
 										},
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  200,
+												},
 											},
 										},
 										"-": {
@@ -1004,7 +1199,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1016,12 +1211,20 @@ func TestGetSchema(t *testing.T) {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  100,
+												},
 											},
 										},
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  200,
+												},
 											},
 										},
 										"-": {
@@ -1099,7 +1302,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1185,7 +1388,7 @@ func TestGetSchema(t *testing.T) {
 							State: vtadminpb.Tablet_SERVING,
 						},
 					},
-					VtctldClient: &testutil.VtctldClient{
+					VtctldClient: &fakevtctldclient.VtctldClient{
 						FindAllShardsInKeyspaceResults: map[string]struct {
 							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 							Error    error
@@ -1197,12 +1400,20 @@ func TestGetSchema(t *testing.T) {
 											Name: "-80",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  100,
+												},
 											},
 										},
 										"80-": {
 											Name: "80-",
 											Shard: &topodatapb.Shard{
 												IsMasterServing: true,
+												MasterAlias: &topodatapb.TabletAlias{
+													Cell: "zone1",
+													Uid:  200,
+												},
 											},
 										},
 									},
@@ -1352,7 +1563,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1393,7 +1604,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1414,7 +1625,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1437,7 +1648,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1507,7 +1718,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetKeyspacesResults: struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
@@ -1587,7 +1798,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1609,7 +1820,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1654,7 +1865,7 @@ func TestFindWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1761,7 +1972,7 @@ func TestGetVSchema(t *testing.T) {
 					Id:   "c0",
 					Name: "cluster0",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetVSchemaResults: map[string]struct {
 						Response *vtctldatapb.GetVSchemaResponse
 						Error    error
@@ -1792,7 +2003,7 @@ func TestGetVSchema(t *testing.T) {
 					Id:   "c0",
 					Name: "cluster0",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetVSchemaResults: map[string]struct {
 						Response *vtctldatapb.GetVSchemaResponse
 						Error    error
@@ -1855,7 +2066,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1896,7 +2107,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1919,7 +2130,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -1944,7 +2155,7 @@ func TestGetWorkflow(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2015,7 +2226,7 @@ func TestGetWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2075,7 +2286,7 @@ func TestGetWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error
@@ -2120,7 +2331,7 @@ func TestGetWorkflows(t *testing.T) {
 					Id:   "c1",
 					Name: "cluster1",
 				},
-				VtctldClient: &testutil.VtctldClient{
+				VtctldClient: &fakevtctldclient.VtctldClient{
 					GetWorkflowsResults: map[string]struct {
 						Response *vtctldatapb.GetWorkflowsResponse
 						Error    error

@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
@@ -103,9 +105,7 @@ func WithTestServers(
 // could not be added. It shallow copies the proto struct to prevent XXX_ fields
 // from changing in the marshalling.
 func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctldatapb.Keyspace) {
-	in := *ks.Keyspace // take a copy to avoid XXX_ fields changing.
-
-	err := ts.CreateKeyspace(ctx, ks.Name, &in)
+	err := ts.CreateKeyspace(ctx, ks.Name, proto.Clone(ks.Keyspace).(*topodatapb.Keyspace))
 	require.NoError(t, err)
 }
 
@@ -148,16 +148,13 @@ type AddTabletOptions struct {
 // shard to serving. If that shard record already has a serving primary, then
 // AddTablet will fail the test.
 func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet, opts *AddTabletOptions) {
-	in := *tablet
-	alias := *tablet.Alias
-	in.Alias = &alias
-
+	tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 	if opts == nil {
 		opts = &AddTabletOptions{}
 	}
 
-	err := ts.CreateTablet(ctx, &in)
-	require.NoError(t, err, "CreateTablet(%+v)", &in)
+	err := ts.CreateTablet(ctx, tablet)
+	require.NoError(t, err, "CreateTablet(%+v)", tablet)
 
 	if opts.SkipShardCreation {
 		return

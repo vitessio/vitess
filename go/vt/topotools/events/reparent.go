@@ -30,6 +30,6 @@ type Reparent struct {
 	base.StatusUpdater
 
 	ShardInfo            topo.ShardInfo
-	OldMaster, NewMaster topodatapb.Tablet
+	OldMaster, NewMaster *topodatapb.Tablet
 	ExternalID           string
 }

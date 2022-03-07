@@ -18,9 +18,11 @@ limitations under the License.
 package cluster
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -29,6 +31,7 @@ import (
 	"reflect"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -104,6 +107,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
 	}
+	if *PerfTest {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
+	}
 
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
@@ -113,8 +119,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	}
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
-
-	errFile, _ := os.Create(path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt"))
+	fname := path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt")
+	errFile, _ := os.Create(fname)
 	vttablet.proc.Stderr = errFile
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
@@ -135,6 +141,10 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
+			errFileContent, _ := ioutil.ReadFile(fname)
+			if errFileContent != nil {
+				log.Infof("vttablet error:\n%s\n", string(errFileContent))
+			}
 			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)
 		}
 	}
@@ -295,8 +305,11 @@ func (vttablet *VttabletProcess) TearDown() error {
 		return nil
 
 	case <-time.After(10 * time.Second):
-		vttablet.proc.Process.Kill()
-		vttablet.proc = nil
+		proc := vttablet.proc
+		if proc != nil {
+			vttablet.proc.Process.Kill()
+			vttablet.proc = nil
+		}
 		return <-vttablet.exit
 	}
 }
@@ -314,11 +327,15 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 		keyspace = ""
 	}
 	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
-	return executeQuery(dbParams, query)
+	conn, err := vttablet.conn(&dbParams)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return executeQuery(conn, query)
 }
 
-// QueryTabletWithDB lets you execute query on a specific DB in this tablet and get the result
-func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) (*sqltypes.Result, error) {
+func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
@@ -327,18 +344,26 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 	if vttablet.DbPassword != "" {
 		dbParams.Pass = vttablet.DbPassword
 	}
-	return executeQuery(dbParams, query)
+	return vttablet.conn(&dbParams)
 }
 
-func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, error) {
+func (vttablet *VttabletProcess) conn(dbParams *mysql.ConnParams) (*mysql.Conn, error) {
 	ctx := context.Background()
-	dbConn, err := mysql.Connect(ctx, &dbParams)
+	return mysql.Connect(ctx, dbParams)
+}
+
+// QueryTabletWithDB lets you execute query on a specific DB in this tablet and get the result
+func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) (*sqltypes.Result, error) {
+	conn, err := vttablet.defaultConn(dbname)
 	if err != nil {
 		return nil, err
 	}
-	defer dbConn.Close()
-	qr, err := dbConn.ExecuteFetch(query, 10000, true)
-	return qr, err
+	defer conn.Close()
+	return executeQuery(conn, query)
+}
+
+func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	return dbConn.ExecuteFetch(query, 10000, true)
 }
 
 // GetDBVar returns first matching database variable's value
@@ -360,6 +385,91 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 		return fmt.Sprintf("%s", output.Rows[0][1].ToBytes()), nil
 	}
 	return "", nil
+}
+
+// ToggleProfiling enables or disables the configured CPU profiler on this vttablet
+func (vttablet *VttabletProcess) ToggleProfiling() error {
+	return vttablet.proc.Process.Signal(syscall.SIGUSR1)
+}
+
+// WaitForVReplicationToCatchup waits for "workflow" to finish copying
+func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, duration time.Duration) {
+	queries := [3]string{
+		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
+		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
+		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
+	}
+	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
+
+	conn, err := vttablet.defaultConn("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	var lastChecked time.Time
+	for ind, query := range queries {
+		waitDuration := 500 * time.Millisecond
+		for duration > 0 {
+			log.Infof("Executing query %s on %s", query, vttablet.Name)
+			lastChecked = time.Now()
+			qr, err := conn.ExecuteFetch(query, 1000, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
+				break
+			} else {
+				log.Infof("In WaitForVReplicationToCatchup: %s %+v", query, qr.Rows)
+			}
+			time.Sleep(waitDuration)
+			duration -= waitDuration
+		}
+		if duration <= 0 {
+			t.Fatalf("WaitForVReplicationToCatchup timed out for workflow %s, keyspace %s", workflow, database)
+		}
+	}
+	log.Infof("WaitForVReplicationToCatchup succeeded at %v", lastChecked)
+}
+
+// BulkLoad performs a bulk load of rows into a given vttablet.
+func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkInsert func(io.Writer)) {
+	tmpbulk, err := ioutil.TempFile(path.Join(vttablet.Directory, "tmp"), "bulk_load")
+	if err != nil {
+		t.Fatalf("failed to create tmp file for loading: %v", err)
+	}
+	defer os.Remove(tmpbulk.Name())
+
+	log.Infof("create temporary file for bulk loading %q", tmpbulk.Name())
+	bufStart := time.Now()
+
+	bulkBuffer := bufio.NewWriter(tmpbulk)
+	bulkInsert(bulkBuffer)
+	bulkBuffer.Flush()
+
+	pos, _ := tmpbulk.Seek(0, 1)
+	bufFinish := time.Now()
+	log.Infof("bulk loading %d bytes from %q...", pos, tmpbulk.Name())
+
+	if err := tmpbulk.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := vttablet.defaultConn("vt_" + db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	query := fmt.Sprintf("LOAD DATA INFILE '%s' INTO TABLE `%s` FIELDS TERMINATED BY ',' ENCLOSED BY '\"'", tmpbulk.Name(), table)
+	_, err = conn.ExecuteFetch(query, 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	end := time.Now()
+	log.Infof("bulk insert successful (write tmp file = %v, mysql bulk load = %v, total = %v",
+		bufFinish.Sub(bufStart), end.Sub(bufFinish), end.Sub(bufStart))
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process

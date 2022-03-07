@@ -36,7 +36,9 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # predef1 is in both user and unsharded. So, it's ambiguous.
 "select predef1, predef3 from user join unsharded on predef1 = predef3"
 "symbol predef1 not found"
+Gen4 error: Column 'predef1' in field list is ambiguous

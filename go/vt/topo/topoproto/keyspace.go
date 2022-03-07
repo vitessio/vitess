@@ -42,3 +42,25 @@ func KeyspaceTypeString(kt topodatapb.KeyspaceType) string {
 
 	return str
 }
+
+// KeyspaceTypeLString returns the lowercased string representation of a
+// KeyspaceType.
+func KeyspaceTypeLString(kt topodatapb.KeyspaceType) string {
+	return strings.ToLower(KeyspaceTypeString(kt))
+}
+
+// KeyspaceIDTypeString returns the string representation of a KeyspaceIdType.
+func KeyspaceIDTypeString(kidType topodatapb.KeyspaceIdType) string {
+	str, ok := topodatapb.KeyspaceIdType_name[int32(kidType)]
+	if !ok {
+		return "UNKNOWN"
+	}
+
+	return str
+}
+
+// KeyspaceIDTypeLString returns the lowercased string representation of a
+// KeyspaceIdType.
+func KeyspaceIDTypeLString(kidType topodatapb.KeyspaceIdType) string {
+	return strings.ToLower(KeyspaceIDTypeString(kidType))
+}

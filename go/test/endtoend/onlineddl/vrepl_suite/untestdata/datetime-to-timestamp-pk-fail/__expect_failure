@@ -1,0 +1,1 @@
+No support at this time for converting a column from DATETIME to TIMESTAMP that is also part of the chosen unique key

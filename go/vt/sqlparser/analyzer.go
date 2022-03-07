@@ -62,6 +62,7 @@ const (
 	StmtFlush
 	StmtCallProc
 	StmtRevert
+	StmtShowMigrationLogs
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -83,6 +84,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtDDL
 	case *RevertMigration:
 		return StmtRevert
+	case *ShowMigrationLogs:
+		return StmtShowMigrationLogs
 	case *Use:
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:
@@ -109,6 +112,10 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtFlush
 	case *CallProc:
 		return StmtCallProc
+	case *Stream:
+		return StmtStream
+	case *VStream:
+		return StmtVStream
 	default:
 		return StmtUnknown
 	}
@@ -117,7 +124,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 //CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc: // TODO: we could merge this logic into ASTrewriter
+	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc, *Stream: // TODO: we could merge this logic into ASTrewriter
 		return true
 	}
 	return false
@@ -127,7 +134,7 @@ func CanNormalize(stmt Statement) bool {
 func CachePlan(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *ParenSelect,
-		*Insert, *Update, *Delete:
+		*Insert, *Update, *Delete, *Stream:
 		return true
 	}
 	return false
@@ -319,6 +326,35 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
+// AndExpressions ands together two expression, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (Expr)(nil)
+		for i, expr := range exprs {
+			if result == nil {
+				result = expr
+			} else {
+				found := false
+				for j := 0; j < i; j++ {
+					if EqualsExpr(expr, exprs[j]) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					result = &AndExpr{Left: result, Right: expr}
+				}
+			}
+		}
+		return result
+	}
+}
+
 // TableFromStatement returns the qualified table name for the query.
 // This works only for select statements.
 func TableFromStatement(sql string) (TableName, error) {
@@ -406,7 +442,7 @@ func IsSimpleTuple(node Expr) bool {
 func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	switch node := node.(type) {
 	case Argument:
-		return sqltypes.PlanValue{Key: string(node[1:])}, nil
+		return sqltypes.PlanValue{Key: string(node)}, nil
 	case *Literal:
 		switch node.Type {
 		case IntVal:
@@ -427,7 +463,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
 		}
 	case ListArg:
-		return sqltypes.PlanValue{ListKey: string(node[2:])}, nil
+		return sqltypes.PlanValue{ListKey: string(node)}, nil
 	case ValTuple:
 		pv := sqltypes.PlanValue{
 			Values: make([]sqltypes.PlanValue, 0, len(node)),

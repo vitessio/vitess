@@ -17,18 +17,19 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
@@ -58,7 +59,7 @@ func testComplete(t *testing.T, vrwf *VReplicationWorkflow) error {
 func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf := getMoveTablesWorkflow(t, "cell1,cell2", "replica,rdonly")
 	require.False(t, mtwf.Exists())
-	mtwf.ws = &workflowState{}
+	mtwf.ws = &workflow.State{}
 	require.True(t, mtwf.Exists())
 	require.Errorf(t, testComplete(t, mtwf), ErrWorkflowNotFullySwitched)
 	mtwf.ws.WritesSwitched = true
@@ -249,7 +250,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 }
 
 func testSwitchForward(t *testing.T, wf *VReplicationWorkflow) error {
-	_, err := wf.SwitchTraffic(DirectionForward)
+	_, err := wf.SwitchTraffic(workflow.DirectionForward)
 	return err
 }
 
@@ -417,7 +418,7 @@ func TestVRWSchemaValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, vrwf)
 	shouldErr := vrwf.Create(ctx)
-	require.Contains(t, shouldErr.Error(), "Create ReshardWorkflow failed Schema Validation")
+	require.Contains(t, shouldErr.Error(), "Create ReshardWorkflow failed: ValidateVSchema")
 }
 
 func TestReshardV2Cancel(t *testing.T) {

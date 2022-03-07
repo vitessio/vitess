@@ -204,7 +204,7 @@ func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletA
 		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 	// creates and registers the query service
-	qsc := tabletserver.NewTabletServer("", config, ts, *tabletAlias)
+	qsc := tabletserver.NewTabletServer("", config, ts, tabletAlias)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)

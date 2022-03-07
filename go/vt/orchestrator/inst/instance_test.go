@@ -198,12 +198,12 @@ func TestHumanReadableDescription(t *testing.T) {
 		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,nobinlog]")
 	}
 	{
-		i57.UsingPseudoGTID = true
+		i57.UsingOracleGTID = true
 		i57.LogBinEnabled = true
 		i57.Binlog_format = "ROW"
 		i57.LogReplicationUpdatesEnabled = true
 		desc := i57.HumanReadableDescription()
-		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,ROW,>>,P-GTID]")
+		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,ROW,>>,GTID]")
 	}
 }
 
@@ -214,12 +214,12 @@ func TestTabulatedDescription(t *testing.T) {
 		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|nobinlog|")
 	}
 	{
-		i57.UsingPseudoGTID = true
+		i57.UsingOracleGTID = true
 		i57.LogBinEnabled = true
 		i57.Binlog_format = "ROW"
 		i57.LogReplicationUpdatesEnabled = true
 		desc := i57.TabulatedDescription("|")
-		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|ROW|>>,P-GTID")
+		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|ROW|>>,GTID")
 	}
 }
 

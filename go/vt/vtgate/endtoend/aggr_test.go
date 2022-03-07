@@ -54,4 +54,34 @@ func TestAggregateTypes(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
+
+	qr = exec(t, conn, "select ascii(val1) as a, count(*) from aggr_test group by a")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select ascii(val1) as a, count(*) from aggr_test group by a order by a")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(99) INT64(2)] [INT32(100) INT64(1)] [INT32(101) INT64(1)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select ascii(val1) as a, count(*) from aggr_test group by a order by 2, a")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT32(65) INT64(1)] [INT32(69) INT64(1)] [INT32(97) INT64(1)] [INT32(98) INT64(1)] [INT32(100) INT64(1)] [INT32(101) INT64(1)] [INT32(99) INT64(2)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select val1 as a, count(*) from aggr_test group by a")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select val1 as a, count(*) from aggr_test group by a order by a")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select val1 as a, count(*) from aggr_test group by a order by 2, a")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("b") INT64(1)] [VARCHAR("d") INT64(1)] [VARCHAR("a") INT64(2)] [VARCHAR("c") INT64(2)] [VARCHAR("e") INT64(2)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
 }

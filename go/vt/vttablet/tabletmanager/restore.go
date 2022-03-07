@@ -17,33 +17,28 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vttime"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-
-	"vitess.io/vitess/go/vt/dbconfigs"
-
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
-	"context"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -88,10 +83,47 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
 		}
 	}()
-	err := tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
+
+	var (
+		err       error
+		startTime time.Time
+	)
+
+	defer func() {
+		stopTime := time.Now()
+
+		h := hook.NewSimpleHook("vttablet_restore_done")
+		h.ExtraEnv = tm.hookExtraEnv()
+		h.ExtraEnv["TM_RESTORE_DATA_START_TS"] = startTime.UTC().Format(time.RFC3339)
+		h.ExtraEnv["TM_RESTORE_DATA_STOP_TS"] = stopTime.UTC().Format(time.RFC3339)
+		h.ExtraEnv["TM_RESTORE_DATA_DURATION"] = stopTime.Sub(startTime).String()
+
+		if err != nil {
+			h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
+		}
+
+		// vttablet_restore_done is best-effort (for now?).
+		go func() {
+			// Package vthook already logs the stdout/stderr of hooks when they
+			// are run, so we don't duplicate that here.
+			hr := h.Execute()
+			switch hr.ExitStatus {
+			case hook.HOOK_SUCCESS:
+			case hook.HOOK_DOES_NOT_EXIST:
+				log.Info("No vttablet_restore_done hook.")
+			default:
+				log.Warning("vttablet_restore_done hook failed")
+			}
+		}()
+	}()
+
+	startTime = time.Now()
+
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
 	if err != nil {
 		return err
 	}
+
 	// Tell Orchestrator we're no longer stopped on purpose.
 	// Do this in the background, as it's best-effort.
 	go func() {
@@ -152,7 +184,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 	if !ok {
 		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
-		return mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+		// (NOTE:@ajm188) the legacy behavior is to always populate the metadata
+		// tables in this branch. Since tm.MetadataManager could be nil, we
+		// create a new instance for use here.
+		metadataManager := &mysqlctl.MetadataManager{}
+		return metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	}
 	// We should not become master after restore, because that would incorrectly
 	// start a new master term, and it's likely our data dir will be out of date.
@@ -304,7 +340,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return "", "", err
 	}
 	defer binlogConn.Close()
-	lastPos, err := binlogConn.MasterPosition()
+	lastPos, err := binlogConn.PrimaryPosition()
 	if err != nil {
 		return "", "", err
 	}
@@ -405,14 +441,14 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		return vterrors.Wrap(err, fmt.Sprintf("failed to restart the replication until %s GTID", afterGTIDStr))
 	}
 	log.Infof("Waiting for position to reach", beforeGTIDPosParsed.GTIDSet.Last())
-	// Could not use `agent.MysqlDaemon.WaitMasterPos` as replication is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
+	// Could not use `agent.MysqlDaemon.WaitSourcePos` as replication is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
 	// this is as per https://dev.mysql.com/doc/refman/5.6/en/start-slave.html
 	// We need to wait until replication catches upto the specified afterGTIDPos
 	chGTIDCaughtup := make(chan bool)
 	go func() {
 		timeToWait := time.Now().Add(*timeoutForGTIDLookup)
 		for time.Now().Before(timeToWait) {
-			pos, err := tm.MysqlDaemon.MasterPosition()
+			pos, err := tm.MysqlDaemon.PrimaryPosition()
 			if err != nil {
 				chGTIDCaughtup <- false
 			}
@@ -494,8 +530,8 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	}
 
 	// Set master and start replication.
-	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, !*mysqlctl.DisableActiveReparents /* startReplicationAfter */); err != nil {
-		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, !*mysqlctl.DisableActiveReparents /* startReplicationAfter */); err != nil {
+		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 
 	// If active reparents are disabled, we don't restart replication. So it makes no sense to wait for an update on the replica.
@@ -505,7 +541,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	}
 	// wait for reliable seconds behind master
 	// we have pos where we want to resume from
-	// if MasterPosition is the same, that means no writes
+	// if PrimaryPosition is the same, that means no writes
 	// have happened to master, so we are up-to-date
 	// otherwise, wait for replica's Position to change from
 	// the initial pos before proceeding

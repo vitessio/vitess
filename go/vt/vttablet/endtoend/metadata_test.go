@@ -19,6 +19,8 @@ package endtoend
 import (
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
@@ -93,8 +95,8 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 		}},
 		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	mustMatch(t, want, qr)
-	mustMatch(t, want, streamQr)
+	utils.MustMatch(t, want, qr)
+	utils.MustMatch(t, want, streamQr)
 }
 
 // should return Name and Type, because we pass an empty ExecuteOptions and that is the default
@@ -125,8 +127,8 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 		}},
 		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	mustMatch(t, want, qr)
-	mustMatch(t, want, streamQr)
+	utils.MustMatch(t, want, qr)
+	utils.MustMatch(t, want, streamQr)
 }
 
 // should return Name and Type, because if nil ExecuteOptions are passed, we normalize to TYPE_AND_NAME
@@ -157,6 +159,6 @@ func TestMetadataNoExecOptions(t *testing.T) {
 		}},
 		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	mustMatch(t, want, qr)
-	mustMatch(t, want, streamQr)
+	utils.MustMatch(t, want, qr)
+	utils.MustMatch(t, want, streamQr)
 }

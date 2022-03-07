@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
@@ -27,7 +29,13 @@ import (
 // MaxReplicationLagModule. Internally, the parameters are represented by a
 // protobuf message. This message is also used to update the parameters.
 type MaxReplicationLagModuleConfig struct {
-	throttlerdatapb.Configuration
+	*throttlerdatapb.Configuration
+}
+
+func (cfg MaxReplicationLagModuleConfig) Clone() MaxReplicationLagModuleConfig {
+	return MaxReplicationLagModuleConfig{
+		proto.Clone(cfg.Configuration).(*throttlerdatapb.Configuration),
+	}
 }
 
 // Most of the values are based on the assumption that vttablet is started
@@ -35,7 +43,7 @@ type MaxReplicationLagModuleConfig struct {
 const healthCheckInterval = 20
 
 var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
-	throttlerdatapb.Configuration{
+	&throttlerdatapb.Configuration{
 		TargetReplicationLagSec: 2,
 		MaxReplicationLagSec:    ReplicationLagModuleDisabled,
 
@@ -62,13 +70,13 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 
 // DefaultMaxReplicationLagModuleConfig returns a copy of the default config object.
 func DefaultMaxReplicationLagModuleConfig() MaxReplicationLagModuleConfig {
-	return defaultMaxReplicationLagModuleConfig
+	return defaultMaxReplicationLagModuleConfig.Clone()
 }
 
 // NewMaxReplicationLagModuleConfig returns a default configuration where
 // only "maxReplicationLag" is set.
 func NewMaxReplicationLagModuleConfig(maxReplicationLag int64) MaxReplicationLagModuleConfig {
-	config := defaultMaxReplicationLagModuleConfig
+	config := defaultMaxReplicationLagModuleConfig.Clone()
 	config.MaxReplicationLagSec = maxReplicationLag
 	return config
 }

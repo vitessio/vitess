@@ -13,48 +13,146 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { orderBy } from 'lodash-es';
+import { groupBy, orderBy } from 'lodash-es';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 
+import style from './Workflows.module.scss';
 import { useWorkflows } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
+import { filterNouns } from '../../util/filterNouns';
+import { getStreams, getTimeUpdated } from '../../util/workflows';
+import { formatDateTime, formatRelativeTime } from '../../util/time';
+import { StreamStatePip } from '../pips/StreamStatePip';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { DataFilter } from '../dataTable/DataFilter';
+import { Tooltip } from '../tooltip/Tooltip';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
     const { data } = useWorkflows();
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
-    const sortedData = React.useMemo(
-        () => orderBy(data, ['workflow.name', 'cluster.name', 'workflow.source.keyspace', 'workflow.target.keyspace']),
-        [data]
-    );
+    const sortedData = React.useMemo(() => {
+        const mapped = (data || []).map((workflow) => ({
+            clusterID: workflow.cluster?.id,
+            clusterName: workflow.cluster?.name,
+            keyspace: workflow.keyspace,
+            name: workflow.workflow?.name,
+            source: workflow.workflow?.source?.keyspace,
+            sourceShards: workflow.workflow?.source?.shards,
+            streams: groupBy(getStreams(workflow), 'state'),
+            target: workflow.workflow?.target?.keyspace,
+            targetShards: workflow.workflow?.target?.shards,
+            timeUpdated: getTimeUpdated(workflow),
+        }));
+        const filtered = filterNouns(filter, mapped);
+        return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
+    }, [data, filter]);
 
     const renderRows = (rows: typeof sortedData) =>
-        rows.map(({ cluster, keyspace, workflow }, idx) => {
+        rows.map((row, idx) => {
             const href =
-                cluster?.id && keyspace && workflow?.name
-                    ? `/workflow/${cluster.id}/${keyspace}/${workflow.name}`
+                row.clusterID && row.keyspace && row.name
+                    ? `/workflow/${row.clusterID}/${row.keyspace}/${row.name}`
                     : null;
 
             return (
                 <tr key={idx}>
-                    <td>{href ? <Link to={href}>{workflow?.name}</Link> : workflow?.name}</td>
-                    <td>{cluster?.name}</td>
-                    <td>{workflow?.source?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
-                    <td>{workflow?.target?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
+                    <DataCell>
+                        <div className="font-weight-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
+                        <div className="font-size-small text-color-secondary">{row.clusterName}</div>
+                    </DataCell>
+                    <DataCell>
+                        {row.source ? (
+                            <>
+                                <KeyspaceLink clusterID={row.clusterID} name={row.source}>
+                                    {row.source}
+                                </KeyspaceLink>
+                                <div className={style.shardList}>{(row.sourceShards || []).join(', ')}</div>
+                            </>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
+                    </DataCell>
+                    <DataCell>
+                        {row.target ? (
+                            <>
+                                <KeyspaceLink clusterID={row.clusterID} name={row.target}>
+                                    {row.target}
+                                </KeyspaceLink>
+                                <div className={style.shardList}>{(row.targetShards || []).join(', ')}</div>
+                            </>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
+                    </DataCell>
+
+                    <DataCell>
+                        <div className={style.streams}>
+                            {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
+                            {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
+                                if (streamState in row.streams) {
+                                    const streamCount = row.streams[streamState].length;
+                                    const tooltip = [
+                                        streamCount,
+                                        streamState === 'Error' ? 'failed' : streamState.toLocaleLowerCase(),
+                                        streamCount === 1 ? 'stream' : 'streams',
+                                    ].join(' ');
+
+                                    return (
+                                        <Tooltip key={streamState} text={tooltip}>
+                                            <span className={style.stream}>
+                                                <StreamStatePip state={streamState} /> {streamCount}
+                                            </span>
+                                        </Tooltip>
+                                    );
+                                }
+                                return (
+                                    <span key={streamState} className={style.streamPlaceholder}>
+                                        -
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </DataCell>
+
+                    <DataCell>
+                        <div className="font-family-primary white-space-nowrap">{formatDateTime(row.timeUpdated)}</div>
+                        <div className="font-family-primary font-size-small text-color-secondary">
+                            {formatRelativeTime(row.timeUpdated)}
+                        </div>
+                    </DataCell>
                 </tr>
             );
         });
 
     return (
-        <div className="max-width-content">
-            <h1>Workflows</h1>
-            <DataTable
-                columns={['Workflow', 'Cluster', 'Source', 'Target']}
-                data={sortedData}
-                renderRows={renderRows}
-            />
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Workflows</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter workflows"
+                    value={filter || ''}
+                />
+
+                <DataTable
+                    columns={['Workflow', 'Source', 'Target', 'Streams', 'Last Updated']}
+                    data={sortedData}
+                    renderRows={renderRows}
+                />
+            </ContentContainer>
         </div>
     );
 };

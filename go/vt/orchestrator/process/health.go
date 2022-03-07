@@ -27,7 +27,6 @@ import (
 	"github.com/patrickmn/go-cache"
 
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 )
 
 var lastHealthCheckUnixNano int64
@@ -76,7 +75,7 @@ type HealthStatus struct {
 	Hostname           string
 	Token              string
 	IsActiveNode       bool
-	ActiveNode         NodeHealth
+	ActiveNode         *NodeHealth
 	Error              error
 	AvailableNodes     [](*NodeHealth)
 	RaftLeader         string
@@ -122,19 +121,9 @@ func HealthTest() (health *HealthStatus, err error) {
 		health.Healthy = healthy
 	}
 
-	if orcraft.IsRaftEnabled() {
-		health.ActiveNode.Hostname = orcraft.GetLeader()
-		health.IsActiveNode = orcraft.IsLeader()
-		health.RaftLeader = orcraft.GetLeader()
-		health.RaftLeaderURI = orcraft.LeaderURI.Get()
-		health.IsRaftLeader = orcraft.IsLeader()
-		health.RaftAdvertise = config.Config.RaftAdvertise
-		health.RaftHealthyMembers = orcraft.HealthyMembers()
-	} else {
-		if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
-			health.Error = err
-			return health, log.Errore(err)
-		}
+	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
+		health.Error = err
+		return health, log.Errore(err)
 	}
 	health.AvailableNodes, _ = ReadAvailableNodes(true)
 

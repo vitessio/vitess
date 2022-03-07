@@ -40,7 +40,7 @@ type memorySort struct {
 }
 
 // newMemorySort builds a new memorySort.
-func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, error) {
+func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 	eMemorySort := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: newResultsBuilder(plan, eMemorySort),
@@ -82,10 +82,12 @@ func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, er
 		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
+
 		ob := engine.OrderbyParams{
-			Col:             colNumber,
-			WeightStringCol: -1,
-			Desc:            order.Direction == sqlparser.DescOrder,
+			Col:               colNumber,
+			WeightStringCol:   -1,
+			Desc:              order.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: colNumber,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}
@@ -113,15 +115,9 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 		rc := ms.resultColumns[orderby.Col]
 		// Add a weight_string column if we know that the column is a textual column or if its type is unknown
 		if sqltypes.IsText(rc.column.typ) || rc.column.typ == sqltypes.Null {
-			// If a weight string was previously requested, reuse it.
-			if weightcolNumber, ok := ms.weightStrings[rc]; ok {
-				ms.eMemorySort.OrderBy[i].WeightStringCol = weightcolNumber
-				continue
-			}
-			weightcolNumber, err := ms.input.SupplyWeightString(orderby.Col)
+			weightcolNumber, err := ms.input.SupplyWeightString(orderby.Col, orderby.FromGroupBy)
 			if err != nil {
-				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
-				if isUnsupportedErr {
+				if _, isUnsupportedErr := err.(UnsupportedSupplyWeightString); isUnsupportedErr {
 					continue
 				}
 				return err
@@ -134,6 +130,6 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *memorySort) WireupV4(semTable *semantics.SemTable) error {
-	return ms.input.WireupV4(semTable)
+func (ms *memorySort) WireupGen4(semTable *semantics.SemTable) error {
+	return ms.input.WireupGen4(semTable)
 }

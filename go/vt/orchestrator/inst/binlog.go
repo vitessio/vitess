@@ -44,21 +44,6 @@ type BinlogCoordinates struct {
 	Type    BinlogType
 }
 
-// rpad formats the binlog coordinates to a given size. If the size
-// increases this value is modified so it can be reused later. This
-// is to ensure consistent formatting in debug output.
-func rpad(coordinates BinlogCoordinates, length *int) string {
-	s := fmt.Sprintf("%+v", coordinates)
-	if len(s) > *length {
-		*length = len(s)
-	}
-
-	if len(s) >= *length {
-		return s
-	}
-	return fmt.Sprintf("%s%s", s, strings.Repeat(" ", *length-len(s)))
-}
-
 // ParseInstanceKey will parse an InstanceKey from a string representation such as 127.0.0.1:3306
 func ParseBinlogCoordinates(logFileLogPos string) (*BinlogCoordinates, error) {
 	tokens := strings.SplitN(logFileLogPos, ":", 2)

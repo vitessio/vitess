@@ -109,3 +109,12 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, query []byte, ma
 	result, err := conn.ExecuteFetch(string(query), maxrows, true /*wantFields*/)
 	return sqltypes.ResultToProto3(result), err
 }
+
+// ExecuteQuery submits a new online DDL request
+func (tm *TabletManager) ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error) {
+	// get the db name from the tablet
+	tablet := tm.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, string(query), nil, 0, 0, nil)
+	return sqltypes.ResultToProto3(result), err
+}

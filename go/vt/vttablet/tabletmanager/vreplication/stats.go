@@ -329,14 +329,14 @@ func (st *vrStats) register() {
 	stats.NewCountersFuncWithMultiLabels(
 		"VReplicationErrors",
 		"Errors during vreplication",
-		[]string{"workflow", "type"},
+		[]string{"workflow", "id", "type"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := make(map[string]int64)
 			for _, ct := range st.controllers {
 				for key, val := range ct.blpStats.ErrorCounts.Counts() {
-					result[fmt.Sprintf("%d_%s", ct.id, key)] = val
+					result[fmt.Sprintf("%s.%d.%s", ct.workflow, ct.id, key)] = val
 				}
 			}
 			return result

@@ -172,3 +172,15 @@ func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 
 	return c.fallbackClient.VStream(ctx, tabletType, vgtid, filter, flags, callback)
 }
+
+func (c *echoClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	if strings.HasPrefix(sql, EchoPrefix) {
+		return session, echoQueryResult(map[string]interface{}{
+			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
+			"query":    sql,
+			"bindVars": bindVariables,
+			"session":  session,
+		}).Fields, nil
+	}
+	return c.fallbackClient.Prepare(ctx, session, sql, bindVariables)
+}

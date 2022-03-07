@@ -23,8 +23,8 @@ import (
 
 // comparer is the struct that has the logic for comparing two rows in the result set
 type comparer struct {
-	orderBy, weightString int
-	desc                  bool
+	orderBy, weightString, starColFixedIndex int
+	desc                                     bool
 }
 
 // compare compares two rows given the comparer and returns which one should be earlier in the result set
@@ -32,7 +32,13 @@ type comparer struct {
 // 1 is the second row should be earlier
 // 0 if both the rows have equal ordering
 func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
-	cmp, err := evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy])
+	var colIndex int
+	if c.starColFixedIndex > c.orderBy && c.starColFixedIndex < len(r1) {
+		colIndex = c.starColFixedIndex
+	} else {
+		colIndex = c.orderBy
+	}
+	cmp, err := evalengine.NullsafeCompare(r1[colIndex], r2[colIndex])
 	if err != nil {
 		_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 		if !(isComparisonErr && c.weightString != -1) {
@@ -58,9 +64,10 @@ func extractSlices(input []OrderbyParams) []*comparer {
 	var result []*comparer
 	for _, order := range input {
 		result = append(result, &comparer{
-			orderBy:      order.Col,
-			weightString: order.WeightStringCol,
-			desc:         order.Desc,
+			orderBy:           order.Col,
+			weightString:      order.WeightStringCol,
+			desc:              order.Desc,
+			starColFixedIndex: order.StarColFixedIndex,
 		})
 	}
 	return result

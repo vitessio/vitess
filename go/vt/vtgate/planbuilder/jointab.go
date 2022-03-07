@@ -17,7 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"strconv"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -26,7 +26,7 @@ import (
 // variables across primitives.
 type jointab struct {
 	refs     map[*column]string
-	vars     map[string]struct{}
+	reserved *sqlparser.ReservedVars
 	varIndex int
 }
 
@@ -34,10 +34,10 @@ type jointab struct {
 // being built. It also needs the current list of bind vars
 // used in the original query to make sure that the names
 // it generates don't collide with those already in use.
-func newJointab(bindvars map[string]struct{}) *jointab {
+func newJointab(reserved *sqlparser.ReservedVars) *jointab {
 	return &jointab{
-		refs: make(map[*column]string),
-		vars: bindvars,
+		refs:     make(map[*column]string),
+		reserved: reserved,
 	}
 }
 
@@ -47,17 +47,7 @@ func (jt *jointab) Procure(plan logicalPlan, col *sqlparser.ColName, to int) str
 	from, joinVar := jt.Lookup(col)
 	// If joinVar is empty, generate a unique name.
 	if joinVar == "" {
-		suffix := ""
-		i := 0
-		for {
-			joinVar = col.CompliantName(suffix)
-			if _, ok := jt.vars[joinVar]; !ok {
-				break
-			}
-			i++
-			suffix = strconv.Itoa(i)
-		}
-		jt.vars[joinVar] = struct{}{}
+		joinVar = jt.reserved.ReserveColName(col)
 		jt.refs[col.Metadata.(*column)] = joinVar
 	}
 	plan.SupplyVar(from, to, col, joinVar)
@@ -71,24 +61,13 @@ func (jt *jointab) Procure(plan logicalPlan, col *sqlparser.ColName, to int) str
 func (jt *jointab) GenerateSubqueryVars() (sq, hasValues string) {
 	for {
 		jt.varIndex++
-		suffix := strconv.Itoa(jt.varIndex)
-		var1 := "__sq" + suffix
-		var2 := "__sq_has_values" + suffix
-		if jt.containsAny(var1, var2) {
+		var1 := fmt.Sprintf("__sq%d", jt.varIndex)
+		var2 := fmt.Sprintf("__sq_has_values%d", jt.varIndex)
+		if !jt.reserved.ReserveAll(var1, var2) {
 			continue
 		}
 		return var1, var2
 	}
-}
-
-func (jt *jointab) containsAny(names ...string) bool {
-	for _, name := range names {
-		if _, ok := jt.vars[name]; ok {
-			return true
-		}
-		jt.vars[name] = struct{}{}
-	}
-	return false
 }
 
 // Lookup returns the order of the route that supplies the column and

@@ -447,8 +447,8 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 	}
 
 	// Stop replication (in case we're restarting), set master, and start replication.
-	if err := mysqld.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), true /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
-		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
+	if err := mysqld.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), true /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 	return nil
 }

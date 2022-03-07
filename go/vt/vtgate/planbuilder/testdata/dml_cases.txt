@@ -2168,7 +2168,7 @@ Gen4 plan same as above
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
     "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
-    "Query": "delete music from music where id = 1",
+    "Query": "delete from music where id = 1",
     "Table": "music",
     "Values": [
       1
@@ -2387,6 +2387,62 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
+  }
+}
+Gen4 plan same as above
+
+# multi-table delete with single table
+"delete u.* from user u where u.id * u.col = u.foo"
+{
+  "QueryType": "DELETE",
+  "Original": "delete u.* from user u where u.id * u.col = u.foo",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",
+    "Query": "delete from `user` where `user`.id * `user`.col = `user`.foo",
+    "Table": "user"
+  }
+}
+Gen4 plan same as above
+
+# delete with unknown reference
+"delete music from user where id = 1"
+"Unknown table 'music' in MULTI DELETE"
+Gen4 plan same as above
+
+# delete with derived tables
+"delete music from (select * from user) music where id = 1"
+"The target table music of the DELETE is not updatable"
+Gen4 plan same as above
+
+# delete with derived tables with unknown table
+"delete user from (select * from user) music where id = 1"
+"Unknown table 'user' in MULTI DELETE"
+Gen4 plan same as above
+
+"INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)"
+{
+  "QueryType": "INSERT",
+  "Original": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
+    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1)",
+    "TableName": "user_privacy_consents"
   }
 }
 Gen4 plan same as above

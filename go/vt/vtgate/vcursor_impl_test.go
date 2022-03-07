@@ -32,10 +32,6 @@ func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschema.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) GetCurrentVschema() (*vindexes.VSchema, error) {
-	return f.vschema, nil
-}
-
 func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschema.SrvVSchema) error {
 	panic("implement me")
 }
@@ -234,11 +230,11 @@ func TestSetTarget(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks3",
-		expectedError: "Unknown database 'ks3'",
+		expectedError: "unknown database 'ks3'",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks2@replica",
-		expectedError: "Can't execute the given command because you have an active transaction",
+		expectedError: "can't execute the given command because you have an active transaction",
 	}}
 
 	for i, tc := range tests {

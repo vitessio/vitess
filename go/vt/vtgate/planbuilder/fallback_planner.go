@@ -29,9 +29,9 @@ type fallbackPlanner struct {
 
 var _ selectPlanner = (*fallbackPlanner)(nil).plan
 
-func (fp *fallbackPlanner) safePrimary(query string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
+func (fp *fallbackPlanner) safePrimary(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	primaryF := fp.primary(query)
-	return func(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (res engine.Primitive, err error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (res engine.Primitive, err error) {
 		defer func() {
 			// if the primary planner panics, we want to catch it here so we can fall back
 			if r := recover(); r != nil {
@@ -43,11 +43,11 @@ func (fp *fallbackPlanner) safePrimary(query string) func(sqlparser.Statement, s
 	}
 }
 
-func (fp *fallbackPlanner) plan(query string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
+func (fp *fallbackPlanner) plan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	primaryF := fp.safePrimary(query)
 	backupF := fp.fallback(query)
 
-	return func(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		res, err := primaryF(stmt, reservedVars, vschema)
 		if err != nil {
 			return backupF(stmt, reservedVars, vschema)

@@ -19,5 +19,4 @@
 
 source ./env.sh
 
-vtctlclient SwitchReads -tablet_type=rdonly customer.commerce2customer
-vtctlclient SwitchReads -tablet_type=replica customer.commerce2customer
+vtctlclient MoveTables -tablet_types=rdonly,replica SwitchTraffic customer.commerce2customer

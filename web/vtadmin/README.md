@@ -76,6 +76,7 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 | `npm run lint` | Run all of the linters and formatters. The `package.json` file defines a bunch more scripts to run individual linters, if you prefer, like `npm run lint:eslint`. |
 | `npm run lint:fix` | Run all of the linters and fix errors (where possible) in place. Note that this will overwrite your files so you may want to consider committing your work beforehand! |
 | `npm run build` | Generates a build of vtadmin-web for production and outputs the files to the `vitess/web/vtadmin/build` folder. In most cases, you won't need to run this locally, but it _can_ be useful for debugging production-specific issues. See the create-react-app documentation about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information. |
+| `npm run analyze` | Analyze and debug JavaScript build size using [source-map-explorer](https://create-react-app.dev/docs/analyzing-the-bundle-size/). In most cases, you'll first want to run `npm run build` to update the `build/` directory. |
 
 ## Toolchain
 

@@ -19,45 +19,55 @@ import { createMemoryHistory } from 'history';
 import { Router } from 'react-router-dom';
 import { QueryParams } from '../util/queryString';
 
-import { useURLQuery } from './useURLQuery';
+import { useURLQuery, URLQueryOptions } from './useURLQuery';
 
 describe('useURLQuery', () => {
     describe('parsing', () => {
         const tests: {
             name: string;
             url: string;
+            opts: URLQueryOptions | undefined;
             expected: ReturnType<typeof useURLQuery>['query'];
         }[] = [
             {
+                name: 'parses complex URLs',
+                url: '/test?page=1&isTrue=true&isFalse=false&list=one&list=two&list=three&foo=bar',
+                opts: undefined,
+                expected: { page: '1', isTrue: 'true', isFalse: 'false', list: ['one', 'two', 'three'], foo: 'bar' },
+            },
+            {
                 name: 'parses numbers',
                 url: '/test?page=1',
+                opts: { parseNumbers: true },
                 expected: { page: 1 },
             },
             {
                 name: 'parses booleans',
                 url: '/test?foo=true&bar=false',
+                opts: { parseBooleans: true },
                 expected: { foo: true, bar: false },
             },
             {
                 name: 'parses arrays by duplicate keys',
                 url: '/test?list=1&list=2&list=3',
+                opts: { parseNumbers: true },
                 expected: { list: [1, 2, 3] },
-            },
-            {
-                name: 'parses complex URLs',
-                url: '/test?page=1&isTrue=true&isFalse=false&list=one&list=two&list=three&foo=bar',
-                expected: { page: 1, isTrue: true, isFalse: false, list: ['one', 'two', 'three'], foo: 'bar' },
             },
         ];
 
         test.each(tests.map(Object.values))(
             '%s',
-            (name: string, url: string, expected: ReturnType<typeof useURLQuery>) => {
+            (
+                name: string,
+                url: string,
+                opts: URLQueryOptions | undefined,
+                expected: ReturnType<typeof useURLQuery>
+            ) => {
                 const history = createMemoryHistory({
                     initialEntries: [url],
                 });
 
-                const { result } = renderHook(() => useURLQuery(), {
+                const { result } = renderHook(() => useURLQuery(opts), {
                     wrapper: ({ children }) => {
                         return <Router history={history}>{children}</Router>;
                     },
@@ -90,8 +100,8 @@ describe('useURLQuery', () => {
             {
                 name: 'it does not merge array-like queries',
                 initialEntries: ['/test?arr=one&arr=two'],
-                nextQuery: { arr: [3, 4, 5] },
-                expected: { arr: [3, 4, 5] },
+                nextQuery: { arr: ['three', 'four', 'five'] },
+                expected: { arr: ['three', 'four', 'five'] },
             },
         ];
 
@@ -142,8 +152,8 @@ describe('useURLQuery', () => {
             {
                 name: 'it does not merge array-like queries',
                 initialEntries: ['/test?arr=one&arr=two'],
-                nextQuery: { arr: [3, 4, 5] },
-                expected: { arr: [3, 4, 5] },
+                nextQuery: { arr: ['three', 'four', 'five'] },
+                expected: { arr: ['three', 'four', 'five'] },
             },
         ];
 

@@ -29,13 +29,14 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/vt/topo"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 
 	"vitess.io/vitess/go/mysql"
@@ -86,7 +87,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
-	target := querypb.Target{}
+	target := &querypb.Target{}
 	fn := func(r *sqltypes.Result) error {
 		return nil
 	}
@@ -195,7 +196,7 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	// Prevent use of non-master if in_transaction is on.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", InTransaction: true})
 	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
-	require.EqualError(t, err, `Can't execute the given command because you have an active transaction`)
+	require.EqualError(t, err, `can't execute the given command because you have an active transaction`)
 }
 
 func TestDirectTargetRewrites(t *testing.T) {
@@ -306,9 +307,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err := executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1, RowCount: -1}
-	testSession := *session.Session
+	testSession := proto.Clone(session.Session).(*vtgatepb.Session)
 	testSession.ShardSessions = nil
-	utils.MustMatch(t, wantSession, &testSession, "session does not match for autocommit=0")
+	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
 	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	if logStats.CommitTime != 0 {
@@ -347,9 +348,9 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1}
-	testSession = *session.Session
+	testSession = proto.Clone(session.Session).(*vtgatepb.Session)
 	testSession.ShardSessions = nil
-	utils.MustMatch(t, wantSession, &testSession, "session does not match for autocommit=1")
+	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
@@ -943,10 +944,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	wantErr = "Unknown database 'UnexistentKeyspace'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("got: %v, want %v", err, wantErr)
-	}
+	require.EqualError(t, err, "unknown database 'UnexistentKeyspace'")
 }
 
 func TestExecutorComment(t *testing.T) {
@@ -1116,7 +1114,7 @@ func TestExecutorDDL(t *testing.T) {
 
 	stmts := []string{
 		"create table t1(id bigint primary key)",
-		"alter table t2 add primary key id",
+		"alter table t2 add primary key (id)",
 		"rename table t2 to t3",
 		"truncate table t2",
 		"drop table t2",
@@ -1204,7 +1202,8 @@ func TestExecutorDDLFk(t *testing.T) {
 					require.NoError(t, err)
 					require.EqualValues(t, 1, sbc.ExecCount.Get())
 				} else {
-					require.EqualError(t, err, "foreign key constraint is not allowed")
+					require.Error(t, err)
+					require.Contains(t, err.Error(), "foreign key constraints are not allowed")
 				}
 			})
 		}
@@ -1371,10 +1370,10 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	// test that by default no users can perform the operation
 	stmt := "alter vschema create vindex test_hash using hash"
 	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'blueUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
 	*vschemaacl.AuthorizedDDLUsers = "%"
@@ -1393,7 +1392,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
 
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
@@ -1806,63 +1805,6 @@ func TestDebugVSchema(t *testing.T) {
 	}
 }
 
-func TestGenerateCharsetRows(t *testing.T) {
-	rows := make([][]sqltypes.Value, 0, 4)
-	rows0 := [][]sqltypes.Value{
-		append(buildVarCharRow(
-			"utf8",
-			"UTF-8 Unicode",
-			"utf8_general_ci"),
-			sqltypes.NewInt32(3)),
-	}
-	rows1 := [][]sqltypes.Value{
-		append(buildVarCharRow(
-			"utf8mb4",
-			"UTF-8 Unicode",
-			"utf8mb4_general_ci"),
-			sqltypes.NewInt32(4)),
-	}
-	rows2 := [][]sqltypes.Value{
-		append(buildVarCharRow(
-			"utf8",
-			"UTF-8 Unicode",
-			"utf8_general_ci"),
-			sqltypes.NewInt32(3)),
-		append(buildVarCharRow(
-			"utf8mb4",
-			"UTF-8 Unicode",
-			"utf8mb4_general_ci"),
-			sqltypes.NewInt32(4)),
-	}
-
-	testcases := []struct {
-		input    string
-		expected [][]sqltypes.Value
-	}{
-		{input: "show charset", expected: rows2},
-		{input: "show character set", expected: rows2},
-		{input: "show charset where charset like 'foo%'", expected: rows},
-		{input: "show charset where charset like 'utf8%'", expected: rows0},
-		{input: "show charset where charset = 'utf8'", expected: rows0},
-		{input: "show charset where charset = 'foo%'", expected: rows},
-		{input: "show charset where charset = 'utf8mb4'", expected: rows1},
-	}
-
-	charsets := []string{"utf8", "utf8mb4"}
-
-	for _, tc := range testcases {
-		t.Run(tc.input, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tc.input)
-			require.NoError(t, err)
-			match := stmt.(*sqlparser.Show).Internal.(*sqlparser.ShowBasic)
-			filter := match.Filter
-			actual, err := generateCharsetRows(filter, charsets)
-			require.NoError(t, err)
-			require.Equal(t, tc.expected, actual)
-		})
-	}
-}
-
 func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	saveMax := *maxPayloadSize
 	saveWarn := *warnPayloadSize
@@ -1916,7 +1858,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 	session := &vtgatepb.Session{Autocommit: true}
 
 	sql := `select database()`
-	target := querypb.Target{}
+	target := &querypb.Target{}
 	cbInvoked := false
 	cb := func(r *sqltypes.Result) error {
 		cbInvoked = true

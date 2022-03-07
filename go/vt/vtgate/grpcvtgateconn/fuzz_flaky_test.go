@@ -56,7 +56,7 @@ func Fuzz(data []byte) int {
 	// listen on a random port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		fmt.Println("Cannot listen: %v", err)
+		fmt.Println("Cannot listen")
 		return -1
 	}
 	defer listener.Close()
@@ -93,7 +93,7 @@ func Fuzz(data []byte) int {
 	flag.Set("grpc_auth_static_client_creds", f.Name())
 	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
-		fmt.Println("dial failed: %v", err)
+		fmt.Println("dial failed")
 		return -1
 	}
 	defer client.Close()
@@ -101,7 +101,7 @@ func Fuzz(data []byte) int {
 	RegisterTestDialProtocol(client)
 	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
-		fmt.Println("Got err: %v from vtgateconn.DialProtocol", err)
+		fmt.Println("Got err from vtgateconn.DialProtocol")
 		return -1
 	}
 	session := conn.Session("connection_ks@rdonly", testExecuteOptions)

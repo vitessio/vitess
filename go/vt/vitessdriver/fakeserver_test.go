@@ -23,7 +23,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -66,7 +66,8 @@ func (f *fakeVTGateService) Execute(ctx context.Context, session *vtgatepb.Sessi
 		return session, nil, fmt.Errorf("Execute request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
 	if execCase.session != nil {
-		*session = *execCase.session
+		proto.Reset(session)
+		proto.Merge(session, execCase.session)
 	}
 	return session, execCase.result, nil
 }
@@ -90,7 +91,8 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 			return session, nil, fmt.Errorf("Execute request mismatch: got %+v, want %+v", query, execCase.execQuery)
 		}
 		if execCase.session != nil {
-			*session = *execCase.session
+			proto.Reset(session)
+			proto.Merge(session, execCase.session)
 		}
 		return session, []sqltypes.QueryResponse{
 			{QueryResult: execCase.result},
@@ -129,6 +131,31 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb
 			}
 		}
 	}
+	return nil
+}
+
+// Prepare is part of the VTGateService interface
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	execCase, ok := execMap[sql]
+	if !ok {
+		return session, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Session:       session,
+	}
+	if !query.Equal(execCase.execQuery) {
+		return session, nil, fmt.Errorf("Prepare request mismatch: got %+v, want %+v", query, execCase.execQuery)
+	}
+	if execCase.session != nil {
+		proto.Reset(session)
+		proto.Merge(session, execCase.session)
+	}
+	return session, execCase.result.Fields, nil
+}
+
+func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
 	return nil
 }
 

@@ -49,7 +49,7 @@ var (
 			<td>{{.Duration}}</td>
 			<td>{{.Start}}</td>
 			<td>{{.ConnID}}</td>
-			<td><a href='/livequeryz/terminate?connID={{.ConnID}}'>Terminate</a></td>
+			<td><a href='terminate?connID={{.ConnID}}'>Terminate</a></td>
 		</tr>
 	`))
 )

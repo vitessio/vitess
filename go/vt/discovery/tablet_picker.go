@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -41,6 +43,7 @@ import (
 var (
 	tabletPickerRetryDelay   = 30 * time.Second
 	muTabletPickerRetryDelay sync.Mutex
+	globalTPStats            *tabletPickerStats
 )
 
 // GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
@@ -107,12 +110,12 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
-		candidates := tp.getMatchingTablets(ctx)
-
+		candidates := tp.GetMatchingTablets(ctx)
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
-			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %d seconds",
-				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, int(GetTabletPickerRetryDelay()/1e9))
+			tp.incNoTabletFoundStat()
+			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %.3f seconds",
+				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0)
 			timer := time.NewTimer(GetTabletPickerRetryDelay())
 			select {
 			case <-ctx.Done():
@@ -133,6 +136,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 				log.Warningf("unable to connect to tablet for alias %v", ti.Alias)
 				candidates = append(candidates[:idx], candidates[idx+1:]...)
 				if len(candidates) == 0 {
+					tp.incNoTabletFoundStat()
 					break
 				}
 				continue
@@ -145,9 +149,9 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 	}
 }
 
-// getMatchingTablets returns a list of TabletInfo for tablets
+// GetMatchingTablets returns a list of TabletInfo for tablets
 // that match the cells, keyspace, shard and tabletTypes for this TabletPicker
-func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletInfo {
+func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletInfo {
 	// Special handling for MASTER tablet type
 	// Since there is only one master, we ignore cell and find the master
 	aliases := make([]*topodatapb.TabletAlias, 0)
@@ -226,4 +230,25 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 func init() {
 	// TODO(sougou): consolidate this call to be once per process.
 	rand.Seed(time.Now().UnixNano())
+	globalTPStats = newTabletPickerStats()
+}
+
+type tabletPickerStats struct {
+	mu                 sync.Mutex
+	noTabletFoundError *stats.CountersWithMultiLabels
+}
+
+func newTabletPickerStats() *tabletPickerStats {
+	tpStats := &tabletPickerStats{}
+	tpStats.noTabletFoundError = stats.NewCountersWithMultiLabels("TabletPickerNoTabletFoundErrorCount", "", []string{"cells", "keyspace", "shard", "types"})
+	return tpStats
+}
+
+func (tp *TabletPicker) incNoTabletFoundStat() {
+	globalTPStats.mu.Lock()
+	defer globalTPStats.mu.Unlock()
+	cells := strings.Join(tp.cells, "_")
+	tabletTypes := strings.Join(topoproto.MakeStringTypeList(tp.tabletTypes), "_")
+	labels := []string{cells, tp.keyspace, tp.shard, tabletTypes}
+	globalTPStats.noTabletFoundError.Add(labels, 1)
 }

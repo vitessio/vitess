@@ -22,17 +22,28 @@ import { stringify } from '../../util/queryString';
 import { PaginationNav } from './PaginationNav';
 
 interface Props<T> {
-    columns: string[];
+    // When passing a JSX.Element, note that the column element
+    // will be rendered *inside* a <th> tag. (Note: I don't love this
+    // abstraction + we'll likely want to revisit this when we add
+    // table sorting.)
+    columns: Array<string | JSX.Element>;
     data: T[];
     pageSize?: number;
     renderRows: (rows: T[]) => JSX.Element[];
+    title?: string;
 }
 
 // Generally, page sizes of ~100 rows are fine in terms of performance,
 // but anything over ~50 feels unwieldy in terms of UX.
 const DEFAULT_PAGE_SIZE = 50;
 
-export const DataTable = <T extends object>({ columns, data, pageSize = DEFAULT_PAGE_SIZE, renderRows }: Props<T>) => {
+export const DataTable = <T extends object>({
+    columns,
+    data,
+    pageSize = DEFAULT_PAGE_SIZE,
+    renderRows,
+    title,
+}: Props<T>) => {
     const { pathname } = useLocation();
     const urlQuery = useURLQuery();
 
@@ -54,6 +65,7 @@ export const DataTable = <T extends object>({ columns, data, pageSize = DEFAULT_
     return (
         <div>
             <table>
+                {title && <caption>{title}</caption>}
                 <thead>
                     <tr>
                         {columns.map((col, cdx) => (

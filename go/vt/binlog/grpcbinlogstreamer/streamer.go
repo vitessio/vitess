@@ -28,12 +28,13 @@ import (
 
 // UpdateStream is the gRPC UpdateStream server
 type UpdateStream struct {
+	binlogservicepb.UnimplementedUpdateStreamServer
 	updateStream binlog.UpdateStream
 }
 
 // New returns a new go rpc server implementation stub for UpdateStream
 func New(updateStream binlog.UpdateStream) *UpdateStream {
-	return &UpdateStream{updateStream}
+	return &UpdateStream{updateStream: updateStream}
 }
 
 // StreamKeyRange is part of the binlogservicepb.UpdateStreamServer interface

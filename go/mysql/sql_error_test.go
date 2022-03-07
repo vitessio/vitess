@@ -19,8 +19,6 @@ package mysql
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -154,11 +152,9 @@ func TestNewSQLErrorFromError(t *testing.T) {
 
 	for _, tc := range tCases {
 		t.Run(tc.err.Error(), func(t *testing.T) {
-			err := NewSQLErrorFromError(tc.err)
-			sErr, ok := err.(*SQLError)
-			require.True(t, ok)
-			assert.Equal(t, tc.num, sErr.Number())
-			assert.Equal(t, tc.ss, sErr.SQLState())
+			err := NewSQLErrorFromError(tc.err).(*SQLError)
+			assert.Equal(t, tc.num, err.Number())
+			assert.Equal(t, tc.ss, err.SQLState())
 		})
 	}
 }

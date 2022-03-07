@@ -160,20 +160,9 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	}
 
 	if includeVSchema {
-		vschm, err := wr.ts.GetVSchema(ctx, keyspace)
+		err := wr.ValidateVSchema(ctx, keyspace, []string{shard}, excludeTables, includeViews)
 		if err != nil {
-			return fmt.Errorf("GetVSchema(%s) failed: %v", keyspace, err)
-		}
-		notFoundTables := []string{}
-
-		for _, tableDef := range masterSchema.TableDefinitions {
-			if _, ok := vschm.Tables[tableDef.Name]; !ok {
-				notFoundTables = append(notFoundTables, tableDef.Name)
-			}
-		}
-
-		if len(notFoundTables) > 0 {
-			return fmt.Errorf("Vschema Validation Failed: the following tables were not found in the vschema %v", notFoundTables)
+			return err
 		}
 	}
 
@@ -204,7 +193,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 
 // ValidateSchemaKeyspace will diff the schema from all the tablets in
 // the keyspace.
-func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoMaster bool) error {
+func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoMaster bool, includeVSchema bool) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -217,7 +206,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
-		return wr.ValidateSchemaShard(ctx, keyspace, shards[0], excludeTables, includeViews, false /*includeVSchema*/)
+		return wr.ValidateSchemaShard(ctx, keyspace, shards[0], excludeTables, includeViews, includeVSchema)
 	}
 
 	var referenceSchema *tabletmanagerdatapb.SchemaDefinition
@@ -226,6 +215,15 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	// then diff with all other tablets everywhere
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
+
+	// If we are checking against the vschema then all shards
+	// should just be validated individually against it
+	if includeVSchema {
+		err := wr.ValidateVSchema(ctx, keyspace, shards, excludeTables, includeViews)
+		if err != nil {
+			return err
+		}
+	}
 
 	// then diffs all tablets in the other shards
 	for _, shard := range shards[0:] {
@@ -269,6 +267,51 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	wg.Wait()
 	if er.HasErrors() {
 		return fmt.Errorf("schema diffs: %v", er.Error().Error())
+	}
+	return nil
+}
+
+// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
+func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards []string, excludeTables []string, includeViews bool) error {
+	vschm, err := wr.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return fmt.Errorf("GetVSchema(%s) failed: %v", keyspace, err)
+	}
+
+	shardFailures := concurrency.AllErrorRecorder{}
+	var wg sync.WaitGroup
+	wg.Add(len(shards))
+
+	for _, shard := range shards {
+		go func(shard string) {
+			defer wg.Done()
+			notFoundTables := []string{}
+			si, err := wr.ts.GetShard(ctx, keyspace, shard)
+			if err != nil {
+				shardFailures.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
+				return
+			}
+			masterSchema, err := wr.GetSchema(ctx, si.MasterAlias, nil, excludeTables, includeViews)
+			if err != nil {
+				shardFailures.RecordError(fmt.Errorf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.MasterAlias.String(),
+					excludeTables, includeViews, keyspace, shard, err,
+				))
+				return
+			}
+			for _, tableDef := range masterSchema.TableDefinitions {
+				if _, ok := vschm.Tables[tableDef.Name]; !ok {
+					notFoundTables = append(notFoundTables, tableDef.Name)
+				}
+			}
+			if len(notFoundTables) > 0 {
+				shardFailure := fmt.Errorf("%v/%v has tables that are not in the vschema: %v", keyspace, shard, notFoundTables)
+				shardFailures.RecordError(shardFailure)
+			}
+		}(shard)
+	}
+	wg.Wait()
+	if shardFailures.HasErrors() {
+		return fmt.Errorf("ValidateVSchema(%v, %v, %v, %v) failed: %v", keyspace, shards, excludeTables, includeViews, shardFailures.Error().Error())
 	}
 	return nil
 }

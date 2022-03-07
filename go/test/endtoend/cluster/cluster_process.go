@@ -48,6 +48,9 @@ var (
 	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
 	forcePortStart     = flag.Int("force-port-start", 0, "force assigning ports based on this seed")
 	forceBaseTabletUID = flag.Int("force-base-tablet-uid", 0, "force assigning tablet ports based on this seed")
+
+	// PerfTest controls whether to run the slower end-to-end tests that check the system's performance
+	PerfTest = flag.Bool("perf-test", false, "include end-to-end performance tests")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster

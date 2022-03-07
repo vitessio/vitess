@@ -25,7 +25,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
 
@@ -44,9 +43,7 @@ var (
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 			traceCloser = trace.StartTracing("vtctldclient")
-			if server == "" {
-				err = errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")
-				log.Error(err)
+			if err := ensureServerArg(); err != nil {
 				return err
 			}
 
@@ -74,6 +71,17 @@ var (
 		SilenceErrors: true,
 	}
 )
+
+var errNoServer = errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")
+
+// ensureServerArg validates that --server was passed to the CLI.
+func ensureServerArg() error {
+	if server == "" {
+		return errNoServer
+	}
+
+	return nil
+}
 
 func init() {
 	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection")

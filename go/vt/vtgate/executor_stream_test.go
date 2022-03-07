@@ -60,7 +60,7 @@ func TestStreamSQLSharded(t *testing.T) {
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil)
 
 	sql := "stream * from sharded_user_msgs"
 	result, err := executorStreamMessages(executor, sql)
@@ -113,7 +113,7 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 		NewSafeSession(masterSession),
 		sql,
 		nil,
-		querypb.Target{
+		&querypb.Target{
 			TabletType: topodatapb.TabletType_MASTER,
 		},
 		func(qr *sqltypes.Result) error {

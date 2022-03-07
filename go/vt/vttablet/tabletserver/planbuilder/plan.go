@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	execLimit = &sqlparser.Limit{Rowcount: sqlparser.NewArgument(":#maxLimit")}
+	execLimit = &sqlparser.Limit{Rowcount: sqlparser.NewArgument("#maxLimit")}
 
 	// PassthroughDMLs will return plans that pass-through the DMLs without changing them.
 	PassthroughDMLs = false
@@ -73,6 +73,8 @@ const (
 	PlanUnlockTables
 	PlanCallProc
 	PlanAlterMigration
+	PlanRevertMigration
+	PlanShowMigrationLogs
 	NumPlans
 )
 
@@ -103,6 +105,8 @@ var planName = []string{
 	"UnlockTables",
 	"CallProcedure",
 	"AlterMigration",
+	"RevertMigration",
+	"ShowMigrationLogs",
 }
 
 func (pt PlanType) String() string {
@@ -213,9 +217,13 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		if stmt.IsFullyParsed() {
 			fullQuery = GenerateFullQuery(stmt)
 		}
-		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery}
+		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt}
 	case *sqlparser.AlterMigration:
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
+	case *sqlparser.RevertMigration:
+		plan, err = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}, nil
+	case *sqlparser.ShowMigrationLogs:
+		plan, err = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, sqlparser.Explain:

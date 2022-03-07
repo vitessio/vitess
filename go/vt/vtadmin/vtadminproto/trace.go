@@ -36,4 +36,5 @@ func AnnotateSpanWithGetSchemaTableSizeOptions(opts *vtadminpb.GetSchemaTableSiz
 	}
 
 	span.Annotate("aggregate_table_sizes", opts.AggregateSizes)
+	span.Annotate("include_non_serving_shards", opts.IncludeNonServingShards)
 }

@@ -26,7 +26,7 @@ import (
 func TestTabletChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123/cell-0000012345 [tablet] status"
 	tc := &TabletChange{
-		Tablet: topodatapb.Tablet{
+		Tablet: &topodatapb.Tablet{
 			Keyspace: "keyspace-123",
 			Shard:    "shard-123",
 			Alias: &topodatapb.TabletAlias{

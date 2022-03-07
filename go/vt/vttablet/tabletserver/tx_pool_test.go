@@ -355,7 +355,8 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
-	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	conn1, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	require.NoError(t, err, "unable to start transaction: %v", err)
 	conn1.Unlock()
 	id = conn1.ReservedID()
 	time.Sleep(20 * time.Millisecond)

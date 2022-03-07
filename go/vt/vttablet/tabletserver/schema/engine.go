@@ -145,7 +145,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	// We use allprivs instead of DBA because we want db create to fail if we're read-only.
 	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsConnector())
 	if err != nil {
-		return vterrors.Wrap(err, "allprivs connection failed")
+		return err
 	}
 	defer conn.Close()
 

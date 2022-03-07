@@ -21,9 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -72,7 +74,7 @@ type TxThrottler struct {
 	// if the TransactionThrottler is closed.
 	state *txThrottlerState
 
-	target querypb.Target
+	target *querypb.Target
 }
 
 // NewTxThrottler tries to construct a TxThrottler from the
@@ -96,8 +98,8 @@ func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *Tx
 }
 
 // InitDBConfig initializes the target parameters for the throttler.
-func (t *TxThrottler) InitDBConfig(target querypb.Target) {
-	t.target = target
+func (t *TxThrottler) InitDBConfig(target *querypb.Target) {
+	t.target = proto.Clone(target).(*querypb.Target)
 }
 
 func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
@@ -106,7 +108,7 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 	}
 
 	var throttlerConfig throttlerdatapb.Configuration
-	if err := proto.UnmarshalText(config.TxThrottlerConfig, &throttlerConfig); err != nil {
+	if err := prototext.Unmarshal([]byte(config.TxThrottlerConfig), &throttlerConfig); err != nil {
 		return nil, err
 	}
 
@@ -205,7 +207,7 @@ const TxThrottlerName = "TransactionThrottler"
 func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 	if config.enabled {
 		// Verify config.
-		err := throttler.MaxReplicationLagModuleConfig{Configuration: *config.throttlerConfig}.Verify()
+		err := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}.Verify()
 		if err != nil {
 			return nil, err
 		}

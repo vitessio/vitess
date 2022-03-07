@@ -17,7 +17,7 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-ARG bootstrap_version=1
+ARG bootstrap_version=2
 ARG image="vitess/bootstrap:${bootstrap_version}-percona80"
 
 FROM "${image}" AS builder
@@ -38,8 +38,7 @@ FROM registry.access.redhat.com/ubi7/ubi:latest
 # Install keys and dependencies
 RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
  && yum install -y --setopt=alwaysprompt=no gnupg \
- && ( gpg --keyserver keyserver.ubuntu.com --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 \
- ||   gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 ) \
+ && ( gpg --keyserver keyserver.ubuntu.com --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 ) \
  && gpg --export --armor 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A > ${GNUPGHOME}/RPM-GPG-KEY-Percona.1 \
  && gpg --export --armor 4D1BB29D63D98E422B2113B19334A25F8507EFA5 > ${GNUPGHOME}/RPM-GPG-KEY-Percona.2 \
  && gpg --export --armor 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 > ${GNUPGHOME}/RPM-GPG-KEY-CentOS-7 \

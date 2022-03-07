@@ -23,8 +23,7 @@ import (
 )
 
 const (
-	_ TableSet = 1 << iota
-	F1
+	F1 TableSet = 1 << iota
 	F2
 	F3
 )
@@ -50,4 +49,10 @@ func TestTableSet_Constituents(t *testing.T) {
 	assert.Equal(t, []TableSet{F1, F3}, (F1 | F3).Constituents())
 	assert.Equal(t, []TableSet{F2, F3}, (F2 | F3).Constituents())
 	assert.Empty(t, TableSet(0).Constituents())
+}
+
+func TestTableSet_TableOffset(t *testing.T) {
+	assert.Equal(t, 0, F1.TableOffset())
+	assert.Equal(t, 1, F2.TableOffset())
+	assert.Equal(t, 2, F3.TableOffset())
 }

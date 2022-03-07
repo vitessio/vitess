@@ -436,6 +436,19 @@ func TestNumericPrecisionScale(t *testing.T) {
 	assert.True(t, qr.Rows[0][1].Type() == sqltypes.Uint64 || qr.Rows[0][1].Type() == sqltypes.Uint32)
 }
 
+func TestDeleteAlias(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete t1 from t1 where c1 = 1")
+	exec(t, conn, "delete t.* from t1 t where t.c1 = 1")
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)

@@ -142,7 +142,7 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 				}
 			}
 		case 'a':
-			buf.WriteArg(values[fieldnum].(string))
+			buf.WriteArg("", values[fieldnum].(string))
 		default:
 			panic("unexpected")
 		}
@@ -212,13 +212,13 @@ func areBothISExpr(op Expr, val Expr) bool {
 }
 
 // WriteArg writes a value argument into the buffer along with
-// tracking information for future substitutions. arg must contain
-// the ":" or "::" prefix.
-func (buf *TrackedBuffer) WriteArg(arg string) {
+// tracking information for future substitutions.
+func (buf *TrackedBuffer) WriteArg(prefix, arg string) {
 	buf.bindLocations = append(buf.bindLocations, bindLocation{
 		offset: buf.Len(),
-		length: len(arg),
+		length: len(prefix) + len(arg),
 	})
+	buf.WriteString(prefix)
 	buf.WriteString(arg)
 }
 

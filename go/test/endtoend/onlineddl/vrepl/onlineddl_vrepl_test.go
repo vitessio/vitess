@@ -163,7 +163,9 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"-online_ddl_check_interval", "3s",
+			"-schema_change_check_interval", "1",
+		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-enable-lag-throttler",
@@ -248,6 +250,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "online", "vtgate", "vrepl_col")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
+		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
@@ -256,6 +259,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "online", "vtctl", "vrepl_col")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
+		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
@@ -370,6 +374,21 @@ func testRows(t *testing.T) {
 	require.Equal(t, countInserts, row.AsInt64("c", 0))
 }
 
+func testMigrationRowCount(t *testing.T, uuid string) {
+	insertMutex.Lock()
+	defer insertMutex.Unlock()
+
+	var totalRowsCopied uint64
+	// count sum of rows copied in all shards, that should be the total number of rows inserted to the table
+	rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+	require.NotNil(t, rs)
+	for _, row := range rs.Named().Rows {
+		rowsCopied := row.AsUint64("rows_copied", 0)
+		totalRowsCopied += rowsCopied
+	}
+	require.Equal(t, uint64(countInserts), totalRowsCopied)
+}
+
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
 	var sqlQuery = "" //nolint
@@ -384,7 +403,7 @@ func testWithInitialSchema(t *testing.T) {
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
@@ -394,22 +413,22 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategy)
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	if !strategy.IsDirect() {
+	if !strategySetting.Strategy.IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
 
-	if expectColumn != "" {
-		checkMigratedTable(t, tableName, expectColumn)
+	if expectHint != "" {
+		checkMigratedTable(t, tableName, expectHint)
 	}
 	return uuid
 }

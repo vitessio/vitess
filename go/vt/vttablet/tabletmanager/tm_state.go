@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
@@ -26,9 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/servenv"
 
-	"context"
-
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
@@ -368,7 +367,8 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 			log.Error(err)
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
-		*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+		proto.Reset(tablet)
+		proto.Merge(tablet, ts.tablet)
 		return nil
 	})
 	if err != nil {
@@ -399,7 +399,8 @@ func (ts *tmState) retryPublish() {
 				log.Error(err)
 				return topo.NewError(topo.NoUpdateNeeded, "")
 			}
-			*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+			proto.Reset(tablet)
+			proto.Merge(tablet, ts.tablet)
 			return nil
 		})
 		cancel()

@@ -89,7 +89,7 @@ func TestMigrateServedFrom(t *testing.T) {
 
 	// sourceMaster will see the refresh, and has to respond to it
 	// also will be asked about its replication position.
-	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	sourceMaster.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			5: mysql.MariadbGTID{
 				Domain:   5,

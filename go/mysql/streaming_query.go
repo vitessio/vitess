@@ -107,7 +107,7 @@ func (c *Conn) Fields() ([]*querypb.Field, error) {
 
 // FetchNext returns the next result for an ongoing streaming query.
 // It returns (nil, nil) if there is nothing more to read.
-func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
+func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, error) {
 	if c.fields == nil {
 		// We are already done, and the result was closed.
 		return nil, NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
@@ -133,14 +133,15 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	}
 
 	// Regular row.
-	return c.parseRow(data, c.fields, readLenEncStringAsBytes)
+	return c.parseRow(data, c.fields, readLenEncStringAsBytes, in)
 }
 
 // CloseResult can be used to terminate a streaming query
 // early. It just drains the remaining values.
 func (c *Conn) CloseResult() {
+	row := make([]sqltypes.Value, 0, len(c.fields))
 	for c.fields != nil {
-		rows, err := c.FetchNext()
+		rows, err := c.FetchNext(row[:0])
 		if err != nil || rows == nil {
 			// We either got an error, or got the last result.
 			c.fields = nil

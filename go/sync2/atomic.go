@@ -17,6 +17,7 @@ limitations under the License.
 package sync2
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,6 +81,31 @@ func (i *AtomicInt64) Get() int64 {
 // CompareAndSwap automatically swaps the old with the new value.
 func (i *AtomicInt64) CompareAndSwap(oldval, newval int64) (swapped bool) {
 	return atomic.CompareAndSwapInt64(&i.int64, oldval, newval)
+}
+
+// AtomicFloat64 is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Flat64 functions.
+type AtomicFloat64 struct {
+	uint64
+}
+
+// NewAtomicFloat64 initializes a new AtomicFloat64 with a given value.
+func NewAtomicFloat64(n float64) AtomicFloat64 {
+	return AtomicFloat64{math.Float64bits(n)}
+}
+
+// Set atomically sets n as new value.
+func (f *AtomicFloat64) Set(n float64) {
+	atomic.StoreUint64(&f.uint64, math.Float64bits(n))
+}
+
+// Get atomically returns the current value.
+func (f *AtomicFloat64) Get() float64 {
+	return math.Float64frombits(atomic.LoadUint64(&f.uint64))
+}
+
+// CompareAndSwap automatically swaps the old with the new value.
+func (f *AtomicFloat64) CompareAndSwap(oldval, newval float64) (swapped bool) {
+	return atomic.CompareAndSwapUint64(&f.uint64, math.Float64bits(oldval), math.Float64bits(newval))
 }
 
 // AtomicDuration is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Int64 functions.

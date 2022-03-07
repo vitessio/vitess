@@ -1,0 +1,1 @@
+drop key id_uidx, drop key its_uidx, add unique key its2_uidx(i, ts), add unique key id2_uidx(id)

@@ -160,5 +160,5 @@ func TestErrorInAutocommitSession(t *testing.T) {
 
 	// if we have properly working autocommit code, both the successful inserts should be visible to a second
 	// connection, even if we have not done an explicit commit
-	assert.Equal(t, `[[INT64(1) VARCHAR("foo")] [INT64(2) VARCHAR("baz")]]`, fmt.Sprintf("%v", result.Rows))
+	assert.Equal(t, `[[INT64(1) VARCHAR("foo")] [INT64(2) VARCHAR("baz")] [INT64(3) VARCHAR("mark")] [INT64(4) VARCHAR("doug")]]`, fmt.Sprintf("%v", result.Rows))
 }

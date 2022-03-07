@@ -29,7 +29,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -752,7 +752,7 @@ func testStreamHealth(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 		t.Fatalf("StreamHealth failed: %v", err)
 	}
 	if !proto.Equal(health, TestStreamHealthStreamHealthResponse) {
-		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *health, *TestStreamHealthStreamHealthResponse)
+		t.Errorf("invalid StreamHealthResponse: got %v expected %v", health, TestStreamHealthStreamHealthResponse)
 	}
 }
 

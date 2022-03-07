@@ -9,30 +9,16 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/schema"
 )
 
 var (
-	sanitizeQuotesRegexp                 = regexp.MustCompile("('[^']*')")
-	renameColumnRegexp                   = regexp.MustCompile(`(?i)\bchange\s+(column\s+|)([\S]+)\s+([\S]+)\s+`)
-	dropColumnRegexp                     = regexp.MustCompile(`(?i)\bdrop\s+(column\s+|)([\S]+)$`)
-	renameTableRegexp                    = regexp.MustCompile(`(?i)\brename\s+(to|as)\s+`)
-	autoIncrementRegexp                  = regexp.MustCompile(`(?i)\bauto_increment[\s]*=[\s]*([0-9]+)`)
-	alterTableExplicitSchemaTableRegexps = []*regexp.Regexp{
-		// ALTER TABLE `scm`.`tbl` something
-		regexp.MustCompile(`(?i)\balter\s+table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
-		// ALTER TABLE `scm`.tbl something
-		regexp.MustCompile(`(?i)\balter\s+table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]([\S]+)\s+(.*$)`),
-		// ALTER TABLE scm.`tbl` something
-		regexp.MustCompile(`(?i)\balter\s+table\s+([\S]+)[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
-		// ALTER TABLE scm.tbl something
-		regexp.MustCompile(`(?i)\balter\s+table\s+([\S]+)[.]([\S]+)\s+(.*$)`),
-	}
-	alterTableExplicitTableRegexps = []*regexp.Regexp{
-		// ALTER TABLE `tbl` something
-		regexp.MustCompile(`(?i)\balter\s+table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
-		// ALTER TABLE tbl something
-		regexp.MustCompile(`(?i)\balter\s+table\s+([\S]+)\s+(.*$)`),
-	}
+	sanitizeQuotesRegexp = regexp.MustCompile("('[^']*')")
+	renameColumnRegexp   = regexp.MustCompile(`(?i)\bchange\s+(column\s+|)([\S]+)\s+([\S]+)\s+`)
+	dropColumnRegexp     = regexp.MustCompile(`(?i)\bdrop\s+(column\s+|)([\S]+)$`)
+	renameTableRegexp    = regexp.MustCompile(`(?i)\brename\s+(to|as)\s+`)
+	autoIncrementRegexp  = regexp.MustCompile(`(?i)\bauto_increment[\s]*[=]?[\s]*([0-9]+)`)
 )
 
 // AlterTableParser is a parser tool for ALTER TABLE statements
@@ -141,22 +127,8 @@ func (p *AlterTableParser) parseAlterToken(alterToken string) (err error) {
 
 // ParseAlterStatement is the main function of th eparser, and parses an ALTER TABLE statement
 func (p *AlterTableParser) ParseAlterStatement(alterStatement string) (err error) {
-	p.alterStatementOptions = alterStatement
-	for _, alterTableRegexp := range alterTableExplicitSchemaTableRegexps {
-		if submatch := alterTableRegexp.FindStringSubmatch(p.alterStatementOptions); len(submatch) > 0 {
-			p.explicitSchema = submatch[1]
-			p.explicitTable = submatch[2]
-			p.alterStatementOptions = submatch[3]
-			break
-		}
-	}
-	for _, alterTableRegexp := range alterTableExplicitTableRegexps {
-		if submatch := alterTableRegexp.FindStringSubmatch(p.alterStatementOptions); len(submatch) > 0 {
-			p.explicitTable = submatch[1]
-			p.alterStatementOptions = submatch[2]
-			break
-		}
-	}
+	p.explicitSchema, p.explicitTable, p.alterStatementOptions = schema.ParseAlterTableOptions(alterStatement)
+
 	alterTokens, _ := p.tokenizeAlterStatement(p.alterStatementOptions)
 	for _, alterToken := range alterTokens {
 		alterToken = p.sanitizeQuotesFromAlterStatement(alterToken)

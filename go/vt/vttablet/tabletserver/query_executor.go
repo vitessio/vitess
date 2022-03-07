@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -25,19 +26,17 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -177,8 +176,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execCallProc()
 	case p.PlanAlterMigration:
 		return qre.execAlterMigration()
+	case p.PlanRevertMigration:
+		return qre.execRevertMigration()
+	case p.PlanShowMigrationLogs:
+		return qre.execShowMigrationLogs()
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
 func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
@@ -259,7 +262,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanCallProc:
 		return qre.execProc(conn)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
 // Stream performs a streaming query execution.
@@ -286,7 +289,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
-		if qre.connID == 0 && qre.plan.PlanID == planbuilder.PlanSelectStream && qre.shouldConsolidate() {
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
 			return consolidator.Consolidate(qre.logStats, sqlWithoutComments, callback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
@@ -452,6 +455,16 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	// Let's see if this is a normal DDL statement or an Online DDL statement.
+	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
+	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
+		// Parsing is successful.
+		if !onlineDDL.Strategy.IsDirect() {
+			// This is an online DDL.
+			return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
+		}
+	}
+
 	defer func() {
 		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
 			log.Errorf("failed to reload schema %v", err)
@@ -512,7 +525,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	}
 	tableName := qre.plan.TableName()
 	if inc < 1 {
-		return nil, fmt.Errorf("invalid increment for sequence %s: %d", tableName, inc)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %d", tableName, inc)
 	}
 
 	t := qre.plan.Table
@@ -526,7 +539,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, err
 			}
 			if len(qr.Rows) != 1 {
-				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
 			nextID, err := evalengine.ToInt64(qr.Rows[0][0])
 			if err != nil {
@@ -548,7 +561,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
 			if cache < 1 {
-				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", tableName, cache)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cache value for sequence %s: %d", tableName, cache)
 			}
 			newLast := nextID + cache
 			for newLast < t.SequenceInfo.NextVal+inc {
@@ -829,6 +842,20 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
+}
+
+func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
+	if _, ok := qre.plan.FullStmt.(*sqlparser.RevertMigration); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting REVERT VITESS_MIGRATION plan")
+	}
+	return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
+}
+
+func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
+	if showMigrationLogsStmt, ok := qre.plan.FullStmt.(*sqlparser.ShowMigrationLogs); ok {
+		return qre.tsv.onlineDDLExecutor.ShowMigrationLogs(qre.ctx, showMigrationLogsStmt)
+	}
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATION plan")
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {

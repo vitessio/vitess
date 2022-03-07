@@ -17,7 +17,7 @@ limitations under the License.
 package automation
 
 import (
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
@@ -26,14 +26,14 @@ import (
 // Unlike the protobuf message, the additional runtime data will not be part of a checkpoint.
 // Methods of this struct are not thread-safe.
 type ClusterOperationInstance struct {
-	automationpb.ClusterOperation
+	*automationpb.ClusterOperation
 	taskIDGenerator *IDGenerator
 }
 
 // NewClusterOperationInstance creates a new cluster operation instance with one initial task.
 func NewClusterOperationInstance(clusterOpID string, initialTask *automationpb.TaskContainer, taskIDGenerator *IDGenerator) ClusterOperationInstance {
 	c := ClusterOperationInstance{
-		automationpb.ClusterOperation{
+		&automationpb.ClusterOperation{
 			Id:          clusterOpID,
 			SerialTasks: []*automationpb.TaskContainer{},
 			State:       automationpb.ClusterOperationState_CLUSTER_OPERATION_NOT_STARTED,
@@ -59,6 +59,6 @@ func (c *ClusterOperationInstance) InsertTaskContainers(newTaskContainers []*aut
 // Other elements e.g. taskIDGenerator are not deep-copied.
 func (c ClusterOperationInstance) Clone() ClusterOperationInstance {
 	var clone = c
-	clone.ClusterOperation = *(proto.Clone(&c.ClusterOperation).(*automationpb.ClusterOperation))
+	clone.ClusterOperation = proto.Clone(c.ClusterOperation).(*automationpb.ClusterOperation)
 	return clone
 }

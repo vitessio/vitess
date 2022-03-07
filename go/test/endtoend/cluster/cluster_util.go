@@ -59,6 +59,18 @@ func (tablet *Vttablet) Restart() error {
 	return tablet.MysqlctldProcess.Start()
 }
 
+// RestartOnlyTablet restarts vttablet, but not the underlying mysql instance
+func (tablet *Vttablet) RestartOnlyTablet() error {
+	err := tablet.VttabletProcess.TearDown()
+	if err != nil {
+		return err
+	}
+
+	tablet.VttabletProcess.ServingStatus = "SERVING"
+
+	return tablet.VttabletProcess.Setup()
+}
+
 // ValidateTabletRestart restarts the tablet and validate error if there is any.
 func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 	require.Nilf(t, tablet.Restart(), "tablet restart failed")

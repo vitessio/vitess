@@ -68,8 +68,67 @@ func TestValidateSchemaShard(t *testing.T) {
 		}
 	}
 
+	// Schema Checks
 	err := tme.wr.ValidateSchemaShard(ctx, "ks", "-80", nil /*excludeTables*/, true /*includeViews*/, true /*includeVSchema*/)
 	require.NoError(t, err)
 	shouldErr := tme.wr.ValidateSchemaShard(ctx, "ks", "80-", nil /*excludeTables*/, true /*includeViews*/, true /*includeVSchema*/)
-	require.Contains(t, shouldErr.Error(), "Vschema Validation Failed:")
+	require.Contains(t, shouldErr.Error(), "ks/80- has tables that are not in the vschema:")
+
+	// VSchema Specific Checks
+	err = tme.wr.ValidateVSchema(ctx, "ks", []string{"-80"}, nil /*excludeTables*/, true /*includeViews*/)
+	require.NoError(t, err)
+	shouldErr = tme.wr.ValidateVSchema(ctx, "ks", []string{"80-"}, nil /*excludeTables*/, true /*includeVoews*/)
+	require.Contains(t, shouldErr.Error(), "ks/80- has tables that are not in the vschema:")
+}
+
+func TestValidateSchemaKeyspace(t *testing.T) {
+	ctx := context.Background()
+	sourceShards := []string{"-80", "80-"}
+	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
+
+	tmePass := newTestShardMigrater(ctx, t, sourceShards, targetShards)
+	tmeDiffs := newTestShardMigrater(ctx, t, sourceShards, targetShards)
+
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "not_in_vschema",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+
+	// This is the vschema returned by newTestShardMigrater
+	sameAsVSchema := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:    "t1",
+				Columns: []string{"c1"},
+			},
+			{
+				Name:    "t2",
+				Columns: []string{"c1"},
+			},
+			{
+				Name:    "t3",
+				Columns: []string{"c1"},
+			},
+		},
+	}
+
+	for _, primary := range append(tmePass.sourceMasters, tmePass.targetMasters...) {
+		primary.FakeMysqlDaemon.Schema = sameAsVSchema
+	}
+
+	for _, primary := range append(tmeDiffs.sourceMasters, tmeDiffs.targetMasters...) {
+		primary.FakeMysqlDaemon.Schema = schm
+	}
+
+	// Schema Checks
+	err := tmePass.wr.ValidateSchemaKeyspace(ctx, "ks", nil /*excludeTables*/, true /*includeViews*/, true /*skipNoMaster*/, true /*includeVSchema*/)
+	require.NoError(t, err)
+	err = tmePass.wr.ValidateSchemaKeyspace(ctx, "ks", nil /*excludeTables*/, true /*includeViews*/, true /*skipNoMaster*/, false /*includeVSchema*/)
+	require.NoError(t, err)
+	shouldErr := tmeDiffs.wr.ValidateSchemaKeyspace(ctx, "ks", nil /*excludeTables*/, true /*includeViews*/, true /*skipNoMaster*/, true /*includeVSchema*/)
+	require.Error(t, shouldErr)
 }

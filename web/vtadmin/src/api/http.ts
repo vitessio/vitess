@@ -15,68 +15,67 @@
  */
 
 import { vtadmin as pb } from '../proto/vtadmin';
+import * as errorHandler from '../errors/errorHandler';
+import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
+import { HttpOkResponse } from './responseTypes';
+import { TabletDebugVars } from '../util/tabletDebugVars';
 
-interface HttpOkResponse {
-    ok: true;
-    result: any;
-}
-
-interface HttpErrorResponse {
-    ok: false;
-}
-
-export const MALFORMED_HTTP_RESPONSE_ERROR = 'MalformedHttpResponseError';
-
-// MalformedHttpResponseError is thrown when the JSON response envelope
-// is an unexpected shape.
-class MalformedHttpResponseError extends Error {
-    responseJson: object;
-
-    constructor(message: string, responseJson: object) {
-        super(message);
-        this.name = MALFORMED_HTTP_RESPONSE_ERROR;
-        this.responseJson = responseJson;
-    }
-}
-
-export const HTTP_RESPONSE_NOT_OK_ERROR = 'HttpResponseNotOkError';
-
-// HttpResponseNotOkError is throw when the `ok` is false in
-// the JSON response envelope.
-class HttpResponseNotOkError extends Error {
-    response: HttpErrorResponse | null;
-
-    constructor(endpoint: string, response: HttpErrorResponse) {
-        super(endpoint);
-        this.name = HTTP_RESPONSE_NOT_OK_ERROR;
-        this.response = response;
-    }
-}
-
-// vtfetch makes HTTP requests against the given vtadmin-api endpoint
-// and returns the parsed response.
-//
-// HttpResponse envelope types are not defined in vtadmin.proto (nor should they be)
-// thus we have to validate the shape of the API response with more care.
-//
-// Note that this only validates the HttpResponse envelope; it does not
-// do any type checking or validation on the result.
+/**
+ * vtfetch makes HTTP requests against the given vtadmin-api endpoint
+ * and returns the parsed response.
+ *
+ * HttpResponse envelope types are not defined in vtadmin.proto (nor should they be)
+ * thus we have to validate the shape of the API response with more care.
+ *
+ * Note that this only validates the HttpResponse envelope; it does not
+ * do any type checking or validation on the result.
+ */
 export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
-    const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
+    try {
+        const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
 
-    const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
-    const opts = vtfetchOpts();
+        const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+        const opts = vtfetchOpts();
 
-    const response = await global.fetch(url, opts);
+        let response = null;
+        try {
+            response = await global.fetch(url, opts);
+        } catch (error) {
+            // Capture fetch() promise rejections and rethrow as HttpFetchError.
+            // fetch() promises will reject with a TypeError when a network error is
+            // encountered or CORS is misconfigured, in which case the request never
+            // makes it to the server.
+            // See https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#checking_that_the_fetch_was_successful
+            throw new HttpFetchError(url);
+        }
 
-    const json = await response.json();
-    if (!('ok' in json)) throw new MalformedHttpResponseError('invalid http envelope', json);
+        let json = null;
+        try {
+            json = await response.json();
+        } catch (error) {
+            throw new MalformedHttpResponseError(error.message, endpoint, json, response);
+        }
 
-    // Throw "not ok" responses so that react-query correctly interprets them as errors.
-    // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
-    if (!json.ok) throw new HttpResponseNotOkError(endpoint, json);
+        if (!('ok' in json)) {
+            throw new MalformedHttpResponseError('invalid HTTP envelope', endpoint, json, response);
+        }
 
-    return json as HttpOkResponse;
+        if (!json.ok) {
+            throw new HttpResponseNotOkError(endpoint, json, response);
+        }
+
+        return json as HttpOkResponse;
+    } catch (error) {
+        // Most commonly, react-query is the downstream consumer of
+        // errors thrown in vtfetch. Because react-query "handles" errors
+        // by propagating them to components (as it should!), any errors thrown
+        // from vtfetch are _not_ automatically logged as "unhandled errors".
+        // Instead, we catch errors and manually notify our error handling serivce(s),
+        // and then rethrow the error for react-query to propagate the usual way.
+        // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
+        errorHandler.notify(error);
+        throw error;
+    }
 };
 
 export const vtfetchOpts = (): RequestInit => {
@@ -106,11 +105,27 @@ export const vtfetchEntities = async <T>(opts: {
 
     const entities = opts.extract(res);
     if (!Array.isArray(entities)) {
-        throw Error(`expected entities to be an array, got ${entities}`);
+        // Since react-query is the downstream consumer of vtfetch + vtfetchEntities,
+        // errors thrown in either function will be "handled" and will not automatically
+        // propagate as "unhandled" errors, meaning we have to log them manually.
+        const error = Error(`expected entities to be an array, got ${entities}`);
+        errorHandler.notify(error);
+        throw error;
     }
 
     return entities.map(opts.transform);
 };
+
+export const fetchBackups = async () =>
+    vtfetchEntities({
+        endpoint: '/api/backups',
+        extract: (res) => res.result.backups,
+        transform: (e) => {
+            const err = pb.ClusterBackup.verify(e);
+            if (err) throw Error(err);
+            return pb.ClusterBackup.create(e);
+        },
+    });
 
 export const fetchClusters = async () =>
     vtfetchEntities({
@@ -171,6 +186,38 @@ export const fetchSchema = async ({ clusterID, keyspace, table }: FetchSchemaPar
     return pb.Schema.create(result);
 };
 
+export interface FetchTabletParams {
+    clusterID: string;
+    alias: string;
+}
+
+export const fetchTablet = async ({ clusterID, alias }: FetchTabletParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}?cluster=${clusterID}`);
+
+    const err = pb.Tablet.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Tablet.create(result);
+};
+
+export interface TabletDebugVarsResponse {
+    params: FetchTabletParams;
+    data?: TabletDebugVars;
+}
+
+export const fetchExperimentalTabletDebugVars = async (params: FetchTabletParams): Promise<TabletDebugVarsResponse> => {
+    if (!process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
+        return Promise.resolve({ params });
+    }
+
+    const { clusterID, alias } = params;
+    const { result } = await vtfetch(`/api/experimental/tablet/${alias}/debug/vars?cluster=${clusterID}`);
+
+    // /debug/vars doesn't contain cluster/tablet information, so we
+    // return that as part of the response.
+    return { params, data: result };
+};
+
 export const fetchTablets = async () =>
     vtfetchEntities({
         endpoint: '/api/tablets',
@@ -181,6 +228,19 @@ export const fetchTablets = async () =>
             return pb.Tablet.create(e);
         },
     });
+export interface FetchVSchemaParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) => {
+    const { result } = await vtfetch(`/api/vschema/${clusterID}/${keyspace}`);
+
+    const err = pb.VSchema.verify(result);
+    if (err) throw Error(err);
+
+    return pb.VSchema.create(result);
+};
 
 export const fetchWorkflows = async () => {
     const { result } = await vtfetch(`/api/workflows`);
@@ -198,4 +258,20 @@ export const fetchWorkflow = async (params: { clusterID: string; keyspace: strin
     if (err) throw Error(err);
 
     return pb.Workflow.create(result);
+};
+
+export const fetchVTExplain = async <R extends pb.IVTExplainRequest>({ cluster, keyspace, sql }: R) => {
+    // As an easy enhancement for later, we can also validate the request parameters on the front-end
+    // instead of defaulting to '', to save a round trip.
+    const req = new URLSearchParams();
+    req.append('cluster', cluster || '');
+    req.append('keyspace', keyspace || '');
+    req.append('sql', sql || '');
+
+    const { result } = await vtfetch(`/api/vtexplain?${req}`);
+
+    const err = pb.VTExplainResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.VTExplainResponse.create(result);
 };

@@ -40,10 +40,16 @@ func TestParseAlterStatementWithAutoIncrement(t *testing.T) {
 		"auto_increment=7",
 		"auto_increment = 7",
 		"AUTO_INCREMENT = 71",
+		"AUTO_INCREMENT   23",
+		"AUTO_INCREMENT 23",
 		"add column t int, change ts ts timestamp, auto_increment=7 engine=innodb",
 		"add column t int, change ts ts timestamp, auto_increment =7 engine=innodb",
 		"add column t int, change ts ts timestamp, AUTO_INCREMENT = 7 engine=innodb",
 		"add column t int, change ts ts timestamp, engine=innodb auto_increment=73425",
+		"add column t int, change ts ts timestamp, engine=innodb, auto_increment=73425",
+		"add column t int, change ts ts timestamp, engine=innodb, auto_increment 73425",
+		"add column t int, change ts ts timestamp, engine innodb, auto_increment 73425",
+		"add column t int, change ts ts timestamp, engine innodb auto_increment 73425",
 	}
 	for _, statement := range statements {
 		parser := NewAlterTableParser()

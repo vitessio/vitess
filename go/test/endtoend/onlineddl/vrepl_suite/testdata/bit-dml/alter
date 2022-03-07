@@ -1,0 +1,1 @@
+modify column is_good bit not null default 0

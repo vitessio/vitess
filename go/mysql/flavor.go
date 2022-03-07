@@ -34,8 +34,8 @@ var (
 	// Returned by ShowReplicationStatus().
 	ErrNotReplica = errors.New("no replication status")
 
-	// ErrNoMasterStatus means no status was returned by ShowMasterStatus().
-	ErrNoMasterStatus = errors.New("no master status")
+	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
+	ErrNoPrimaryStatus = errors.New("no master status")
 )
 
 const (
@@ -57,8 +57,8 @@ const (
 // 1. Oracle MySQL 5.6, 5.7, 8.0, ...
 // 2. MariaDB 10.X
 type flavor interface {
-	// masterGTIDSet returns the current GTIDSet of a server.
-	masterGTIDSet(c *Conn) (GTIDSet, error)
+	// primaryGTIDSet returns the current GTIDSet of a server.
+	primaryGTIDSet(c *Conn) (GTIDSet, error)
 
 	// startReplicationCommand returns the command to start the replication.
 	startReplicationCommand() string
@@ -91,17 +91,17 @@ type flavor interface {
 	// replication position at which the replica will resume.
 	setReplicationPositionCommands(pos Position) []string
 
-	// changeMasterArg returns the specific parameter to add to
-	// a change master command.
-	changeMasterArg() string
+	// changeReplicationSourceArg returns the specific parameter to add to
+	// a "change master" command.
+	changeReplicationSourceArg() string
 
 	// status returns the result of the appropriate status command,
 	// with parsed replication position.
 	status(c *Conn) (ReplicationStatus, error)
 
-	// masterStatus returns the result of 'SHOW MASTER STATUS',
+	// primaryStatus returns the result of 'SHOW MASTER STATUS',
 	// with parsed executed position.
-	masterStatus(c *Conn) (MasterStatus, error)
+	primaryStatus(c *Conn) (PrimaryStatus, error)
 
 	// waitUntilPositionCommand returns the SQL command to issue
 	// to wait until the given position, until the context
@@ -176,9 +176,9 @@ func (c *Conn) IsMariaDB() bool {
 	return false
 }
 
-// MasterPosition returns the current master replication position.
-func (c *Conn) MasterPosition() (Position, error) {
-	gtidSet, err := c.flavor.masterGTIDSet(c)
+// PrimaryPosition returns the current primary's replication position.
+func (c *Conn) PrimaryPosition() (Position, error) {
+	gtidSet, err := c.flavor.primaryGTIDSet(c)
 	if err != nil {
 		return Position{}, err
 	}
@@ -187,10 +187,10 @@ func (c *Conn) MasterPosition() (Position, error) {
 	}, nil
 }
 
-// MasterFilePosition returns the current master's file based replication position.
-func (c *Conn) MasterFilePosition() (Position, error) {
+// PrimaryFilePosition returns the current primary's file based replication position.
+func (c *Conn) PrimaryFilePosition() (Position, error) {
 	filePosFlavor := filePosFlavor{}
-	gtidSet, err := filePosFlavor.masterGTIDSet(c)
+	gtidSet, err := filePosFlavor.primaryGTIDSet(c)
 	if err != nil {
 		return Position{}, err
 	}
@@ -245,22 +245,22 @@ func (c *Conn) ResetReplicationCommands() []string {
 
 // SetReplicationPositionCommands returns the commands to set the
 // replication position at which the replica will resume
-// when it is later reparented with SetMasterCommands.
+// when it is later reparented with SetReplicationSourceCommand.
 func (c *Conn) SetReplicationPositionCommands(pos Position) []string {
 	return c.flavor.setReplicationPositionCommands(pos)
 }
 
-// SetMasterCommand returns the command to use the provided master
-// as the new master (without changing any GTID position).
+// SetReplicationSourceCommand returns the command to use the provided host/port
+// as the new replication source (without changing any GTID position).
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
-func (c *Conn) SetMasterCommand(params *ConnParams, masterHost string, masterPort int, masterConnectRetry int) string {
+func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int, connectRetry int) string {
 	args := []string{
-		fmt.Sprintf("MASTER_HOST = '%s'", masterHost),
-		fmt.Sprintf("MASTER_PORT = %d", masterPort),
+		fmt.Sprintf("MASTER_HOST = '%s'", host),
+		fmt.Sprintf("MASTER_PORT = %d", port),
 		fmt.Sprintf("MASTER_USER = '%s'", params.Uname),
 		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
-		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", masterConnectRetry),
+		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
 	}
 	if params.SslEnabled() {
 		args = append(args, "MASTER_SSL = 1")
@@ -277,7 +277,7 @@ func (c *Conn) SetMasterCommand(params *ConnParams, masterHost string, masterPor
 	if params.SslKey != "" {
 		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
 	}
-	args = append(args, c.flavor.changeMasterArg())
+	args = append(args, c.flavor.changeReplicationSourceArg())
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 }
 
@@ -350,9 +350,9 @@ func (c *Conn) ShowReplicationStatus() (ReplicationStatus, error) {
 	return c.flavor.status(c)
 }
 
-// parseMasterStatus parses the common fields of SHOW MASTER STATUS.
-func parseMasterStatus(fields map[string]string) MasterStatus {
-	status := MasterStatus{}
+// parsePrimaryStatus parses the common fields of SHOW MASTER STATUS.
+func parsePrimaryStatus(fields map[string]string) PrimaryStatus {
+	status := PrimaryStatus{}
 
 	fileExecPosStr := fields["Position"]
 	file := fields["File"]
@@ -369,10 +369,10 @@ func parseMasterStatus(fields map[string]string) MasterStatus {
 	return status
 }
 
-// ShowMasterStatus executes the right SHOW MASTER STATUS command,
+// ShowPrimaryStatus executes the right SHOW MASTER STATUS command,
 // and returns a parsed executed Position, as well as file based Position.
-func (c *Conn) ShowMasterStatus() (MasterStatus, error) {
-	return c.flavor.masterStatus(c)
+func (c *Conn) ShowPrimaryStatus() (PrimaryStatus, error) {
+	return c.flavor.primaryStatus(c)
 }
 
 // WaitUntilPositionCommand returns the SQL command to issue

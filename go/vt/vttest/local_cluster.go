@@ -117,6 +117,15 @@ type Config struct {
 
 	// Authorize vschema ddl operations to a list of users
 	VSchemaDDLAuthorizedUsers string
+
+	// How to handle foreign key constraint in CREATE/ALTER TABLE.  Valid values are "allow", "disallow"
+	ForeignKeyMode string
+
+	// Allow users to submit, view, and control Online DDL
+	EnableOnlineDDL bool
+
+	// Allow users to submit direct DDL statements
+	EnableDirectDDL bool
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single

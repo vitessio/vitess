@@ -41,25 +41,20 @@ const (
 var configurationLoaded chan bool = make(chan bool)
 
 const (
-	HealthPollSeconds                            = 1
-	RaftHealthPollSeconds                        = 10
-	RecoveryPollSeconds                          = 1
-	ActiveNodeExpireSeconds                      = 5
-	BinlogFileHistoryDays                        = 1
-	MaintenanceOwner                             = "orchestrator"
-	AuditPageSize                                = 20
-	MaintenancePurgeDays                         = 7
-	MySQLTopologyMaxPoolConnections              = 3
-	MaintenanceExpireMinutes                     = 10
-	AgentHttpTimeoutSeconds                      = 60
-	PseudoGTIDCoordinatesHistoryHeuristicMinutes = 2
-	DebugMetricsIntervalSeconds                  = 10
-	PseudoGTIDSchema                             = "_pseudo_gtid_"
-	PseudoGTIDIntervalSeconds                    = 5
-	PseudoGTIDExpireMinutes                      = 60
-	StaleInstanceCoordinatesExpireSeconds        = 60
-	CheckAutoPseudoGTIDGrantsIntervalSeconds     = 60
-	SelectTrueQuery                              = "select 1"
+	HealthPollSeconds                     = 1
+	RaftHealthPollSeconds                 = 10
+	RecoveryPollSeconds                   = 1
+	ActiveNodeExpireSeconds               = 5
+	BinlogFileHistoryDays                 = 1
+	MaintenanceOwner                      = "orchestrator"
+	AuditPageSize                         = 20
+	MaintenancePurgeDays                  = 7
+	MySQLTopologyMaxPoolConnections       = 3
+	MaintenanceExpireMinutes              = 10
+	AgentHttpTimeoutSeconds               = 60
+	DebugMetricsIntervalSeconds           = 10
+	StaleInstanceCoordinatesExpireSeconds = 60
+	SelectTrueQuery                       = "select 1"
 )
 
 // Configuration makes for orchestrator configuration input, which can be provided by user via JSON formatted file.
@@ -125,7 +120,6 @@ type Configuration struct {
 	InstanceWriteBufferSize                    int      // Instance write buffer size (max number of instances to flush in one INSERT ODKU)
 	BufferInstanceWrites                       bool     // Set to 'true' for write-optimization on backend table (compromise: writes can be stale and overwrite non stale data)
 	InstanceFlushIntervalMilliseconds          int      // Max interval between instance write buffer flushes
-	SkipMaxScaleCheck                          bool     // If you don't ever have MaxScale BinlogServer in your topology (and most people don't), set this to 'true' to save some pointless queries
 	UnseenInstanceForgetHours                  uint     // Number of hours after which an unseen instance is forgotten
 	SnapshotTopologiesIntervalHours            uint     // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
 	DiscoveryMaxConcurrency                    uint     // Number of goroutines doing hosts discovery
@@ -198,13 +192,7 @@ type Configuration struct {
 	StaleSeedFailMinutes                       uint              // Number of minutes after which a stale (no progress) seed is considered failed.
 	SeedAcceptableBytesDiff                    int64             // Difference in bytes between seed source & target data size that is still considered as successful copy
 	SeedWaitSecondsBeforeSend                  int64             // Number of seconds for waiting before start send data command on agent
-	AutoPseudoGTID                             bool              // Should orchestrator automatically inject Pseudo-GTID entries to the masters
-	PseudoGTIDPattern                          string            // Pattern to look for in binary logs that makes for a unique entry (pseudo GTID). When empty, Pseudo-GTID based refactoring is disabled.
-	PseudoGTIDPatternIsFixedSubstring          bool              // If true, then PseudoGTIDPattern is not treated as regular expression but as fixed substring, and can boost search time
-	PseudoGTIDMonotonicHint                    string            // subtring in Pseudo-GTID entry which indicates Pseudo-GTID entries are expected to be monotonically increasing
-	DetectPseudoGTIDQuery                      string            // Optional query which is used to authoritatively decide whether pseudo gtid is enabled on instance
 	BinlogEventsChunkSize                      int               // Chunk size (X) for SHOW BINLOG|RELAYLOG EVENTS LIMIT ?,X statements. Smaller means less locking and mroe work to be done
-	SkipBinlogEventsContaining                 []string          // When scanning/comparing binlogs for Pseudo-GTID, skip entries containing given texts. These are NOT regular expressions (would consume too much CPU while scanning binlogs), just substrings to find.
 	ReduceReplicationAnalysisCount             bool              // When true, replication analysis will only report instances where possibility of handled problems is possible in the first place (e.g. will not report most leaf nodes, that are mostly uninteresting). When false, provides an entry for every known instance
 	FailureDetectionPeriodBlockMinutes         int               // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this preceeds any recovery process, if any.
 	RecoveryPeriodBlockMinutes                 int               // (supported for backwards compatibility but please use newer `RecoveryPeriodBlockSeconds` instead) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
@@ -237,10 +225,6 @@ type Configuration struct {
 	PostponeSlaveRecoveryOnLagMinutes          uint              // Synonym to PostponeReplicaRecoveryOnLagMinutes
 	PostponeReplicaRecoveryOnLagMinutes        uint              // On crash recovery, replicas that are lagging more than given minutes are only resurrected late in the recovery process, after master/IM has been elected and processes executed. Value of 0 disables this feature
 	OSCIgnoreHostnameFilters                   []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
-	GraphiteAddr                               string            // Optional; address of graphite port. If supplied, metrics will be written here
-	GraphitePath                               string            // Prefix for graphite path. May include {hostname} magic placeholder
-	GraphiteConvertHostnameDotsToUnderscores   bool              // If true, then hostname's dots are converted to underscores before being used in graphite path
-	GraphitePollSeconds                        int               // Graphite writes interval. 0 disables.
 	URLPrefix                                  string            // URL prefix to run orchestrator on non-root web path, e.g. /orchestrator to put it behind nginx.
 	DiscoveryIgnoreReplicaHostnameFilters      []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
 	DiscoveryIgnoreMasterHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering a master. Usage: pointing your master temporarily to replicate seom data from external host
@@ -305,7 +289,6 @@ func newConfiguration() *Configuration {
 		InstanceWriteBufferSize:                    100,
 		BufferInstanceWrites:                       false,
 		InstanceFlushIntervalMilliseconds:          100,
-		SkipMaxScaleCheck:                          true,
 		UnseenInstanceForgetHours:                  240,
 		SnapshotTopologiesIntervalHours:            0,
 		DiscoverByShowSlaveHosts:                   false,
@@ -373,13 +356,7 @@ func newConfiguration() *Configuration {
 		StaleSeedFailMinutes:                       60,
 		SeedAcceptableBytesDiff:                    8192,
 		SeedWaitSecondsBeforeSend:                  2,
-		AutoPseudoGTID:                             false,
-		PseudoGTIDPattern:                          "",
-		PseudoGTIDPatternIsFixedSubstring:          false,
-		PseudoGTIDMonotonicHint:                    "",
-		DetectPseudoGTIDQuery:                      "",
 		BinlogEventsChunkSize:                      10000,
-		SkipBinlogEventsContaining:                 []string{},
 		ReduceReplicationAnalysisCount:             true,
 		FailureDetectionPeriodBlockMinutes:         60,
 		RecoveryPeriodBlockMinutes:                 60,
@@ -409,10 +386,6 @@ func newConfiguration() *Configuration {
 		DelayMasterPromotionIfSQLThreadNotUpToDate: true,
 		PostponeSlaveRecoveryOnLagMinutes:          0,
 		OSCIgnoreHostnameFilters:                   []string{},
-		GraphiteAddr:                               "",
-		GraphitePath:                               "",
-		GraphiteConvertHostnameDotsToUnderscores:   true,
-		GraphitePollSeconds:                        60,
 		URLPrefix:                                  "",
 		DiscoveryIgnoreReplicaHostnameFilters:      []string{},
 		ConsulAddress:                              "",
@@ -551,12 +524,6 @@ func (this *Configuration) postReadAdjustments() error {
 		// "some/prefix///" turns to "some/prefix/"
 		this.KVClusterMasterPrefix = strings.TrimRight(this.KVClusterMasterPrefix, "/")
 		this.KVClusterMasterPrefix = fmt.Sprintf("%s/", this.KVClusterMasterPrefix)
-	}
-	if this.AutoPseudoGTID {
-		this.PseudoGTIDPattern = "drop view if exists `_pseudo_gtid_`"
-		this.PseudoGTIDPatternIsFixedSubstring = true
-		this.PseudoGTIDMonotonicHint = "asc:"
-		this.DetectPseudoGTIDQuery = SelectTrueQuery
 	}
 	if this.HTTPAdvertise != "" {
 		u, err := url.Parse(this.HTTPAdvertise)

@@ -145,9 +145,5 @@ func PrintResults(results []*Result) string {
 }
 
 func split(str string) []string {
-	splits := strings.Split(str, "|")
-	for i, v := range splits {
-		splits[i] = strings.TrimSpace(v)
-	}
-	return splits
+	return strings.Split(str, "|")
 }

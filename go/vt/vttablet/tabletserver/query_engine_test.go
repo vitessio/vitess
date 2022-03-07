@@ -109,7 +109,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	_, err := qe.GetPlan(ctx, logStats, "", false, false /* inReservedConn */)
-	require.EqualError(t, err, "Query was empty")
+	require.EqualError(t, err, "query was empty")
 }
 
 func addSchemaEngineQueries(db *fakesqldb.DB) {

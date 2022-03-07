@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/assert"
@@ -94,7 +96,7 @@ func TestMessage(t *testing.T) {
 		}
 	}
 	require.NoError(t, err)
-	assert.Equal(t, wantFields, gotFields)
+	utils.MustMatch(t, wantFields, gotFields)
 
 	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
 
@@ -104,14 +106,14 @@ func TestMessage(t *testing.T) {
 
 	// Consume first message.
 	start := time.Now().UnixNano()
-	got, err := streamConn.FetchNext()
+	got, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
 
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewVarChar("hello world"),
 	}
-	assert.Equal(t, want, got)
+	utils.MustMatch(t, want, got)
 
 	qr := exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch := getTimeEpoch(qr)
@@ -131,7 +133,7 @@ func TestMessage(t *testing.T) {
 	}
 
 	// Consume the resend.
-	_, err = streamConn.FetchNext()
+	_, err = streamConn.FetchNext(nil)
 	require.NoError(t, err)
 	qr = exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch = getTimeEpoch(qr)
@@ -215,18 +217,18 @@ func TestThreeColMessage(t *testing.T) {
 		}
 	}
 	require.NoError(t, err)
-	assert.Equal(t, wantFields, gotFields)
+	utils.MustMatch(t, wantFields, gotFields)
 
 	exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
 
-	got, err := streamConn.FetchNext()
+	got, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewVarChar("hello world"),
 		sqltypes.NewInt64(3),
 	}
-	assert.Equal(t, want, got)
+	utils.MustMatch(t, want, got)
 
 	// Verify Ack.
 	qr := exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")

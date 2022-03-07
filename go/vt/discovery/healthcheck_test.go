@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"html/template"
@@ -38,8 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
@@ -57,7 +56,7 @@ var connMapMu sync.Mutex
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
 
-	//log error
+	// log error
 	if err := flag.Set("tablet_protocol", "fake_gateway"); err != nil {
 		log.Errorf("failed to set flag \"tablet_protocol\" to \"fake_gateway\":%v", err)
 	}
@@ -196,7 +195,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
+	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
@@ -257,7 +256,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		LastError:           fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
+	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
@@ -317,7 +316,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		LastError:           fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
+	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
@@ -1158,7 +1157,7 @@ func TestTemplate(t *testing.T) {
 }
 
 func TestDebugURLFormatting(t *testing.T) {
-	//log error
+	// log error
 	if err2 := flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"); err2 != nil {
 		log.Errorf("flag.Set(\"tablet_url_template\", \"https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp\") failed : %v", err2)
 	}
@@ -1310,9 +1309,4 @@ func createTestTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 	return tablet
 }
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		TabletHealth{},
-	},
-	[]string{".Conn"}, // ignored fields
-)
+var mustMatch = utils.MustMatchFn(".Conn" /* ignored fields*/)

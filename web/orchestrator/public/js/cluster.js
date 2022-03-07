@@ -39,14 +39,6 @@ function Cluster() {
       apiCommand("/api/relocate-replicas/" + _instancesMap[e.draggedNodeId].Key.Hostname + "/" + _instancesMap[e.draggedNodeId].Key.Port + "/" + belowHost + "/" + belowPort);
       return true;
     },
-    "make-master": function(e) {
-      makeMaster(_instancesMap[e.draggedNodeId]);
-      return false;
-    },
-    "make-local-master": function(e) {
-      makeLocalMaster(_instancesMap[e.draggedNodeId]);
-      return false;
-    },
   };
 
   Object.defineProperties(_this, {
@@ -432,7 +424,7 @@ function Cluster() {
     }
     var droppableTitle = getInstanceDiv(droppableNode.id).find("h3 .pull-left").html();
     if (moveInstanceMethod == "smart") {
-      // Moving via GTID or Pseudo GTID
+      // Moving via GTID
       if (node.hasConnectivityProblem || droppableNode.hasConnectivityProblem || droppableNode.isAggregate) {
         // Obviously can't handle.
         return {
@@ -495,16 +487,12 @@ function Cluster() {
     }
     var gtidBelowFunc = null;
     var gtidOperationName = "";
-    if (moveInstanceMethod == "pseudo-gtid") {
-      gtidBelowFunc = matchBelow;
-      gtidOperationName = "match";
-    }
     if (moveInstanceMethod == "gtid") {
       gtidBelowFunc = moveBelowGTID;
       gtidOperationName = "move:gtid";
     }
     if (gtidBelowFunc != null) {
-      // Moving via GTID or Pseudo GTID
+      // Moving via GTID
       if (node.hasConnectivityProblem || droppableNode.hasConnectivityProblem || droppableNode.isAggregate) {
         // Obviously can't handle.
         return {
@@ -583,7 +571,7 @@ function Cluster() {
       };
     }
     if (moveInstanceMethod == "classic") {
-      // Not pseudo-GTID mode, non GTID mode
+      // non GTID mode
       if (node.id == droppableNode.id) {
         return {
           accept: false
@@ -778,7 +766,7 @@ function Cluster() {
     }
     var droppableTitle = getInstanceDiv(droppableNode.id).find("h3 .pull-left").html();
     if (moveInstanceMethod == "smart") {
-      // Moving via GTID or Pseudo GTID
+      // Moving via GTID
       if (droppableNode.hasConnectivityProblem || droppableNode.isAggregate) {
         // Obviously can't handle.
         return {
@@ -824,16 +812,12 @@ function Cluster() {
 
     var gtidBelowFunc = null;
     var gtidOperationName = "";
-    if (moveInstanceMethod == "pseudo-gtid") {
-      gtidBelowFunc = matchReplicas;
-      gtidOperationName = "match";
-    }
     if (moveInstanceMethod == "gtid") {
       gtidBelowFunc = moveReplicasGTID;
       gtidOperationName = "move:gtid";
     }
     if (gtidBelowFunc != null) {
-      // Moving via GTID or Pseudo GTID
+      // Moving via GTID
       if (droppableNode.hasConnectivityProblem || droppableNode.isAggregate) {
         // Obviously can't handle.
         return {
@@ -888,7 +872,7 @@ function Cluster() {
       };
     }
     if (moveInstanceMethod == "classic") {
-      // Not pseudo-GTID mode, non GTID mode
+      // non GTID mode
       if (node.id == droppableNode.id) {
         if (shouldApply) {
           repointReplicas(node);
@@ -1025,16 +1009,6 @@ function Cluster() {
       masterNode.Key.Hostname + ":" + masterNode.Key.Port +
       "</strong></code>?";
     var apiUrl = "/api/take-master/" + node.Key.Hostname + "/" + node.Key.Port;
-    return executeMoveOperation(message, apiUrl);
-  }
-
-  function matchBelow(node, otherNode) {
-    var message = "<h4>PSEUDO-GTID MODE, match-below</h4>Are you sure you wish to turn <code><strong>" +
-      node.Key.Hostname + ":" + node.Key.Port +
-      "</strong></code> into a replica of <code><strong>" +
-      otherNode.Key.Hostname + ":" + otherNode.Key.Port +
-      "</strong></code>?";
-    var apiUrl = "/api/match-below/" + node.Key.Hostname + "/" + node.Key.Port + "/" + otherNode.Key.Hostname + "/" + otherNode.Key.Port;
     return executeMoveOperation(message, apiUrl);
   }
 
@@ -1318,7 +1292,6 @@ function Cluster() {
     }
   }
 
-
   function refreshClusterOperationModeButton() {
     if (moveInstanceMethod == "smart") {
       $("#move-instance-method-button").removeClass("btn-success").removeClass("btn-primary").removeClass("btn-warning").addClass("btn-info");
@@ -1326,26 +1299,9 @@ function Cluster() {
       $("#move-instance-method-button").removeClass("btn-info").removeClass("btn-primary").removeClass("btn-warning").addClass("btn-success");
     } else if (moveInstanceMethod == "gtid") {
       $("#move-instance-method-button").removeClass("btn-success").removeClass("btn-info").removeClass("btn-warning").addClass("btn-primary");
-    } else if (moveInstanceMethod == "pseudo-gtid") {
-      $("#move-instance-method-button").removeClass("btn-success").removeClass("btn-primary").removeClass("btn-info").addClass("btn-warning");
     }
     $("#move-instance-method-button").html(moveInstanceMethod + ' mode <span class="caret"></span>')
   }
-
-  // This is legacy and will be removed
-  function makeMaster(instance) {
-    var message = "Are you sure you wish to make <code><strong>" + instance.Key.Hostname + ":" + instance.Key.Port + "</strong></code> the new master?" + "<p>Siblings of <code><strong>" + instance.Key.Hostname + ":" + instance.Key.Port + "</strong></code> will turn to be its children, " + "via Pseudo-GTID." + "<p>The instance will be set to be writeable (<code><strong>read_only = 0</strong></code>)." + "<p>Replication on this instance will be stopped, but not reset. You should run <code><strong>RESET SLAVE</strong></code> yourself " + "if this instance will indeed become the master." + "<p>Pointing your application servers to the new master is on you.";
-    var apiUrl = "/api/make-master/" + instance.Key.Hostname + "/" + instance.Key.Port;
-    return executeMoveOperation(message, apiUrl);
-  }
-
-  //This is legacy and will be removed
-  function makeLocalMaster(instance) {
-    var message = "Are you sure you wish to make <code><strong>" + instance.Key.Hostname + ":" + instance.Key.Port + "</strong></code> a local master?" + "<p>Siblings of <code><strong>" + instance.Key.Hostname + ":" + instance.Key.Port + "</strong></code> will turn to be its children, " + "via Pseudo-GTID." + "<p>The instance will replicate from its grandparent.";
-    var apiUrl = "/api/make-local-master/" + instance.Key.Hostname + "/" + instance.Key.Port;
-    return executeMoveOperation(message, apiUrl);
-  }
-
 
   function promptForAlias(oldAlias) {
     bootbox.prompt({

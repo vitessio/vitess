@@ -556,7 +556,7 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where case a when b then c when d then c else (select a from b) end",
 		out: "case a when b then c when d then c else :a end",
 	}}
-	to := NewArgument(":a")
+	to := NewArgument("a")
 	for _, tcase := range tcases {
 		tree, err := Parse(tcase.in)
 		if err != nil {
@@ -769,6 +769,12 @@ func TestSplitStatementToPieces(t *testing.T) {
 		output: "select * from table1;select * from table1",
 	}, {
 		input: "select * from table",
+	}, {
+		input:  "select * from table;",
+		output: "select * from table",
+	}, {
+		input:  "select * from table;   ",
+		output: "select * from table",
 	}, {
 		input:  "select * from table1; select * from table2;",
 		output: "select * from table1; select * from table2",

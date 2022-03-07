@@ -1,0 +1,33 @@
+#stream table
+"stream * from music"
+{
+  "QueryType": "STREAM",
+  "Original": "stream * from music",
+  "Instructions": {
+    "OperatorType": "MStream",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "ExactKeyRange(-)",
+    "Table": "music"
+  }
+}
+
+#vstream table
+"vstream * from user where pos > 'a4afea21-a320-11eb-a37a-98af65a6dc4a:1-44' limit 1000"
+{
+  "QueryType": "VSTREAM",
+  "Original": "vstream * from user where pos \u003e 'a4afea21-a320-11eb-a37a-98af65a6dc4a:1-44' limit 1000",
+  "Instructions": {
+    "OperatorType": "VStream",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AllShards()",
+    "Limit": 1000,
+    "Position": "a4afea21-a320-11eb-a37a-98af65a6dc4a:1-44",
+    "Table": "user"
+  }
+}

@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
@@ -104,8 +106,8 @@ func TestManager_GetConfiguration(t *testing.T) {
 
 	// Test GetConfiguration() when all throttlers are returned.
 	want := map[string]*throttlerdatapb.Configuration{
-		"t1": &defaultMaxReplicationLagModuleConfig.Configuration,
-		"t2": &defaultMaxReplicationLagModuleConfig.Configuration,
+		"t1": defaultMaxReplicationLagModuleConfig.Clone().Configuration,
+		"t2": defaultMaxReplicationLagModuleConfig.Clone().Configuration,
 	}
 	got, err := f.m.GetConfiguration("" /* all */)
 	if err != nil {
@@ -117,7 +119,7 @@ func TestManager_GetConfiguration(t *testing.T) {
 
 	// Test GetConfiguration() when a specific throttler is requested.
 	wantT2 := map[string]*throttlerdatapb.Configuration{
-		"t2": &defaultMaxReplicationLagModuleConfig.Configuration,
+		"t2": defaultMaxReplicationLagModuleConfig.Clone().Configuration,
 	}
 	gotT2, err := f.m.GetConfiguration("t2")
 	if err != nil {
@@ -223,9 +225,9 @@ func TestManager_UpdateConfiguration_ZeroValues(t *testing.T) {
 	defer f.tearDown()
 
 	// Test the explicit copy of zero values.
-	zeroValueConfig := defaultMaxReplicationLagModuleConfig.Configuration
+	zeroValueConfig := proto.Clone(defaultMaxReplicationLagModuleConfig.Configuration).(*throttlerdatapb.Configuration)
 	zeroValueConfig.IgnoreNSlowestReplicas = 0
-	names, err := f.m.UpdateConfiguration("t2", &zeroValueConfig, true /* copyZeroValues */)
+	names, err := f.m.UpdateConfiguration("t2", zeroValueConfig, true /* copyZeroValues */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +235,7 @@ func TestManager_UpdateConfiguration_ZeroValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Repeat test for all throttlers.
-	allNames, err := f.m.UpdateConfiguration("" /* all */, &zeroValueConfig, true /* copyZeroValues */)
+	allNames, err := f.m.UpdateConfiguration("" /* all */, zeroValueConfig, true /* copyZeroValues */)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -32,7 +32,7 @@ import (
 // This file has functions to analyze the FROM clause.
 
 // processDMLTable analyzes the FROM clause for DMLs and returns a route.
-func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, reservedVars sqlparser.BindVars, where sqlparser.Expr) (*route, error) {
+func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) (*route, error) {
 	if err := pb.processTableExprs(tableExprs, reservedVars, where); err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, res
 
 // processTableExprs analyzes the FROM clause. It produces a logicalPlan
 // with all the routes identified.
-func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs, reservedVars sqlparser.BindVars, where sqlparser.Expr) error {
+func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) error {
 	if len(tableExprs) == 1 {
 		return pb.processTableExpr(tableExprs[0], reservedVars, where)
 	}
@@ -64,7 +64,7 @@ func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs, r
 }
 
 // processTableExpr produces a logicalPlan subtree for the given TableExpr.
-func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, reservedVars sqlparser.BindVars, where sqlparser.Expr) error {
+func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) error {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return pb.processAliasedTable(tableExpr, reservedVars)
@@ -95,7 +95,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 // versatile than a subquery. If a subquery becomes a route, then any result
 // columns that represent underlying vindex columns are also exposed as
 // vindex columns.
-func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, reservedVars sqlparser.BindVars) error {
+func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, reservedVars *sqlparser.ReservedVars) error {
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
@@ -268,7 +268,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 // processJoin produces a logicalPlan subtree for the given Join.
 // If the left and right nodes can be part of the same route,
 // then it's a route. Otherwise, it's a join.
-func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr, reservedVars sqlparser.BindVars, where sqlparser.Expr) error {
+func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) error {
 	switch ajoin.Join {
 	case sqlparser.NormalJoinType, sqlparser.StraightJoinType, sqlparser.LeftJoinType:
 	case sqlparser.RightJoinType:
@@ -300,7 +300,7 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 	ajoin.Join = sqlparser.LeftJoinType
 }
 
-func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reservedVars sqlparser.BindVars, where sqlparser.Expr) error {
+func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) error {
 	// Merge the symbol tables. In the case of a left join, we have to
 	// ideally create new symbols that originate from the join primitive.
 	// However, this is not worth it for now, because the Push functions
@@ -356,7 +356,7 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 	ajoin.Condition.On = expr
 	pb.addPullouts(pullouts)
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		lRoute.UpdatePlan(pb, filter)
 	}
 	return nil

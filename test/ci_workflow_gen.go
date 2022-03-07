@@ -51,7 +51,6 @@ var (
 		"23",
 		"24",
 		"26",
-		"27",
 		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",
@@ -59,11 +58,30 @@ var (
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
+		"onlineddl_vrepl_suite",
 		"vreplication_migrate",
 		"onlineddl_revert",
 		"onlineddl_declarative",
+		"onlineddl_singleton",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
+		"tabletmanager_tablegc",
+		"vtorc",
+		"vtgate_buffer",
+		"vtgate_concurrentdml",
+		"vtgate_gen4",
+		"vtgate_readafterwrite",
+		"vtgate_reservedconn",
+		"vtgate_schema",
+		"vtgate_topo",
+		"vtgate_transaction",
+		"vtgate_unsharded",
+		"vtgate_vindex",
+		"vtgate_vschema",
+		"xb_recovery",
+		"resharding",
+		"resharding_bytes",
+		"mysql80",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
@@ -71,6 +89,9 @@ var (
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
+	}
+	clustersRequiringUbuntu20 = []string{
+		"mysql80",
 	}
 )
 
@@ -81,6 +102,7 @@ type unitTest struct {
 type clusterTest struct {
 	Name, Shard                  string
 	MakeTools, InstallXtraBackup bool
+	Ubuntu20                     bool
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -143,6 +165,13 @@ func generateClusterWorkflows() {
 		for _, xtraBackupCluster := range xtraBackupClusters {
 			if xtraBackupCluster == cluster {
 				test.InstallXtraBackup = true
+				break
+			}
+		}
+		ubuntu20Clusters := canonnizeList(clustersRequiringUbuntu20)
+		for _, ubuntu20Cluster := range ubuntu20Clusters {
+			if ubuntu20Cluster == cluster {
+				test.Ubuntu20 = true
 				break
 			}
 		}

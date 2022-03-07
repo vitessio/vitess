@@ -67,8 +67,10 @@ create table test_partitioned (
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	initTabletEnvironment(ddls, defaultTestOpts())
-
+	{
+		tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
+		setGlobalTabletEnv(tabletEnv)
+	}
 	tablet := newTablet(defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",
@@ -92,7 +94,7 @@ create table test_partitioned (
 		t.Errorf("expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	}
 	pkCol := t1.GetPKColumn(0)
-	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 ` {
+	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64` {
 		t.Errorf("expected pkCol[0] == id, got %v", pkCol)
 	}
 
@@ -139,7 +141,8 @@ create table t1 like t2;
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-	err = initTabletEnvironment(ddl, defaultTestOpts())
+
+	_, err = newTabletEnvironment(ddl, defaultTestOpts())
 	if err.Error() != expected {
 		t.Errorf("want: %s, got %s", expected, err.Error())
 	}

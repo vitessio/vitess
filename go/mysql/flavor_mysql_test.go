@@ -40,9 +40,9 @@ func TestMysql56SetMasterCommands(t *testing.T) {
   MASTER_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, masterHost, masterPort, masterConnectRetry)
 	if got != want {
-		t.Errorf("mysqlFlavor.SetMasterCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
+		t.Errorf("mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
 	}
 }
 
@@ -73,7 +73,7 @@ func TestMysql56SetMasterCommandsSSL(t *testing.T) {
   MASTER_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, masterHost, masterPort, masterConnectRetry)
 	if got != want {
 		t.Errorf("mysqlFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
 	}
@@ -136,11 +136,11 @@ func TestMysqlShouldGetMasterPosition(t *testing.T) {
 	}
 
 	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
-	want := MasterStatus{
+	want := PrimaryStatus{
 		Position:     Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
 		FilePosition: Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
 	}
-	got, err := parseMysqlMasterStatus(resultMap)
+	got, err := parseMysqlPrimaryStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet.String(), want.Position.GTIDSet.String(), "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
 	assert.Equalf(t, got.FilePosition.GTIDSet.String(), want.FilePosition.GTIDSet.String(), "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)

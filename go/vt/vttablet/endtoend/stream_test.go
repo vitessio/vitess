@@ -26,8 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -44,31 +45,56 @@ func TestStreamUnion(t *testing.T) {
 	assert.Equal(t, 1, len(qr.Rows))
 }
 
+func populateStressQuery(client *framework.QueryClient, rowCount int, rowContent string) error {
+	err := client.Begin(false)
+	if err != nil {
+		return err
+	}
+	defer client.Rollback()
+
+	for i := 0; i < rowCount; i++ {
+		query := fmt.Sprintf("insert into vitess_stress values (%d, '%s')", i, strings.Repeat(rowContent, 2048/len(rowContent)))
+		_, err := client.Execute(query, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return client.Commit()
+}
+
+func BenchmarkStreamQuery(b *testing.B) {
+	const RowCount = 1100
+	const RowContent = "abcdefghijklmnopqrstuvwxyz"
+
+	client := framework.NewClient()
+	err := populateStressQuery(client, RowCount, RowContent)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_stress", nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+			return nil
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestStreamConsolidation(t *testing.T) {
 	const Workers = 50
 	const RowCount = 1100
 	const RowContent = "abcdefghijklmnopqrstuvwxyz"
 
-	populate := func(client *framework.QueryClient) error {
-		err := client.Begin(false)
-		if err != nil {
-			return err
-		}
-		defer client.Rollback()
-
-		for i := 0; i < RowCount; i++ {
-			query := fmt.Sprintf("insert into vitess_stress values (%d, '%s')", i, strings.Repeat(RowContent, 2048/len(RowContent)))
-			_, err := client.Execute(query, nil)
-			if err != nil {
-				return err
-			}
-		}
-		return client.Commit()
-	}
-
 	client := framework.NewClient()
-	err := populate(client)
-	require.NoError(t, err)
+	err := populateStressQuery(client, RowCount, RowContent)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer client.Execute("delete from vitess_stress", nil)
 
 	defaultPoolSize := framework.Server.StreamPoolSize()

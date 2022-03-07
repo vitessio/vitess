@@ -28,8 +28,7 @@ func RedactSQLQuery(sql string) (string, error) {
 		return "", err
 	}
 
-	prefix := "redacted"
-	err = Normalize(stmt, reservedVars, bv, prefix)
+	err = Normalize(stmt, NewReservedVars("redacted", reservedVars), bv)
 	if err != nil {
 		return "", err
 	}

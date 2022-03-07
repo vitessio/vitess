@@ -151,11 +151,11 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		}
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
-		err = sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(r *sqltypes.Result) error {
+		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(r *sqltypes.Result) error {
 			qr.AppendResult(r)
 			return nil
 		})
-		return qr, err
+		return qr, vterrors.Aggregate(errors)
 	})
 }
 

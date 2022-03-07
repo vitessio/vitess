@@ -128,7 +128,6 @@ data:
     "SkipBinlogEventsContaining": [
     ],
     "SkipBinlogServerUnresolveCheck": true,
-    "SkipMaxScaleCheck": true,
     "SkipOrchestratorDatabaseUpdate": false,
     "SlaveStartPostWaitMilliseconds": 1000,
     "SnapshotTopologiesIntervalHours": 0,

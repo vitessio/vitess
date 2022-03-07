@@ -4,7 +4,11 @@ import { Theme, useTheme } from '../../hooks/useTheme';
 import { Button } from '../Button';
 import { Icon, Icons } from '../Icon';
 import { Select } from '../inputs/Select';
+import { ContentContainer } from '../layout/ContentContainer';
+import { Tab } from '../tabs/Tab';
+import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
+import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
 
 export const Debug = () => {
@@ -13,232 +17,260 @@ export const Debug = () => {
     const [formData, setFormData] = React.useState<{ [key: string]: any }>({});
 
     return (
-        <div className={style.container}>
-            <h1>Debugging ✨🦋🐛🐝🐞🐜🕷🕸🦂🦗🦟✨</h1>
+        <ContentContainer>
+            <div className={style.container}>
+                <h1>Debugging ✨🦋🐛🐝🐞🐜🕷🕸🦂🦗🦟✨</h1>
 
-            <h2>Environment variables</h2>
-            <pre>{JSON.stringify(process.env, null, 2)}</pre>
+                <h2>Environment variables</h2>
+                <pre>{JSON.stringify(process.env, null, 2)}</pre>
 
-            <h2>Style Guide</h2>
+                <h2>Style Guide</h2>
 
-            <section>
-                <h3>Theme</h3>
-                <div>
-                    {Object.values(Theme).map((t) => (
-                        <div key={t}>
-                            <label>
-                                <input
-                                    checked={theme === t}
-                                    name="theme"
-                                    onChange={() => setTheme(t)}
-                                    type="radio"
-                                    value={t}
-                                />
-                                {t}
-                            </label>
+                <section>
+                    <h3>Theme</h3>
+                    <div>
+                        {Object.values(Theme).map((t) => (
+                            <div key={t}>
+                                <label>
+                                    <input
+                                        checked={theme === t}
+                                        name="theme"
+                                        onChange={() => setTheme(t)}
+                                        type="radio"
+                                        value={t}
+                                    />
+                                    {t}
+                                </label>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Tabs</h3>
+
+                    <TabContainer className={style.tabContainer} size="small">
+                        <Tab text="Small Tab" to="/debug/small/1" />
+                        <Tab text="Small Tab" to="/debug/small/2" count={1} />
+                        <Tab text="Small Tab" to="/debug/small/3" status="danger" />
+                    </TabContainer>
+
+                    <TabContainer className={style.tabContainer} size="medium">
+                        <Tab text="Medium Tab" to="/debug/medium/1" />
+                        <Tab text="Medium Tab" to="/debug/medium/2" status="success" count={1000} />
+                        <Tab text="Medium Tab" to="/debug/medium/3" />
+                    </TabContainer>
+
+                    <TabContainer className={style.tabContainer} size="large">
+                        <Tab text="Large Tab" to="/debug/large/1" />
+                        <Tab text="Large Tab" to="/debug/large/2" status="primary" />
+                        <Tab text="Large Tab" to="/debug/large/3" count={10000} />
+                    </TabContainer>
+                </section>
+
+                <section>
+                    <h3>Icons</h3>
+                    <div className={style.iconContainer}>
+                        {Object.values(Icons).map((i) => (
+                            <Tooltip text={i}>
+                                <Icon className={style.icon} icon={i} key={i} tabIndex={0} />
+                            </Tooltip>
+                        ))}
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Select</h3>
+                    <div className={style.dropdownContainer}>
+                        <div className={style.dropdownRow}>
+                            <Select
+                                itemToString={(fruit) => fruit?.name || ''}
+                                items={FRUITS}
+                                label="Fruits"
+                                onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
+                                placeholder="Choose a fruit"
+                                renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                                selectedItem={formData.selectFruitDefault || null}
+                            />
+                            <Select
+                                items={FRUIT_NAMES}
+                                label="Fruit names"
+                                onChange={(fruitName) =>
+                                    setFormData({ ...formData, selectFruitNameDefault: fruitName })
+                                }
+                                placeholder="Choose a fruit name"
+                                selectedItem={formData.selectFruitNameDefault || null}
+                            />
+                            <Select
+                                disabled
+                                itemToString={(fruit) => fruit?.name || ''}
+                                items={FRUITS}
+                                label="Fruits"
+                                onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
+                                placeholder="Choose a fruit"
+                                renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                                selectedItem={formData.selectFruitDefault || null}
+                            />
+                            <Select
+                                items={[]}
+                                emptyPlaceholder="No fruits :("
+                                label="Empty Fruits"
+                                onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
+                                placeholder="Choose a fruit"
+                                renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                                selectedItem={formData.selectFruitDefault || null}
+                            />
                         </div>
-                    ))}
-                </div>
-            </section>
-
-            <section>
-                <h3>Icons</h3>
-                <div className={style.iconContainer}>
-                    {Object.values(Icons).map((i) => (
-                        <Icon className={style.icon} icon={i} key={i} />
-                    ))}
-                </div>
-            </section>
-
-            <section>
-                <h3>Select</h3>
-                <div className={style.dropdownContainer}>
-                    <div className={style.dropdownRow}>
-                        <Select
-                            itemToString={(fruit) => fruit?.name || ''}
-                            items={FRUITS}
-                            label="Fruits"
-                            onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
-                            placeholder="Choose a fruit"
-                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
-                            selectedItem={formData.selectFruitDefault || null}
-                        />
-                        <Select
-                            items={FRUIT_NAMES}
-                            label="Fruit names"
-                            onChange={(fruitName) => setFormData({ ...formData, selectFruitNameDefault: fruitName })}
-                            placeholder="Choose a fruit name"
-                            selectedItem={formData.selectFruitNameDefault || null}
-                        />
-                        <Select
-                            disabled
-                            itemToString={(fruit) => fruit?.name || ''}
-                            items={FRUITS}
-                            label="Fruits"
-                            onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
-                            placeholder="Choose a fruit"
-                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
-                            selectedItem={formData.selectFruitDefault || null}
-                        />
-                        <Select
-                            items={[]}
-                            emptyPlaceholder="No fruits :("
-                            label="Empty Fruits"
-                            onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
-                            placeholder="Choose a fruit"
-                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
-                            selectedItem={formData.selectFruitDefault || null}
-                        />
+                        <div className={style.dropdownRow}>
+                            <Select
+                                itemToString={(fruit) => fruit?.name || ''}
+                                items={FRUITS}
+                                label="Fruits"
+                                onChange={(fruit) => setFormData({ ...formData, selectFruitLarge: fruit })}
+                                placeholder="Choose a fruit"
+                                renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                                selectedItem={formData.selectFruitLarge || null}
+                                size="large"
+                            />
+                            <Select
+                                items={FRUIT_NAMES}
+                                label="Fruit names"
+                                onChange={(fruitName) => setFormData({ ...formData, selectFruitNameLarge: fruitName })}
+                                placeholder="Choose a fruit name"
+                                size="large"
+                                selectedItem={formData.selectFruitNameLarge || null}
+                            />
+                            <Select
+                                disabled
+                                itemToString={(fruit) => fruit?.name || ''}
+                                items={FRUITS}
+                                label="Fruits"
+                                onChange={(fruit) => setFormData({ ...formData, selectFruitLarge: fruit })}
+                                placeholder="Choose a fruit"
+                                renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                                selectedItem={formData.selectFruitLarge || null}
+                                size="large"
+                            />
+                        </div>
                     </div>
-                    <div className={style.dropdownRow}>
-                        <Select
-                            itemToString={(fruit) => fruit?.name || ''}
-                            items={FRUITS}
-                            label="Fruits"
-                            onChange={(fruit) => setFormData({ ...formData, selectFruitLarge: fruit })}
-                            placeholder="Choose a fruit"
-                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
-                            selectedItem={formData.selectFruitLarge || null}
-                            size="large"
-                        />
-                        <Select
-                            items={FRUIT_NAMES}
-                            label="Fruit names"
-                            onChange={(fruitName) => setFormData({ ...formData, selectFruitNameLarge: fruitName })}
-                            placeholder="Choose a fruit name"
-                            size="large"
-                            selectedItem={formData.selectFruitNameLarge || null}
-                        />
-                        <Select
-                            disabled
-                            itemToString={(fruit) => fruit?.name || ''}
-                            items={FRUITS}
-                            label="Fruits"
-                            onChange={(fruit) => setFormData({ ...formData, selectFruitLarge: fruit })}
-                            placeholder="Choose a fruit"
-                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
-                            selectedItem={formData.selectFruitLarge || null}
-                            size="large"
-                        />
-                    </div>
-                </div>
-            </section>
+                </section>
 
-            <section>
-                <h3>Text Inputs</h3>
-                <div className={style.inputContainer}>
-                    <TextInput autoFocus placeholder="Basic text input" />
-                    <TextInput iconLeft={Icons.search} placeholder="With leftIcon" />
-                    <TextInput iconRight={Icons.delete} placeholder="With rightIcon" />
-                    <TextInput
-                        iconLeft={Icons.search}
-                        iconRight={Icons.delete}
-                        placeholder="With leftIcon and rightIcon"
-                    />
-                    <TextInput disabled placeholder="Disabled" />
-                    <TextInput
-                        disabled
-                        iconLeft={Icons.search}
-                        iconRight={Icons.delete}
-                        placeholder="Disabled with icons"
-                    />
-                    <div className={style.inputRow}>
+                <section>
+                    <h3>Text Inputs</h3>
+                    <div className={style.inputContainer}>
+                        <TextInput autoFocus placeholder="Basic text input" />
+                        <TextInput iconLeft={Icons.search} placeholder="With leftIcon" />
+                        <TextInput iconRight={Icons.delete} placeholder="With rightIcon" />
                         <TextInput
                             iconLeft={Icons.search}
                             iconRight={Icons.delete}
-                            size="large"
-                            placeholder="Button-adjacent"
+                            placeholder="With leftIcon and rightIcon"
                         />
-                        <Button size="large">Primary</Button>
+                        <TextInput disabled placeholder="Disabled" />
+                        <TextInput
+                            disabled
+                            iconLeft={Icons.search}
+                            iconRight={Icons.delete}
+                            placeholder="Disabled with icons"
+                        />
+                        <div className={style.inputRow}>
+                            <TextInput
+                                iconLeft={Icons.search}
+                                iconRight={Icons.delete}
+                                size="large"
+                                placeholder="Button-adjacent"
+                            />
+                            <Button size="large">Primary</Button>
+                            <Button secondary size="large">
+                                Secondary
+                            </Button>
+                        </div>
+                        <div className={style.inputRow}>
+                            <TextInput iconLeft={Icons.search} iconRight={Icons.delete} placeholder="Button-adjacent" />
+                            <Button>Primary</Button>
+                            <Button secondary>Secondary</Button>
+                        </div>
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Buttons</h3>
+                    <div className={style.buttonContainer}>
+                        {/* Large */}
+                        <Button size="large">Button</Button>
                         <Button secondary size="large">
-                            Secondary
+                            Button
+                        </Button>
+                        <Button icon={Icons.circleAdd} size="large">
+                            Button
+                        </Button>
+                        <Button icon={Icons.circleAdd} secondary size="large">
+                            Button
+                        </Button>
+                        <Button disabled size="large">
+                            Button
+                        </Button>
+                        <Button disabled secondary size="large">
+                            Button
+                        </Button>
+                        <Button disabled icon={Icons.circleAdd} size="large">
+                            Button
+                        </Button>
+                        <Button disabled icon={Icons.circleAdd} secondary size="large">
+                            Button
+                        </Button>
+
+                        {/* Medium */}
+                        <Button size="medium">Button</Button>
+                        <Button secondary size="medium">
+                            Button
+                        </Button>
+                        <Button icon={Icons.circleAdd} size="medium">
+                            Button
+                        </Button>
+                        <Button icon={Icons.circleAdd} secondary size="medium">
+                            Button
+                        </Button>
+                        <Button disabled size="medium">
+                            Button
+                        </Button>
+                        <Button disabled secondary size="medium">
+                            Button
+                        </Button>
+                        <Button disabled icon={Icons.circleAdd} size="medium">
+                            Button
+                        </Button>
+                        <Button disabled icon={Icons.circleAdd} secondary size="medium">
+                            Button
+                        </Button>
+
+                        {/* Small */}
+                        <Button size="small">Button</Button>
+                        <Button secondary size="small">
+                            Button
+                        </Button>
+                        <Button icon={Icons.circleAdd} size="small">
+                            Button
+                        </Button>
+                        <Button icon={Icons.circleAdd} secondary size="small">
+                            Button
+                        </Button>
+                        <Button disabled size="small">
+                            Button
+                        </Button>
+                        <Button disabled secondary size="small">
+                            Button
+                        </Button>
+                        <Button disabled icon={Icons.circleAdd} size="small">
+                            Button
+                        </Button>
+                        <Button disabled icon={Icons.circleAdd} secondary size="small">
+                            Button
                         </Button>
                     </div>
-                    <div className={style.inputRow}>
-                        <TextInput iconLeft={Icons.search} iconRight={Icons.delete} placeholder="Button-adjacent" />
-                        <Button>Primary</Button>
-                        <Button secondary>Secondary</Button>
-                    </div>
-                </div>
-            </section>
-
-            <section>
-                <h3>Buttons</h3>
-                <div className={style.buttonContainer}>
-                    {/* Large */}
-                    <Button size="large">Button</Button>
-                    <Button secondary size="large">
-                        Button
-                    </Button>
-                    <Button icon={Icons.circleAdd} size="large">
-                        Button
-                    </Button>
-                    <Button icon={Icons.circleAdd} secondary size="large">
-                        Button
-                    </Button>
-                    <Button disabled size="large">
-                        Button
-                    </Button>
-                    <Button disabled secondary size="large">
-                        Button
-                    </Button>
-                    <Button disabled icon={Icons.circleAdd} size="large">
-                        Button
-                    </Button>
-                    <Button disabled icon={Icons.circleAdd} secondary size="large">
-                        Button
-                    </Button>
-
-                    {/* Medium */}
-                    <Button size="medium">Button</Button>
-                    <Button secondary size="medium">
-                        Button
-                    </Button>
-                    <Button icon={Icons.circleAdd} size="medium">
-                        Button
-                    </Button>
-                    <Button icon={Icons.circleAdd} secondary size="medium">
-                        Button
-                    </Button>
-                    <Button disabled size="medium">
-                        Button
-                    </Button>
-                    <Button disabled secondary size="medium">
-                        Button
-                    </Button>
-                    <Button disabled icon={Icons.circleAdd} size="medium">
-                        Button
-                    </Button>
-                    <Button disabled icon={Icons.circleAdd} secondary size="medium">
-                        Button
-                    </Button>
-
-                    {/* Small */}
-                    <Button size="small">Button</Button>
-                    <Button secondary size="small">
-                        Button
-                    </Button>
-                    <Button icon={Icons.circleAdd} size="small">
-                        Button
-                    </Button>
-                    <Button icon={Icons.circleAdd} secondary size="small">
-                        Button
-                    </Button>
-                    <Button disabled size="small">
-                        Button
-                    </Button>
-                    <Button disabled secondary size="small">
-                        Button
-                    </Button>
-                    <Button disabled icon={Icons.circleAdd} size="small">
-                        Button
-                    </Button>
-                    <Button disabled icon={Icons.circleAdd} secondary size="small">
-                        Button
-                    </Button>
-                </div>
-            </section>
-        </div>
+                </section>
+            </div>
+        </ContentContainer>
     );
 };
 
