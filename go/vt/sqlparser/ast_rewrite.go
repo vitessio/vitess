@@ -1655,6 +1655,11 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 			return true
 		}
 	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DeallocateStmt).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
 	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DeallocateStmt).Name = newNode.(ColIdent)
 	}) {
@@ -1971,6 +1976,11 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	}
 	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ExecuteStmt).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Comments = newNode.(Comments)
 	}) {
 		return false
 	}
@@ -3462,6 +3472,11 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}
 	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*PrepareStmt).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Comments = newNode.(Comments)
 	}) {
 		return false
 	}

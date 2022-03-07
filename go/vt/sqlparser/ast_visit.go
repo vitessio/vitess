@@ -946,6 +946,9 @@ func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
@@ -1091,6 +1094,9 @@ func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
 		return err
 	}
 	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitColumns(in.Arguments, f); err != nil {
@@ -1748,6 +1754,9 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 		return err
 	}
 	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	if err := VisitColIdent(in.StatementIdentifier, f); err != nil {

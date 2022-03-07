@@ -1191,6 +1191,7 @@ func (node *ExplainTab) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("prepare ")
+	node.Comments.formatFast(buf)
 	node.Name.formatFast(buf)
 	buf.WriteString(" from ")
 	if node.Statement != "" {
@@ -1203,6 +1204,7 @@ func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *ExecuteStmt) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("execute ")
+	node.Comments.formatFast(buf)
 	node.Name.formatFast(buf)
 	if len(node.Arguments) > 0 {
 		buf.WriteString(" using ")
@@ -1218,7 +1220,9 @@ func (node *ExecuteStmt) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *DeallocateStmt) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Type.ToString())
-	buf.WriteString(" prepare ")
+	buf.WriteByte(' ')
+	node.Comments.formatFast(buf)
+	buf.WriteString("prepare ")
 	node.Name.formatFast(buf)
 }
 
