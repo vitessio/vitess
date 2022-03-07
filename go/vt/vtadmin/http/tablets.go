@@ -99,6 +99,28 @@ func RunHealthCheck(ctx context.Context, r Request, api *API) *JSONResponse {
 	return NewJSONResponse(result, err)
 }
 
+// SetReadOnly sets the tablet to read only mode
+func SetReadOnly(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	result, err := api.server.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
+		Alias:      vars["tablet"],
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+
+	return NewJSONResponse(result, err)
+}
+
+// SetReadWrite sets the tablet to read write mode
+func SetReadWrite(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+	result, err := api.server.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
+		Alias:      vars["tablet"],
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+
+	return NewJSONResponse(result, err)
+}
+
 // StartReplication starts replication on the specified tablet.
 func StartReplication(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()

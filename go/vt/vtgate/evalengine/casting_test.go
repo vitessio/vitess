@@ -28,35 +28,35 @@ import (
 
 func TestEvalResultToBooleanStrict(t *testing.T) {
 	trueValues := []*EvalResult{{
-		type_:    sqltypes.Int64,
+		type_:    int16(sqltypes.Int64),
 		numeric_: 1,
 	}, {
-		type_:    sqltypes.Uint64,
+		type_:    int16(sqltypes.Uint64),
 		numeric_: 1,
 	}, {
-		type_:    sqltypes.Int8,
+		type_:    int16(sqltypes.Int8),
 		numeric_: 1,
 	}}
 
 	falseValues := []*EvalResult{{
-		type_:    sqltypes.Int64,
+		type_:    int16(sqltypes.Int64),
 		numeric_: 0,
 	}, {
-		type_:    sqltypes.Uint64,
+		type_:    int16(sqltypes.Uint64),
 		numeric_: 0,
 	}, {
-		type_:    sqltypes.Int8,
+		type_:    int16(sqltypes.Int8),
 		numeric_: 0,
 	}}
 
 	invalid := []*EvalResult{{
-		type_:  sqltypes.VarChar,
+		type_:  int16(sqltypes.VarChar),
 		bytes_: []byte("foobar"),
 	}, {
-		type_:    sqltypes.Float32,
+		type_:    int16(sqltypes.Float32),
 		numeric_: math.Float64bits(1.0),
 	}, {
-		type_:    sqltypes.Int64,
+		type_:    int16(sqltypes.Int64),
 		numeric_: 12,
 	}}
 

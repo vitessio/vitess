@@ -141,6 +141,8 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 					buf.WriteByte(')')
 				}
 			}
+		case 'd':
+			buf.WriteString(fmt.Sprintf("%d", values[fieldnum]))
 		case 'a':
 			buf.WriteArg("", values[fieldnum].(string))
 		default:

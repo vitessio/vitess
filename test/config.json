@@ -127,7 +127,7 @@
 			"Manual": false,
 			"Shard": "19",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_backups"]
 		},
 		"backup_transform": {
 			"File": "unused.go",
@@ -136,7 +136,7 @@
 			"Manual": false,
 			"Shard": "19",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_backups"]
 		},
 		"backup_transform_mysqlctld": {
 			"File": "unused.go",
@@ -397,6 +397,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"schemadiff_vrepl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/schemadiff/vrepl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "schemadiff_vrepl",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -704,6 +713,15 @@
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
 			"Tags": ["upgrade_downgrade_query_serving"]
+		},
+		"vtgate_queries_insert": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 2,
+			"Tags": []
 		},
 		"vtgate_buffer": {
 			"File": "unused.go",
@@ -1127,7 +1145,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"RetryMax": 2,
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_across_db_versions": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_across_db_versions",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_migrate": {

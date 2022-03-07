@@ -32,10 +32,12 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -150,6 +152,12 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		})
 		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
 			return e.plans.Evictions()
+		})
+		stats.NewCounterFunc("QueryPlanCacheHits", "Query plan cache hits", func() int64 {
+			return e.plans.Hits()
+		})
+		stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
+			return e.plans.Misses()
 		})
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
@@ -495,6 +503,23 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
+		default:
+			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
+				expr, err := sqlparser.ParseExpr(value)
+				if err != nil {
+					return err
+				}
+
+				evalExpr, err := evalengine.Translate(expr, nil)
+				if err != nil {
+					return err
+				}
+				evaluated, err := evalengine.EmptyExpressionEnv().Evaluate(evalExpr)
+				if err != nil {
+					return err
+				}
+				bindVars[key] = sqltypes.ValueBindVariable(evaluated.Value())
+			}
 		}
 	}
 
@@ -641,7 +666,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -704,7 +729,7 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 				return nil, err
 			}
 			return num, nil
-		case sqlparser.FloatVal:
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
 			num, err := strconv.ParseFloat(expr.Val, 64)
 			if err != nil {
 				return nil, err
@@ -1314,10 +1339,23 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
+	setVarComment, err := prepareSetVarComment(vcursor, stmt)
+	if err != nil {
+		return nil, err
+	}
 	// Normalize if possible and retry.
-	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
+	if e.canNormalizeStatement(stmt, qo, setVarComment) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit())
+		result, err := sqlparser.PrepareAST(
+			stmt,
+			reservedVars,
+			bindVars,
+			parameterize,
+			vcursor.keyspace,
+			qo.getSelectLimit(),
+			setVarComment,
+			vcursor.safeSession.SystemVariables,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1354,6 +1392,39 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
+	return (e.normalize && sqlparser.CanNormalize(stmt)) ||
+		sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) || setVarComment != ""
+}
+
+func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (string, error) {
+	if vcursor == nil || vcursor.Session().InReservedConn() {
+		return "", nil
+	}
+
+	if !vcursor.Session().HasSystemVariables() {
+		return "", nil
+	}
+
+	switch stmt.(type) {
+	// If the statement is a transaction statement or a set no reserved connection / SET_VAR is needed
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set:
+		return "", nil
+	case sqlparser.SupportOptimizerHint:
+		break
+	default:
+		vcursor.NeedsReservedConn()
+		return "", nil
+	}
+
+	var res strings.Builder
+	vcursor.Session().GetSystemVariables(func(k, v string) {
+		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
+	})
+	return strings.TrimSpace(res.String()), nil
 }
 
 func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
@@ -1445,7 +1516,7 @@ func buildVarCharFields(names ...string) []*querypb.Field {
 		fields[i] = &querypb.Field{
 			Name:    v,
 			Type:    sqltypes.VarChar,
-			Charset: mysql.CharacterSetUtf8,
+			Charset: collations.CollationUtf8ID,
 			Flags:   uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 		}
 	}
@@ -1655,7 +1726,7 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 		if !ok {
 			return false
 		}
-		return router.Opcode == engine.SelectScatter
+		return router.Opcode == engine.Scatter
 	}, plan.Instructions)
 
 	if badPrimitive == nil {

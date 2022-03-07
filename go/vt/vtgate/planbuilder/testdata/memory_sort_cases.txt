@@ -19,7 +19,7 @@
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -55,7 +55,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -93,7 +93,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -133,7 +133,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -173,7 +173,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -212,7 +212,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -241,11 +241,11 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1) AS k",
-        "GroupBy": "(2|3)",
+        "GroupBy": "(2|3) COLLATE latin1_swedish_ci",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -286,7 +286,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -297,7 +297,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -337,7 +337,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -348,7 +348,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -387,7 +387,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -402,7 +402,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -440,7 +440,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -455,7 +455,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -496,7 +496,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -511,7 +511,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -549,7 +549,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -564,7 +564,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -602,7 +602,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -613,7 +613,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -644,7 +644,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -655,7 +655,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -689,7 +689,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -700,7 +700,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -731,7 +731,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -742,7 +742,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -792,36 +792,20 @@ Gen4 plan same as above
 
 # unary expression
 "select a from user order by binary a desc"
+"unsupported: in scatter query: complex order by expression: convert(a, binary)"
 {
   "QueryType": "SELECT",
   "Original": "select a from user order by binary a desc",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, weight_string(a) from `user` where 1 != 1",
-    "OrderBy": "(0|1) DESC",
-    "Query": "select a, weight_string(a) from `user` order by binary a desc",
-    "ResultColumns": 1,
-    "Table": "`user`"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select a from user order by binary a desc",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select a, binary a, weight_string(binary a) from `user` where 1 != 1",
+    "FieldQuery": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` where 1 != 1",
     "OrderBy": "(1|2) DESC",
-    "Query": "select a, binary a, weight_string(binary a) from `user` order by binary a desc",
+    "Query": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` order by convert(a, binary) desc",
     "ResultColumns": 1,
     "Table": "`user`"
   }
@@ -829,6 +813,7 @@ Gen4 plan same as above
 
 # unary expression in join query
 "select u.a from user u join music m on u.a = m.a order by binary a desc"
+"unsupported: in scatter query: complex order by expression: convert(a, binary)"
 {
   "QueryType": "SELECT",
   "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
@@ -843,58 +828,19 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.a, weight_string(u.a) from `user` as u where 1 != 1",
-        "OrderBy": "(0|1) DESC",
-        "Query": "select u.a, weight_string(u.a) from `user` as u order by binary a desc",
-        "ResultColumns": 1,
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from music as m where 1 != 1",
-        "Query": "select 1 from music as m where m.a = :u_a",
-        "Table": "music"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "u_a": 0
-    },
-    "TableName": "`user`_music",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.a, binary a, weight_string(binary a) from `user` as u where 1 != 1",
+        "FieldQuery": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u where 1 != 1",
         "OrderBy": "(1|2) DESC",
-        "Query": "select u.a, binary a, weight_string(binary a) from `user` as u order by binary a desc",
+        "Query": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u order by convert(a, binary) desc",
         "Table": "`user`"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -914,7 +860,7 @@ Gen4 plan same as above
   "Original": "select id, intcol from user order by intcol",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -935,7 +881,7 @@ Gen4 plan same as above
   "Original": "select col from user order by id",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
 
@@ -86,8 +86,8 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 
 	utils.Exec(t, conn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4)")
 
-	_ = utils.Exec(t, conn, "SELECT /* GEN4_COMPARE_ONLY_GEN4 */ * FROM t1000") // test that the routed table is available to us
-	result := utils.Exec(t, conn, "SELECT /* GEN4_COMPARE_ONLY_GEN4 */ * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
+	_ = utils.Exec(t, conn, "SELECT /*vt+ PLANNER=gen4 */ * FROM t1000") // test that the routed table is available to us
+	result := utils.Exec(t, conn, "SELECT /*vt+ PLANNER=gen4 */ * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
 	assert.NotEmpty(t, result.Rows)
 }
 
@@ -98,7 +98,7 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	query := "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = 't7_fk' and rc.constraint_schema = database() and rc.table_name = 't7_fk'"
+	query := "select  fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk on fk.constraint_schema = rc.constraint_schema and fk.constraint_name = rc.constraint_name where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = 't7_fk' and rc.constraint_schema = database() and rc.table_name = 't7_fk'"
 	utils.AssertMatches(t, conn, query, `[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`)
 }
 

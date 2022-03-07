@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -45,21 +47,37 @@ func knownBadQuery(expr Expr) bool {
 
 var errKnownBadQuery = errors.New("this query is known to give bad results in MySQL")
 
-func testSingle(t *testing.T, query string) (EvalResult, error) {
+func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := ConvertEx(astExpr, dummyCollation(45), false)
+	converted, err := TranslateEx(astExpr, LookupDefaultCollation(collations.CollationUtf8mb4ID), simplify)
 	if err == nil {
 		if knownBadQuery(converted) {
-			return EvalResult{}, errKnownBadQuery
+			return nil, errKnownBadQuery
 		}
-		return noenv.Evaluate(converted)
+		return converted, nil
+	}
+	return nil, err
+}
+
+func testSingle(t *testing.T, query string) (EvalResult, error) {
+	converted, err := convert(t, query, true)
+	if err == nil {
+		return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).Evaluate(converted)
 	}
 	return EvalResult{}, err
+}
+
+func testSingleType(t *testing.T, query string) (sqltypes.Type, error) {
+	converted, err := convert(t, query, false)
+	if err == nil {
+		return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).TypeOf(converted)
+	}
+	return 0, err
 }
 
 func TestMySQLGolden(t *testing.T) {
@@ -118,24 +136,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT ((NULL, ("foo" >= -1), "FOO", NULL), "fOo", ("foo" < ("fOo", -1, "FOO", 0)), NULL) <=> (0, "foo", 0, NULL)`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
-}
-
-func TestDebug2(t *testing.T) {
-	// Debug
-	eval, err := testSingle(t, `SELECT ((("FOO" / "FOO") + -1) + (("foo", ((NULL, -1, 1, 1) * -1), ("foo", 0, NULL, NULL), "fOo") >= "foo")) + "fOo"`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
-}
-
-func TestDebug3(t *testing.T) {
-	// Debug
-	eval, err := testSingle(t, `SELECT (0, ("fOo" NOT LIKE ((NULL LIKE "foo"), "foo", -1, NULL)), "foo", "fOo") <=> "fOo"`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
-}
-
-func TestDebug4(t *testing.T) {
-	// Debug
-	eval, err := testSingle(t, `SELECT ("foo", (("foo" >= "fOo"), 0, ((1, (NULL >= "foo"), (1 LIKE "fOo"), "fOo"), "fOo", (-1 <=> "FOO"), 1), NULL), 0, 1) != ("FOO", ("FOO", 1, NULL, -1), 1, (NULL != NULL))`)
-	t.Logf("eval=%s err=%v", eval.Value(), err) // want value=""
+	eval, err := testSingleType(t, `SELECT --9223372036854775808`)
+	t.Logf("eval=%s err=%v", eval.String(), err) // want value=""
 }

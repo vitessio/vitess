@@ -20,8 +20,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import './style/components.css';
-
 :root {
     /* Greyscale */
     --grey75: #f8fafd;
@@ -231,4 +229,169 @@ table tbody td[rowSpan] {
 .Toastify__toast-theme--light,
 .Toastify__toast-theme--dark {
     background: none !important;
+}
+
+/* See https://tailwindcss.com/docs/extracting-components */
+@layer components {
+    .btn,
+    .btn:visited {
+        @apply bg-vtblue;
+        @apply border-2 border-vtblue;
+        @apply cursor-pointer;
+        @apply font-sans font-semibold;
+        @apply inline-block;
+        @apply leading-relaxed;
+        @apply outline-none;
+        @apply px-6 py-2;
+        @apply rounded-lg;
+        @apply text-center;
+        @apply text-white;
+        @apply select-none;
+        @apply whitespace-nowrap;
+        @apply w-min;
+
+        @apply focus:ring-vtblue-50;
+        @apply focus:ring-offset-1;
+        @apply focus:ring-2;
+
+        height: fit-content;
+        appearance: button;
+    }
+
+    .btn:disabled {
+        @apply cursor-not-allowed;
+
+        background: var(--colorDisabled);
+        border-color: var(--colorDisabled);
+    }
+
+    /* Size variants */
+    .btn-lg {
+        @apply px-8;
+        @apply leading-loose;
+        @apply text-lg;
+    }
+
+    .btn-sm {
+        @apply border;
+        @apply leading-snug;
+        @apply px-4 py-1;
+        @apply text-sm;
+    }
+
+    /* Implicit icon styling */
+    .btn svg {
+        @apply align-middle;
+        @apply fill-current;
+        @apply h-8;
+        @apply inline-block;
+        @apply -ml-2 mr-1;
+    }
+
+    .btn-lg svg {
+        @apply h-10;
+        @apply -ml-2 mr-2;
+    }
+
+    .btn-sm svg {
+        @apply h-6;
+        @apply -ml-3 mr-0;
+    }
+
+    /* Visual priority variants */
+    .btn-secondary,
+    .btn-secondary:visited {
+        @apply bg-transparent !important;
+        @apply text-vtblue;
+    }
+
+    .btn-secondary:disabled {
+        @apply text-vtblue;
+
+        color: var(--colorDisabled);
+    }
+
+    /* Intents (colours) */
+    .btn-danger,
+    .btn-danger:visited {
+        @apply focus:ring-danger-50;
+        @apply bg-danger;
+        @apply border-danger;
+    }
+
+    .btn-danger.btn-secondary:enabled,
+    .btn-danger.btn-secondary:visited {
+        @apply text-danger;
+    }
+
+    .btn-success,
+    .btn-success:visited {
+        @apply focus:ring-success-50;
+        @apply bg-success;
+        @apply border-success;
+    }
+
+    .btn-success.btn-secondary:enabled,
+    .btn-success.btn-secondary:visited {
+        @apply text-success;
+    }
+
+    .btn-warning,
+    .btn-warning:visited {
+        @apply focus:ring-warning-50;
+        @apply bg-warning;
+        @apply border-warning;
+    }
+
+    .btn-warning.btn-secondary:enabled,
+    .btn-warning.btn-secondary:visited {
+        @apply text-warning;
+    }
+
+    .toggle {
+        height: 19px;
+        width: 37px;
+        @apply relative;
+        @apply inline-flex;
+        @apply flex-shrink-0;
+        @apply border-2;
+        @apply border-transparent;
+        @apply rounded-full;
+        @apply cursor-pointer;
+        @apply transition-colors;
+        @apply ease-in-out;
+        @apply duration-200;
+        @apply focus:outline-none;
+    }
+
+    .toggle.on {
+        @apply bg-vtblue;
+    }
+
+    .toggle.off {
+        @apply bg-gray-400;
+    }
+
+    .toggle-button {
+        height: 15px;
+        width: 15px;
+        @apply pointer-events-none;
+        @apply inline-block;
+        @apply rounded-full;
+        @apply bg-white;
+        @apply shadow-lg;
+        @apply transform;
+        @apply ring-0;
+        @apply transition;
+        @apply ease-in-out;
+        @apply duration-200;
+    }
+
+    .toggle-button.on {
+        @apply translate-x-7;
+    }
+
+    .toggle-button.off {
+        @apply translate-x-0;
+    }
 }

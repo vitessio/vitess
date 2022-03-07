@@ -17,8 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -62,14 +61,14 @@ func makeboolean2(b, isNull bool) boolean {
 	return makeboolean(b)
 }
 
-func (b boolean) not() boolean {
-	switch b {
+func (left boolean) not() boolean {
+	switch left {
 	case boolFalse:
 		return boolTrue
 	case boolTrue:
 		return boolFalse
 	default:
-		return b
+		return left
 	}
 }
 
@@ -128,33 +127,28 @@ func (left boolean) xor(right boolean) boolean {
 func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var inner EvalResult
 	inner.init(env, n.Inner)
-	out.setBoolean(inner.truthy().not())
+	out.setBoolean(inner.isTruthy().not())
 }
 
-func (n *NotExpr) typeof(*ExpressionEnv) querypb.Type {
-	return querypb.Type_UINT64
-}
-
-func (n *NotExpr) collation() collations.TypedCollation {
-	return collationNumeric
+func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	_, flags := n.Inner.typeof(env)
+	return sqltypes.Uint64, flags
 }
 
 func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
 	var left, right EvalResult
 	left.init(env, l.Left)
 	right.init(env, l.Right)
-	if left.typeof() == querypb.Type_TUPLE || right.typeof() == querypb.Type_TUPLE {
+	if left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple {
 		panic("did not typecheck tuples")
 	}
-	out.setBoolean(l.op(left.truthy(), right.truthy()))
+	out.setBoolean(l.op(left.isTruthy(), right.isTruthy()))
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) querypb.Type {
-	return querypb.Type_UINT64
-}
-
-func (n *LogicalExpr) collation() collations.TypedCollation {
-	return collationNumeric
+func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	_, f1 := l.Left.typeof(env)
+	_, f2 := l.Right.typeof(env)
+	return sqltypes.Uint64, f1 | f2
 }
 
 // IsExpr represents the IS expression in MySQL.
@@ -165,18 +159,12 @@ type IsExpr struct {
 	Check func(*EvalResult) bool
 }
 
-var _ Expr = (*IsExpr)(nil)
-
 func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	var in EvalResult
 	in.init(env, i.Inner)
 	result.setBool(i.Check(&in))
 }
 
-func (i *IsExpr) typeof(env *ExpressionEnv) querypb.Type {
-	return querypb.Type_INT64
-}
-
-func (i *IsExpr) collation() collations.TypedCollation {
-	return collationNumeric
+func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	return sqltypes.Int64, 0
 }

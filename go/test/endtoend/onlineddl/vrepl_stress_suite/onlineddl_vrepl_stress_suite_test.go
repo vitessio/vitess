@@ -72,7 +72,7 @@ var (
 	evaluatedMysqlParams *mysql.ConnParams
 
 	directDDLStrategy     = "direct"
-	onlineDDLStrategy     = "online -vreplication-test-suite -skip-topo"
+	onlineDDLStrategy     = "vitess -vreplication-test-suite -skip-topo"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
@@ -664,9 +664,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			err = generateDelete(t, conn)
 		}
 		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce denied tables") {
-				err = nil
-			} else if strings.Contains(err.Error(), "doesn't exist") {
+			if strings.Contains(err.Error(), "doesn't exist") {
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}

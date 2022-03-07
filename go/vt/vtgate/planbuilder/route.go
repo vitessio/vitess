@@ -36,6 +36,7 @@ var _ logicalPlan = (*route)(nil)
 // are moved into this node, which will be used to build
 // the final SQL for this route.
 type route struct {
+	v3Plan
 	order int
 
 	// Redirect may point to another route if this route
@@ -65,9 +66,6 @@ type route struct {
 
 	// eroute is the primitive being built.
 	eroute *engine.Route
-
-	// tables keeps track of which tables this route is covering
-	tables semantics.TableSet
 }
 
 type tableSubstitution struct {
@@ -131,24 +129,6 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
-}
-
-// WireupGen4 implements the logicalPlan interface
-func (rb *route) WireupGen4(semTable *semantics.SemTable) error {
-	rb.prepareTheAST()
-
-	rb.eroute.Query = sqlparser.String(rb.Select)
-
-	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-	node := buffer.WriteNode(rb.Select)
-	query := node.ParsedQuery()
-	rb.eroute.FieldQuery = query.Query
-	return nil
-}
-
-// ContainsTables implements the logicalPlan interface
-func (rb *route) ContainsTables() semantics.TableSet {
-	return rb.tables
 }
 
 // Wireup implements the logicalPlan interface
@@ -272,7 +252,7 @@ func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr
 		joinVar := jt.Procure(plan, typedVal, rb.Order())
 		return evalengine.NewBindVar(joinVar, collations.TypedCollation{}), nil
 	default:
-		return evalengine.Convert(typedVal, semantics.EmptySemTable())
+		return evalengine.Translate(typedVal, semantics.EmptySemTable())
 	}
 }
 
@@ -395,14 +375,14 @@ func (rb *route) Inputs() []logicalPlan {
 // with the outer route.
 func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 	if rb.SubqueryCanMerge(pb, inner) {
-		if inner.eroute.Opcode == engine.SelectDBA && (len(inner.eroute.SysTableTableName) > 0 || len(inner.eroute.SysTableTableSchema) > 0) {
+		if inner.eroute.Opcode == engine.DBA && (len(inner.eroute.SysTableTableName) > 0 || len(inner.eroute.SysTableTableSchema) > 0) {
 			switch rb.eroute.Opcode {
-			case engine.SelectDBA, engine.SelectReference:
+			case engine.DBA, engine.Reference:
 				rb.eroute.SysTableTableSchema = append(rb.eroute.SysTableTableSchema, inner.eroute.SysTableTableSchema...)
 				for k, v := range inner.eroute.SysTableTableName {
 					rb.eroute.SysTableTableName[k] = v
 				}
-				rb.eroute.Opcode = engine.SelectDBA
+				rb.eroute.Opcode = engine.DBA
 			default:
 				return false
 			}
@@ -427,7 +407,7 @@ func (rb *route) MergeUnion(right *route, isDistinct bool) bool {
 
 func (rb *route) isSingleShard() bool {
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
+	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
 		return true
 	}
 	return false
@@ -440,24 +420,24 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
 		return false
 	}
-	if rrb.eroute.Opcode == engine.SelectReference {
+	if rrb.eroute.Opcode == engine.Reference {
 		// Any opcode can join with a reference table.
 		return true
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded:
+	case engine.Unsharded:
 		return rb.eroute.Opcode == rrb.eroute.Opcode
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		// Check if they target the same shard.
-		if rrb.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == rrb.eroute.Vindex && valEqual(rb.condition, rrb.condition) {
+		if rrb.eroute.Opcode == engine.EqualUnique && rb.eroute.Vindex == rrb.eroute.Vindex && valEqual(rb.condition, rrb.condition) {
 			return true
 		}
-	case engine.SelectReference:
+	case engine.Reference:
 		return true
-	case engine.SelectNext:
+	case engine.Next:
 		return false
-	case engine.SelectDBA:
-		if rrb.eroute.Opcode != engine.SelectDBA {
+	case engine.DBA:
+		if rrb.eroute.Opcode != engine.DBA {
 			return false
 		}
 		if where == nil {
@@ -482,19 +462,19 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 	}
 
 	// if either side is a reference table, we can just merge it and use the opcode of the other side
-	if rb.eroute.Opcode == engine.SelectReference || inner.eroute.Opcode == engine.SelectReference {
+	if rb.eroute.Opcode == engine.Reference || inner.eroute.Opcode == engine.Reference {
 		return true
 	}
 
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA:
+	case engine.Unsharded, engine.DBA:
 		return rb.eroute.Opcode == inner.eroute.Opcode
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		// Check if they target the same shard.
-		if inner.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == inner.eroute.Vindex && valEqual(rb.condition, inner.condition) {
+		if inner.eroute.Opcode == engine.EqualUnique && rb.eroute.Vindex == inner.eroute.Vindex && valEqual(rb.condition, inner.condition) {
 			return true
 		}
-	case engine.SelectNext:
+	case engine.Next:
 		return false
 	}
 
@@ -512,22 +492,22 @@ func (rb *route) unionCanMerge(other *route, distinct bool) bool {
 		return false
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectReference:
+	case engine.Unsharded, engine.Reference:
 		return rb.eroute.Opcode == other.eroute.Opcode
-	case engine.SelectDBA:
-		return other.eroute.Opcode == engine.SelectDBA &&
+	case engine.DBA:
+		return other.eroute.Opcode == engine.DBA &&
 			len(rb.eroute.SysTableTableSchema) == 0 &&
 			len(rb.eroute.SysTableTableName) == 0 &&
 			len(other.eroute.SysTableTableSchema) == 0 &&
 			len(other.eroute.SysTableTableName) == 0
-	case engine.SelectEqualUnique:
+	case engine.EqualUnique:
 		// Check if they target the same shard.
-		if other.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == other.eroute.Vindex && valEqual(rb.condition, other.condition) {
+		if other.eroute.Opcode == engine.EqualUnique && rb.eroute.Vindex == other.eroute.Vindex && valEqual(rb.condition, other.condition) {
 			return true
 		}
-	case engine.SelectScatter:
-		return other.eroute.Opcode == engine.SelectScatter && !distinct
-	case engine.SelectNext:
+	case engine.Scatter:
+		return other.eroute.Opcode == engine.Scatter && !distinct
+	case engine.Next:
 		return false
 	}
 	return false
@@ -568,66 +548,66 @@ func (rb *route) canMergeOnFilter(pb *primitiveBuilder, rrb *route, filter sqlpa
 func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	switch rb.eroute.Opcode {
 	// For these opcodes, a new filter will not make any difference, so we can just exit early
-	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone:
+	case engine.Unsharded, engine.Next, engine.DBA, engine.Reference, engine.None:
 		return
 	}
 	opcode, vindex, values := rb.computePlan(pb, filter)
-	if opcode == engine.SelectScatter {
+	if opcode == engine.Scatter {
 		return
 	}
 	// If we get SelectNone in next filters, override the previous route plan.
-	if opcode == engine.SelectNone {
+	if opcode == engine.None {
 		rb.updateRoute(opcode, vindex, values)
 		return
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectEqualUnique:
-		if opcode == engine.SelectEqualUnique && vindex.Cost() < rb.eroute.Vindex.Cost() {
+	case engine.EqualUnique:
+		if opcode == engine.EqualUnique && vindex.Cost() < rb.eroute.Vindex.Cost() {
 			rb.updateRoute(opcode, vindex, values)
 		}
-	case engine.SelectEqual:
+	case engine.Equal:
 		switch opcode {
-		case engine.SelectEqualUnique:
+		case engine.EqualUnique:
 			rb.updateRoute(opcode, vindex, values)
-		case engine.SelectEqual:
+		case engine.Equal:
 			if vindex.Cost() < rb.eroute.Vindex.Cost() {
 				rb.updateRoute(opcode, vindex, values)
 			}
 		}
-	case engine.SelectIN:
+	case engine.IN:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual:
+		case engine.EqualUnique, engine.Equal:
 			rb.updateRoute(opcode, vindex, values)
-		case engine.SelectIN:
+		case engine.IN:
 			if vindex.Cost() < rb.eroute.Vindex.Cost() {
 				rb.updateRoute(opcode, vindex, values)
 			}
 		}
-	case engine.SelectMultiEqual:
+	case engine.MultiEqual:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN:
+		case engine.EqualUnique, engine.Equal, engine.IN:
 			rb.updateRoute(opcode, vindex, values)
-		case engine.SelectMultiEqual:
+		case engine.MultiEqual:
 			if vindex.Cost() < rb.eroute.Vindex.Cost() {
 				rb.updateRoute(opcode, vindex, values)
 			}
 		}
-	case engine.SelectScatter:
+	case engine.Scatter:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectMultiEqual, engine.SelectNone:
+		case engine.EqualUnique, engine.Equal, engine.IN, engine.MultiEqual, engine.None:
 			rb.updateRoute(opcode, vindex, values)
 		}
 	}
 }
 
-func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) updateRoute(opcode engine.Opcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	rb.eroute.Opcode = opcode
 	rb.eroute.Vindex = vindex
 	rb.condition = condition
 }
 
 // computePlan computes the plan for the specified filter.
-func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.Opcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -643,40 +623,40 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 	case *sqlparser.IsExpr:
 		return rb.computeISPlan(pb, node)
 	}
-	return engine.SelectScatter, nil, nil
+	return engine.Scatter, nil, nil
 }
 
 // computeLikePlan computes the plan for 'LIKE' constraint
-func (rb *route) computeLikePlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computeLikePlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.Opcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 
 	left := comparison.Left
 	right := comparison.Right
 
 	if sqlparser.IsNull(right) {
-		return engine.SelectNone, nil, nil
+		return engine.None, nil, nil
 	}
 	if !rb.exprIsValue(right) {
-		return engine.SelectScatter, nil, nil
+		return engine.Scatter, nil, nil
 	}
 	vindex = pb.st.Vindex(left, rb)
 	if vindex == nil {
 		// if there is no vindex defined, scatter
-		return engine.SelectScatter, nil, nil
+		return engine.Scatter, nil, nil
 	}
 	if subsharding, ok := vindex.(vindexes.Prefixable); ok {
-		return engine.SelectEqual, subsharding.PrefixVindex(), right
+		return engine.Equal, subsharding.PrefixVindex(), right
 	}
 
-	return engine.SelectScatter, nil, nil
+	return engine.Scatter, nil, nil
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.Opcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
 
 	if sqlparser.IsNull(right) {
-		return engine.SelectNone, nil, nil
+		return engine.None, nil, nil
 	}
 
 	vindex = pb.st.Vindex(left, rb)
@@ -684,73 +664,73 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 		left, right = right, left
 		vindex = pb.st.Vindex(left, rb)
 		if vindex == nil {
-			return engine.SelectScatter, nil, nil
+			return engine.Scatter, nil, nil
 		}
 	}
 	if !rb.exprIsValue(right) {
-		return engine.SelectScatter, nil, nil
+		return engine.Scatter, nil, nil
 	}
 	if vindex.IsUnique() {
-		return engine.SelectEqualUnique, vindex, right
+		return engine.EqualUnique, vindex, right
 	}
-	return engine.SelectEqual, vindex, right
+	return engine.Equal, vindex, right
 }
 
 // computeIS computes the plan for an equality constraint.
-func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
+func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.Opcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
 	if comparison.Right != sqlparser.IsNullOp {
-		return engine.SelectScatter, nil, nil
+		return engine.Scatter, nil, nil
 	}
 
 	vindex = pb.st.Vindex(comparison.Left, rb)
 	// fallback to scatter gather if there is no vindex
 	if vindex == nil {
-		return engine.SelectScatter, nil, nil
+		return engine.Scatter, nil, nil
 	}
 	if vindex.IsUnique() {
-		return engine.SelectEqualUnique, vindex, &sqlparser.NullVal{}
+		return engine.EqualUnique, vindex, &sqlparser.NullVal{}
 	}
-	return engine.SelectEqual, vindex, &sqlparser.NullVal{}
+	return engine.Equal, vindex, &sqlparser.NullVal{}
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
+func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.Opcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	switch comparison.Left.(type) {
 	case *sqlparser.ColName:
 		return rb.computeSimpleINPlan(pb, comparison)
 	case sqlparser.ValTuple:
 		return rb.computeCompositeINPlan(pb, comparison)
 	}
-	return engine.SelectScatter, nil, nil
+	return engine.Scatter, nil, nil
 }
 
 // computeSimpleINPlan computes the plan for a simple IN constraint.
-func (rb *route) computeSimpleINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
+func (rb *route) computeSimpleINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.Opcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	vindex = pb.st.Vindex(comparison.Left, rb)
 	if vindex == nil {
-		return engine.SelectScatter, nil, nil
+		return engine.Scatter, nil, nil
 	}
 	switch node := comparison.Right.(type) {
 	case sqlparser.ValTuple:
 		if len(node) == 1 && sqlparser.IsNull(node[0]) {
-			return engine.SelectNone, nil, nil
+			return engine.None, nil, nil
 		}
 
 		for _, n := range node {
 			if !rb.exprIsValue(n) {
-				return engine.SelectScatter, nil, nil
+				return engine.Scatter, nil, nil
 			}
 		}
-		return engine.SelectIN, vindex, comparison
+		return engine.IN, vindex, comparison
 	case sqlparser.ListArg:
-		return engine.SelectIN, vindex, comparison
+		return engine.IN, vindex, comparison
 	}
-	return engine.SelectScatter, nil, nil
+	return engine.Scatter, nil, nil
 }
 
 // computeCompositeINPlan computes the plan for a composite IN constraint.
-func (rb *route) computeCompositeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+func (rb *route) computeCompositeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.Opcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
 	leftTuple := comparison.Left.(sqlparser.ValTuple)
 	return rb.iterateCompositeIN(pb, comparison, nil, leftTuple)
 }
@@ -763,8 +743,8 @@ func (rb *route) iterateCompositeIN(
 	comparison *sqlparser.ComparisonExpr,
 	coordinates []int,
 	tuple sqlparser.ValTuple,
-) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
-	opcode = engine.SelectScatter
+) (opcode engine.Opcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+	opcode = engine.Scatter
 
 	cindex := len(coordinates)
 	coordinates = append(coordinates, 0)
@@ -787,23 +767,23 @@ func (rb *route) iterateCompositeIN(
 
 // compositePlanForCol builds a plan for a matched column in the LHS
 // of a composite IN clause.
-func (rb *route) compositePlanForCol(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int) (opcode engine.RouteOpcode, values sqlparser.Expr) {
+func (rb *route) compositePlanForCol(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int) (opcode engine.Opcode, values sqlparser.Expr) {
 	rightTuple, ok := comparison.Right.(sqlparser.ValTuple)
 	if !ok {
-		return engine.SelectScatter, nil
+		return engine.Scatter, nil
 	}
 	retVal := make(sqlparser.ValTuple, len(rightTuple))
 	for i, rval := range rightTuple {
 		val := tupleAccess(rval, coordinates)
 		if val == nil {
-			return engine.SelectScatter, nil
+			return engine.Scatter, nil
 		}
 		if !rb.exprIsValue(val) {
-			return engine.SelectScatter, nil
+			return engine.Scatter, nil
 		}
 		retVal[i] = val
 	}
-	return engine.SelectMultiEqual, retVal
+	return engine.MultiEqual, retVal
 }
 
 // tupleAccess returns the value of the expression that corresponds
@@ -821,11 +801,11 @@ func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
 }
 
 // bestOfComposite returns the best of two composite IN clause plans.
-func bestOfComposite(opcode1, opcode2 engine.RouteOpcode, vindex1, vindex2 vindexes.SingleColumn, values1, values2 sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
-	if opcode1 == engine.SelectScatter {
+func bestOfComposite(opcode1, opcode2 engine.Opcode, vindex1, vindex2 vindexes.SingleColumn, values1, values2 sqlparser.Expr) (opcode engine.Opcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+	if opcode1 == engine.Scatter {
 		return opcode2, vindex2, values2
 	}
-	if opcode2 == engine.SelectScatter {
+	if opcode2 == engine.Scatter {
 		return opcode1, vindex1, values1
 	}
 	if vindex1.Cost() < vindex2.Cost() {
@@ -835,17 +815,17 @@ func bestOfComposite(opcode1, opcode2 engine.RouteOpcode, vindex1, vindex2 vinde
 }
 
 // computeNotInPlan looks for null values to produce a SelectNone if found
-func (rb *route) computeNotInPlan(right sqlparser.Expr) engine.RouteOpcode {
+func (rb *route) computeNotInPlan(right sqlparser.Expr) engine.Opcode {
 	switch node := right.(type) {
 	case sqlparser.ValTuple:
 		for _, n := range node {
 			if sqlparser.IsNull(n) {
-				return engine.SelectNone
+				return engine.None
 			}
 		}
 	}
 
-	return engine.SelectScatter
+	return engine.Scatter
 }
 
 // exprIsValue returns true if the expression can be treated as a value

@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
@@ -476,6 +478,7 @@ func shouldIgnoreQuery(query string) bool {
 	queriesToIgnore := []string{
 		"_vt.vreplication_log", // ignore all selects, updates and inserts into this table
 		"@@session.sql_mode",   // ignore all selects, and sets of this variable
+		", time_heartbeat=",    // update of last heartbeat time, can happen out-of-band, so can't test for it
 	}
 	for _, q := range queriesToIgnore {
 		if strings.Contains(query, q) {
@@ -488,6 +491,7 @@ func shouldIgnoreQuery(query string) bool {
 func expectDBClientQueries(t *testing.T, queries []string, skippableOnce ...string) {
 	extraQueries := withDDL.DDLs()
 	extraQueries = append(extraQueries, withDDLInitialQueries...)
+	extraQueries = append(extraQueries, withddl.QueryToTriggerWithDDL)
 	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
@@ -560,6 +564,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 	failed := false
 
 	skipQueries := withDDLInitialQueries
+	skipQueries = append(skipQueries, withDDL.DDLs()...)
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)

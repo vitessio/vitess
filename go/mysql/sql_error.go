@@ -195,6 +195,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
+	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
 }
 
 func init() {

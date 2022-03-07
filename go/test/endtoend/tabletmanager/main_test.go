@@ -25,10 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -56,7 +53,8 @@ var (
 		id bigint,
 		value varchar(16),
 		primary key(id)
-	) Engine=InnoDB;
+	) Engine=InnoDB DEFAULT CHARSET=utf8;
+	CREATE VIEW v1 AS SELECT id, value FROM t1;
 `
 
 	vSchema = `
@@ -158,13 +156,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
-}
-
 func tmcLockTables(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
 	return tmClient.LockTables(ctx, vtablet)
@@ -182,7 +173,7 @@ func tmcStopReplication(ctx context.Context, tabletGrpcPort int) error {
 
 func tmcStartReplication(ctx context.Context, tabletGrpcPort int) error {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.StartReplication(ctx, vtablet)
+	return tmClient.StartReplication(ctx, vtablet, false)
 }
 
 func tmcPrimaryPosition(ctx context.Context, tabletGrpcPort int) (string, error) {

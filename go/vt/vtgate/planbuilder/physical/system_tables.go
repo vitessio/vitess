@@ -56,9 +56,9 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		if cmp.Operator == sqlparser.EqualOp {
 			isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
 			if col != nil && shouldRewrite(other) {
-				evalExpr, err := evalengine.Convert(other, &notImplementedSchemaInfoConverter{})
+				evalExpr, err := evalengine.Translate(other, &notImplementedSchemaInfoConverter{})
 				if err != nil {
-					if strings.Contains(err.Error(), evalengine.ErrConvertExprNotSupported) {
+					if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 						// This just means we can't rewrite this particular expression,
 						// not that we have to exit altogether
 						return false, "", nil, nil
@@ -125,6 +125,10 @@ func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (in
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not yet supported")
 }
 
-func (f *notImplementedSchemaInfoConverter) CollationIDLookup(sqlparser.Expr) collations.ID {
-	return 0
+func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {
+	return collations.Unknown
+}
+
+func (f *notImplementedSchemaInfoConverter) DefaultCollation() collations.ID {
+	return collations.Default()
 }

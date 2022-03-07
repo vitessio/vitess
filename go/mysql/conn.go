@@ -182,24 +182,33 @@ type Conn struct {
 	// by Handler methods.
 	StatusFlags uint16
 
-	// CharacterSet is the character set used by the other side of the
-	// connection.
-	// It is set during the initial handshake.
-	// See the values in constants.go.
-	CharacterSet uint8
-
-	// Collation defines the collation for this connection, it has the same
-	// value as the collation_connection variable of MySQL.
-	// Its value is set after we send the initial "SET collation_connection"
-	// query to MySQL after the handshake is done.
-	Collation collations.ID
+	// CharacterSet is the charset for this connection, as negotiated
+	// in our handshake with the server. Note that although the MySQL protocol lists this
+	// as a "character set", the returned byte value is actually a Collation ID,
+	// and hence it's casted as such here.
+	// If the user has specified a custom Collation in the ConnParams for this
+	// connection, once the CharacterSet has been negotiated, we will override
+	// it via SQL and update this field accordingly.
+	CharacterSet collations.ID
 
 	// Packet encoding variables.
 	sequence uint8
+
+	// ExpectSemiSyncIndicator is applicable when the connection is used for replication (ComBinlogDump).
+	// When 'true', events are assumed to be padded with 2-byte semi-sync information
+	// See https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
+	ExpectSemiSyncIndicator bool
+
+	// ReturnQueryInfo sets whether the *Result objects from queries performed by this
+	// connection should include the 'info' field that MySQL usually returns. This 'info'
+	// field usually contains a human-readable text description of the executed query
+	// for informative purposes. It has no programmatic value. Returning this field is
+	// disabled by default.
+	ReturnQueryInfo bool
 }
 
-// splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
-var splitStatementFunction func(blob string) (pieces []string, err error) = sqlparser.SplitStatementToPieces
+// splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
+var splitStatementFunction = sqlparser.SplitStatementToPieces
 
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
@@ -909,7 +918,8 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
-
+	case ComBinlogDumpGTID:
+		return c.handleComBinlogDumpGTID(handler, data)
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -917,6 +927,27 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			return false
 		}
 	}
+
+	return true
+}
+
+func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
+	defer c.recycleReadPacket()
+
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	_, _, position, err := c.parseComBinlogDumpGTID(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		kontinue = false
+	}
+	handler.ComBinlogDumpGTID(c, position.GTIDSet)
 
 	return true
 }
@@ -1424,10 +1455,13 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	}
 	packetOK.warnings = warnings
 
-	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
-		// info
-		info, _ := data.readLenEncInfo()
+	// info
+	info, _ := data.readLenEncInfo()
+	if c.ReturnQueryInfo {
 		packetOK.info = info
+	}
+
+	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			_, ok := data.readLenEncInt()
@@ -1455,10 +1489,6 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			}
 			packetOK.sessionStateData = gtids
 		}
-	} else {
-		// info
-		info, _ := data.readLenEncInfo()
-		packetOK.info = info
 	}
 
 	return packetOK, nil

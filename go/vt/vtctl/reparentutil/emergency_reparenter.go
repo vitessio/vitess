@@ -139,11 +139,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	ersCounter.Add(1)
 
 	var (
+		stoppedReplicationSnapshot *replicationSnapshot
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
-		statusMap                  map[string]*replicationdatapb.StopReplicationStatus
-		primaryStatusMap           map[string]*replicationdatapb.PrimaryStatus
 		validCandidates            map[string]mysql.Position
 		intermediateSource         *topodatapb.Tablet
 		validCandidateTablets      []*topodatapb.Tablet
@@ -177,7 +176,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	statusMap, primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
+	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -189,7 +188,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// find the valid candidates for becoming the primary
 	// this is where we check for errant GTIDs and remove the tablets that have them from consideration
-	validCandidates, err = FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
+	validCandidates, err = FindValidEmergencyReparentCandidates(stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
 	if err != nil {
 		return err
 	}
@@ -202,7 +201,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Wait for all candidates to apply relay logs
-	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, statusMap, opts.WaitReplicasTimeout); err != nil {
+	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
 	}
 
@@ -211,13 +210,25 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// In case the user has specified a tablet specifically, then it is selected, as long as it is the most advanced.
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
+	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
 	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
 	erp.logger.Infof("intermediate source selected - %v", intermediateSource.Alias)
 
-	// check weather the intermediate source candidate selected is ideal or if it can be improved later
+	// After finding the intermediate source, we want to filter the valid candidate list by the following criteria -
+	// 1. Only keep the tablets which can make progress after being promoted (have sufficient reachable semi-sync ackers)
+	// 2. Remove the tablets with the Must_not promote rule
+	// 3. Remove cross-cell tablets if PreventCrossCellPromotion is specified
+	// Our final primary candidate MUST belong to this list of valid candidates
+	validCandidateTablets, err = erp.filterValidCandidates(validCandidateTablets, stoppedReplicationSnapshot.reachableTablets, prevPrimary, opts)
+	if err != nil {
+		return err
+	}
+
+	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
+	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
 	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
@@ -234,8 +245,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if !isIdeal {
 		// we now reparent all the tablets to start replicating from the intermediate source
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
-		// it also returns the list of the tablets that started replication successfully including itself. These are the candidates that we can use to find a replacement
-		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, statusMap, opts)
+		// it also returns the list of the tablets that started replication successfully including itself part of the validCandidateTablets list.
+		// These are the candidates that we can use to find a replacement.
+		validReplacementCandidates, err = erp.promoteIntermediateSource(ctx, ev, intermediateSource, tabletMap, stoppedReplicationSnapshot.statusMap, validCandidateTablets, opts)
 		if err != nil {
 			return err
 		}
@@ -258,27 +270,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
-	// now we check if all the constraints are satisfied. If they are not, then we should exit
-	constraintFailure := erp.checkIfConstraintsSatisfied(newPrimary, prevPrimary, opts)
-	if constraintFailure != nil {
-		erp.logger.Errorf("have to override promotion because of constraint failure - %v", constraintFailure)
-		// we want to send both the errors to the user, constraint failure and also any error encountered in undoing the promotion
-		defer func() {
-			if err != nil {
-				err = vterrors.Errorf(vtrpc.Code_ABORTED, "error in undoing promotion - %v, constraint failure - %v", err, constraintFailure)
-			} else {
-				err = constraintFailure
-			}
-		}()
-		// we now try to undo are changes. We can do so by promoting the previous primary instead of the new one we selected
-		if prevPrimary == nil {
-			return vterrors.Errorf(vtrpc.Code_ABORTED, "could not undo promotion, since shard record has no primary information")
-		}
-		newPrimary = prevPrimary
-	}
+	// The new primary which will be promoted will always belong to the validCandidateTablets list because -
+	// 	1. 	if the intermediate source is ideal - then we know the intermediate source was in the validCandidateTablets list
+	// 		since we used that list
+	//	2. 	if the intermediate source isn't ideal - we take the intersection of the validCandidateTablets list and the one we
+	//		were able to reach during the promotion of intermediate source, as possible candidates. So the final candidate (even if
+	//		it is the intermediate source itself) will belong to the list
+	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	err = erp.promoteNewPrimary(ctx, ev, newPrimary, opts, tabletMap, statusMap)
+	err = erp.promoteNewPrimary(ctx, ev, newPrimary, opts, tabletMap, stoppedReplicationSnapshot.statusMap)
 	if err != nil {
 		return err
 	}
@@ -303,7 +304,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	waiterCount := 0
 
 	for candidate := range validCandidates {
-		// When we called StopReplicationAndBuildStatusMaps, we got back two
+		// When we called stopReplicationAndBuildStatusMaps, we got back two
 		// maps: (1) the StopReplicationStatus of any replicas that actually
 		// stopped replication; and (2) the PrimaryStatus of anything that
 		// returned ErrNotReplica, which is a tablet that is either the current
@@ -417,17 +418,28 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 	source *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	validCandidateTablets []*topodatapb.Tablet,
 	opts EmergencyReparentOptions,
 ) ([]*topodatapb.Tablet, error) {
 	// we reparent all the other tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	validCandidatesForImprovement, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
 	if err != nil {
 		return nil, err
 	}
 
 	// also include the current tablet for being considered as part of valid candidates for ERS promotion
-	validCandidatesForImprovement = append(validCandidatesForImprovement, source)
+	reachableTablets = append(reachableTablets, source)
+
+	// The only valid candidates for improvement are the ones which are reachable and part of the valid candidate list.
+	// Here we need to be careful not to mess up the ordering of tablets in validCandidateTablets, since the list is sorted by the
+	// replication positions.
+	var validCandidatesForImprovement []*topodatapb.Tablet
+	for _, tablet := range validCandidateTablets {
+		if topoproto.IsTabletInList(tablet, reachableTablets) {
+			validCandidatesForImprovement = append(validCandidatesForImprovement, tablet)
+		}
+	}
 	return validCandidatesForImprovement, nil
 }
 
@@ -499,7 +511,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart)
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(newPrimaryTablet, ti.Tablet))
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -619,6 +631,10 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 		}
 	}()
 
+	if len(validCandidates) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
+	}
+
 	if opts.NewPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
@@ -689,19 +705,8 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 		}
 	}
 
-	// return the one that we have if nothing is found
-	return intermediateSource, nil
-}
-
-// checkIfConstraintsSatisfied is used to check whether the constraints for ERS are satisfied or not.
-func (erp *EmergencyReparenter) checkIfConstraintsSatisfied(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
-	if opts.PreventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
-		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
-	}
-	if PromotionRule(newPrimary) == promotionrule.MustNot {
-		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy promotion rule constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
-	}
-	return nil
+	// return any valid tablet
+	return findCandidateAnyCell(intermediateSource, validCandidates), nil
 }
 
 func (erp *EmergencyReparenter) promoteNewPrimary(
@@ -716,11 +721,11 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	if ev.ShardInfo.PrimaryAlias == nil {
 		erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", newPrimary.Alias)
 		// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
-		_, err = erp.tmc.InitPrimary(ctx, newPrimary)
+		_, err = erp.tmc.InitPrimary(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
 	} else {
 		erp.logger.Infof("starting promotion for the new primary - %v", newPrimary.Alias)
 		// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-		_, err = erp.tmc.PromoteReplica(ctx, newPrimary)
+		_, err = erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
 	}
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
@@ -732,4 +737,38 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 		return err
 	}
 	return nil
+}
+
+// filterValidCandidates filters valid tablets, keeping only the ones which can successfully be promoted without any constraint failures and can make forward progress on being promoted
+func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
+	var restrictedValidTablets []*topodatapb.Tablet
+	for _, tablet := range validTablets {
+		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
+		// Remove tablets which have MustNot promote rule since they must never be promoted
+		if PromotionRule(tablet) == promotionrule.MustNot {
+			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it has the Must Not promote rule", tabletAliasStr)
+			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s has a must not promotion rule", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+			}
+			continue
+		}
+		// If ERS is configured to prevent cross cell promotions, remove any tablet not from the same cell as the previous primary
+		if opts.PreventCrossCellPromotion && prevPrimary != nil && tablet.Alias.Cell != prevPrimary.Alias.Cell {
+			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it isn't in the same cell as the previous primary", tabletAliasStr)
+			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is is a different cell as the previous primary", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+			}
+			continue
+		}
+		// Remove any tablet which cannot make forward progress using the list of tablets we have reached
+		if !canEstablishForTablet(tablet, tabletsReachable) {
+			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it will not be able to make forward progress on promotion with the tablets currently reachable", tabletAliasStr)
+			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s will not be able to make forward progress on being promoted", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+			}
+			continue
+		}
+		restrictedValidTablets = append(restrictedValidTablets, tablet)
+	}
+	return restrictedValidTablets, nil
 }

@@ -27,6 +27,7 @@ import "topodata.proto";
 import "replicationdata.proto";
 import "logutil.proto";
 import "vttime.proto";
+import "vtrpc.proto";
 
 //
 // Data structures
@@ -161,6 +162,7 @@ message SetReadWriteResponse {
 
 message ChangeTypeRequest {
   topodata.TabletType tablet_type = 1;
+  bool semiSync = 2;
 }
 
 message ChangeTypeResponse {
@@ -176,13 +178,6 @@ message RunHealthCheckRequest {
 }
 
 message RunHealthCheckResponse {
-}
-
-message IgnoreHealthErrorRequest {
-  string pattern = 1;
-}
-
-message IgnoreHealthErrorResponse {
 }
 
 message ReloadSchemaRequest {
@@ -235,6 +230,9 @@ message ExecuteQueryRequest {
   bytes query = 1;
   string db_name = 2;
   uint64 max_rows = 3;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 4;
 }
 
 message ExecuteQueryResponse {
@@ -317,6 +315,7 @@ message StopReplicationMinimumResponse {
 }
 
 message StartReplicationRequest {
+  bool semiSync = 1;
 }
 
 message StartReplicationResponse {
@@ -360,6 +359,7 @@ message VReplicationWaitForPosResponse {
 }
 
 message InitPrimaryRequest {
+  bool semiSync = 1;
 }
 
 message InitPrimaryResponse {
@@ -380,6 +380,7 @@ message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
   int64 time_created_ns = 3;
+  bool semiSync = 4;
 }
 
 message InitReplicaResponse {
@@ -397,6 +398,7 @@ message DemotePrimaryResponse {
 }
 
 message UndoDemotePrimaryRequest {
+  bool semiSync = 1;
 }
 
 message UndoDemotePrimaryResponse {
@@ -413,6 +415,7 @@ message SetReplicationSourceRequest {
   int64 time_created_ns = 2;
   bool force_start_replication = 3;
   string wait_position = 4;
+  bool semiSync = 5;
 }
 
 message SetReplicationSourceResponse {
@@ -441,6 +444,7 @@ message StopReplicationAndGetStatusResponse {
 }
 
 message PromoteReplicaRequest {
+  bool semiSync = 1;
 }
 
 message PromoteReplicaResponse {

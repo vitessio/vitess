@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
@@ -884,6 +885,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		return false, nil, nil
 	}
 	values := make([]sqltypes.Value, dataColumns.Count())
+	charsets := make([]collations.ID, len(values))
 	valueIndex := 0
 	pos := 0
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
@@ -902,11 +904,12 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
+		charsets[colNum] = collations.ID(plan.Table.Fields[colNum].Charset)
 		values[colNum] = value
 		valueIndex++
 	}
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
-	ok, err := plan.filter(values, filtered)
+	ok, err := plan.filter(values, filtered, charsets)
 	return ok, filtered, err
 }
 

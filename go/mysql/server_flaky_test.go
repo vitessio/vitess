@@ -67,6 +67,7 @@ var selectRowsResult = &sqltypes.Result{
 }
 
 type testHandler struct {
+	UnimplementedHandler
 	mu       sync.Mutex
 	lastConn *Conn
 	result   *sqltypes.Result
@@ -108,12 +109,6 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.lastConn = c
-}
-
-func (th *testHandler) ConnectionReady(_ *Conn) {
-}
-
-func (th *testHandler) ConnectionClosed(_ *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -230,9 +225,8 @@ func (th *testHandler) ComPrepare(c *Conn, query string, bindVars map[string]*qu
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	return nil
 }
-
-func (th *testHandler) ComResetConnection(c *Conn) {
-
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
+	return nil
 }
 
 func (th *testHandler) WarningCount(c *Conn) uint16 {

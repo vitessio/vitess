@@ -83,6 +83,7 @@ var (
 // LaunchCluster : starts the cluster as per given params.
 func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
+	localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "-durability_policy=semi_sync")
 
 	// Start topo server
 	err := localCluster.StartTopo()
@@ -672,15 +673,22 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, 25*time.Second)
 		require.Nil(t, err)
 	}
+	// We restart replication here because semi-sync will not be set correctly on tablet startup since
+	// we deprecated enable_semi_sync. StartReplication RPC fixes the semi-sync settings by consulting the
+	// durability policies set.
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", tablet.Alias)
+	require.NoError(t, err)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StartReplication", tablet.Alias)
+	require.NoError(t, err)
 
 	if tablet.Type == "replica" {
-		verifyReplicationStatus(t, tablet, "ON")
+		verifySemiSyncStatus(t, tablet, "ON")
 	} else if tablet.Type == "rdonly" {
-		verifyReplicationStatus(t, tablet, "OFF")
+		verifySemiSyncStatus(t, tablet, "OFF")
 	}
 }
 
-func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
+func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 	require.Nil(t, err)
 	assert.Equal(t, status, expectedStatus)

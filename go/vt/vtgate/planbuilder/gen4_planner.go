@@ -17,20 +17,20 @@ limitations under the License.
 package planbuilder
 
 import (
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ selectPlanner = gen4Planner
+var _ selectPlanner = gen4Planner("apa", 0)
 
-func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
+func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) selectPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
 		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
@@ -63,7 +63,7 @@ func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars
 		}
 
 		getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
-			return newBuildSelectPlan(selStatement, reservedVars, vschema)
+			return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 		}
 
 		plan, err := getPlan(selStatement)
@@ -106,7 +106,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 }
 
 func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
-	plan, err := newBuildSelectPlan(sel, reservedVars, vschema)
+	plan, err := newBuildSelectPlan(sel, reservedVars, vschema, 0)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -127,7 +127,12 @@ func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparse
 	return nil
 }
 
-func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (logicalPlan, error) {
+func newBuildSelectPlan(
+	selStmt sqlparser.SelectStatement,
+	reservedVars *sqlparser.ReservedVars,
+	vschema plancontext.VSchema,
+	version querypb.ExecuteOptions_PlannerVersion,
+) (logicalPlan, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -139,12 +144,21 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	if ks := semTable.SingleUnshardedKeyspace(); ks != nil {
+		return unshardedShortcut(selStmt, ks, semTable)
+	}
+
+	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
+	if semTable.NotUnshardedErr != nil {
+		return nil, semTable.NotUnshardedErr
+	}
+
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema)
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err

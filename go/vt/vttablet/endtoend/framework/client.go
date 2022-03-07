@@ -198,25 +198,6 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 	return qr, nil
 }
 
-// BeginExecuteBatch performs a BeginExecuteBatch.
-func (client *QueryClient) BeginExecuteBatch(queries []*querypb.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
-	if client.transactionID != 0 {
-		return nil, errors.New("already in transaction")
-	}
-	qr, transactionID, _, err := client.server.BeginExecuteBatch(
-		client.ctx,
-		client.target,
-		queries,
-		asTransaction,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
-	)
-	client.transactionID = transactionID
-	if err != nil {
-		return nil, err
-	}
-	return qr, nil
-}
-
 // ExecuteWithOptions executes a query using 'options'.
 func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return client.server.Execute(
@@ -287,20 +268,6 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 // Stream streams the results of a query.
 func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.BindVariable, sendFunc func(*sqltypes.Result) error) error {
 	return client.server.StreamExecute(client.ctx, client.target, query, bindvars, 0, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, sendFunc)
-}
-
-// ExecuteBatch executes a batch of queries.
-func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
-	return client.server.ExecuteBatch(
-		client.ctx,
-		client.target,
-		queries,
-		asTransaction,
-		client.transactionID,
-		&querypb.ExecuteOptions{
-			IncludedFields: querypb.ExecuteOptions_ALL,
-		},
-	)
 }
 
 // MessageStream streams messages from the message table.

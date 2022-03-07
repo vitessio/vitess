@@ -82,6 +82,7 @@ func TestMainImpl(m *testing.M) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
+		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "-durability_policy=semi_sync")
 		// Start topo server
 		err := localCluster.StartTopo()
 		if err != nil {
@@ -156,7 +157,7 @@ SET GLOBAL old_alter_table = ON;
 			}
 		}
 
-		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
+		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil

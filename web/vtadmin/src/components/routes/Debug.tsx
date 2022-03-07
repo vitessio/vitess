@@ -9,6 +9,7 @@ import { warn, danger, success, info } from '../Snackbar';
 import { Tab } from '../tabs/Tab';
 import { TabContainer } from '../tabs/TabContainer';
 import { TextInput } from '../TextInput';
+import Toggle from '../toggle/Toggle';
 import { Tooltip } from '../tooltip/Tooltip';
 import style from './Debug.module.scss';
 
@@ -17,6 +18,7 @@ export const Debug = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
     const [formData, setFormData] = React.useState<{ [key: string]: any }>({});
+    const [enabled, setEnabled] = React.useState(false);
 
     return (
         <ContentContainer>
@@ -51,19 +53,26 @@ export const Debug = () => {
                 <section>
                     <h3 className="mt-12 mb-8">Colours</h3>
                     {[
-                        ['danger', 'danger-50', 'danger-200'],
-                        ['success', 'success-50', 'success-200'],
-                        ['warning', 'warning-50', 'warning-200'],
-                        ['vtblue', 'vtblue-50', 'vtblue-200'],
-                        ['vtblue-dark', 'vtblue-dark-50', 'vtblue-dark-200'],
-                        ['gray-75', 'gray-100', 'gray-200', 'gray-400', 'gray-600', 'gray-800', 'gray-900'],
+                        [style.danger, style.danger50, style.danger200],
+                        [style.success, style.success50, style.success200],
+                        [style.warning, style.warning50, style.warning200],
+                        [style.vtblue, style.vtblue50, style.vtblue200],
+                        [style.vtblueDark, style.vtblueDark50, style.vtblueDark200],
+                        [
+                            style.gray75,
+                            style.gray100,
+                            style.gray200,
+                            style.gray400,
+                            style.gray600,
+                            style.gray800,
+                            style.gray900,
+                        ],
                     ].map((colors, idx) => {
                         return (
                             <div className="flex my-8" key={idx}>
                                 {colors.map((c) => (
-                                    <div className="mr-4" key={c}>
-                                        <div className={`w-40 h-16 rounded bg-${c}`} />
-                                        <div className={`text-sm font-semibold text-${c}`}>{c}</div>
+                                    <div className={`${c} mr-4 font-semibold text-sm`} key={c}>
+                                        <div className="w-40 h-16 rounded" />
                                     </div>
                                 ))}
                             </div>
@@ -159,7 +168,10 @@ export const Debug = () => {
                         ))}
                     </div>
                 </section>
-
+                <section>
+                    <h3 className="mt-12 mb-8">Toggle</h3>
+                    <Toggle enabled={enabled} onChange={() => setEnabled(!enabled)} />
+                </section>
                 <section>
                     <h3 className="mt-12 mb-8">Select</h3>
                     <div className={style.dropdownContainer}>

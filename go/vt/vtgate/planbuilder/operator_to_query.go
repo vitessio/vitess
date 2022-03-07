@@ -77,7 +77,12 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 		buildQuery(op.Source, qb)
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil
-		sel.SelectExprs = sqlparser.GetFirstSelect(op.Query).SelectExprs
+		opQuery := sqlparser.RemoveKeyspace(op.Query).(*sqlparser.Select)
+		sel.Limit = opQuery.Limit
+		sel.OrderBy = opQuery.OrderBy
+		sel.GroupBy = opQuery.GroupBy
+		sel.Having = opQuery.Having
+		sel.SelectExprs = opQuery.SelectExprs
 		qb.addTableExpr(op.Alias, op.Alias, op.TableID(), &sqlparser.DerivedTable{
 			Select: sel,
 		}, nil)
@@ -90,7 +95,7 @@ func (qb *queryBuilder) produce() {
 	sort.Sort(qb)
 }
 
-func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints *sqlparser.IndexHints) {
+func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
 	tableExpr := sqlparser.TableName{
 		Name:      sqlparser.NewTableIdent(tableName),
 		Qualifier: sqlparser.NewTableIdent(db),
@@ -98,7 +103,7 @@ func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.
 	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints)
 }
 
-func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr, hint *sqlparser.IndexHints) {
+func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.TableSet, tblExpr sqlparser.SimpleTableExpr, hints sqlparser.IndexHints) {
 	if qb.sel == nil {
 		qb.sel = &sqlparser.Select{}
 	}
@@ -107,7 +112,7 @@ func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.
 		Expr:       tblExpr,
 		Partitions: nil,
 		As:         sqlparser.NewTableIdent(alias),
-		Hints:      hint,
+		Hints:      hints,
 		Columns:    nil,
 	})
 	qb.sel = sel

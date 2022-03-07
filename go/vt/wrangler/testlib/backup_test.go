@@ -17,6 +17,7 @@ limitations under the License.
 package testlib
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -47,6 +49,7 @@ import (
 )
 
 func TestBackupRestore(t *testing.T) {
+	_ = reparentutil.SetDurabilityPolicy("none")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -120,6 +123,7 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
+	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -130,7 +134,15 @@ func TestBackupRestore(t *testing.T) {
 		},
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// This first set of STOP and START commands come from
+		// the builtinBackupEngine implementation which stops the replication
+		// while taking the backup
 		"STOP SLAVE",
+		"START SLAVE",
+		// These commands come from SetReplicationSource RPC called
+		// to set the correct primary and semi-sync after Backup has concluded
+		"STOP SLAVE",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -252,6 +264,7 @@ func TestBackupRestore(t *testing.T) {
 // While doing a backup or a restore, we wait for a change of the replica's position before completing the action
 // This is because otherwise ReplicationLagSeconds is not accurate and the tablet may go into SERVING when it should not
 func TestBackupRestoreLagged(t *testing.T) {
+	_ = reparentutil.SetDurabilityPolicy("none")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -334,8 +347,17 @@ func TestBackupRestoreLagged(t *testing.T) {
 			},
 		},
 	}
+	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// This first set of STOP and START commands come from
+		// the builtinBackupEngine implementation which stops the replication
+		// while taking the backup
 		"STOP SLAVE",
+		"START SLAVE",
+		// These commands come from SetReplicationSource RPC called
+		// to set the correct primary and semi-sync after Backup has concluded
+		"STOP SLAVE",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -449,6 +471,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 }
 
 func TestRestoreUnreachablePrimary(t *testing.T) {
+	_ = reparentutil.SetDurabilityPolicy("none")
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -530,8 +553,17 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 			},
 		},
 	}
+	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// This first set of STOP and START commands come from
+		// the builtinBackupEngine implementation which stops the replication
+		// while taking the backup
 		"STOP SLAVE",
+		"START SLAVE",
+		// These commands come from SetReplicationSource RPC called
+		// to set the correct primary and semi-sync after Backup has concluded
+		"STOP SLAVE",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -599,6 +631,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 }
 
 func TestDisableActiveReparents(t *testing.T) {
+	_ = reparentutil.SetDurabilityPolicy("none")
 	*mysqlctl.DisableActiveReparents = true
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
@@ -721,7 +754,6 @@ func TestDisableActiveReparents(t *testing.T) {
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},

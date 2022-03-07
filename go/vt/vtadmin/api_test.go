@@ -18,8 +18,12 @@ package vtadmin
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
+	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -4808,6 +4813,145 @@ func TestVTExplain(t *testing.T) {
 					assert.NotEmpty(t, resp.Response)
 				}
 			})
+		})
+	}
+}
+
+type ServeHTTPResponse struct {
+	Result ServeHTTPResult `json:"result"`
+	Ok     bool            `json:"ok"`
+}
+
+type ServeHTTPResult struct {
+	Clusters []*vtadminpb.Cluster `json:"clusters"`
+}
+
+func TestServeHTTP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                  string
+		cookie                string
+		enableDynamicClusters bool
+		clusters              []*cluster.Cluster
+		expected              []*vtadminpb.Cluster
+	}{
+		{
+			name:                  "multiple clusters without dynamic clusters",
+			enableDynamicClusters: false,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		},
+		{
+			name:                  "no clusters without dynamic clusters",
+			enableDynamicClusters: false,
+			clusters:              []*cluster.Cluster{},
+			expected:              []*vtadminpb.Cluster{},
+		},
+		{
+			name:                  "multiple clusters with dynamic clusters",
+			enableDynamicClusters: true,
+			cookie:                `{"name": "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "dynamiccluster1",
+					Name: "dynamiccluster1",
+				},
+			},
+		},
+		{
+			name:                  "multiple clusters with invalid json cookie and dynamic clusters",
+			enableDynamicClusters: true,
+			cookie:                `{"name "dynamiccluster1", "vtctlds": [{"host":{"fqdn": "localhost:15000", "hostname": "localhost:15999"}}], "vtgates": [{"host": {"hostname": "localhost:15991"}}]}`,
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		},
+		{
+			name:                  "no clusters with dynamic clusters",
+			enableDynamicClusters: true,
+			clusters:              []*cluster.Cluster{},
+			expected:              []*vtadminpb.Cluster{},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			api := NewAPI(tt.clusters, Options{HTTPOpts: vtadminhttp.Options{EnableDynamicClusters: tt.enableDynamicClusters}})
+
+			// Copy the Cookie over to a new Request
+			req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)
+			req.AddCookie(&http.Cookie{Name: "cluster", Value: base64.StdEncoding.EncodeToString([]byte(tt.cookie))})
+
+			w := httptest.NewRecorder()
+
+			api.ServeHTTP(w, req)
+
+			res := w.Result()
+			defer res.Body.Close()
+
+			dec := json.NewDecoder(res.Body)
+			dec.DisallowUnknownFields()
+			var clustersResponse ServeHTTPResponse
+			err := dec.Decode(&clustersResponse)
+
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.expected, clustersResponse.Result.Clusters)
 		})
 	}
 }

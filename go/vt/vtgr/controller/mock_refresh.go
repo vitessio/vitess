@@ -120,7 +120,7 @@ func (m *MockGRTmcClient) EXPECT() *MockGRTmcClientMockRecorder {
 }
 
 // ChangeType mocks base method.
-func (m *MockGRTmcClient) ChangeType(ctx context.Context, tablet *topodata.Tablet, dbType topodata.TabletType) error {
+func (m *MockGRTmcClient) ChangeType(ctx context.Context, tablet *topodata.Tablet, dbType topodata.TabletType, semiSync bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ChangeType", ctx, tablet, dbType)
 	ret0, _ := ret[0].(error)

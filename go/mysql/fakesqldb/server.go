@@ -47,6 +47,8 @@ const appendEntry = -1
 // closed, the client queries will return CRServerGone(2006) when sending
 // the data, as opposed to CRServerLost(2013) when reading the response.
 type DB struct {
+	mysql.UnimplementedHandler
+
 	// Fields set at construction time.
 
 	// t is our testing.TB instance
@@ -270,8 +272,6 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
-		Charset:    "utf8mb4",
-		Collation:  "utf8mb4_general_ci",
 	})
 }
 
@@ -281,7 +281,6 @@ func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
-		Charset:    "utf8",
 	})
 }
 
@@ -306,11 +305,6 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 		db.t.Fatalf("BUG: connection with id: %v is already active. existing conn: %v new conn: %v", c.ConnectionID, conn, c)
 	}
 	db.connections[c.ConnectionID] = c
-}
-
-// ConnectionReady is part of the mysql.Handler interface.
-func (db *DB) ConnectionReady(c *mysql.Conn) {
-
 }
 
 // ConnectionClosed is part of the mysql.Handler interface.
@@ -469,9 +463,9 @@ func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback
 	return nil
 }
 
-// ComResetConnection is part of the mysql.Handler interface.
-func (db *DB) ComResetConnection(c *mysql.Conn) {
-
+// ComBinlogDumpGTID is part of the mysql.Handler interface.
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+	return nil
 }
 
 //

@@ -160,15 +160,14 @@ func getOpcode(comparison *sqlparser.ComparisonExpr) (Opcode, error) {
 }
 
 // compare returns true after applying the comparison specified in the Filter to the actual data in the column
-func compare(comparison Opcode, columnValue, filterValue sqltypes.Value) (bool, error) {
+func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, charset collations.ID) (bool, error) {
 	// use null semantics: return false if either value is null
 	if columnValue.IsNull() || filterValue.IsNull() {
 		return false, nil
 	}
 	// at this point neither values can be null
 	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
-	// TODO(king-11) make collation aware
-	result, err := evalengine.NullsafeCompare(columnValue, filterValue, collations.Unknown)
+	result, err := evalengine.NullsafeCompare(columnValue, filterValue, charset)
 	if err != nil {
 		return false, err
 	}
@@ -208,7 +207,7 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value) (bool, 
 // The output of the filtering operation is stored in the 'result' argument because
 // filtering cannot be performed in-place. The result argument must be a slice of
 // length equal to ColExprs
-func (plan *Plan) filter(values, result []sqltypes.Value) (bool, error) {
+func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.ID) (bool, error) {
 	if len(result) != len(plan.ColExprs) {
 		return false, fmt.Errorf("expected %d values in result slice", len(plan.ColExprs))
 	}
@@ -223,7 +222,7 @@ func (plan *Plan) filter(values, result []sqltypes.Value) (bool, error) {
 				return false, nil
 			}
 		default:
-			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value)
+			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, charsets[filter.ColNum])
 			if err != nil {
 				return false, err
 			}
@@ -506,7 +505,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := evalengine.Convert(val, semantics.EmptySemTable())
+			pv, err := evalengine.Translate(val, semantics.EmptySemTable())
 			if err != nil {
 				return err
 			}

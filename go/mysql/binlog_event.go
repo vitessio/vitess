@@ -45,6 +45,7 @@ type BinlogEvent interface {
 	IsValid() bool
 
 	// General protocol events.
+	NextPosition() uint32
 
 	// IsFormatDescription returns true if this is a
 	// FORMAT_DESCRIPTION_EVENT. Do not call StripChecksum before
@@ -57,6 +58,8 @@ type BinlogEvent interface {
 	// IsXID returns true if this is an XID_EVENT, which is an alternate
 	// form of COMMIT.
 	IsXID() bool
+	// IsStop returns true if this is a STOP_EVENT.
+	IsStop() bool
 	// IsGTID returns true if this is a GTID_EVENT.
 	IsGTID() bool
 	// IsRotate returns true if this is a ROTATE_EVENT.
@@ -67,6 +70,8 @@ type BinlogEvent interface {
 	IsRand() bool
 	// IsPreviousGTIDs returns true if this event is a PREVIOUS_GTIDS_EVENT.
 	IsPreviousGTIDs() bool
+	// IsSemiSyncAckRequested returns true if the source requests a semi-sync ack for this event
+	IsSemiSyncAckRequested() bool
 
 	// RBR events.
 
@@ -114,6 +119,9 @@ type BinlogEvent interface {
 	// IsWriteRows(), IsUpdateRows(), or IsDeleteRows() returns
 	// true.
 	Rows(BinlogFormat, *TableMap) (Rows, error)
+	// NextLogFile returns the name of the next binary log file & pos.
+	// This is only valid if IsRotate() returns true
+	NextLogFile(BinlogFormat) (string, uint64, error)
 
 	// StripChecksum returns the checksum and a modified event with the
 	// checksum stripped off, if any. If there is no checksum, it returns
@@ -125,6 +133,9 @@ type BinlogEvent interface {
 
 	// IsCompressed returns true if a compressed event is found (binlog_transaction_compression=ON)
 	IsCompressed() bool
+
+	// Bytes returns the binary representation of the event
+	Bytes() []byte
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.

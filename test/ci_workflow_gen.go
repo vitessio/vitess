@@ -50,6 +50,7 @@ var (
 		"11",
 		"12",
 		"13",
+		"14",
 		"15",
 		"16",
 		"17",
@@ -100,15 +101,15 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
+		"vreplication_across_db_versions",
 		"vreplication_multicell",
 		"vreplication_cellalias",
+		"vtorc",
+		"schemadiff_vrepl",
 	}
 
-	clusterSelfHostedList = []string{
-		"14",
-		"vtorc",
-	}
-	clusterDockerList = []string{
+	clusterSelfHostedList []string
+	clusterDockerList     = []string{
 		"vreplication_basic",
 		"vreplication_v2",
 	}
@@ -123,6 +124,7 @@ var (
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
+		"vreplication_across_db_versions",
 	}
 )
 
