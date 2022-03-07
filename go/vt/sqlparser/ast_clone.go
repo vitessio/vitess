@@ -787,6 +787,7 @@ func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneComments(n.Comments)
 	out.Name = CloneColIdent(n.Name)
 	return &out
 }
@@ -896,6 +897,7 @@ func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
+	out.Comments = CloneComments(n.Comments)
 	out.Arguments = CloneColumns(n.Arguments)
 	return &out
 }
@@ -1413,6 +1415,7 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
+	out.Comments = CloneComments(n.Comments)
 	out.StatementIdentifier = CloneColIdent(n.StatementIdentifier)
 	return &out
 }

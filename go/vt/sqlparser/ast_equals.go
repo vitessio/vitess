@@ -1520,6 +1520,7 @@ func EqualsRefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 		return false
 	}
 	return a.Type == b.Type &&
+		EqualsComments(a.Comments, b.Comments) &&
 		EqualsColIdent(a.Name, b.Name)
 }
 
@@ -1648,6 +1649,7 @@ func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsComments(a.Comments, b.Comments) &&
 		EqualsColumns(a.Arguments, b.Arguments)
 }
 
@@ -2261,6 +2263,7 @@ func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 	}
 	return a.Statement == b.Statement &&
 		EqualsColIdent(a.Name, b.Name) &&
+		EqualsComments(a.Comments, b.Comments) &&
 		EqualsColIdent(a.StatementIdentifier, b.StatementIdentifier)
 }
 

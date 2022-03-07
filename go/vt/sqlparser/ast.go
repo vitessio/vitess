@@ -617,6 +617,7 @@ type (
 	PrepareStmt struct {
 		Name                ColIdent
 		Statement           string
+		Comments            Comments
 		StatementIdentifier ColIdent
 	}
 
@@ -624,14 +625,16 @@ type (
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
 	ExecuteStmt struct {
 		Name      ColIdent
+		Comments  Comments
 		Arguments Columns
 	}
 
 	// DeallocateStmt represents a Deallocate Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
 	DeallocateStmt struct {
-		Type DeallocateStmtType
-		Name ColIdent
+		Type     DeallocateStmtType
+		Comments Comments
+		Name     ColIdent
 	}
 
 	// DeallocateStmtType is an enum to get types of deallocate

@@ -3793,19 +3793,19 @@ distinct_opt:
   }
 
 prepare_statement:
-  PREPARE sql_id FROM STRING
+  PREPARE comment_opt sql_id FROM STRING
   {
-    $$ = &PrepareStmt{Name:$2, Statement:$4}
+    $$ = &PrepareStmt{Name:$3, Comments: $2, Statement:$5}
   }
-| PREPARE sql_id FROM AT_ID
+| PREPARE comment_opt sql_id FROM AT_ID
   {
-    $$ = &PrepareStmt{Name:$2, StatementIdentifier: NewColIdentWithAt(string($4), SingleAt)}
+    $$ = &PrepareStmt{Name:$3, Comments: $2, StatementIdentifier: NewColIdentWithAt(string($5), SingleAt)}
   }
 
 execute_statement:
-  EXECUTE sql_id execute_statement_list_opt
+  EXECUTE comment_opt sql_id execute_statement_list_opt
   {
-    $$ = &ExecuteStmt{Name:$2, Arguments: $3}
+    $$ = &ExecuteStmt{Name:$3, Comments: $2, Arguments: $4}
   }
 
 execute_statement_list_opt:
@@ -3818,15 +3818,14 @@ execute_statement_list_opt:
   }
 
 deallocate_statement:
-  DEALLOCATE PREPARE sql_id
+  DEALLOCATE comment_opt PREPARE sql_id
   {
-    $$ = &DeallocateStmt{Type:DeallocateType, Name:$3}
+    $$ = &DeallocateStmt{Type:DeallocateType, Comments: $2, Name:$4}
   }
-// Addition of below is failing tests
-//| DROP PREPARE sql_id
-//  {
-//    $$ = &DeallocateStmt{Type: DropType, Name: $3}
-//  }
+| DROP comment_opt PREPARE sql_id
+  {
+    $$ = &DeallocateStmt{Type: DropType, Comments: $2, Name: $4}
+  }
 
 select_expression_list_opt:
   {
