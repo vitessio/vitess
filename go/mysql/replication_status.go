@@ -49,16 +49,28 @@ type ReplicationStatus struct {
 	SourceUUID            SID
 }
 
-// ReplicationRunning returns true if both the IO and SQL threads are
-// running.
-func (s *ReplicationStatus) ReplicationRunning() bool {
+// Running returns true if both the IO and SQL threads are running.
+func (s *ReplicationStatus) Running() bool {
 	return s.IOState == ReplicationStateRunning && s.SQLState == ReplicationStateRunning
 }
 
-// ReplicationConnectingWithoutError returns true if both the SQL thread(s) is running and the
-// IO thread is connecting and there's no IO error from the last attempt to connect to the source.
-func (s *ReplicationStatus) ReplicationConnectingWithoutError() bool {
-	return s.SQLState == ReplicationStateRunning && s.IOState == ReplicationStateConnecting && s.LastIOError == ""
+// Healthy returns true if both the SQL IO components are healthy
+func (s *ReplicationStatus) Healthy() bool {
+	return s.SQLHealthy() && s.IOHealthy()
+}
+
+// IOHealthy returns true if the IO thread is running OR, the
+// IO thread is connecting AND there's no IO error from the last
+// attempt to connect to the source.
+func (s *ReplicationStatus) IOHealthy() bool {
+	return s.IOState == ReplicationStateRunning ||
+		(s.IOState == ReplicationStateConnecting && s.LastIOError == "")
+}
+
+// SQLHealthy returns true if the SQLState is running.
+// For consistency and to support altering this calculation in the future.
+func (s *ReplicationStatus) SQLHealthy() bool {
+	return s.SQLState == ReplicationStateRunning
 }
 
 // ReplicationStatusToProto translates a Status to proto3.

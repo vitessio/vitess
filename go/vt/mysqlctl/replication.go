@@ -47,7 +47,7 @@ func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error
 			return err
 		}
 
-		if status.ReplicationRunning() {
+		if status.Running() {
 			return nil
 		}
 		time.Sleep(time.Second)
