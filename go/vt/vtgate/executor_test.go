@@ -178,19 +178,6 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 		t.Errorf("logstats: expected no record for no-op rollback, got %v", logStats)
 	}
 
-	// Prevent transactions on non-primary.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", InTransaction: true})
-	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
-	require.Error(t, err)
-	want := "transaction is supported only for primary tablet type, current type: REPLICA"
-	require.Contains(t, err.Error(), want)
-
-	// Prevent begin on non-primary.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica"})
-	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), want)
-
 	// Prevent use of non-primary if in_transaction is on.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", InTransaction: true})
 	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
