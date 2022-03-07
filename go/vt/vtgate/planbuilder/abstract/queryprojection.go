@@ -47,9 +47,6 @@ type (
 		CanPushDownSorting bool
 		HasStar            bool
 		ProjectionError    error
-
-		// CanCombineGroupByAndOrderBy is true if the grouping and ordering can be merged into one set of expressions
-		CanCombineGroupByAndOrderBy bool
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
