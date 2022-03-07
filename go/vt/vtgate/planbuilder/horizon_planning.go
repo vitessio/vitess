@@ -410,6 +410,21 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 	// all these three cases are handled by the call to GetFirstSelect.
 	sel := sqlparser.GetFirstSelect(node)
 
+	exprCol, isExprCol := expr.Expr.(*sqlparser.ColName)
+
+	// first pass - search for aliased expressions
+	for i, selectExpr := range sel.SelectExprs {
+		if !isExprCol {
+			break
+		}
+
+		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if ok && selectExpr.As.Equal(exprCol.Name) {
+			return i
+		}
+	}
+
+	// next pass - we are searching the actual expressions and not the aliases
 	for i, selectExpr := range sel.SelectExprs {
 		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -417,7 +432,6 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 		}
 
 		selectExprCol, isSelectExprCol := selectExpr.Expr.(*sqlparser.ColName)
-		exprCol, isExprCol := expr.Expr.(*sqlparser.ColName)
 		selectExprDep := semTable.RecursiveDeps(selectExpr.Expr)
 
 		// Check that the two expressions have the same dependencies
@@ -425,18 +439,11 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 			continue
 		}
 
-		if selectExpr.As.IsEmpty() {
-			// we don't have an alias
-
-			if isSelectExprCol && isExprCol && exprCol.Name.Equal(selectExprCol.Name) {
-				// the expressions are ColName, we compare their name
-				return i
-			} else if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
-				// the expressions are not ColName, so we just compare the expressions
-				return i
-			}
-		} else if isExprCol && selectExpr.As.Equal(exprCol.Name) {
-			// we have an aliased column, checking if the expression is matching the alias
+		if isSelectExprCol && isExprCol && exprCol.Name.Equal(selectExprCol.Name) {
+			// the expressions are ColName, we compare their name
+			return i
+		} else if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+			// the expressions are not ColName, so we just compare the expressions
 			return i
 		}
 	}
