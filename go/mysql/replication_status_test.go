@@ -28,8 +28,8 @@ func TestStatusReplicationRunning(t *testing.T) {
 		SQLState: ReplicationStatusToState("yes"),
 	}
 	want := true
-	if got := input.ReplicationRunning(); got != want {
-		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
+	if got := input.Running(); got != want {
+		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
 	}
 }
 
@@ -39,8 +39,8 @@ func TestStatusIOThreadNotRunning(t *testing.T) {
 		SQLState: ReplicationStatusToState("yes"),
 	}
 	want := false
-	if got := input.ReplicationRunning(); got != want {
-		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
+	if got := input.Running(); got != want {
+		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
 	}
 }
 
@@ -50,8 +50,8 @@ func TestStatusSQLThreadNotRunning(t *testing.T) {
 		SQLState: ReplicationStatusToState("no"),
 	}
 	want := false
-	if got := input.ReplicationRunning(); got != want {
-		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
+	if got := input.Running(); got != want {
+		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
 	}
 }
 
