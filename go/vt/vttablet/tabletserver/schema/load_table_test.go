@@ -17,12 +17,11 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,9 +38,7 @@ import (
 func TestLoadTable(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
+	mockLoadTableQueries(db)
 	table, err := newTestLoadTable("USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatal(err)
@@ -65,9 +62,7 @@ func TestLoadTable(t *testing.T) {
 func TestLoadTableSequence(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
+	mockLoadTableQueries(db)
 	table, err := newTestLoadTable("USER_TABLE", "vitess_sequence", db)
 	if err != nil {
 		t.Fatal(err)
@@ -87,9 +82,7 @@ func TestLoadTableSequence(t *testing.T) {
 func TestLoadTableMessage(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getMessageTableQueries() {
-		db.AddQuery(query, result)
-	}
+	mockMessageTableQueries(db)
 	table, err := newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
 	if err != nil {
 		t.Fatal(err)
@@ -148,9 +141,7 @@ func TestLoadTableMessage(t *testing.T) {
 		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
 	}
 
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
+	mockLoadTableQueries(db)
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
 	wanterr = "missing from message table: test_table"
 	if err == nil || !strings.Contains(err.Error(), wanterr) {
@@ -173,48 +164,46 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "test_table", comment)
+	return LoadTable(conn, "fakesqldb", "test_table", comment)
 }
 
-func getTestLoadTableQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
-		"select * from test_table where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "name",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "addr",
-				Type: sqltypes.Int32,
-			}},
-		},
-	}
+func mockLoadTableQueries(db *fakesqldb.DB) {
+	db.ClearQueryPattern()
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "name",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "addr",
+			Type: sqltypes.Int32,
+		}},
+	})
 }
 
-func getMessageTableQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
-		"select * from test_table where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "id",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "priority",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_next",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "epoch",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_acked",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "message",
-				Type: sqltypes.VarBinary,
-			}},
-		},
-	}
+func mockMessageTableQueries(db *fakesqldb.DB) {
+	db.ClearQueryPattern()
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "priority",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_next",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "epoch",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_acked",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarBinary,
+		}},
+	})
 }
