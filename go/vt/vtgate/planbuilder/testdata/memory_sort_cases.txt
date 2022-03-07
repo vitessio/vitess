@@ -234,7 +234,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC, 1 ASC, 0 ASC",
+    "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 1 ASC, 0 ASC COLLATE latin1_swedish_ci",
     "Inputs": [
       {
         "OperatorType": "Aggregate",

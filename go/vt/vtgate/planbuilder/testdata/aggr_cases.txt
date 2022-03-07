@@ -246,7 +246,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC, 2 ASC",
+    "OrderBy": "0 ASC, 2 ASC COLLATE latin1_swedish_ci",
     "ResultColumns": 4,
     "Inputs": [
       {
