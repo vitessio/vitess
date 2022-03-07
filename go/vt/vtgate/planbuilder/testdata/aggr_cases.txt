@@ -2340,7 +2340,31 @@ Gen4 plan same as above
 # multiple distinct functions with grouping.
 "select col1, count(distinct col2), sum(distinct col2) from user group by col1"
 "unsupported: only one distinct aggregation allowed in a select: sum(distinct col2)"
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|3) AS count(distinct col2), sum_distinct(1|3) AS sum(distinct col2)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2)",
+        "OrderBy": "(0|2) ASC, (1|3) ASC",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2) order by col1 asc, col2 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # aggregate query with order by aggregate column along with NULL
 "select col, count(*) k from user group by col order by null, k"
@@ -3599,6 +3623,64 @@ Gen4 error: cannot push projections in ordered aggregates
         "FieldQuery": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` where 1 != 1 group by a, weight_string(ascii(val1))",
         "OrderBy": "(0|2) ASC",
         "Query": "select ascii(val1) as a, count(*), weight_string(ascii(val1)) from `user` group by a, weight_string(ascii(val1)) order by a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# multiple distinct aggregations on the same column is allowed
+"select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1"
+"unsupported: only one distinct aggregation allowed in a select: sum(distinct tcol2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|3) AS count(distinct tcol2), sum_distinct(1|3) AS sum(distinct tcol2)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2)",
+        "OrderBy": "(0|2) ASC, (1|3) ASC",
+        "Query": "select tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2) order by tcol1 asc, tcol2 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# multiple distinct aggregations on the same column in different positions
+"select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1"
+"unsupported: only one distinct aggregation allowed in a select: sum(distinct tcol2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(0|3) AS count(distinct tcol2), sum(2) AS count(*), sum_distinct(0|3) AS sum(distinct tcol2)",
+    "GroupBy": "(1|4)",
+    "ResultColumns": 4,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select tcol2, tcol1, count(*), weight_string(tcol2), weight_string(tcol1) from `user` where 1 != 1 group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1)",
+        "OrderBy": "(1|4) ASC, (0|3) ASC",
+        "Query": "select tcol2, tcol1, count(*), weight_string(tcol2), weight_string(tcol1) from `user` group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1) order by tcol1 asc, tcol2 asc",
         "Table": "`user`"
       }
     ]
