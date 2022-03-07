@@ -175,8 +175,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJoinTableExpr(in)
 	case *KeyState:
 		return CloneRefOfKeyState(in)
-	case *LTrimFuncExpr:
-		return CloneRefOfLTrimFuncExpr(in)
 	case *Limit:
 		return CloneRefOfLimit(in)
 	case ListArg:
@@ -227,8 +225,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
-	case *RTrimFuncExpr:
-		return CloneRefOfRTrimFuncExpr(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -1134,16 +1130,6 @@ func CloneRefOfKeyState(n *KeyState) *KeyState {
 	return &out
 }
 
-// CloneRefOfLTrimFuncExpr creates a deep clone of the input.
-func CloneRefOfLTrimFuncExpr(n *LTrimFuncExpr) *LTrimFuncExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.StringArg = CloneExpr(n.StringArg)
-	return &out
-}
-
 // CloneRefOfLimit creates a deep clone of the input.
 func CloneRefOfLimit(n *Limit) *Limit {
 	if n == nil {
@@ -1393,16 +1379,6 @@ func ClonePartitions(n Partitions) Partitions {
 		res = append(res, CloneColIdent(x))
 	}
 	return res
-}
-
-// CloneRefOfRTrimFuncExpr creates a deep clone of the input.
-func CloneRefOfRTrimFuncExpr(n *RTrimFuncExpr) *RTrimFuncExpr {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.StringArg = CloneExpr(n.StringArg)
-	return &out
 }
 
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
@@ -2087,12 +2063,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
-	case *LTrimFuncExpr:
-		return CloneRefOfLTrimFuncExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
-	case *RTrimFuncExpr:
-		return CloneRefOfRTrimFuncExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
 	case *TimestampFuncExpr:
@@ -2269,8 +2241,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
-	case *LTrimFuncExpr:
-		return CloneRefOfLTrimFuncExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -2283,8 +2253,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNullVal(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
-	case *RTrimFuncExpr:
-		return CloneRefOfRTrimFuncExpr(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:

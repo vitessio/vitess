@@ -174,8 +174,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *KeyState:
 		return a.rewriteRefOfKeyState(parent, node, replacer)
-	case *LTrimFuncExpr:
-		return a.rewriteRefOfLTrimFuncExpr(parent, node, replacer)
 	case *Limit:
 		return a.rewriteRefOfLimit(parent, node, replacer)
 	case ListArg:
@@ -226,8 +224,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionValueRange(parent, node, replacer)
 	case Partitions:
 		return a.rewritePartitions(parent, node, replacer)
-	case *RTrimFuncExpr:
-		return a.rewriteRefOfRTrimFuncExpr(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
 	case *ReferenceDefinition:
@@ -2669,33 +2665,6 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 	}
 	return true
 }
-func (a *application) rewriteRefOfLTrimFuncExpr(parent SQLNode, node *LTrimFuncExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
-		parent.(*LTrimFuncExpr).StringArg = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3405,33 +3374,6 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		}(x)) {
 			return false
 		}
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfRTrimFuncExpr(parent SQLNode, node *RTrimFuncExpr, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
-		parent.(*RTrimFuncExpr).StringArg = newNode.(Expr)
-	}) {
-		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5385,12 +5327,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
-	case *LTrimFuncExpr:
-		return a.rewriteRefOfLTrimFuncExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
-	case *RTrimFuncExpr:
-		return a.rewriteRefOfRTrimFuncExpr(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
@@ -5553,8 +5491,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
-	case *LTrimFuncExpr:
-		return a.rewriteRefOfLTrimFuncExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -5567,8 +5503,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNullVal(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
-	case *RTrimFuncExpr:
-		return a.rewriteRefOfRTrimFuncExpr(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:

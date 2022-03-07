@@ -2279,17 +2279,23 @@ var (
 		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
 		output: "select trim('aa' from 'aabccaaa') from dual",
 	}, {
-		input:  "SELECT TRIM('aa' FROM 'aabccaaa')",
-		output: "select trim('aa' from 'aabccaaa') from dual",
-	}, {
 		input:  "SELECT TRIM(LEADING FROM 'aabccaaa')",
 		output: "select trim(leading from 'aabccaaa') from dual",
 	}, {
 		input:  "SELECT TRIM(TRAILING FROM 'abca')",
 		output: "select trim(trailing from 'abca') from dual",
 	}, {
-		input:  "SELECT TRIM(BOTH FROM 'aabccaaa')",
-		output: "select trim(both from 'aabccaaa') from dual",
+		input:  "SELECT TRIM(BOTH FROM 'abc')",
+		output: "select trim(both from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(LEADING 'a' FROM 'abc')",
+		output: "select trim(leading 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(TRAILING 'a' FROM 'abc')",
+		output: "select trim(trailing 'a' from 'abc') from dual",
+	}, {
+		input:  "SELECT TRIM(BOTH 'a' FROM 'abc')",
+		output: "select trim(both 'a' from 'abc') from dual",
 	}}
 )
 

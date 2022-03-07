@@ -1613,22 +1613,9 @@ func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *LTrimFuncExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("ltrim(")
-	buf.printExpr(node, node.StringArg, true)
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node.
-func (node *RTrimFuncExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("rtrim(")
-	buf.printExpr(node, node.StringArg, true)
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node.
 func (node *TrimFuncExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("trim(")
+	buf.WriteString(node.TrimFuncType.ToString())
+	buf.WriteByte('(')
 	if node.Type.ToString() != "" {
 		buf.WriteString(node.Type.ToString())
 		buf.WriteByte(' ')

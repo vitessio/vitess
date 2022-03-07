@@ -4434,26 +4434,6 @@ function_call_keyword
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
-| LTRIM openb expression closeb
-  {
-    $$ = &LTrimFuncExpr{StringArg: $3}
-  }
-| RTRIM openb expression closeb
-  {
-    $$ = &RTrimFuncExpr{StringArg: $3}
-  }
-| TRIM openb expression closeb
-  {
-    $$ = &TrimFuncExpr{StringArg: $3}
-  }
-| TRIM openb expression FROM expression closeb
-  {
-    $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
-  }
-| TRIM openb trim_type_opt FROM expression closeb
-  {
-    $$ = &TrimFuncExpr{Type:$3, StringArg: $5}
-  }
 | BINARY simple_expr %prec UNARY
   {
     // From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary
@@ -4484,10 +4464,7 @@ function_call_keyword
   }
 
 trim_type_opt:
-  {
-    $$ = NoTrimType
-  }
-| BOTH
+  BOTH
   {
     $$ = BothTrimType
   }
@@ -4712,6 +4689,26 @@ UTC_DATE func_paren_opt
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
+  }
+| LTRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimFuncType:LTrimType, StringArg: $3}
+  }
+| RTRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimFuncType:RTrimType, StringArg: $3}
+  }
+| TRIM openb trim_type_opt expression_opt FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{Type:$3, TrimArg:$4, StringArg: $6}
+  }
+| TRIM openb expression closeb
+  {
+    $$ = &TrimFuncExpr{StringArg: $3}
+  }
+| TRIM openb expression FROM expression closeb
+  {
+    $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
 
 interval:
@@ -5785,7 +5782,6 @@ reserved_keyword:
 | LOCALTIMESTAMP
 | LOCK
 | LOW_PRIORITY
-| LTRIM
 | MATCH
 | MAXVALUE
 | MOD
@@ -5817,7 +5813,6 @@ reserved_keyword:
 | REPLACE
 | RIGHT
 | ROW_NUMBER
-| RTRIM
 | SCHEMA
 | SCHEMAS
 | SELECT
@@ -5834,7 +5829,6 @@ reserved_keyword:
 | TIMESTAMPDIFF
 | TO
 | TRAILING
-| TRIM
 | TRUE
 | UNION
 | UNIQUE
@@ -5986,6 +5980,7 @@ non_reserved_keyword:
 | LOGS
 | LONGBLOB
 | LONGTEXT
+| LTRIM
 | MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
@@ -6067,6 +6062,7 @@ non_reserved_keyword:
 | ROLE
 | ROLLBACK
 | ROW_FORMAT
+| RTRIM
 | S3
 | SECONDARY
 | SECONDARY_ENGINE
@@ -6112,6 +6108,7 @@ non_reserved_keyword:
 | TREE
 | TRIGGER
 | TRIGGERS
+| TRIM
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED

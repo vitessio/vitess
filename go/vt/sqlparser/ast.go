@@ -1917,25 +1917,18 @@ type Where struct {
 // WhereType is an enum for Where.Type
 type WhereType int8
 
-// LTrimFuncExpr represents a LTRIM function
-// More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_ltrim
-type LTrimFuncExpr struct {
-	StringArg Expr
-}
-
-// RTrimFuncExpr represents a LTRIM function
-// More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_rtrim
-type RTrimFuncExpr struct {
-	StringArg Expr
-}
-
-// TrimFuncExpr represents a LTRIM function
+// TrimFuncExpr represents a TRIM function
 // More information available on https://dev.mysql.com/doc/refman/5.7/en/string-functions.html#function_trim
 type TrimFuncExpr struct {
-	Type      TrimType
-	TrimArg   Expr
-	StringArg Expr
+	TrimFuncType TrimFuncType
+	Type         TrimType
+	TrimArg      Expr
+	StringArg    Expr
 }
+
+// TrimFuncType is an enum to get types of TrimFunc.
+// TrimFunc stand for one of the following: LTRIM, RTRIM, TRIM
+type TrimFuncType int8
 
 // TrimType is an enum to get types of Trim
 type TrimType int8
@@ -2235,8 +2228,6 @@ func (*MatchExpr) iExpr()            {}
 func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
-func (*LTrimFuncExpr) iExpr()        {}
-func (*RTrimFuncExpr) iExpr()        {}
 func (*TrimFuncExpr) iExpr()         {}
 
 // iCallable marks all expressions that represent function calls
@@ -2247,8 +2238,6 @@ func (*WeightStringFuncExpr) iCallable() {}
 func (*CurTimeFuncExpr) iCallable()      {}
 func (*ValuesFuncExpr) iCallable()       {}
 func (*ConvertExpr) iCallable()          {}
-func (*LTrimFuncExpr) iCallable()        {}
-func (*RTrimFuncExpr) iCallable()        {}
 func (*TrimFuncExpr) iCallable()         {}
 func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}

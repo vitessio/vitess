@@ -1286,6 +1286,20 @@ func (ty IndexHintForType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty TrimFuncType) ToString() string {
+	switch ty {
+	case NormalTrimType:
+		return NormalTrimStr
+	case LTrimType:
+		return LTrimStr
+	case RTrimType:
+		return RTrimStr
+	default:
+		return "Unknown TrimFuncType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty TrimType) ToString() string {
 	switch ty {
 	case NoTrimType:

@@ -299,6 +299,11 @@ const (
 	LeadingTrimStr  = "leading"
 	TrailingTrimStr = "trailing"
 
+	// TrimFuncType strings
+	NormalTrimStr = "trim"
+	LTrimStr      = "ltrim"
+	RTrimStr      = "rtrim"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -389,6 +394,13 @@ const (
 	BothTrimType
 	LeadingTrimType
 	TrailingTrimType
+)
+
+// Constants for Enum Type - TrimFuncType
+const (
+	NormalTrimType TrimFuncType = iota
+	LTrimType
+	RTrimType
 )
 
 // Constants for Enum Type - WhereType

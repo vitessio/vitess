@@ -1215,18 +1215,8 @@ func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *LTrimFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "ltrim(%v)", node.StringArg)
-}
-
-// Format formats the node.
-func (node *RTrimFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "rtrim(%v)", node.StringArg)
-}
-
-// Format formats the node.
 func (node *TrimFuncExpr) Format(buf *TrackedBuffer) {
-	buf.WriteString("trim(")
+	buf.astPrintf(node, "%s(", node.TrimFuncType.ToString())
 	if node.Type.ToString() != "" {
 		buf.astPrintf(node, "%s ", node.Type.ToString())
 	}
