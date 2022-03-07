@@ -59,7 +59,7 @@ func checkDeprecations(args []string) {
 	if _, ok := findSubstring("ApplySchema"); ok {
 		if arg, ok := findSubstring("ddl_strategy"); ok {
 			if strings.Contains(arg, "-skip-topo") {
-				log.Warning("-skip-topo is depracated and will be removed in future versions")
+				log.Warning("-skip-topo is deprecated and will be removed in future versions")
 			}
 		}
 	}
