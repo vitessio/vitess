@@ -100,7 +100,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
-			TabletAlias:   sbc0.Tablet().Alias,
+			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -469,7 +469,7 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 	// The last failed commit must generate a warning.
 	wantSession := vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{
-			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TestTxConn.1.primary",
+			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n",
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -558,7 +558,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
-			TabletAlias:   sbc0.Tablet().Alias,
+			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
