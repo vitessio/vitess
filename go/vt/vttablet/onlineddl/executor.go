@@ -2895,10 +2895,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			// In a normal operation, the table should not exist outside the scope of cutOverVReplMigration
 			// If it exists, that means a tablet crashed while running a cut-over, and left the database in a bad state, where the migrated table does not exist.
 			// thankfully, we have tracked this situation and just realized what happened. Now, first thing to do is to restore the original table.
-			log.Infof("found stowaway table %s in migration %s. Restoring it as %s", stowawayTable, uuid, onlineDDL.Table)
-			if _, err := e.renameTableIfApplicable(ctx, stowawayTable, onlineDDL.Table); err != nil {
+			log.Infof("found stowaway table %s journal in migration %s for table %s", stowawayTable, uuid, onlineDDL.Table)
+			attemptMade, err := e.renameTableIfApplicable(ctx, stowawayTable, onlineDDL.Table)
+			if err != nil {
 				// unable to restore table; we bail out, and we will try again next round.
 				return countRunnning, cancellable, err
+			}
+			// success
+			if attemptMade {
+				log.Infof("stowaway table %s restored back into %s", stowawayTable, onlineDDL.Table)
+			} else {
+				log.Infof("stowaway table %s did not exist and there was no need to restore it", stowawayTable)
 			}
 			// OK good, table restored. We can remove the record.
 			if err := e.updateMigrationStowawayTable(ctx, uuid, ""); err != nil {
