@@ -48,7 +48,6 @@ func TestStreamSQLUnsharded(t *testing.T) {
 }
 
 func TestStreamSQLSharded(t *testing.T) {
-	// Special setup: Don't use createExecutorEnv.
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")

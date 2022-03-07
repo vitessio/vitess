@@ -115,7 +115,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	}
 }
 
-func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
+func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
