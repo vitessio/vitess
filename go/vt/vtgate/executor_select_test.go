@@ -754,7 +754,7 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
-func TestSelectUserDefindVariable(t *testing.T) {
+func TestSelectUserDefinedVariable(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
