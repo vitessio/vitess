@@ -21,12 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -245,8 +244,7 @@ func findCandidate(
 }
 
 // getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets
-func getTabletsWithPromotionRules(tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) []*topodatapb.Tablet {
-	var res []*topodatapb.Tablet
+func getTabletsWithPromotionRules(tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
 	for _, candidate := range tablets {
 		promotionRule := PromotionRule(candidate)
 		if promotionRule == rule {

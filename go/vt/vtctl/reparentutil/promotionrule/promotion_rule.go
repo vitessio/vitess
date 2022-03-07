@@ -41,7 +41,7 @@ var promotionRuleOrderMap = map[CandidatePromotionRule]int{
 }
 
 // AllPromotionRules returns all the CandidatePromotionRules in a list
-// sorted by their priority
+// sorted by their priority.
 func AllPromotionRules() []CandidatePromotionRule {
 	return []CandidatePromotionRule{Must, Prefer, Neutral, PreferNot, MustNot}
 }
