@@ -244,11 +244,8 @@ func TestHold(t *testing.T) {
 	if isMySQL8() {
 		// PURGE state is skipped in mysql 8.0.23 and beyond
 		assert.False(t, exists)
-		exists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
-		assert.NoError(t, err)
-		assert.True(t, exists)
-		err = dropTable(dropTableName)
-		assert.NoError(t, err)
+
+		cleanupDropTable(t)
 	} else {
 		// Table should be renamed as _vt_PURGE_...
 		assert.True(t, exists)
@@ -373,11 +370,7 @@ func TestPurge(t *testing.T) {
 			// EVAC state is skipped in mysql 8.0.23 and beyond
 			assert.False(t, exists)
 
-			exists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
-			assert.NoError(t, err)
-			assert.True(t, exists)
-			err = dropTable(dropTableName)
-			assert.NoError(t, err)
+			cleanupDropTable(t)
 		} else {
 			require.True(t, exists)
 			checkTableRows(t, evacTableName, 0)
@@ -385,6 +378,16 @@ func TestPurge(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
+}
+
+func cleanupDropTable(t *testing.T) {
+	exists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
+	assert.NoError(t, err)
+	if !exists {
+		return
+	}
+	err = dropTable(dropTableName)
+	assert.NoError(t, err)
 }
 
 func TestPurgeView(t *testing.T) {
@@ -417,7 +420,12 @@ func TestPurgeView(t *testing.T) {
 		// View was created with +10s timestamp, so it should still exist
 		exists, _, err := tableExists(tableName)
 		require.NoError(t, err)
-		require.True(t, exists)
+		if isMySQL8() {
+			// PURGE is skipped in mysql 8.0.23
+			require.False(t, exists)
+		} else {
+			require.True(t, exists)
+		}
 
 		// We're really reading the view here:
 		checkTableRows(t, tableName, 1024)
