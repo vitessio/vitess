@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
@@ -904,10 +903,9 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []abstract
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		collID := ctx.SemTable.CollationForExpr(order.Inner.Expr)
-		wsExpr := order.WeightStrExpr
-		if collID != collations.Unknown {
-			wsExpr = nil
+		var wsExpr sqlparser.Expr
+		if ctx.SemTable.NeedsWeightString(order.Inner.Expr) {
+			wsExpr = order.WeightStrExpr
 		}
 
 		offset, weightStringOffset, err := wrapAndPushExpr(ctx, order.Inner.Expr, wsExpr, plan)
