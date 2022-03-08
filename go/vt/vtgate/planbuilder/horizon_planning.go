@@ -1443,12 +1443,12 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr abstract.GroupB
 	switch node := plan.(type) {
 	case *routeGen4:
 		sel := node.Select.(*sqlparser.Select)
-		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
+		sel.AddGroupBy(groupExpr.Inner)
 		// If a weight_string function is added to the select list,
 		// then we need to add that to the group by clause otherwise the query will fail on mysql with full_group_by error
 		// as the weight_string function might not be functionally dependent on the group by.
 		if wsAdded {
-			sel.GroupBy = append(sel.GroupBy, weightStringFor(groupExpr.WeightStrExpr))
+			sel.AddGroupBy(weightStringFor(groupExpr.WeightStrExpr))
 		}
 		return nil
 	case *pulloutSubquery:

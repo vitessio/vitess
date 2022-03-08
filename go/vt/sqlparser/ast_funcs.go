@@ -898,6 +898,17 @@ func (node *Select) AddHaving(expr Expr) {
 	}
 }
 
+// AddGroupBy adds a grouping expression, unless it's already present
+func (node *Select) AddGroupBy(expr Expr) {
+	for _, gb := range node.GroupBy {
+		if EqualsExpr(gb, expr) {
+			// group by columns are sets - duplicates don't add anything, so we can just skip these
+			return
+		}
+	}
+	node.GroupBy = append(node.GroupBy, expr)
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
