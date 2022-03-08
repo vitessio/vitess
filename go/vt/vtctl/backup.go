@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -108,7 +109,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 
-	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
+	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, wr.TopoServer(), wr.TabletManagerClient(), keyspace, shard)
 	if err != nil {
 		return err
 	}
