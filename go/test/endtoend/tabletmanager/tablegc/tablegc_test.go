@@ -425,10 +425,9 @@ func TestPurgeView(t *testing.T) {
 			require.False(t, exists)
 		} else {
 			require.True(t, exists)
+			// We're really reading the view here:
+			checkTableRows(t, tableName, 1024)
 		}
-
-		// We're really reading the view here:
-		checkTableRows(t, tableName, 1024)
 	}
 
 	time.Sleep(15 * time.Second) // purgeReentranceInterval
