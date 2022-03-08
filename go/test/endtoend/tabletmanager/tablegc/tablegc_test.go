@@ -18,6 +18,7 @@ package tablegc
 import (
 	"flag"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +37,7 @@ var (
 	hostname        = "localhost"
 	keyspaceName    = "ks"
 	cell            = "zone1"
+	mysqlVersion    = ""
 	sqlCreateTable  = `
 		create table if not exists t1(
 			id bigint not null auto_increment,
@@ -168,6 +170,25 @@ func dropTable(tableName string) (err error) {
 	return err
 }
 
+func readMysqlVersion(t *testing.T) string {
+	query := `select @@version as ver`
+	rs, err := primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	assert.NoError(t, err)
+	row := rs.Named().Row()
+	assert.NotNil(t, row)
+	version := row["ver"].ToString()
+	assert.NotEmpty(t, row)
+	return version
+}
+
+func isMySQL8() bool {
+	return strings.HasPrefix(mysqlVersion, "8.")
+}
+
+func TestMySQLVersion(t *testing.T) {
+	mysqlVersion = readMysqlVersion(t)
+}
+
 func TestPopulateTable(t *testing.T) {
 	populateTable(t)
 	{
@@ -218,10 +239,18 @@ func TestHold(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, exists)
 	}
-	{
-		// Table should be renamed as _vt_PURGE_...
-		exists, purgeTableName, err := tableExists(`\_vt\_PURGE\_%`)
+	exists, purgeTableName, err := tableExists(`\_vt\_PURGE\_%`)
+	assert.NoError(t, err)
+	if isMySQL8() {
+		// PURGE state is skipped in mysql 8.0.23 and beyond
+		assert.False(t, exists)
+		exists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
 		assert.NoError(t, err)
+		assert.True(t, exists)
+		err = dropTable(dropTableName)
+		assert.NoError(t, err)
+	} else {
+		// Table should be renamed as _vt_PURGE_...
 		assert.True(t, exists)
 		err = dropTable(purgeTableName)
 		assert.NoError(t, err)
@@ -252,9 +281,13 @@ func TestEvac(t *testing.T) {
 		// Table was created with +10s timestamp, so it should still exist
 		exists, _, err := tableExists(tableName)
 		assert.NoError(t, err)
-		assert.True(t, exists)
-
-		checkTableRows(t, tableName, 1024)
+		if isMySQL8() {
+			// EVAC state is skipped in mysql 8.0.23 and beyond
+			assert.False(t, exists)
+		} else {
+			assert.True(t, exists)
+			checkTableRows(t, tableName, 1024)
+		}
 	}
 
 	time.Sleep(10 * time.Second)
@@ -336,10 +369,21 @@ func TestPurge(t *testing.T) {
 		// Table should be renamed as _vt_EVAC_...
 		exists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
 		require.NoError(t, err)
-		require.True(t, exists)
-		checkTableRows(t, evacTableName, 0)
-		err = dropTable(evacTableName)
-		require.NoError(t, err)
+		if isMySQL8() {
+			// EVAC state is skipped in mysql 8.0.23 and beyond
+			assert.False(t, exists)
+
+			exists, dropTableName, err := tableExists(`\_vt\_DROP\_%`)
+			assert.NoError(t, err)
+			assert.True(t, exists)
+			err = dropTable(dropTableName)
+			assert.NoError(t, err)
+		} else {
+			require.True(t, exists)
+			checkTableRows(t, evacTableName, 0)
+			err = dropTable(evacTableName)
+			require.NoError(t, err)
+		}
 	}
 }
 
