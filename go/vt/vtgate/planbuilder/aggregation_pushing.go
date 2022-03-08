@@ -131,9 +131,8 @@ func pushAggrOnRoute(
 	}
 
 	groupingOffsets := make([]offsets, 0, len(grouping))
-	sel.GroupBy = make([]sqlparser.Expr, 0, len(grouping))
 	for idx, expr := range grouping {
-		sel.GroupBy = append(sel.GroupBy, expr.Inner)
+		sel.AddGroupBy(expr.Inner)
 		collID := ctx.SemTable.CollationForExpr(expr.Inner)
 		qt := ctx.SemTable.TypeFor(expr.Inner)
 		wsExpr := expr.WeightStrExpr
@@ -159,7 +158,7 @@ func pushAggrOnRoute(
 				return nil, nil, err
 			}
 			if wsCol >= 0 {
-				sel.GroupBy = append(sel.GroupBy, wsExpr)
+				sel.AddGroupBy(wsExpr)
 			}
 		}
 		groupingOffsets = append(groupingOffsets, offsets{

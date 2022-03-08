@@ -118,9 +118,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(textcol1), weight_string(b)",
+        "FieldQuery": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b)",
         "OrderBy": "(1|5) ASC, (2|4) ASC, (3|6) ASC",
-        "Query": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(textcol1), weight_string(b) order by a asc, textcol1 asc, b asc",
+        "Query": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) order by a asc, textcol1 asc, b asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -229,9 +229,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(a), weight_string(b)",
+            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b)",
             "OrderBy": "(2|4) ASC, (1|5) ASC, (3|6) ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(a), weight_string(b) order by textcol1 asc, a asc, b asc",
+            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) order by textcol1 asc, a asc, b asc",
             "ResultColumns": 5,
             "Table": "`user`"
           }
@@ -2357,9 +2357,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2), col2, weight_string(col2)",
+        "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2)",
         "OrderBy": "(0|3) ASC, (1|4) ASC",
-        "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2), col2, weight_string(col2) order by col1 asc, col2 asc",
+        "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2) order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -3649,9 +3649,9 @@ Gen4 error: cannot push projections in ordered aggregates
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2), tcol2, weight_string(tcol2)",
+        "FieldQuery": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2)",
         "OrderBy": "(0|3) ASC, (1|4) ASC",
-        "Query": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2), tcol2, weight_string(tcol2) order by tcol1 asc, tcol2 asc",
+        "Query": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2) order by tcol1 asc, tcol2 asc",
         "Table": "`user`"
       }
     ]
@@ -3678,9 +3678,9 @@ Gen4 error: cannot push projections in ordered aggregates
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol2), weight_string(tcol1) from `user` where 1 != 1 group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1), tcol2, weight_string(tcol2)",
+        "FieldQuery": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol2), weight_string(tcol1) from `user` where 1 != 1 group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1)",
         "OrderBy": "(1|5) ASC, (0|4) ASC",
-        "Query": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol2), weight_string(tcol1) from `user` group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1), tcol2, weight_string(tcol2) order by tcol1 asc, tcol2 asc",
+        "Query": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol2), weight_string(tcol1) from `user` group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1) order by tcol1 asc, tcol2 asc",
         "Table": "`user`"
       }
     ]
