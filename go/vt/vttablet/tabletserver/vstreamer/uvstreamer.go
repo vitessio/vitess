@@ -432,6 +432,62 @@ func (uvs *uvstreamer) sendTestEvent(msg string) {
 	}
 }
 
+// waitForSource ensures that the source is able to stay within defined bounds for
+// its MVCC history list (trx rollback segment linked list for old versions of rows
+// that should be purged ASAP) and its replica lag (which will be -1 for non-replicas)
+// to help ensure that the vstream does not have an outsized harmful impact on the
+// source's ability to function normally.
+func (uvs *uvstreamer) waitForSource() error {
+	sourceEndpoint, _ := uvs.getEndpoint()
+	backoff := 1 * time.Second
+	backoffLimit := backoff * 30
+	ready := false
+	mhll := uvs.vse.env.Config().RowStreamer.MaxTrxHistLen
+	mrls := uvs.vse.env.Config().RowStreamer.MaxReplicaLagSeconds
+
+	loopFunc := func() error {
+		// Exit if the context has been cancelled
+		if uvs.ctx.Err() != nil {
+			return uvs.ctx.Err()
+		}
+		hll := uvs.getTrxHistoryLen()
+		rpl := uvs.getReplicationLag()
+		if hll <= mhll && rpl <= mrls {
+			ready = true
+		} else {
+			log.Infof("VStream source (%s) is not ready to stream more rows. Max InnoDB history length is %d and it was %d, max replication lag is %d (seconds) and it was %d. Will pause and retry.",
+				sourceEndpoint, mhll, hll, mrls, rpl)
+		}
+		return nil
+	}
+
+	for {
+		if err := loopFunc(); err != nil {
+			return err
+		}
+		if ready {
+			break
+		} else {
+			select {
+			case <-uvs.ctx.Done():
+				return uvs.ctx.Err()
+			case <-time.After(backoff):
+				// Exponential backoff with 1.5 as a factor
+				if backoff != backoffLimit {
+					nb := time.Duration(float64(backoff) * 1.5)
+					if nb > backoffLimit {
+						backoff = backoffLimit
+					} else {
+						backoff = nb
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (uvs *uvstreamer) copyComplete(tableName string) error {
 	evs := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_BEGIN},
@@ -507,4 +563,59 @@ func (uvs *uvstreamer) setReplicationLagSeconds(sbm int64) {
 	uvs.mu.Lock()
 	defer uvs.mu.Unlock()
 	uvs.ReplicationLagSeconds = sbm
+}
+
+// getTrxHistoryLen attempts to query InnoDB's current transaction rollback segment's history
+// list length. If the value cannot be determined for any reason then -1 is returned, which means
+// "unknown".
+func (uvs *uvstreamer) getTrxHistoryLen() int64 {
+	histLen := int64(-1)
+	conn, err := uvs.cp.Connect(uvs.ctx)
+	if err != nil {
+		return histLen
+	}
+	defer conn.Close()
+
+	res, err := conn.ExecuteFetch(trxHistoryLenQuery, 1, false)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+		return histLen
+	}
+	histLen, _ = res.Rows[0][0].ToInt64()
+	return histLen
+}
+
+// getReplicationLag attempts to get the seconds_behind_master value.
+// If the value cannot be determined for any reason then -1 is returned, which
+// means "unknown" or "irrelevant" (meaning it's not actively replicating).
+func (uvs *uvstreamer) getReplicationLag() int64 {
+	lagSecs := int64(-1)
+	conn, err := uvs.cp.Connect(uvs.ctx)
+	if err != nil {
+		return lagSecs
+	}
+	defer conn.Close()
+
+	res, err := conn.ExecuteFetch(replicaLagQuery, 1, false)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+		return lagSecs
+	}
+	row := res.Named().Rows[0]
+	return row.AsInt64("seconds_behind_master", -1)
+}
+
+// getSourceEndpoint returns the host:port value for the vstreamer (MySQL) instance
+func (uvs *uvstreamer) getEndpoint() (string, error) {
+	conn, err := uvs.cp.Connect(uvs.ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	res, err := conn.ExecuteFetch(hostQuery, 1, false)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0] == nil {
+		return "", vterrors.Wrap(err, "could not get vstreamer endpoint")
+	}
+	host := res.Rows[0][0].ToString()
+	port, _ := res.Rows[0][1].ToInt64()
+	return fmt.Sprintf("%s:%d", host, port), nil
 }

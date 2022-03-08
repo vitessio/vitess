@@ -48,6 +48,10 @@ func TestConfigParse(t *testing.T) {
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
 		},
+		RowStreamer: RowStreamerConfig{
+			MaxTrxHistLen:        1000,
+			MaxReplicaLagSeconds: 400,
+		},
 	}
 	gotBytes, err := yaml2.Marshal(&cfg)
 	require.NoError(t, err)
@@ -79,6 +83,9 @@ oltpReadPool:
   size: 16
   timeoutSeconds: 10
 replicationTracker: {}
+rowstreamer:
+  maxReplicaLagSeconds: 400
+  maxTrxHistoryLength: 1000
 txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
@@ -141,6 +148,9 @@ queryCacheSize: 5000
 replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
+rowstreamer:
+  maxReplicaLagSeconds: 43200
+  maxTrxHistoryLength: 1000000
 schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
 streamBufferSize: 32768
@@ -164,6 +174,10 @@ func TestClone(t *testing.T) {
 			IdleTimeoutSeconds: 20,
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
+		},
+		RowStreamer: RowStreamerConfig{
+			MaxTrxHistLen:        1000000,
+			MaxReplicaLagSeconds: 43200,
 		},
 	}
 	cfg2 := cfg1.Clone()
@@ -216,6 +230,10 @@ func TestFlags(t *testing.T) {
 		EnforceStrictTransTables: true,
 		EnableOnlineDDL:          true,
 		DB:                       &dbconfigs.DBConfigs{},
+		RowStreamer: RowStreamerConfig{
+			MaxTrxHistLen:        1000000,
+			MaxReplicaLagSeconds: 43200,
+		},
 	}
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)

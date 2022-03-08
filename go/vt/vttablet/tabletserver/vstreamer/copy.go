@@ -211,6 +211,10 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
 	filter := uvs.plans[tableName].rule.Filter
 
+	if err := uvs.waitForSource(); err != nil {
+		return err
+	}
+
 	log.Infof("Starting copyTable for %s, PK %v", tableName, lastPK)
 	uvs.sendTestEvent(fmt.Sprintf("Copy Start %s", tableName))
 
