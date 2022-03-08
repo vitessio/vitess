@@ -2296,9 +2296,6 @@ var (
 	}, {
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
-	}, {
-		input:  "SELECT vq1.b,dt.b FROM v1 vq1, LATERAL (SELECT vq1.b) dt",
-		output: "select vq1.b, dt.b from v1 as vq1, lateral(select vq1.b from dual) as dt",
 	}}
 )
 
