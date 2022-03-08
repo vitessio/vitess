@@ -168,7 +168,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	rs.sendQuery, err = rs.buildSelect()
+	rs.sendQuery, err = rs.buildSelect(st)
 	if err != nil {
 		return err
 	}
@@ -211,11 +211,12 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	return pkColumns, nil
 }
 
-func (rs *rowStreamer) buildSelect() (string, error) {
+func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
 	buf.Myprintf("select ")
 	prefix := ""
+	indexHint := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
 			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
@@ -224,7 +225,13 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		}
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
+	// We need to look at the actual PK columns at the schema level because in vstreamer
+	// when there's no PK we will use a unique key if one is available, and if not then
+	// we treat the combination of every column as the PK
+	if len(st.PKColumns) > 0 {
+		indexHint = " force index (`PRIMARY`)"
+	}
+	buf.Myprintf(" from %v%s", sqlparser.NewTableIdent(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)

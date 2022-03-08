@@ -77,8 +77,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -94,8 +94,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -111,8 +111,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -128,8 +128,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c2, c1 from t1 order by c1 asc",
-			targetExpression: "select c2, c1 from t1 order by c1 asc",
+			sourceExpression: "select c2, c1 from t1 force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select c2, c1 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
 			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
 			pkCols:           []int{1},
@@ -145,8 +145,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c0 as c1, c2 from t2 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c0 as c1, c2 from t2 force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -163,8 +163,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "nonpktext",
 		td: &tableDiffer{
 			targetTable:      "nonpktext",
-			sourceExpression: "select c1, textcol from nonpktext order by c1 asc",
-			targetExpression: "select c1, textcol from nonpktext order by c1 asc",
+			sourceExpression: "select c1, textcol from nonpktext force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select c1, textcol from nonpktext force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -181,8 +181,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "nonpktext",
 		td: &tableDiffer{
 			targetTable:      "nonpktext",
-			sourceExpression: "select textcol, c1 from nonpktext order by c1 asc",
-			targetExpression: "select textcol, c1 from nonpktext order by c1 asc",
+			sourceExpression: "select textcol, c1 from nonpktext force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select textcol, c1 from nonpktext force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
 			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
 			pkCols:           []int{1},
@@ -199,8 +199,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "pktext",
 		td: &tableDiffer{
 			targetTable:      "pktext",
-			sourceExpression: "select textcol, c2 from pktext order by textcol asc",
-			targetExpression: "select textcol, c2 from pktext order by textcol asc",
+			sourceExpression: "select textcol, c2 from pktext force index (`PRIMARY`) order by textcol asc",
+			targetExpression: "select textcol, c2 from pktext force index (`PRIMARY`) order by textcol asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -217,8 +217,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "pktext",
 		td: &tableDiffer{
 			targetTable:      "pktext",
-			sourceExpression: "select c2, textcol from pktext order by textcol asc",
-			targetExpression: "select c2, textcol from pktext order by textcol asc",
+			sourceExpression: "select c2, textcol from pktext force index (`PRIMARY`) order by textcol asc",
+			targetExpression: "select c2, textcol from pktext force index (`PRIMARY`) order by textcol asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
 			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
 			pkCols:           []int{1},
@@ -235,8 +235,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "pktext",
 		td: &tableDiffer{
 			targetTable:      "pktext",
-			sourceExpression: "select c2, a + b as textcol from pktext order by textcol asc",
-			targetExpression: "select c2, textcol from pktext order by textcol asc",
+			sourceExpression: "select c2, a + b as textcol from pktext force index (`PRIMARY`) order by textcol asc",
+			targetExpression: "select c2, textcol from pktext force index (`PRIMARY`) order by textcol asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
 			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
 			pkCols:           []int{1},
@@ -251,8 +251,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "multipk",
 		td: &tableDiffer{
 			targetTable:      "multipk",
-			sourceExpression: "select c1, c2 from multipk order by c1 asc, c2 asc",
-			targetExpression: "select c1, c2 from multipk order by c1 asc, c2 asc",
+			sourceExpression: "select c1, c2 from multipk force index (`PRIMARY`) order by c1 asc, c2 asc",
+			targetExpression: "select c1, c2 from multipk force index (`PRIMARY`) order by c1 asc, c2 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), true}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), true}},
 			pkCols:           []int{0, 1},
@@ -269,8 +269,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -288,8 +288,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) where c2 = 2 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -307,8 +307,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) where c2 = 2 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -326,8 +326,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 where c2 = 2 and c1 = 1 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) where c2 = 2 and c1 = 1 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -345,8 +345,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) where c2 = 2 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -363,8 +363,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "t1",
 		td: &tableDiffer{
 			targetTable:      "t1",
-			sourceExpression: "select c1, c2 from t1 group by c1 order by c1 asc",
-			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			sourceExpression: "select c1, c2 from t1 force index (`PRIMARY`) group by c1 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -381,8 +381,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "aggr",
 		td: &tableDiffer{
 			targetTable:      "aggr",
-			sourceExpression: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1 order by c1 asc",
-			targetExpression: "select c1, c2, c3, c4 from aggr order by c1 asc",
+			sourceExpression: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 force index (`PRIMARY`) group by c1 order by c1 asc",
+			targetExpression: "select c1, c2, c3, c4 from aggr force index (`PRIMARY`) order by c1 asc",
 			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}, {2, collations.Collation(nil), false}, {3, collations.Collation(nil), false}},
 			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
 			pkCols:           []int{0},
@@ -716,13 +716,13 @@ func TestVDiffUnsharded(t *testing.T) {
 						"c1": sqltypes.NewInt64(2),
 						"c2": sqltypes.NewInt64(3),
 					},
-						Query: "select c1, c2 from t1 where c1=2;",
+						Query: "select c1, c2 from t1 force index (`PRIMARY`) where c1=2;",
 					},
 					Target: &RowDiff{Row: map[string]sqltypes.Value{
 						"c1": sqltypes.NewInt64(2),
 						"c2": sqltypes.NewInt64(4),
 					},
-						Query: "select c1, c2 from t1 where c1=2;",
+						Query: "select c1, c2 from t1 force index (`PRIMARY`) where c1=2;",
 					},
 				},
 			},
@@ -731,8 +731,8 @@ func TestVDiffUnsharded(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.id, func(t *testing.T) {
-			env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
-			env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, tcase.target)
+			env.tablets[101].setResults("select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc", vdiffSourceGtid, tcase.source)
+			env.tablets[201].setResults("select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc", vdiffTargetPrimaryPosition, tcase.target)
 
 			dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", tcase.debug, tcase.onlyPks, 100)
 			require.NoError(t, err)
@@ -767,7 +767,7 @@ func TestVDiffSharded(t *testing.T) {
 
 	env.tmc.schema = schm
 
-	query := "select c1, c2 from t1 order by c1 asc"
+	query := "select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc"
 	fields := sqltypes.MakeTestFields(
 		"c1|c2",
 		"int64|int64",
@@ -828,7 +828,7 @@ func TestVDiffAggregates(t *testing.T) {
 	}
 	env.tmc.schema = schm
 
-	sourceQuery := "select c1, count(*) as c2, sum(c3) as c3 from t group by c1 order by c1 asc"
+	sourceQuery := "select c1, count(*) as c2, sum(c3) as c3 from t force index (`PRIMARY`) group by c1 order by c1 asc"
 	fields := sqltypes.MakeTestFields(
 		"c1|c2|c3",
 		"int64|int64|int64",
@@ -852,7 +852,7 @@ func TestVDiffAggregates(t *testing.T) {
 			"5|3|3",
 		),
 	)
-	targetQuery := "select c1, c2, c3 from t1 order by c1 asc"
+	targetQuery := "select c1, c2, c3 from t1 force index (`PRIMARY`) order by c1 asc"
 	env.tablets[201].setResults(
 		targetQuery,
 		vdiffTargetPrimaryPosition,
@@ -907,8 +907,8 @@ func TestVDiffDefaults(t *testing.T) {
 		"3|1",
 	)
 	target := source
-	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
-	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
+	env.tablets[101].setResults("select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc", vdiffSourceGtid, source)
+	env.tablets[201].setResults("select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc", vdiffTargetPrimaryPosition, target)
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
@@ -960,8 +960,8 @@ func TestVDiffReplicationWait(t *testing.T) {
 		"3|1",
 	)
 	target := source
-	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
-	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
+	env.tablets[101].setResults("select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc", vdiffSourceGtid, source)
+	env.tablets[201].setResults("select c1, c2 from t1 force index (`PRIMARY`) order by c1 asc", vdiffTargetPrimaryPosition, target)
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.Error(t, err)

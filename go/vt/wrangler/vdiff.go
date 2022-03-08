@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -527,7 +528,34 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		}
 	}
 
-	sourceSelect.From = sel.From
+	var sourceHints, targetHints sqlparser.IndexHints
+	if len(table.PrimaryKeyColumns) > 0 {
+		sourceHints = sqlparser.IndexHints{
+			&sqlparser.IndexHint{
+				Type: sqlparser.ForceOp,
+				Indexes: []sqlparser.ColIdent{
+					sqlparser.NewColIdent("PRIMARY"),
+				},
+			},
+		}
+
+		targetHints = sqlparser.IndexHints{
+			&sqlparser.IndexHint{
+				Type: sqlparser.ForceOp,
+				Indexes: []sqlparser.ColIdent{
+					sqlparser.NewColIdent("PRIMARY"),
+				},
+			},
+		}
+	}
+	sourceSelect.From = sqlparser.TableExprs{
+		&sqlparser.AliasedTableExpr{
+			Expr: &sqlparser.TableName{
+				Name: sqlparser.NewTableIdent(sqlescape.UnescapeID(sqlparser.ToString(sel.From))),
+			},
+			Hints: sourceHints,
+		},
+	}
 	// The target table name should the one that matched the rule.
 	// It can be different from the source table.
 	targetSelect.From = sqlparser.TableExprs{
@@ -535,6 +563,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			Expr: &sqlparser.TableName{
 				Name: sqlparser.NewTableIdent(table.Name),
 			},
+			Hints: targetHints,
 		},
 	}
 
