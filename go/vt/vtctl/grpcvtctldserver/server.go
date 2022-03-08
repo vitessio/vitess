@@ -361,6 +361,85 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	}
 }
 
+// BackupShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream vtctlservicepb.Vtctld_BackupShardServer) error {
+	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.BackupShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("allow_primary", req.AllowPrimary)
+	span.Annotate("concurrency", req.Concurrency)
+
+	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
+	if err != nil {
+		return err
+	}
+
+	var (
+		backupTablet    *topodatapb.Tablet
+		backupTabletLag uint32
+	)
+
+	for i, tablet := range tablets {
+		switch tablet.Type {
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
+		default:
+			continue
+		}
+
+		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
+			backupTablet = tablet.Tablet
+			backupTabletLag = lag
+		}
+	}
+
+	if backupTablet == nil && req.AllowPrimary {
+		for _, tablet := range tablets {
+			if tablet.Type != topodatapb.TabletType_PRIMARY {
+				continue
+			}
+
+			backupTablet = tablet.Tablet
+			break
+		}
+	}
+
+	if backupTablet == nil {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tablet available for backup")
+	}
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
+
+	logStream, err := s.tmc.Backup(ctx, backupTablet, int(req.Concurrency), req.AllowPrimary)
+	if err != nil {
+		return err
+	}
+
+	logger := logutil.NewConsoleLogger()
+
+	for {
+		event, err := logStream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(logger, event)
+			resp := &vtctldatapb.BackupResponse{
+				TabletAlias: backupTablet.Alias,
+				Keyspace:    req.Keyspace,
+				Shard:       req.Shard,
+				Event:       event,
+			}
+			if err := stream.Send(resp); err != nil {
+				logger.Errorf("failed to send stream response %+v: %v", resp, err)
+			}
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+	}
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletType")
