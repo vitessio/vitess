@@ -163,7 +163,6 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
-			"-online_ddl_check_interval", "3s",
 			"-schema_change_check_interval", "1",
 		}
 
