@@ -275,7 +275,9 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 	// Next, we have to pass through the grouping values through the join and the projection we add on top
 	// We added new groupings to the LHS because of the join condition, so we don't want to pass through everything,
 	// just the groupings that are used by operators on top of this current one
+	wsOutputGrpOffset := len(groupingOffsets) + len(join.Cols)
 	outputGroupings := make([]offsets, 0, len(groupingOffsets))
+	var wsOffsets []int
 	for _, groupBy := range groupingOffsets {
 		var offset offsets
 		var f func(i int) int
@@ -286,15 +288,15 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			offset = rhsOffsets[groupBy-1]
 			f = func(i int) int { return i + 1 }
 		}
-		var outputGrouping offsets
-		outputGrouping.col = len(join.Cols)
+		outputGrouping := offsets{col: len(join.Cols), wsCol: -1}
 		join.Cols = append(join.Cols, f(offset.col))
 		if offset.wsCol > -1 {
-			outputGrouping.wsCol = len(join.Cols)
-			join.Cols = append(join.Cols, f(offset.wsCol))
+			outputGrouping.wsCol = wsOutputGrpOffset + len(wsOffsets)
+			wsOffsets = append(wsOffsets, f(offset.wsCol))
 		}
 		outputGroupings = append(outputGroupings, outputGrouping)
 	}
+	join.Cols = append(join.Cols, wsOffsets...)
 
 	outputAggrOffsets := make([][]offsets, 0, len(aggregations))
 	for idx := range aggregations {

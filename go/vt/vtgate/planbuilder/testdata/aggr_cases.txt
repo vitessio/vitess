@@ -3686,3 +3686,84 @@ Gen4 error: cannot push projections in ordered aggregates
     ]
   }
 }
+
+# distinct aggregation will 3 table join query
+"select u.textcol1, count(distinct u.val2) from user u join user u2 on u.val2 = u2.id join music m on u2.val2 = m.id group by u.textcol1"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.textcol1, count(distinct u.val2) from user u join user u2 on u.val2 = u2.id join music m on u2.val2 = m.id group by u.textcol1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_distinct(1|2) AS count(distinct u.val2)",
+    "GroupBy": "0 COLLATE latin1_swedish_ci",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-3,-4,-6",
+        "JoinVars": {
+          "u2_val2": 0
+        },
+        "TableName": "`user`_`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "1,1,-3,-1,2,-2",
+            "JoinVars": {
+              "u_val2": 0
+            },
+            "TableName": "`user`_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.val2, weight_string(u.val2), u.textcol1 from `user` as u where 1 != 1 group by u.val2, weight_string(u.val2), u.textcol1",
+                "OrderBy": "2 ASC COLLATE latin1_swedish_ci, (0|1) ASC",
+                "Query": "select u.val2, weight_string(u.val2), u.textcol1 from `user` as u group by u.val2, weight_string(u.val2), u.textcol1 order by u.textcol1 asc, u.val2 asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u2.val2, weight_string(u2.val2) from `user` as u2 where 1 != 1 group by u2.val2, weight_string(u2.val2)",
+                "Query": "select u2.val2, weight_string(u2.val2) from `user` as u2 where u2.id = :u_val2 group by u2.val2, weight_string(u2.val2)",
+                "Table": "`user`",
+                "Values": [
+                  ":u_val2"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.id = :u2_val2",
+            "Table": "music",
+            "Values": [
+              ":u2_val2"
+            ],
+            "Vindex": "music_user_map"
+          }
+        ]
+      }
+    ]
+  }
+}
