@@ -107,7 +107,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Launch keyspace
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -136,16 +136,16 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	shard3.Vttablets = []*cluster.Vttablet{shard3Primary, shard3Replica, shard3Rdonly}
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_semi_sync",
-		"-enable_replication_reporter",
-		"-enable-tx-throttler",
-		"-binlog_use_v3_resharding_mode=true",
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_semi_sync",
+		"--enable_replication_reporter",
+		"--enable-tx-throttler",
+		"--binlog_use_v3_resharding_mode=true",
 	}
 
 	shardingColumnType := "bigint(20) unsigned"
@@ -274,7 +274,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	// Initial clone (online).
-	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone", "--",
 		"--offline=false",
 		"--chunk_count", "10",
 		"--min_rows_per_chunk", "1",
@@ -304,7 +304,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	insertValue(t, shard3.PrimaryTablet(), keyspaceName, tableName, 4, "msg4", key3)
 
 	err = clusterInstance.VtworkerProcess.ExecuteCommand(
-		"SplitClone",
+		"SplitClone", "--",
 		"--chunk_count", "10",
 		"--min_rows_per_chunk", "1",
 		"--min_healthy_rdonly_tablets", "1",
@@ -378,7 +378,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
-		"SplitDiff",
+		"SplitDiff", "--",
 		"--exclude_tables", "unrelated",
 		"--min_healthy_rdonly_tablets", "1",
 		"--source_uid", "1",
@@ -395,7 +395,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
-		"SplitDiff",
+		"SplitDiff", "--",
 		"--exclude_tables", "unrelated",
 		"--min_healthy_rdonly_tablets", "1",
 		"--source_uid", "2",
@@ -409,8 +409,8 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	sharding.CheckTabletQueryService(t, *shard3Primary, "NOT_SERVING", false, *clusterInstance)
 	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth",
-		"-count", "1", shard3Primary.Alias)
+		"VtTabletStreamHealth", "--",
+		"--count", "1", shard3Primary.Alias)
 	require.NoError(t, err)
 	log.Info("Got health: ", streamHealth)
 
@@ -487,7 +487,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 
 	for _, tablet := range []cluster.Vttablet{*shard0Primary, *shard1Primary} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
 		require.NoError(t, err)
 	}
 

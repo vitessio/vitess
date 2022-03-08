@@ -56,12 +56,12 @@ func TestTopoCustomRule(t *testing.T) {
 	require.NoError(t, err)
 
 	// Copy config file into topo.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-topocustomrule_path", topoCustomRulePath,
+		"--topocustomrule_path", topoCustomRulePath,
 	}
 
 	// Start a new Tablet
@@ -98,7 +98,7 @@ func TestTopoCustomRule(t *testing.T) {
 	err = os.WriteFile(topoCustomRuleFile, data, 0777)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
@@ -121,6 +121,6 @@ func TestTopoCustomRule(t *testing.T) {
 }
 
 func vtctlExec(sql string, tabletAlias string) (string, error) {
-	args := []string{"VtTabletExecute", "-json", tabletAlias, sql}
+	args := []string{"VtTabletExecute", "--", "--json", tabletAlias, sql}
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }

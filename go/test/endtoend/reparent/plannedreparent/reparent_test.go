@@ -236,8 +236,8 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 	if downPrimary {
 		err := tablets[0].VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
-			"-allow_primary", tablets[0].Alias)
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--",
+			"--allow_primary", tablets[0].Alias)
 		require.NoError(t, err)
 	}
 

@@ -96,14 +96,14 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "3"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "3"}
 		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			log.Fatal(err.Error())
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-warn_sharded_only=true"}
+		clusterInstance.VtGateExtraArgs = []string{"--warn_sharded_only=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Fatal(err.Error())
 			return 1

@@ -17,18 +17,20 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/worker/vtworkerclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -36,7 +38,7 @@ var (
 )
 
 func main() {
-	flag.Parse()
+	_flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -51,7 +53,7 @@ func main() {
 	logger := logutil.NewConsoleLogger()
 
 	err := vtworkerclient.RunCommandAndWait(
-		ctx, *server, flag.Args(),
+		ctx, *server, _flag.Args(),
 		func(e *logutilpb.Event) {
 			logutil.LogEvent(logger, e)
 		})

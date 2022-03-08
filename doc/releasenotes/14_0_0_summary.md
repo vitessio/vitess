@@ -1,5 +1,57 @@
 ## Major Changes
 
+## Command-line syntax deprecations
+
+Vitess has begun a transition to a new library for CLI flag parsing.
+In order to facilitate a smooth transition, certain syntaxes that will not be supported in the future now issue deprecation warnings when used.
+
+The messages you will likely see, along with explanations and migrations, are:
+
+### "Use of single-dash long flags is deprecated"
+
+Single-dash usage will be only possible for short flags (e.g. `-v` is okay, but `-verbose` is not).
+
+To migrate, update your CLI scripts from:
+
+```
+$ vttablet -tablet_alias zone1-100 -init_keyspace mykeyspace ... # old way
+```
+
+To:
+
+```
+$ vttablet --tablet_alias zone1-100 --init_keyspace mykeyspace ... # new way
+```
+
+### "Detected a dashed argument after a position argument."
+
+As the full deprecation text goes on to (attempt to) explain, mixing flags and positional arguments will change in a future version that will break scripts.
+
+Currently, when invoking a binary like
+
+```
+$ vtctl --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
+```
+
+everything after the `AddCellInfo` is treated by `package flag` as a positional argument, and we then use a sub FlagSet to parse flags specific to the subcommand.
+So, at the top-level, `flag.Args()` returns `["AddCellInfo", "--root", "/vitess/global"]`.
+
+The library we are transitioning to is more flexible, allowing flags and positional arguments to be interwoven on the command-line.
+For the above example, this means that we would attempt to parse `--root` as a top-level flag for the `vtctl` binary.
+This will cause the program to exit on error, because that flag is only defined on the `AddCellInfo` subcommand.
+
+In order to transition, a standalone double-dash (literally, `--`) will cause the new flag library to treat everything following that as a positional argument, and also works with the current flag parsing code we use.
+
+So, to transition the above example without breakage, update the command to:
+
+```
+$ vtctl --topo_implementation etcd2 AddCellInfo -- --root "/vitess/global"
+$ # the following will also work
+$ vtctl --topo_implementation etcd2 -- AddCellInfo --root "/vitess/global"
+$ # the following will NOT work, because --topo_implementation is a top-level flag, not a sub-command flag
+$ vtctl -- --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
+```
+
 ### Online DDL changes
 
 #### ddl_strategy: 'vitess'
