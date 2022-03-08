@@ -189,9 +189,9 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		return resp, vterrors.Wrapf(err, "unable to create execution UUID")
 	}
 
-	requestContext := req.RequestContext
-	if requestContext == "" {
-		requestContext = fmt.Sprintf("vtctl:%s", executionUUID)
+	migrationContext := req.MigrationContext
+	if migrationContext == "" {
+		migrationContext = fmt.Sprintf("vtctl:%s", executionUUID)
 	}
 
 	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
@@ -210,7 +210,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 		logstream = append(logstream, e)
 	})
 
-	executor := schemamanager.NewTabletExecutor(requestContext, s.ts, s.tmc, logger, waitReplicasTimeout)
+	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
 	if req.AllowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
@@ -313,6 +313,52 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 		return nil, vterrors.Wrapf(err, "GetVSchema(%s)", req.Keyspace)
 	}
 	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
+}
+
+// Backup is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservicepb.Vtctld_BackupServer) error {
+	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.Backup")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("allow_primary", req.AllowPrimary)
+	span.Annotate("concurrency", req.Concurrency)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	span.Annotate("keyspace", ti.Keyspace)
+	span.Annotate("shard", ti.Shard)
+
+	logStream, err := s.tmc.Backup(ctx, ti.Tablet, int(req.Concurrency), req.AllowPrimary)
+	if err != nil {
+		return err
+	}
+
+	logger := logutil.NewConsoleLogger()
+
+	for {
+		event, err := logStream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(logger, event)
+			resp := &vtctldatapb.BackupResponse{
+				TabletAlias: req.TabletAlias,
+				Keyspace:    ti.Keyspace,
+				Shard:       ti.Shard,
+				Event:       event,
+			}
+			if err := stream.Send(resp); err != nil {
+				logger.Errorf("failed to send stream response %+v: %v", resp, err)
+			}
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+	}
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.

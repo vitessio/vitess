@@ -182,7 +182,6 @@ func TestMain(m *testing.M) {
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
 			"-schema_change_check_interval", "1",
-			"-online_ddl_check_interval", "3s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
@@ -888,11 +887,6 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			err = generateUpdate(t, conn)
 		case 2:
 			err = generateDelete(t, conn)
-		}
-		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce denied tables") {
-				err = nil
-			}
 		}
 		assert.Nil(t, err)
 		time.Sleep(10 * time.Millisecond)

@@ -409,7 +409,6 @@ func TestMain(m *testing.M) {
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
 			"-schema_change_check_interval", "1",
-			"-online_ddl_check_interval", "3s",
 		}
 
 		// -vstream_packet_size is set to a small value that ensures we get multiple stream iterations,
@@ -679,9 +678,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			err = generateDelete(t, conn)
 		}
 		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce denied tables") {
-				err = nil
-			} else if strings.Contains(err.Error(), "doesn't exist") {
+			if strings.Contains(err.Error(), "doesn't exist") {
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}

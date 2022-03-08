@@ -2264,6 +2264,36 @@ var (
 	}, {
 		input: "call proc(@param)",
 	}, {
+		input:  "PREPARE stmt1 FROM 'SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse'",
+		output: "prepare stmt1 from SELECT SQRT(POW(?,2) + POW(?,2)) AS hypotenuse",
+	}, {
+		input:  "PREPARE stmt2 FROM @s",
+		output: "prepare stmt2 from @s",
+	}, {
+		input:  "PREPARE /* comment */ stmt2 FROM @s",
+		output: "prepare /* comment */ stmt2 from @s",
+	}, {
+		input:  "EXECUTE stmt1",
+		output: "execute stmt1",
+	}, {
+		input:  "EXECUTE /* comment */ stmt1",
+		output: "execute /* comment */ stmt1",
+	}, {
+		input:  "EXECUTE stmt1 USING @a",
+		output: "execute stmt1 using @a",
+	}, {
+		input:  "EXECUTE stmt1 USING @a, @b",
+		output: "execute stmt1 using @a, @b",
+	}, {
+		input:  "DEALLOCATE PREPARE stmt1",
+		output: "deallocate prepare stmt1",
+	}, {
+		input:  "DROP PREPARE stmt1",
+		output: "drop prepare stmt1",
+	}, {
+		input:  "DROP /* comment */ PREPARE stmt1",
+		output: "drop /* comment */ prepare stmt1",
+	}, {
 		input:  "create table unused_reserved_keywords (dense_rank bigint, lead VARCHAR(255), percent_rank decimal(3, 0), row TINYINT, rows CHAR(10), constraint PK_project PRIMARY KEY (dense_rank))",
 		output: "create table unused_reserved_keywords (\n\t`dense_rank` bigint,\n\t`lead` VARCHAR(255),\n\t`percent_rank` decimal(3,0),\n\t`row` TINYINT,\n\t`rows` CHAR(10),\n\tconstraint PK_project PRIMARY KEY (`dense_rank`)\n)",
 	}}
@@ -3787,6 +3817,15 @@ var (
 	}{{
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
+	}, {
+		input:  "execute stmt using 1;",
+		output: "syntax error at position 21 near '1'",
+	}, {
+		input:  "PREPARE stmt FROM a;",
+		output: "syntax error at position 20 near 'a'",
+	}, {
+		input:  "PREPARE stmt FROM @@a;",
+		output: "syntax error at position 22 near 'a'",
 	}, {
 		input:  "select x'78 from t",
 		output: "syntax error at position 12 near '78'",

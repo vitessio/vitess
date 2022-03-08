@@ -3263,6 +3263,12 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("the <keyspace> argument is required for the commandApplySchema command")
 	}
 
+	// v14 deprecates `-skip-topo` flag. This check will be removed in v15
+	if settings, _ := schema.ParseDDLStrategy(*ddlStrategy); settings != nil && settings.IsSkipTopoFlag() {
+		deprecationMessage := `-skip-topo flag is deprecated and will be removed in v15`
+		log.Warningf(deprecationMessage)
+	}
+
 	keyspace := subFlags.Arg(0)
 	change, err := getFileParam(*sql, *sqlFile, "sql")
 	if err != nil {
@@ -3295,7 +3301,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		Sql:                     parts,
 		SkipPreflight:           *skipPreflight,
 		UuidList:                textutil.SplitDelimitedList(*uuidList),
-		RequestContext:          *migrationContext,
+		MigrationContext:        *migrationContext,
 		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
 		CallerId:                cID,
 	})

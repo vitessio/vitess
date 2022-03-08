@@ -40,6 +40,12 @@ var promotionRuleOrderMap = map[CandidatePromotionRule]int{
 	MustNot:   4,
 }
 
+// AllPromotionRules returns all the CandidatePromotionRules in a list
+// sorted by their priority.
+func AllPromotionRules() []CandidatePromotionRule {
+	return []CandidatePromotionRule{Must, Prefer, Neutral, PreferNot, MustNot}
+}
+
 func (this *CandidatePromotionRule) BetterThan(other CandidatePromotionRule) bool {
 	otherOrder, ok := promotionRuleOrderMap[other]
 	if !ok {

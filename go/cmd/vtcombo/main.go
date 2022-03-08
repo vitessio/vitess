@@ -150,6 +150,13 @@ func main() {
 		// Create topo server. We use a 'memorytopo' implementation.
 		ts = memorytopo.NewServer(tpb.Cells...)
 	}
+
+	// attempt to load any routing rules specified by tpb
+	if err := vtcombo.InitRoutingRules(context.Background(), ts, tpb.GetRoutingRules()); err != nil {
+		log.Errorf("Failed to load routing rules: %v", err)
+		exit.Return(1)
+	}
+
 	servenv.Init()
 	tabletenv.Init()
 

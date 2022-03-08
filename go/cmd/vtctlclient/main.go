@@ -42,6 +42,29 @@ var (
 	server        = flag.String("server", "", "server to use for connection")
 )
 
+// checkDeprecations runs quick and dirty checks to see whether any command or flag are deprecated.
+// For any depracated command or flag, the function issues a warning message.
+// this function will change on each Vitess version. Each depracation message should only last a version.
+// VEP-4 will replace the need for this function. See https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md
+func checkDeprecations(args []string) {
+	// utility:
+	findSubstring := func(s string) (arg string, ok bool) {
+		for _, arg := range args {
+			if strings.Contains(arg, s) {
+				return arg, true
+			}
+		}
+		return "", false
+	}
+	if _, ok := findSubstring("ApplySchema"); ok {
+		if arg, ok := findSubstring("ddl_strategy"); ok {
+			if strings.Contains(arg, "-skip-topo") {
+				log.Warning("-skip-topo is deprecated and will be removed in future versions")
+			}
+		}
+	}
+}
+
 func main() {
 	defer exit.Recover()
 
@@ -60,6 +83,8 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
 	defer cancel()
+
+	checkDeprecations(flag.Args())
 
 	err := vtctlclient.RunCommandAndWait(
 		ctx, *server, flag.Args(),

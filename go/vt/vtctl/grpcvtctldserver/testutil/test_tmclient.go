@@ -26,13 +26,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -129,6 +134,12 @@ type TabletManagerClient struct {
 	// information, e.g. ChangeType. To force an error result for those rpcs in
 	// a test, set tmc.TopoServer = nil.
 	TopoServer *topo.Server
+	Backups    map[string]struct {
+		Events        []*logutilpb.Event
+		EventInterval time.Duration
+		EventJitter   time.Duration
+		ErrorAfter    time.Duration
+	}
 	// keyed by tablet alias.
 	ChangeTabletTypeResult map[string]error
 	// keyed by tablet alias.
@@ -258,6 +269,104 @@ type TabletManagerClient struct {
 	// WaitForPosition(tablet *topodatapb.Tablet, position string) error, so we
 	// key by tablet alias and then by position.
 	WaitForPositionResults map[string]map[string]error
+}
+
+type backupStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *logutilpb.Event
+}
+
+func (stream *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	case <-stream.Closed():
+		return nil, stream.CloseErr()
+	}
+}
+
+func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// Backup is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
+	if tablet.Type == topodatapb.TabletType_PRIMARY && !allowPrimary {
+		return nil, fmt.Errorf("cannot backup primary with allowPrimary=false")
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	testdata, ok := fake.Backups[key]
+	if !ok {
+		return nil, fmt.Errorf("no Backup fake result set for %s", key)
+	}
+
+	stream := &backupStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *logutilpb.Event, len(testdata.Events)),
+	}
+	go func() {
+		if testdata.EventInterval == 0 {
+			testdata.EventInterval = 10 * time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.Backup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+		}
+
+		if testdata.EventJitter == 0 {
+			testdata.EventJitter = time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+		}
+
+		errCtx, errCancel := context.WithCancel(context.Background())
+		switch testdata.ErrorAfter {
+		case 0:
+			// no error to send, cancel the error context immediately
+			errCancel()
+		default:
+			go func() {
+				timer := time.NewTimer(testdata.ErrorAfter)
+				defer func() { // Stop the timer and drain the channel.
+					if !timer.Stop() {
+						<-timer.C
+					}
+				}()
+				defer errCancel()
+
+				<-timer.C
+				stream.ErrCh <- fmt.Errorf("error triggered after %s", testdata.ErrorAfter)
+			}()
+		}
+
+		ticker := timer.NewRandTicker(testdata.EventInterval, testdata.EventJitter)
+
+		defer ticker.Stop()
+		defer stream.CloseWithError(nil)
+
+		for _, event := range testdata.Events {
+			stream.ch <- event
+			<-ticker.C
+		}
+
+		// Wait for the error goroutine to finish. Note that if ErrorAfter
+		// is zero, we never start the goroutine and cancel this context
+		// immediately.
+		//
+		// The reason for this select is so that the error goroutine does
+		// not attempt to send to stream.errCh after the call to CloseSend().
+		<-errCtx.Done()
+	}()
+
+	return stream, nil
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.

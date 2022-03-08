@@ -73,6 +73,7 @@ const (
 	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
 	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -138,6 +139,11 @@ const (
 	`
 	sqlUpdateMigrationReadyToComplete = `UPDATE _vt.schema_migrations
 			SET ready_to_complete=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationStowawayTable = `UPDATE _vt.schema_migrations
+			SET stowaway_table=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -270,6 +276,7 @@ const (
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
 			postpone_completion,
+			stowaway_table,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
@@ -483,6 +490,7 @@ const (
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
 	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT
@@ -517,8 +525,9 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
-	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
+	sqlSwapTables      = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable     = "RENAME TABLE `%a` TO `%a`"
+	sqlRenameTwoTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`"
 )
 
 const (
@@ -575,4 +584,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableRevertedUUIDIndex,
 	alterSchemaMigrationsTableIsView,
 	alterSchemaMigrationsTableReadyToComplete,
+	alterSchemaMigrationsTableStowawayTable,
 }

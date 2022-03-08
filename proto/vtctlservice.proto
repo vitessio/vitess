@@ -47,6 +47,9 @@ service Vtctld {
   rpc ApplySchema(vtctldata.ApplySchemaRequest) returns (vtctldata.ApplySchemaResponse) {};
   // ApplyVSchema applies a vschema to a keyspace.
   rpc ApplyVSchema(vtctldata.ApplyVSchemaRequest) returns (vtctldata.ApplyVSchemaResponse) {};
+  // Backup uses the BackupEngine and BackupStorage services on the specified
+  // tablet to create and store a new backup.
+  rpc Backup(vtctldata.BackupRequest) returns (stream vtctldata.BackupResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.
