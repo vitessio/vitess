@@ -57,6 +57,47 @@ func (hp *horizonPlanning) pushAggregation(
 	}
 }
 
+type reorgFunc = func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets)
+
+func passThrough(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
+	return groupByOffsets, aggrOffsets
+}
+
+func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]abstract.GroupBy, []abstract.Aggr, reorgFunc) {
+	originalGrouping := make([]abstract.GroupBy, len(grouping))
+	originalAggr := make([]abstract.Aggr, len(aggregations))
+	copy(originalAggr, aggregations)
+	copy(originalGrouping, grouping)
+	sort.Sort(abstract.Aggrs(aggregations))
+	sort.Sort(abstract.GroupBys(grouping))
+
+	reorg := func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
+		orderedGroupingOffsets := make([]offsets, 0, len(originalGrouping))
+		for _, og := range originalGrouping {
+			for i, g := range grouping {
+				if og.Inner == g.Inner {
+					orderedGroupingOffsets = append(orderedGroupingOffsets, groupByOffsets[i])
+					break
+				}
+			}
+		}
+
+		orderedAggrs := make([][]offsets, 0, len(originalAggr))
+		for _, og := range originalAggr {
+			for i, g := range aggregations {
+				if og.Func == g.Func {
+					orderedAggrs = append(orderedAggrs, aggrOffsets[i])
+					break
+				}
+			}
+		}
+
+		return orderedGroupingOffsets, orderedAggrs
+	}
+
+	return grouping, aggregations, reorg
+}
+
 func pushAggrOnRoute(
 	ctx *plancontext.PlanningContext,
 	plan *routeGen4,
@@ -64,30 +105,25 @@ func pushAggrOnRoute(
 	grouping []abstract.GroupBy,
 	ignoreOutputOrder bool,
 ) ([]offsets, [][]offsets, error) {
+	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
 	}
 
-	var originalGrouping []abstract.GroupBy
 	var vtgateAggregation [][]offsets
 	var groupingCols []int
+	var reorg = passThrough
 
 	// aggIdx keeps track of the index of the aggregations we have processed so far. Starts with 0, goes all the way to len(aggregations)
 	aggrIdx := 0
-	if !ignoreOutputOrder {
-		// creating a copy of the original grouping list, so we can reorder them
-		// we do the actual copying inside the if statement below
-		originalGrouping = make([]abstract.GroupBy, len(grouping))
-		vtgateAggregation = make([][]offsets, 0, len(aggregations))
-		copy(originalGrouping, grouping)
+	if columnOrderMatters {
+		grouping, aggregations, reorg = sortOffsets(grouping, aggregations)
 
 		// If we care for the output order, we first sort the aggregations and the groupBys independently
 		// Then we run a merge sort on the two lists. This ensures that we start pushing the aggregations and groupBys in the ascending order
 		// So their ordering in the SELECT statement of the route matches what we intended
 		groupbyIdx := 0
-		sort.Sort(abstract.Aggrs(aggregations))
-		sort.Sort(abstract.GroupBys(grouping))
 		for aggrIdx < len(aggregations) && groupbyIdx < len(grouping) {
 			aggregation := aggregations[aggrIdx]
 			groupBy := grouping[groupbyIdx]
@@ -169,21 +205,8 @@ func pushAggrOnRoute(
 		})
 	}
 
-	if ignoreOutputOrder {
-		return groupingOffsets, vtgateAggregation, nil
-	}
-
-	// re-ordering the output slice to match the input order
-	orderedGroupingOffsets := make([]offsets, 0, len(grouping))
-	for _, og := range originalGrouping {
-		for i, g := range grouping {
-			if og.Inner == g.Inner {
-				orderedGroupingOffsets = append(orderedGroupingOffsets, groupingOffsets[i])
-				break
-			}
-		}
-	}
-	return orderedGroupingOffsets, vtgateAggregation, nil
+	groupingOffsets, vtgateAggregation = reorg(groupingOffsets, vtgateAggregation)
+	return groupingOffsets, vtgateAggregation, nil
 }
 
 // addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
