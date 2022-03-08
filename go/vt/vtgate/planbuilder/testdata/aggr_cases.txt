@@ -186,7 +186,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(0) AS count(*)",
-    "GroupBy": "1",
+    "GroupBy": "(1|2)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -195,9 +196,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*), intcol from `user` where 1 != 1 group by intcol",
+        "FieldQuery": "select count(*), intcol, weight_string(intcol) from `user` where 1 != 1 group by intcol, weight_string(intcol)",
         "OrderBy": "1 ASC",
-        "Query": "select count(*), intcol from `user` group by intcol order by intcol asc",
+        "Query": "select count(*), intcol, weight_string(intcol) from `user` group by intcol, weight_string(intcol) order by intcol asc",
         "Table": "`user`"
       }
     ]
@@ -621,7 +622,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(1) AS count(*)",
-    "GroupBy": "0",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -630,9 +632,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "0 ASC",
-        "Query": "select col, count(*) from `user` group by col order by col asc",
+        "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -649,7 +651,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(1) AS count(*)",
-    "GroupBy": "0, (2|3)",
+    "GroupBy": "(0|3), (2|4)",
     "ResultColumns": 2,
     "Inputs": [
       {
@@ -659,9 +661,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*), baz, weight_string(baz) from `user` where 1 != 1 group by col, baz, weight_string(baz)",
-        "OrderBy": "0 ASC, (2|3) ASC",
-        "Query": "select col, count(*), baz, weight_string(baz) from `user` group by col, baz, weight_string(baz) order by col asc, baz asc",
+        "FieldQuery": "select col, count(*), baz, weight_string(col), weight_string(baz) from `user` where 1 != 1 group by col, weight_string(col), baz, weight_string(baz)",
+        "OrderBy": "0 ASC, (2|4) ASC",
+        "Query": "select col, count(*), baz, weight_string(col), weight_string(baz) from `user` group by col, weight_string(col), baz, weight_string(baz) order by col asc, baz asc",
         "Table": "`user`"
       }
     ]
@@ -998,7 +1000,30 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user group by col",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
+        "OrderBy": "0 ASC",
+        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # count with distinct group by unique vindex
 "select id, count(distinct col) from user group by id"
@@ -1052,7 +1077,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(1) AS count(distinct id)",
-    "GroupBy": "0",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1061,9 +1087,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(distinct id) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "0 ASC",
-        "Query": "select col, count(distinct id) from `user` group by col order by col asc",
+        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1595,7 +1621,8 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "0",
+    "GroupBy": "(0|1)",
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1604,9 +1631,9 @@ Gen4 error: Can't group on 'count(*)'
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "0 ASC",
-        "Query": "select col from `user` group by col order by col asc",
+        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1930,7 +1957,8 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum(1) AS count(*)",
-        "GroupBy": "0",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1939,9 +1967,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(*) from `user` group by col order by col asc limit :__upper_limit",
+            "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -2163,7 +2191,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(1) AS count(*)",
-    "GroupBy": "0",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2172,9 +2201,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col",
+        "FieldQuery": "select col, count(*), weight_string(`user`.col) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(1|2) ASC, 0 ASC",
-        "Query": "select col, count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a group by col order by col asc",
+        "Query": "select col, count(*), weight_string(`user`.col) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a group by col, weight_string(col) order by col asc",
         "ResultColumns": 2,
         "Table": "`user`, user_extra"
       }
@@ -2346,8 +2375,8 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1|3) AS count(distinct col2), sum_distinct(1|3) AS sum(distinct col2)",
-    "GroupBy": "(0|2)",
+    "Aggregates": "count_distinct(1|4) AS count(distinct col2), sum_distinct(2|4) AS sum(distinct col2)",
+    "GroupBy": "(0|3)",
     "ResultColumns": 3,
     "Inputs": [
       {
@@ -2357,9 +2386,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2)",
-        "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2) order by col1 asc, col2 asc",
+        "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2), col2, weight_string(col2)",
+        "OrderBy": "(0|3) ASC, (1|4) ASC",
+        "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2), col2, weight_string(col2) order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -2376,12 +2405,13 @@ Gen4 plan same as above
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "1 ASC",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "sum(1) AS k",
-        "GroupBy": "0",
+        "GroupBy": "(0|2)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2390,9 +2420,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
+            "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
             "OrderBy": "0 ASC",
-            "Query": "select col, count(*) as k from `user` group by col order by col asc",
+            "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
             "Table": "`user`"
           }
         ]
@@ -2434,7 +2464,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(1) AS k",
-    "GroupBy": "0",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2443,9 +2474,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "0 ASC",
-        "Query": "select col, count(*) as k from `user` group by col order by col asc",
+        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -3000,26 +3031,35 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select col, count(*) a from user group by col having a \u003c= 10",
   "Instructions": {
-    "OperatorType": "Filter",
-    "Predicate": "a \u003c= 10",
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0,
+      1
+    ],
     "Inputs": [
       {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum(1) AS a",
-        "GroupBy": "0",
+        "OperatorType": "Filter",
+        "Predicate": "a \u003c= 10",
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col, count(*) as a from `user` where 1 != 1 group by col",
-            "OrderBy": "0 ASC",
-            "Query": "select col, count(*) as a from `user` group by col order by col asc",
-            "Table": "`user`"
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum(1) AS a",
+            "GroupBy": "(0|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, count(*) as a, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
+                "OrderBy": "0 ASC",
+                "Query": "select col, count(*) as a, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+                "Table": "`user`"
+              }
+            ]
           }
         ]
       }
@@ -3104,7 +3144,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count_distinct(1 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
-    "GroupBy": "0",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -3113,9 +3154,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, textcol1 from `user` where 1 != 1 group by col, textcol1",
+        "FieldQuery": "select col, textcol1, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col), textcol1",
         "OrderBy": "0 ASC, 1 ASC COLLATE latin1_swedish_ci",
-        "Query": "select col, textcol1 from `user` group by col, textcol1 order by col asc, textcol1 asc",
+        "Query": "select col, textcol1, weight_string(col) from `user` group by col, weight_string(col), textcol1 order by col asc, textcol1 asc",
         "Table": "`user`"
       }
     ]
@@ -3376,8 +3417,8 @@ Gen4 error: cannot push projections in ordered aggregates
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select u.foo, count(u.textcol1), count(*), weight_string(u.foo) from `user` as u where 1 != 1 group by u.foo, weight_string(u.foo)",
-                    "Query": "select u.foo, count(u.textcol1), count(*), weight_string(u.foo) from `user` as u group by u.foo, weight_string(u.foo)",
+                    "FieldQuery": "select u.foo, count(u.textcol1), count(*), u.foo, weight_string(u.foo) from `user` as u where 1 != 1 group by u.foo, weight_string(u.foo)",
+                    "Query": "select u.foo, count(u.textcol1), count(*), u.foo, weight_string(u.foo) from `user` as u group by u.foo, weight_string(u.foo)",
                     "Table": "`user`"
                   },
                   {
@@ -3396,8 +3437,8 @@ Gen4 error: cannot push projections in ordered aggregates
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select ue.bar, count(*), count(ue.foo), weight_string(ue.bar) from user_extra as ue where 1 != 1 group by ue.bar, weight_string(ue.bar)",
-                        "Query": "select ue.bar, count(*), count(ue.foo), weight_string(ue.bar) from user_extra as ue where ue.bar = :u_foo group by ue.bar, weight_string(ue.bar)",
+                        "FieldQuery": "select ue.bar, count(*), count(ue.foo), ue.bar, weight_string(ue.bar) from user_extra as ue where 1 != 1 group by ue.bar, weight_string(ue.bar)",
+                        "Query": "select ue.bar, count(*), count(ue.foo), ue.bar, weight_string(ue.bar) from user_extra as ue where ue.bar = :u_foo group by ue.bar, weight_string(ue.bar)",
                         "Table": "user_extra"
                       },
                       {
@@ -3502,8 +3543,8 @@ Gen4 error: cannot push projections in ordered aggregates
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.apa, count(*), weight_string(`user`.apa) from `user` where 1 != 1 group by `user`.apa, weight_string(`user`.apa)",
-            "Query": "select `user`.apa, count(*), weight_string(`user`.apa) from `user` group by `user`.apa, weight_string(`user`.apa)",
+            "FieldQuery": "select `user`.apa, count(*), `user`.apa, weight_string(`user`.apa) from `user` where 1 != 1 group by `user`.apa, weight_string(`user`.apa)",
+            "Query": "select `user`.apa, count(*), `user`.apa, weight_string(`user`.apa) from `user` group by `user`.apa, weight_string(`user`.apa)",
             "Table": "`user`"
           },
           {
@@ -3638,8 +3679,8 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1|3) AS count(distinct tcol2), sum_distinct(1|3) AS sum(distinct tcol2)",
-    "GroupBy": "(0|2)",
+    "Aggregates": "count_distinct(1|4) AS count(distinct tcol2), sum_distinct(2|4) AS sum(distinct tcol2)",
+    "GroupBy": "(0|3)",
     "ResultColumns": 3,
     "Inputs": [
       {
@@ -3649,9 +3690,9 @@ Gen4 error: cannot push projections in ordered aggregates
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2)",
-        "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select tcol1, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2) order by tcol1 asc, tcol2 asc",
+        "FieldQuery": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` where 1 != 1 group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2), tcol2, weight_string(tcol2)",
+        "OrderBy": "(0|3) ASC, (1|4) ASC",
+        "Query": "select tcol1, tcol2, tcol2, weight_string(tcol1), weight_string(tcol2) from `user` group by tcol1, weight_string(tcol1), tcol2, weight_string(tcol2), tcol2, weight_string(tcol2) order by tcol1 asc, tcol2 asc",
         "Table": "`user`"
       }
     ]
@@ -3667,8 +3708,8 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(0|3) AS count(distinct tcol2), sum(2) AS count(*), sum_distinct(0|3) AS sum(distinct tcol2)",
-    "GroupBy": "(1|4)",
+    "Aggregates": "count_distinct(0|4) AS count(distinct tcol2), sum(2) AS count(*), sum_distinct(3|4) AS sum(distinct tcol2)",
+    "GroupBy": "(1|5)",
     "ResultColumns": 4,
     "Inputs": [
       {
@@ -3678,9 +3719,9 @@ Gen4 error: cannot push projections in ordered aggregates
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select tcol2, tcol1, count(*), weight_string(tcol2), weight_string(tcol1) from `user` where 1 != 1 group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1)",
-        "OrderBy": "(1|4) ASC, (0|3) ASC",
-        "Query": "select tcol2, tcol1, count(*), weight_string(tcol2), weight_string(tcol1) from `user` group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1) order by tcol1 asc, tcol2 asc",
+        "FieldQuery": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol2), weight_string(tcol1) from `user` where 1 != 1 group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1), tcol2, weight_string(tcol2)",
+        "OrderBy": "(1|5) ASC, (0|4) ASC",
+        "Query": "select tcol2, tcol1, count(*), tcol2, weight_string(tcol2), weight_string(tcol1) from `user` group by tcol2, weight_string(tcol2), tcol1, weight_string(tcol1), tcol2, weight_string(tcol2) order by tcol1 asc, tcol2 asc",
         "Table": "`user`"
       }
     ]

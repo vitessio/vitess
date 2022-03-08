@@ -69,6 +69,7 @@ func pushAggrOnRoute(
 
 	var originalGrouping []abstract.GroupBy
 	var vtgateAggregation [][]offsets
+	var groupingCols []int
 
 	// aggIdx keeps track of the index of the aggregations we have processed so far. Starts with 0, goes all the way to len(aggregations)
 	aggrIdx := 0
@@ -100,7 +101,8 @@ func pushAggrOnRoute(
 				// and don't want to insert weight_strings in the beginning. We don't keep track of the offsets of where these
 				// are pushed since the later coll will reuse them and get the offset for us.
 				groupbyIdx++
-				_, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), true)
+				col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), false)
+				groupingCols = append(groupingCols, col)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -110,7 +112,8 @@ func pushAggrOnRoute(
 		for groupbyIdx < len(grouping) {
 			groupBy := grouping[groupbyIdx]
 			groupbyIdx++
-			_, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), true)
+			col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), false)
+			groupingCols = append(groupingCols, col)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -127,19 +130,33 @@ func pushAggrOnRoute(
 
 	groupingOffsets := make([]offsets, 0, len(grouping))
 	sel.GroupBy = make([]sqlparser.Expr, 0, len(grouping))
-	for _, expr := range grouping {
+	for idx, expr := range grouping {
 		sel.GroupBy = append(sel.GroupBy, expr.Inner)
 		collID := ctx.SemTable.CollationForExpr(expr.Inner)
 		wsExpr := expr.WeightStrExpr
 		if collID != collations.Unknown {
 			wsExpr = nil
 		}
-		col, wsCol, err := wrapAndPushExpr(ctx, expr.Inner, wsExpr, plan)
-		if err != nil {
-			return nil, nil, err
+		var col int
+		var err error
+		if ignoreOutputOrder {
+			col, _, err = addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: expr.Inner}, false)
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			col = groupingCols[idx]
 		}
-		if wsCol >= 0 {
-			sel.GroupBy = append(sel.GroupBy, weightStringFor(expr.WeightStrExpr))
+		wsCol := -1
+		if wsExpr != nil {
+			wsExpr = weightStringFor(expr.WeightStrExpr)
+			wsCol, _, err = addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
+			if err != nil {
+				return nil, nil, err
+			}
+			if wsCol >= 0 {
+				sel.GroupBy = append(sel.GroupBy, wsExpr)
+			}
 		}
 		groupingOffsets = append(groupingOffsets, offsets{
 			col:   col,

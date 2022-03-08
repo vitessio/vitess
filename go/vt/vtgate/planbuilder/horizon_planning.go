@@ -444,14 +444,16 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 		selectExprDep := semTable.RecursiveDeps(selectExpr.Expr)
 
 		// Check that the two expressions have the same dependencies
-		if selectExprDep != exprDep {
+		if !selectExprDep.Equals(exprDep) {
 			continue
 		}
 
 		if isSelectExprCol && isExprCol && exprCol.Name.Equal(selectExprCol.Name) {
 			// the expressions are ColName, we compare their name
 			return i
-		} else if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
+		}
+
+		if sqlparser.EqualsExpr(selectExpr.Expr, expr.Expr) {
 			// the expressions are not ColName, so we just compare the expressions
 			return i
 		}
@@ -533,9 +535,10 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		return nil, err
 	}
 
-	if distinctGroupBy != nil {
-		grouping = append(grouping, *distinctGroupBy)
-		order = append(order, distinctGroupBy.AsOrderBy())
+	if len(distinctGroupBy) > 0 {
+		grouping = append(grouping, distinctGroupBy...)
+		// all the distinct grouping aggregates use the same expression, so it should be OK to just add it once
+		order = append(order, distinctGroupBy[0].AsOrderBy())
 		oa.preProcess = true
 	}
 
@@ -663,20 +666,22 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 func addColumnsToOA(
 	ctx *plancontext.PlanningContext,
 	oa *orderedAggregate,
-	distinctGroupBy *abstract.GroupBy,
+	distinctGroupBy []abstract.GroupBy,
 	aggrParams []*engine.AggregateParams,
 	distinctOffsets []int,
 	groupings []offsets,
 	aggregationExprs []abstract.Aggr,
 ) {
-	if distinctGroupBy == nil {
+	if len(distinctGroupBy) == 0 {
 		oa.aggregates = aggrParams
 	} else {
+		count := len(groupings) - len(distinctOffsets)
 		addDistinctAggr := func(offset int) {
 			// the last grouping we pushed is the one we added for the distinct aggregation
-			o := groupings[len(groupings)-1]
+			o := groupings[count]
+			count++
 			a := aggregationExprs[offset]
-			collID := ctx.SemTable.CollationForExpr(distinctGroupBy.Inner)
+			collID := ctx.SemTable.CollationForExpr(a.Func.Exprs[0].(*sqlparser.AliasedExpr).Expr)
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 				Opcode:      a.OpCode,
 				Col:         o.col,
@@ -700,7 +705,7 @@ func addColumnsToOA(
 			}
 		}
 		// the last grouping should not be treated as a grouping column by the OA
-		groupings = groupings[:len(groupings)-1]
+		groupings = groupings[:len(groupings)-len(distinctOffsets)]
 	}
 
 	for i, grouping := range groupings {
@@ -710,7 +715,8 @@ func addColumnsToOA(
 }
 
 func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, exprs []abstract.Aggr) (
-	distinct *abstract.GroupBy, offsets []int, aggrs []abstract.Aggr, err error) {
+	distincts []abstract.GroupBy, offsets []int, aggrs []abstract.Aggr, err error) {
+	var distinctExpr sqlparser.Expr
 	for i, expr := range exprs {
 		if !expr.Distinct {
 			aggrs = append(aggrs, expr)
@@ -729,18 +735,19 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			aggrs = append(aggrs, expr)
 			continue
 		}
-		if distinct == nil {
-			distinct = &abstract.GroupBy{
-				Inner:         inner,
-				WeightStrExpr: innerWS,
-				InnerIndex:    expr.Index,
-			}
+		if distinctExpr == nil {
+			distinctExpr = innerWS
 		} else {
-			if !sqlparser.EqualsExpr(distinct.WeightStrExpr, innerWS) {
+			if !sqlparser.EqualsExpr(distinctExpr, innerWS) {
 				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
 				return nil, nil, nil, err
 			}
 		}
+		distincts = append(distincts, abstract.GroupBy{
+			Inner:         inner,
+			WeightStrExpr: innerWS,
+			InnerIndex:    expr.Index,
+		})
 		offsets = append(offsets, i)
 	}
 	return
@@ -964,7 +971,8 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 
 	weightStringOffset := -1
 	if wsNeeded {
-		weightStringOffset, _, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: weightStringFor(weightStrExpr)}, plan, true, true, false)
+		aliasedExpr := &sqlparser.AliasedExpr{Expr: weightStringFor(weightStrExpr)}
+		weightStringOffset, _, err = pushProjection(ctx, aliasedExpr, plan, true, true, false)
 		if err != nil {
 			return 0, 0, err
 		}
