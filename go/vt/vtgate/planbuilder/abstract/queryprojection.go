@@ -60,10 +60,6 @@ type (
 		Inner         sqlparser.Expr
 		WeightStrExpr sqlparser.Expr
 
-		// This is to add the distinct function expression in grouping column for pushing down but not be to used as grouping key at VTGate level.
-		// Starts with 1 so that default (0) means unassigned.
-		DistinctAggrIndex int
-
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
 		InnerIndex  *int
 		aliasedExpr *sqlparser.AliasedExpr

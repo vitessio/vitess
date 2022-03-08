@@ -103,7 +103,8 @@ func pushAggrOnRoute(
 				// and don't want to insert weight_strings in the beginning. We don't keep track of the offsets of where these
 				// are pushed since the later coll will reuse them and get the offset for us.
 				groupbyIdx++
-				col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), false)
+				reuseCol := groupBy.InnerIndex == nil
+				col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), reuseCol)
 				groupingCols = append(groupingCols, col)
 				if err != nil {
 					return nil, nil, err
@@ -114,7 +115,8 @@ func pushAggrOnRoute(
 		for groupbyIdx < len(grouping) {
 			groupBy := grouping[groupbyIdx]
 			groupbyIdx++
-			col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), false)
+			reuseCol := groupBy.InnerIndex == nil
+			col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), reuseCol)
 			groupingCols = append(groupingCols, col)
 			if err != nil {
 				return nil, nil, err
@@ -142,7 +144,7 @@ func pushAggrOnRoute(
 		var col int
 		var err error
 		if ignoreOutputOrder {
-			col, _, err = addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: expr.Inner}, false)
+			col, _, err = addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: expr.Inner}, true)
 			if err != nil {
 				return nil, nil, err
 			}
