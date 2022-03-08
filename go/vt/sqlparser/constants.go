@@ -53,6 +53,7 @@ const (
 	// DDL strings.
 	CreateStr           = "create"
 	AlterStr            = "alter"
+	DeallocateStr       = "deallocate"
 	DropStr             = "drop"
 	RenameStr           = "rename"
 	TruncateStr         = "truncate"
@@ -551,6 +552,12 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
+)
+
+// Constant for Enum Type - DeallocateStmtType
+const (
+	DeallocateType DeallocateStmtType = iota
+	DropType
 )
 
 // Constant for Enum Type - CollateAndCharsetType

@@ -611,6 +611,35 @@ type (
 		Table TableName
 		Wild  string
 	}
+
+	// PrepareStmt represents a Prepare Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
+	PrepareStmt struct {
+		Name                ColIdent
+		Statement           string
+		Comments            Comments
+		StatementIdentifier ColIdent
+	}
+
+	// ExecuteStmt represents an Execute Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
+	ExecuteStmt struct {
+		Name      ColIdent
+		Comments  Comments
+		Arguments Columns
+	}
+
+	// DeallocateStmt represents a Deallocate Statement
+	// More info available on https://dev.mysql.com/doc/refman/8.0/en/deallocate-prepare.html
+	DeallocateStmt struct {
+		Type     DeallocateStmtType
+		Comments Comments
+		Name     ColIdent
+	}
+
+	// DeallocateStmtType is an enum to get types of deallocate
+	DeallocateStmtType int8
+
 	// IntervalTypes is an enum to get types of intervals
 	IntervalTypes int8
 
@@ -669,6 +698,9 @@ func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
 func (*ExplainStmt) iStatement()       {}
 func (*ExplainTab) iStatement()        {}
+func (*PrepareStmt) iStatement()       {}
+func (*ExecuteStmt) iStatement()       {}
+func (*DeallocateStmt) iStatement()    {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}

@@ -1189,6 +1189,44 @@ func (node *ExplainTab) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *PrepareStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("prepare ")
+	node.Comments.formatFast(buf)
+	node.Name.formatFast(buf)
+	buf.WriteString(" from ")
+	if node.Statement != "" {
+		buf.WriteString(node.Statement)
+	} else {
+		node.StatementIdentifier.formatFast(buf)
+	}
+}
+
+// formatFast formats the node.
+func (node *ExecuteStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("execute ")
+	node.Comments.formatFast(buf)
+	node.Name.formatFast(buf)
+	if len(node.Arguments) > 0 {
+		buf.WriteString(" using ")
+	}
+	var prefix string
+	for _, n := range node.Arguments {
+		buf.WriteString(prefix)
+		n.formatFast(buf)
+		prefix = ", "
+	}
+}
+
+// formatFast formats the node.
+func (node *DeallocateStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte(' ')
+	node.Comments.formatFast(buf)
+	buf.WriteString("prepare ")
+	node.Name.formatFast(buf)
+}
+
+// formatFast formats the node.
 func (node *CallProc) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("call ")
 	node.Name.formatFast(buf)

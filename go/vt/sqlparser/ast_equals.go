@@ -284,6 +284,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfCurTimeFuncExpr(a, b)
+	case *DeallocateStmt:
+		b, ok := inB.(*DeallocateStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDeallocateStmt(a, b)
 	case *Default:
 		b, ok := inB.(*Default)
 		if !ok {
@@ -338,6 +344,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfDropView(a, b)
+	case *ExecuteStmt:
+		b, ok := inB.(*ExecuteStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExecuteStmt(a, b)
 	case *ExistsExpr:
 		b, ok := inB.(*ExistsExpr)
 		if !ok {
@@ -632,6 +644,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsPartitions(a, b)
+	case *PrepareStmt:
+		b, ok := inB.(*PrepareStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPrepareStmt(a, b)
 	case ReferenceAction:
 		b, ok := inB.(ReferenceAction)
 		if !ok {
@@ -1499,6 +1517,19 @@ func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 		EqualsRefOfLiteral(a.Fsp, b.Fsp)
 }
 
+// EqualsRefOfDeallocateStmt does deep equals between the two objects.
+func EqualsRefOfDeallocateStmt(a, b *DeallocateStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsColIdent(a.Name, b.Name)
+}
+
 // EqualsRefOfDefault does deep equals between the two objects.
 func EqualsRefOfDefault(a, b *Default) bool {
 	if a == b {
@@ -1613,6 +1644,19 @@ func EqualsRefOfDropView(a, b *DropView) bool {
 	return a.IfExists == b.IfExists &&
 		EqualsTableNames(a.FromTables, b.FromTables) &&
 		EqualsComments(a.Comments, b.Comments)
+}
+
+// EqualsRefOfExecuteStmt does deep equals between the two objects.
+func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsColumns(a.Arguments, b.Arguments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.
@@ -2213,6 +2257,20 @@ func EqualsPartitions(a, b Partitions) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfPrepareStmt does deep equals between the two objects.
+func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Statement == b.Statement &&
+		EqualsColIdent(a.Name, b.Name) &&
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsColIdent(a.StatementIdentifier, b.StatementIdentifier)
 }
 
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.
@@ -3811,6 +3869,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfCreateView(a, b)
+	case *DeallocateStmt:
+		b, ok := inB.(*DeallocateStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDeallocateStmt(a, b)
 	case *Delete:
 		b, ok := inB.(*Delete)
 		if !ok {
@@ -3835,6 +3899,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfDropView(a, b)
+	case *ExecuteStmt:
+		b, ok := inB.(*ExecuteStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExecuteStmt(a, b)
 	case *ExplainStmt:
 		b, ok := inB.(*ExplainStmt)
 		if !ok {
@@ -3883,6 +3953,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
+	case *PrepareStmt:
+		b, ok := inB.(*PrepareStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPrepareStmt(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {

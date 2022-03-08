@@ -361,12 +361,12 @@ func TestClientInfo(t *testing.T) {
 	const infoPrepared = "Statement prepared"
 
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &connParams)
+	params := connParams
+	params.EnableQueryInfo = true
+	conn, err := mysql.Connect(ctx, &params)
 	require.NoError(t, err)
 
 	defer conn.Close()
-
-	conn.ReturnQueryInfo = true
 
 	// This is the simplest query that would return some textual data in the 'info' field
 	result, err := conn.ExecuteFetch(`PREPARE stmt1 FROM 'SELECT 1 = 1'`, -1, true)

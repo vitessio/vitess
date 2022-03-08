@@ -108,6 +108,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCreateView(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *DeallocateStmt:
+		return VisitRefOfDeallocateStmt(in, f)
 	case *Default:
 		return VisitRefOfDefault(in, f)
 	case *Definer:
@@ -126,6 +128,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
 		return VisitRefOfDropView(in, f)
+	case *ExecuteStmt:
+		return VisitRefOfExecuteStmt(in, f)
 	case *ExistsExpr:
 		return VisitRefOfExistsExpr(in, f)
 	case *ExplainStmt:
@@ -224,6 +228,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPartitionValueRange(in, f)
 	case Partitions:
 		return VisitPartitions(in, f)
+	case *PrepareStmt:
+		return VisitRefOfPrepareStmt(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
@@ -935,6 +941,21 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfDefault(in *Default, f Visit) error {
 	if in == nil {
 		return nil
@@ -1063,6 +1084,24 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 		return err
 	}
 	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Arguments, f); err != nil {
 		return err
 	}
 	return nil
@@ -1706,6 +1745,24 @@ func VisitPartitions(in Partitions, f Visit) error {
 		if err := VisitColIdent(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.StatementIdentifier, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -2909,6 +2966,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:
 		return VisitRefOfCreateView(in, f)
+	case *DeallocateStmt:
+		return VisitRefOfDeallocateStmt(in, f)
 	case *Delete:
 		return VisitRefOfDelete(in, f)
 	case *DropDatabase:
@@ -2917,6 +2976,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
 		return VisitRefOfDropView(in, f)
+	case *ExecuteStmt:
+		return VisitRefOfExecuteStmt(in, f)
 	case *ExplainStmt:
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
@@ -2933,6 +2994,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
+	case *PrepareStmt:
+		return VisitRefOfPrepareStmt(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameTable:

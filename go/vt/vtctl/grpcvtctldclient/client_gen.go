@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
@@ -71,6 +72,15 @@ func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatap
 	}
 
 	return client.c.ApplyVSchema(ctx, in, opts...)
+}
+
+// Backup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.Backup(ctx, in, opts...)
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.

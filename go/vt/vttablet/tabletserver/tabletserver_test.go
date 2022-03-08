@@ -2161,9 +2161,7 @@ func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig, k
 
 func setupFakeDB(t *testing.T) *fakesqldb.DB {
 	db := fakesqldb.New(t)
-	for query, result := range getSupportedQueries() {
-		db.AddQuery(query, result)
-	}
+	addTabletServerSupportedQueries(db)
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -2180,8 +2178,8 @@ func setupFakeDB(t *testing.T) *fakesqldb.DB {
 	return db
 }
 
-func getSupportedQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
+func addTabletServerSupportedQueries(db *fakesqldb.DB) {
+	queryResultMap := map[string]*sqltypes.Result{
 		// Queries for how row protection test (txserializer).
 		"update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001": {
 			RowsAffected: 1,
@@ -2306,6 +2304,45 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
+	for query, result := range queryResultMap {
+		db.AddQuery(query, result)
+	}
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "name",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "addr",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "name_string",
+			Type: sqltypes.VarChar,
+		}},
+	})
+	db.MockQueriesForTable("msg", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "priority",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_next",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "epoch",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_acked",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.Int64,
+		}},
+	})
 }
 
 func init() {

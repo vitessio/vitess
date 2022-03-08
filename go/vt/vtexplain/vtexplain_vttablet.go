@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 
 	"vitess.io/vitess/go/mysql"
@@ -51,6 +52,25 @@ type tabletEnv struct {
 
 	// map for each table from the column name to its type
 	tableColumns map[string]map[string]querypb.Type
+}
+
+func newTabletEnv() *tabletEnv {
+	return &tabletEnv{
+		schemaQueries: make(map[string]*sqltypes.Result),
+		tableColumns:  make(map[string]map[string]querypb.Type),
+	}
+}
+
+func (te *tabletEnv) addResult(query string, result *sqltypes.Result) {
+	te.schemaQueries[query] = result
+}
+
+func (te *tabletEnv) getResult(query string) *sqltypes.Result {
+	result, ok := te.schemaQueries[query]
+	if !ok {
+		return nil
+	}
+	return result
 }
 
 var (
@@ -269,10 +289,8 @@ func (t *explainTablet) Close(ctx context.Context) error {
 }
 
 func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tabletEnv, error) {
-	var tEnv tabletEnv
-
-	tEnv.tableColumns = make(map[string]map[string]querypb.Type)
-	tEnv.schemaQueries = map[string]*sqltypes.Result{
+	tEnv := newTabletEnv()
+	schemaQueries := map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
@@ -375,11 +393,14 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		),
 	}
 
+	for query, result := range schemaQueries {
+		tEnv.addResult(query, result)
+	}
 	for _, query := range onlineddl.ApplyDDL {
-		tEnv.schemaQueries[query] = &sqltypes.Result{
+		tEnv.addResult(query, &sqltypes.Result{
 			Fields: []*querypb.Field{{Type: sqltypes.Uint64}},
 			Rows:   [][]sqltypes.Value{},
-		}
+		})
 	}
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)
@@ -396,21 +417,32 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		}
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
 	}
-	tEnv.schemaQueries[mysql.TablesWithSize57] = &sqltypes.Result{
+	tEnv.addResult(mysql.TablesWithSize57, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows:   showTableRows,
-	}
+	})
 
 	indexRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
 		table := sqlparser.String(ddl.GetTable().Name)
-
+		backtickedTable := sqlescape.EscapeID(sqlescape.UnescapeID(table))
 		if ddl.GetOptLike() != nil {
 			likeTable := ddl.GetOptLike().LikeTable.Name.String()
-			if _, ok := tEnv.schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
+			backtickedLikeTable := sqlescape.EscapeID(sqlescape.UnescapeID(likeTable))
+
+			likeQuery := "SELECT * FROM " + backtickedLikeTable + " WHERE 1 != 1"
+			query := "SELECT * FROM " + backtickedTable + " WHERE 1 != 1"
+			if tEnv.getResult(likeQuery) == nil {
 				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
-			tEnv.schemaQueries["select * from "+table+" where 1 != 1"] = tEnv.schemaQueries["select * from "+likeTable+" where 1 != 1"]
+			tEnv.addResult(query, tEnv.getResult(likeQuery))
+
+			likeQuery = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(likeTable))
+			query = fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+			if tEnv.getResult(likeQuery) == nil {
+				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
+			}
+			tEnv.addResult(query, tEnv.getResult(likeQuery))
 			continue
 		}
 		for _, idx := range ddl.GetTableSpec().Indexes {
@@ -425,6 +457,13 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 
 		tEnv.tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
+		var colTypes []*querypb.Field
+		var colValues [][]sqltypes.Value
+		colType := &querypb.Field{
+			Name: "column_type",
+			Type: sqltypes.VarChar,
+		}
+		colTypes = append(colTypes, colType)
 		for _, col := range ddl.GetTableSpec().Columns {
 			colName := strings.ToLower(col.Name.String())
 			rowType := &querypb.Field{
@@ -433,18 +472,24 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 			}
 			rowTypes = append(rowTypes, rowType)
 			tEnv.tableColumns[table][colName] = col.Type.SQLType()
+			colValues = append(colValues, []sqltypes.Value{sqltypes.NewVarChar(colName)})
 		}
-		tEnv.schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
+		tEnv.addResult("SELECT * FROM "+backtickedTable+" WHERE 1 != 1", &sqltypes.Result{
 			Fields: rowTypes,
-		}
+		})
+		query := fmt.Sprintf(mysqlctl.GetColumnNamesQuery, "database()", sqlescape.UnescapeID(table))
+		tEnv.addResult(query, &sqltypes.Result{
+			Fields: colTypes,
+			Rows:   colValues,
+		})
 	}
 
-	tEnv.schemaQueries[mysql.BaseShowPrimary] = &sqltypes.Result{
+	tEnv.addResult(mysql.BaseShowPrimary, &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
 		Rows:   indexRows,
-	}
+	})
 
-	return &tEnv, nil
+	return tEnv, nil
 }
 
 // HandleQuery implements the fakesqldb query handler interface
@@ -460,11 +505,12 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	// return the pre-computed results for any schema introspection queries
-	result, ok := getGlobalTabletEnv().schemaQueries[query]
-	if ok {
+	tEnv := getGlobalTabletEnv()
+	result := tEnv.getResult(query)
+
+	if result != nil {
 		return callback(result)
 	}
-
 	switch sqlparser.Preview(query) {
 	case sqlparser.StmtSelect:
 		// Parse the select statement to figure out the table and columns
@@ -493,7 +539,6 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		}
 
 		tableColumnMap := map[sqlparser.TableIdent]map[string]querypb.Type{}
-
 		for _, table := range tables {
 			if table == nil {
 				continue

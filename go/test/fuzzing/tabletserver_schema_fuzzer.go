@@ -70,5 +70,5 @@ func newTestLoadTable(tableName, comment string, db *fakesqldb.DB) (*schema.Tabl
 	}
 	defer conn.Recycle()
 
-	return schema.LoadTable(conn, tableName, comment)
+	return schema.LoadTable(conn, "fakesqldb", tableName, comment)
 }
