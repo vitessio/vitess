@@ -105,6 +105,57 @@ func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.Bac
 	return stream, nil
 }
 
+type backupShardStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *vtctldatapb.BackupResponse
+}
+
+func (stream *backupShardStreamAdapter) Recv() (*vtctldatapb.BackupResponse, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	}
+}
+
+func (stream *backupShardStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// BackupShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+	stream := &backupShardStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *vtctldatapb.BackupResponse, 1),
+	}
+	go func() {
+		err := client.s.BackupShard(in, stream)
+		stream.CloseWithError(err)
+	}()
+
+	return stream, nil
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	return client.s.ChangeTabletType(ctx, in)

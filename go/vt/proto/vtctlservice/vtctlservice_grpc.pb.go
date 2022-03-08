@@ -151,6 +151,8 @@ type VtctldClient interface {
 	// Backup uses the BackupEngine and BackupStorage services on the specified
 	// tablet to create and store a new backup.
 	Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error)
+	// BackupShard chooses a tablet in the shard and uses it to create a backup.
+	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -432,6 +434,38 @@ type vtctldBackupClient struct {
 }
 
 func (x *vtctldBackupClient) Recv() (*vtctldata.BackupResponse, error) {
+	m := new(vtctldata.BackupResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *vtctldClient) BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[1], "/vtctlservice.Vtctld/BackupShard", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vtctldBackupShardClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vtctld_BackupShardClient interface {
+	Recv() (*vtctldata.BackupResponse, error)
+	grpc.ClientStream
+}
+
+type vtctldBackupShardClient struct {
+	grpc.ClientStream
+}
+
+func (x *vtctldBackupShardClient) Recv() (*vtctldata.BackupResponse, error) {
 	m := new(vtctldata.BackupResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -1020,6 +1054,8 @@ type VtctldServer interface {
 	// Backup uses the BackupEngine and BackupStorage services on the specified
 	// tablet to create and store a new backup.
 	Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error
+	// BackupShard chooses a tablet in the shard and uses it to create a backup.
+	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -1245,6 +1281,9 @@ func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyV
 }
 func (UnimplementedVtctldServer) Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error {
 	return status.Errorf(codes.Unimplemented, "method Backup not implemented")
+}
+func (UnimplementedVtctldServer) BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error {
+	return status.Errorf(codes.Unimplemented, "method BackupShard not implemented")
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
@@ -1553,6 +1592,27 @@ type vtctldBackupServer struct {
 }
 
 func (x *vtctldBackupServer) Send(m *vtctldata.BackupResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Vtctld_BackupShard_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtctldata.BackupShardRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VtctldServer).BackupShard(m, &vtctldBackupShardServer{stream})
+}
+
+type Vtctld_BackupShardServer interface {
+	Send(*vtctldata.BackupResponse) error
+	grpc.ServerStream
+}
+
+type vtctldBackupShardServer struct {
+	grpc.ServerStream
+}
+
+func (x *vtctldBackupShardServer) Send(m *vtctldata.BackupResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -2952,6 +3012,11 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Backup",
 			Handler:       _Vtctld_Backup_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "BackupShard",
+			Handler:       _Vtctld_BackupShard_Handler,
 			ServerStreams: true,
 		},
 	},
