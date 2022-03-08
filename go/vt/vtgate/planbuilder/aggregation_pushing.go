@@ -57,47 +57,6 @@ func (hp *horizonPlanning) pushAggregation(
 	}
 }
 
-type reorgFunc = func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets)
-
-func passThrough(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
-	return groupByOffsets, aggrOffsets
-}
-
-func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]abstract.GroupBy, []abstract.Aggr, reorgFunc) {
-	originalGrouping := make([]abstract.GroupBy, len(grouping))
-	originalAggr := make([]abstract.Aggr, len(aggregations))
-	copy(originalAggr, aggregations)
-	copy(originalGrouping, grouping)
-	sort.Sort(abstract.Aggrs(aggregations))
-	sort.Sort(abstract.GroupBys(grouping))
-
-	reorg := func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
-		orderedGroupingOffsets := make([]offsets, 0, len(originalGrouping))
-		for _, og := range originalGrouping {
-			for i, g := range grouping {
-				if og.Inner == g.Inner {
-					orderedGroupingOffsets = append(orderedGroupingOffsets, groupByOffsets[i])
-					break
-				}
-			}
-		}
-
-		orderedAggrs := make([][]offsets, 0, len(originalAggr))
-		for _, og := range originalAggr {
-			for i, g := range aggregations {
-				if og.Func == g.Func {
-					orderedAggrs = append(orderedAggrs, aggrOffsets[i])
-					break
-				}
-			}
-		}
-
-		return orderedGroupingOffsets, orderedAggrs
-	}
-
-	return grouping, aggregations, reorg
-}
-
 func pushAggrOnRoute(
 	ctx *plancontext.PlanningContext,
 	plan *routeGen4,
@@ -105,6 +64,7 @@ func pushAggrOnRoute(
 	grouping []abstract.GroupBy,
 	ignoreOutputOrder bool,
 ) ([]offsets, [][]offsets, error) {
+	var err error
 	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
@@ -115,57 +75,21 @@ func pushAggrOnRoute(
 	var groupingCols []int
 	var reorg = passThrough
 
-	// aggIdx keeps track of the index of the aggregations we have processed so far. Starts with 0, goes all the way to len(aggregations)
-	aggrIdx := 0
 	if columnOrderMatters {
-		grouping, aggregations, reorg = sortOffsets(grouping, aggregations)
-
-		// If we care for the output order, we first sort the aggregations and the groupBys independently
-		// Then we run a merge sort on the two lists. This ensures that we start pushing the aggregations and groupBys in the ascending order
-		// So their ordering in the SELECT statement of the route matches what we intended
-		groupbyIdx := 0
-		for aggrIdx < len(aggregations) && groupbyIdx < len(grouping) {
-			aggregation := aggregations[aggrIdx]
-			groupBy := grouping[groupbyIdx]
-			// Compare the reference of integers, treating nils as columns that go to the end
-			// since they don't have any explicit ordering specified
-			if abstract.CompareRefInt(aggregation.Index, groupBy.InnerIndex) {
-				aggrIdx++
-				param := addAggregationToSelect(sel, aggregation)
-				vtgateAggregation = append(vtgateAggregation, []offsets{param})
-			} else {
-				// Here we only push the groupBy column and not the weight string expr even if it is required.
-				// We rely on the later for-loop to push the weight strings. This is required since we care about the order
-				// and don't want to insert weight_strings in the beginning. We don't keep track of the offsets of where these
-				// are pushed since the later coll will reuse them and get the offset for us.
-				groupbyIdx++
-				reuseCol := groupBy.InnerIndex == nil
-				col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), reuseCol)
-				groupingCols = append(groupingCols, col)
-				if err != nil {
-					return nil, nil, err
-				}
-			}
+		// During this first run, we push the projections for the normal columns (not the weigh_string ones, that is)
+		// in the order that the user asked for it
+		var it *sortedIterator
+		grouping, reorg, it = sortOffsets(grouping, aggregations)
+		vtgateAggregation, groupingCols, err = pushAggrsAndGroupingInOrder(ctx, plan, it, sel, vtgateAggregation, groupingCols)
+		if err != nil {
+			return nil, nil, err
 		}
-		// Go over the remaining grouping values that we should push.
-		for groupbyIdx < len(grouping) {
-			groupBy := grouping[groupbyIdx]
-			groupbyIdx++
-			reuseCol := groupBy.InnerIndex == nil
-			col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), reuseCol)
-			groupingCols = append(groupingCols, col)
-			if err != nil {
-				return nil, nil, err
-			}
+	} else {
+		// if we haven't already pushed the aggregations, now is the time
+		for _, aggregation := range aggregations {
+			param := addAggregationToSelect(sel, aggregation)
+			vtgateAggregation = append(vtgateAggregation, []offsets{param})
 		}
-	}
-
-	// Go over the remaining aggregations and add them to the SELECT.
-	for aggrIdx < len(aggregations) {
-		aggregation := aggregations[aggrIdx]
-		aggrIdx++
-		param := addAggregationToSelect(sel, aggregation)
-		vtgateAggregation = append(vtgateAggregation, []offsets{param})
 	}
 
 	groupingOffsets := make([]offsets, 0, len(grouping))
@@ -207,6 +131,33 @@ func pushAggrOnRoute(
 
 	groupingOffsets, vtgateAggregation = reorg(groupingOffsets, vtgateAggregation)
 	return groupingOffsets, vtgateAggregation, nil
+}
+
+func pushAggrsAndGroupingInOrder(
+	ctx *plancontext.PlanningContext,
+	plan *routeGen4,
+	it *sortedIterator,
+	sel *sqlparser.Select,
+	vtgateAggregation [][]offsets,
+	groupingCols []int,
+) ([][]offsets, []int, error) {
+	for it.next() {
+		groupBy, aggregation := it.current()
+		if aggregation != nil {
+			param := addAggregationToSelect(sel, *aggregation)
+			vtgateAggregation = append(vtgateAggregation, []offsets{param})
+			continue
+		}
+		if groupBy != nil {
+			reuseCol := groupBy.InnerIndex == nil
+			col, _, err := addExpressionToRoute(ctx, plan, groupBy.AsAliasedExpr(), reuseCol)
+			groupingCols = append(groupingCols, col)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	return vtgateAggregation, groupingCols, nil
 }
 
 // addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
@@ -479,4 +430,91 @@ func splitGroupingsToLeftAndRight(
 		}
 	}
 	return lhsGrouping, rhsGrouping, groupingOffsets, nil
+}
+
+type (
+	reorgFunc      = func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets)
+	sortedIterator struct {
+		grouping     []abstract.GroupBy
+		aggregations []abstract.Aggr
+		valueGB      *abstract.GroupBy
+		valueA       *abstract.Aggr
+		groupbyIdx   int
+		aggrIdx      int
+	}
+)
+
+func (it *sortedIterator) current() (*abstract.GroupBy, *abstract.Aggr) {
+	return it.valueGB, it.valueA
+}
+
+func (it *sortedIterator) next() bool {
+	if it.aggrIdx < len(it.aggregations) && it.groupbyIdx < len(it.grouping) {
+		aggregation := it.aggregations[it.aggrIdx]
+		groupBy := it.grouping[it.groupbyIdx]
+		if abstract.CompareRefInt(aggregation.Index, groupBy.InnerIndex) {
+			it.aggrIdx++
+			it.valueA, it.valueGB = &aggregation, nil
+			return true
+		}
+		it.groupbyIdx++
+		it.valueA, it.valueGB = nil, &groupBy
+		return true
+	}
+
+	if it.groupbyIdx < len(it.grouping) {
+		groupBy := it.grouping[it.groupbyIdx]
+		it.groupbyIdx++
+		it.valueA, it.valueGB = nil, &groupBy
+		return true
+	}
+	if it.aggrIdx < len(it.aggregations) {
+		aggregation := it.aggregations[it.aggrIdx]
+		it.aggrIdx++
+		it.valueA, it.valueGB = &aggregation, nil
+		return true
+	}
+	return false
+}
+
+func passThrough(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
+	return groupByOffsets, aggrOffsets
+}
+
+func sortOffsets(grouping []abstract.GroupBy, aggregations []abstract.Aggr) ([]abstract.GroupBy, reorgFunc, *sortedIterator) {
+	originalGrouping := make([]abstract.GroupBy, len(grouping))
+	originalAggr := make([]abstract.Aggr, len(aggregations))
+	copy(originalAggr, aggregations)
+	copy(originalGrouping, grouping)
+	sort.Sort(abstract.Aggrs(aggregations))
+	sort.Sort(abstract.GroupBys(grouping))
+
+	reorg := func(groupByOffsets []offsets, aggrOffsets [][]offsets) ([]offsets, [][]offsets) {
+		orderedGroupingOffsets := make([]offsets, 0, len(originalGrouping))
+		for _, og := range originalGrouping {
+			for i, g := range grouping {
+				if og.Inner == g.Inner {
+					orderedGroupingOffsets = append(orderedGroupingOffsets, groupByOffsets[i])
+					break
+				}
+			}
+		}
+
+		orderedAggrs := make([][]offsets, 0, len(originalAggr))
+		for _, og := range originalAggr {
+			for i, g := range aggregations {
+				if og.Func == g.Func {
+					orderedAggrs = append(orderedAggrs, aggrOffsets[i])
+					break
+				}
+			}
+		}
+
+		return orderedGroupingOffsets, orderedAggrs
+	}
+
+	return grouping, reorg, &sortedIterator{
+		grouping:     grouping,
+		aggregations: aggregations,
+	}
 }
