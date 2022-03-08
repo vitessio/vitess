@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -223,6 +224,15 @@ func (st *SemTable) CollationForExpr(e sqlparser.Expr) collations.ID {
 		return typ.Collation
 	}
 	return collations.Unknown
+}
+
+// NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
+func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
+	typ, found := st.ExprTypes[e]
+	if !found {
+		return true
+	}
+	return typ.Collation == collations.Unknown && !sqltypes.IsNumber(typ.Type)
 }
 
 func (st *SemTable) DefaultCollation() collations.ID {

@@ -19,9 +19,6 @@ package planbuilder
 import (
 	"sort"
 
-	"vitess.io/vitess/go/sqltypes"
-
-	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -95,11 +92,9 @@ func pushAggrOnRoute(
 	groupingOffsets := make([]offsets, 0, len(grouping))
 	for idx, expr := range grouping {
 		sel.AddGroupBy(expr.Inner)
-		collID := ctx.SemTable.CollationForExpr(expr.Inner)
-		qt := ctx.SemTable.TypeFor(expr.Inner)
-		wsExpr := expr.WeightStrExpr
-		if collID != collations.Unknown || (qt != nil && sqltypes.IsNumber(*qt)) {
-			wsExpr = nil
+		var wsExpr sqlparser.Expr
+		if ctx.SemTable.NeedsWeightString(expr.Inner) {
+			wsExpr = expr.WeightStrExpr
 		}
 		var col int
 		var err error
@@ -113,7 +108,6 @@ func pushAggrOnRoute(
 		}
 		wsCol := -1
 		if wsExpr != nil {
-			ctx.SemTable.CollationForExpr(expr.Inner)
 			wsExpr = weightStringFor(expr.WeightStrExpr)
 			wsCol, _, err = addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
