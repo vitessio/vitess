@@ -186,6 +186,9 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 			// We must read the data again and verify whether the previous write succeeded or not.
 			// The only way to guarantee safety is to keep retrying read until we succeed
 			for {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				ti, errInReading := ts.tm.TopoServer.GetTablet(ctx, ts.tm.tabletAlias)
 				if errInReading != nil {
 					<-time.After(100 * time.Millisecond)
