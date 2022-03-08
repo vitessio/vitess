@@ -182,7 +182,7 @@ func TestERSForInitialization(t *testing.T) {
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	defer clusterInstance.Teardown()
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
@@ -196,10 +196,10 @@ func TestERSForInitialization(t *testing.T) {
 	shard := &cluster.Shard{Name: utils.ShardName}
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-enable_semi_sync",
-		"-init_populate_metadata",
-		"-track_schema_versions=true",
+		"--lock_tables_timeout", "5s",
+		"--enable_semi_sync",
+		"--init_populate_metadata",
+		"--track_schema_versions=true",
 	}
 
 	// Initialize Cluster

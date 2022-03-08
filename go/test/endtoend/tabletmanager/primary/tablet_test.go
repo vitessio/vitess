@@ -87,9 +87,9 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-lock_tables_timeout", "5s",
-			"-watch_replication_stream",
-			"-enable_replication_reporter",
+			"--lock_tables_timeout", "5s",
+			"--watch_replication_stream",
+			"--enable_replication_reporter",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -174,7 +174,7 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 
 	// Capture the current TER.
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
+		"VtTabletStreamHealth", "--", "--count", "1", replicaTablet.Alias)
 	require.Nil(t, err)
 
 	var streamHealthRes1 querypb.StreamHealthResponse
@@ -201,7 +201,7 @@ func TestPrimaryRestartSetsTERTimestamp(t *testing.T) {
 
 	// Make sure that the TER did not change
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
+		"VtTabletStreamHealth", "--", "--count", "1", replicaTablet.Alias)
 	require.Nil(t, err)
 
 	var streamHealthRes2 querypb.StreamHealthResponse

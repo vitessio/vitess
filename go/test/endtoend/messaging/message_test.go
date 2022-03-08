@@ -277,9 +277,9 @@ func TestReparenting(t *testing.T) {
 	// do planned reparenting, make one replica as primary
 	// and validate client connection count in correspond tablets
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_primary", shard0Replica.Alias)
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", userKeyspace+"/-80",
+		"--new_primary", shard0Replica.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)
@@ -300,9 +300,9 @@ func TestReparenting(t *testing.T) {
 
 	// make old primary again as new primary
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", userKeyspace+"/-80",
-		"-new_primary", shard0Primary.Alias)
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", userKeyspace+"/-80",
+		"--new_primary", shard0Primary.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err)

@@ -25,11 +25,11 @@ It has two modes: single command or interactive.
 package main
 
 import (
+	"context"
 	"flag"
+	"io"
 	"os"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/callerid"
@@ -39,6 +39,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/worker"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -53,13 +56,16 @@ func init() {
 
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
-	flag.Usage = func() {
-		logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
-		logger.Printf("\nThe global optional parameters are:\n")
-		flag.PrintDefaults()
-		logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
-		worker.PrintAllCommands(logger)
-	}
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
+		Preface: func(w io.Writer) {
+			logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+			logger.Printf("\nThe global optional parameters are:\n")
+		},
+		Epilogue: func(w io.Writer) {
+			logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+			worker.PrintAllCommands(logger)
+		},
+	})
 }
 
 var (
@@ -69,8 +75,8 @@ var (
 func main() {
 	defer exit.Recover()
 
-	flag.Parse()
-	args := flag.Args()
+	_flag.Parse()
+	args := _flag.Args()
 
 	servenv.Init()
 	defer servenv.Close()

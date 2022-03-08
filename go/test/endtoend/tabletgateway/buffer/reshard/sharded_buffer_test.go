@@ -70,7 +70,7 @@ func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 	workflowName := "buf2buf"
 	workflow := fmt.Sprintf("%s.%s", keyspaceName, "buf2buf")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "-source_shards", "0", "-target_shards", "-80,80-", "Create", workflow)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--source_shards", "0", "--target_shards", "-80,80-", "Create", workflow)
 	require.NoError(t, err)
 
 	// Execute the resharding operation
@@ -78,10 +78,10 @@ func reshard02(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keysp
 	writes.ExpectQueries(25)
 
 	waitForLowLag(t, clusterInstance, keyspaceName, workflowName)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "-tablet_types=rdonly,replica", "SwitchTraffic", workflow)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=rdonly,replica", "SwitchTraffic", workflow)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "-tablet_types=primary", "SwitchTraffic", workflow)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=primary", "SwitchTraffic", workflow)
 	require.NoError(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "Complete", workflow)

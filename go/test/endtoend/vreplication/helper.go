@@ -243,7 +243,7 @@ func checkIfTableExists(t *testing.T, vc *VitessCluster, tabletAlias string, tab
 	var err error
 	found := false
 
-	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetSchema", "-tables", table, tabletAlias); err != nil {
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetSchema", "--", "--tables", table, tabletAlias); err != nil {
 		return false, err
 	}
 	jsonparser.ArrayEach([]byte(output), func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
@@ -288,7 +288,7 @@ func printShardPositions(vc *VitessCluster, ksShards []string) {
 }
 
 func clearRoutingRules(t *testing.T, vc *VitessCluster) error {
-	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "-rules={}"); err != nil {
+	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "--", "--rules={}"); err != nil {
 		return err
 	}
 	return nil
