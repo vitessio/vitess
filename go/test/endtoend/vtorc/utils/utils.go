@@ -835,3 +835,13 @@ func IsPrimarySemiSyncSetupCorrectly(t *testing.T, tablet *cluster.Vttablet, sem
 	require.NoError(t, err)
 	return semiSyncVal == dbVar
 }
+
+// IsReplicationStopped checks that the replication is stopped on the given tablet
+func IsReplicationStopped(t *testing.T, tablet *cluster.Vttablet) {
+	qr, err := RunSQL(t, "show slave status", tablet, "")
+	require.NoError(t, err)
+	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
+	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
+	assert.Equal(t, IOThreadRunning, "VARCHAR(\"No\")")
+	assert.Equal(t, SQLThreadRunning, "VARCHAR(\"No\")")
+}
