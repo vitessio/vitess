@@ -229,7 +229,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
-	isIdeal, err = erp.intermediateSourceIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
+	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// try to find a better candidate using the list we got back
 		// We prefer to choose a candidate which is in the same cell as our previous primary and of the best possible durability rule.
 		// However, if there is an explicit request from the user to promote a specific tablet, then we choose that tablet.
-		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, prevPrimary, validReplacementCandidates, tabletMap, opts)
+		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, opts)
 		if err != nil {
 			return err
 		}
@@ -601,16 +601,15 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 }
 
-// intermediateSourceIsIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
-func (erp *EmergencyReparenter) intermediateSourceIsIdeal(
+// isIntermediateSourceIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not
+func (erp *EmergencyReparenter) isIntermediateSourceIdeal(
 	intermediateSource *topodatapb.Tablet,
-	prevPrimary *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
 ) (bool, error) {
 	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, prevPrimary, validCandidates, tabletMap, opts)
+	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, opts)
 	if err != nil {
 		return false, err
 	}
@@ -620,7 +619,6 @@ func (erp *EmergencyReparenter) intermediateSourceIsIdeal(
 // identifyPrimaryCandidate is used to find the final candidate for ERS promotion
 func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	intermediateSource *topodatapb.Tablet,
-	prevPrimary *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
@@ -642,71 +640,32 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 		if !isFound {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
 		}
-		for _, validCandidate := range validCandidates {
-			if topoproto.TabletAliasEqual(validCandidate.Alias, opts.NewPrimaryAlias) {
-				return requestedPrimaryInfo.Tablet, nil
-			}
+		if topoproto.IsTabletInList(requestedPrimaryInfo.Tablet, validCandidates) {
+			return requestedPrimaryInfo.Tablet, nil
 		}
 		return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "requested candidate %v is not in valid candidates list", requestedPrimaryAlias)
 	}
-	var (
-		preferredCandidates []*topodatapb.Tablet
-		neutralReplicas     []*topodatapb.Tablet
-	)
-	for _, candidate := range validCandidates {
-		promotionRule := PromotionRule(candidate)
-		if promotionRule == promotionrule.Must || promotionRule == promotionrule.Prefer {
-			preferredCandidates = append(preferredCandidates, candidate)
-		}
-		if promotionRule == promotionrule.Neutral {
-			neutralReplicas = append(neutralReplicas, candidate)
-		}
-	}
 
-	// So we already have an intermediate source. What if our intermediate source was a rdonly?
-	// So we will try to improve our candidate selection.
-	// Are there any replicas with better promotion rules?
-	// Maybe we actually promoted such a replica. Does that mean we should keep it?
-	// Maybe we promoted a "neutral", and some "prefer" server is available.
-	// Maybe we promoted a "prefer_not"
-	// Maybe we promoted a server in a different cell than the primary
-	// There's many options. We may wish to replace the server we promoted with a better one.
-
-	// If the user requested for prevention of cross cell promotion then we should only search for valid candidates in the same cell
-	// otherwise we can search in any cell
-	if opts.PreventCrossCellPromotion {
-		// find candidates in the same cell from the preferred candidates list
-		candidate = findCandidateSameCell(intermediateSource, prevPrimary, preferredCandidates)
-		if candidate != nil {
-			return candidate, nil
-		}
-		// we do not have a preferred candidate in the same cell
-	} else {
-		// find candidates in any cell from the preferred candidates list
-		candidate = findCandidateAnyCell(intermediateSource, preferredCandidates)
+	// We have already selected an intermediate source which was selected based on the replication position
+	// (ties broken by promotion rules), but that tablet might not even be a valid candidate i.e. it could
+	// be in a different cell when we have PreventCrossCellPromotion specified, or it could have a promotion rule of
+	// MustNot. Even if it is valid, there could be a tablet with a better promotion rule. This is what we try to
+	// find here.
+	// We go over all the promotion rules in descending order of priority and try and find a valid candidate with
+	// that promotion rule.
+	// If the intermediate source has the same promotion rules as some other tablets, then we prioritize using
+	// the intermediate source since we won't have to wait for the new candidate to catch up!
+	for _, promotionRule := range promotionrule.AllPromotionRules() {
+		candidates := getTabletsWithPromotionRules(validCandidates, promotionRule)
+		candidate = findCandidate(intermediateSource, candidates)
 		if candidate != nil {
 			return candidate, nil
 		}
 	}
-
-	// repeat the same process for the neutral candidates list
-	if opts.PreventCrossCellPromotion {
-		// find candidates in the same cell from the neutral candidates list
-		candidate = findCandidateSameCell(intermediateSource, prevPrimary, neutralReplicas)
-		if candidate != nil {
-			return candidate, nil
-		}
-		// we do not have a neutral candidate in the same cell
-	} else {
-		// find candidates in any cell from the neutral candidates list
-		candidate = findCandidateAnyCell(intermediateSource, neutralReplicas)
-		if candidate != nil {
-			return candidate, nil
-		}
-	}
-
-	// return any valid tablet
-	return findCandidateAnyCell(intermediateSource, validCandidates), nil
+	// Unreachable code.
+	// We should have found atleast 1 tablet in the valid list.
+	// If the list is empty, then we should have errored out much sooner.
+	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unreachable - did not find a valid primary candidate even though the valid candidate list was non-empty")
 }
 
 func (erp *EmergencyReparenter) promoteNewPrimary(
