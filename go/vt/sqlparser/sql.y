@@ -346,7 +346,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
-%type <trimType> trim_type_opt
+%type <trimType> trim_type
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
 %type <partitionOption> partitions_options_opt partitions_options_beginning
@@ -4513,7 +4513,7 @@ function_call_keyword
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
   }
 
-trim_type_opt:
+trim_type:
   BOTH
   {
     $$ = BothTrimType
@@ -4748,7 +4748,7 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimFuncType:RTrimType, StringArg: $3}
   }
-| TRIM openb trim_type_opt expression_opt FROM expression closeb
+| TRIM openb trim_type expression_opt FROM expression closeb
   {
     $$ = &TrimFuncExpr{Type:$3, TrimArg:$4, StringArg: $6}
   }
