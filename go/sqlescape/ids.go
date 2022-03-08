@@ -15,6 +15,7 @@ package sqlescape
 
 import (
 	"bytes"
+	"strings"
 )
 
 // EscapeID returns a backticked identifier given an input string.
@@ -48,8 +49,48 @@ func EscapeIDs(identifiers []string) []string {
 // UnescapeID reverses any backticking in the input string.
 func UnescapeID(in string) string {
 	l := len(in)
-	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
-		return in[1 : l-1]
+
+	// can't be escaped if only 2 chars
+	if l <= 2 {
+		return in
 	}
-	return in
+
+	// not escaped if the first and last chars aren't backticks
+	if !(in[0] == '`' && in[l-1] == '`') {
+		return in
+	}
+
+	// truncate first and last backticks
+	in = in[1 : l-1]
+	l -= 2
+
+	// Quickly determine if there are any double backticks within
+	// the string that need to be unescaped
+	newLen := l
+	for i := 0; i < l-1; i++ {
+		// double backticks are collapsed to single backticks,
+		// so decrement the new len, and skip the next char
+		if in[i] == '`' && in[i+1] == '`' {
+			newLen--
+			i++
+		}
+	}
+
+	// nothing changed, so we can return the string as-is
+	if newLen == l {
+		return in
+	}
+
+	// fill up a new string with the backticks collapsed
+	var b strings.Builder
+	b.Grow(newLen)
+
+	for i := 0; i < l; i++ {
+		if in[i] == '`' && in[i+1] == '`' {
+			i++
+		}
+		b.WriteByte(in[i])
+	}
+
+	return b.String()
 }

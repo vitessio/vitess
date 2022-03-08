@@ -26,11 +26,54 @@ func TestEscapeID(t *testing.T) {
 	}, {
 		in:  "a`a",
 		out: "`a``a`",
+	}, {
+		in:  "a``a",
+		out: "`a````a`",
 	}}
 	for _, tc := range testcases {
-		out := EscapeID(tc.in)
-		if out != tc.out {
-			t.Errorf("EscapeID(%s): %s, want %s", tc.in, out, tc.out)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			out := EscapeID(tc.in)
+			if out != tc.out {
+				t.Errorf("EscapeID(%s): %s, want %s", tc.in, out, tc.out)
+			}
+		})
+	}
+}
+
+func TestUnescapeID(t *testing.T) {
+	testcases := []struct {
+		in, out string
+	}{{
+		in:  "`aa`",
+		out: "aa",
+	}, {
+		in:  "`a``a`",
+		out: "a`a",
+	}, {
+		in:  "`a````a`",
+		out: "a``a",
+	}, {
+		in:  "aa",
+		out: "aa",
+	}, {
+		in:  "",
+		out: "",
+	}, {
+		in:  "`aa",
+		out: "`aa",
+	}, {
+		in:  "`a```a`",
+		out: "a``a",
+	}, {
+		in:  "`a",
+		out: "`a",
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			out := UnescapeID(tc.in)
+			if out != tc.out {
+				t.Errorf("UnescapeID(%s): %s, want %s", tc.in, out, tc.out)
+			}
+		})
 	}
 }
