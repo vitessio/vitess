@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
@@ -684,8 +685,8 @@ func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclie
 
 var testReplicationStatus = &replicationdatapb.Status{
 	Position:              "MariaDB/1-345-789",
-	IoThreadRunning:       true,
-	SqlThreadRunning:      true,
+	IoState:               int32(mysql.ReplicationStateRunning),
+	SqlState:              int32(mysql.ReplicationStateRunning),
 	ReplicationLagSeconds: 654,
 	SourceHost:            "source.host",
 	SourcePort:            3366,
