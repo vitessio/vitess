@@ -511,13 +511,18 @@ func TestBackup(t *testing.T) {
 						Events: []*logutilpb.Event{{}, {}, {}},
 					},
 				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
 			},
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
 				},
-				Type: topodatapb.TabletType_REPLICA,
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: "ks",
+				Shard:    "-",
 			},
 			req: &vtctldatapb.BackupRequest{
 				TabletAlias: &topodatapb.TabletAlias{
@@ -550,7 +555,9 @@ func TestBackup(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
-				Type: topodatapb.TabletType_PRIMARY,
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: "ks",
+				Shard:    "-",
 			},
 			req: &vtctldatapb.BackupRequest{
 				TabletAlias: &topodatapb.TabletAlias{
@@ -583,7 +590,9 @@ func TestBackup(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
-				Type: topodatapb.TabletType_PRIMARY,
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: "ks",
+				Shard:    "-",
 			},
 			req: &vtctldatapb.BackupRequest{
 				TabletAlias: &topodatapb.TabletAlias{
@@ -617,7 +626,9 @@ func TestBackup(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
-				Type: topodatapb.TabletType_REPLICA,
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: "ks",
+				Shard:    "-",
 			},
 			req: &vtctldatapb.BackupRequest{
 				TabletAlias: &topodatapb.TabletAlias{
@@ -652,7 +663,9 @@ func TestBackup(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
-				Type: topodatapb.TabletType_REPLICA,
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: "ks",
+				Shard:    "-",
 			},
 			req: &vtctldatapb.BackupRequest{
 				TabletAlias: &topodatapb.TabletAlias{
@@ -670,10 +683,21 @@ func TestBackup(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			if tt.tablet != nil {
 				testutil.AddTablet(ctx, t, tt.ts, tt.tablet, nil)
+				if tt.tablet.Type != topodatapb.TabletType_PRIMARY {
+					testutil.AddTablet(ctx, t, tt.ts, &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: tt.tablet.Alias.Cell,
+							Uid:  tt.tablet.Alias.Uid + 1,
+						},
+						Keyspace: tt.tablet.Keyspace,
+						Shard:    tt.tablet.Shard,
+						Type:     topodatapb.TabletType_PRIMARY,
+					}, &testutil.AddTabletOptions{
+						AlsoSetShardPrimary: true,
+					})
+				}
 			}
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
@@ -732,6 +756,14 @@ func TestBackupShard(t *testing.T) {
 						Events: []*logutilpb.Event{{}, {}, {}},
 					},
 				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Position: "some-position",
+					},
+				},
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
 					Error    error
@@ -741,6 +773,9 @@ func TestBackupShard(t *testing.T) {
 							ReplicationLagSeconds: 0,
 						},
 					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -752,6 +787,15 @@ func TestBackupShard(t *testing.T) {
 					Keyspace: "ks",
 					Shard:    "-",
 					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.BackupShardRequest{
@@ -924,9 +968,11 @@ func TestBackupShard(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
+			testutil.AddTablets(ctx, t, tt.ts,
+				&testutil.AddTabletOptions{
+					AlsoSetShardPrimary: true,
+				}, tt.tablets...,
+			)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})

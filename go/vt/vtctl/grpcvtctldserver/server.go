@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/vt/schemamanager"
@@ -412,7 +413,20 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 				logger.Errorf("failed to send stream response %+v: %v", resp, err)
 			}
 		case io.EOF:
-			return nil
+			// Do not do anything for primary tablets and when active reparenting is disabled
+			if *mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
+				return nil
+			}
+
+			// Otherwise we find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we executed the backup which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err := s.ts.GetTablet(ctx, tablet.Alias)
+			if err != nil {
+				return err
+			}
+
+			return reparentutil.SetReplicationSource(ctx, s.ts, s.tmc, tabletInfo.Tablet)
 		default:
 			return err
 		}
