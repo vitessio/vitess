@@ -14,11 +14,11 @@ bootstrap.sh @deepthi
 /go/mysql @harshit-gangal @systay
 /go/protoutil @ajm188
 /go/test/endtoend/onlineddl @shlomi-noach
-/go/test/endtoend/orchestrator @deepthi @shlomi-noach
+/go/test/endtoend/orchestrator @deepthi @shlomi-noach @GuptaManan100
 /go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
-/go/vt/orchestrator @deepthi @shlomi-noach
+/go/vt/orchestrator @deepthi @shlomi-noach @GuptaManan100
 /go/vt/proto/vtadmin @ajm188 @doeg @notfelineit
 /go/vt/schema @shlomi-noach
 /go/vt/servenv @deepthi
