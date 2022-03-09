@@ -204,3 +204,46 @@ func TestQPSimplifiedExpr(t *testing.T) {
 		})
 	}
 }
+
+func TestCompareRefInt(t *testing.T) {
+	one := 1
+	two := 2
+	tests := []struct {
+		name string
+		a    *int
+		b    *int
+		want bool
+	}{
+		{
+			name: "1<2",
+			a:    &one,
+			b:    &two,
+			want: true,
+		}, {
+			name: "2<1",
+			a:    &two,
+			b:    &one,
+			want: false,
+		}, {
+			name: "2<nil",
+			a:    &two,
+			b:    nil,
+			want: true,
+		}, {
+			name: "nil<1",
+			a:    nil,
+			b:    &one,
+			want: false,
+		}, {
+			name: "nil<nil",
+			a:    nil,
+			b:    nil,
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, CompareRefInt(tt.a, tt.b))
+		})
+	}
+}

@@ -64,7 +64,7 @@ func TestSelect(t *testing.T) {
 	sel.AddWhere(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Where.Format(buf)
-	want = " where a = 1 and a = 1"
+	want = " where a = 1"
 	if buf.String() != want {
 		t.Errorf("where: %q, want %s", buf.String(), want)
 	}
