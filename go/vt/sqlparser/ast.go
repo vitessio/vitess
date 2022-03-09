@@ -2206,6 +2206,14 @@ type (
 		argName      string
 		alternative  Expr // this is what will be used to Format this struct
 	}
+
+	// JSONUtilityExpr represents set of JSON utility functions
+	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-utility-functions.html
+	JSONUtilityExpr struct {
+		Name      ColIdent
+		StringArg Expr
+		Column    *ColName
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2244,6 +2252,7 @@ func (*MatchExpr) iExpr()            {}
 func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
+func (*JSONUtilityExpr) iExpr()      {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}
@@ -2257,6 +2266,7 @@ func (*SubstrExpr) iCallable()           {}
 func (*ConvertUsingExpr) iCallable()     {}
 func (*MatchExpr) iCallable()            {}
 func (*GroupConcatExpr) iCallable()      {}
+func (*JSONUtilityExpr) iCallable()      {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

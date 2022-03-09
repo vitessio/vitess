@@ -1300,6 +1300,16 @@ func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "values(%v)", node.Name)
 }
 
+// Format formats the node
+func (node *JSONUtilityExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.Name.Lowered())
+	if node.Column != nil {
+		buf.astPrintf(node, "%v)", node.Column)
+	} else {
+		buf.astPrintf(node, "%v)", node.StringArg)
+	}
+}
+
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	if node.To == nil {

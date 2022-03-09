@@ -173,6 +173,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
+	case *JSONUtilityExpr:
+		return CloneRefOfJSONUtilityExpr(in)
 	case *JoinCondition:
 		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
@@ -1122,6 +1124,18 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	}
 	out := *n
 	out.Left = CloneExpr(n.Left)
+	return &out
+}
+
+// CloneRefOfJSONUtilityExpr creates a deep clone of the input.
+func CloneRefOfJSONUtilityExpr(n *JSONUtilityExpr) *JSONUtilityExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneColIdent(n.Name)
+	out.StringArg = CloneExpr(n.StringArg)
+	out.Column = CloneRefOfColName(n.Column)
 	return &out
 }
 
@@ -2091,6 +2105,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *JSONUtilityExpr:
+		return CloneRefOfJSONUtilityExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *SubstrExpr:
@@ -2267,6 +2283,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
+	case *JSONUtilityExpr:
+		return CloneRefOfJSONUtilityExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
