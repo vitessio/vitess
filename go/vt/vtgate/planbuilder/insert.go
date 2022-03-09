@@ -225,7 +225,11 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 }
 
 func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (engine.Primitive, error) {
-	selectStmt, queryPlanner, err := getStatementAndPlanner(ins, vschema)
+	selStmt, ok := ins.Rows.(sqlparser.SelectStatement)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected rows type: %T", ins.Rows)
+	}
+	queryPlanner, err := getStatementAndPlanner(selStmt, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -233,37 +237,29 @@ func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, rese
 	// validate the columns to match on insert and select
 	// for sharded insert table only
 	if sharded {
-		if err := checkColumnCounts(ins, selectStmt); err != nil {
+		if err := checkColumnCounts(ins, selStmt); err != nil {
 			return nil, err
 		}
 	}
 
 	// Override the locking with `for update` to lock the rows for inserting the data.
-	selectStmt.SetLock(sqlparser.ForUpdateLock)
+	selStmt.SetLock(sqlparser.ForUpdateLock)
 
-	return queryPlanner(selectStmt, reservedVars, vschema)
+	return queryPlanner(selStmt, reservedVars, vschema)
 }
 
 func getStatementAndPlanner(
-	ins *sqlparser.Insert,
+	statement sqlparser.SelectStatement,
 	vschema plancontext.VSchema,
-) (selectStmt sqlparser.SelectStatement, configuredPlanner selectPlanner, err error) {
-	switch stmt := ins.Rows.(type) {
+) (configuredPlanner selectPlanner, err error) {
+	switch stmt := statement.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
-		selectStmt = stmt
+		return getConfiguredPlanner(vschema, buildSelectPlan, stmt, "")
 	case *sqlparser.Union:
-		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
-		selectStmt = stmt
+		return getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
 	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert plan with %T", ins.Rows)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert plan with %T", statement)
 	}
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return selectStmt, configuredPlanner, nil
 }
 
 func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStatement) error {
