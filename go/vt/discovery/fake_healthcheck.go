@@ -23,7 +23,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -53,7 +52,7 @@ type FakeHealthCheck struct {
 	// mu protects the items map
 	mu               sync.RWMutex
 	items            map[string]*fhcItem
-	currentTabletUID sync2.AtomicInt32
+	currentTabletUID int
 	// channel to return on subscribe. Pass nil if no subscribe should not return a channel
 	ch chan *TabletHealth
 }
@@ -247,7 +246,7 @@ func (fhc *FakeHealthCheck) Reset() {
 	defer fhc.mu.Unlock()
 
 	fhc.items = make(map[string]*fhcItem)
-	fhc.currentTabletUID.Set(0)
+	fhc.currentTabletUID = 0
 }
 
 // AddFakeTablet inserts a fake entry into FakeHealthCheck.
@@ -255,9 +254,12 @@ func (fhc *FakeHealthCheck) Reset() {
 // The Listener is called, as if AddTablet had been called.
 // For flexibility the connection is created via a connFactory callback
 func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspace, shard string, tabletType topodatapb.TabletType, serving bool, reparentTS int64, err error, connFactory func(*topodatapb.Tablet) queryservice.QueryService) queryservice.QueryService {
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+
 	// tabletUID must be unique
-	fhc.currentTabletUID.Add(1)
-	uid := fhc.currentTabletUID.Get()
+	fhc.currentTabletUID++
+	uid := fhc.currentTabletUID
 	t := topo.NewTablet(uint32(uid), cell, host)
 	t.Keyspace = keyspace
 	t.Shard = shard
@@ -265,8 +267,6 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 	t.PortMap["vt"] = port
 	key := TabletToMapKey(t)
 
-	fhc.mu.Lock()
-	defer fhc.mu.Unlock()
 	item := fhc.items[key]
 	if item == nil {
 		item = &fhcItem{
