@@ -22,9 +22,11 @@ import (
 	"context"
 
 	"google.golang.org/protobuf/proto"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -168,8 +170,27 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) {
 					continue
 				}
 
+				sriNodes := sets.NewString()
+				for _, node := range sri.Nodes {
+					sriNodes.Insert(topoproto.TabletAliasString(node.TabletAlias))
+				}
+
 				if err := toTS.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *topodatapb.ShardReplication) error {
+					var nodes []*topodatapb.ShardReplication_Node
+					for _, oldNode := range oldSR.Nodes {
+						if sriNodes.Has(topoproto.TabletAliasString(oldNode.TabletAlias)) {
+							continue
+						}
+
+						nodes = append(nodes, oldNode)
+					}
+
+					nodes = append(nodes, sri.ShardReplication.Nodes...)
+					// Even though ShardReplication currently only has the .Nodes field,
+					// keeping the proto.Merge call here prevents this copy from
+					// unintentionally breaking if we add new fields.
 					proto.Merge(oldSR, sri.ShardReplication)
+					oldSR.Nodes = nodes
 					return nil
 				}); err != nil {
 					log.Warningf("UpdateShardReplicationFields(%v, %v, %v): %v", cell, keyspace, shard, err)
