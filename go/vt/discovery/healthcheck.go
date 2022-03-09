@@ -164,7 +164,7 @@ type TabletRecorder interface {
 type keyspaceShardTabletType string
 type tabletAliasString string
 
-//HealthCheck declares what the TabletGateway needs from the HealthCheck
+// HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {
 	// CacheStatus returns a displayable version of the health check cache.
 	CacheStatus() TabletsCacheStatusList

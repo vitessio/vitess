@@ -46,8 +46,6 @@ var (
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
 
-	// Deprecated GatewayImplementation allows you to choose which gateway to use for vtgate routing. Defaults to tabletgateway, other option is discoverygateway
-	_                    = flag.String("gateway_implementation", "tabletgateway", "Deprecated. The only available gateway_implementation is tabletgateway")
 	bufferImplementation = flag.String("buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
 	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
 	// retryCount is the number of times a query will be retried on error
