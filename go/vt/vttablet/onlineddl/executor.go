@@ -663,12 +663,24 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 
-	// A bit early on, we create the table swap query. We do so here and not at cut-over time
-	// just because there might just be an error, and we prefer to bail out now, and not
-	// proceeed with all the locks involved in the cut-over operation
-	swapQuery, _, err := e.generateSwapTablesStatement(ctx, onlineDDL.Table, vreplTable)
-	if err != nil {
-		return err
+	// A bit early on, we generate names for stowaway and temporary tables
+	// We do this here because right now we're in a safe place where nothing happened yet. If there's an error now, bail out
+	// and no harm done.
+	// Later on, when traffic is blocked and tables renamed, that's a more dangerous place to be in; we want as little logic
+	// in that place as possible.
+	var stowawayTableName string
+	if !isVreplicationTestSuite {
+		stowawayTableName, err = schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+		if err != nil {
+			return err
+		}
+		// Audit stowawayTableName. If operation is complete, we remove the audit. But if this tablet fails while
+		// the original table is renamed (into stowaway table), then this will be both the evidence and the information we need
+		// to restore the table back into existence. This can (and will) be done by a different vttablet process
+		if err := e.updateMigrationStowawayTable(ctx, onlineDDL.UUID, stowawayTableName); err != nil {
+			return err
+		}
+		defer e.updateMigrationStowawayTable(ctx, onlineDDL.UUID, "")
 	}
 
 	bufferingCtx, bufferingContextCancel := context.WithCancel(ctx)
@@ -677,7 +689,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	toggleBuffering := func(bufferQueries bool) error {
 		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
 		if !bufferQueries {
-			// release
+			// called after new table is in place.
+			// unbuffer existing queries:
+			bufferingContextCancel()
+			// force re-read of tables
 			if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
 				return err
 			}
@@ -687,32 +702,52 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	var reenableOnce sync.Once
 	reenableWritesOnce := func() {
 		reenableOnce.Do(func() {
-			bufferingContextCancel()
 			toggleBuffering(false)
 		})
 	}
 	// stop writes on source:
-	if err := toggleBuffering(true); err != nil {
+	err = toggleBuffering(true)
+	defer reenableWritesOnce()
+	if err != nil {
 		return err
 	}
-	defer reenableWritesOnce()
 
+	// swap out the table
+	// Give a fraction of a second for a scenario where a query is in
+	// query executor, it passed the ACLs and is _about to_ execute. This will be nicer to those queries:
+	// they will be able to complete before the rename, rather than block briefly on the rename only to find
+	// the table no longer exists.
+	time.Sleep(100 * time.Millisecond)
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
-		// Those queries are unaffected by UpdateSourceDeniedTables() because they don't go through Vitess.
-		// We therefore hard-rename the table here, such that the queries will hard-fail.
-		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-			onlineDDL.Table, beforeTableName,
-		)
-		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
+		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
+		// the original table. We will actually make the table disappear, creating a void.
+		testSuiteBeforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
+		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
 		}
 	} else {
-		// As a temporary race condition mitigation step, while working on a full solution, we take a short sleep. This will let queries that are past
-		// the ACL/Rules check and are just about to query the table, to get their work done, without harming the logic.
-		time.Sleep(250 * time.Millisecond)
+		// real production
+		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, stowawayTableName)
+		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
 	}
+
+	// We have just created a gaping hole, the original table does not exist.
+	// we expect to fill that hole by swapping in the vrepl table. But if anything goes wrong we prepare
+	// to rename the table back:
+	defer func() {
+		if _, err := e.renameTableIfApplicable(ctx, stowawayTableName, onlineDDL.Table); err != nil {
+			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "cannot rename back swapped table: %v into %v: %v", stowawayTableName, onlineDDL.Table, err)
+		}
+	}()
+	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
+	// that some leftover query finds the table is not actually there anymore...
+	// At any case, there's definitely no more writes to the table since it does not exist. We can
+	// safely take the (GTID) pos now.
 	postWritesPos, err := e.primaryPosition(ctx)
 	if err != nil {
 		return err
@@ -748,11 +783,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	{
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
-			afterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
-				vreplTable, afterTableName,
-			)
-			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
+			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
 		} else {
@@ -762,7 +795,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				return err
 			}
 			defer conn.Close()
-			if _, err = conn.ExecuteFetch(swapQuery, 0, false); err != nil {
+
+			parsed := sqlparser.BuildParsedQuery(sqlRenameTwoTables,
+				vreplTable, onlineDDL.Table,
+				stowawayTableName, vreplTable,
+			)
+			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 				return err
 			}
 		}
@@ -986,7 +1024,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, sqlImpossibleSelectVreplication)
 		})
 
-		// reload schema
+		// reload schema before migration
 		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
 			return err
 		}
@@ -2275,8 +2313,33 @@ func (e *Executor) generateSwapTablesStatement(ctx context.Context, tableName1, 
 	return parsed.Query, swapTableName, nil
 }
 
-func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+// renameTableIfApplicable renames a table, assuming it exists and that the target does not exist.
+func (e *Executor) renameTableIfApplicable(ctx context.Context, fromTableName, toTableName string) (attemptMade bool, err error) {
+	if fromTableName == "" {
+		return false, nil
+	}
+	exists, err := e.tableExists(ctx, fromTableName)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		// can't rename from table when it does not exist
+		return false, nil
+	}
+	exists, err = e.tableExists(ctx, toTableName)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		// target table exists, abort.
+		return false, nil
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlRenameTable, fromTableName, toTableName)
+	_, err = e.execQuery(ctx, parsed.Query)
+	return true, err
+}
 
+func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
 	artifactViewName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 	if err != nil {
 		return err
@@ -2826,6 +2889,30 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
 
+		if stowawayTable := row.AsString("stowaway_table", ""); stowawayTable != "" {
+			// whoa
+			// stowawayTable is an original table stowed away while cutting over a vrepl migration, see call to cutOverVReplMigration() down below in this function.
+			// In a normal operation, the table should not exist outside the scope of cutOverVReplMigration
+			// If it exists, that means a tablet crashed while running a cut-over, and left the database in a bad state, where the migrated table does not exist.
+			// thankfully, we have tracked this situation and just realized what happened. Now, first thing to do is to restore the original table.
+			log.Infof("found stowaway table %s journal in migration %s for table %s", stowawayTable, uuid, onlineDDL.Table)
+			attemptMade, err := e.renameTableIfApplicable(ctx, stowawayTable, onlineDDL.Table)
+			if err != nil {
+				// unable to restore table; we bail out, and we will try again next round.
+				return countRunnning, cancellable, err
+			}
+			// success
+			if attemptMade {
+				log.Infof("stowaway table %s restored back into %s", stowawayTable, onlineDDL.Table)
+			} else {
+				log.Infof("stowaway table %s did not exist and there was no need to restore it", stowawayTable)
+			}
+			// OK good, table restored. We can remove the record.
+			if err := e.updateMigrationStowawayTable(ctx, uuid, ""); err != nil {
+				return countRunnning, cancellable, err
+			}
+		}
+
 		uuidsFoundRunning[uuid] = true
 
 		switch onlineDDL.StrategySetting().Strategy {
@@ -3140,7 +3227,6 @@ func (e *Executor) onMigrationCheckTick() {
 		log.Error(err)
 		return
 	}
-
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
 		log.Error(err)
 	}
@@ -3429,6 +3515,18 @@ func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isVie
 func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid string, isReady bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationReadyToComplete,
 		sqltypes.BoolBindVariable(isReady),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStowawayTable,
+		sqltypes.StringBindVariable(tableName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
