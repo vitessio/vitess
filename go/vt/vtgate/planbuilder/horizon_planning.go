@@ -541,22 +541,17 @@ func (hp *horizonPlanning) planAggrUsingOA(
 		oa.preProcess = true
 	}
 
-	groupings, aggrParamOffsets, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
+	groupingOffsets, aggrParamOffsets, err := hp.pushAggregation(ctx, plan, grouping, aggrs, false)
 	if err != nil {
 		return nil, err
 	}
 
-	needsProj := false
-	for _, paramOffset := range aggrParamOffsets {
-		if len(paramOffset) > 1 {
-			needsProj = true
-			break
-		}
-	}
+	_, isRoute := plan.(*routeGen4)
+	needsProj := !isRoute
 	var aggPlan = plan
 	var proj *projection
 	if needsProj {
-		length := getLengthOfProjection(groupings, aggrs)
+		length := getLengthOfProjection(groupingOffsets, aggrs)
 		proj = &projection{
 			source:      plan,
 			columns:     make([]sqlparser.Expr, length),
@@ -571,14 +566,14 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	if proj != nil {
-		groupings, err = passGroupingColumns(proj, groupings, grouping)
+		groupingOffsets, err = passGroupingColumns(proj, groupingOffsets, grouping)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Next we add the aggregation expressions and grouping offsets to the OA
-	addColumnsToOA(ctx, oa, distinctGroupBy, aggrParams, distinctOffsets, groupings, aggregationExprs)
+	addColumnsToOA(ctx, oa, distinctGroupBy, aggrParams, distinctOffsets, groupingOffsets, aggregationExprs)
 
 	aggPlan, err = hp.planOrderBy(ctx, order, aggPlan)
 	if err != nil {
@@ -620,19 +615,15 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 		var offset int
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
-			if len(paramOffset) == 1 {
-				aggrExpr = sqlparser.Offset(incomingOffset)
-			} else {
-				for _, ofs := range paramOffset {
-					curr := sqlparser.Offset(ofs.col)
-					if aggrExpr == nil {
-						aggrExpr = curr
-					} else {
-						aggrExpr = &sqlparser.BinaryExpr{
-							Operator: sqlparser.MultOp,
-							Left:     aggrExpr,
-							Right:    curr,
-						}
+			for _, ofs := range paramOffset {
+				curr := sqlparser.Offset(ofs.col)
+				if aggrExpr == nil {
+					aggrExpr = curr
+				} else {
+					aggrExpr = &sqlparser.BinaryExpr{
+						Operator: sqlparser.MultOp,
+						Left:     aggrExpr,
+						Right:    curr,
 					}
 				}
 			}
