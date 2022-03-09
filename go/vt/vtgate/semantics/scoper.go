@@ -118,7 +118,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		}
 		return s.createSpecialScopePostProjection(cursor.Parent())
 	case *sqlparser.DerivedTable:
-		if node.LateralPresent {
+		if node.Lateral {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lateral derived tables")
 		}
 	}

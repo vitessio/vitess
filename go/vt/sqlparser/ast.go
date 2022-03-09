@@ -1906,8 +1906,8 @@ type (
 
 	// DerivedTable represents a subquery used as a table expression.
 	DerivedTable struct {
-		LateralPresent bool
-		Select         SelectStatement
+		Lateral bool
+		Select  SelectStatement
 	}
 )
 

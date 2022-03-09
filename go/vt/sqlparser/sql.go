@@ -12376,7 +12376,7 @@ yydefault:
 		var yyLOCAL *DerivedTable
 //line sql.y:3983
 		{
-			yyLOCAL = &DerivedTable{LateralPresent: false, Select: yyDollar[2].selStmtUnion()}
+			yyLOCAL = &DerivedTable{Lateral: false, Select: yyDollar[2].selStmtUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 768:
@@ -12384,7 +12384,7 @@ yydefault:
 		var yyLOCAL *DerivedTable
 //line sql.y:3987
 		{
-			yyLOCAL = &DerivedTable{LateralPresent: true, Select: yyDollar[3].selStmtUnion()}
+			yyLOCAL = &DerivedTable{Lateral: true, Select: yyDollar[3].selStmtUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 769:

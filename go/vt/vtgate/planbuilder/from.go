@@ -106,7 +106,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
 	case *sqlparser.DerivedTable:
-		if expr.LateralPresent {
+		if expr.Lateral {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: lateral derived tables")
 		}
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)

@@ -3981,11 +3981,11 @@ table_factor:
 derived_table:
   openb query_expression closeb
   {
-    $$ = &DerivedTable{LateralPresent:false, Select:$2}
+    $$ = &DerivedTable{Lateral: false, Select: $2}
   }
 | LATERAL openb query_expression closeb
   {
-    $$ = &DerivedTable{LateralPresent:true, Select:$3}
+    $$ = &DerivedTable{Lateral: true, Select: $3}
   }
 
 aliased_table_name:

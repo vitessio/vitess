@@ -1574,7 +1574,7 @@ func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.LateralPresent == b.LateralPresent &&
+	return a.Lateral == b.Lateral &&
 		EqualsSelectStatement(a.Select, b.Select)
 }
 
