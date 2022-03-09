@@ -37,6 +37,10 @@ type ApplyJoin struct {
 	// LeftJoin will be true in the case of an outer join
 	LeftJoin bool
 
+	// JoinCols are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the Vars field
+	LHSColumns []*sqlparser.ColName
+
 	Predicate sqlparser.Expr
 }
 
@@ -82,12 +86,15 @@ func (a *ApplyJoin) Clone() abstract.PhysicalOperator {
 	}
 	columnsClone := make([]int, len(a.Columns))
 	copy(columnsClone, a.Columns)
+	lhsColumns := make([]*sqlparser.ColName, len(a.LHSColumns))
+	copy(lhsColumns, a.LHSColumns)
 	return &ApplyJoin{
-		LHS:       a.LHS.Clone(),
-		RHS:       a.RHS.Clone(),
-		Columns:   columnsClone,
-		Vars:      varsClone,
-		LeftJoin:  a.LeftJoin,
-		Predicate: sqlparser.CloneExpr(a.Predicate),
+		LHS:        a.LHS.Clone(),
+		RHS:        a.RHS.Clone(),
+		Columns:    columnsClone,
+		Vars:       varsClone,
+		LeftJoin:   a.LeftJoin,
+		Predicate:  sqlparser.CloneExpr(a.Predicate),
+		LHSColumns: lhsColumns,
 	}
 }

@@ -878,10 +878,8 @@ func (node *Select) AddWhere(expr Expr) {
 		}
 		return
 	}
-	node.Where.Expr = &AndExpr{
-		Left:  node.Where.Expr,
-		Right: expr,
-	}
+	exprs := SplitAndExpression(nil, node.Where.Expr)
+	node.Where.Expr = AndExpressions(append(exprs, expr)...)
 }
 
 // AddHaving adds the boolean expression to the
@@ -898,6 +896,17 @@ func (node *Select) AddHaving(expr Expr) {
 		Left:  node.Having.Expr,
 		Right: expr,
 	}
+}
+
+// AddGroupBy adds a grouping expression, unless it's already present
+func (node *Select) AddGroupBy(expr Expr) {
+	for _, gb := range node.GroupBy {
+		if EqualsExpr(gb, expr) {
+			// group by columns are sets - duplicates don't add anything, so we can just skip these
+			return
+		}
+	}
+	node.GroupBy = append(node.GroupBy, expr)
 }
 
 // AddWhere adds the boolean expression to the

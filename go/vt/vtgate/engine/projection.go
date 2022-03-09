@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package engine
 
 import (
@@ -40,18 +56,18 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	env.Fields = result.Fields
-	var rows [][]sqltypes.Value
+	var resultRows []sqltypes.Row
 	for _, row := range result.Rows {
+		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 		env.Row = row
-		resRow := make([]sqltypes.Value, 0, len(p.Exprs))
 		for _, exp := range p.Exprs {
 			result, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
-			resRow = append(resRow, result.Value())
+			resultRow = append(resultRow, result.Value())
 		}
-		rows = append(rows, resRow)
+		resultRows = append(resultRows, resultRow)
 	}
 	if wantfields {
 		err := p.addFields(env, result)
@@ -59,7 +75,7 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 			return nil, err
 		}
 	}
-	result.Rows = rows
+	result.Rows = resultRows
 	return result, nil
 }
 
@@ -131,14 +147,18 @@ func (p *Projection) Inputs() []Primitive {
 // description implements the Primitive interface
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
-	for _, e := range p.Exprs {
-		exprs = append(exprs, evalengine.FormatExpr(e))
+	for idx, e := range p.Exprs {
+		expr := evalengine.FormatExpr(e)
+		alias := p.Cols[idx]
+		if alias != "" {
+			expr += " as " + alias
+		}
+		exprs = append(exprs, expr)
 	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",
 		Other: map[string]interface{}{
 			"Expressions": exprs,
-			"Columns":     p.Cols,
 		},
 	}
 }

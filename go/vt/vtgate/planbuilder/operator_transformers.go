@@ -122,11 +122,12 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *physical.ApplyJ
 	//	}, nil
 	// }
 	return &joinGen4{
-		Left:   lhs,
-		Right:  rhs,
-		Cols:   n.Columns,
-		Vars:   n.Vars,
-		Opcode: opCode,
+		Left:       lhs,
+		Right:      rhs,
+		Cols:       n.Columns,
+		Vars:       n.Vars,
+		LHSColumns: n.LHSColumns,
+		Opcode:     opCode,
 	}, nil
 }
 
