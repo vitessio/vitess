@@ -778,6 +778,10 @@ type offsets struct {
 	col, wsCol int
 }
 
+func newOffset(col int) offsets {
+	return offsets{col: col, wsCol: -1}
+}
+
 func (hp *horizonPlanning) createGroupingsForColumns(
 	ctx *plancontext.PlanningContext,
 	columns []*sqlparser.ColName,

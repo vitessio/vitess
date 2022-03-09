@@ -61,7 +61,6 @@ func pushAggrOnRoute(
 	grouping []abstract.GroupBy,
 	ignoreOutputOrder bool,
 ) ([]offsets, [][]offsets, error) {
-	var err error
 	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
@@ -75,7 +74,10 @@ func pushAggrOnRoute(
 	if columnOrderMatters {
 		// During this first run, we push the projections for the normal columns (not the weigh_string ones, that is)
 		// in the order that the user asked for it
+		// sortOffsets also returns a reorgFunc,
+		// that can be used to rearrange the produced outputs to the original order
 		var it *sortedIterator
+		var err error
 		grouping, reorg, it = sortOffsets(grouping, aggregations)
 		vtgateAggregation, groupingCols, err = pushAggrsAndGroupingInOrder(ctx, plan, it, sel, vtgateAggregation, groupingCols)
 		if err != nil {
@@ -92,35 +94,28 @@ func pushAggrOnRoute(
 	groupingOffsets := make([]offsets, 0, len(grouping))
 	for idx, expr := range grouping {
 		sel.AddGroupBy(expr.Inner)
-		var wsExpr sqlparser.Expr
-		if ctx.SemTable.NeedsWeightString(expr.Inner) {
-			wsExpr = expr.WeightStrExpr
-		}
-		var col int
-		var err error
+		var pos offsets
 		if ignoreOutputOrder {
-			col, _, err = addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: expr.Inner}, true)
+			// we have not yet pushed anything, so we need to push the expression first
+			col, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: expr.Inner}, true)
 			if err != nil {
 				return nil, nil, err
 			}
+			pos = newOffset(col)
 		} else {
-			col = groupingCols[idx]
+			pos = newOffset(groupingCols[idx])
 		}
-		wsCol := -1
-		if wsExpr != nil {
-			wsExpr = weightStringFor(expr.WeightStrExpr)
-			wsCol, _, err = addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
+
+		if ctx.SemTable.NeedsWeightString(expr.Inner) {
+			wsExpr := weightStringFor(expr.WeightStrExpr)
+			wsCol, _, err := addExpressionToRoute(ctx, plan, &sqlparser.AliasedExpr{Expr: wsExpr}, true)
 			if err != nil {
 				return nil, nil, err
 			}
-			if wsCol >= 0 {
-				sel.AddGroupBy(wsExpr)
-			}
+			pos.wsCol = wsCol
+			sel.AddGroupBy(wsExpr)
 		}
-		groupingOffsets = append(groupingOffsets, offsets{
-			col:   col,
-			wsCol: wsCol,
-		})
+		groupingOffsets = append(groupingOffsets, pos)
 	}
 
 	groupingOffsets, vtgateAggregation = reorg(groupingOffsets, vtgateAggregation)
