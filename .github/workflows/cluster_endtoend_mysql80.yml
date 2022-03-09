@@ -17,6 +17,9 @@ jobs:
     - name: Tune the OS
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
+        echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
+        sudo sysctl -p /etc/sysctl.conf
 
     # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
     - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
@@ -29,8 +32,16 @@ jobs:
 
     - name: Get dependencies
       run: |
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+
+        # Setup MySQL 8.0
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/

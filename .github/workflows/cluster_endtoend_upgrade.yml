@@ -32,8 +32,6 @@ jobs:
       run: |
         # This prepares general purpose binary dependencies
         # as well as v9.0.0 specific go modules
-<<<<<<< HEAD
-=======
 
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
 
@@ -47,10 +45,10 @@ jobs:
         sudo rm -rf /etc/mysql
 
         # Install mysql80
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
->>>>>>> 630259cfeb32b85d5b53be3c68b555de710bbeb7
         sudo apt-get update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
 

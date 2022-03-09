@@ -19,14 +19,13 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"strings"
 	"time"
 
 	rice "github.com/GeertJohan/go.rice"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -39,6 +38,7 @@ import (
 
 var (
 	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
+	sanitizeLogMessages = flag.Bool("vtctld_sanitize_log_messages", false, "When true, vtctld sanitizes logging.")
 
 	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
 	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
