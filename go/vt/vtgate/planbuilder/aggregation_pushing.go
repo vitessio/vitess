@@ -152,23 +152,18 @@ func pushAggrsAndGroupingInOrder(
 // addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
 func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) offsets {
 	// TODO: removing duplicated aggregation expression should also be done at the join level
-	offset := -1
 	for i, expr := range sel.SelectExprs {
 		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
 		if !isAliasedExpr {
 			continue
 		}
 		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Func) {
-			offset = i
-			break
+			return newOffset(i)
 		}
 	}
-	if offset == -1 {
-		sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
-		offset = len(sel.SelectExprs) - 1
-	}
 
-	return offsets{col: offset}
+	sel.SelectExprs = append(sel.SelectExprs, aggregation.Original)
+	return newOffset(len(sel.SelectExprs) - 1)
 }
 
 func countStarAggr() *abstract.Aggr {
@@ -251,7 +246,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 			offset = rhsOffsets[groupBy-1]
 			f = func(i int) int { return i + 1 }
 		}
-		outputGrouping := offsets{col: len(join.Cols), wsCol: -1}
+		outputGrouping := newOffset(len(join.Cols))
 		join.Cols = append(join.Cols, f(offset.col))
 		if offset.wsCol > -1 {
 			outputGrouping.wsCol = wsOutputGrpOffset + len(wsOffsets)
@@ -266,11 +261,11 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		l, r := lhsAggrOffsets[idx], rhsAggrOffsets[idx]
 		var offSlice []offsets
 		for _, off := range l {
-			offSlice = append(offSlice, offsets{col: len(join.Cols)})
+			offSlice = append(offSlice, newOffset(len(join.Cols)))
 			join.Cols = append(join.Cols, -(off.col + 1))
 		}
 		for _, off := range r {
-			offSlice = append(offSlice, offsets{col: len(join.Cols)})
+			offSlice = append(offSlice, newOffset(len(join.Cols)))
 			join.Cols = append(join.Cols, off.col+1)
 		}
 		outputAggrOffsets = append(outputAggrOffsets, offSlice)
