@@ -9,8 +9,10 @@ bootstrap.sh @deepthi
 /examples/region_sharding @deepthi
 /java/ @harshit-gangal @pH14
 /go/cache @vmg
+/go/cmd @ajm188
 /go/cmd/vtadmin @ajm188 @doeg @notfelineit
 /go/cmd/vtctldclient @ajm188 @doeg @notfelineit
+/go/internal/flag @ajm188
 /go/mysql @harshit-gangal @systay
 /go/protoutil @ajm188
 /go/test/endtoend/onlineddl @shlomi-noach
