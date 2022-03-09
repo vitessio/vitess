@@ -45,6 +45,14 @@ var (
 	_ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
 	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
+
+	// Deprecated GatewayImplementation allows you to choose which gateway to use for vtgate routing. Defaults to tabletgateway, other option is discoverygateway
+	_                    = flag.String("gateway_implementation", "tabletgateway", "Deprecated. The only available gateway_implementation is tabletgateway")
+	bufferImplementation = flag.String("buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
+	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
+	// retryCount is the number of times a query will be retried on error
+	// Make this unexported after DiscoveryGateway is deprecated
+	retryCount = flag.Int("retry-count", 2, "retry count")
 )
 
 // TabletGateway implements the Gateway interface.
@@ -166,7 +174,25 @@ func (gw *TabletGateway) RegisterStats() {
 }
 
 // WaitForTablets is part of the Gateway interface.
-func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
+func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletType) (err error) {
+	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), *initialTabletTimeout)
+	defer cancel()
+
+	defer func() {
+		switch err {
+		case nil:
+			// Log so we know everything is fine.
+			log.Infof("Waiting for tablets completed")
+		case context.DeadlineExceeded:
+			// In this scenario, we were able to reach the
+			// topology service, but some tablets may not be
+			// ready. We just warn and keep going.
+			log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
+			err = nil
+		}
+	}()
+
 	// Skip waiting for tablets if we are not told to do so.
 	if len(tabletTypesToWait) == 0 {
 		return nil
@@ -177,7 +203,8 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 	if err != nil {
 		return err
 	}
-	return gw.hc.WaitForAllServingTablets(ctx, targets)
+	err = gw.hc.WaitForAllServingTablets(ctx, targets)
+	return err
 }
 
 // Close shuts down underlying connections.
@@ -209,7 +236,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries on replicas")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
 	var err error

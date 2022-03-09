@@ -78,22 +78,19 @@ This module also provides helper methods to find a tablet to route traffic
 to. Since it knows the health status of all tablets for a given keyspace / shard
 / tablet type, and their replication lag, it can provide a good list of tablets.
 
-## Vtgate Gateway interface
+## Vtgate TabletGateway
 
-An important interface inside vtgate is the Gateway interface. It can send
+An important interface inside vtgate is the TabletGateway. It can send
 queries to a tablet by keyspace, shard, and tablet type.
 
 As mentioned previously, the higher levels inside vtgate can resolve queries to
-a keyspace, shard and tablet type. The queries are then passed to the Gateway
-implementation inside vtgate, to route them to the right tablet.
+a keyspace, shard and tablet type. The queries are then passed to the TabletGateway inside vtgate,
+to route them to the right tablet.
 
-There are two implementations of the Gateway interface:
-
-* discoveryGateway: deprecated
-* tabletGateway: Combines a set of TopologyWatchers (described in the
-  discovery section, one per cell) as a source of tablets, a HealthCheck module
-  to watch their health, and a tabletHealthCheck per tablet to collect all the health
-  information. Based on this data, it can find the best tablet to use.
+The TabletGateway Combines a set of TopologyWatchers (described in the
+discovery section, one per cell) as a source of tablets, a HealthCheck module
+to watch their health, and a tabletHealthCheck per tablet to collect all the health
+information. Based on this data, it can find the best tablet to use.
   
 # Extensions, work in progress
 

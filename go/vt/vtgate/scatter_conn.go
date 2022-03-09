@@ -53,7 +53,7 @@ type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.CountersWithMultiLabels
 	txConn               *TxConn
-	gateway              Gateway
+	gateway              *TabletGateway
 }
 
 // shardActionFunc defines the contract for a shard action

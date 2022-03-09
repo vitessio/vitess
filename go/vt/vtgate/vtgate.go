@@ -139,7 +139,7 @@ type VTGate struct {
 	resolver *Resolver
 	vsm      *vstreamManager
 	txConn   *TxConn
-	gw       Gateway
+	gw       *TabletGateway
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -178,8 +178,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
-	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
-		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	if err := gw.WaitForTablets(tabletTypesToWait); err != nil {
+		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
 	}
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
@@ -364,7 +364,7 @@ func (vtg *VTGate) IsHealthy() error {
 }
 
 // Gateway returns the current gateway implementation. Mostly used for tests.
-func (vtg *VTGate) Gateway() Gateway {
+func (vtg *VTGate) Gateway() *TabletGateway {
 	return vtg.gw
 }
 
