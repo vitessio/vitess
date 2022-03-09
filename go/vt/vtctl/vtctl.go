@@ -616,13 +616,13 @@ var commands = []commandGroup{
 				name: "VtctldCommand",
 				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 					subFlags.Usage = func() {
-						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a later version of Vitess.")
+						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.")
 					}
 
 					return subFlags.Parse(args)
 				},
 				params: "<command> [args ...]",
-				help:   "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a later version of Vitess.",
+				help:   "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.",
 			},
 		},
 	},
