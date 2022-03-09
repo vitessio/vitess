@@ -1417,6 +1417,9 @@ func TestSelectScatter(t *testing.T) {
 
 func TestSelectScatterPartial(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
+	primarySession = &vtgatepb.Session{
+		TargetString: "@primary",
+	}
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
