@@ -656,13 +656,20 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 func addColumnsToOA(
 	ctx *plancontext.PlanningContext,
 	oa *orderedAggregate,
+	// these are the group by expressions that where added because we have unique aggregations
 	distinctGroupBy []abstract.GroupBy,
+	// these are the aggregate params we already have for non-distinct aggregations
 	aggrParams []*engine.AggregateParams,
+	// distinctOffsets mark out where we need to use the distinctGroupBy offsets
+	// to create *engine.AggregateParams for the distinct aggregations
 	distinctOffsets []int,
+	// these are the offsets for the group by params
 	groupings []offsets,
+	// aggregationExprs are all the original aggregation expressions the query requested
 	aggregationExprs []abstract.Aggr,
 ) {
 	if len(distinctGroupBy) == 0 {
+		// no distinct aggregations
 		oa.aggregates = aggrParams
 	} else {
 		count := len(groupings) - len(distinctOffsets)
@@ -687,6 +694,7 @@ func addColumnsToOA(
 		distinctIdx := 0
 		for i := 0; i <= lastOffset || i <= len(aggrParams); i++ {
 			for distinctIdx < len(distinctOffsets) && i == distinctOffsets[distinctIdx] {
+				// we loop here since we could be dealing with multiple distinct aggregations after each other
 				addDistinctAggr(i)
 				distinctIdx++
 			}
@@ -694,7 +702,8 @@ func addColumnsToOA(
 				oa.aggregates = append(oa.aggregates, aggrParams[i])
 			}
 		}
-		// the last grouping should not be treated as a grouping column by the OA
+
+		// we have to remove the tail of the grouping offsets, so we only have the offsets for the GROUP BY in the query
 		groupings = groupings[:len(groupings)-len(distinctOffsets)]
 	}
 
@@ -704,6 +713,9 @@ func addColumnsToOA(
 	}
 }
 
+// handleDistinctAggr takes in a slice of aggregations and returns GroupBy elements that replace
+// the distinct aggregations in the input, along with a slice of offsets and the non-distinct aggregations left,
+// so we can later reify the original aggregations
 func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, exprs []abstract.Aggr) (
 	distincts []abstract.GroupBy, offsets []int, aggrs []abstract.Aggr, err error) {
 	var distinctExpr sqlparser.Expr
