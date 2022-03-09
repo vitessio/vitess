@@ -332,33 +332,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("keyspace", ti.Keyspace)
 	span.Annotate("shard", ti.Shard)
 
-	logStream, err := s.tmc.Backup(ctx, ti.Tablet, int(req.Concurrency), req.AllowPrimary)
-	if err != nil {
-		return err
-	}
-
-	logger := logutil.NewConsoleLogger()
-
-	for {
-		event, err := logStream.Recv()
-		switch err {
-		case nil:
-			logutil.LogEvent(logger, event)
-			resp := &vtctldatapb.BackupResponse{
-				TabletAlias: req.TabletAlias,
-				Keyspace:    ti.Keyspace,
-				Shard:       ti.Shard,
-				Event:       event,
-			}
-			if err := stream.Send(resp); err != nil {
-				logger.Errorf("failed to send stream response %+v: %v", resp, err)
-			}
-		case io.EOF:
-			return nil
-		default:
-			return err
-		}
-	}
+	return s.backupTablet(ctx, ti.Tablet, int(req.Concurrency), req.AllowPrimary, stream)
 }
 
 // BackupShard is part of the vtctlservicepb.VtctldServer interface.
@@ -411,22 +385,27 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	logStream, err := s.tmc.Backup(ctx, backupTablet, int(req.Concurrency), req.AllowPrimary)
+	return s.backupTablet(ctx, backupTablet, int(req.Concurrency), req.AllowPrimary, stream)
+}
+
+func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool, stream interface {
+	Send(resp *vtctldatapb.BackupResponse) error
+}) error {
+	logStream, err := s.tmc.Backup(ctx, tablet, concurrency, allowPrimary)
 	if err != nil {
 		return err
 	}
 
 	logger := logutil.NewConsoleLogger()
-
 	for {
 		event, err := logStream.Recv()
 		switch err {
 		case nil:
 			logutil.LogEvent(logger, event)
 			resp := &vtctldatapb.BackupResponse{
-				TabletAlias: backupTablet.Alias,
-				Keyspace:    req.Keyspace,
-				Shard:       req.Shard,
+				TabletAlias: tablet.Alias,
+				Keyspace:    tablet.Keyspace,
+				Shard:       tablet.Shard,
 				Event:       event,
 			}
 			if err := stream.Send(resp); err != nil {
