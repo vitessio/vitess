@@ -131,43 +131,53 @@ Gen4 error: unsupported: cross-shard correlated subquery
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(2) AS order_count",
-    "GroupBy": "(1|3)",
+    "Aggregates": "sum(1) AS order_count",
+    "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
       {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "o_orderkey": 0
-        },
-        "TableName": "orders_lineitem",
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 1]",
+          "[COLUMN 2] as order_count",
+          "[COLUMN 3]"
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": true
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "o_orderkey": 0
             },
-            "FieldQuery": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where 1 != 1 group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey)",
-            "OrderBy": "(1|3) ASC",
-            "Query": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where o_orderdate \u003e= date('1993-07-01') and o_orderdate \u003c date('1993-07-01') + interval '3' month group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey) order by o_orderpriority asc",
-            "Table": "orders"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from lineitem where 1 != 1",
-            "Query": "select 1 from lineitem where l_commitdate \u003c l_receiptdate and l_orderkey = :o_orderkey",
-            "Table": "lineitem",
-            "Values": [
-              ":o_orderkey"
-            ],
-            "Vindex": "lineitem_map"
+            "TableName": "orders_lineitem",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where 1 != 1 group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey)",
+                "OrderBy": "(1|3) ASC",
+                "Query": "select o_orderkey, o_orderpriority, count(*) as order_count, weight_string(o_orderpriority), weight_string(o_orderkey) from orders where o_orderdate \u003e= date('1993-07-01') and o_orderdate \u003c date('1993-07-01') + interval '3' month group by o_orderpriority, weight_string(o_orderpriority), o_orderkey, weight_string(o_orderkey) order by o_orderpriority asc",
+                "Table": "orders"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from lineitem where 1 != 1",
+                "Query": "select 1 from lineitem where l_commitdate \u003c l_receiptdate and l_orderkey = :o_orderkey",
+                "Table": "lineitem",
+                "Values": [
+                  ":o_orderkey"
+                ],
+                "Vindex": "lineitem_map"
+              }
+            ]
           }
         ]
       }
