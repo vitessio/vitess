@@ -105,13 +105,13 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, []string{"-health_check_interval", "1s"}...)
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, []string{"--health_check_interval", "1s"}...)
 		err = clusterInstance.StartKeyspace(*keyspace, shards, 1, false)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{"-tablet_refresh_interval", tabletRefreshInterval.String()}...)
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{"--tablet_refresh_interval", tabletRefreshInterval.String()}...)
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

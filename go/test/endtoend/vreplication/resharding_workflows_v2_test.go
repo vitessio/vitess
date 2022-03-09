@@ -98,23 +98,26 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	} else {
 		args = append(args, "Reshard")
 	}
+
+	args = append(args, "--")
+
 	if BypassLagCheck {
-		args = append(args, "-max_replication_lag_allowed=2542087h")
+		args = append(args, "--max_replication_lag_allowed=2542087h")
 	}
 
 	switch action {
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
-			args = append(args, "-source", sourceKs, "-tables", tables)
+			args = append(args, "--source", sourceKs, "--tables", tables)
 		} else {
-			args = append(args, "-source_shards", sourceShards, "-target_shards", targetShards)
+			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
 		}
 	}
 	if cells != "" {
-		args = append(args, "-cells", cells)
+		args = append(args, "--cells", cells)
 	}
 	if tabletTypes != "" {
-		args = append(args, "-tablet_types", tabletTypes)
+		args = append(args, "--tablet_types", tabletTypes)
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	args = append(args, action, ksWorkflow)
@@ -606,8 +609,8 @@ func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
 }
 
 func switchReadsNew(t *testing.T, cells, ksWorkflow string, reverse bool) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells,
-		"-tablet_types=rdonly,replica", fmt.Sprintf("-reverse=%t", reverse), ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells,
+		"--tablet_types=rdonly,replica", fmt.Sprintf("-reverse=%t", reverse), ksWorkflow)
 	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
 	if output != "" {
 		fmt.Printf("SwitchReads output: %s\n", output)
@@ -730,7 +733,7 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 }
 
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
-	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "-skip_preflight", "-ddl_strategy=online",
-		"-sql", sql, keyspace)
+	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "--", "--skip_preflight", "--ddl_strategy=online",
+		"--sql", sql, keyspace)
 	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 }

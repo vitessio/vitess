@@ -29,6 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/zkctl"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -42,7 +45,7 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	flag.Parse()
+	_flag.Parse()
 
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
 	zkd := zkctl.NewZkd(zkConfig)

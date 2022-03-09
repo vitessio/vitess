@@ -38,6 +38,75 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestPlayerInvisibleColumns(t *testing.T) {
+	if !supportsInvisibleColumns() {
+		t.Skip()
+	}
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(20), id2 int invisible, pk2 int invisible, primary key(id, pk2))",
+		fmt.Sprintf("create table %s.t1(id int, val varchar(20), id2 int invisible, pk2 int invisible, primary key(id, pk2))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input       string
+		output      string
+		table       string
+		data        [][]string
+		query       string
+		queryResult [][]string
+	}{{
+		input:  "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
+		output: "insert into t1(id,val,id2,pk2) values (1,'aaa',10,100)",
+		table:  "t1",
+		data: [][]string{
+			{"1", "aaa"},
+		},
+		query: "select id, val, id2, pk2 from t1",
+		queryResult: [][]string{
+			{"1", "aaa", "10", "100"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			tcases.output,
+		}
+		expectNontxQueries(t, output)
+		time.Sleep(1 * time.Second)
+		log.Flush()
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+		if tcases.query != "" {
+			expectQueryResult(t, tcases.query, tcases.queryResult)
+		}
+	}
+
+}
+
 func TestHeartbeatFrequencyFlag(t *testing.T) {
 	origVReplicationHeartbeatUpdateInterval := *vreplicationHeartbeatUpdateInterval
 	defer func() {
@@ -2715,6 +2784,7 @@ func TestGeneratedColumns(t *testing.T) {
 		}
 	}
 }
+
 func TestPlayerInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 

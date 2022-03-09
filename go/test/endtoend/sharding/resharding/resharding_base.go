@@ -190,7 +190,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Launch keyspace
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -228,16 +228,16 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	shard3.Vttablets = []*cluster.Vttablet{shard3Primary, shard3Replica, shard3Rdonly}
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_semi_sync",
-		"-enable_replication_reporter",
-		"-enable-tx-throttler",
-		"-binlog_use_v3_resharding_mode=true",
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_semi_sync",
+		"--enable_replication_reporter",
+		"--enable-tx-throttler",
+		"--binlog_use_v3_resharding_mode=true",
 	}
 
 	shardingColumnType := "bigint(20) unsigned"
@@ -377,10 +377,10 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// we need to create the schema, and the worker will do data copying
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--exclude_tables", "unrelated",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--", "--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard2.Name))
 	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--exclude_tables", "unrelated",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--", "--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard3.Name))
 	require.Nil(t, err)
 
@@ -394,7 +394,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// the rate limit is set very high.
 
 	// Initial clone (online).
-	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone", "--",
 		"--offline=false",
 		"--exclude_tables", "unrelated",
 		"--chunk_count", "10",
@@ -419,7 +419,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	_, err = shard1Primary.VttabletProcess.QueryTablet(sql, keyspaceName, true)
 	require.Nil(t, err)
 
-	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone", "--",
 		"--offline=false",
 		"--exclude_tables", "unrelated",
 		"--chunk_count", "10",
@@ -442,7 +442,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	_, err = shard1Primary.VttabletProcess.QueryTablet(sql, keyspaceName, true)
 	require.Nil(t, err)
 
-	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone", "--",
 		"--offline=false",
 		"--exclude_tables", "unrelated",
 		"--chunk_count", "10",
@@ -474,7 +474,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	insertValue(t, shard3.PrimaryTablet(), keyspaceName, tableName, 4, "msg4", key3)
 	insertValue(t, shard3.PrimaryTablet(), keyspaceName, tableName, 5, "msg5", key3)
 
-	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone", "--",
 		"--exclude_tables", "unrelated",
 		"--chunk_count", "10",
 		"--min_rows_per_chunk", "1",
@@ -495,7 +495,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	checkStartupValues(t, shardingKeyType)
 
 	// check the schema too
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateSchemaKeyspace", "--exclude_tables=unrelated", keyspaceName)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateSchemaKeyspace", "--", "--exclude_tables=unrelated", keyspaceName)
 	require.Nil(t, err)
 
 	// Verify vreplication table entries
@@ -567,7 +567,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
-		"SplitDiff",
+		"SplitDiff", "--",
 		"--exclude_tables", "unrelated",
 		"--min_healthy_rdonly_tablets", "1",
 		shard3Ks)
@@ -578,7 +578,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
-		"MultiSplitDiff",
+		"MultiSplitDiff", "--",
 		"--exclude_tables", "unrelated",
 		shard1Ks)
 	require.Nil(t, err)
@@ -622,8 +622,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	for _, primary := range []cluster.Vttablet{*shard2Primary, *shard3Primary} {
 		sharding.CheckTabletQueryService(t, primary, "NOT_SERVING", false, *clusterInstance)
 		streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-			"VtTabletStreamHealth",
-			"-count", "1", primary.Alias)
+			"VtTabletStreamHealth", "--",
+			"--count", "1", primary.Alias)
 		require.Nil(t, err)
 		log.Info("Got health: ", streamHealth)
 
@@ -637,7 +637,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// now serve rdonly from the split shards, in cell1 only
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"MigrateServedTypes", fmt.Sprintf("--cells=%s", cell1),
+		"MigrateServedTypes", "--", fmt.Sprintf("--cells=%s", cell1),
 		shard1Ks, "rdonly")
 	require.Nil(t, err)
 
@@ -667,9 +667,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// rerun migrate to ensure it doesn't fail
 	// skip refresh to make it go faster
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"MigrateServedTypes",
+		"MigrateServedTypes", "--",
 		fmt.Sprintf("--cells=%s", cell1),
-		"-skip-refresh-state=true",
+		"--skip-refresh-state=true",
 		shard1Ks, "rdonly")
 	require.Nil(t, err)
 
@@ -694,8 +694,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// rerun migrate to ensure it doesn't fail
 	// skip refresh to make it go faster
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"MigrateServedTypes",
-		"-skip-refresh-state=true",
+		"MigrateServedTypes", "--",
+		"--skip-refresh-state=true",
 		shard1Ks, "rdonly")
 	require.Nil(t, err)
 
@@ -713,7 +713,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// move replica back and forth
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"MigrateServedTypes", "-reverse",
+		"MigrateServedTypes", "--", "--reverse",
 		shard1Ks, "replica")
 	require.Nil(t, err)
 
@@ -754,8 +754,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// reparent shard2 to shard2Replica1, then insert more data and see it flow through still
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", shard2Ks,
-		"-new_primary", shard2Replica1.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", shard2Ks,
+		"--new_primary", shard2Replica1.Alias)
 	require.Nil(t, err)
 
 	// update our test variables to point at the new primary
@@ -773,7 +773,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
-		"SplitDiff",
+		"SplitDiff", "--",
 		"--exclude_tables", "unrelated",
 		"--min_healthy_rdonly_tablets", "1",
 		shard3Ks)
@@ -784,7 +784,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
-		"MultiSplitDiff",
+		"MultiSplitDiff", "--",
 		"--exclude_tables", "unrelated",
 		shard1Ks)
 	require.Nil(t, err)
@@ -799,7 +799,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// mock with the SourceShard records to test 'vtctl SourceShardDelete'  and 'vtctl SourceShardAdd'
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SourceShardDelete", shard3Ks, "1")
 	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SourceShardAdd", "--key_range=80-",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SourceShardAdd", "--", "--key_range=80-",
 		shard3Ks, "1", shard1Ks)
 	require.Nil(t, err)
 
@@ -811,8 +811,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// which should cause the Migrate to be canceled and the source
 	// primary to be serving again.
 	// This is the legacy resharding migration command
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		"-filtered_replication_wait_time", "0s", shard1Ks, "primary")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "--",
+		"--filtered_replication_wait_time", "0s", shard1Ks, "primary")
 	require.Error(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
@@ -824,8 +824,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	sharding.CheckTabletQueryService(t, *shard1Primary, "SERVING", false, *clusterInstance)
 
 	// sabotage primary migration and make it fail in an unfinished state.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl",
-		"-denied_tables=t",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--",
+		"--denied_tables=t",
 		shard3Ks, "primary")
 	require.Nil(t, err)
 
@@ -850,11 +850,11 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// remove sabotage, but make it fail early. This should not result in the source primary serving,
 	// because this failure is past the point of no return.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "-denied_tables=t",
-		"-remove", shard3Ks, "primary")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--", "--denied_tables=t",
+		"--remove", shard3Ks, "primary")
 	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		"-filtered_replication_wait_time", "0s", shard1Ks, "primary")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "--",
+		"--filtered_replication_wait_time", "0s", shard1Ks, "primary")
 	require.Error(t, err)
 
 	sharding.CheckTabletQueryService(t, *shard1Primary, "NOT_SERVING", true, *clusterInstance)
@@ -893,7 +893,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		3, false, "resharding2", fixedParentID, keyspaceName, shardingKeyType, nil)
 
 	// repeat the migration with reverse_replication
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "-reverse_replication=true",
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "--", "--reverse_replication=true",
 		shard1Ks, "primary")
 	require.Nil(t, err)
 	// look for the rows in the original primary after a short wait
@@ -905,8 +905,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// retry the migration to ensure it now fails
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"MigrateServedTypes",
-		"-reverse_replication=true",
+		"MigrateServedTypes", "--",
+		"--reverse_replication=true",
 		shard1Ks, "primary")
 	require.Error(t, err)
 
@@ -932,7 +932,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.Nil(t, err)
 	}
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", shard1Primary.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", shard1Primary.Alias)
 	require.Nil(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone

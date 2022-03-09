@@ -157,22 +157,21 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
-			"-online_ddl_check_interval", "3s",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
-			"-gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--migration_check_interval", "5s",
+			"--gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"-ddl_strategy", "gh-ost",
+			"--ddl_strategy", "gh-ost",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {

@@ -109,17 +109,17 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = []string{
-			"-vschema_ddl_authorized_users=%",
-			"-mysql_server_query_timeout", "1s",
-			"-mysql_auth_server_impl", "static",
-			"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			"-mysql_server_version", "8.0.16-7",
-			"-warn_sharded_only=true",
+			"--vschema_ddl_authorized_users=%",
+			"--mysql_server_query_timeout", "1s",
+			"--mysql_auth_server_impl", "static",
+			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
+			"--mysql_server_version", "8.0.16-7",
+			"--warn_sharded_only=true",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-table-acl-config", clusterInstance.TmpDirectory + tableACLConfig,
-			"-queryserver-config-strict-table-acl",
+			"--table-acl-config", clusterInstance.TmpDirectory + tableACLConfig,
+			"--queryserver-config-strict-table-acl",
 		}
 
 		// Start keyspace

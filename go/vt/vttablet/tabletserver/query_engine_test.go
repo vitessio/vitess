@@ -54,9 +54,7 @@ import (
 func TestStrictMode(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	// Test default behavior.
 	config := tabletenv.NewDefaultConfig()
@@ -99,9 +97,7 @@ func TestStrictMode(t *testing.T) {
 func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
@@ -133,9 +129,7 @@ func addSchemaEngineQueries(db *fakesqldb.DB) {
 func TestGetMessageStreamPlan(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	addSchemaEngineQueries(db)
 
@@ -179,9 +173,7 @@ func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
 func TestQueryPlanCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	firstQuery := "select * from test_table_01"
 	secondQuery := "select * from test_table_02"
@@ -224,9 +216,7 @@ func TestQueryPlanCache(t *testing.T) {
 func TestNoQueryPlanCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	firstQuery := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
@@ -254,11 +244,10 @@ func TestNoQueryPlanCache(t *testing.T) {
 func TestNoQueryPlanCacheDirective(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	firstQuery := "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
@@ -284,9 +273,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	qe := newTestQueryEngine(1*time.Second, true, newDBConfigs(db))
@@ -387,9 +374,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 	db := fakesqldb.New(b)
 	defer db.Close()
 
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
@@ -444,9 +429,7 @@ func BenchmarkPlanCacheContention(b *testing.B) {
 	db := fakesqldb.New(b)
 	defer db.Close()
 
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
@@ -473,9 +456,7 @@ func TestPlanCachePollution(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 

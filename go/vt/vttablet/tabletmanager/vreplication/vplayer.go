@@ -335,6 +335,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		// check throttler.
 		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
 			continue

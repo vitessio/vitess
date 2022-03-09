@@ -65,11 +65,11 @@ func TestTabletReshuffle(t *testing.T) {
 	// We have to disable active reparenting to prevent the tablet from trying to fix replication.
 	// We also have to disable replication reporting because we're pointed at the primary.
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
-		"-db_socket", fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
-		"-disable_active_reparents",
-		"-enable_replication_reporter=false",
+		"--lock_tables_timeout", "5s",
+		"--mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
+		"--db_socket", fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
+		"--disable_active_reparents",
+		"--enable_replication_reporter=false",
 	}
 	defer func() { clusterInstance.VtTabletExtraArgs = []string{} }()
 
@@ -80,9 +80,9 @@ func TestTabletReshuffle(t *testing.T) {
 
 	sql := "select value from t1"
 	args := []string{
-		"VtTabletExecute",
-		"-options", "included_fields:TYPE_ONLY",
-		"-json",
+		"VtTabletExecute", "--",
+		"--options", "included_fields:TYPE_ONLY",
+		"--json",
 		rTablet.Alias,
 		sql,
 	}
@@ -135,7 +135,7 @@ func TestHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 
 	// make sure the health stream is updated
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", rTablet.Alias)
 	require.NoError(t, err)
 	verifyStreamHealth(t, result, true)
 
@@ -147,7 +147,7 @@ func TestHealthCheck(t *testing.T) {
 	checkHealth(t, rTablet.HTTPPort, false)
 
 	// now test VtTabletStreamHealth returns the right thing
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "2", rTablet.Alias)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "2", rTablet.Alias)
 	require.NoError(t, err)
 	scanner := bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {
@@ -163,7 +163,7 @@ func TestHealthCheck(t *testing.T) {
 	time.Sleep(tabletUnhealthyThreshold + tabletHealthcheckRefreshInterval)
 
 	// now the replica's VtTabletStreamHealth should show it as unhealthy
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", rTablet.Alias)
 	require.NoError(t, err)
 	scanner = bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {
@@ -188,7 +188,7 @@ func TestHealthCheck(t *testing.T) {
 	time.Sleep(tabletHealthcheckRefreshInterval)
 
 	// now the replica's VtTabletStreamHealth should show it as healthy again
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", rTablet.Alias)
 	require.NoError(t, err)
 	scanner = bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {

@@ -265,3 +265,19 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 	return cp
 
 }
+
+func filterDoubleDashArgs(args []string, version int) (filtered []string) {
+	if version > 13 {
+		return args
+	}
+
+	for _, arg := range args {
+		if arg == "--" {
+			continue
+		}
+
+		filtered = append(filtered, arg)
+	}
+
+	return filtered
+}

@@ -101,8 +101,8 @@ func testListAllTablets(t *testing.T) {
 	// now filtering with the first keyspace and tablet type of primary, in
 	// addition to the cell
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"ListAllTablets", "-keyspace", clusterInstance.Keyspaces[0].Name,
-		"-tablet_type", "primary",
+		"ListAllTablets", "--", "--keyspace", clusterInstance.Keyspaces[0].Name,
+		"--tablet_type", "primary",
 		clusterInstance.Cell)
 	require.Nil(t, err)
 

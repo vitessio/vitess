@@ -85,43 +85,43 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		"-topo_implementation", vttablet.CommonArg.TopoImplementation,
-		"-topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
-		"-topo_global_root", vttablet.CommonArg.TopoGlobalRoot,
-		"-log_queries_to_file", vttablet.FileToLogQueries,
-		"-tablet-path", vttablet.TabletPath,
-		"-port", fmt.Sprintf("%d", vttablet.Port),
-		"-grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
-		"-init_shard", vttablet.Shard,
-		"-log_dir", vttablet.LogDir,
-		"-tablet_hostname", vttablet.TabletHostname,
-		"-init_keyspace", vttablet.Keyspace,
-		"-init_tablet_type", vttablet.TabletType,
-		"-health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
-		"-enable_replication_reporter",
-		"-backup_storage_implementation", vttablet.BackupStorageImplementation,
-		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
-		"-service_map", vttablet.ServiceMap,
-		"-vtctld_addr", vttablet.VtctldAddress,
-		"-vtctld_addr", vttablet.VtctldAddress,
-		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
-		"-db_charset", vttablet.Charset,
+		"--topo_implementation", vttablet.CommonArg.TopoImplementation,
+		"--topo_global_server_address", vttablet.CommonArg.TopoGlobalAddress,
+		"--topo_global_root", vttablet.CommonArg.TopoGlobalRoot,
+		"--log_queries_to_file", vttablet.FileToLogQueries,
+		"--tablet-path", vttablet.TabletPath,
+		"--port", fmt.Sprintf("%d", vttablet.Port),
+		"--grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
+		"--init_shard", vttablet.Shard,
+		"--log_dir", vttablet.LogDir,
+		"--tablet_hostname", vttablet.TabletHostname,
+		"--init_keyspace", vttablet.Keyspace,
+		"--init_tablet_type", vttablet.TabletType,
+		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
+		"--enable_replication_reporter",
+		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
+		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
+		"--service_map", vttablet.ServiceMap,
+		"--vtctld_addr", vttablet.VtctldAddress,
+		"--vtctld_addr", vttablet.VtctldAddress,
+		"--vreplication_tablet_type", vttablet.VreplicationTabletType,
+		"--db_charset", vttablet.Charset,
 	)
 	if *isCoverage {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
+		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
 	}
 	if *PerfTest {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
+		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
 	}
 
 	if vttablet.SupportsBackup {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
-		vttablet.proc.Args = append(vttablet.proc.Args, "-enable_semi_sync")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--enable_semi_sync")
 	}
 	if vttablet.DbFlavor != "" {
-		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("-db_flavor=%s", vttablet.DbFlavor))
+		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
 	}
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
