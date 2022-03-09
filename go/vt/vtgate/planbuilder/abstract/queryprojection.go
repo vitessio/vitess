@@ -61,7 +61,9 @@ type (
 		WeightStrExpr sqlparser.Expr
 
 		// The index at which the user expects to see this column. Set to nil, if the user does not ask for it
-		InnerIndex  *int
+		InnerIndex *int
+
+		// The original aliased expression that this group by is referring
 		aliasedExpr *sqlparser.AliasedExpr
 	}
 )

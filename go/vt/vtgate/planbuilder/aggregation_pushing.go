@@ -249,6 +249,7 @@ func (hp *horizonPlanning) pushAggrOnJoin(
 		outputGrouping := newOffset(len(join.Cols))
 		join.Cols = append(join.Cols, f(offset.col))
 		if offset.wsCol > -1 {
+			// we add the weight_string calls at the end of the join columns
 			outputGrouping.wsCol = wsOutputGrpOffset + len(wsOffsets)
 			wsOffsets = append(wsOffsets, f(offset.wsCol))
 		}
