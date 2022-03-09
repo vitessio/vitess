@@ -53,7 +53,14 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.LastSqlError)
 		i = encodeVarint(dAtA, i, uint64(len(m.LastSqlError)))
 		i--
-		dAtA[i] = 0x7a
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x82
+	}
+	if m.SqlState != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.SqlState))
+		i--
+		dAtA[i] = 0x78
 	}
 	if len(m.LastIoError) > 0 {
 		i -= len(m.LastIoError)
@@ -62,13 +69,8 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x72
 	}
-	if m.IoThreadConnecting {
-		i--
-		if m.IoThreadConnecting {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
+	if m.IoState != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.IoState))
 		i--
 		dAtA[i] = 0x68
 	}
@@ -126,26 +128,6 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i = encodeVarint(dAtA, i, uint64(m.ReplicationLagSeconds))
 		i--
 		dAtA[i] = 0x20
-	}
-	if m.SqlThreadRunning {
-		i--
-		if m.SqlThreadRunning {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x18
-	}
-	if m.IoThreadRunning {
-		i--
-		if m.IoThreadRunning {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x10
 	}
 	if len(m.Position) > 0 {
 		i -= len(m.Position)
@@ -278,12 +260,6 @@ func (m *Status) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.IoThreadRunning {
-		n += 2
-	}
-	if m.SqlThreadRunning {
-		n += 2
-	}
 	if m.ReplicationLagSeconds != 0 {
 		n += 1 + sov(uint64(m.ReplicationLagSeconds))
 	}
@@ -316,16 +292,19 @@ func (m *Status) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.IoThreadConnecting {
-		n += 2
+	if m.IoState != 0 {
+		n += 1 + sov(uint64(m.IoState))
 	}
 	l = len(m.LastIoError)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.SqlState != 0 {
+		n += 1 + sov(uint64(m.SqlState))
+	}
 	l = len(m.LastSqlError)
 	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+		n += 2 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -440,46 +419,6 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Position = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IoThreadRunning", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.IoThreadRunning = bool(v != 0)
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SqlThreadRunning", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.SqlThreadRunning = bool(v != 0)
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReplicationLagSeconds", wireType)
@@ -718,9 +657,9 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 13:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IoThreadConnecting", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field IoState", wireType)
 			}
-			var v int
+			m.IoState = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -730,12 +669,11 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				m.IoState |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.IoThreadConnecting = bool(v != 0)
 		case 14:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LastIoError", wireType)
@@ -769,6 +707,25 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			m.LastIoError = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 15:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SqlState", wireType)
+			}
+			m.SqlState = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SqlState |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 16:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LastSqlError", wireType)
 			}
