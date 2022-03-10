@@ -55,7 +55,7 @@ func NewLegacyCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, t
 // NewLegacyShardReplicationWatcher returns a LegacyTopologyWatcher that
 // monitors the tablets in a cell/keyspace/shard, and starts refreshing.
 func NewLegacyShardReplicationWatcher(ctx context.Context, topoServer *topo.Server, tr LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) *LegacyTopologyWatcher {
-	return NewLegacyTopologyWatcher(ctx, topoServer, tr, cell, refreshInterval, true /* RefreshKnownTablets */, topoReadConcurrency, func(tw *LegacyTopologyWatcher) ([]*topodatapb.TabletAlias, error) {
+	return NewLegacyTopologyWatcher(ctx, topoServer, tr, cell, refreshInterval, true /* refreshKnownTablets */, topoReadConcurrency, func(tw *LegacyTopologyWatcher) ([]*topodatapb.TabletAlias, error) {
 		sri, err := tw.topoServer.GetShardReplication(ctx, tw.cell, keyspace, shard)
 		switch {
 		case err == nil:
