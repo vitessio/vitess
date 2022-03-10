@@ -41,4 +41,4 @@ print("Total keywords:", len(reserved_keywords) + len(non_reserved_keywords))
 with open("reserved_keywords.txt", 'w') as f:
     f.write(",".join(reserved_keywords))
 with open("non_reserved_keywords.txt", 'w') as f:
-    f.write(",".join(reserved_keywords))
+    f.write(",".join(non_reserved_keywords))
