@@ -37,7 +37,7 @@ func TestQueryzHandler(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 
 	// single shard query
 	sql := "select id from user where id = 1"
