@@ -5845,6 +5845,7 @@ reserved_keyword:
 | FOLLOWING
 | FOR
 | FORCE
+| FOUND
 | FROM
 | FUNCTION
 | GRANT
@@ -6212,10 +6213,12 @@ column_name_safe_reserved_keyword:
 | BIT_AND
 | BIT_OR
 | BIT_XOR
+| COMMENT_KEYWORD
 | COUNT
 | CUME_DIST
 | DENSE_RANK
 | FIRST_VALUE
+| FOUND
 | JSON_ARRAYAGG
 | JSON_OBJECTAGG
 | LAG
@@ -6238,7 +6241,7 @@ column_name_safe_reserved_keyword:
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
-| COMMENT_KEYWORD
+
 
 openb:
   '('
