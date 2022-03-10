@@ -2118,7 +2118,27 @@ func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatap
 
 // RemoveBackup is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveBackup(ctx context.Context, req *vtctldatapb.RemoveBackupRequest) (*vtctldatapb.RemoveBackupResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RemoveBackup")
+	defer span.Finish()
+
+	bucket := fmt.Sprintf("%v/%v", req.Keyspace, req.Shard)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("bucket", bucket)
+	span.Annotate("backup_name", req.Name)
+
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return nil, err
+	}
+	defer bs.Close()
+
+	if err := bs.RemoveBackup(ctx, bucket, req.Name); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RemoveBackupResponse{}, nil
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
