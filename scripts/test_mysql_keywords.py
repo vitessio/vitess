@@ -1,8 +1,10 @@
 # Open list of reserved and non-reserved keywords
 with open("reserved_keywords.txt", "r") as f:
     reserved_keywords = f.read().split(',')
+    f.close()
 with open("non_reserved_keywords.txt", "r") as f:
     non_reserved_keywords = f.read().split(',')
+    f.close()
 
 # Print useful stats
 print("Number of Reserved Keywords:", len(reserved_keywords))
