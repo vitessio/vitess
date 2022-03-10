@@ -187,6 +187,8 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // RestoreFromBackup stops mysqld for the given tablet and restores a backup.
+  rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
   // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended

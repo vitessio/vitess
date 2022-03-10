@@ -39198,6 +39198,210 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a RestoreFromBackupRequest. */
+    interface IRestoreFromBackupRequest {
+
+        /** RestoreFromBackupRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupRequest backup_time */
+        backup_time?: (vttime.ITime|null);
+    }
+
+    /** Represents a RestoreFromBackupRequest. */
+    class RestoreFromBackupRequest implements IRestoreFromBackupRequest {
+
+        /**
+         * Constructs a new RestoreFromBackupRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRestoreFromBackupRequest);
+
+        /** RestoreFromBackupRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupRequest backup_time. */
+        public backup_time?: (vttime.ITime|null);
+
+        /**
+         * Creates a new RestoreFromBackupRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestoreFromBackupRequest instance
+         */
+        public static create(properties?: vtctldata.IRestoreFromBackupRequest): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Encodes the specified RestoreFromBackupRequest message. Does not implicitly {@link vtctldata.RestoreFromBackupRequest.verify|verify} messages.
+         * @param message RestoreFromBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRestoreFromBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestoreFromBackupRequest message, length delimited. Does not implicitly {@link vtctldata.RestoreFromBackupRequest.verify|verify} messages.
+         * @param message RestoreFromBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRestoreFromBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestoreFromBackupRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestoreFromBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Decodes a RestoreFromBackupRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestoreFromBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Verifies a RestoreFromBackupRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestoreFromBackupRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestoreFromBackupRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RestoreFromBackupRequest;
+
+        /**
+         * Creates a plain object from a RestoreFromBackupRequest message. Also converts values to other types if specified.
+         * @param message RestoreFromBackupRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RestoreFromBackupRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestoreFromBackupRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RestoreFromBackupResponse. */
+    interface IRestoreFromBackupResponse {
+
+        /** RestoreFromBackupResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupResponse keyspace */
+        keyspace?: (string|null);
+
+        /** RestoreFromBackupResponse shard */
+        shard?: (string|null);
+
+        /** RestoreFromBackupResponse event */
+        event?: (logutil.IEvent|null);
+    }
+
+    /** Represents a RestoreFromBackupResponse. */
+    class RestoreFromBackupResponse implements IRestoreFromBackupResponse {
+
+        /**
+         * Constructs a new RestoreFromBackupResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRestoreFromBackupResponse);
+
+        /** RestoreFromBackupResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** RestoreFromBackupResponse keyspace. */
+        public keyspace: string;
+
+        /** RestoreFromBackupResponse shard. */
+        public shard: string;
+
+        /** RestoreFromBackupResponse event. */
+        public event?: (logutil.IEvent|null);
+
+        /**
+         * Creates a new RestoreFromBackupResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RestoreFromBackupResponse instance
+         */
+        public static create(properties?: vtctldata.IRestoreFromBackupResponse): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Encodes the specified RestoreFromBackupResponse message. Does not implicitly {@link vtctldata.RestoreFromBackupResponse.verify|verify} messages.
+         * @param message RestoreFromBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRestoreFromBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RestoreFromBackupResponse message, length delimited. Does not implicitly {@link vtctldata.RestoreFromBackupResponse.verify|verify} messages.
+         * @param message RestoreFromBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRestoreFromBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RestoreFromBackupResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RestoreFromBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Decodes a RestoreFromBackupResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RestoreFromBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Verifies a RestoreFromBackupResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RestoreFromBackupResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RestoreFromBackupResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RestoreFromBackupResponse;
+
+        /**
+         * Creates a plain object from a RestoreFromBackupResponse message. Also converts values to other types if specified.
+         * @param message RestoreFromBackupResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RestoreFromBackupResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RestoreFromBackupResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RunHealthCheckRequest. */
     interface IRunHealthCheckRequest {
 

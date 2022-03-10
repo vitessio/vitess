@@ -488,6 +488,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	return client.c.ReparentTablet(ctx, in, opts...)
 }
 
+// RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RestoreFromBackup(ctx, in, opts...)
+}
+
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RunHealthCheck(ctx context.Context, in *vtctldatapb.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldatapb.RunHealthCheckResponse, error) {
 	if client.c == nil {

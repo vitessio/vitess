@@ -2244,6 +2244,10 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupRequest, stream vtctlservicepb.Vtctld_RestoreFromBackupServer) error {
+	panic("unimplemented!")
+}
+
 // RunHealthCheck is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunHealthCheckRequest) (*vtctldatapb.RunHealthCheckResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.RunHealthCheck")
