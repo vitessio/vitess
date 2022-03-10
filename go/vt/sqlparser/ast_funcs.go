@@ -1683,7 +1683,7 @@ func (es *ExtractedSubquery) GetHasValuesArg() string {
 func (es *ExtractedSubquery) updateAlternative() {
 	switch original := es.Original.(type) {
 	case *ExistsExpr:
-		es.alternative = NewArgument(es.argName)
+		es.alternative = NewArgument(es.hasValuesArg)
 	case *Subquery:
 		es.alternative = NewArgument(es.argName)
 	case *ComparisonExpr:
