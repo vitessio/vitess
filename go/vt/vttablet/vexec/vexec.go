@@ -153,7 +153,7 @@ func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.Lite
 	return ErrColumNotFound
 }
 
-// ReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
+// AddOrReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
 // into a given value
 func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser.Literal) error {
 	if err := e.ReplaceInsertColumnVal(colName, val); err != ErrColumNotFound {

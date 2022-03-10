@@ -33,7 +33,7 @@ import (
 // StreamExecutor is a subset of Primitive that MergeSort
 // requires its inputs to satisfy.
 type StreamExecutor interface {
-	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 }
 
 var _ Primitive = (*MergeSort)(nil)
@@ -248,6 +248,7 @@ func runOneStream(ctx context.Context, vcursor VCursor, input StreamExecutor, bi
 			bindVars,
 			wantfields,
 			func(qr *sqltypes.Result) error {
+				//log.Infof("runOneStream StreamExecute %d fields, %d rows", len(qr.Fields), len(qr.Rows))
 				if len(qr.Fields) != 0 {
 					select {
 					case handle.fields <- qr.Fields:

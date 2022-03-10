@@ -487,6 +487,8 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {
+	return nil //HACK added this to get my local cluster to run // TODO: remove before PR
+
 	log.Infof("Setting semi-sync mode: primary=%v, replica=%v", primary, replica)
 
 	// Convert bool to int.
