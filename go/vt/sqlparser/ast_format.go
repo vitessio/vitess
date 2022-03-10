@@ -1200,7 +1200,7 @@ func (node *Subquery) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *DerivedTable) Format(buf *TrackedBuffer) {
 	if node.Lateral {
-		buf.WriteString(" lateral")
+		buf.WriteString("lateral ")
 	}
 	buf.astPrintf(node, "(%v)", node.Select)
 }
