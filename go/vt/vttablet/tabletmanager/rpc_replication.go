@@ -837,6 +837,11 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 	defer tm.unlock()
 
+	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)
+	defer func() {
+		tm.replManager.SetTabletType(tm.Tablet().Type)
+	}()
+
 	// If Orchestrator is configured then also tell it we're promoting a tablet so it needs to be in maintenance mode
 	// Do this in the background, as it's best-effort.
 	go func() {
