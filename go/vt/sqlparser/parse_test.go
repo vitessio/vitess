@@ -3037,6 +3037,21 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:  "select variables from t",
 			output: "select `variables` from t",
+		}, {
+			input:  "select 1 as found",
+			output: "select 1 as `found` from dual",
+		}, {
+			input:  "select found from t",
+			output: "select `found` from t",
+		}, {
+			input:  "insert into t (found) values (42)",
+			output: "insert into t(`found`) values (42)",
+		}, {
+			input:  "update x set found = 32 where found = 42",
+			output: "update x set found = 32 where `found` = 42",
+		}, {
+			input:  "delete from x where found = 32",
+			output: "delete from x where `found` = 32",
 		}}
 
 	for _, tcase := range validSQL {
@@ -4392,7 +4407,7 @@ var correctlyDoParse = []string{"avg", "bit_and", "bit_or", "bit_xor", "count", 
 	"check", "cipher", "class_origin", "client", "clone", "collation", "columns", "column_name", "commit", "committed", "component",
 	"constraint", "constraint_catalog", "constraint_name", "constraint_schema", "contains", "cursor_name", "data", "date", "datetime",
 	"day", "decimal", "declare", "definer", "definition", "description", "double", "duplicate", "each", "enforced", "engines", "enum",
-	"except", "exclude", "expansion", "expire", "fields", "fixed", "float_type", "flush", "foreign", "fulltext", "geomcollection",
+	"except", "exclude", "expansion", "expire", "fields", "fixed", "float_type", "flush", "foreign", "found", "fulltext", "geomcollection",
 	"geometry", "geometrycollection", "get_master_public_key", "global", "grants", "histogram", "history", "inactive", "indexes",
 	"initial", "int", "integer", "invisible", "invoker", "isolation", "issuer", "json", "keys", "key_block_size", "language", "last_insert_id",
 	"less", "level", "lines", "linestring", "load", "local", "locked", "longblob", "longtext", "low_priority", "master_compression_algorithms",
