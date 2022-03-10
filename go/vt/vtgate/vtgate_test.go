@@ -43,15 +43,13 @@ import (
 
 // This file uses the sandbox_test framework.
 
-var hcVTGateTest *discovery.FakeLegacyHealthCheck
+var hcVTGateTest *discovery.FakeHealthCheck
 
 var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
-var primarySession = &vtgatepb.Session{
-	TargetString: "@primary",
-}
+var primarySession *vtgatepb.Session
 
 func init() {
 	getSandbox(KsTestUnsharded).VSchema = `
@@ -75,14 +73,9 @@ func init() {
 	}
 }
 `
-	hcVTGateTest = discovery.NewFakeLegacyHealthCheck()
+	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
 	*transactionMode = "MULTI"
-	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
-	*GatewayImplementation = GatewayImplementationDiscovery
-	// The topo.Server is used to start watching the cells described
-	// in '-cells_to_watch' command line parameter, which is
-	// empty by default. So it's unused in this test, set to nil.
-	LegacyInit(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", 10, nil)
+	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"
@@ -305,6 +298,11 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 func TestErrorPropagation(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
+	// create a new session each time so that ShardSessions don't get re-used across tests
+	primarySession = &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+
 	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbcrdonly := hcVTGateTest.AddTestTablet("aa", "1.1.1.2", 1001, KsTestUnsharded, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
 	sbcs := []*sandboxconn.SandboxConn{
