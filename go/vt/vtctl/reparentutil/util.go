@@ -18,17 +18,22 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -192,6 +197,52 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 	}
 
 	return currentPrimary
+}
+
+// ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
+func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, shard string) ([]*topo.TabletInfo, []*replicationdatapb.Status, error) {
+	tabletMap, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
+	if err != nil {
+		return nil, nil, err
+	}
+	tablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
+
+	log.Infof("Gathering tablet replication status for: %v", tablets)
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	result := make([]*replicationdatapb.Status, len(tablets))
+
+	for i, ti := range tablets {
+		// Don't scan tablets that won't return something
+		// useful. Otherwise, you'll end up waiting for a timeout.
+		if ti.Type == topodatapb.TabletType_PRIMARY {
+			wg.Add(1)
+			go func(i int, ti *topo.TabletInfo) {
+				defer wg.Done()
+				pos, err := tmc.PrimaryPosition(ctx, ti.Tablet)
+				if err != nil {
+					rec.RecordError(fmt.Errorf("PrimaryPosition(%v) failed: %v", ti.AliasString(), err))
+					return
+				}
+				result[i] = &replicationdatapb.Status{
+					Position: pos,
+				}
+			}(i, ti)
+		} else if ti.IsReplicaType() {
+			wg.Add(1)
+			go func(i int, ti *topo.TabletInfo) {
+				defer wg.Done()
+				status, err := tmc.ReplicationStatus(ctx, ti.Tablet)
+				if err != nil {
+					rec.RecordError(fmt.Errorf("ReplicationStatus(%v) failed: %v", ti.AliasString(), err))
+					return
+				}
+				result[i] = status
+			}(i, ti)
+		}
+	}
+	wg.Wait()
+	return tablets, result, rec.Error()
 }
 
 // getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort

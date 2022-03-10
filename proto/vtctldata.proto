@@ -256,6 +256,17 @@ message BackupResponse {
   logutil.Event event = 4;
 }
 
+message BackupShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  // AllowPrimary allows the backup to occur on a PRIMARY tablet. See
+  // BackupRequest.AllowPrimary for warnings and caveats.
+  bool allow_primary = 3;
+  // Concurrency specifies the number of compression/checksum jobs to run
+  // simultaneously.
+  uint64 concurrency = 4;
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;

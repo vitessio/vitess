@@ -38,6 +38,17 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackup,
 	}
+	// BackupShard makes a BackupShard gRPC call to a vtctld.
+	BackupShard = &cobra.Command{
+		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] <keyspace/shard>",
+		Short: "Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.",
+		Long: `Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
+
+If no replica-type tablet can be found, the backup can be taken on the primary if --allow-primary is specified.`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandBackupShard,
+	}
 	// GetBackups makes a GetBackups gRPC call to a vtctld.
 	GetBackups = &cobra.Command{
 		Use:  "GetBackups <keyspace/shard>",
@@ -61,6 +72,42 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 
 	stream, err := client.Backup(commandCtx, &vtctldatapb.BackupRequest{
 		TabletAlias:  tabletAlias,
+		AllowPrimary: backupOptions.AllowPrimary,
+		Concurrency:  backupOptions.Concurrency,
+	})
+	if err != nil {
+		return err
+	}
+
+	for {
+		resp, err := stream.Recv()
+		switch err {
+		case nil:
+			fmt.Printf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
+	}
+}
+
+var backupShardOptions = struct {
+	AllowPrimary bool
+	Concurrency  uint64
+}{}
+
+func commandBackupShard(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	stream, err := client.BackupShard(commandCtx, &vtctldatapb.BackupShardRequest{
+		Keyspace:     keyspace,
+		Shard:        shard,
 		AllowPrimary: backupOptions.AllowPrimary,
 		Concurrency:  backupOptions.Concurrency,
 	})
@@ -127,6 +174,10 @@ func init() {
 	Backup.Flags().BoolVar(&backupOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	Backup.Flags().Uint64Var(&backupOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
 	Root.AddCommand(Backup)
+
+	BackupShard.Flags().BoolVar(&backupShardOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
+	BackupShard.Flags().Uint64Var(&backupShardOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
+	Root.AddCommand(BackupShard)
 
 	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups")
 	GetBackups.Flags().BoolVarP(&getBackupsOptions.OutputJSON, "json", "j", false, "Output backup info in JSON format rather than a list of backups")
