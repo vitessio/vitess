@@ -158,9 +158,9 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Source.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field ColCollations []vitess.io/vitess/go/mysql/collations.ID
+	// field CheckCols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.ColCollations)) * int64(2))
+		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(10))
 	}
 	return size
 }

@@ -112,8 +112,8 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return result, nil
 }
 
-func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.HashCode][]row, error) {
-	probeTable := map[evalengine.HashCode][]row{}
+func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.HashCode][]sqltypes.Row, error) {
+	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
 	for _, current := range lresult.Rows {
 		joinVal := current[hj.LHSKey]
 		if joinVal.IsNull() {
@@ -131,7 +131,7 @@ func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.Ha
 // TryStreamExecute implements the Primitive interface
 func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
-	probeTable := map[evalengine.HashCode][]row{}
+	probeTable := map[evalengine.HashCode][]sqltypes.Row{}
 	var lfields []*querypb.Field
 	err := vcursor.StreamExecutePrimitive(hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
 		if len(lfields) == 0 && len(result.Fields) != 0 {

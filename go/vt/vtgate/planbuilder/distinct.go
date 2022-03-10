@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -28,20 +27,28 @@ var _ logicalPlan = (*distinct)(nil)
 // distinct is the logicalPlan for engine.Distinct.
 type distinct struct {
 	logicalPlanCommon
-	ColCollations []collations.ID
+	checkCols []engine.CheckCol
 }
 
-func newDistinct(source logicalPlan, colCollations []collations.ID) logicalPlan {
+func newDistinct(source logicalPlan, checkCols []engine.CheckCol) logicalPlan {
 	return &distinct{
 		logicalPlanCommon: newBuilderCommon(source),
-		ColCollations:     colCollations,
+		checkCols:         checkCols,
 	}
 }
 
 func (d *distinct) Primitive() engine.Primitive {
+	truncate := false
+	for i, col := range d.checkCols {
+		if col.Idx != i {
+			truncate = true
+			break
+		}
+	}
 	return &engine.Distinct{
-		Source:        d.input.Primitive(),
-		ColCollations: d.ColCollations,
+		Source:    d.input.Primitive(),
+		CheckCols: d.checkCols,
+		Truncate:  truncate,
 	}
 }
 
