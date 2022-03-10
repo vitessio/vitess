@@ -226,11 +226,29 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
+
+	t.Run("ensure _vt.vreplication table is created", func(t *testing.T) {
+		ensureVTSchemaIsUpToDate(t)
+	})
 	insertInitialData(t)
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, "product", 2)
 	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
+}
+
+/// confirm that WithDDL runs on tablet start and creates the expected _vt.vreplication schema
+func ensureVTSchemaIsUpToDate(t *testing.T) {
+	tablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
+	require.Equal(t, 1, len(tablets))
+	for _, tablet := range tablets {
+		qr, err := tablet.QueryTabletWithDB("show create table vreplication", "_vt")
+		require.NoError(t, err)
+		require.Equal(t, int64(1), int64(len(qr.Rows)))
+		// verify that a recently added column exists. ideally this should be the most recent one, but
+		// there is no way for an e2e test to know which column was added last.
+		require.Contains(t, qr.Rows[0][1].ToString(), "time_heartbeat")
+	}
 }
 
 // testVStreamFrom confirms that the "vstream * from" endpoint is serving data

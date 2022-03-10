@@ -216,12 +216,12 @@ func (vre *Engine) Open(ctx context.Context) {
 // We plan to refactor so that we remove WithDDL, just define the list of DDLs required to reach the desired
 // and execute vreplication queries normally.
 func (vre *Engine) ensureValidSchema(ctx context.Context) error {
-	dbClient := vre.dbClientFactoryFiltered()
+	dbClient := vre.getDBClient(false)
 	if err := dbClient.Connect(); err != nil {
 		return err
 	}
 	defer dbClient.Close()
-	_, _ = withDDL.ExecIgnore(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch)
+	_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	return nil
 }
 
