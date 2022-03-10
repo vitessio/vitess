@@ -187,7 +187,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 			// The only way to guarantee safety is to keep retrying read until we succeed
 			for {
 				if ctx.Err() != nil {
-					return ctx.Err()
+					return fmt.Errorf("context canceled updating tablet_type for %s in the topo, please retry", ts.tm.tabletAlias)
 				}
 				ti, errInReading := ts.tm.TopoServer.GetTablet(ctx, ts.tm.tabletAlias)
 				if errInReading != nil {
