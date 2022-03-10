@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"strconv"
+	"unicode"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -31,15 +32,19 @@ type (
 	builtinBitLength struct{}
 )
 
-func (builtinAscii) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+func (builtinAscii) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	toascii := &args[0]
-	if toascii.null() {
+	if toascii.isNull() {
 		result.setNull()
 		return
 	}
 
 	toascii.makeBinary()
-	result.setInt64(int64(toascii.bytes()[0]))
+	if len(toascii.bytes()) > 0 {
+		result.setInt64(int64(toascii.bytes()[0]))
+	} else {
+		result.setInt64(0)
+	}
 }
 
 func (builtinAscii) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
@@ -52,26 +57,38 @@ func (builtinAscii) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag
 
 func (builtinBin) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	tobin := &args[0]
-	if tobin.null() {
+	if tobin.isNull() {
 		result.setNull()
 		return
 	}
 
-	var str string
+	var raw []byte
 	switch t := tobin.typeof(); {
 	case sqltypes.IsNumber(t):
 		tobin.makeUnsignedIntegral()
-		str = strconv.FormatUint(tobin.uint64(), 2)
+		raw = strconv.AppendUint(raw, tobin.uint64(), 2)
 	case sqltypes.IsText(t):
-		toint64, _ := strconv.ParseInt(tobin.string(), 10, 64)
-		str = strconv.FormatUint(uint64(toint64), 2)
+		input := tobin.string()
+		index := len(input)
+		if index == 0 {
+			break
+		}
+		for i, ch := range input {
+			if !unicode.IsDigit(ch) {
+				index = i
+				break
+			}
+		}
+		intstr := input[:index]
+		toint64, _ := strconv.ParseInt(intstr, 10, 64)
+		raw = strconv.AppendUint(raw, uint64(toint64), 2)
 	default:
 		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported BIN argument: %s", t.String()))
 	}
 
-	result.setString(str, collations.TypedCollation{
+	result.setRaw(sqltypes.VarChar, raw, collations.TypedCollation{
 		Collation:    env.DefaultCollation,
-		Coercibility: collations.CoerceImplicit,
+		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireASCII,
 	})
 }
@@ -84,9 +101,9 @@ func (builtinBin) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) 
 	return sqltypes.VarChar, f
 }
 
-func (builtinBitLength) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
+func (builtinBitLength) call(_ *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	arg1 := &args[0]
-	if arg1.null() {
+	if arg1.isNull() {
 		result.setNull()
 		return
 	}
