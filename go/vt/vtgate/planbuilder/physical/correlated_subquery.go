@@ -26,6 +26,11 @@ type (
 	CorrelatedSubQueryOp struct {
 		Outer, Inner abstract.PhysicalOperator
 		Extracted    *sqlparser.ExtractedSubquery
+
+		// JoinCols are the columns from the LHS used for the join.
+		// These are the same columns pushed on the LHS that are now used in the Vars field
+		LHSColumns []*sqlparser.ColName
+
 		// arguments that need to be copied from the outer to inner
 		Vars map[string]int
 	}
@@ -106,10 +111,13 @@ func (c *CorrelatedSubQueryOp) Cost() int {
 }
 
 func (c *CorrelatedSubQueryOp) Clone() abstract.PhysicalOperator {
+	columns := make([]*sqlparser.ColName, len(c.LHSColumns))
+	copy(columns, c.LHSColumns)
 	result := &CorrelatedSubQueryOp{
-		Outer:     c.Outer.Clone(),
-		Inner:     c.Inner.Clone(),
-		Extracted: c.Extracted,
+		Outer:      c.Outer.Clone(),
+		Inner:      c.Inner.Clone(),
+		Extracted:  c.Extracted,
+		LHSColumns: columns,
 	}
 	return result
 }

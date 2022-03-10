@@ -2222,6 +2222,9 @@ type (
 		argName      string
 		alternative  Expr // this is what will be used to Format this struct
 	}
+
+	// Offset is another AST type that is used during planning and never produced by the parser
+	Offset int
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2261,6 +2264,7 @@ func (*GroupConcatExpr) iExpr()      {}
 func (*Default) iExpr()              {}
 func (*ExtractedSubquery) iExpr()    {}
 func (*TrimFuncExpr) iExpr()         {}
+func (Offset) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()             {}

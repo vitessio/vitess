@@ -416,10 +416,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_id, col1, col2, weight_string(col1) from authoritative where 1 != 1",
-    "OrderBy": "(1|3) ASC COLLATE latin1_swedish_ci",
-    "Query": "select user_id, col1, col2, weight_string(col1) from authoritative order by col1 asc",
-    "ResultColumns": 3,
+    "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
+    "OrderBy": "1 ASC COLLATE latin1_swedish_ci",
+    "Query": "select user_id, col1, col2 from authoritative order by col1 asc",
     "Table": "authoritative"
   }
 }
@@ -453,9 +452,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
-    "OrderBy": "(0|3) ASC, (1|4) ASC COLLATE latin1_swedish_ci, (2|5) ASC",
-    "Query": "select a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
+    "FieldQuery": "select a, textcol1, b, weight_string(a), weight_string(b) from `user` where 1 != 1",
+    "OrderBy": "(0|3) ASC, 1 ASC COLLATE latin1_swedish_ci, (2|4) ASC",
+    "Query": "select a, textcol1, b, weight_string(a), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
     "ResultColumns": 3,
     "Table": "`user`"
   }
@@ -490,9 +489,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
-    "OrderBy": "(0|3) ASC, (1|4) ASC COLLATE latin1_swedish_ci, (2|5) ASC",
-    "Query": "select a, `user`.textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
+    "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), weight_string(b) from `user` where 1 != 1",
+    "OrderBy": "(0|3) ASC, 1 ASC COLLATE latin1_swedish_ci, (2|4) ASC",
+    "Query": "select a, `user`.textcol1, b, weight_string(a), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
     "ResultColumns": 3,
     "Table": "`user`"
   }
@@ -527,9 +526,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(a), weight_string(textcol1), weight_string(b), weight_string(textcol2) from `user` where 1 != 1",
-    "OrderBy": "(0|4) ASC, (1|5) ASC COLLATE latin1_swedish_ci, (2|6) ASC, (3|7) ASC COLLATE latin1_swedish_ci",
-    "Query": "select a, textcol1, b, textcol2, weight_string(a), weight_string(textcol1), weight_string(b), weight_string(textcol2) from `user` order by a asc, textcol1 asc, b asc, textcol2 asc",
+    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(a), weight_string(b) from `user` where 1 != 1",
+    "OrderBy": "(0|4) ASC, 1 ASC COLLATE latin1_swedish_ci, (2|5) ASC, 3 ASC COLLATE latin1_swedish_ci",
+    "Query": "select a, textcol1, b, textcol2, weight_string(a), weight_string(b) from `user` order by a asc, textcol1 asc, b asc, textcol2 asc",
     "ResultColumns": 4,
     "Table": "`user`"
   }
@@ -704,7 +703,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
-        "Query": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where `user`.id = 1 order by null",
+        "Query": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where `user`.id = 1",
         "Table": "`user`",
         "Values": [
           "INT64(1)"
@@ -719,7 +718,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select music.col3 from music where 1 != 1",
-        "Query": "select music.col3 from music where music.id = :user_id order by null",
+        "Query": "select music.col3 from music where music.id = :user_id",
         "Table": "music",
         "Values": [
           ":user_id"
@@ -956,7 +955,42 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col2 from user) order by null",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # ORDER BY RAND()
 "select col from user order by RAND()"
@@ -1889,7 +1923,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0) AS count(id)",
+    "Aggregates": "sum(0) AS count(id)",
     "GroupBy": "(1|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -1955,7 +1989,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0) AS count(id)",
+        "Aggregates": "sum(0) AS count(id)",
         "GroupBy": "(1|2)",
         "Inputs": [
           {
@@ -2169,7 +2203,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Sharded": true
         },
         "FieldQuery": "select a as c, a, weight_string(a) from `user` where 1 != 1",
-        "OrderBy": "(0|2) ASC, (1|2) ASC",
+        "OrderBy": "(0|2) ASC, (0|2) ASC",
         "Query": "select distinct a as c, a, weight_string(a) from `user` order by c asc, a asc",
         "Table": "`user`"
       }
@@ -2237,7 +2271,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS a",
+        "Aggregates": "sum(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",

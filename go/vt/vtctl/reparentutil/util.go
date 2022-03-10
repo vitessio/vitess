@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -225,47 +226,32 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	return restrictedValidCandidates, nil
 }
 
-func findCandidateSameCell(
-	newPrimary *topodatapb.Tablet,
-	prevPrimary *topodatapb.Tablet,
-	possibleCandidates []*topodatapb.Tablet,
-) *topodatapb.Tablet {
-	// check whether the one we have selected as the source is in the same cell and belongs to the candidate list provided
-	for _, candidate := range possibleCandidates {
-		if !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
-			continue
-		}
-		if prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
-			continue
-		}
-		return candidate
-	}
-	// check whether there is some other tablet in the same cell belonging to the candidate list provided
-	for _, candidate := range possibleCandidates {
-		if prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
-			continue
-		}
-		return candidate
-	}
-	return nil
-}
-
-func findCandidateAnyCell(
-	newPrimary *topodatapb.Tablet,
+func findCandidate(
+	intermediateSource *topodatapb.Tablet,
 	possibleCandidates []*topodatapb.Tablet,
 ) *topodatapb.Tablet {
 	// check whether the one we have selected as the source belongs to the candidate list provided
 	for _, candidate := range possibleCandidates {
-		if !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
-			continue
+		if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
+			return candidate
 		}
-		return candidate
 	}
 	// return the first candidate from this list, if it isn't empty
 	if len(possibleCandidates) > 0 {
 		return possibleCandidates[0]
 	}
 	return nil
+}
+
+// getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets
+func getTabletsWithPromotionRules(tablets []*topodatapb.Tablet, rule promotionrule.CandidatePromotionRule) (res []*topodatapb.Tablet) {
+	for _, candidate := range tablets {
+		promotionRule := PromotionRule(candidate)
+		if promotionRule == rule {
+			res = append(res, candidate)
+		}
+	}
+	return res
 }
 
 // waitForCatchUp is used to wait for the given tablet until it has caught up to the source

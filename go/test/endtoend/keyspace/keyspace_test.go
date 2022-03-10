@@ -120,7 +120,7 @@ func TestMain(m *testing.M) {
 		if err := clusterForKSTest.StartKeyspace(*keyspaceUnsharded, []string{keyspaceUnshardedName}, 1, false); err != nil {
 			return 1
 		}
-		if err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("SetKeyspaceShardingInfo", "-force", keyspaceUnshardedName, "keyspace_id", "uint64"); err != nil {
+		if err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("SetKeyspaceShardingInfo", "--", "--force", keyspaceUnshardedName, "keyspace_id", "uint64"); err != nil {
 			return 1
 		}
 		if err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceUnshardedName); err != nil {
@@ -202,25 +202,25 @@ func TestDeleteKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
 
 	// Can't delete keyspace if there are shards present.
 	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
 	require.Error(t, err)
 
 	// Can't delete shard if there are tablets present.
-	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "-even_if_serving", "test_delete_keyspace/0")
+	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "--", "--even_if_serving", "test_delete_keyspace/0")
 	require.Error(t, err)
 
 	// Use recursive DeleteShard to remove tablets.
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "-even_if_serving", "-recursive", "test_delete_keyspace/0")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "--", "--even_if_serving", "--recursive", "test_delete_keyspace/0")
 	// Now non-recursive DeleteKeyspace should work.
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
 
 	// Start over and this time use recursive DeleteKeyspace to do everything.
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "--", "--port=1234", "--keyspace=test_delete_keyspace", "--shard=0", "zone1-0000000100", "primary")
 
 	// Create the serving/replication entries and check that they exist,
 	//  so we can later check they're deleted.
@@ -229,7 +229,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
 
 	// Recursive DeleteKeyspace
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "--", "--recursive", "test_delete_keyspace")
 
 	// Check that everything is gone.
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace")
@@ -245,6 +245,7 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 // TODO: Fix this test, not running in CI
+// TODO: (ajm188) if this test gets fixed, the flags need to be updated to comply with VEP-4 as well.
 // tells that in zone2 after deleting shard, there is no shard #264 and in zone1 there is only 1 #269
 /*func RemoveKeyspaceCell(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace_removekscell")

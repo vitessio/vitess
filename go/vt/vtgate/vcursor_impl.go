@@ -43,7 +43,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -636,19 +635,6 @@ func (vc *vcursorImpl) Destination() key.Destination {
 // TabletType implements the ContextVSchema interface
 func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
 	return vc.tabletType
-}
-
-// SubmitOnlineDDL implements the VCursor interface
-func (vc *vcursorImpl) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
-	if vc.topoServer == nil {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "Unable to apply DDL toposerver unavailable, ensure this vtgate is not using filtered keyspaces")
-	}
-	conn, err := vc.topoServer.ConnForCell(vc.ctx, topo.GlobalCell)
-	if err != nil {
-		return err
-	}
-	// Submit an online schema change by writing a migration request in topo
-	return onlineDDl.WriteTopo(vc.ctx, conn, schema.MigrationRequestsPath())
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {

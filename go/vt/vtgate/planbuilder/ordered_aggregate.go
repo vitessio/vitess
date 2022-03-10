@@ -253,6 +253,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 		Aggregates:          oa.aggregates,
 		GroupByKeys:         oa.groupByKeys,
 		TruncateColumnCount: oa.truncateColumnCount,
+		Collations:          colls,
 		Input:               input,
 	}
 }

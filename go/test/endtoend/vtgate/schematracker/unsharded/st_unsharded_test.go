@@ -66,14 +66,14 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 		if err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-vschema_ddl_authorized_users", "%"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

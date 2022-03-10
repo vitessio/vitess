@@ -27,8 +27,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -486,23 +484,6 @@ func merge(
 		}
 	}
 	return result, curDistincts, nil
-}
-
-func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
-	switch opcode {
-	case
-		AggregateCountDistinct,
-		AggregateCount:
-		return countZero, nil
-	case
-		AggregateSumDistinct,
-		AggregateSum,
-		AggregateMin,
-		AggregateMax:
-		return sqltypes.NULL, nil
-
-	}
-	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
 }
 
 func aggregateParamsToString(in interface{}) string {

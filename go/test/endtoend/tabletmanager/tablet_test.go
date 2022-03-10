@@ -69,8 +69,8 @@ func TestLocalMetadata(t *testing.T) {
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-init_populate_metadata",
+		"--lock_tables_timeout", "5s",
+		"--init_populate_metadata",
 	}
 	rTablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet.TabletUID, rTablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := rTablet.MysqlctlProcess.Start()
@@ -90,7 +90,7 @@ func TestLocalMetadata(t *testing.T) {
 
 	// start with -init_populate_metadata false (default)
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
+		"--lock_tables_timeout", "5s",
 	}
 	rTablet2.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet2.TabletUID, rTablet2.MySQLPort, clusterInstance.TmpDirectory)
 	err = rTablet2.MysqlctlProcess.Start()

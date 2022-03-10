@@ -92,9 +92,9 @@ func failoverPlannedReparenting(t *testing.T, clusterInstance *cluster.LocalProc
 	reads.ExpectQueries(10)
 	writes.ExpectQueries(10)
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard",
 		fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-		"-new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
+		"--new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
 	require.NoError(t, err)
 }
 

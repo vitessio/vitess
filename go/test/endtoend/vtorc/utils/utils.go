@@ -134,8 +134,8 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 		}
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-disable_active_reparents",
+		"--lock_tables_timeout", "5s",
+		"--disable_active_reparents",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -389,7 +389,7 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VtOrcClusterInfo, tablet *clu
 			continue
 		}
 		// make sure the health stream is updated
-		result, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
+		result, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
 		require.NoError(t, err)
 		var streamHealthResponse querypb.StreamHealthResponse
 
@@ -753,7 +753,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(Cell1, Hostname)
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "-durability_policy=semi_sync")
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err, "Error starting topo: %v", err)
@@ -772,9 +772,9 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-lock_tables_timeout", "5s",
-		"-disable_active_reparents",
-		"-enable_semi_sync",
+		"--lock_tables_timeout", "5s",
+		"--disable_active_reparents",
+		"--enable_semi_sync",
 	}
 
 	// Initialize Cluster

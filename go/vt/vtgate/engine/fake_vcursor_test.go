@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -276,10 +275,6 @@ func (t *noopVCursor) ResolveDestinationsMultiCol(keyspace string, ids [][]sqlty
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
-	panic("unimplemented")
-}
-
 func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
 }
@@ -447,11 +442,6 @@ func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries
 
 func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
-}
-
-func (f *loggingVCursor) SubmitOnlineDDL(onlineDDL *schema.OnlineDDL) error {
-	f.log = append(f.log, fmt.Sprintf("SubmitOnlineDDL: %s", onlineDDL.ToString()))
-	return nil
 }
 
 func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {

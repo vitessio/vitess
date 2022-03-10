@@ -701,7 +701,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_SCHEMA = :__vtschemaname",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
     "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"main\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"
   }
@@ -1061,7 +1061,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname",
+        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname",
         "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\")]",
         "Table": "information_schema.`tables`"
       },
@@ -1073,7 +1073,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1",
+        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1",
         "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"user\")]",
         "Table": "information_schema.views"
       }
@@ -1091,7 +1091,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
     "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\"), VARCHAR(\"music\"), VARCHAR(\"user\")]",
     "Table": "information_schema.`tables`"
   }
@@ -1113,7 +1113,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname",
+        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname",
         "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\")]",
         "Table": "information_schema.`tables`"
       },
@@ -1125,7 +1125,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1",
+        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1",
         "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"user\")]",
         "Table": "information_schema.views"
       }
@@ -1143,7 +1143,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
-    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
     "SysTableTableSchema": "[VARCHAR(\"music\"), VARCHAR(\"Music\"), VARCHAR(\"music\"), VARCHAR(\"user\")]",
     "Table": "information_schema.`tables`"
   }

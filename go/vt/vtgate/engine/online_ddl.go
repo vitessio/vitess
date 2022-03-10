@@ -89,23 +89,16 @@ func (v *OnlineDDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindV
 		return result, err
 	}
 	for _, onlineDDL := range onlineDDLs {
-		if onlineDDL.StrategySetting().IsSkipTopo() {
-			// Go directly to tablets, much like Send primitive does
-			s := Send{
-				Keyspace:          v.Keyspace,
-				TargetDestination: v.TargetDestination,
-				Query:             onlineDDL.SQL,
-				IsDML:             false,
-				SingleShardOnly:   false,
-			}
-			if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
-				return result, err
-			}
-		} else {
-			// Submit a request entry in topo. vtctld will take it from there
-			if err := vcursor.SubmitOnlineDDL(onlineDDL); err != nil {
-				return result, err
-			}
+		// Go directly to tablets, much like Send primitive does
+		s := Send{
+			Keyspace:          v.Keyspace,
+			TargetDestination: v.TargetDestination,
+			Query:             onlineDDL.SQL,
+			IsDML:             false,
+			SingleShardOnly:   false,
+		}
+		if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
+			return result, err
 		}
 		result.Rows = append(result.Rows, []sqltypes.Value{
 			sqltypes.NewVarChar(onlineDDL.UUID),

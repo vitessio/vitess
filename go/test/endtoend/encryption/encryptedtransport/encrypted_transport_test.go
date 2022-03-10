@@ -131,7 +131,7 @@ func TestSecureTransport(t *testing.T) {
 
 	// start the tablets
 	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
-		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-table-acl-config", tableACLConfigJSON, "-queryserver-config-strict-table-acl")
+		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "--table-acl-config", tableACLConfigJSON, "--queryserver-config-strict-table-acl")
 		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, serverExtraArguments("vttablet-server-instance", "vttablet-client")...)
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
@@ -143,12 +143,12 @@ func TestSecureTransport(t *testing.T) {
 	vtctlClientTmArgs := append(vtctlClientArgs, tmclientExtraArgs("vttablet-client-1")...)
 
 	// Reparenting
-	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardPrimary", "-force", "test_keyspace/0", primaryTablet.Alias)
+	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardPrimary", "--", "--force", "test_keyspace/0", primaryTablet.Alias)
 	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlClientArgs...)
 	require.NoError(t, err)
 
 	// Apply schema
-	var vtctlApplySchemaArgs = append(vtctlClientTmArgs, "ApplySchema", "-sql", createVtInsertTest, "test_keyspace")
+	var vtctlApplySchemaArgs = append(vtctlClientTmArgs, "ApplySchema", "--", "--sql", createVtInsertTest, "test_keyspace")
 	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlApplySchemaArgs...)
 	require.NoError(t, err)
 
@@ -195,7 +195,7 @@ func TestSecureTransport(t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"-grpc_use_effective_callerid"}
+	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err = clusterInstance.RestartVtgate()
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
 	_ = encryption.CreateDirectory(certDirectory, 0700)
 
-	err := encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateCA")
+	err := encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateCA")
 	require.NoError(t, err)
 
 	err = createSignedCert("ca", "01", "vttablet-server", "vttablet server CA")
@@ -341,37 +341,37 @@ func createSignedCert(ca string, serial string, name string, commonName string) 
 	log.Infof("Creating signed cert and key %s", commonName)
 	tmpProcess := exec.Command(
 		"vttlstest",
-		"-root", certDirectory,
-		"CreateSignedCert",
-		"-parent", ca,
-		"-serial", serial,
-		"-common_name", commonName,
+		"--root", certDirectory,
+		"CreateSignedCert", "--",
+		"--parent", ca,
+		"--serial", serial,
+		"--common_name", commonName,
 		name)
 	return tmpProcess.Run()
 }
 
 func serverExtraArguments(name string, ca string) []string {
-	args := []string{"-grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"-grpc_key", certDirectory + "/" + name + "-key.pem",
-		"-grpc_ca", certDirectory + "/" + ca + "-cert.pem"}
+	args := []string{"--grpc_cert", certDirectory + "/" + name + "-cert.pem",
+		"--grpc_key", certDirectory + "/" + name + "-key.pem",
+		"--grpc_ca", certDirectory + "/" + ca + "-cert.pem"}
 	return args
 }
 
 func tmclientExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	var args = []string{"-tablet_manager_grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"-tablet_manager_grpc_key", certDirectory + "/" + name + "-key.pem",
-		"-tablet_manager_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
-		"-tablet_manager_grpc_server_name", "vttablet server instance"}
+	var args = []string{"--tablet_manager_grpc_cert", certDirectory + "/" + name + "-cert.pem",
+		"--tablet_manager_grpc_key", certDirectory + "/" + name + "-key.pem",
+		"--tablet_manager_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
+		"--tablet_manager_grpc_server_name", "vttablet server instance"}
 	return args
 }
 
 func tabletConnExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	args := []string{"-tablet_grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"-tablet_grpc_key", certDirectory + "/" + name + "-key.pem",
-		"-tablet_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
-		"-tablet_grpc_server_name", "vttablet server instance"}
+	args := []string{"--tablet_grpc_cert", certDirectory + "/" + name + "-cert.pem",
+		"--tablet_grpc_key", certDirectory + "/" + name + "-key.pem",
+		"--tablet_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
+		"--tablet_grpc_server_name", "vttablet server instance"}
 	return args
 }
 
