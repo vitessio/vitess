@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/physical"
@@ -272,10 +274,90 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *physical.Union) (l
 		result = &concatenateGen4{sources: sources}
 	}
 	if op.Distinct {
-		return newDistinct(result, getCollationsFor(ctx, op)), nil
+		colls := getCollationsFor(ctx, op)
+		checkCols, err := getCheckColsForUnion(ctx, op, result, colls)
+		if err != nil {
+			return nil, err
+		}
+		return newDistinct(result, checkCols), nil
 	}
 	return result, nil
 
+}
+
+func getWeightStringForSelectExpr(selectExpr sqlparser.SelectExpr) (*sqlparser.AliasedExpr, error) {
+	expr, isAliased := selectExpr.(*sqlparser.AliasedExpr)
+	if !isAliased {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot convert select expression to an aliased expression")
+	}
+	return &sqlparser.AliasedExpr{Expr: weightStringFor(expr.Expr)}, nil
+}
+
+func getCheckColsForUnion(ctx *plancontext.PlanningContext, op *physical.Union, result logicalPlan, colls []collations.ID) ([]engine.CheckCol, error) {
+	checkCols := make([]engine.CheckCol, 0, len(colls))
+	for i, coll := range colls {
+		if coll != collations.Unknown {
+			checkCols = append(checkCols, engine.CheckCol{Idx: i, Collation: coll})
+			continue
+		}
+		newOffset, err := pushProjectionForDistinct(ctx, result, i)
+		if err != nil {
+			return nil, err
+		}
+		checkCols = append(checkCols, engine.CheckCol{Idx: newOffset, Collation: collations.CollationBinaryID})
+	}
+	return checkCols, nil
+}
+
+// pushProjectionForDistinct pushes a projection to the plan.
+func pushProjectionForDistinct(ctx *plancontext.PlanningContext, plan logicalPlan, offset int) (newOffset int, err error) {
+	switch node := plan.(type) {
+	case *routeGen4:
+		allSelects := sqlparser.GetAllSelects(node.Select)
+		for _, sel := range allSelects {
+			expr, err := getWeightStringForSelectExpr(sel.SelectExprs[offset])
+			if err != nil {
+				return 0, err
+			}
+			if i := checkIfAlreadyExists(expr, sel, ctx.SemTable); i != -1 {
+				return i, nil
+			}
+			sel.SelectExprs = append(sel.SelectExprs, expr)
+			newOffset = len(sel.SelectExprs) - 1
+		}
+		// we leave the responsibility of truncating to distinct
+		node.eroute.TruncateColumnCount = 0
+	case *concatenateGen4:
+		for _, source := range node.sources {
+			newOffset, err = pushProjectionForDistinct(ctx, source, offset)
+			if err != nil {
+				return 0, err
+			}
+		}
+	case *joinGen4:
+		lhsSolves := node.Left.ContainsTables()
+		rhsSolves := node.Right.ContainsTables()
+		expr := node.OutputColumns()[offset]
+		aliasedExpr, isAliased := expr.(*sqlparser.AliasedExpr)
+		if !isAliased {
+			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot convert select expression to an aliased expression")
+		}
+		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
+		switch {
+		case deps.IsSolvedBy(lhsSolves):
+			offset, err = pushProjectionForDistinct(ctx, node.Left, offset)
+			node.Cols = append(node.Cols, -(offset + 1))
+		case deps.IsSolvedBy(rhsSolves):
+			offset, err = pushProjectionForDistinct(ctx, node.Right, offset)
+			node.Cols = append(node.Cols, offset+1)
+		default:
+			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot push distinct weight string to both sides of the join")
+		}
+		newOffset = len(node.Cols) - 1
+	default:
+		panic("not supported")
+	}
+	return
 }
 
 func transformAndMerge(ctx *plancontext.PlanningContext, op *physical.Union) (sources []logicalPlan, err error) {
@@ -368,6 +450,7 @@ func createLogicalPlan(ctx *plancontext.PlanningContext, source abstract.Physica
 }
 
 func getCollationsFor(ctx *plancontext.PlanningContext, n *physical.Union) []collations.ID {
+	// TODO: coerce selects' select expressions' collations
 	var colls []collations.ID
 	for _, expr := range n.SelectStmts[0].SelectExprs {
 		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
@@ -375,6 +458,11 @@ func getCollationsFor(ctx *plancontext.PlanningContext, n *physical.Union) []col
 			return nil
 		}
 		typ := ctx.SemTable.CollationForExpr(aliasedE.Expr)
+		if typ == collations.Unknown {
+			if t, hasT := ctx.SemTable.ExprTypes[aliasedE.Expr]; hasT && sqltypes.IsNumber(t.Type) {
+				typ = collations.CollationBinaryID
+			}
+		}
 		colls = append(colls, typ)
 	}
 	return colls
