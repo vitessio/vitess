@@ -162,7 +162,7 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) error {
 	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, ts, tablet)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	isSemiSync := IsReplicaSemiSync(shardPrimary.Tablet, tablet)

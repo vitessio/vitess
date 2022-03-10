@@ -685,19 +685,6 @@ func TestBackup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.tablet != nil {
 				testutil.AddTablet(ctx, t, tt.ts, tt.tablet, nil)
-				if tt.tablet.Type != topodatapb.TabletType_PRIMARY {
-					testutil.AddTablet(ctx, t, tt.ts, &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: tt.tablet.Alias.Cell,
-							Uid:  tt.tablet.Alias.Uid + 1,
-						},
-						Keyspace: tt.tablet.Keyspace,
-						Shard:    tt.tablet.Shard,
-						Type:     topodatapb.TabletType_PRIMARY,
-					}, &testutil.AddTabletOptions{
-						AlsoSetShardPrimary: true,
-					})
-				}
 			}
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
