@@ -21,35 +21,28 @@ conn = mysql.connector.connect(user="root", password="root", host="127.0.0.1", d
 cursor = conn.cursor()
 queries = ["SELECT 1 AS {0}", "INSERT INTO t ({0})", "DELETE FROM t WHERE {0}=1", "UPDATE t SET {0}=1", "CREATE TABLE t({0} int)"]
 
+# Expect all Reserved Keywords to fail, so only print ones that pass
 print("Running tests for Reserved Keywords")
 for word in reserved_keywords:
-    print("Keyword:", word)
     for i in range(len(queries)):
         query = queries[i].format(word)
-        print("\tQuery:", query, "Result: ", end="")
         try:
             cursor.execute(query)
-            print("PASS")
+            print("\tKeyword:", word, "\n\t\tQuery:", query, "\n\t\t\tResult: PASS")
         except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_PARSE_ERROR:
-                print("FAIL")
-            else:
-                print("PASS")
+            if err.errno != errorcode.ER_PARSE_ERROR:
+                print("\tKeyword:", word, "\n\t\tQuery:", query, "\n\t\t\tResult: NOT PARSE ERROR")
 
+# Expect all Non-Reserved Keywords to pass, so only print ones that fail
 print("Running tests for Reserved Keywords")
 for word in non_reserved_keywords:
-    print("Keyword:", word)
     for i in range(len(queries)):
         query = queries[i].format(word)
-        print("\tQuery:", query, "Result: ", end="")
         try:
             cursor.execute(query)
-            print("PASS")
         except mysql.connector.Error as err:
             if err.errno == errorcode.ER_PARSE_ERROR:
-                print("FAIL")
-            else:
-                print("PASS")
+                print("\tKeyword:", word, "\tQuery:", query, "Result: FAIL")
 
 # Close connection to MySQL server
 conn.close()
