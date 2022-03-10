@@ -22,7 +22,6 @@ import (
 	"context"
 
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -170,15 +169,15 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) {
 					continue
 				}
 
-				sriNodes := sets.NewString()
+				sriNodes := map[string]struct{}{}
 				for _, node := range sri.Nodes {
-					sriNodes.Insert(topoproto.TabletAliasString(node.TabletAlias))
+					sriNodes[topoproto.TabletAliasString(node.TabletAlias)] = struct{}{}
 				}
 
 				if err := toTS.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *topodatapb.ShardReplication) error {
 					var nodes []*topodatapb.ShardReplication_Node
 					for _, oldNode := range oldSR.Nodes {
-						if sriNodes.Has(topoproto.TabletAliasString(oldNode.TabletAlias)) {
+						if _, ok := sriNodes[topoproto.TabletAliasString(oldNode.TabletAlias)]; ok {
 							continue
 						}
 
