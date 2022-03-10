@@ -2245,7 +2245,65 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 }
 
 func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupRequest, stream vtctlservicepb.Vtctld_RestoreFromBackupServer) error {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.RestoreFromBackup")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	backupTime := protoutil.TimeFromProto(req.BackupTime)
+	if !backupTime.IsZero() {
+		span.Annotate("backup_timestamp", backupTime.Format(mysqlctl.BackupTimestampFormat))
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	span.Annotate("keyspace", ti.Keyspace)
+	span.Annotate("shard", ti.Shard)
+
+	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, protoutil.TimeFromProto(req.BackupTime))
+	if err != nil {
+		return err
+	}
+
+	logger := logutil.NewConsoleLogger()
+
+	for {
+		event, err := logStream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(logger, event)
+			resp := &vtctldatapb.RestoreFromBackupResponse{
+				TabletAlias: req.TabletAlias,
+				Keyspace:    ti.Keyspace,
+				Shard:       ti.Shard,
+				Event:       event,
+			}
+			if err := stream.Send(resp); err != nil {
+				logger.Errorf("failed to send stream response %+v: %v", resp, err)
+			}
+		case io.EOF:
+			// Do not do anything when active reparenting is disabled.
+			if *mysqlctl.DisableActiveReparents {
+				return nil
+			}
+
+			// Otherwise, we find the correct primary tablet and set the
+			// replication source on the freshly-restored tablet, since the
+			// shard primary may have changed while it was restoring.
+			//
+			// This also affects whether or not we want to send semi-sync ACKs.
+			ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+			if err != nil {
+				return err
+			}
+
+			return reparentutil.SetReplicationSource(ctx, s.ts, s.tmc, ti.Tablet)
+		default:
+			return err
+		}
+	}
 }
 
 // RunHealthCheck is part of the vtctlservicepb.VtctldServer interface.
