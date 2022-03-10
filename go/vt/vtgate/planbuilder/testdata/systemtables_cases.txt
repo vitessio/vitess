@@ -283,7 +283,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
+    "JoinColumnIndexes": "L:0,R:0",
     "TableName": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS_INFORMATION_SCHEMA.K",
     "Inputs": [
       {
@@ -835,7 +835,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "x_id": 1
     },
@@ -876,7 +876,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "L:1",
     "JoinVars": {
       "x_id": 0
     },
