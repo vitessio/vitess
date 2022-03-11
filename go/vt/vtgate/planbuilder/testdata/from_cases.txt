@@ -4367,3 +4367,36 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+
+# single unsharded keyspace with derived table
+"select col from (select col from unsharded join unsharded_b) as u join unsharded_a ua limit 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a ua limit 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select col from (select col from unsharded join unsharded_b where 1 != 1) as u join unsharded_a as ua where 1 != 1",
+    "Query": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a as ua limit 1",
+    "Table": "unsharded, unsharded_b, unsharded_a"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a ua limit 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select col from (select col from unsharded join unsharded_b where 1 != 1) as u join unsharded_a as ua where 1 != 1",
+    "Query": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a as ua limit 1",
+    "Table": "unsharded, unsharded_a, unsharded_b"
+  }
+}

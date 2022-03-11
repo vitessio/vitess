@@ -351,7 +351,12 @@ func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
 	for _, table := range st.Tables {
 		vindexTable := table.GetVindexTable()
 		if vindexTable == nil || vindexTable.Type != "" {
-			// this is not a simple table access - can't shortcut
+			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
+			if isDT {
+				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
+				// we check the real tables inside the derived table as well for same unsharded keyspace.
+				continue
+			}
 			return nil
 		}
 		name, ok := table.getExpr().Expr.(sqlparser.TableName)
