@@ -6212,7 +6212,7 @@ non_reserved_keyword:
 | WARNINGS
 | WORK
 | WRITE
-| X509 // TDOO: wtf is this?
+| X509
 | YEAR
 //| ZEROFILL
 
