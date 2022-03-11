@@ -63,6 +63,7 @@ Gen4 plan same as above
     "Collations": [
       "1: binary"
     ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -537,6 +538,7 @@ Gen4 plan same as above
     "Collations": [
       "1: binary"
     ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
@@ -921,6 +923,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
     "Collations": [
       "1: binary"
     ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1031,7 +1034,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1083,6 +1086,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
       "2: binary",
       "3: binary"
     ],
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
@@ -1090,7 +1094,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2,-3,-4",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1159,7 +1163,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1200,6 +1204,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
       "2: binary",
       "3: binary"
     ],
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
@@ -1218,7 +1223,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2,-3,-4",
+            "JoinColumnIndexes": "L:0,L:1,L:2,L:3",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1438,6 +1443,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Collations": [
           "1: binary"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1467,6 +1473,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
     "Collations": [
       "1: binary"
     ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
@@ -1555,6 +1562,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Collations": [
           "1: binary"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -1696,6 +1704,7 @@ Gen4 plan same as above
     "Collations": [
       "1: binary"
     ],
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Concatenate",
@@ -1736,7 +1745,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "tbl1_id": 0
     },
@@ -1854,6 +1863,7 @@ Gen4 plan same as above
         "Collations": [
           "1: binary"
         ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",

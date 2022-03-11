@@ -76,10 +76,27 @@ func TestDistinct(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
+		var checkCols []CheckCol
+		if len(tc.inputs.Rows) > 0 {
+			for i := range tc.inputs.Rows[0] {
+				collID := collations.Unknown
+				if tc.collations != nil {
+					collID = tc.collations[i]
+				}
+				if sqltypes.IsNumber(tc.inputs.Fields[i].Type) {
+					collID = collations.CollationBinaryID
+				}
+				checkCols = append(checkCols, CheckCol{
+					Idx:       i,
+					Collation: collID,
+				})
+			}
+		}
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
 			distinct := &Distinct{
-				Source:        &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
-				ColCollations: tc.collations,
+				Source:    &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
+				CheckCols: checkCols,
+				Truncate:  false,
 			}
 
 			qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
@@ -94,8 +111,8 @@ func TestDistinct(t *testing.T) {
 		})
 		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
 			distinct := &Distinct{
-				Source:        &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
-				ColCollations: tc.collations,
+				Source:    &fakePrimitive{results: []*sqltypes.Result{tc.inputs}},
+				CheckCols: checkCols,
 			}
 
 			result, err := wrapStreamExecute(distinct, &noopVCursor{ctx: context.Background()}, nil, true)

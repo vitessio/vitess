@@ -83,6 +83,15 @@ func (client *gRPCVtctldClient) Backup(ctx context.Context, in *vtctldatapb.Back
 	return client.c.Backup(ctx, in, opts...)
 }
 
+// BackupShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.BackupShard(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {

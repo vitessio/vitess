@@ -128,10 +128,6 @@ func newVCursorImpl(
 		return nil, err
 	}
 
-	// With DiscoveryGateway transactions are only allowed on primary.
-	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", tabletType)
-	}
 	var ts *topo.Server
 	// We don't have access to the underlying TopoServer if this vtgate is
 	// filtering keyspaces because we don't have an accurate view of the topo.
