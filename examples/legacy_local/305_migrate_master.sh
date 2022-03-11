@@ -16,6 +16,6 @@
 
 # this script migrates traffic for the primary tablet
 
-vtctlclient -server localhost:15999 MigrateServedTypes customer/0 primary
+vtctlclient --server localhost:15999 MigrateServedTypes customer/0 primary
 # data has been copied over to shards, and databases for the new shards are now available
 
