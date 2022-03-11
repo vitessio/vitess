@@ -299,7 +299,7 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE SYSTEM INFILE
 
 // TODO: categorize/organize these somehow later
-%token <bytes> ACCESSIBLE NVAR PASSWORD_LOCK
+%token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
 %type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
@@ -5793,8 +5793,7 @@ kill_statement:
   Sorted alphabetically
 */
 reserved_keyword:
-  ACCESSIBLE
-| ACCOUNT
+  ACCOUNT
 | ADD
 | AFTER
 | ALTER
@@ -5995,7 +5994,7 @@ non_reserved_keyword:
 //| CHANGE
 | CHANNEL
 //| CHAR
-//| CHARACTER
+| CHARACTER
 | CHARSET
 //| CHECK
 | CIPHER
