@@ -1,9 +1,9 @@
 #!/bin/bash
 set -ex
 
-vt_base_version='v12.0.3'
+vt_base_version='v13.0.0'
 debian_versions='buster  bullseye'
-default_debian_version='buster'
+default_debian_version='bullseye'
 
 docker pull vitess/base:$vt_base_version
 
