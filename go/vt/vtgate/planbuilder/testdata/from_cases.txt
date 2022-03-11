@@ -4367,3 +4367,107 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+
+# single unsharded keyspace with derived table
+"select col from (select col from unsharded join unsharded_b) as u join unsharded_a ua limit 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a ua limit 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select col from (select col from unsharded join unsharded_b where 1 != 1) as u join unsharded_a as ua where 1 != 1",
+    "Query": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a as ua limit 1",
+    "Table": "unsharded, unsharded_b, unsharded_a"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a ua limit 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select col from (select col from unsharded join unsharded_b where 1 != 1) as u join unsharded_a as ua where 1 != 1",
+    "Query": "select col from (select col from unsharded join unsharded_b) as u join unsharded_a as ua limit 1",
+    "Table": "unsharded, unsharded_a, unsharded_b"
+  }
+}
+
+# query builder with derived table having join inside it
+"select u.col from (select user.col from user join user_extra) as u join user_extra ue limit 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.col from (select user.col from user join user_extra) as u join user_extra ue limit 1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": "INT64(1)",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": [
+              0
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0",
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.col from `user` where 1 != 1",
+                    "Query": "select `user`.col from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra where 1 != 1",
+                    "Query": "select 1 from user_extra",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+            "Query": "select 1 from user_extra as ue",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above
