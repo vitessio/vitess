@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
@@ -219,13 +220,13 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 		{
 			name: "TestReplicaBackup",
 			method: func(t *testing.T) {
-				vtctlBackup(t, "replica")
+				vtctlBackup(t, "replica", setupType != XtraBackup)
 			},
 		}, //
 		{
 			name: "TestRdonlyBackup",
 			method: func(t *testing.T) {
-				vtctlBackup(t, "rdonly")
+				vtctlBackup(t, "rdonly", setupType != XtraBackup)
 			},
 		}, //
 		{
@@ -595,7 +596,35 @@ func terminatedRestore(t *testing.T) {
 //tablet_type: 'replica' or 'rdonly'.
 //
 //
-func vtctlBackup(t *testing.T, tabletType string) {
+func vtctlBackup(t *testing.T, tabletType string, startVtorc bool) {
+	if startVtorc {
+		// Start vtorc before running backups
+		err := localCluster.StartVtorc(`{
+  "Debug": true,
+  "MySQLTopologyUser": "orc_client_user",
+  "MySQLTopologyPassword": "orc_client_user_password",
+  "MySQLReplicaUser": "vt_repl",
+  "MySQLReplicaPassword": "VtReplPass",
+  "RecoveryPeriodBlockSeconds": 1,
+  "InstancePollSeconds": 1,
+  "Durability": "semi_sync"
+}`)
+		require.NoError(t, err)
+
+		// Defer stopping vtorc
+		defer func() {
+			err := localCluster.StopVtorc()
+			if err != nil {
+				log.Errorf("Error stopping vtorc - %v", err)
+			}
+		}()
+
+		// StopReplication on replica1. We verify that the replication works fine later in
+		// verifyInitialReplication. So this will also check that VTOrc is running.
+		err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
+		require.Nil(t, err)
+	}
+
 	restoreWaitForBackup(t, tabletType)
 	verifyInitialReplication(t)
 

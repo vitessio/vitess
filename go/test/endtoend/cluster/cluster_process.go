@@ -235,6 +235,35 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	return
 }
 
+// StartVtorc is used to start vtorc with the given parameters
+func (cluster *LocalProcessCluster) StartVtorc(params string) error {
+	pathToConfig := writeVTOrcConfig(cluster.TmpDirectory, params)
+	// Start vtorc
+	cluster.VtorcProcess = cluster.NewOrcProcess(pathToConfig)
+	err := cluster.VtorcProcess.Setup()
+	return err
+}
+
+// writeVTOrcConfig writes json format vtorc config to tmp directory
+func writeVTOrcConfig(tmpDir string, params string) string {
+	data := []byte(params)
+	vtorcConfig := path.Join(tmpDir, fmt.Sprintf("vtorc_config_%d.json", time.Now().UnixNano()))
+	os.WriteFile(vtorcConfig, data, 0666)
+	return vtorcConfig
+}
+
+// StopVtorc is used to stop vtorc if it is running
+func (cluster *LocalProcessCluster) StopVtorc() error {
+	if cluster.VtorcProcess != nil {
+		err := cluster.VtorcProcess.TearDown()
+		if err != nil {
+			return err
+		}
+		cluster.VtorcProcess = nil
+	}
+	return nil
+}
+
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"
 func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, replicaCount int, rdonly bool) error {
 	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly)
