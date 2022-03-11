@@ -3037,6 +3037,21 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:  "select variables from t",
 			output: "select `variables` from t",
+		}, {
+			input:  "select 1 as found",
+			output: "select 1 as `found` from dual",
+		}, {
+			input:  "select found from t",
+			output: "select `found` from t",
+		}, {
+			input:  "insert into t (found) values (42)",
+			output: "insert into t(`found`) values (42)",
+		}, {
+			input:  "update x set found = 32 where found = 42",
+			output: "update x set found = 32 where `found` = 42",
+		}, {
+			input:  "delete from x where found = 32",
+			output: "delete from x where `found` = 32",
 		}}
 
 	for _, tcase := range validSQL {
