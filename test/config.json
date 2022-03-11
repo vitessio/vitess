@@ -1026,7 +1026,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "23",
-			"RetryMax": 1,
+			"RetryMax": 3,
 			"Tags": [
 				"worker_test"
 			]
