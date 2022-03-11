@@ -5795,7 +5795,7 @@ kill_statement:
 reserved_keyword:
   ACCOUNT
 | ADD
-| AFTER
+| AFTER // TODO: this isn't reserved in MySQL what is it doing here??? what is going on i'm so confused (see BEFORE keyword)
 | ALTER
 | AND
 | ARRAY
