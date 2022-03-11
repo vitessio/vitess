@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -4936,7 +4937,7 @@ func TestServeHTTP(t *testing.T) {
 
 			// Copy the Cookie over to a new Request
 			req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)
-			req.AddCookie(&http.Cookie{Name: "cluster", Value: base64.StdEncoding.EncodeToString([]byte(tt.cookie))})
+			req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(tt.cookie)))})
 
 			w := httptest.NewRecorder()
 
