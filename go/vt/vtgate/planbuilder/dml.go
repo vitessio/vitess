@@ -352,6 +352,18 @@ func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.St
 	return edml, ksidVindex, nil
 }
 
+func dmlSubquerySelectPlan(selStmt sqlparser.SelectStatement, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
+	queryPlanner, err := getStatementAndPlanner(selStmt, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	// Override the locking with `for update` to lock the rows for inserting the data.
+	selStmt.SetLock(sqlparser.ForUpdateLock)
+
+	return queryPlanner(selStmt, reservedVars, vschema)
+}
+
 func generateDMLSubquery(tblExpr sqlparser.TableExpr, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCols []sqlparser.ColIdent) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	for idx, col := range ksidCols {

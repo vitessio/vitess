@@ -47,8 +47,9 @@ type Update struct {
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string]*VindexValues
 
-	// Update does not take inputs
-	noInputs
+	// Input contains select query plan for each expression in update expression
+	// that needs retrieval of results for updating table column.
+	Input []Primitive
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -67,6 +68,14 @@ func (upd *Update) GetTableName() string {
 		return upd.Table.Name.String()
 	}
 	return ""
+}
+
+// Inputs specifies the inputs to this Primitive.
+func (upd *Update) Inputs() []Primitive {
+	if len(upd.Input) == 0 {
+		return nil
+	}
+	return upd.Input
 }
 
 // TryExecute performs a non-streaming exec.

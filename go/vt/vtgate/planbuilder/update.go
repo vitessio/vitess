@@ -35,6 +35,9 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	if upd.With != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
 	}
+	if updateColsHasSubquery(upd) {
+		return updateSelectSubqueryPlan(upd, reservedVars, vschema)
+	}
 	dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 	if err != nil {
 		return nil, err
@@ -56,6 +59,67 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		eupd.KsidLength = len(ksidVindex.Columns)
 	}
 	return eupd, nil
+}
+
+func updateColsHasSubquery(upd *sqlparser.Update) bool {
+	for _, updExpr := range upd.Exprs {
+		if _, ok := updExpr.Expr.(*sqlparser.Subquery); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func updateSelectSubqueryPlan(upd *sqlparser.Update, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+	edml := &engine.Update{DML: engine.NewDML()}
+	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
+	rb, err := pb.processDMLTable(upd.TableExprs, reservedVars, nil)
+	if err != nil {
+		return nil, err
+	}
+	edml.Keyspace = rb.eroute.Keyspace
+	if !edml.Keyspace.Sharded {
+		// We only validate non-table subexpressions because the previous analysis has already validated them.
+		var subqueryArgs []sqlparser.SQLNode
+		subqueryArgs = append(subqueryArgs, upd.Where, upd.OrderBy, upd.Limit)
+		if pb.finalizeUnshardedDMLSubqueries(reservedVars, subqueryArgs...) {
+			vschema.WarnUnshardedOnly("subqueries can't be sharded in DML")
+		} else {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
+		}
+		edml.Opcode = engine.Unsharded
+		// Generate query after all the analysis. Otherwise table name substitutions for
+		// routed tables won't happen.
+		edml.Query = generateQuery(upd)
+		return edml, nil
+	}
+
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *sqlparser.UpdateExprs:
+			return false, nil
+		case *sqlparser.DerivedTable, *sqlparser.Subquery:
+			return false, err
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, updExpr := range upd.Exprs {
+		subq, ok := updExpr.Expr.(*sqlparser.Subquery)
+		if !ok {
+			continue
+		}
+		// select plan will be taken as input to insert rows into the table.
+		plan, err := dmlSubquerySelectPlan(subq.Select, vschema, reservedVars)
+		if err != nil {
+			return nil, err
+		}
+		edml.Input = append(edml.Input, plan)
+	}
+
+	return edml, nil
 }
 
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
