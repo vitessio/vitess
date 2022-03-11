@@ -173,15 +173,14 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	bucket := fmt.Sprintf("%v/%v", keyspace, shard)
 	name := subFlags.Arg(1)
 
-	bs, err := backupstorage.GetBackupStorage()
-	if err != nil {
-		return err
-	}
-	defer bs.Close()
-	return bs.RemoveBackup(ctx, bucket, name)
+	_, err = wr.VtctldServer().RemoveBackup(ctx, &vtctldatapb.RemoveBackupRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Name:     name,
+	})
+	return err
 }
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

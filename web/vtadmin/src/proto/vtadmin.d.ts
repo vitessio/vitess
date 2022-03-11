@@ -38430,6 +38430,192 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a RemoveBackupRequest. */
+    interface IRemoveBackupRequest {
+
+        /** RemoveBackupRequest keyspace */
+        keyspace?: (string|null);
+
+        /** RemoveBackupRequest shard */
+        shard?: (string|null);
+
+        /** RemoveBackupRequest name */
+        name?: (string|null);
+    }
+
+    /** Represents a RemoveBackupRequest. */
+    class RemoveBackupRequest implements IRemoveBackupRequest {
+
+        /**
+         * Constructs a new RemoveBackupRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRemoveBackupRequest);
+
+        /** RemoveBackupRequest keyspace. */
+        public keyspace: string;
+
+        /** RemoveBackupRequest shard. */
+        public shard: string;
+
+        /** RemoveBackupRequest name. */
+        public name: string;
+
+        /**
+         * Creates a new RemoveBackupRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RemoveBackupRequest instance
+         */
+        public static create(properties?: vtctldata.IRemoveBackupRequest): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Encodes the specified RemoveBackupRequest message. Does not implicitly {@link vtctldata.RemoveBackupRequest.verify|verify} messages.
+         * @param message RemoveBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRemoveBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RemoveBackupRequest message, length delimited. Does not implicitly {@link vtctldata.RemoveBackupRequest.verify|verify} messages.
+         * @param message RemoveBackupRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRemoveBackupRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RemoveBackupRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RemoveBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Decodes a RemoveBackupRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RemoveBackupRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Verifies a RemoveBackupRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RemoveBackupRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RemoveBackupRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RemoveBackupRequest;
+
+        /**
+         * Creates a plain object from a RemoveBackupRequest message. Also converts values to other types if specified.
+         * @param message RemoveBackupRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RemoveBackupRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RemoveBackupRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RemoveBackupResponse. */
+    interface IRemoveBackupResponse {
+    }
+
+    /** Represents a RemoveBackupResponse. */
+    class RemoveBackupResponse implements IRemoveBackupResponse {
+
+        /**
+         * Constructs a new RemoveBackupResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRemoveBackupResponse);
+
+        /**
+         * Creates a new RemoveBackupResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RemoveBackupResponse instance
+         */
+        public static create(properties?: vtctldata.IRemoveBackupResponse): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Encodes the specified RemoveBackupResponse message. Does not implicitly {@link vtctldata.RemoveBackupResponse.verify|verify} messages.
+         * @param message RemoveBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRemoveBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RemoveBackupResponse message, length delimited. Does not implicitly {@link vtctldata.RemoveBackupResponse.verify|verify} messages.
+         * @param message RemoveBackupResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRemoveBackupResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RemoveBackupResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RemoveBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Decodes a RemoveBackupResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RemoveBackupResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Verifies a RemoveBackupResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RemoveBackupResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RemoveBackupResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RemoveBackupResponse;
+
+        /**
+         * Creates a plain object from a RemoveBackupResponse message. Also converts values to other types if specified.
+         * @param message RemoveBackupResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RemoveBackupResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RemoveBackupResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RemoveKeyspaceCellRequest. */
     interface IRemoveKeyspaceCellRequest {
 

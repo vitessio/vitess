@@ -452,6 +452,15 @@ func (client *gRPCVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctl
 	return client.c.ReloadSchemaShard(ctx, in, opts...)
 }
 
+// RemoveBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RemoveBackup(ctx context.Context, in *vtctldatapb.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveBackupResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RemoveBackup(ctx, in, opts...)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	if client.c == nil {

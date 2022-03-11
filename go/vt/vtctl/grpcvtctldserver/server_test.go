@@ -3747,8 +3747,6 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 }
 
 func TestGetBackups(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	ts := memorytopo.NewServer()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -6560,6 +6558,64 @@ func TestReloadSchemaShard(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoveBackup(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer()
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	setup := func() {
+		testutil.BackupStorage.Backups = map[string][]string{
+			"testkeyspace/-": {"backup1", "backup2", "backup3"},
+		}
+	}
+
+	t.Run("ok", func(t *testing.T) {
+		setup()
+		_, err := vtctld.RemoveBackup(ctx, &vtctldatapb.RemoveBackupRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+			Name:     "backup2",
+		})
+
+		assert.NoError(t, err)
+
+		resp, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		})
+		require.NoError(t, err)
+
+		var backupNames []string
+		for _, bi := range resp.Backups {
+			backupNames = append(backupNames, bi.Name)
+		}
+		utils.MustMatch(t, []string{"backup1", "backup3"}, backupNames, "expected \"backup2\" to be removed")
+	})
+
+	t.Run("no bucket found", func(t *testing.T) {
+		setup()
+		_, err := vtctld.RemoveBackup(ctx, &vtctldatapb.RemoveBackupRequest{
+			Keyspace: "notfound",
+			Shard:    "-",
+			Name:     "somebackup",
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("no backup found in bucket", func(t *testing.T) {
+		setup()
+		_, err := vtctld.RemoveBackup(ctx, &vtctldatapb.RemoveBackupRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+			Name:     "notfound",
+		})
+		assert.Error(t, err)
+	})
+}
+
 func TestRemoveKeyspaceCell(t *testing.T) {
 	t.Parallel()
 

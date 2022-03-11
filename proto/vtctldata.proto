@@ -785,6 +785,15 @@ message ReloadSchemaShardResponse {
   repeated logutil.Event events = 2;
 }
 
+message RemoveBackupRequest {
+  string keyspace = 1;
+  string shard = 2;
+  string name = 3;
+}
+
+message RemoveBackupResponse {
+}
+
 message RemoveKeyspaceCellRequest {
   string keyspace = 1;
   string cell = 2;

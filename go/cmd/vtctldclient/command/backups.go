@@ -55,6 +55,14 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 		Args: cobra.ExactArgs(1),
 		RunE: commandGetBackups,
 	}
+	// RemoveBackup makes a RemoveBackup gRPC call to a vtctld.
+	RemoveBackup = &cobra.Command{
+		Use:                   "RemoveBackup <keyspace/shard> <backup name>",
+		Short:                 "Removes the given backup from the BackupStorage used by vtctld.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandRemoveBackup,
+	}
 )
 
 var backupOptions = struct {
@@ -170,6 +178,24 @@ func commandGetBackups(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandRemoveBackup(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	name := cmd.Flags().Arg(1)
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.RemoveBackup(commandCtx, &vtctldatapb.RemoveBackupRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Name:     name,
+	})
+	return err
+}
+
 func init() {
 	Backup.Flags().BoolVar(&backupOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	Backup.Flags().Uint64Var(&backupOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
@@ -182,4 +208,6 @@ func init() {
 	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups")
 	GetBackups.Flags().BoolVarP(&getBackupsOptions.OutputJSON, "json", "j", false, "Output backup info in JSON format rather than a list of backups")
 	Root.AddCommand(GetBackups)
+
+	Root.AddCommand(RemoveBackup)
 }

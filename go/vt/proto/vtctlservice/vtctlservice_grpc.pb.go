@@ -275,6 +275,8 @@ type VtctldClient interface {
 	// on a best-effort basis, and log warnings for any tablets that fail to
 	// reload within the context deadline.
 	ReloadSchemaShard(ctx context.Context, in *vtctldata.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaShardResponse, error)
+	// RemoveBackup removes a backup from the BackupStorage used by vtctld.
+	RemoveBackup(ctx context.Context, in *vtctldata.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldata.RemoveBackupResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
 	// shards in the specified keyspace (by calling RemoveShardCell on every
 	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
@@ -833,6 +835,15 @@ func (c *vtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctldata.Relo
 	return out, nil
 }
 
+func (c *vtctldClient) RemoveBackup(ctx context.Context, in *vtctldata.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldata.RemoveBackupResponse, error) {
+	out := new(vtctldata.RemoveBackupResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RemoveBackup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldata.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	out := new(vtctldata.RemoveKeyspaceCellResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RemoveKeyspaceCell", in, out, opts...)
@@ -1178,6 +1189,8 @@ type VtctldServer interface {
 	// on a best-effort basis, and log warnings for any tablets that fail to
 	// reload within the context deadline.
 	ReloadSchemaShard(context.Context, *vtctldata.ReloadSchemaShardRequest) (*vtctldata.ReloadSchemaShardResponse, error)
+	// RemoveBackup removes a backup from the BackupStorage used by vtctld.
+	RemoveBackup(context.Context, *vtctldata.RemoveBackupRequest) (*vtctldata.RemoveBackupResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
 	// shards in the specified keyspace (by calling RemoveShardCell on every
 	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
@@ -1404,6 +1417,9 @@ func (UnimplementedVtctldServer) ReloadSchemaKeyspace(context.Context, *vtctldat
 }
 func (UnimplementedVtctldServer) ReloadSchemaShard(context.Context, *vtctldata.ReloadSchemaShardRequest) (*vtctldata.ReloadSchemaShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemaShard not implemented")
+}
+func (UnimplementedVtctldServer) RemoveBackup(context.Context, *vtctldata.RemoveBackupRequest) (*vtctldata.RemoveBackupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveBackup not implemented")
 }
 func (UnimplementedVtctldServer) RemoveKeyspaceCell(context.Context, *vtctldata.RemoveKeyspaceCellRequest) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
@@ -2336,6 +2352,24 @@ func _Vtctld_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_RemoveBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.RemoveBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).RemoveBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/RemoveBackup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).RemoveBackup(ctx, req.(*vtctldata.RemoveBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.RemoveKeyspaceCellRequest)
 	if err := dec(in); err != nil {
@@ -2918,6 +2952,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReloadSchemaShard",
 			Handler:    _Vtctld_ReloadSchemaShard_Handler,
+		},
+		{
+			MethodName: "RemoveBackup",
+			Handler:    _Vtctld_RemoveBackup_Handler,
 		},
 		{
 			MethodName: "RemoveKeyspaceCell",

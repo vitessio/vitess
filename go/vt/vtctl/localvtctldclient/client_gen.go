@@ -356,6 +356,11 @@ func (client *localVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtct
 	return client.s.ReloadSchemaShard(ctx, in)
 }
 
+// RemoveBackup is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RemoveBackup(ctx context.Context, in *vtctldatapb.RemoveBackupRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveBackupResponse, error) {
+	return client.s.RemoveBackup(ctx, in)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	return client.s.RemoveKeyspaceCell(ctx, in)
