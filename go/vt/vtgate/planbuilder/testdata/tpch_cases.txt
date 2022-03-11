@@ -50,7 +50,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "-1,1,2,-3,3,4,-2,5,6",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,L:2,R:2,R:3,L:1,R:4,R:5",
                         "JoinVars": {
                           "l_orderkey": 0
                         },
@@ -70,7 +70,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "-4,-6,-5,-7,-2,1",
+                            "JoinColumnIndexes": "L:3,L:5,L:4,L:6,L:1,R:0",
                             "JoinVars": {
                               "o_custkey": 0
                             },
@@ -219,7 +219,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "1,2,-4,-5,-6,-7,3,4",
+                    "JoinColumnIndexes": "R:0,R:1,L:3,L:4,L:5,L:6,R:2,R:3",
                     "JoinVars": {
                       "s_nationkey": 0
                     },
@@ -228,7 +228,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "1,2,3,-7,-8,4,5",
+                        "JoinColumnIndexes": "R:0,R:1,R:2,L:6,L:7,R:3,R:4",
                         "JoinVars": {
                           "c_nationkey": 1,
                           "o_orderkey": 0
@@ -238,7 +238,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "-2,1,-2,1,-5,3,-3,2",
+                            "JoinColumnIndexes": "L:1,R:0,L:1,R:0,L:4,R:2,L:2,R:1",
                             "JoinVars": {
                               "o_custkey": 0
                             },
@@ -275,7 +275,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "1,1,3,-2,2",
+                            "JoinColumnIndexes": "R:0,R:0,R:2,L:1,R:1",
                             "JoinVars": {
                               "l_suppkey": 0
                             },
@@ -318,7 +318,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "-4,-5,-2,1",
+                        "JoinColumnIndexes": "L:3,L:4,L:1,R:0",
                         "JoinVars": {
                           "n_regionkey": 0
                         },
@@ -480,7 +480,7 @@ Gen4 error: using aggregation on top of a *planbuilder.simpleProjection plan is 
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,-4,-5,15,16",
+                        "JoinColumnIndexes": "R:0,R:1,R:2,R:3,R:4,R:5,R:6,R:7,R:8,R:9,R:10,R:11,R:12,R:13,L:3,L:4,R:14,R:15",
                         "JoinVars": {
                           "o_custkey": 0
                         },
@@ -489,7 +489,7 @@ Gen4 error: using aggregation on top of a *planbuilder.simpleProjection plan is 
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "-2,-2,-5,-3,1",
+                            "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:0",
                             "JoinVars": {
                               "o_orderkey": 0
                             },
@@ -526,7 +526,7 @@ Gen4 error: using aggregation on top of a *planbuilder.simpleProjection plan is 
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "-4,-6,-8,-10,2,-12,-14,-5,-7,-9,-11,3,-13,-15,-2,1",
+                            "JoinColumnIndexes": "L:3,L:5,L:7,L:9,R:1,L:11,L:13,L:4,L:6,L:8,L:10,R:2,L:12,L:14,L:1,R:0",
                             "JoinVars": {
                               "c_nationkey": 0
                             },
@@ -613,7 +613,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "2,3,-2,1,-3,1",
+                "JoinColumnIndexes": "R:1,R:2,L:1,R:0,L:2,R:0",
                 "JoinVars": {
                   "o_orderkey": 0
                 },
@@ -703,7 +703,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,-3,-4,1",
+        "JoinColumnIndexes": "L:0,L:1,L:2,L:3,R:0",
         "JoinVars": {
           "s_suppkey": 0
         },
@@ -823,7 +823,7 @@ Gen4 error: unsupported: group by on: *planbuilder.joinGen4
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-5,1",
+            "JoinColumnIndexes": "L:4,R:0",
             "JoinVars": {
               "l_partkey": 0,
               "l_quantity": 1,
@@ -905,7 +905,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "1,2,-4,-5,3,4",
+                        "JoinColumnIndexes": "R:0,R:1,L:3,L:4,R:2,R:3",
                         "JoinVars": {
                           "l1_l_suppkey": 0
                         },
@@ -914,7 +914,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "-2,-2,-5,-3,1",
+                            "JoinColumnIndexes": "L:1,L:1,L:4,L:2,R:0",
                             "JoinVars": {
                               "l1_l_orderkey": 0
                             },
@@ -951,7 +951,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "-4,-5,-2,1",
+                            "JoinColumnIndexes": "L:3,L:4,L:1,R:0",
                             "JoinVars": {
                               "s_nationkey": 0
                             },

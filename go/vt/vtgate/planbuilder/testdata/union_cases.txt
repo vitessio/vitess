@@ -1016,7 +1016,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1071,7 +1071,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1140,7 +1140,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1195,7 +1195,7 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "L:0,L:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -1698,7 +1698,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
+    "JoinColumnIndexes": "R:0",
     "JoinVars": {
       "tbl1_id": 0
     },
