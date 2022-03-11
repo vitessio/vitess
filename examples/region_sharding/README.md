@@ -5,7 +5,7 @@ This document contains the summary of the commands to be run.
 
 
 ```
-# Edit main_vschema.json and set region_map to full path of countries.json file
+# Edit main_vschema_sharded.json and set region_map to full path of countries.json file
 # Example:
 	    "region_map": "/home/user/vitess/examples/region_sharding/countries.json",
 
