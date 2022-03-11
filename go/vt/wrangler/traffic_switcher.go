@@ -503,6 +503,13 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 			return 0, nil, err
 		}
 
+		ts.Logger().Infof("Getting online ddl migrations")
+		onlineDDLMigrations, err := workflow.BuildOnlineDDLMigrator(ctx, ts, ts.wr.ExecuteFetchAsApp)
+		if err != nil {
+			ts.Logger().Errorf("BuildOnlineDDLMigrator failed: %v", err)
+			return 0, nil, err
+		}
+
 		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
 			ts.Logger().Errorf("stopSourceWrites failed: %v", err)
@@ -544,6 +551,15 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 		if err := sw.createReverseVReplication(ctx); err != nil {
 			ts.Logger().Errorf("createReverseVReplication failed: %v", err)
 			sw.cancelMigration(ctx, sm)
+			return 0, nil, err
+		}
+
+		ts.Logger().Infof("Migrating online ddl streams")
+		if err := onlineDDLMigrations.MigrateStreams(ctx); err != nil {
+			ts.Logger().Errorf("Migrate onlineDDL Streams failed: %v", err)
+			sw.cancelMigration(ctx, sm)
+		}
+		if err != nil {
 			return 0, nil, err
 		}
 	} else {

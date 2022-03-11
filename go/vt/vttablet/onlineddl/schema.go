@@ -579,3 +579,7 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableIsView,
 	alterSchemaMigrationsTableMaterializedTableName,
 }
+
+func GetOnlineDDLInsertMigrationQuery() string {
+	return sqlInsertMigration
+}

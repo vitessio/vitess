@@ -68,12 +68,13 @@ const (
 	case1Update = "update customer set description = concat('cust-', cid)"
 	enableCase1 = true
 
-	//  Case 2: Online DDL ALTER is started before Reshard starts and completed after it starts:
+	//  Case 2: Online DDL ALTER is started before Reshard starts and completed after it starts, but before cutover:
 	case2Ddl    = "ALTER TABLE `Lead` ADD COLUMN description varchar(64) NOT NULL;"
 	case2Update = "update `Lead` set description = concat('Lead-id-', md5(`Lead-id`))"
 	enableCase2 = true
 
 	//  Case 3: Online DDL ALTER is started before Reshard starts and completed after it ends:
+	// not supported, this should error out
 	case3Ddl    = "ALTER TABLE `Lead-1` ADD COLUMN description varchar(64) NOT NULL;"
 	case3Update = "update `Lead-1` set description = concat('Lead1-', md5(`Lead`))"
 	enableCase3 = false
@@ -158,6 +159,7 @@ func TestOnlineDDLsDuringReshard(t *testing.T) {
 	}
 	require.Nil(t, vdiffError)
 	// complete Reshard
+	log.Infof("Switching traffic")
 	err = tstWorkflowExec(t, defaultCellName, workflowName, shardedKeyspaceName, shardedKeyspaceName, "", workflowActionSwitchTraffic, "", "", "")
 	require.NoError(t, err)
 	log.Infof("Reshard completed")
@@ -228,7 +230,7 @@ func waitForMigrationStatus(t *testing.T, vtgateConn *mysql.Conn, uuid, keyspace
 		if countMatchedShards == numShards {
 			return schema.OnlineDDLStatus(lastKnownStatus)
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 	require.FailNowf(t, "WaitForMigrationStatus timed out", "status is %s", lastKnownStatus)
 	return schema.OnlineDDLStatus(lastKnownStatus)

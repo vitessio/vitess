@@ -14,11 +14,12 @@ import (
 )
 
 const (
-	onlineDDLMigrationTableName   = "_vt.vreplication_onlineddl_migration"
+	onlineDDLMigrationTableName = "_vt.vreplication_onlineddl_migration"
+	//TODO: add one to many from vreplication_onlineddl_migration to vrepl_id
 	createOnlineDDLMigrationTable = `create table if not exists _vt.vreplication_onlineddl_migration(
 		id BIGINT(20) AUTO_INCREMENT,
 		uuid VARBINARY(256) NOT NULL,
-		vrepl_id BIGINT(20) NOT NULL,
+		vrepl_id BIGINT(20) NOT NULL,  
 		state VARBINARY(100) NOT NULL,
 		materialized_table VARBINARY(256) NOT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -113,7 +114,7 @@ func (odm *OnlineDDLMigration) register(ddl string) (bool, error) {
 		log.Infof("%s", err)
 		return false, err
 	}
-	// if this is a new migration, create the materialized table and add to copy state
+	// if this is a new migration, create the materialized table
 	if qr.InsertID != 0 {
 		log.Infof("did not insert %s into %s", odm.uuid, onlineDDLMigrationTableName)
 		odm.id = int64(qr.InsertID)
@@ -122,10 +123,11 @@ func (odm *OnlineDDLMigration) register(ddl string) (bool, error) {
 			log.Infof("%s", err)
 			return false, err
 		}
-		log.Infof("uuid %s, id %d, execed %s, updating plan", odm.uuid, odm.id, ddl)
-		if err := odm.addToCopyState(odm.materializedTable); err != nil {
-			return false, err
-		}
+	}
+	//todo: for existing migration and new one add to map table
+	log.Infof("uuid %s, id %d, execed %s, updating plan", odm.uuid, odm.id, ddl)
+	if err := odm.addToCopyState(odm.materializedTable); err != nil {
+		return false, err
 	}
 	// both for new and existing migrations we need to update the plan
 	if err := odm.vp.updatePlan(odm.ctx); err != nil {
@@ -243,6 +245,8 @@ func (vp *vplayer) handleOnlineDDLEvent(ctx context.Context, event *binlogdatapb
 			return ErrReloadCopyState
 		}
 	case binlogdatapb.OnlineDDLEventType_RENAME_TABLE:
+		// todo: need to synchronize all source streams that merge into target, so how do we know how many streams
+		// are there. Can one shard start and complete before other streams even start?
 		if err := odm.complete(odEvent.Ddl); err != nil {
 			log.Errorf("%s", err)
 			return err
