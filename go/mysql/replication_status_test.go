@@ -24,34 +24,34 @@ import (
 
 func TestStatusReplicationRunning(t *testing.T) {
 	input := &ReplicationStatus{
-		IOThreadRunning:  true,
-		SQLThreadRunning: true,
+		IOState:  ReplicationStatusToState("yes"),
+		SQLState: ReplicationStatusToState("yes"),
 	}
 	want := true
-	if got := input.ReplicationRunning(); got != want {
-		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
+	if got := input.Running(); got != want {
+		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
 	}
 }
 
 func TestStatusIOThreadNotRunning(t *testing.T) {
 	input := &ReplicationStatus{
-		IOThreadRunning:  false,
-		SQLThreadRunning: true,
+		IOState:  ReplicationStatusToState("no"),
+		SQLState: ReplicationStatusToState("yes"),
 	}
 	want := false
-	if got := input.ReplicationRunning(); got != want {
-		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
+	if got := input.Running(); got != want {
+		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
 	}
 }
 
 func TestStatusSQLThreadNotRunning(t *testing.T) {
 	input := &ReplicationStatus{
-		IOThreadRunning:  true,
-		SQLThreadRunning: false,
+		IOState:  ReplicationStatusToState("yes"),
+		SQLState: ReplicationStatusToState("no"),
 	}
 	want := false
-	if got := input.ReplicationRunning(); got != want {
-		t.Errorf("%#v.ReplicationRunning() = %v, want %v", input, got, want)
+	if got := input.Running(); got != want {
+		t.Errorf("%#v.Running() = %v, want %v", input, got, want)
 	}
 }
 

@@ -26754,12 +26754,6 @@ export namespace replicationdata {
         /** Status position */
         position?: (string|null);
 
-        /** Status io_thread_running */
-        io_thread_running?: (boolean|null);
-
-        /** Status sql_thread_running */
-        sql_thread_running?: (boolean|null);
-
         /** Status replication_lag_seconds */
         replication_lag_seconds?: (number|null);
 
@@ -26786,6 +26780,18 @@ export namespace replicationdata {
 
         /** Status source_uuid */
         source_uuid?: (string|null);
+
+        /** Status io_state */
+        io_state?: (number|null);
+
+        /** Status last_io_error */
+        last_io_error?: (string|null);
+
+        /** Status sql_state */
+        sql_state?: (number|null);
+
+        /** Status last_sql_error */
+        last_sql_error?: (string|null);
     }
 
     /** Represents a Status. */
@@ -26799,12 +26805,6 @@ export namespace replicationdata {
 
         /** Status position. */
         public position: string;
-
-        /** Status io_thread_running. */
-        public io_thread_running: boolean;
-
-        /** Status sql_thread_running. */
-        public sql_thread_running: boolean;
 
         /** Status replication_lag_seconds. */
         public replication_lag_seconds: number;
@@ -26832,6 +26832,18 @@ export namespace replicationdata {
 
         /** Status source_uuid. */
         public source_uuid: string;
+
+        /** Status io_state. */
+        public io_state: number;
+
+        /** Status last_io_error. */
+        public last_io_error: string;
+
+        /** Status sql_state. */
+        public sql_state: number;
+
+        /** Status last_sql_error. */
+        public last_sql_error: string;
 
         /**
          * Creates a new Status instance using the specified properties.
