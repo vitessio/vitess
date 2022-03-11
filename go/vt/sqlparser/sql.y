@@ -6211,7 +6211,7 @@ non_reserved_keyword:
 | VISIBLE
 | WARNINGS
 | WORK
-//| WRITE
+| WRITE
 | X509 // TDOO: wtf is this?
 | YEAR
 //| ZEROFILL
