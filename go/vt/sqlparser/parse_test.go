@@ -5183,50 +5183,73 @@ var incorrectlyParseForNonSelect = []string{
 }
 
 // TestKeywordsCorrectlyParse ensures that certain keywords can be parsed by a series of edit queries.
-func TestKeywordsCorrectlyParse(t *testing.T) {
+func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
 	iTest := "INSERT INTO t (%s) VALUES (1)"
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
 	cTest := "CREATE TABLE t(%s int)"
 
+	// Define expected format for non-reserved keywords
+	aliasTestFmt := "select 1 as %s from dual"
+	iTestFmt := "insert into t(%s) values (1)"
+	dTestFmt := "delete from t where %s = 1"
+	uTestFmt := "update t set %s = 1"
+	cTestFmt := "create table t (\n\t%s int\n)"
+
+	// TODO: most of them aren't back-ticked...but shouldn't they all be?
+	aliasTestFmtTicked := "select 1 as `%s` from dual"
+	iTestFmtTicked := "insert into t(`%s`) values (1)"
+	dTestFmtTicked := "delete from t where `%s` = 1"
+	uTestFmtTicked := "update t set `%s` = 1"
+	cTestFmtTicked := "create table t (\n\t`%s` int\n)"
+
 	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
+	fmts := []string{aliasTestFmt, iTestFmt, dTestFmt, uTestFmt, cTestFmt}
+	fmtsTicked := []string{aliasTestFmtTicked, iTestFmtTicked, dTestFmtTicked, uTestFmtTicked, cTestFmtTicked}
 
 	for _, kw := range correctlyDoParse {
-		for _, query := range tests {
+		for i, query := range tests {
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
-				_, err := Parse(test)
+				stmt, err := Parse(test)
 				assert.NoError(t, err)
+
+				// TODO: not sure if it's supposed to be ticked or not
+				exp := fmt.Sprintf(fmts[i], kw)
+				expTicked := fmt.Sprintf(fmtsTicked[i], kw)
+				out := String(stmt)
+				result := exp == out || expTicked == out
+				assert.True(t, result)
 			})
 		}
 	}
 }
 
-// TestKeywordsThatDontParseButShould documents behavior where the parser is incorrectly throwing an error for a valid keyword.
-func TestKeywordsThatDontParseButShould(t *testing.T) {
+// TestKeywordsCorrectlyDontParse ensures certain keywords should not be parsed in certain queries.
+func TestKeywordsCorrectlyDontParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
-	iTest := "INSERT INTO t (%s) VALUES (1)"
-	dTest := "DELETE FROM t where %s=1"
-	uTest := "UPDATE t SET %s=1"
-	cTest := "CREATE TABLE t(%s int)"
+	// TODO: Want all of these passing eventually
+	// iTest := "INSERT INTO t (%s) VALUES (1)"
+	// dTest := "DELETE FROM t where %s=1"
+	// uTest := "UPDATE t SET %s=1"
+	// cTest := "CREATE TABLE t(%s int)"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
+	tests := []string{aliasTest}
 
-	for _, kw := range incorrectlyDontParse {
+	for _, kw := range correctlyDontParse {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
-			t.Skip()
 			t.Run(test, func(t *testing.T) {
 				_, err := Parse(test)
-				assert.NoError(t, err)
+				assert.Error(t, err)
 			})
 		}
 	}
 }
 
-// TestKeywordsParseButShouldnt  documents bad behavior where the parser is incorrectly parsing a keyword that should error.
-func TestKeywordsParseButShouldnt(t *testing.T) {
+// TestKeywordsIncorrectlyDoParse documents bad behavior where the parser is incorrectly parsing a keyword that should error.
+func TestKeywordsIncorrectlyDoParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
 	iTest := "INSERT INTO t (%s) VALUES (1)"
 	dTest := "DELETE FROM t where %s=1"
@@ -5259,23 +5282,23 @@ func TestKeywordsParseButShouldnt(t *testing.T) {
 	}
 }
 
-// TestKeywordsCorrectlyDontParse ensures certain keywords should not be parsed in certain queries.
-func TestKeywordsCorrectlyDontParse(t *testing.T) {
+// TestKeywordsIncorrectlyDontParse documents behavior where the parser is incorrectly throwing an error for a valid keyword.
+func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
-	// TODO: Want all of these passing eventually
-	// iTest := "INSERT INTO t (%s) VALUES (1)"
-	// dTest := "DELETE FROM t where %s=1"
-	// uTest := "UPDATE t SET %s=1"
-	// cTest := "CREATE TABLE t(%s int)"
+	iTest := "INSERT INTO t (%s) VALUES (1)"
+	dTest := "DELETE FROM t where %s=1"
+	uTest := "UPDATE t SET %s=1"
+	cTest := "CREATE TABLE t(%s int)"
 
-	tests := []string{aliasTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
 
-	for _, kw := range correctlyDontParse {
+	for _, kw := range incorrectlyDontParse {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
+			t.Skip()
 			t.Run(test, func(t *testing.T) {
 				_, err := Parse(test)
-				assert.Error(t, err)
+				assert.NoError(t, err)
 			})
 		}
 	}
