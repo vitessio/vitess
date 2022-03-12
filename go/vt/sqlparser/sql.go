@@ -4,6 +4,7 @@
 package sqlparser
 
 import __yyfmt__ "fmt"
+
 //line sql.y:18
 
 import "fmt"
