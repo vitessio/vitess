@@ -3052,6 +3052,21 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:  "delete from x where found = 32",
 			output: "delete from x where `found` = 32",
+		}, {
+			input:  "select 1 as event",
+			output: "select 1 as `event` from dual",
+		}, {
+			input:  "select event from t",
+			output: "select `event` from t",
+		}, {
+			input:  "insert into t (event) values (42)",
+			output: "insert into t(`event`) values (42)",
+		}, {
+			input:  "update x set event = 32 where event = 42",
+			output: "update x set event = 32 where `event` = 42",
+		}, {
+			input:  "delete from x where event = 32",
+			output: "delete from x where `event` = 32",
 		}}
 
 	for _, tcase := range validSQL {
@@ -4406,7 +4421,7 @@ var correctlyDoParse = []string{"avg", "bit_and", "bit_or", "bit_xor", "count", 
 	"serial", "bit", "blob", "bool", "boolean", "buckets", "cascade", "catalog_name", "change", "char", "character", "charset",
 	"check", "cipher", "class_origin", "client", "clone", "collation", "columns", "column_name", "commit", "committed", "component",
 	"constraint", "constraint_catalog", "constraint_name", "constraint_schema", "contains", "cursor_name", "data", "date", "datetime",
-	"day", "decimal", "declare", "definer", "definition", "description", "double", "duplicate", "each", "enforced", "engines", "enum",
+	"day", "decimal", "declare", "definer", "definition", "description", "double", "duplicate", "each", "enforced", "engines", "enum", "event",
 	"except", "exclude", "expansion", "expire", "fields", "fixed", "float_type", "flush", "foreign", "found", "fulltext", "geomcollection",
 	"geometry", "geometrycollection", "get_master_public_key", "global", "grants", "histogram", "history", "inactive", "indexes",
 	"initial", "int", "integer", "invisible", "invoker", "isolation", "issuer", "json", "keys", "key_block_size", "language", "last_insert_id",
@@ -4426,7 +4441,7 @@ var correctlyDoParse = []string{"avg", "bit_and", "bit_or", "bit_xor", "count", 
 	"x509", "year", "zerofil"}
 var correctlyDontParse = []string{"auto_increment", "add", "and", "alter", "mod", "asc", "as", "between", "binary", "by",
 	"call", "case", "collate", "convert", "connection", "create", "cross", "current", "current_date", "current_time", "current_timestamp", "database", "databases", "default", "delete",
-	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "event", "execute",
+	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "execute",
 	"exists", "explain", "failed_login_attempts", "false", "file", "first", "following", "for", "force", "from", "function",
 	"grant", "group", "grouping", "groups", "having", "identified", "if", "ignore", "in", "inout", "index", "inner", "insert",
 	"interval", "into", "is", "join", "key", "kill", "left",
